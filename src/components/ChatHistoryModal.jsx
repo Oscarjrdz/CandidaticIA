@@ -7,7 +7,20 @@ const ChatHistoryModal = ({ isOpen, onClose, candidate, chatContent }) => {
     if (!isOpen) return null;
 
     const handleDownload = () => {
-        downloadChatHistory(candidate);
+        // Download currently displayed content directly
+        if (!chatContent) return;
+
+        const blob = new Blob([chatContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const filename = `${candidate?.whatsapp || 'chat_history'}.txt`;
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     return (
