@@ -9,17 +9,19 @@ const MAX_EVENTS = 100;
 
 /**
  * Verifica si Vercel KV está disponible
- * Soporta tanto KV_ como STORAGE_ prefixes
+ * Soporta tanto KV_ como STORAGE_ prefixes, y también REDIS_URL
  */
 const isKVAvailable = () => {
-    // Vercel puede usar KV_ o STORAGE_ como prefix dependiendo de cómo se configuró
+    // Vercel puede usar diferentes nombres de variables dependiendo de cómo se configuró
     const hasKVPrefix = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
     const hasStoragePrefix = !!(process.env.STORAGE_REST_API_URL && process.env.STORAGE_REST_API_TOKEN);
+    const hasRedisURL = !!process.env.REDIS_URL; // Upstash Redis usa REDIS_URL
 
-    const available = hasKVPrefix || hasStoragePrefix;
+    const available = hasKVPrefix || hasStoragePrefix || hasRedisURL;
 
     if (available) {
-        console.log(`✅ Vercel KV disponible (prefix: ${hasKVPrefix ? 'KV_' : 'STORAGE_'})`);
+        const prefix = hasKVPrefix ? 'KV_' : hasStoragePrefix ? 'STORAGE_' : 'REDIS_URL';
+        console.log(`✅ Vercel KV disponible (usando: ${prefix})`);
     }
 
     return available;
