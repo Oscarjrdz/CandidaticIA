@@ -96,41 +96,58 @@ export default async function handler(req, res) {
                 // Necesitamos Node 18+ FormData o usar librería 'form-data'
                 // Vercel serverless usa Node 18+ nativo
 
-                // --- Implementación Robusta con form-data y Buffer ---
+                // --- Implementación Final: Depuración + Stream Estándar ---
                 const remoteFormData = new FormData();
-                const file = formData.files.file;
 
+                // Depuración de lo que recibe Formidable
+                console.log('📦 Formidable Files:', JSON.stringify(formData.files, (key, value) => {
+                    if (key === 'file') return '[File Object]';
+                    return value;
+                }));
+
+                const file = formData.files.file;
                 const fileObj = Array.isArray(file) ? file[0] : file;
 
                 if (!fileObj) {
-                    return res.status(400).json({ error: 'No se recibió archivo', receivedFiles: Object.keys(formData.files || {}) });
+                    console.error('❌ Formidable no encontró el archivo "file". Keys:', Object.keys(formData.files || {}));
+                    return res.status(400).json({
+                        error: 'No se recibió archivo',
+                        details: 'El servidor no recibió el campo "file".',
+                        debug: Object.keys(formData.files || {})
+                    });
                 }
 
                 // Compatibilidad v2/v3 formidable
                 const filepath = fileObj.filepath || fileObj.path;
-                const filename = fileObj.originalFilename || fileObj.name || 'documento';
-
-                // Detección robusta de MIME type
-                let mimetype = mime.lookup(filename) || fileObj.mimetype || fileObj.type || 'application/octet-stream';
-
-                // Corrección manual para tipos comunes si fallan
-                if (filename.endsWith('.docx')) mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-                if (filename.endsWith('.pdf')) mimetype = 'application/pdf';
+                const filename = fileObj.originalFilename || fileObj.name || 'documento.bin';
 
                 if (!filepath) {
-                    return res.status(500).json({ error: 'Error procesando archivo', details: 'Filepath missing in formidable object', fileObj });
+                    return res.status(500).json({ error: 'Error procesando archivo', details: 'Filepath perdido', fileObj });
                 }
 
-                console.log(`📤 Preparando subida: ${filename} (${mimetype}) desde ${filepath}`);
+                // Forzar extensión si falta (ayuda a mime detection)
+                let finalFilename = filename;
+                if (!path.extname(finalFilename) && fileObj.mimetype) {
+                    const ext = mime.extension(fileObj.mimetype);
+                    if (ext) finalFilename = `${filename}.${ext}`;
+                }
 
-                // Usar Buffer para asegurar que tenemos todo el contenido antes de enviar (evita problemas de Stream interrumpido)
-                const fileBuffer = fs.readFileSync(filepath);
+                // Detección MIME obligatoria
+                const mimetype = mime.lookup(finalFilename) || fileObj.mimetype || 'application/octet-stream';
 
-                remoteFormData.append('file', fileBuffer, {
-                    filename: filename,
+                console.log(`📤 Preparando subida: ${finalFilename} (${mimetype}) desde ${filepath}`);
+
+                // Usamos Stream directo (como curl -F file=@path)
+                // form-data maneja el boundary y headers correctamente con streams
+                const fileStream = fs.createReadStream(filepath);
+
+                remoteFormData.append('file', fileStream, {
+                    filename: finalFilename,
                     contentType: mimetype,
-                    knownLength: fileBuffer.length // Ayuda al servidor a saber el tamaño exacto
                 });
+
+                // Headers calculados por form-data
+                const formHeaders = remoteFormData.getHeaders();
 
                 console.log(`📤 Enviando request a BuilderBot API...`);
 
@@ -138,9 +155,10 @@ export default async function handler(req, res) {
                     method: 'POST',
                     headers: {
                         'x-api-builderbot': apiKey,
-                        ...remoteFormData.getHeaders() // Headers correctos para multipart/form-data
+                        ...formHeaders
                     },
-                    body: remoteFormData
+                    body: remoteFormData,
+                    duplex: 'half' // Requerido para Node 18+ si body es un stream
                 });
 
                 console.log(`📥 Respuesta BuilderBot: ${response.status} ${response.statusText}`);
@@ -158,7 +176,6 @@ export default async function handler(req, res) {
                 try {
                     data = JSON.parse(textData);
                 } catch (e) {
-                    // Si el parseo falla pero el status fue 200, es un éxito
                     console.log('⚠️ Respuesta no-JSON de BuilderBot (asumiendo éxito 200 OK):', textData);
                     data = { success: true, message: 'Archivo subido correctamente', raw: textData };
                 }
