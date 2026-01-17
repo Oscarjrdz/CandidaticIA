@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';

@@ -7,9 +7,7 @@ import CandidatesSection from './components/CandidatesSection';
 import HistorySection from './components/HistorySection';
 import SettingsSection from './components/SettingsSection';
 import AssistantSection from './components/AssistantSection';
-// ... (imports)
-
-// ... (inside App component)
+import { getTheme, saveTheme, exportConfig, importConfig, clearAllStorage } from './utils/storage';
 
 
 
