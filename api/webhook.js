@@ -93,32 +93,41 @@ async function processEvent(payload) {
     switch (eventType) {
         case 'status.ready':
             console.log('🟢 Bot está listo:', payload.botId);
-            // Aquí puedes enviar notificación, actualizar DB, etc.
             break;
 
         case 'status.require_action':
             console.log('🟡 Bot requiere acción (QR):', payload.botId);
-            // Notificar al usuario que debe escanear QR
             break;
 
         case 'status.disconnect':
             console.log('🔴 Bot desconectado:', payload.botId);
-            // Alertar sobre desconexión
             break;
 
         case 'message.incoming':
             console.log('📨 Mensaje recibido de:', payload.from);
-            // Procesar mensaje entrante
+
+            // Guardar candidato automáticamente
+            if (payload.from) {
+                const { saveCandidate } = await import('./utils/storage.js');
+
+                const candidateData = {
+                    whatsapp: payload.from,
+                    nombre: payload.name || payload.pushName || 'Sin nombre',
+                    foto: payload.profilePicUrl || null,
+                    ultimoPayload: payload
+                };
+
+                await saveCandidate(candidateData);
+                console.log('👤 Candidato guardado/actualizado:', candidateData.nombre);
+            }
             break;
 
         case 'message.outgoing':
             console.log('📤 Mensaje enviado a:', payload.to);
-            // Registrar mensaje enviado
             break;
 
         case 'message.calling':
             console.log('📞 Llamada recibida de:', payload.from);
-            // Manejar llamada
             break;
 
         default:

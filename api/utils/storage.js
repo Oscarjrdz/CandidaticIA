@@ -132,3 +132,178 @@ export const clearEvents = async () => {
     }
     console.log('🗑️ Eventos limpiados');
 };
+
+/**
+ * ==========================================
+ * FUNCIONES PARA CANDIDATOS
+ * ==========================================
+ */
+
+/**
+ * Guarda o actualiza un candidato
+ */
+export const saveCandidate = async (candidateData) => {
+    const { whatsapp, nombre } = candidateData;
+
+    if (!whatsapp) {
+        console.error('❌ WhatsApp es requerido para guardar candidato');
+        return null;
+    }
+
+    // Buscar si ya existe
+    const existingId = await getCandidateIdByPhone(whatsapp);
+
+    const candidate = {
+        id: existingId || `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        nombre: nombre || 'Sin nombre',
+        whatsapp: whatsapp,
+        foto: null,
+        primerContacto: existingId ? undefined : new Date().toISOString(),
+        ultimoMensaje: new Date().toISOString(),
+        totalMensajes: existingId ? undefined : 1,
+        ...candidateData
+    };
+
+    if (isKVAvailable()) {
+        try {
+            // TODO: Implementar con Vercel KV
+            console.log('📦 KV disponible pero no implementado aún, usando memoria');
+            return saveCandidateToMemory(candidate, existingId);
+        } catch (error) {
+            console.error('Error guardando candidato en KV:', error);
+            return saveCandidateToMemory(candidate, existingId);
+        }
+    } else {
+        return saveCandidateToMemory(candidate, existingId);
+    }
+};
+
+// Almacenamiento en memoria para candidatos
+let candidatesMemory = [];
+
+const saveCandidateToMemory = (candidate, isUpdate) => {
+    if (isUpdate) {
+        // Actualizar existente
+        const index = candidatesMemory.findIndex(c => c.id === candidate.id);
+        if (index !== -1) {
+            candidatesMemory[index] = {
+                ...candidatesMemory[index],
+                ...candidate,
+                totalMensajes: (candidatesMemory[index].totalMensajes || 0) + 1
+            };
+            console.log(`📝 Candidato actualizado: ${candidate.nombre} (${candidate.whatsapp})`);
+            return candidatesMemory[index];
+        }
+    }
+
+    // Crear nuevo
+    candidatesMemory.unshift(candidate);
+    console.log(`✅ Nuevo candidato guardado: ${candidate.nombre} (${candidate.whatsapp})`);
+    return candidate;
+};
+
+/**
+ * Obtiene candidatos almacenados
+ */
+export const getCandidates = async (limit = 50, offset = 0, search = '') => {
+    if (isKVAvailable()) {
+        try {
+            // TODO: Implementar con Vercel KV
+            console.log('📦 KV disponible pero no implementado aún, usando memoria');
+            return getCandidatesFromMemory(limit, offset, search);
+        } catch (error) {
+            console.error('Error obteniendo candidatos de KV:', error);
+            return getCandidatesFromMemory(limit, offset, search);
+        }
+    } else {
+        return getCandidatesFromMemory(limit, offset, search);
+    }
+};
+
+const getCandidatesFromMemory = (limit, offset, search) => {
+    let filtered = candidatesMemory;
+
+    // Filtrar por búsqueda
+    if (search) {
+        const searchLower = search.toLowerCase();
+        filtered = candidatesMemory.filter(c =>
+            c.nombre.toLowerCase().includes(searchLower) ||
+            c.whatsapp.includes(search)
+        );
+    }
+
+    return filtered.slice(offset, offset + limit);
+};
+
+/**
+ * Obtiene ID de candidato por teléfono
+ */
+const getCandidateIdByPhone = async (phone) => {
+    const candidate = candidatesMemory.find(c => c.whatsapp === phone);
+    return candidate ? candidate.id : null;
+};
+
+/**
+ * Obtiene candidato por ID
+ */
+export const getCandidateById = async (id) => {
+    if (isKVAvailable()) {
+        try {
+            // TODO: Implementar con Vercel KV
+            return candidatesMemory.find(c => c.id === id) || null;
+        } catch (error) {
+            console.error('Error obteniendo candidato de KV:', error);
+            return candidatesMemory.find(c => c.id === id) || null;
+        }
+    } else {
+        return candidatesMemory.find(c => c.id === id) || null;
+    }
+};
+
+/**
+ * Elimina un candidato
+ */
+export const deleteCandidate = async (id) => {
+    if (isKVAvailable()) {
+        try {
+            // TODO: Implementar con Vercel KV
+            const index = candidatesMemory.findIndex(c => c.id === id);
+            if (index !== -1) {
+                candidatesMemory.splice(index, 1);
+                console.log(`🗑️ Candidato eliminado: ${id}`);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error eliminando candidato de KV:', error);
+            return false;
+        }
+    } else {
+        const index = candidatesMemory.findIndex(c => c.id === id);
+        if (index !== -1) {
+            candidatesMemory.splice(index, 1);
+            console.log(`🗑️ Candidato eliminado: ${id}`);
+            return true;
+        }
+        return false;
+    }
+};
+
+/**
+ * Obtiene estadísticas de candidatos
+ */
+export const getCandidatesStats = async () => {
+    const total = candidatesMemory.length;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const nuevosHoy = candidatesMemory.filter(c =>
+        new Date(c.primerContacto) >= hoy
+    ).length;
+
+    return {
+        total,
+        nuevosHoy,
+        ultimoContacto: candidatesMemory[0] || null
+    };
+};
