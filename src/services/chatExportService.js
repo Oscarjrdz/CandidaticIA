@@ -13,17 +13,33 @@ export const generateChatHistoryText = (candidate) => {
         return `Conversación con: ${candidate?.whatsapp || 'Desconocido'}\nFecha: ${new Date().toLocaleDateString('es-MX')}\n\nNo hay mensajes en el historial.`;
     }
 
-    const header = `Conversación con: ${candidate.whatsapp}\nFecha: ${new Date().toLocaleDateString('es-MX')}\n\n`;
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const formattedTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+    let header = `HISTORIAL DE CONVERSACIÓN\n`;
+    header += `----------------------------------------\n`;
+    header += `Candidato: ${candidate.nombre || 'Desconocido'}\n`;
+    header += `WhatsApp: ${candidate.whatsapp}\n`;
+    header += `Fecha de exportación: ${formattedDate} a las ${formattedTime}\n`;
+    header += `----------------------------------------\n\n`;
 
     const messages = candidate.messages
         .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-        .map(msg => {
+        .map((msg, index) => {
             const time = new Date(msg.timestamp).toLocaleTimeString('es-MX', {
                 hour: '2-digit',
-                minute: '2-digit'
+                minute: '2-digit',
+                hour12: true
             });
-            const sender = msg.incoming ? 'Candidato' : 'Bot';
+
+            // Detect sender correctly based on 'from' property or 'incoming' flag fallback
+            const isCandidate = msg.from === 'candidate' || msg.from === 'user' || msg.incoming === true;
+            const sender = isCandidate ? 'Candidato' : 'Bot';
+
             const messageText = msg.content || msg.body || msg.text || '';
+            const paddedIndex = (index + 1).toString().padStart(3, '0');
+
             return `[${time}] ${sender}: ${messageText}`;
         })
         .join('\n');
