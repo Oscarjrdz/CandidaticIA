@@ -34,6 +34,8 @@ const CandidatesSection = ({ showToast }) => {
 
     // Timers para cada candidato (se reinician con mensajes salientes)
     const exportTimersRef = useRef({});
+    const [exportSchedules, setExportSchedules] = useState({}); // { whatsapp: { scheduledTime: timestamp, lastOutgoing: timestamp } }
+    const [currentTime, setCurrentTime] = useState(Date.now()); // For countdown updates
 
     useEffect(() => {
         // Cargar credenciales
@@ -58,6 +60,14 @@ const CandidatesSection = ({ showToast }) => {
         return () => subscription.stop();
     }, []);
 
+    // Update current time every second for countdown display
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCurrentTime(Date.now());
+        }, 1000);
+        return () => clearInterval(interval);
+    }, []);
+
     // Auto-export logic - triggers when candidates change and timer is configured
     useEffect(() => {
         if (!exportTimer || exportTimer <= 0 || !credentials || candidates.length === 0) return;
@@ -69,16 +79,40 @@ const CandidatesSection = ({ showToast }) => {
             const outgoingMessages = candidate.messages.filter(msg => !msg.incoming);
             if (outgoingMessages.length === 0) return;
 
-            // Clear existing timer for this candidate
-            if (exportTimersRef.current[candidate.whatsapp]) {
-                clearTimeout(exportTimersRef.current[candidate.whatsapp]);
-            }
+            const lastOutgoing = outgoingMessages[outgoingMessages.length - 1];
+            const lastOutgoingTime = new Date(lastOutgoing.timestamp).getTime();
 
-            // Set new timer
-            const timerMs = exportTimer * 60 * 1000;
-            exportTimersRef.current[candidate.whatsapp] = setTimeout(() => {
-                handleAutoExport(candidate, credentials);
-            }, timerMs);
+            // Check if this is a NEW outgoing message (different from what we tracked)
+            const currentSchedule = exportSchedules[candidate.whatsapp];
+            const isNewMessage = !currentSchedule || currentSchedule.lastOutgoing !== lastOutgoingTime;
+
+            if (isNewMessage) {
+                console.log(`[Auto-Export] New outgoing message for ${candidate.whatsapp}, resetting timer`);
+
+                // Clear existing timer
+                if (exportTimersRef.current[candidate.whatsapp]) {
+                    clearTimeout(exportTimersRef.current[candidate.whatsapp]);
+                }
+
+                // Calculate scheduled export time
+                const timerMs = exportTimer * 60 * 1000;
+                const scheduledTime = Date.now() + timerMs;
+
+                // Update schedule tracking
+                setExportSchedules(prev => ({
+                    ...prev,
+                    [candidate.whatsapp]: {
+                        lastOutgoing: lastOutgoingTime,
+                        scheduledTime: scheduledTime
+                    }
+                }));
+
+                // Set new timer
+                exportTimersRef.current[candidate.whatsapp] = setTimeout(() => {
+                    console.log(`[Auto-Export] Timer fired for ${candidate.whatsapp}`);
+                    handleAutoExport(candidate, credentials);
+                }, timerMs);
+            }
         });
 
         // Cleanup timers on unmount
@@ -317,6 +351,7 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Mensajes</th>
+                                    <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
@@ -366,6 +401,35 @@ const CandidatesSection = ({ showToast }) => {
                                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                                                 {candidate.totalMensajes}
                                             </span>
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
+                                            {(() => {
+                                                const schedule = exportSchedules[candidate.whatsapp];
+                                                if (!schedule || !exportTimer || exportTimer <= 0) {
+                                                    return <span className="text-xs text-gray-400">-</span>;
+                                                }
+                                                const timeRemaining = schedule.scheduledTime - currentTime;
+                                                if (timeRemaining <= 0) {
+                                                    return <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">Exportando...</span>;
+                                                }
+                                                const minutes = Math.floor(timeRemaining / 60000);
+                                                const seconds = Math.floor((timeRemaining % 60000) / 1000);
+                                                const lastOutgoingDate = new Date(schedule.lastOutgoing);
+                                                const scheduledDate = new Date(schedule.scheduledTime);
+                                                return (
+                                                    <div className="text-xs">
+                                                        <div className="font-mono text-lg font-bold text-blue-600 dark:text-blue-400 mb-1">
+                                                            {minutes}:{seconds.toString().padStart(2, '0')}
+                                                        </div>
+                                                        <div className="text-gray-500 dark:text-gray-400">
+                                                            Último: {lastOutgoingDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+                                                        <div className="text-gray-500 dark:text-gray-400">
+                                                            Export: {scheduledDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="py-4 px-4 text-center">
                                             {exportingMap[candidate.whatsapp] === 'uploading' ? (
