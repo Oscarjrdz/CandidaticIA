@@ -468,6 +468,7 @@ const CandidatesSection = ({ showToast }) => {
                             <thead>
                                 <tr className="border-b border-gray-200 dark:border-gray-700">
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
+                                    <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
@@ -490,6 +491,11 @@ const CandidatesSection = ({ showToast }) => {
                                             </div>
                                             <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                                 Desde {formatDate(candidate.primerContacto)}
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                {candidate.nombre}
                                             </div>
                                         </td>
                                         <td className="py-4 px-4">
