@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Search, Trash2, RefreshCw, User, MessageCircle } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
-import ChatDrawer from './ChatDrawer';
+import ChatWindow from './ChatWindow';
 import { getCandidates, deleteCandidate, CandidatesSubscription } from '../services/candidatesService';
 
 /**
@@ -260,12 +260,12 @@ const CandidatesSection = ({ showToast }) => {
                 </div>
             </Card>
 
-            {/* Panel lateral de Chat */}
-            <ChatDrawer
+            {/* Ventana Flotante de Chat */}
+            <ChatWindow
                 isOpen={!!selectedCandidate}
                 onClose={() => setSelectedCandidate(null)}
                 candidate={selectedCandidate}
-                credentials={credentials}
+                credentials={builderBotCreds}
             />
         </div>
     );
