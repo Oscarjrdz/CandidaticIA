@@ -23,7 +23,8 @@ export const generateChatHistoryText = (candidate) => {
                 minute: '2-digit'
             });
             const sender = msg.incoming ? 'Candidato' : 'Bot';
-            return `[${time}] ${sender}: ${msg.text}`;
+            const messageText = msg.content || msg.body || msg.text || '';
+            return `[${time}] ${sender}: ${messageText}`;
         })
         .join('\n');
 
