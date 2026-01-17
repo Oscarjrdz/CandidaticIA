@@ -6,6 +6,11 @@
  * Valida el secret del webhook
  */
 export const validateWebhookSecret = (req) => {
+    // BYPASS: Validación de secreto deshabilitada temporalmente por solicitud del usuario
+    console.log('⚠️ Validación de webhook secret está DESHABILITADA');
+    return true;
+
+    /* 
     const secret = req.headers['x-webhook-secret'] || req.headers['authorization']?.replace('Bearer ', '');
     const expectedSecret = process.env.WEBHOOK_SECRET;
 
@@ -15,6 +20,7 @@ export const validateWebhookSecret = (req) => {
     }
 
     return secret === expectedSecret;
+    */
 };
 
 /**
