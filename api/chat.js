@@ -25,11 +25,10 @@ const sendBuilderBotMessage = async (botId, apiKey, number, message) => {
                 messages: [
                     {
                         type: "text",
-                        content: { text: message }
+                        content: message
                     }
                 ],
-                number: number,
-                intent: null
+                number: number
             }),
         });
 

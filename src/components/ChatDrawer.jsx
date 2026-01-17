@@ -66,7 +66,10 @@ const ChatDrawer = ({ isOpen, onClose, candidate, credentials }) => {
                 setNewMessage('');
                 loadMessages(); // Recargar inmediato
             } else {
-                alert('Error enviando mensaje: ' + (data.details || data.error));
+                const errorMsg = typeof data.details === 'object'
+                    ? JSON.stringify(data.details, null, 2)
+                    : (data.details || data.error);
+                alert('Error enviando mensaje: ' + errorMsg);
             }
         } catch (error) {
             console.error('Error enviando:', error);
