@@ -135,7 +135,7 @@ async function processEvent(payload) {
 
             // Guardar candidato automáticamente
             if (from) {
-                const { saveCandidate, saveMessage } = await import('./utils/storage.js');
+                const { saveCandidate, saveMessage, setLastActiveUser } = await import('./utils/storage.js');
 
                 const candidateData = {
                     whatsapp: from,
@@ -147,6 +147,11 @@ async function processEvent(payload) {
 
                 const savedCandidate = await saveCandidate(candidateData);
                 console.log('👤 Candidato guardado/actualizado:', candidateData.nombre);
+
+                // Actualizar último usuario activo (para fallback de outgoing)
+                if (setLastActiveUser) {
+                    await setLastActiveUser(from);
+                }
 
                 // Guardar mensaje en historial
                 if (savedCandidate && savedCandidate.id) {
@@ -169,7 +174,18 @@ async function processEvent(payload) {
             // Vamos a loguear TODO para debuggear la primera vez.
             console.log('📤 OUTGOING DETECTADO:', JSON.stringify(data, null, 2));
 
-            const recipientNumber = data.to || data.remoteJid || (data.key && data.key.remoteJid);
+            let recipientNumber = data.to || data.remoteJid || (data.key && data.key.remoteJid);
+
+            const { saveMessage, getCandidateIdByPhone, getCandidateById, getLastActiveUser } = await import('./utils/storage.js');
+
+            // Fallback: Si no hay 'to', usar el último usuario activo
+            if (!recipientNumber && getLastActiveUser) {
+                recipientNumber = await getLastActiveUser();
+                if (recipientNumber) {
+                    console.log('⚠️ Usando Fallback LastActiveUser:', recipientNumber);
+                }
+            }
+
             // Si no hay recipient explícito, ¿quizás 'from' es el usuario en algunas versiones? No, 'from' es el bot.
 
             const content = data.answer || data.body || (data.message && data.message.content) || 'Mensaje enviado';
@@ -177,8 +193,6 @@ async function processEvent(payload) {
             if (recipientNumber) {
                 // Limpiar número (quitar @s.whatsapp.net si viene)
                 const cleanNumber = recipientNumber.replace('@s.whatsapp.net', '');
-
-                const { saveMessage, getCandidateIdByPhone, getCandidateById } = await import('./utils/storage.js');
 
                 const candidateId = await getCandidateIdByPhone(cleanNumber);
 

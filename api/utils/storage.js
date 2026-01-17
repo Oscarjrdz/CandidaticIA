@@ -478,3 +478,25 @@ export const getMessages = async (candidateId, limit = 100) => {
         return (memoryStore[`msg_${candidateId}`] || []).slice(-limit);
     }
 };
+export const setLastActiveUser = async (phone) => {
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            await redis.set('system:last_active_user', phone, 'EX', 3600); // 1 hora de expiración
+        } catch (error) {
+            console.error('Error setLastActiveUser:', error);
+        }
+    }
+};
+
+export const getLastActiveUser = async () => {
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            return await redis.get('system:last_active_user');
+        } catch (error) {
+            return null;
+        }
+    }
+    return null;
+};
