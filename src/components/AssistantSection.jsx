@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, FileText, Upload, Trash2, Save, RefreshCw, File } from 'lucide-react';
+import { Bot, FileText, Upload, Trash2, Save, RefreshCw, File, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { getCredentials } from '../utils/storage';
@@ -17,6 +17,7 @@ const AssistantSection = ({ showToast }) => {
     const [files, setFiles] = useState([]);
     const [loadingFiles, setLoadingFiles] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [uploadStatus, setUploadStatus] = useState('idle'); // 'idle' | 'uploading' | 'success' | 'error'
     const fileInputRef = useRef(null);
 
     useEffect(() => {
@@ -170,10 +171,13 @@ const AssistantSection = ({ showToast }) => {
     };
 
     const handleFileUpload = async (e) => {
-        const file = e.target.files[0];
+        // Soporte para evento de input o file direto (para drag & drop)
+        const file = e.type === 'change' ? e.target.files[0] : e;
         if (!file || !credentials) return;
 
         setUploading(true);
+        setUploadStatus('uploading');
+
         const formData = new FormData();
         formData.append('file', file);
 
@@ -193,14 +197,22 @@ const AssistantSection = ({ showToast }) => {
             const data = await res.json();
 
             if (res.ok) {
+                setUploadStatus('success');
                 showToast('Archivo subido correctamente', 'success');
                 fetchFiles();
                 if (fileInputRef.current) fileInputRef.current.value = '';
+
+                // Reset status after delay
+                setTimeout(() => setUploadStatus('idle'), 3000);
             } else {
+                setUploadStatus('error');
                 showToast(data.error || 'Error subiendo archivo', 'error');
+                setTimeout(() => setUploadStatus('idle'), 3000);
             }
         } catch (error) {
+            setUploadStatus('error');
             showToast('Error de conexión', 'error');
+            setTimeout(() => setUploadStatus('idle'), 3000);
         } finally {
             setUploading(false);
         }
@@ -337,34 +349,13 @@ const AssistantSection = ({ showToast }) => {
             ) : (
                 <Card>
                     <div className="space-y-6">
-                        {/* Upload Area */}
-                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl p-8 text-center hover:border-blue-500 dark:hover:border-blue-500 transition-colors bg-gray-50 dark:bg-gray-900/50">
-                            <div className="mx-auto w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
-                                <Upload className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-1">
-                                Subir nuevo archivo
-                            </h3>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                                PDF, TXT, DOCX, etc. Máximo 10MB.
-                            </p>
-
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                onChange={handleFileUpload}
-                                className="hidden"
-                                id="file-upload"
-                                disabled={uploading}
-                            />
-
-                            <label
-                                htmlFor="file-upload"
-                                className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 cursor-pointer transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                {uploading ? 'Subiendo...' : 'Seleccionar Archivo'}
-                            </label>
-                        </div>
+                        {/* Drag & Drop Upload Area */}
+                        <DragDropUpload
+                            fileInputRef={fileInputRef}
+                            handleFileUpload={handleFileUpload}
+                            uploading={uploading}
+                            uploadStatus={uploadStatus}
+                        />
 
                         {/* Files List */}
                         <div>
@@ -426,6 +417,113 @@ const AssistantSection = ({ showToast }) => {
                     </div>
                 </Card>
             )}
+        </div>
+    );
+};
+
+// Subcomponente para Drag & Drop
+const DragDropUpload = ({ fileInputRef, handleFileUpload, uploading, uploadStatus }) => {
+    const [dragActive, setDragActive] = useState(false);
+
+    const handleDrag = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.type === 'dragenter' || e.type === 'dragover') {
+            setDragActive(true);
+        } else if (e.type === 'dragleave') {
+            setDragActive(false);
+        }
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleFileUpload(e.dataTransfer.files[0]);
+        }
+    };
+
+    const handleClick = () => {
+        if (!uploading && fileInputRef.current) {
+            fileInputRef.current.click();
+        }
+    };
+
+    return (
+        <div
+            className={`
+                relative border-2 border-dashed rounded-xl p-10 text-center transition-all duration-200
+                ${dragActive
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-4 ring-blue-100 dark:ring-blue-900/40'
+                    : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 bg-gray-50 dark:bg-gray-800/50'
+                }
+                ${uploading ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}
+                ${uploadStatus === 'success' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : ''}
+                ${uploadStatus === 'error' ? 'border-red-500 bg-red-50 dark:bg-red-900/20' : ''}
+            `}
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            onClick={handleClick}
+        >
+            <input
+                ref={fileInputRef}
+                type="file"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="file-upload"
+                disabled={uploading}
+            />
+
+            <div className="flex flex-col items-center justify-center space-y-4">
+                {uploadStatus === 'uploading' ? (
+                    <div className="animate-spin text-blue-600 dark:text-blue-400">
+                        <Loader2 className="w-12 h-12" />
+                    </div>
+                ) : uploadStatus === 'success' ? (
+                    <div className="text-green-600 dark:text-green-400 scale-110 transform transition-transform duration-300">
+                        <CheckCircle className="w-12 h-12" />
+                    </div>
+                ) : uploadStatus === 'error' ? (
+                    <div className="text-red-600 dark:text-red-400">
+                        <AlertCircle className="w-12 h-12" />
+                    </div>
+                ) : (
+                    <div className={`p-4 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 transition-transform duration-200 ${dragActive ? 'scale-110' : ''}`}>
+                        <Upload className="w-8 h-8" />
+                    </div>
+                )}
+
+                <div className="space-y-1">
+                    <h3 className={`text-lg font-semibold transition-colors duration-200 
+                        ${uploadStatus === 'success' ? 'text-green-700 dark:text-green-300' :
+                            uploadStatus === 'error' ? 'text-red-700 dark:text-red-300' :
+                                'text-gray-900 dark:text-white'}`
+                    }>
+                        {uploadStatus === 'uploading' ? 'Subiendo archivo...' :
+                            uploadStatus === 'success' ? '¡Archivo subido con éxito!' :
+                                uploadStatus === 'error' ? 'Error al subir archivo' :
+                                    dragActive ? '¡Suelta el archivo aquí!' : 'Sube un nuevo archivo'}
+                    </h3>
+
+                    {uploadStatus === 'idle' && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+                            Arrastra y suelta documentos aquí, o haz clic para seleccionar.
+                            <br />
+                            <span className="text-xs text-gray-400 mt-1 block">Soporta PDF, TXT, DOCX, Img (Max 10MB)</span>
+                        </p>
+                    )}
+                </div>
+
+                {uploadStatus === 'idle' && (
+                    <button className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
+                        Seleccionar del ordenador
+                    </button>
+                )}
+            </div>
         </div>
     );
 };
