@@ -135,7 +135,7 @@ async function processEvent(payload) {
 
             // Guardar candidato automáticamente
             if (from) {
-                const { saveCandidate } = await import('./utils/storage.js');
+                const { saveCandidate, saveMessage } = await import('./utils/storage.js');
 
                 const candidateData = {
                     whatsapp: from,
@@ -145,8 +145,19 @@ async function processEvent(payload) {
                     ultimoPayload: payload
                 };
 
-                await saveCandidate(candidateData);
+                const savedCandidate = await saveCandidate(candidateData);
                 console.log('👤 Candidato guardado/actualizado:', candidateData.nombre);
+
+                // Guardar mensaje en historial
+                if (savedCandidate && savedCandidate.id) {
+                    await saveMessage(savedCandidate.id, {
+                        from: 'candidate',
+                        content: body,
+                        type: 'text', // TODO: Detectar tipo real (image, voice, etc)
+                        timestamp: timestamp
+                    });
+                    console.log('💾 Mensaje guardado en historial');
+                }
             }
             break;
 
