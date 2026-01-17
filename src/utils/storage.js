@@ -261,6 +261,68 @@ export const getChatFileId = (whatsapp) => {
     return fileIds[whatsapp] || null;
 };
 
+// --- Local Chat History Files ---
+/**
+ * Save chat history file content locally
+ * @param {string} whatsapp - WhatsApp number
+ * @param {string} content - Text content of the chat history
+ * @returns {Object} Success status
+ */
+export const saveLocalChatFile = (whatsapp, content) => {
+    try {
+        const files = getLocalChatFiles();
+        files[whatsapp] = {
+            content,
+            createdAt: new Date().toISOString(),
+            filename: `${whatsapp}.txt`
+        };
+        localStorage.setItem('local_chat_files', JSON.stringify(files));
+        return { success: true };
+    } catch (error) {
+        console.error('Error saving local chat file:', error);
+        return { success: false, error: 'Error guardando archivo local' };
+    }
+};
+
+/**
+ * Get all local chat files
+ * @returns {Object} Map of whatsapp number to file data
+ */
+export const getLocalChatFiles = () => {
+    try {
+        const saved = localStorage.getItem('local_chat_files');
+        return saved ? JSON.parse(saved) : {};
+    } catch (error) {
+        return {};
+    }
+};
+
+/**
+ * Get local chat file for a specific candidate
+ * @param {string} whatsapp - WhatsApp number
+ * @returns {Object|null} File data or null
+ */
+export const getLocalChatFile = (whatsapp) => {
+    const files = getLocalChatFiles();
+    return files[whatsapp] || null;
+};
+
+/**
+ * Delete local chat file for a candidate
+ * @param {string} whatsapp - WhatsApp number
+ * @returns {Object} Success status
+ */
+export const deleteLocalChatFile = (whatsapp) => {
+    try {
+        const files = getLocalChatFiles();
+        delete files[whatsapp];
+        localStorage.setItem('local_chat_files', JSON.stringify(files));
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: 'Error eliminando archivo local' };
+    }
+};
+
 export const clearAllStorage = () => {
     try {
         Object.values(STORAGE_KEYS).forEach(key => {

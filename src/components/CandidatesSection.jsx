@@ -5,7 +5,7 @@ import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
 import ChatHistoryModal from './ChatHistoryModal';
 import { getCandidates, deleteCandidate, CandidatesSubscription } from '../services/candidatesService';
-import { getExportSettings, saveExportSettings, getChatFileId, saveChatFileId, deleteChatFileId } from '../utils/storage';
+import { getExportSettings, saveExportSettings, getChatFileId, saveChatFileId, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
 import { exportChatToFile, deleteOldChatFile, generateChatHistoryText } from '../services/chatExportService';
 
 /**
@@ -36,6 +36,8 @@ const CandidatesSection = ({ showToast }) => {
     const exportTimersRef = useRef({});
     const [exportSchedules, setExportSchedules] = useState({}); // { whatsapp: { scheduledTime: timestamp, lastOutgoing: timestamp } }
     const [currentTime, setCurrentTime] = useState(Date.now()); // For countdown updates
+    const [localChatFiles, setLocalChatFiles] = useState({}); // { whatsapp: true/false } - tracks which candidates have local files
+    const previousTimerStates = useRef({}); // Track previous timer states to detect green transitions
 
     useEffect(() => {
         // Cargar credenciales
@@ -45,6 +47,14 @@ const CandidatesSection = ({ showToast }) => {
         // Cargar timer guardado
         const savedTimer = getExportSettings();
         setExportTimer(savedTimer);
+
+        // Cargar archivos locales existentes
+        const existingFiles = {};
+        const allLocalFiles = JSON.parse(localStorage.getItem('local_chat_files') || '{}');
+        Object.keys(allLocalFiles).forEach(whatsapp => {
+            existingFiles[whatsapp] = true;
+        });
+        setLocalChatFiles(existingFiles);
 
         // Cargar candidatos
         loadCandidates();
@@ -67,6 +77,47 @@ const CandidatesSection = ({ showToast }) => {
         }, 1000);
         return () => clearInterval(interval);
     }, []);
+
+    // Auto-create chat history file when timer reaches green
+    useEffect(() => {
+        if (!exportTimer || exportTimer <= 0 || candidates.length === 0) return;
+
+        candidates.forEach(candidate => {
+            if (!candidate.ultimoMensaje) return;
+
+            // Calculate if timer is ready (green)
+            const lastMessageTime = new Date(candidate.ultimoMensaje).getTime();
+            const targetTime = lastMessageTime + (exportTimer * 60 * 1000);
+            const isReady = currentTime >= targetTime;
+
+            // Get previous state
+            const wasReady = previousTimerStates.current[candidate.whatsapp];
+
+            // Detect transition from red to green (or first time reaching green)
+            if (isReady && !wasReady) {
+                console.log(`🟢 Timer reached green for ${candidate.whatsapp}, creating chat history file...`);
+
+                // Generate chat history text
+                const chatContent = generateChatHistoryText(candidate);
+
+                // Delete old file if exists
+                deleteLocalChatFile(candidate.whatsapp);
+
+                // Save new file
+                const result = saveLocalChatFile(candidate.whatsapp, chatContent);
+
+                if (result.success) {
+                    console.log(`✅ Chat history file created: ${candidate.whatsapp}.txt`);
+                    setLocalChatFiles(prev => ({ ...prev, [candidate.whatsapp]: true }));
+                } else {
+                    console.error(`❌ Error creating chat history file for ${candidate.whatsapp}`);
+                }
+            }
+
+            // Update previous state
+            previousTimerStates.current[candidate.whatsapp] = isReady;
+        });
+    }, [currentTime, candidates, exportTimer]);
 
     // Auto-export logic - triggers when candidates change and timer is configured
     useEffect(() => {
@@ -442,8 +493,8 @@ const CandidatesSection = ({ showToast }) => {
                                                 return (
                                                     <div className="flex flex-col items-center justify-center space-y-1">
                                                         <div className={`w-4 h-4 rounded-full ${isReady
-                                                                ? 'bg-green-500 dark:bg-green-400'
-                                                                : 'bg-red-500 dark:bg-red-400'
+                                                            ? 'bg-green-500 dark:bg-green-400'
+                                                            : 'bg-red-500 dark:bg-red-400'
                                                             }`} title={
                                                                 isReady
                                                                     ? 'Tiempo de inactividad cumplido'
@@ -459,7 +510,7 @@ const CandidatesSection = ({ showToast }) => {
                                         <td className="py-4 px-4 text-center">
                                             {exportingMap[candidate.whatsapp] === 'uploading' ? (
                                                 <Loader2 className="w-5 h-5 text-blue-500 animate-spin mx-auto" title="Subiendo historial..." />
-                                            ) : exportingMap[candidate.whatsapp] === 'uploaded' || getChatFileId(candidate.whatsapp) ? (
+                                            ) : localChatFiles[candidate.whatsapp] || exportingMap[candidate.whatsapp] === 'uploaded' || getChatFileId(candidate.whatsapp) ? (
                                                 <button
                                                     onClick={() => handleViewHistory(candidate)}
                                                     className="p-2 hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg smooth-transition"
