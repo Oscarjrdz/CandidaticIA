@@ -500,8 +500,8 @@ const CandidatesSection = ({ showToast }) => {
                                             </div>
                                         </td>
                                         <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-500 dark:text-gray-400 italic">
-                                                -
+                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                {candidate.nombreReal || <span className="text-gray-400 italic font-normal">-</span>}
                                             </div>
                                         </td>
                                         <td className="py-1 px-4">

@@ -235,9 +235,22 @@ async function processEvent(payload) {
                         console.log(`💾 Mensaje de AUTOPILOTO guardado para ${candidateName}`);
 
                         // ✅ NUEVO: Actualizar ultimoMensaje del candidato
-                        await updateCandidate(candidateId, {
+                        const updateData = {
                             ultimoMensaje: timestamp
-                        });
+                        };
+
+                        // 🕵️‍♂️ DETECCIÓN DE NOMBRE REAL
+                        // Buscar patrón "tu nombre es: [Nombre]"
+                        const nameRegex = /tu nombre es:\s*([^.!?\n]+)/i;
+                        const nameMatch = content.match(nameRegex);
+
+                        if (nameMatch && nameMatch[1]) {
+                            const capturedName = nameMatch[1].trim();
+                            console.log(`🎯 NOMBRE REAL DETECTADO: "${capturedName}" para ${cleanNumber}`);
+                            updateData.nombreReal = capturedName;
+                        }
+
+                        await updateCandidate(candidateId, updateData);
                         console.log(`🕐 ultimoMensaje actualizado para ${candidateName}: ${timestamp}`);
                     }
                 }
