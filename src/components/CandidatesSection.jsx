@@ -430,8 +430,17 @@ const CandidatesSection = ({ showToast }) => {
                                                 // Determinar si ya se cumplió el tiempo
                                                 const isReady = now >= targetTime;
 
+                                                // Formatear hora objetivo
+                                                const targetDate = new Date(targetTime);
+                                                const targetTimeStr = targetDate.toLocaleTimeString('es-MX', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit',
+                                                    second: '2-digit',
+                                                    hour12: false
+                                                });
+
                                                 return (
-                                                    <div className="flex items-center justify-center">
+                                                    <div className="flex flex-col items-center justify-center space-y-1">
                                                         <div className={`w-4 h-4 rounded-full ${isReady
                                                                 ? 'bg-green-500 dark:bg-green-400'
                                                                 : 'bg-red-500 dark:bg-red-400'
@@ -440,6 +449,9 @@ const CandidatesSection = ({ showToast }) => {
                                                                     ? 'Tiempo de inactividad cumplido'
                                                                     : 'Esperando tiempo de inactividad'
                                                             } />
+                                                        <div className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                                                            {targetTimeStr}
+                                                        </div>
                                                     </div>
                                                 );
                                             })()}
