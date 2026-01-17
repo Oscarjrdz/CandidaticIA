@@ -51,10 +51,30 @@ const AssistantSection = ({ showToast }) => {
             const data = await res.json();
 
             if (res.ok) {
-                // La API retorna { instructions: "..." } o similar, revisar payload real
-                // Según docs: GET retorna instrucciones directamente? o un objeto?
-                // Asumamos objeto { instructions: "..." }
-                setInstructions(data.instructions || JSON.stringify(data, null, 2));
+                // Intentar extraer el texto limpio
+                let rawInstructions = '';
+                if (typeof data === 'string') {
+                    rawInstructions = data;
+                } else if (data && data.instructions) {
+                    rawInstructions = data.instructions;
+                } else if (data && data.data && data.data.instructions) {
+                    rawInstructions = data.data.instructions;
+                } else {
+                    // Fallback: Si no encontramos 'instructions', mostramos JSON pero intentamos limpiar
+                    rawInstructions = JSON.stringify(data, null, 2);
+                }
+
+                // Si el texto parece ser un JSON stringified que contiene "instructions", intentamos parsearlo de nuevo
+                try {
+                    if (rawInstructions.trim().startsWith('{') && rawInstructions.includes('"instructions"')) {
+                        const parsed = JSON.parse(rawInstructions);
+                        if (parsed.instructions) rawInstructions = parsed.instructions;
+                    }
+                } catch (e) {
+                    // Ignorar error de parseo
+                }
+
+                setInstructions(rawInstructions);
             } else {
                 showToast(data.error || 'Error cargando instrucciones', 'error');
             }
@@ -224,8 +244,8 @@ const AssistantSection = ({ showToast }) => {
                     <button
                         onClick={() => setActiveTab('prompt')}
                         className={`pb-3 px-4 font-medium text-sm transition-colors relative ${activeTab === 'prompt'
-                                ? 'text-blue-600 dark:text-blue-400'
-                                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                             }`}
                     >
                         Instrucciones (Prompt)
@@ -236,8 +256,8 @@ const AssistantSection = ({ showToast }) => {
                     <button
                         onClick={() => setActiveTab('files')}
                         className={`pb-3 px-4 font-medium text-sm transition-colors relative ${activeTab === 'files'
-                                ? 'text-blue-600 dark:text-blue-400'
-                                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                            ? 'text-blue-600 dark:text-blue-400'
+                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                             }`}
                     >
                         Base de Conocimiento (Archivos)
@@ -275,7 +295,7 @@ const AssistantSection = ({ showToast }) => {
                             <textarea
                                 value={instructions}
                                 onChange={(e) => setInstructions(e.target.value)}
-                                className="w-full h-96 p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm leading-relaxed resize-y"
+                                className="w-full h-96 p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans text-sm leading-relaxed resize-y"
                                 placeholder="Escribe aquí las instrucciones para tu asistente..."
                             />
                         )}
