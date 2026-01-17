@@ -412,29 +412,34 @@ const CandidatesSection = ({ showToast }) => {
                                         </td>
                                         <td className="py-4 px-4 text-center">
                                             {(() => {
-                                                const schedule = exportSchedules[candidate.whatsapp];
-                                                if (!schedule || !exportTimer || exportTimer <= 0) {
+                                                // Si no hay timer configurado, mostrar "-"
+                                                if (!exportTimer || exportTimer <= 0) {
                                                     return <span className="text-xs text-gray-400">-</span>;
                                                 }
-                                                const timeRemaining = schedule.scheduledTime - currentTime;
-                                                if (timeRemaining <= 0) {
-                                                    return <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">Exportando...</span>;
+
+                                                // Si no hay último mensaje, no podemos calcular
+                                                if (!candidate.ultimoMensaje) {
+                                                    return <span className="text-xs text-gray-400">-</span>;
                                                 }
-                                                const minutes = Math.floor(timeRemaining / 60000);
-                                                const seconds = Math.floor((timeRemaining % 60000) / 1000);
-                                                const lastOutgoingDate = new Date(schedule.lastOutgoing);
-                                                const scheduledDate = new Date(schedule.scheduledTime);
+
+                                                // Calcular hora objetivo (último mensaje + minutos configurados)
+                                                const lastMessageTime = new Date(candidate.ultimoMensaje).getTime();
+                                                const targetTime = lastMessageTime + (exportTimer * 60 * 1000);
+                                                const now = currentTime;
+
+                                                // Determinar si ya se cumplió el tiempo
+                                                const isReady = now >= targetTime;
+
                                                 return (
-                                                    <div className="text-xs">
-                                                        <div className="font-mono text-lg font-bold text-blue-600 dark:text-blue-400 mb-1">
-                                                            {minutes}:{seconds.toString().padStart(2, '0')}
-                                                        </div>
-                                                        <div className="text-gray-500 dark:text-gray-400">
-                                                            Último: {lastOutgoingDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                                                        </div>
-                                                        <div className="text-gray-500 dark:text-gray-400">
-                                                            Export: {scheduledDate.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
-                                                        </div>
+                                                    <div className="flex items-center justify-center">
+                                                        <div className={`w-4 h-4 rounded-full ${isReady
+                                                                ? 'bg-green-500 dark:bg-green-400'
+                                                                : 'bg-red-500 dark:bg-red-400'
+                                                            }`} title={
+                                                                isReady
+                                                                    ? 'Tiempo de inactividad cumplido'
+                                                                    : 'Esperando tiempo de inactividad'
+                                                            } />
                                                     </div>
                                                 );
                                             })()}
