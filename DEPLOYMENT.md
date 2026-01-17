@@ -190,6 +190,42 @@ Con GitHub conectado:
 
 ---
 
+## 🛠 Troubleshooting BuilderBot Cloud
+
+Si los mensajes no llegan a tu aplicación:
+
+### 1. Verificar URL del Webhook
+Asegúrate de que la URL en BuilderBot Cloud sea exactamente:
+`https://candidatic-ia.vercel.app/api/webhook`
+- Sin espacios al final
+- Con `https://`
+- Sin barras duplicadas al final
+
+### 2. Probar conectividad con Webhook.site
+1. Ve a [Webhook.site](https://webhook.site)
+2. Copia la URL temporal que te dan.
+3. Ponla en BuilderBot Cloud.
+4. Envía un mensaje a tu bot.
+5. Si llega a Webhook.site, BuilderBot funciona bien. El problema podría ser la conexión con Vercel.
+
+### 3. Revisar Configuración en Vercel
+- Asegúrate de que las variables de entorno están configuradas (Redis).
+- Revisa los logs en tiempo real en el dashboard de Vercel cuando envíes un mensaje.
+
+### 4. Estructura del Payload
+BuilderBot Cloud v6 usa esta estructura:
+```json
+{
+  "eventName": "message.incoming",
+  "data": {
+    "from": "521...",
+    "body": "Mensaje...",
+    "name": "Usuario"
+  }
+}
+```
+Nuestra aplicación ya está configurada para manejar este formato automáticamente.
+
 ## 🐛 Troubleshooting
 
 ### Problema: "Webhook no recibe eventos"

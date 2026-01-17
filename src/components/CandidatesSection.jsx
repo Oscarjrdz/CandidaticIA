@@ -54,7 +54,7 @@ const CandidatesSection = ({ showToast }) => {
     };
 
     const handleDelete = async (id, nombre) => {
-        if (!window.confirm(`¿Eliminar candidato ${nombre}?`)) {
+        if (!window.confirm(`¿Estás seguro de eliminar a "${nombre}" permanentemente?\n\nEsta acción no se puede deshacer.`)) {
             return;
         }
 
@@ -217,7 +217,7 @@ const CandidatesSection = ({ showToast }) => {
                                             <button
                                                 onClick={() => handleDelete(candidate.id, candidate.nombre)}
                                                 className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
-                                                title="Eliminar candidato"
+                                                title="Eliminar permanentemente"
                                             >
                                                 <Trash2 className="w-4 h-4 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
                                             </button>
