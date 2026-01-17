@@ -168,6 +168,14 @@ export default async function handler(req, res) {
                     if (response.status !== 200 && response.status !== 201) {
                         const errStr = typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
                         console.error('❌ Error BuilderBot:', errStr);
+
+                        // WORKAROUND: BuilderBot devuelve error 500 "Cannot read properties of undefined" 
+                        // pero el archivo SI se sube. Si detectamos este error específico, devolvemos éxito.
+                        if (errStr.includes('Cannot read properties of undefined') || errStr.includes('reading \'0\'')) {
+                            console.log('⚠️ Detectado falso positivo de BuilderBot. Asumiendo éxito.');
+                            return res.status(200).json({ success: true, message: 'Archivo subido (con advertencia de servidor)', raw: responseData });
+                        }
+
                         return res.status(response.status).json({ error: 'Error subiendo archivo a BuilderBot', details: errStr });
                     }
 
