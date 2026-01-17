@@ -199,7 +199,15 @@ const AssistantSection = ({ showToast }) => {
             if (res.ok) {
                 setUploadStatus('success');
                 showToast('Archivo subido correctamente', 'success');
+
+                // Refresco inmediato
                 fetchFiles();
+
+                // Refresco con delay para dar tiempo al servidor (eventual consistency)
+                setTimeout(() => {
+                    fetchFiles();
+                }, 2000);
+
                 if (fileInputRef.current) fileInputRef.current.value = '';
 
                 // Reset status after delay
