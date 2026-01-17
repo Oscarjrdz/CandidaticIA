@@ -9,9 +9,20 @@ const MAX_EVENTS = 100;
 
 /**
  * Verifica si Vercel KV está disponible
+ * Soporta tanto KV_ como STORAGE_ prefixes
  */
 const isKVAvailable = () => {
-    return !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+    // Vercel puede usar KV_ o STORAGE_ como prefix dependiendo de cómo se configuró
+    const hasKVPrefix = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+    const hasStoragePrefix = !!(process.env.STORAGE_REST_API_URL && process.env.STORAGE_REST_API_TOKEN);
+
+    const available = hasKVPrefix || hasStoragePrefix;
+
+    if (available) {
+        console.log(`✅ Vercel KV disponible (prefix: ${hasKVPrefix ? 'KV_' : 'STORAGE_'})`);
+    }
+
+    return available;
 };
 
 /**
