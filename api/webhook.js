@@ -178,11 +178,21 @@ async function processEvent(payload) {
 
             const { saveMessage, getCandidateIdByPhone, getCandidateById, getLastActiveUser } = await import('./utils/storage.js');
 
-            // Fallback: Si no hay 'to', usar el último usuario activo
+            // INTENTO 2 (Seguro): Verificar si 'data.from' es en realidad el usuario
+            // En algunos adapters, 'from' en outgoing indica la "conversación" (el usuario), no el sender (bot).
+            if (!recipientNumber && data.from) {
+                const potentialCandidateId = await getCandidateIdByPhone(data.from.replace('@s.whatsapp.net', ''));
+                if (potentialCandidateId) {
+                    recipientNumber = data.from;
+                    console.log('✅ "from" coincide con un candidato. Usándolo como destinatario.');
+                }
+            }
+
+            // Fallback (Inseguro): Si no hay 'to' ni 'from' válido, usar el último usuario activo
             if (!recipientNumber && getLastActiveUser) {
                 recipientNumber = await getLastActiveUser();
                 if (recipientNumber) {
-                    console.log('⚠️ Usando Fallback LastActiveUser:', recipientNumber);
+                    console.log('⚠️ Usando Fallback LastActiveUser (Riesgo de concurrencia):', recipientNumber);
                 }
             }
 
