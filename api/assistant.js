@@ -135,10 +135,9 @@ export default async function handler(req, res) {
                 // Detección MIME obligatoria
                 const mimetype = mime.lookup(finalFilename) || fileObj.mimetype || 'application/octet-stream';
 
-                console.log(`📤 Preparando subida: ${finalFilename} (${mimetype}) desde ${filepath}`);
+                console.log(`📤 Preparando subida con Axios: ${finalFilename} (${mimetype}) desde ${filepath}`);
 
-                // Usamos Stream directo (como curl -F file=@path)
-                // form-data maneja el boundary y headers correctamente con streams
+                // Usamos Stream + form-data + Axios
                 const fileStream = fs.createReadStream(filepath);
 
                 remoteFormData.append('file', fileStream, {
@@ -146,41 +145,48 @@ export default async function handler(req, res) {
                     contentType: mimetype,
                 });
 
-                // Headers calculados por form-data
                 const formHeaders = remoteFormData.getHeaders();
 
-                console.log(`📤 Enviando request a BuilderBot API...`);
+                console.log(`📤 Enviando request a BuilderBot API (Axios)...`);
 
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'x-api-builderbot': apiKey,
-                        ...formHeaders
-                    },
-                    body: remoteFormData,
-                    duplex: 'half' // Requerido para Node 18+ si body es un stream
-                });
-
-                console.log(`📥 Respuesta BuilderBot: ${response.status} ${response.statusText}`);
-
-                if (!response.ok) {
-                    const err = await response.text();
-                    console.error('❌ Error BuilderBot:', err);
-                    return res.status(response.status).json({ error: 'Error subiendo archivo a BuilderBot', details: err });
-                }
-
-                // Respuesta exitosa: manejar posible cuerpo vacío o no-JSON
-                const textData = await response.text();
-
-                let data;
                 try {
-                    data = JSON.parse(textData);
-                } catch (e) {
-                    console.log('⚠️ Respuesta no-JSON de BuilderBot (asumiendo éxito 200 OK):', textData);
-                    data = { success: true, message: 'Archivo subido correctamente', raw: textData };
-                }
+                    const response = await axios.post(url, remoteFormData, {
+                        headers: {
+                            'x-api-builderbot': apiKey,
+                            ...formHeaders
+                        },
+                        maxBodyLength: Infinity, // Importante para archivos grandes
+                        validateStatus: () => true // No lanzar error en status != 200 para manejarlo manual
+                    });
 
-                return res.status(200).json(data);
+                    console.log(`📥 Respuesta BuilderBot: ${response.status} ${response.statusText}`);
+
+                    const responseData = response.data;
+
+                    if (response.status !== 200 && response.status !== 201) {
+                        const errStr = typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
+                        console.error('❌ Error BuilderBot:', errStr);
+                        return res.status(response.status).json({ error: 'Error subiendo archivo a BuilderBot', details: errStr });
+                    }
+
+                    // Axios ya parsea JSON automáticamente si el header es correcto
+                    // Pero si viene texto plano, responseData será string
+                    let finalData = responseData;
+                    if (typeof responseData === 'string') {
+                        try {
+                            finalData = JSON.parse(responseData);
+                        } catch (e) {
+                            console.log('⚠️ Respuesta no-JSON de BuilderBot (asumiendo éxito):', responseData);
+                            finalData = { success: true, message: 'Archivo subido correctamente', raw: responseData };
+                        }
+                    }
+
+                    return res.status(200).json(finalData);
+
+                } catch (axiosError) {
+                    console.error('❌ Error Axios:', axiosError.message);
+                    return res.status(500).json({ error: 'Error de conexión interno', details: axiosError.message });
+                }
             }
 
             if (req.method === 'DELETE') {
