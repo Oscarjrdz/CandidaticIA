@@ -1,6 +1,8 @@
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import path from 'path';
+import FormData from 'form-data';
+import mime from 'mime-types';
 
 // Disable default body parser for file uploads
 export const config = {
@@ -94,7 +96,7 @@ export default async function handler(req, res) {
                 // Necesitamos Node 18+ FormData o usar librería 'form-data'
                 // Vercel serverless usa Node 18+ nativo
 
-                // --- Usa FormData nativo (se ha verificado que funciona mejor para la subida que form-data package) ---
+                // --- Implementación Robusta con form-data y Buffer ---
                 const remoteFormData = new FormData();
                 const file = formData.files.file;
 
@@ -107,43 +109,50 @@ export default async function handler(req, res) {
                 // Compatibilidad v2/v3 formidable
                 const filepath = fileObj.filepath || fileObj.path;
                 const filename = fileObj.originalFilename || fileObj.name || 'documento';
-                const mimetype = fileObj.mimetype || fileObj.type || 'application/octet-stream';
+
+                // Detección robusta de MIME type
+                let mimetype = mime.lookup(filename) || fileObj.mimetype || fileObj.type || 'application/octet-stream';
+
+                // Corrección manual para tipos comunes si fallan
+                if (filename.endsWith('.docx')) mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+                if (filename.endsWith('.pdf')) mimetype = 'application/pdf';
 
                 if (!filepath) {
                     return res.status(500).json({ error: 'Error procesando archivo', details: 'Filepath missing in formidable object', fileObj });
                 }
 
-                console.log(`📤 Leyendo archivo de ${filepath} para enviar a BuilderBot...`);
-                // Leemos el archivo a un Blob
+                console.log(`📤 Preparando subida: ${filename} (${mimetype}) desde ${filepath}`);
+
+                // Usar Buffer para asegurar que tenemos todo el contenido antes de enviar (evita problemas de Stream interrumpido)
                 const fileBuffer = fs.readFileSync(filepath);
-                const fileBlob = new Blob([fileBuffer], { type: mimetype });
 
-                remoteFormData.append('file', fileBlob, filename);
+                remoteFormData.append('file', fileBuffer, {
+                    filename: filename,
+                    contentType: mimetype,
+                    knownLength: fileBuffer.length // Ayuda al servidor a saber el tamaño exacto
+                });
 
-                console.log(`📤 Enviando archivo a BuilderBot: ${filename} -> ${url}`);
+                console.log(`📤 Enviando request a BuilderBot API...`);
 
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {
-                        'x-api-builderbot': apiKey
-                        // Importante: No establecer Content-Type manualmente con FormData nativo
-                        // fetch generará el boundary automáticamente
+                        'x-api-builderbot': apiKey,
+                        ...remoteFormData.getHeaders() // Headers correctos para multipart/form-data
                     },
                     body: remoteFormData
                 });
 
                 console.log(`📥 Respuesta BuilderBot: ${response.status} ${response.statusText}`);
 
-                // Si la respuesta no es OK, intentamos leer el error
                 if (!response.ok) {
                     const err = await response.text();
                     console.error('❌ Error BuilderBot:', err);
-                    return res.status(response.status).json({ error: 'Error subiendo archivo', details: err });
+                    return res.status(response.status).json({ error: 'Error subiendo archivo a BuilderBot', details: err });
                 }
 
                 // Respuesta exitosa: manejar posible cuerpo vacío o no-JSON
                 const textData = await response.text();
-                // console.log('📥 Body BuilderBot:', textData); // Uncomment for debug
 
                 let data;
                 try {
