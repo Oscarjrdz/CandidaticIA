@@ -467,8 +467,6 @@ const CandidatesSection = ({ showToast }) => {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-gray-200 dark:border-gray-700">
-                                    <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Foto</th>
-                                    <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre</th>
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
@@ -487,29 +485,11 @@ const CandidatesSection = ({ showToast }) => {
                                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500 animate-pulse rounded-r-full" title="Exportando historial..."></div>
                                         )}
                                         <td className="py-4 px-4">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold">
-                                                {candidate.foto ? (
-                                                    <img
-                                                        src={candidate.foto}
-                                                        alt={candidate.nombre}
-                                                        className="w-10 h-10 rounded-full object-cover"
-                                                    />
-                                                ) : (
-                                                    <span>{candidate.nombre.charAt(0).toUpperCase()}</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-4">
-                                            <div className="font-medium text-gray-900 dark:text-white">
-                                                {candidate.nombre}
-                                            </div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                                                Desde {formatDate(candidate.primerContacto)}
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-4">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 font-mono">
+                                            <div className="text-sm text-gray-900 dark:text-white font-mono font-medium">
                                                 {formatPhone(candidate.whatsapp)}
+                                            </div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                Desde {formatDate(candidate.primerContacto)}
                                             </div>
                                         </td>
                                         <td className="py-4 px-4">
