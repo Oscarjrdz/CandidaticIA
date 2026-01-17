@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Loader2, MessageCircle, GripHorizontal } from 'lucide-react';
+import { X, Send, Loader2, MessageCircle, Move } from 'lucide-react';
 import Button from './ui/Button';
 
 /**
@@ -218,7 +218,7 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                     onMouseDown={handleMouseDown}
                 >
                     <div className="flex items-center space-x-2 pointer-events-none">
-                        <GripHorizontal className="w-4 h-4 text-gray-400" />
+                        <Move className="w-4 h-4 text-gray-400" />
                         <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold text-xs">
                             {candidate?.nombre?.charAt(0) || '?'}
                         </div>
