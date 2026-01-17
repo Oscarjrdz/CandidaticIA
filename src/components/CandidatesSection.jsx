@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Search, Trash2, RefreshCw, User } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
+import ChatDrawer from './ChatDrawer';
 import { getCandidates, deleteCandidate, CandidatesSubscription } from '../services/candidatesService';
 
 /**
@@ -13,7 +14,17 @@ const CandidatesSection = ({ showToast }) => {
     const [search, setSearch] = useState('');
     const [lastUpdate, setLastUpdate] = useState(null);
 
+    // Estado para el chat
+    const [selectedCandidate, setSelectedCandidate] = useState(null);
+    const [credentials, setCredentials] = useState(null);
+
     useEffect(() => {
+        // Cargar credenciales guardadas para usarlas en el chat
+        const savedCreds = localStorage.getItem('builderbot_credentials');
+        if (savedCreds) {
+            setCredentials(JSON.parse(savedCreds));
+        }
+
         // Cargar candidatos al montar
         loadCandidates();
 
@@ -66,6 +77,14 @@ const CandidatesSection = ({ showToast }) => {
         } else {
             showToast(`Error: ${result.error}`, 'error');
         }
+    };
+
+    const handleOpenChat = (candidate) => {
+        if (!credentials) {
+            showToast('Configura tus credenciales de BuilderBot primero para usar el chat', 'warning');
+            return;
+        }
+        setSelectedCandidate(candidate);
     };
 
     const formatPhone = (phone) => {
@@ -168,6 +187,7 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Mensajes</th>
+                                    <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
                             </thead>
@@ -215,6 +235,16 @@ const CandidatesSection = ({ showToast }) => {
                                         </td>
                                         <td className="py-4 px-4 text-center">
                                             <button
+                                                onClick={() => handleOpenChat(candidate)}
+                                                className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative"
+                                                title="Abrir chat"
+                                            >
+                                                <MessageCircle className="w-5 h-5" />
+                                                <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
+                                            </button>
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
+                                            <button
                                                 onClick={() => handleDelete(candidate.id, candidate.nombre)}
                                                 className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
                                                 title="Eliminar permanentemente"
@@ -229,6 +259,14 @@ const CandidatesSection = ({ showToast }) => {
                     )}
                 </div>
             </Card>
+
+            {/* Panel lateral de Chat */}
+            <ChatDrawer
+                isOpen={!!selectedCandidate}
+                onClose={() => setSelectedCandidate(null)}
+                candidate={selectedCandidate}
+                credentials={credentials}
+            />
         </div>
     );
 };
