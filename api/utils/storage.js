@@ -10,14 +10,32 @@ let redisClient = null;
 
 const getRedisClient = () => {
     if (!redisClient && process.env.REDIS_URL) {
-        // Opción para ignorar errores SSL si es necesario (común en Upstash/Vercel)
-        redisClient = new Redis(process.env.REDIS_URL, {
-            tls: { rejectUnauthorized: false }
-        });
+        // Usar configuración optimizada para serverless
+        // ioredis detecta automáticamente SSL si la URL empieza con rediss://
+        // No forzamos tls: {} a menos que sea necesario
 
-        redisClient.on('error', (err) => {
-            console.error('Redis Client Error', err);
-        });
+        try {
+            redisClient = new Redis(process.env.REDIS_URL, {
+                maxRetriesPerRequest: 3, // Fallar rápido en serverless
+                connectTimeout: 5000,    // Timeout de conexión 5s
+                family: 0,               // Auto-detectar IPv4/IPv6
+                // Si la URL es rediss://, ioredis usa TLS automáticamente
+                // Si hay problemas de certificados self-signed:
+                tls: process.env.REDIS_URL.startsWith('rediss://') ? {
+                    rejectUnauthorized: false
+                } : undefined
+            });
+
+            redisClient.on('error', (err) => {
+                console.error('Redis Client Error:', err.message);
+            });
+
+            redisClient.on('connect', () => {
+                console.log('✅ Redis conectado');
+            });
+        } catch (error) {
+            console.error('Error inicializando Redis:', error);
+        }
     }
     return redisClient;
 };
