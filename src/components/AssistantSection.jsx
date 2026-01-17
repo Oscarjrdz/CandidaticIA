@@ -5,6 +5,9 @@ import Button from './ui/Button';
 import { getCredentials } from '../utils/storage';
 
 const AssistantSection = ({ showToast }) => {
+    // Defensive: ensure showToast is always a function
+    const safeShowToast = showToast || ((msg, type) => console.log(`[${type}] ${msg}`));
+
     const [credentials, setCredentials] = useState(null);
     const [activeTab, setActiveTab] = useState('prompt'); // 'prompt' | 'files'
 
@@ -20,6 +23,11 @@ const AssistantSection = ({ showToast }) => {
     const [uploadStatus, setUploadStatus] = useState('idle'); // 'idle' | 'uploading' | 'success' | 'error'
     const fileInputRef = useRef(null);
 
+    // Batch Selection State
+    const [selectedFiles, setSelectedFiles] = useState(new Set());
+    const [selectAll, setSelectAll] = useState(false);
+    const [deletingBatch, setDeletingBatch] = useState(false);
+
     useEffect(() => {
         const creds = getCredentials();
         if (creds && creds.botId && creds.answerId && creds.apiKey) {
@@ -30,8 +38,18 @@ const AssistantSection = ({ showToast }) => {
     }, []);
 
     useEffect(() => {
+        console.log('🔄 AssistantSection useEffect triggered:', {
+            hasCredentials: !!credentials,
+            activeTab,
+            env: import.meta.env.MODE
+        });
+
         if (credentials && activeTab === 'files') {
-            fetchFiles();
+            console.log('📂 Loading files for tab...');
+            fetchFiles().catch(err => {
+                console.error('❌ Error loading files in useEffect:', err);
+                safeShowToast('Error cargando archivos. Revisa la consola.', 'error');
+            });
         }
     }, [activeTab, credentials]);
 
@@ -99,11 +117,11 @@ const AssistantSection = ({ showToast }) => {
 
                 setInstructions(rawInstructions);
             } else {
-                showToast(data.error || 'Error cargando instrucciones', 'error');
+                safeShowToast(data.error || 'Error cargando instrucciones', 'error');
             }
         } catch (error) {
             console.error(error);
-            showToast('Error de conexión', 'error');
+            safeShowToast('Error de conexión', 'error');
         } finally {
             setLoadingPrompt(false);
         }
@@ -129,12 +147,12 @@ const AssistantSection = ({ showToast }) => {
             const data = await res.json();
 
             if (res.ok) {
-                showToast('Instrucciones actualizadas correctamente', 'success');
+                safeShowToast('Instrucciones actualizadas correctamente', 'success');
             } else {
-                showToast(data.error || 'Error guardando instrucciones', 'error');
+                safeShowToast(data.error || 'Error guardando instrucciones', 'error');
             }
         } catch (error) {
-            showToast('Error de conexión', 'error');
+            safeShowToast('Error de conexión', 'error');
         } finally {
             setSavingPrompt(false);
         }
@@ -143,8 +161,14 @@ const AssistantSection = ({ showToast }) => {
     // --- FILES HANDLING ---
 
     const fetchFiles = async () => {
-        if (!credentials) return;
+        if (!credentials) {
+            console.warn('⚠️ fetchFiles called without credentials');
+            return;
+        }
+
+        console.log('📥 Fetching files from API...', { botId: credentials.botId });
         setLoadingFiles(true);
+
         try {
             const params = new URLSearchParams({
                 botId: credentials.botId,
@@ -153,20 +177,49 @@ const AssistantSection = ({ showToast }) => {
                 type: 'files'
             });
 
-            const res = await fetch(`/api/assistant?${params}`);
-            const data = await res.json();
+            const url = `/api/assistant?${params}`;
+            console.log('🌐 API URL:', url.replace(credentials.apiKey, 'REDACTED'));
+
+            const res = await fetch(url);
+            console.log('📡 API Response:', { status: res.status, ok: res.ok, statusText: res.statusText });
+
+            // Handle non-JSON responses gracefully
+            let data;
+            try {
+                data = await res.json();
+                console.log('📦 Parsed JSON data:', data);
+            } catch (jsonError) {
+                console.error('❌ Invalid JSON response:', jsonError);
+                const textResponse = await res.text();
+                console.error('📄 Raw response text:', textResponse);
+                setFiles([]);
+                setLoadingFiles(false);
+                safeShowToast('Error: Respuesta inválida del servidor', 'error');
+                return;
+            }
 
             if (res.ok) {
                 // Asumimos que data es un array de archivos o contiene un array
-                // Docs: GET /files -> lista
-                setFiles(Array.isArray(data) ? data : (data.files || []));
+                const filesList = Array.isArray(data) ? data : (data.files || []);
+                console.log('✅ Files loaded successfully:', filesList.length, 'files');
+                setFiles(filesList);
             } else {
-                showToast(data.error || 'Error cargando archivos', 'error');
+                console.error('❌ API returned error:', data);
+                setFiles([]);
+                safeShowToast(data.error || 'Error cargando archivos', 'error');
             }
         } catch (error) {
-            showToast('Error de conexión', 'error');
+            console.error('❌ Fetch files error:', error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+            });
+            setFiles([]);
+            safeShowToast(`Error de conexión: ${error.message}`, 'error');
         } finally {
             setLoadingFiles(false);
+            console.log('🏁 fetchFiles completed');
         }
     };
 
@@ -198,7 +251,7 @@ const AssistantSection = ({ showToast }) => {
 
             if (res.ok) {
                 setUploadStatus('success');
-                showToast('Archivo subido correctamente', 'success');
+                safeShowToast('Archivo subido correctamente', 'success');
 
                 // Refresco inmediato
                 fetchFiles();
@@ -216,12 +269,12 @@ const AssistantSection = ({ showToast }) => {
                 setUploadStatus('error');
                 // Mostrar detalles del error si existen
                 const errorMsg = data.details ? `${data.error}: ${data.details}` : (data.error || 'Error subiendo archivo');
-                showToast(errorMsg, 'error');
+                safeShowToast(errorMsg, 'error');
                 setTimeout(() => setUploadStatus('idle'), 3000);
             }
         } catch (error) {
             setUploadStatus('error');
-            showToast(`Error de conexión: ${error.message}`, 'error');
+            safeShowToast(`Error de conexión: ${error.message}`, 'error');
             setTimeout(() => setUploadStatus('idle'), 3000);
         } finally {
             setUploading(false);
@@ -245,14 +298,14 @@ const AssistantSection = ({ showToast }) => {
             });
 
             if (res.ok) {
-                showToast('Archivo eliminado', 'success');
+                safeShowToast('Archivo eliminado', 'success');
                 fetchFiles();
             } else {
                 const data = await res.json();
-                showToast(data.error || 'Error eliminando archivo', 'error');
+                safeShowToast(data.error || 'Error eliminando archivo', 'error');
             }
         } catch (error) {
-            showToast('Error de conexión', 'error');
+            safeShowToast('Error de conexión', 'error');
         }
     };
 
@@ -326,17 +379,17 @@ const AssistantSection = ({ showToast }) => {
 
             // Show results
             if (successCount > 0) {
-                showToast(`${successCount} archivo(s) eliminado(s) correctamente`, 'success');
+                safeShowToast(`${successCount} archivo(s) eliminado(s) correctamente`, 'success');
             }
             if (errorCount > 0) {
-                showToast(`Error eliminando ${errorCount} archivo(s)`, 'error');
+                safeShowToast(`Error eliminando ${errorCount} archivo(s)`, 'error');
             }
 
             // Refresh and clear selection
             fetchFiles();
             clearSelection();
         } catch (error) {
-            showToast('Error en operación de borrado masivo', 'error');
+            safeShowToast('Error en operación de borrado masivo', 'error');
         } finally {
             setDeletingBatch(false);
         }
@@ -446,18 +499,31 @@ const AssistantSection = ({ showToast }) => {
                 <Card>
                     <div className="space-y-6">
                         {/* Drag & Drop Upload Area */}
-                        <DragDropUpload
-                            fileInputRef={fileInputRef}
-                            handleFileUpload={handleFileUpload}
-                            uploading={uploading}
-                            uploadStatus={uploadStatus}
-                        />
+                        {(() => {
+                            try {
+                                return (
+                                    <DragDropUpload
+                                        fileInputRef={fileInputRef}
+                                        handleFileUpload={handleFileUpload}
+                                        uploading={uploading}
+                                        uploadStatus={uploadStatus}
+                                    />
+                                );
+                            } catch (error) {
+                                console.error('❌ Error rendering DragDropUpload:', error);
+                                return (
+                                    <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                                        <p className="text-red-800 dark:text-red-400">Error cargando área de subida. Revisa la consola.</p>
+                                    </div>
+                                );
+                            }
+                        })()}
 
                         {/* Files List */}
                         <div>
                             <div className="flex justify-between items-center mb-4">
                                 <div className="flex items-center space-x-3">
-                                    {files.length > 0 && (
+                                    {Array.isArray(files) && files.length > 0 && (
                                         <input
                                             type="checkbox"
                                             checked={selectAll}
@@ -467,7 +533,7 @@ const AssistantSection = ({ showToast }) => {
                                         />
                                     )}
                                     <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                                        Archivos Cargados ({files.length})
+                                        Archivos Cargados ({Array.isArray(files) ? files.length : 0})
                                     </h3>
                                 </div>
                                 <Button
@@ -513,6 +579,10 @@ const AssistantSection = ({ showToast }) => {
                                         <div key={i} className="h-20 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
                                     ))}
                                 </div>
+                            ) : !Array.isArray(files) ? (
+                                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                    <p className="text-yellow-800 dark:text-yellow-400">Error: Estado de archivos inválido. Intenta refrescar.</p>
+                                </div>
                             ) : files.length === 0 ? (
                                 <div className="text-center py-12 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                                     <FileText className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
@@ -520,40 +590,56 @@ const AssistantSection = ({ showToast }) => {
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                    {files.map((file, idx) => (
-                                        <div
-                                            key={file.id || idx}
-                                            className={`flex items-center space-x-2 p-3 bg-white dark:bg-gray-800 border rounded-lg hover:shadow-sm transition-all ${selectedFiles.has(file.id)
-                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500'
-                                                    : 'border-gray-200 dark:border-gray-700'
-                                                }`}
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={selectedFiles.has(file.id)}
-                                                onChange={() => handleSelectFile(file.id)}
-                                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer flex-shrink-0"
-                                            />
-                                            <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded flex items-center justify-center flex-shrink-0">
-                                                <File className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium text-sm text-gray-900 dark:text-white truncate" title={file.filename || file.name || `Archivo ${idx + 1}`}>
-                                                    {file.filename || file.name || `Archivo ${idx + 1}`}
-                                                </p>
-                                                <p className="text-xs text-gray-500 font-mono truncate">
-                                                    {file.id.substring(0, 8)}...
-                                                </p>
-                                            </div>
-                                            <button
-                                                onClick={() => handleDeleteFile(file.id)}
-                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
-                                                title="Eliminar archivo"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    ))}
+                                    {files.map((file, idx) => {
+                                        try {
+                                            // Defensive check for file object
+                                            if (!file || typeof file !== 'object') {
+                                                console.warn('⚠️ Invalid file object at index', idx, file);
+                                                return null;
+                                            }
+
+                                            const fileId = file.id || `file-${idx}`;
+                                            const fileName = file.filename || file.name || `Archivo ${idx + 1}`;
+
+                                            return (
+                                                <div
+                                                    key={fileId}
+                                                    className={`flex items-center space-x-2 p-3 bg-white dark:bg-gray-800 border rounded-lg hover:shadow-sm transition-all ${selectedFiles.has(fileId)
+                                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500'
+                                                        : 'border-gray-200 dark:border-gray-700'
+                                                        }`}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedFiles.has(fileId)}
+                                                        onChange={() => handleSelectFile(fileId)}
+                                                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer flex-shrink-0"
+                                                    />
+                                                    <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded flex items-center justify-center flex-shrink-0">
+                                                        <File className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-sm text-gray-900 dark:text-white truncate" title={fileName}>
+                                                            {fileName}
+                                                        </p>
+                                                        <p className="text-xs text-gray-500 font-mono truncate">
+                                                            {fileId.substring(0, 8)}...
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleDeleteFile(fileId)}
+                                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
+                                                        title="Eliminar archivo"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            );
+                                        } catch (error) {
+                                            console.error('❌ Error rendering file at index', idx, error);
+                                            return null;
+                                        }
+                                    })}
                                 </div>
                             )}
                         </div>

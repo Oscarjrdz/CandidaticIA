@@ -87,7 +87,9 @@ const CandidatesSection = ({ showToast }) => {
             const isNewMessage = !currentSchedule || currentSchedule.lastOutgoing !== lastOutgoingTime;
 
             if (isNewMessage) {
+                const scheduledTime = Date.now() + (exportTimer * 60 * 1000);
                 console.log(`[Auto-Export] New outgoing message for ${candidate.whatsapp}, resetting timer`);
+                console.log(`[Auto-Export] Timer will fire in ${exportTimer} minutes at ${new Date(scheduledTime).toLocaleTimeString('es-MX')}`);
 
                 // Clear existing timer
                 if (exportTimersRef.current[candidate.whatsapp]) {
@@ -96,7 +98,6 @@ const CandidatesSection = ({ showToast }) => {
 
                 // Calculate scheduled export time
                 const timerMs = exportTimer * 60 * 1000;
-                const scheduledTime = Date.now() + timerMs;
 
                 // Update schedule tracking
                 setExportSchedules(prev => ({
@@ -109,7 +110,8 @@ const CandidatesSection = ({ showToast }) => {
 
                 // Set new timer
                 exportTimersRef.current[candidate.whatsapp] = setTimeout(() => {
-                    console.log(`[Auto-Export] Timer fired for ${candidate.whatsapp}`);
+                    console.log(`[Auto-Export] ⏰ Timer fired for ${candidate.whatsapp}`);
+                    console.log(`[Auto-Export] Starting auto-export process...`);
                     handleAutoExport(candidate, credentials);
                 }, timerMs);
             }

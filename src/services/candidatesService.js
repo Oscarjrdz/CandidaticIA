@@ -143,11 +143,9 @@ export class CandidatesSubscription {
         const result = await getCandidates(50, 0);
 
         if (result.success) {
-            // Solo notificar si hay cambios
-            if (result.count !== this.lastCount) {
-                this.lastCount = result.count;
-                this.callback(result.candidates);
-            }
+            // Always notify to detect message changes in existing candidates
+            // This allows the auto-export timer to trigger when new messages arrive
+            this.callback(result.candidates);
         }
     }
 
