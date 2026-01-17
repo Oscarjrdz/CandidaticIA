@@ -82,41 +82,64 @@ const CandidatesSection = ({ showToast }) => {
     useEffect(() => {
         if (!exportTimer || exportTimer <= 0 || candidates.length === 0) return;
 
-        candidates.forEach(candidate => {
-            if (!candidate.ultimoMensaje) return;
+        const processGreenTimers = async () => {
+            const promises = candidates.map(async (candidate) => {
+                if (!candidate.ultimoMensaje) return;
 
-            // Calculate if timer is ready (green)
-            const lastMessageTime = new Date(candidate.ultimoMensaje).getTime();
-            const targetTime = lastMessageTime + (exportTimer * 60 * 1000);
-            const isReady = currentTime >= targetTime;
+                // Calculate if timer is ready (green)
+                const lastMessageTime = new Date(candidate.ultimoMensaje).getTime();
+                const targetTime = lastMessageTime + (exportTimer * 60 * 1000);
+                const isReady = currentTime >= targetTime;
 
-            // Get previous state
-            const wasReady = previousTimerStates.current[candidate.whatsapp];
+                // Get previous state
+                const wasReady = previousTimerStates.current[candidate.whatsapp];
 
-            // Detect transition from red to green (or first time reaching green)
-            if (isReady && !wasReady) {
-                console.log(`🟢 Timer reached green for ${candidate.whatsapp}, creating chat history file...`);
+                // Detect transition from red to green (or first time reaching green)
+                if (isReady && !wasReady) {
+                    console.log(`🟢 Timer reached green for ${candidate.whatsapp}, creating chat history file...`);
 
-                // Generate chat history text
-                const chatContent = generateChatHistoryText(candidate);
+                    try {
+                        // Fetch messages for the candidate
+                        const res = await fetch(`/api/chat?candidateId=${candidate.id}`);
+                        const data = await res.json();
 
-                // Delete old file if exists
-                deleteLocalChatFile(candidate.whatsapp);
+                        if (data.success && data.messages) {
+                            const candidateWithMessages = { ...candidate, messages: data.messages };
 
-                // Save new file
-                const result = saveLocalChatFile(candidate.whatsapp, chatContent);
+                            // Generate chat history text with actual messages
+                            const chatContent = generateChatHistoryText(candidateWithMessages);
 
-                if (result.success) {
-                    console.log(`✅ Chat history file created: ${candidate.whatsapp}.txt`);
-                    setLocalChatFiles(prev => ({ ...prev, [candidate.whatsapp]: true }));
-                } else {
-                    console.error(`❌ Error creating chat history file for ${candidate.whatsapp}`);
+                            // Delete old file if exists
+                            deleteLocalChatFile(candidate.whatsapp);
+
+                            // Save new file
+                            const result = saveLocalChatFile(candidate.whatsapp, chatContent);
+
+                            if (result.success) {
+                                console.log(`✅ Chat history file created: ${candidate.whatsapp}.txt`);
+                                setLocalChatFiles(prev => ({ ...prev, [candidate.whatsapp]: true }));
+                            } else {
+                                console.error(`❌ Error creating chat history file for ${candidate.whatsapp}`);
+                            }
+                        } else {
+                            console.warn(`⚠️ Could not fetch messages for ${candidate.whatsapp}`);
+                        }
+                    } catch (error) {
+                        console.error(`❌ Error fetching messages for ${candidate.whatsapp}:`, error);
+                    }
                 }
-            }
 
-            // Update previous state
-            previousTimerStates.current[candidate.whatsapp] = isReady;
-        });
+                // Update previous state inside the map? No, side-effects tricky in map.
+                // We will return the result and update ref outside? 
+                // Better: update the ref here, assuming sequential or non-conflicting updates.
+                // Since this runs often, we must be careful with async.
+                previousTimerStates.current[candidate.whatsapp] = isReady;
+            });
+
+            await Promise.all(promises);
+        };
+
+        processGreenTimers();
     }, [currentTime, candidates, exportTimer]);
 
     // Auto-export logic - triggers when candidates change and timer is configured
@@ -204,11 +227,42 @@ const CandidatesSection = ({ showToast }) => {
         }
     };
 
-    const handleViewHistory = (candidate) => {
-        const content = generateChatHistoryText(candidate);
-        setHistoryModalCandidate(candidate);
-        setHistoryModalContent(content);
-        setHistoryModalOpen(true);
+    const handleViewHistory = async (candidate) => {
+        // Try to get content from local file first
+        const localFile = getLocalChatFile(candidate.whatsapp);
+
+        if (localFile && localFile.content) {
+            setHistoryModalCandidate(candidate);
+            setHistoryModalContent(localFile.content);
+            setHistoryModalOpen(true);
+            return;
+        }
+
+        // Fallback: Fetch messages and generate content
+        try {
+            const res = await fetch(`/api/chat?candidateId=${candidate.id}`);
+            const data = await res.json();
+
+            if (data.success && data.messages) {
+                const candidateWithMessages = { ...candidate, messages: data.messages };
+                const content = generateChatHistoryText(candidateWithMessages);
+                setHistoryModalCandidate(candidate);
+                setHistoryModalContent(content);
+                setHistoryModalOpen(true);
+            } else {
+                // Show empty or error state
+                const content = generateChatHistoryText(candidate); // Will show "No hay mensajes"
+                setHistoryModalCandidate(candidate);
+                setHistoryModalContent(content);
+                setHistoryModalOpen(true);
+            }
+        } catch (error) {
+            console.error("Error fetching history:", error);
+            const content = generateChatHistoryText(candidate);
+            setHistoryModalCandidate(candidate);
+            setHistoryModalContent(content);
+            setHistoryModalOpen(true);
+        }
     };
 
     const handleSaveSettings = () => {
