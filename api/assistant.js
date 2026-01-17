@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import FormData from 'form-data';
 import mime from 'mime-types';
+import axios from 'axios';
 
 // Disable default body parser for file uploads
 export const config = {
