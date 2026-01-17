@@ -92,12 +92,25 @@ export default async function handler(req, res) {
 /**
  * Procesa eventos según su tipo
  */
+/**
+ * Procesa eventos según su tipo
+ */
 async function processEvent(payload) {
-    const eventType = payload.event;
+    // Normalizar datos entre diferentes formatos de payload
+    const eventType = payload.eventName || payload.event;
+
+    // Extraer datos relevantes (soporte híbrido)
+    const data = payload.data || payload;
+    const from = data.from;
+    const name = data.name || data.pushName || 'Sin nombre';
+    const body = data.body || (data.message && data.message.content) || '';
+    const timestamp = payload.timestamp || payload.ts || new Date().toISOString();
+
+    console.log(`🔄 Procesando evento: ${eventType}`, { from, name });
 
     switch (eventType) {
         case 'status.ready':
-            console.log('🟢 Bot está listo:', payload.botId);
+            console.log('🟢 Bot está listo:', payload.botId || data.botId);
             break;
 
         case 'status.require_action':
@@ -109,16 +122,17 @@ async function processEvent(payload) {
             break;
 
         case 'message.incoming':
-            console.log('📨 Mensaje recibido de:', payload.from);
+            console.log('📨 Mensaje recibido de:', from);
 
             // Guardar candidato automáticamente
-            if (payload.from) {
+            if (from) {
                 const { saveCandidate } = await import('./utils/storage.js');
 
                 const candidateData = {
-                    whatsapp: payload.from,
-                    nombre: payload.name || payload.pushName || 'Sin nombre',
-                    foto: payload.profilePicUrl || null,
+                    whatsapp: from,
+                    nombre: name,
+                    foto: data.profilePicUrl || null,
+                    ultimoMensaje: timestamp,
                     ultimoPayload: payload
                 };
 
@@ -128,11 +142,7 @@ async function processEvent(payload) {
             break;
 
         case 'message.outgoing':
-            console.log('📤 Mensaje enviado a:', payload.to);
-            break;
-
-        case 'message.calling':
-            console.log('📞 Llamada recibida de:', payload.from);
+            console.log('📤 Mensaje enviado a:', data.to);
             break;
 
         default:

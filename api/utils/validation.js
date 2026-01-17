@@ -26,21 +26,30 @@ export const validateWebhookSecret = (req) => {
 /**
  * Valida la estructura básica del payload de BuilderBot
  */
+/**
+ * Valida la estructura básica del payload de BuilderBot
+ */
 export const validateEventPayload = (payload) => {
     if (!payload || typeof payload !== 'object') {
         return { valid: false, error: 'Payload inválido' };
     }
 
-    // Campos requeridos según documentación de BuilderBot
-    if (!payload.event) {
-        return { valid: false, error: 'Campo "event" requerido' };
+    // Soporte para estructura estándar de BuilderBot (v6+)
+    // { eventName: '...', data: { ... } }
+    if (payload.eventName) {
+        if (!payload.data) {
+            return { valid: false, error: 'Campo "data" requerido para BuilderBot' };
+        }
+        return { valid: true };
     }
 
-    if (!payload.timestamp && !payload.ts) {
-        return { valid: false, error: 'Campo "timestamp" requerido' };
+    // Estructura legacy/custom
+    if (payload.event) {
+        // Relax timestamp check for now as some versions might not send it at root
+        return { valid: true };
     }
 
-    return { valid: true };
+    return { valid: false, error: 'Formato desconocido (falta eventName o event)' };
 };
 
 /**
