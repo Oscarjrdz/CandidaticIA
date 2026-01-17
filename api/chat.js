@@ -22,12 +22,10 @@ const sendBuilderBotMessage = async (botId, apiKey, number, message) => {
                 'x-api-builderbot': apiKey,
             },
             body: JSON.stringify({
-                messages: [
-                    {
-                        type: "text",
-                        content: message
-                    }
-                ],
+                messages: {
+                    type: "text",
+                    content: message
+                },
                 number: number
             }),
         });
