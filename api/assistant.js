@@ -130,7 +130,17 @@ export default async function handler(req, res) {
                     return res.status(response.status).json({ error: 'Error subiendo archivo', details: err });
                 }
 
-                const data = await response.json();
+                // BuilderBot might return empty body or non-JSON on success
+                const textData = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(textData);
+                } catch (e) {
+                    // Si no es JSON pero fue OK, asumimos éxito
+                    console.log('Respuesta no-JSON de BuilderBot (asumiendo éxito):', textData);
+                    data = { success: true, message: 'Archivo subido', raw: textData };
+                }
+
                 return res.status(200).json(data);
             }
 
