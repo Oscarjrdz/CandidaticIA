@@ -136,14 +136,15 @@ export default async function handler(req, res) {
                 // Detección MIME obligatoria
                 const mimetype = mime.lookup(finalFilename) || fileObj.mimetype || 'application/octet-stream';
 
-                console.log(`📤 Preparando subida con Axios: ${finalFilename} (${mimetype}) desde ${filepath}`);
+                console.log(`📤 Preparando subida con Axios (Buffer): ${finalFilename} (${mimetype}) desde ${filepath}`);
 
-                // Usamos Stream + form-data + Axios
-                const fileStream = fs.createReadStream(filepath);
+                // Usamos Buffer + Axios para asegurar Length correcto y evitar problemas de stream
+                const fileBuffer = fs.readFileSync(filepath);
 
-                remoteFormData.append('file', fileStream, {
+                remoteFormData.append('file', fileBuffer, {
                     filename: finalFilename,
                     contentType: mimetype,
+                    // knownLength se calcula solo con Buffer
                 });
 
                 const formHeaders = remoteFormData.getHeaders();
