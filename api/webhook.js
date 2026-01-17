@@ -210,13 +210,30 @@ async function processEvent(payload) {
                     const candidate = await getCandidateById(candidateId);
                     const candidateName = candidate ? candidate.nombre : 'Desconocido';
 
-                    await saveMessage(candidateId, {
-                        from: 'bot',
-                        content: content,
-                        type: 'text',
-                        timestamp: timestamp
+                    // DEDUPLICACIÓN: Verificar si ya existe un mensaje reciente idéntico enviado por "me" (api/chat)
+                    // Esto evita duplicados cuando enviamos mensajes manuales desde el dashboard
+                    const { getMessages } = await import('./utils/storage.js');
+                    const recentMessages = await getMessages(candidateId, 5); // Últimos 5 mensajes
+
+                    const isDuplicate = recentMessages.some(msg => {
+                        const timeDiff = new Date(timestamp).getTime() - new Date(msg.timestamp).getTime();
+                        // Coincide contenido Y fue enviado por 'me' Y ocurrió hace menos de 10 segundos
+                        return msg.content === content &&
+                            msg.from === 'me' &&
+                            Math.abs(timeDiff) < 20000; // 20 segundos de ventana
                     });
-                    console.log(`💾 Mensaje de AUTOPILOTO guardado para ${candidateName}`);
+
+                    if (isDuplicate) {
+                        console.log('♻️ Mensaje duplicado detectado (ya guardado manulamente), saltando webhook save.');
+                    } else {
+                        await saveMessage(candidateId, {
+                            from: 'bot',
+                            content: content,
+                            type: 'text',
+                            timestamp: timestamp
+                        });
+                        console.log(`💾 Mensaje de AUTOPILOTO guardado para ${candidateName}`);
+                    }
                 }
             } else {
                 console.warn('⚠️ message.outgoing recibido sin campo "to" ni "remoteJid". No se puede asignar al historial.', data);
