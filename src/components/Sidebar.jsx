@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Settings, Bot } from 'lucide-react';
+import { Users, Settings, Bot, History } from 'lucide-react';
 
 /**
  * Sidebar de navegación

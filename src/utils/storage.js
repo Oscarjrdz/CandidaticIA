@@ -183,6 +183,29 @@ export const importConfig = (jsonString) => {
 /**
  * Limpiar todo el almacenamiento
  */
+// --- Export Settings ---
+export const saveExportSettings = (minutes) => {
+    localStorage.setItem('export_timer', minutes.toString());
+};
+
+export const getExportSettings = () => {
+    const saved = localStorage.getItem('export_timer');
+    return saved ? parseInt(saved, 10) : 0; // 0 = disabled by default
+};
+
+// --- Exported Chats Tracking ---
+// Guardamos timestamp de ultima exportación y ID del ultimo mensaje para saber si hay cambios
+export const saveExportStatus = (candidateId, stats) => {
+    const current = getExportStatus();
+    current[candidateId] = stats; // { lastExport: timestamp, lastMessageId: id }
+    localStorage.setItem('exported_chats_status', JSON.stringify(current));
+};
+
+export const getExportStatus = () => {
+    const saved = localStorage.getItem('exported_chats_status');
+    return saved ? JSON.parse(saved) : {};
+};
+
 export const clearAllStorage = () => {
     try {
         Object.values(STORAGE_KEYS).forEach(key => {
