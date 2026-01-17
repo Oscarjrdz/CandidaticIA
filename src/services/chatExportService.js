@@ -35,7 +35,7 @@ export const generateChatHistoryText = (candidate) => {
 
             // Detect sender correctly based on 'from' property or 'incoming' flag fallback
             const isCandidate = msg.from === 'candidate' || msg.from === 'user' || msg.incoming === true;
-            const sender = isCandidate ? 'Candidato' : 'Bot';
+            const sender = isCandidate ? (candidate.whatsapp || 'Desconocido') : 'Bot';
 
             const messageText = msg.content || msg.body || msg.text || '';
             const paddedIndex = (index + 1).toString().padStart(3, '0');
