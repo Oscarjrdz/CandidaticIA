@@ -311,113 +311,113 @@ const CandidatesSection = ({ showToast }) => {
                     Buscar
                 </Button>
             </form>
-        </div>
 
-            {/* Tabla de candidatos */ }
-    <Card>
-        <div className="overflow-x-auto">
-            {candidates.length === 0 ? (
-                <div className="text-center py-12">
-                    <User className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                    <p className="text-gray-500 dark:text-gray-400">
-                        {search ? 'No se encontraron candidatos' : 'No hay candidatos registrados aún'}
-                    </p>
-                    <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-                        Los candidatos se agregarán automáticamente cuando recibas mensajes de WhatsApp
-                    </p>
-                </div>
-            ) : (
-                <table className="w-full">
-                    <thead>
-                        <tr className="border-b border-gray-200 dark:border-gray-700">
-                            <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Foto</th>
-                            <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre</th>
-                            <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
-                            <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
-                            <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Mensajes</th>
-                            <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
-                            <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {candidates.map((candidate) => (
-                            <tr
-                                key={candidate.id}
-                                className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
-                            >
-                                {exportingMap[candidate.id] && (
-                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500 animate-pulse rounded-r-full" title="Exportando historial..."></div>
-                                )}
-                                <td className="py-4 px-4">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold">
-                                        {candidate.foto ? (
-                                            <img
-                                                src={candidate.foto}
-                                                alt={candidate.nombre}
-                                                className="w-10 h-10 rounded-full object-cover"
-                                            />
-                                        ) : (
-                                            <span>{candidate.nombre.charAt(0).toUpperCase()}</span>
+
+            {/* Tabla de candidatos */}
+            <Card>
+                <div className="overflow-x-auto">
+                    {candidates.length === 0 ? (
+                        <div className="text-center py-12">
+                            <User className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                            <p className="text-gray-500 dark:text-gray-400">
+                                {search ? 'No se encontraron candidatos' : 'No hay candidatos registrados aún'}
+                            </p>
+                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                                Los candidatos se agregarán automáticamente cuando recibas mensajes de WhatsApp
+                            </p>
+                        </div>
+                    ) : (
+                        <table className="w-full">
+                            <thead>
+                                <tr className="border-b border-gray-200 dark:border-gray-700">
+                                    <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Foto</th>
+                                    <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre</th>
+                                    <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
+                                    <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
+                                    <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Mensajes</th>
+                                    <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
+                                    <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {candidates.map((candidate) => (
+                                    <tr
+                                        key={candidate.id}
+                                        className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
+                                    >
+                                        {exportingMap[candidate.id] && (
+                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500 animate-pulse rounded-r-full" title="Exportando historial..."></div>
                                         )}
-                                    </div>
-                                </td>
-                                <td className="py-4 px-4">
-                                    <div className="font-medium text-gray-900 dark:text-white">
-                                        {candidate.nombre}
-                                    </div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                                        Desde {formatDate(candidate.primerContacto)}
-                                    </div>
-                                </td>
-                                <td className="py-4 px-4">
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 font-mono">
-                                        {formatPhone(candidate.whatsapp)}
-                                    </div>
-                                </td>
-                                <td className="py-4 px-4">
-                                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                                        {formatDate(candidate.ultimoMensaje)}
-                                    </div>
-                                </td>
-                                <td className="py-4 px-4 text-center">
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                                        {candidate.totalMensajes}
-                                    </span>
-                                </td>
-                                <td className="py-4 px-4 text-center">
-                                    <button
-                                        onClick={() => handleOpenChat(candidate)}
-                                        className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative"
-                                        title="Abrir chat"
-                                    >
-                                        <MessageCircle className="w-5 h-5" />
-                                        <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
-                                    </button>
-                                </td>
-                                <td className="py-4 px-4 text-center">
-                                    <button
-                                        onClick={() => handleDelete(candidate.id, candidate.nombre)}
-                                        className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
-                                        title="Eliminar permanentemente"
-                                    >
-                                        <Trash2 className="w-4 h-4 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
-        </div>
-    </Card>
+                                        <td className="py-4 px-4">
+                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold">
+                                                {candidate.foto ? (
+                                                    <img
+                                                        src={candidate.foto}
+                                                        alt={candidate.nombre}
+                                                        className="w-10 h-10 rounded-full object-cover"
+                                                    />
+                                                ) : (
+                                                    <span>{candidate.nombre.charAt(0).toUpperCase()}</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="font-medium text-gray-900 dark:text-white">
+                                                {candidate.nombre}
+                                            </div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                Desde {formatDate(candidate.primerContacto)}
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="text-sm text-gray-700 dark:text-gray-300 font-mono">
+                                                {formatPhone(candidate.whatsapp)}
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4">
+                                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                                                {formatDate(candidate.ultimoMensaje)}
+                                            </div>
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                                {candidate.totalMensajes}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
+                                            <button
+                                                onClick={() => handleOpenChat(candidate)}
+                                                className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative"
+                                                title="Abrir chat"
+                                            >
+                                                <MessageCircle className="w-5 h-5" />
+                                                <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
+                                            </button>
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
+                                            <button
+                                                onClick={() => handleDelete(candidate.id, candidate.nombre)}
+                                                className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
+                                                title="Eliminar permanentemente"
+                                            >
+                                                <Trash2 className="w-4 h-4 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </Card>
 
-    {/* Ventana Flotante de Chat */ }
-    <ChatWindow
-        isOpen={!!selectedCandidate}
-        onClose={() => setSelectedCandidate(null)}
-        candidate={selectedCandidate}
-        credentials={credentials}
-    />
+            {/* Ventana Flotante de Chat */}
+            <ChatWindow
+                isOpen={!!selectedCandidate}
+                onClose={() => setSelectedCandidate(null)}
+                candidate={selectedCandidate}
+                credentials={credentials}
+            />
         </div >
     );
 };
