@@ -163,6 +163,28 @@ async function processEvent(payload) {
 
         case 'message.outgoing':
             console.log('📤 Mensaje enviado a:', data.to);
+            if (data.to) {
+                const { saveMessage, getCandidateIdByPhone, getCandidateById } = await import('./utils/storage.js');
+
+                // Buscar ID de candidato eficientemente
+                const candidateId = await getCandidateIdByPhone(data.to);
+
+                if (candidateId) {
+                    // Obtenemos el nombre solo para el log, opcional
+                    const candidate = await getCandidateById(candidateId);
+                    const candidateName = candidate ? candidate.nombre : 'Desconocido';
+
+                    await saveMessage(candidateId, {
+                        from: 'bot',
+                        content: data.body || (data.message && data.message.content) || 'Mensaje enviado',
+                        type: 'text',
+                        timestamp: timestamp
+                    });
+                    console.log(`💾 Mensaje de BOT guardado en historial para ${candidateName} (${data.to})`);
+                } else {
+                    console.log('⚠️ No se encontró candidato para guardar mensaje saliente a:', data.to);
+                }
+            }
             break;
 
         default:

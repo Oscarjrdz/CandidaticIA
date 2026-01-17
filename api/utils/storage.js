@@ -314,7 +314,7 @@ const getCandidatesFromMemory = (limit, offset, search) => {
     return filtered.slice(offset, offset + limit);
 };
 
-const getCandidateIdByPhone = async (phone) => {
+export const getCandidateIdByPhone = async (phone) => {
     if (isKVAvailable()) {
         try {
             const redis = getRedisClient();
