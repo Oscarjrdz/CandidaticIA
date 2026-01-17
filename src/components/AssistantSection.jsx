@@ -206,12 +206,14 @@ const AssistantSection = ({ showToast }) => {
                 setTimeout(() => setUploadStatus('idle'), 3000);
             } else {
                 setUploadStatus('error');
-                showToast(data.error || 'Error subiendo archivo', 'error');
+                // Mostrar detalles del error si existen
+                const errorMsg = data.details ? `${data.error}: ${data.details}` : (data.error || 'Error subiendo archivo');
+                showToast(errorMsg, 'error');
                 setTimeout(() => setUploadStatus('idle'), 3000);
             }
         } catch (error) {
             setUploadStatus('error');
-            showToast('Error de conexión', 'error');
+            showToast(`Error de conexión: ${error.message}`, 'error');
             setTimeout(() => setUploadStatus('idle'), 3000);
         } finally {
             setUploading(false);
