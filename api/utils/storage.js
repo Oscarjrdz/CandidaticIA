@@ -1,31 +1,53 @@
 /**
- * Utilidades para almacenamiento de eventos
- * Usa memoria en desarrollo, Vercel KV en producción
+ * Utilidades para almacenamiento de eventos y candidatos
+ * Usa memoria en desarrollo, Redis (Upstash) en producción
  */
 
-// Almacenamiento en memoria para desarrollo
+import Redis from 'ioredis';
+
+// Singleton para el cliente de Redis
+let redisClient = null;
+
+const getRedisClient = () => {
+    if (!redisClient && process.env.REDIS_URL) {
+        // Opción para ignorar errores SSL si es necesario (común en Upstash/Vercel)
+        redisClient = new Redis(process.env.REDIS_URL, {
+            tls: { rejectUnauthorized: false }
+        });
+
+        redisClient.on('error', (err) => {
+            console.error('Redis Client Error', err);
+        });
+    }
+    return redisClient;
+};
+
+// Almacenamiento en memoria para desarrollo (fallback)
 let memoryStore = [];
+let candidatesMemory = [];
 const MAX_EVENTS = 100;
 
 /**
- * Verifica si Vercel KV está disponible
- * Soporta tanto KV_ como STORAGE_ prefixes, y también REDIS_URL
+ * Verifica si Redis está disponible
+ * Detecta REDIS_URL estándar (usado por Upstash en Marketplace de Vercel)
  */
 const isKVAvailable = () => {
-    // Vercel puede usar diferentes nombres de variables dependiendo de cómo se configuró
-    const hasKVPrefix = !!(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-    const hasStoragePrefix = !!(process.env.STORAGE_REST_API_URL && process.env.STORAGE_REST_API_TOKEN);
-    const hasRedisURL = !!process.env.REDIS_URL; // Upstash Redis usa REDIS_URL
-
-    const available = hasKVPrefix || hasStoragePrefix || hasRedisURL;
-
-    if (available) {
-        const prefix = hasKVPrefix ? 'KV_' : hasStoragePrefix ? 'STORAGE_' : 'REDIS_URL';
-        console.log(`✅ Vercel KV disponible (usando: ${prefix})`);
+    const available = !!process.env.REDIS_URL;
+    if (available && !redisClient) {
+        // Inicializar cliente si existe la variable
+        getRedisClient();
     }
-
+    if (available) {
+        // console.log('✅ Redis disponible (REDIS_URL)');
+    }
     return available;
 };
+
+/**
+ * ==========================================
+ * FUNCIONES PARA EVENTOS (WEBHOOKS)
+ * ==========================================
+ */
 
 /**
  * Guarda un evento
@@ -40,14 +62,13 @@ export const saveEvent = async (event) => {
 
     if (isKVAvailable()) {
         try {
-            // TODO: Implementar con Vercel KV cuando esté configurado
-            // const kv = await import('@vercel/kv');
-            // await kv.lpush('webhook:events', JSON.stringify(eventWithMetadata));
-            // await kv.ltrim('webhook:events', 0, MAX_EVENTS - 1);
-            console.log('📦 KV disponible pero no implementado aún, usando memoria');
-            return saveToMemory(eventWithMetadata);
+            const redis = getRedisClient();
+            // Guardar en lista capped
+            await redis.lpush('webhook:events', JSON.stringify(eventWithMetadata));
+            await redis.ltrim('webhook:events', 0, MAX_EVENTS - 1);
+            return eventWithMetadata;
         } catch (error) {
-            console.error('Error guardando en KV:', error);
+            console.error('Error guardando evento en Redis:', error);
             return saveToMemory(eventWithMetadata);
         }
     } else {
@@ -55,9 +76,6 @@ export const saveEvent = async (event) => {
     }
 };
 
-/**
- * Guarda evento en memoria (fallback)
- */
 const saveToMemory = (event) => {
     memoryStore.unshift(event);
     if (memoryStore.length > MAX_EVENTS) {
@@ -73,14 +91,11 @@ const saveToMemory = (event) => {
 export const getEvents = async (limit = 50, offset = 0) => {
     if (isKVAvailable()) {
         try {
-            // TODO: Implementar con Vercel KV
-            // const kv = await import('@vercel/kv');
-            // const events = await kv.lrange('webhook:events', offset, offset + limit - 1);
-            // return events.map(e => JSON.parse(e));
-            console.log('📦 KV disponible pero no implementado aún, usando memoria');
-            return getFromMemory(limit, offset);
+            const redis = getRedisClient();
+            const events = await redis.lrange('webhook:events', offset, offset + limit - 1);
+            return events.map(e => JSON.parse(e));
         } catch (error) {
-            console.error('Error obteniendo de KV:', error);
+            console.error('Error obteniendo eventos de Redis:', error);
             return getFromMemory(limit, offset);
         }
     } else {
@@ -88,16 +103,10 @@ export const getEvents = async (limit = 50, offset = 0) => {
     }
 };
 
-/**
- * Obtiene eventos de memoria
- */
 const getFromMemory = (limit, offset) => {
     return memoryStore.slice(offset, offset + limit);
 };
 
-/**
- * Filtra eventos por tipo
- */
 export const getEventsByType = async (eventType, limit = 50) => {
     const allEvents = await getEvents(MAX_EVENTS);
     return allEvents
@@ -105,39 +114,28 @@ export const getEventsByType = async (eventType, limit = 50) => {
         .slice(0, limit);
 };
 
-/**
- * Obtiene estadísticas de eventos
- */
 export const getEventStats = async () => {
     const allEvents = await getEvents(MAX_EVENTS);
-
     const stats = {
         total: allEvents.length,
         byType: {},
         lastEvent: allEvents[0] || null,
         oldestEvent: allEvents[allEvents.length - 1] || null
     };
-
     allEvents.forEach(event => {
         const type = event.event || 'unknown';
         stats.byType[type] = (stats.byType[type] || 0) + 1;
     });
-
     return stats;
 };
 
-/**
- * Limpia todos los eventos (útil para testing)
- */
 export const clearEvents = async () => {
     if (isKVAvailable()) {
         try {
-            // const kv = await import('@vercel/kv');
-            // await kv.del('webhook:events');
-            console.log('🗑️ KV disponible pero no implementado aún, limpiando memoria');
-            memoryStore = [];
+            const redis = getRedisClient();
+            await redis.del('webhook:events');
         } catch (error) {
-            console.error('Error limpiando KV:', error);
+            console.error('Error limpiando Redis:', error);
             memoryStore = [];
         }
     } else {
@@ -152,9 +150,6 @@ export const clearEvents = async () => {
  * ==========================================
  */
 
-/**
- * Guarda o actualiza un candidato
- */
 export const saveCandidate = async (candidateData) => {
     const { whatsapp, nombre } = candidateData;
 
@@ -165,10 +160,10 @@ export const saveCandidate = async (candidateData) => {
 
     if (isKVAvailable()) {
         try {
-            const { kv } = await import('@vercel/kv');
+            const redis = getRedisClient();
 
-            // Buscar si ya existe
-            const existingId = await kv.get(`candidate:phone:${whatsapp}`);
+            // Buscar ID existente por teléfono
+            const existingId = await redis.get(`candidate:phone:${whatsapp}`);
 
             const candidate = {
                 id: existingId || `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -182,46 +177,36 @@ export const saveCandidate = async (candidateData) => {
             };
 
             if (existingId) {
-                // Actualizar existente
-                const existing = await kv.get(`candidate:${existingId}`);
-                if (existing) {
+                // Si existe, recuperar para mantener datos históricos
+                const existingData = await redis.get(`candidate:${existingId}`);
+                if (existingData) {
+                    const existing = JSON.parse(existingData);
                     candidate.primerContacto = existing.primerContacto;
                     candidate.totalMensajes = (existing.totalMensajes || 0) + 1;
                 }
             }
 
-            // Guardar candidato
-            await kv.set(`candidate:${candidate.id}`, candidate);
+            // Guardar candidato (stringify para Redis)
+            await redis.set(`candidate:${candidate.id}`, JSON.stringify(candidate));
 
             // Mapeo teléfono → ID
-            await kv.set(`candidate:phone:${whatsapp}`, candidate.id);
+            await redis.set(`candidate:phone:${whatsapp}`, candidate.id);
 
-            // Agregar a lista
-            await kv.zadd('candidates:list', {
-                score: Date.now(),
-                member: candidate.id
-            });
+            // Agregar a lista ordenada (zadd key score member)
+            await redis.zadd('candidates:list', Date.now(), candidate.id);
 
-            console.log(`✅ Candidato guardado en KV: ${candidate.nombre} (${candidate.whatsapp})`);
+            console.log(`✅ Candidato guardado en Redis: ${candidate.nombre} (${candidate.whatsapp})`);
             return candidate;
         } catch (error) {
-            console.error('Error guardando candidato en KV:', error);
-            // Fallback to memory, but need to construct the candidate object first
-            const existingId = await getCandidateIdByPhone(whatsapp); // Check memory for existing ID
-            const candidate = {
-                id: existingId || `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                nombre: nombre || 'Sin nombre',
-                whatsapp: whatsapp,
-                foto: candidateData.foto || null,
-                primerContacto: existingId ? undefined : new Date().toISOString(),
-                ultimoMensaje: new Date().toISOString(),
-                totalMensajes: existingId ? undefined : 1,
-                ...candidateData
-            };
-            return saveCandidateToMemory(candidate, existingId);
+            console.error('Error guardando candidato en Redis:', error);
+            // Fallback a memoria intentando recuperar ID primero si es posible, si no, crear nuevo
+            return saveCandidateToMemory({
+                ...candidateData,
+                id: `cand_${Date.now()}_fallback`,
+                totalMensajes: 1
+            }, false);
         }
     } else {
-        // Buscar si ya existe en memoria
         const existingId = await getCandidateIdByPhone(whatsapp);
         const candidate = {
             id: existingId || `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -237,12 +222,8 @@ export const saveCandidate = async (candidateData) => {
     }
 };
 
-// Almacenamiento en memoria para candidatos
-let candidatesMemory = [];
-
 const saveCandidateToMemory = (candidate, isUpdate) => {
     if (isUpdate) {
-        // Actualizar existente
         const index = candidatesMemory.findIndex(c => c.id === candidate.id);
         if (index !== -1) {
             candidatesMemory[index] = {
@@ -250,40 +231,40 @@ const saveCandidateToMemory = (candidate, isUpdate) => {
                 ...candidate,
                 totalMensajes: (candidatesMemory[index].totalMensajes || 0) + 1
             };
-            console.log(`📝 Candidato actualizado: ${candidate.nombre} (${candidate.whatsapp})`);
             return candidatesMemory[index];
         }
     }
-
-    // Crear nuevo
     candidatesMemory.unshift(candidate);
-    console.log(`✅ Nuevo candidato guardado: ${candidate.nombre} (${candidate.whatsapp})`);
     return candidate;
 };
 
-/**
- * Obtiene candidatos almacenados
- */
 export const getCandidates = async (limit = 50, offset = 0, search = '') => {
     if (isKVAvailable()) {
         try {
-            const { kv } = await import('@vercel/kv');
+            const redis = getRedisClient();
 
-            // Obtener IDs ordenados por fecha (más recientes primero)
-            const candidateIds = await kv.zrange('candidates:list', 0, -1, { rev: true });
+            // Obtener IDs ordenados (más recientes primero)
+            // zrevrange retorna array de IDs
+            const candidateIds = await redis.zrevrange('candidates:list', 0, -1);
 
             if (!candidateIds || candidateIds.length === 0) {
                 return [];
             }
 
-            // Obtener candidatos
-            const candidates = await Promise.all(
-                candidateIds.map(id => kv.get(`candidate:${id}`))
-            );
+            // Obtener datos de cada candidato (pipeline para eficiencia)
+            // Usamos mget es más eficiente si las keys son simples, pero aqui son 'candidate:ID'
+            // pipeline es mejor
+            const pipeline = redis.pipeline();
+            candidateIds.forEach(id => pipeline.get(`candidate:${id}`));
+            const results = await pipeline.exec();
 
-            // Filtrar nulls y aplicar búsqueda
-            let filtered = candidates.filter(c => c !== null);
+            // results es [[err, result], [err, result]...]
+            const candidates = results
+                .map(([err, res]) => res ? JSON.parse(res) : null)
+                .filter(c => c !== null);
 
+            // Filtrar por búsqueda
+            let filtered = candidates;
             if (search) {
                 const searchLower = search.toLowerCase();
                 filtered = filtered.filter(c =>
@@ -295,7 +276,7 @@ export const getCandidates = async (limit = 50, offset = 0, search = '') => {
             // Paginación
             return filtered.slice(offset, offset + limit);
         } catch (error) {
-            console.error('Error obteniendo candidatos de KV:', error);
+            console.error('Error obteniendo candidatos de Redis:', error);
             return getCandidatesFromMemory(limit, offset, search);
         }
     } else {
@@ -305,8 +286,6 @@ export const getCandidates = async (limit = 50, offset = 0, search = '') => {
 
 const getCandidatesFromMemory = (limit, offset, search) => {
     let filtered = candidatesMemory;
-
-    // Filtrar por búsqueda
     if (search) {
         const searchLower = search.toLowerCase();
         filtered = candidatesMemory.filter(c =>
@@ -314,20 +293,15 @@ const getCandidatesFromMemory = (limit, offset, search) => {
             c.whatsapp.includes(search)
         );
     }
-
     return filtered.slice(offset, offset + limit);
 };
 
-/**
- * Obtiene ID de candidato por teléfono
- */
 const getCandidateIdByPhone = async (phone) => {
     if (isKVAvailable()) {
         try {
-            const { kv } = await import('@vercel/kv');
-            return await kv.get(`candidate:phone:${phone}`);
+            const redis = getRedisClient();
+            return await redis.get(`candidate:phone:${phone}`);
         } catch (error) {
-            console.error('Error buscando candidato por teléfono:', error);
             const candidate = candidatesMemory.find(c => c.whatsapp === phone);
             return candidate ? candidate.id : null;
         }
@@ -337,16 +311,13 @@ const getCandidateIdByPhone = async (phone) => {
     }
 };
 
-/**
- * Obtiene candidato por ID
- */
 export const getCandidateById = async (id) => {
     if (isKVAvailable()) {
         try {
-            const { kv } = await import('@vercel/kv');
-            return await kv.get(`candidate:${id}`);
+            const redis = getRedisClient();
+            const data = await redis.get(`candidate:${id}`);
+            return data ? JSON.parse(data) : null;
         } catch (error) {
-            console.error('Error obteniendo candidato de KV:', error);
             return candidatesMemory.find(c => c.id === id) || null;
         }
     } else {
@@ -354,78 +325,65 @@ export const getCandidateById = async (id) => {
     }
 };
 
-/**
- * Elimina un candidato
- */
 export const deleteCandidate = async (id) => {
     if (isKVAvailable()) {
         try {
-            const { kv } = await import('@vercel/kv');
+            const redis = getRedisClient();
 
             // Obtener candidato para eliminar mapeo de teléfono
-            const candidate = await kv.get(`candidate:${id}`);
+            const data = await redis.get(`candidate:${id}`);
+            if (!data) return false;
 
-            if (!candidate) {
-                return false;
-            }
+            const candidate = JSON.parse(data);
 
-            // Eliminar de lista ordenada
-            await kv.zrem('candidates:list', id);
+            await redis.zrem('candidates:list', id);
+            await redis.del(`candidate:phone:${candidate.whatsapp}`);
+            await redis.del(`candidate:${id}`);
 
-            // Eliminar mapeo teléfono
-            await kv.del(`candidate:phone:${candidate.whatsapp}`);
-
-            // Eliminar candidato
-            await kv.del(`candidate:${id}`);
-
-            console.log(`🗑️ Candidato eliminado de KV: ${id}`);
             return true;
         } catch (error) {
-            console.error('Error eliminando candidato de KV:', error);
-            const index = candidatesMemory.findIndex(c => c.id === id);
-            if (index !== -1) {
-                candidatesMemory.splice(index, 1);
-                return true;
-            }
+            console.error('Error eliminando de Redis:', error);
             return false;
         }
     } else {
         const index = candidatesMemory.findIndex(c => c.id === id);
         if (index !== -1) {
             candidatesMemory.splice(index, 1);
-            console.log(`🗑️ Candidato eliminado: ${id}`);
             return true;
         }
         return false;
     }
 };
 
-/**
- * Obtiene estadísticas de candidatos
- */
 export const getCandidatesStats = async () => {
     if (isKVAvailable()) {
         try {
-            const { kv } = await import('@vercel/kv');
+            const redis = getRedisClient();
 
-            const candidateIds = await kv.zrange('candidates:list', 0, -1);
-            const total = candidateIds.length;
+            const total = await redis.zcard('candidates:list');
+
+            // Para 'nuevosHoy' necesitamos iterar, lo cual es costoso si hay muchos.
+            // Por ahora traigamos todos los IDs (asumiendo < 1000)
+            const candidateIds = await redis.zrange('candidates:list', 0, -1);
+
+            // Usar pipeline para traer todos
+            const pipeline = redis.pipeline();
+            candidateIds.forEach(id => pipeline.get(`candidate:${id}`));
+            const results = await pipeline.exec();
+
+            const candidates = results
+                .map(([err, res]) => res ? JSON.parse(res) : null)
+                .filter(c => c !== null);
 
             const hoy = new Date();
             hoy.setHours(0, 0, 0, 0);
-
-            // Obtener todos los candidatos para contar nuevos hoy
-            const candidates = await Promise.all(
-                candidateIds.map(id => kv.get(`candidate:${id}`))
-            );
 
             const nuevosHoy = candidates.filter(c =>
                 c && new Date(c.primerContacto) >= hoy
             ).length;
 
-            // Último contacto (más reciente)
-            const ultimoId = candidateIds[candidateIds.length - 1];
-            const ultimoContacto = ultimoId ? await kv.get(`candidate:${ultimoId}`) : null;
+            // Último contacto (el último ID agregado)
+            const ultimoContacto = candidates.length > 0 ? candidates[candidates.length - 1] : null;
 
             return {
                 total,
@@ -433,7 +391,7 @@ export const getCandidatesStats = async () => {
                 ultimoContacto
             };
         } catch (error) {
-            console.error('Error obteniendo stats de KV:', error);
+            console.error('Error stats Redis:', error);
             return getCandidatesStatsFromMemory();
         }
     } else {
@@ -445,11 +403,7 @@ const getCandidatesStatsFromMemory = () => {
     const total = candidatesMemory.length;
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
-
-    const nuevosHoy = candidatesMemory.filter(c =>
-        new Date(c.primerContacto) >= hoy
-    ).length;
-
+    const nuevosHoy = candidatesMemory.filter(c => new Date(c.primerContacto) >= hoy).length;
     return {
         total,
         nuevosHoy,
