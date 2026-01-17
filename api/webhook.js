@@ -162,28 +162,40 @@ async function processEvent(payload) {
             break;
 
         case 'message.outgoing':
-            console.log('📤 Mensaje enviado a:', data.to);
-            if (data.to) {
+            // Docs: { eventName: "message.outgoing", data: { answer: "...", from: "...", ... } }
+            // IMPORTANTE: Necesitamos saber a QUIÉN se le envió. 
+            // Si 'data.to' no viene, es un problema para saber a qué chat asignarlo.
+            // Algunos webhooks traen 'to', otros 'remoteJid', otros dependen de 'from'.
+            // Vamos a loguear TODO para debuggear la primera vez.
+            console.log('📤 OUTGOING DETECTADO:', JSON.stringify(data, null, 2));
+
+            const recipientNumber = data.to || data.remoteJid || (data.key && data.key.remoteJid);
+            // Si no hay recipient explícito, ¿quizás 'from' es el usuario en algunas versiones? No, 'from' es el bot.
+
+            const content = data.answer || data.body || (data.message && data.message.content) || 'Mensaje enviado';
+
+            if (recipientNumber) {
+                // Limpiar número (quitar @s.whatsapp.net si viene)
+                const cleanNumber = recipientNumber.replace('@s.whatsapp.net', '');
+
                 const { saveMessage, getCandidateIdByPhone, getCandidateById } = await import('./utils/storage.js');
 
-                // Buscar ID de candidato eficientemente
-                const candidateId = await getCandidateIdByPhone(data.to);
+                const candidateId = await getCandidateIdByPhone(cleanNumber);
 
                 if (candidateId) {
-                    // Obtenemos el nombre solo para el log, opcional
                     const candidate = await getCandidateById(candidateId);
                     const candidateName = candidate ? candidate.nombre : 'Desconocido';
 
                     await saveMessage(candidateId, {
                         from: 'bot',
-                        content: data.body || (data.message && data.message.content) || 'Mensaje enviado',
+                        content: content,
                         type: 'text',
                         timestamp: timestamp
                     });
-                    console.log(`💾 Mensaje de BOT guardado en historial para ${candidateName} (${data.to})`);
-                } else {
-                    console.log('⚠️ No se encontró candidato para guardar mensaje saliente a:', data.to);
+                    console.log(`💾 Mensaje de AUTOPILOTO guardado para ${candidateName}`);
                 }
+            } else {
+                console.warn('⚠️ message.outgoing recibido sin campo "to" ni "remoteJid". No se puede asignar al historial.', data);
             }
             break;
 
