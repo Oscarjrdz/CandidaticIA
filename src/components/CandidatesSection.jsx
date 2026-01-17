@@ -236,6 +236,26 @@ const CandidatesSection = ({ showToast }) => {
         return date.toLocaleDateString();
     };
 
+    const formatDateTime = (dateString) => {
+        if (!dateString) return '-';
+        const date = new Date(dateString);
+
+        // Formato: "17 Ene 2026, 16:30"
+        const dateStr = date.toLocaleDateString('es-MX', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        });
+
+        const timeStr = date.toLocaleTimeString('es-MX', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+
+        return `${dateStr}, ${timeStr}`;
+    };
+
     return (
         <div className="space-y-6">
             {/* Header con búsqueda */}
@@ -352,7 +372,6 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre</th>
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
-                                    <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Mensajes</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
@@ -395,14 +414,12 @@ const CandidatesSection = ({ showToast }) => {
                                             </div>
                                         </td>
                                         <td className="py-4 px-4">
-                                            <div className="text-sm text-gray-600 dark:text-gray-400">
+                                            <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                                                {formatDateTime(candidate.ultimoMensaje)}
+                                            </div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                                 {formatDate(candidate.ultimoMensaje)}
                                             </div>
-                                        </td>
-                                        <td className="py-4 px-4 text-center">
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                                                {candidate.totalMensajes}
-                                            </span>
                                         </td>
                                         <td className="py-4 px-4 text-center">
                                             {(() => {

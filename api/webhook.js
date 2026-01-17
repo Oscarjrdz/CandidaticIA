@@ -176,7 +176,7 @@ async function processEvent(payload) {
 
             let recipientNumber = data.to || data.remoteJid || (data.key && data.key.remoteJid);
 
-            const { saveMessage, getCandidateIdByPhone, getCandidateById, getLastActiveUser } = await import('./utils/storage.js');
+            const { saveMessage, getCandidateIdByPhone, getCandidateById, getLastActiveUser, updateCandidate } = await import('./utils/storage.js');
 
             // INTENTO 2 (Seguro): Verificar si 'data.from' es en realidad el usuario
             // En algunos adapters, 'from' en outgoing indica la "conversación" (el usuario), no el sender (bot).
@@ -224,7 +224,7 @@ async function processEvent(payload) {
                     });
 
                     if (isDuplicate) {
-                        console.log('♻️ Mensaje duplicado detectado (ya guardado manulamente), saltando webhook save.');
+                        console.log('♻️ Mensaje duplicado detectado (ya guardado manualmente), saltando webhook save.');
                     } else {
                         await saveMessage(candidateId, {
                             from: 'bot',
@@ -233,6 +233,12 @@ async function processEvent(payload) {
                             timestamp: timestamp
                         });
                         console.log(`💾 Mensaje de AUTOPILOTO guardado para ${candidateName}`);
+
+                        // ✅ NUEVO: Actualizar ultimoMensaje del candidato
+                        await updateCandidate(candidateId, {
+                            ultimoMensaje: timestamp
+                        });
+                        console.log(`🕐 ultimoMensaje actualizado para ${candidateName}: ${timestamp}`);
                     }
                 }
             } else {

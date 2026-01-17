@@ -373,6 +373,51 @@ export const deleteCandidate = async (id) => {
     }
 };
 
+export const updateCandidate = async (id, updates) => {
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+
+            // Obtener candidato existente
+            const data = await redis.get(`candidate:${id}`);
+            if (!data) {
+                console.error(`❌ Candidato ${id} no encontrado para actualizar`);
+                return { success: false, error: 'Candidato no encontrado' };
+            }
+
+            const candidate = JSON.parse(data);
+
+            // Aplicar actualizaciones
+            const updatedCandidate = {
+                ...candidate,
+                ...updates
+            };
+
+            // Guardar candidato actualizado
+            await redis.set(`candidate:${id}`, JSON.stringify(updatedCandidate));
+
+            console.log(`✅ Candidato ${id} actualizado:`, updates);
+            return { success: true, candidate: updatedCandidate };
+        } catch (error) {
+            console.error('Error actualizando candidato en Redis:', error);
+            return { success: false, error: error.message };
+        }
+    } else {
+        // Memoria
+        const index = candidatesMemory.findIndex(c => c.id === id);
+        if (index === -1) {
+            return { success: false, error: 'Candidato no encontrado' };
+        }
+
+        candidatesMemory[index] = {
+            ...candidatesMemory[index],
+            ...updates
+        };
+
+        return { success: true, candidate: candidatesMemory[index] };
+    }
+};
+
 export const getCandidatesStats = async () => {
     if (isKVAvailable()) {
         try {
