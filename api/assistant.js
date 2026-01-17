@@ -101,11 +101,20 @@ export default async function handler(req, res) {
                 const fileObj = Array.isArray(file) ? file[0] : file;
 
                 if (!fileObj) {
-                    return res.status(400).json({ error: 'No se recibió archivo' });
+                    return res.status(400).json({ error: 'No se recibió archivo', receivedFiles: Object.keys(formData.files || {}) });
                 }
 
-                const fileBlob = new Blob([fs.readFileSync(fileObj.filepath)], { type: fileObj.mimetype });
-                remoteFormData.append('file', fileBlob, fileObj.originalFilename);
+                // Compatibilidad v2/v3 formidable
+                const filepath = fileObj.filepath || fileObj.path;
+                const filename = fileObj.originalFilename || fileObj.name || 'documento';
+                const mimetype = fileObj.mimetype || fileObj.type || 'application/octet-stream';
+
+                if (!filepath) {
+                    return res.status(500).json({ error: 'Error procesando archivo', details: 'Filepath missing in formidable object', fileObj });
+                }
+
+                const fileBlob = new Blob([fs.readFileSync(filepath)], { type: mimetype });
+                remoteFormData.append('file', fileBlob, filename);
 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -154,7 +163,24 @@ export default async function handler(req, res) {
 // Helpers par formidable y body parsing
 const parseMultipartForm = (req) => {
     return new Promise((resolve, reject) => {
-        const form = new IncomingForm();
+        // En Vercel/AWS Lambda, siempre usar /tmp para archivos temporales
+        const options = {
+            keepExtensions: true,
+            uploadDir: '/tmp',
+            filename: (name, ext, part, form) => {
+                return part.originalFilename; // Mantener nombre original si es posible
+            }
+        };
+
+        // Asegurar que /tmp existe (debería)
+        try {
+            if (!fs.existsSync('/tmp')) fs.mkdirSync('/tmp');
+        } catch (e) {
+            delete options.uploadDir; // Fallback a default si falla
+        }
+
+        const form = new IncomingForm(options);
+
         form.parse(req, (err, fields, files) => {
             if (err) reject(err);
             resolve({ fields, files });
