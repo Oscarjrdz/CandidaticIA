@@ -51,27 +51,49 @@ const AssistantSection = ({ showToast }) => {
             const data = await res.json();
 
             if (res.ok) {
-                // Intentar extraer el texto limpio
-                let rawInstructions = '';
-                if (typeof data === 'string') {
-                    rawInstructions = data;
-                } else if (data && data.instructions) {
-                    rawInstructions = data.instructions;
-                } else if (data && data.data && data.data.instructions) {
-                    rawInstructions = data.data.instructions;
-                } else {
-                    // Fallback: Si no encontramos 'instructions', mostramos JSON pero intentamos limpiar
-                    rawInstructions = JSON.stringify(data, null, 2);
+                // Función auxiliar para buscar recursivamente la key "instructions"
+                const findInstructions = (obj) => {
+                    if (!obj) return null;
+                    if (typeof obj === 'string') return obj;
+
+                    // 1. Chequeo directo
+                    if (obj.instructions && typeof obj.instructions === 'string') {
+                        return obj.instructions;
+                    }
+
+                    // 2. Si tiene propiedad 'data', buscar adentro primero (prioridad)
+                    if (obj.data && typeof obj.data === 'object') {
+                        const found = findInstructions(obj.data);
+                        if (found) return found;
+                    }
+
+                    // 3. Buscar en todas las keys del objeto
+                    if (typeof obj === 'object') {
+                        for (const key in obj) {
+                            if (key !== 'data' && typeof obj[key] === 'object') { // Evitar ciclo infinito con data si ya se revisó
+                                const found = findInstructions(obj[key]);
+                                if (found) return found;
+                            }
+                        }
+                    }
+
+                    return null;
+                };
+
+                let rawInstructions = findInstructions(data);
+
+                // Si falló todo, y el objeto parece ser el wrapper simple, intentamos fallback manual
+                if (!rawInstructions) {
+                    if (data && data.data && data.data.instructions) rawInstructions = data.data.instructions;
                 }
 
-                // Si el texto parece ser un JSON stringified que contiene "instructions", intentamos parsearlo de nuevo
-                try {
-                    if (rawInstructions.trim().startsWith('{') && rawInstructions.includes('"instructions"')) {
-                        const parsed = JSON.parse(rawInstructions);
-                        if (parsed.instructions) rawInstructions = parsed.instructions;
-                    }
-                } catch (e) {
-                    // Ignorar error de parseo
+                // Si aún es nulo, mostrar string vacío en lugar de JSON crudo para no confundir, 
+                // o el JSON solo si es error explícito
+                if (!rawInstructions) {
+                    console.warn('No se encontraron instrucciones en:', data);
+                    // Último recurso: si es un objeto pequeño, quizás es el mensaje de error o status
+                    if (data.error) rawInstructions = `Error: ${data.error}`;
+                    else rawInstructions = ''; // Mejor vacío que código raro
                 }
 
                 setInstructions(rawInstructions);
