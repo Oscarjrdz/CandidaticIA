@@ -94,10 +94,10 @@ export default async function handler(req, res) {
                 // Necesitamos Node 18+ FormData o usar librería 'form-data'
                 // Vercel serverless usa Node 18+ nativo
 
+                // --- Usa FormData nativo (se ha verificado que funciona mejor para la subida que form-data package) ---
                 const remoteFormData = new FormData();
                 const file = formData.files.file;
 
-                // Formidable v3 devuelve array, v2 objeto. Asumimos v3 (array) o checkeamos
                 const fileObj = Array.isArray(file) ? file[0] : file;
 
                 if (!fileObj) {
@@ -113,32 +113,45 @@ export default async function handler(req, res) {
                     return res.status(500).json({ error: 'Error procesando archivo', details: 'Filepath missing in formidable object', fileObj });
                 }
 
-                const fileBlob = new Blob([fs.readFileSync(filepath)], { type: mimetype });
+                console.log(`📤 Leyendo archivo de ${filepath} para enviar a BuilderBot...`);
+                // Leemos el archivo a un Blob
+                const fileBuffer = fs.readFileSync(filepath);
+                const fileBlob = new Blob([fileBuffer], { type: mimetype });
+
                 remoteFormData.append('file', fileBlob, filename);
+
+                console.log(`📤 Enviando archivo a BuilderBot: ${filename} -> ${url}`);
 
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {
                         'x-api-builderbot': apiKey
-                        // No setear Content-Type, fetch lo hace automático con boundary
+                        // Importante: No establecer Content-Type manualmente con FormData nativo
+                        // fetch generará el boundary automáticamente
                     },
                     body: remoteFormData
                 });
 
+                console.log(`📥 Respuesta BuilderBot: ${response.status} ${response.statusText}`);
+
+                // Si la respuesta no es OK, intentamos leer el error
                 if (!response.ok) {
                     const err = await response.text();
+                    console.error('❌ Error BuilderBot:', err);
                     return res.status(response.status).json({ error: 'Error subiendo archivo', details: err });
                 }
 
-                // BuilderBot might return empty body or non-JSON on success
+                // Respuesta exitosa: manejar posible cuerpo vacío o no-JSON
                 const textData = await response.text();
+                // console.log('📥 Body BuilderBot:', textData); // Uncomment for debug
+
                 let data;
                 try {
                     data = JSON.parse(textData);
                 } catch (e) {
-                    // Si no es JSON pero fue OK, asumimos éxito
-                    console.log('Respuesta no-JSON de BuilderBot (asumiendo éxito):', textData);
-                    data = { success: true, message: 'Archivo subido', raw: textData };
+                    // Si el parseo falla pero el status fue 200, es un éxito
+                    console.log('⚠️ Respuesta no-JSON de BuilderBot (asumiendo éxito 200 OK):', textData);
+                    data = { success: true, message: 'Archivo subido correctamente', raw: textData };
                 }
 
                 return res.status(200).json(data);
