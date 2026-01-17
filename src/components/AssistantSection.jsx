@@ -256,6 +256,92 @@ const AssistantSection = ({ showToast }) => {
         }
     };
 
+    const handleSelectFile = (fileId) => {
+        setSelectedFiles(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(fileId)) {
+                newSet.delete(fileId);
+            } else {
+                newSet.add(fileId);
+            }
+            return newSet;
+        });
+    };
+
+    const handleSelectAll = () => {
+        if (selectAll) {
+            setSelectedFiles(new Set());
+            setSelectAll(false);
+        } else {
+            setSelectedFiles(new Set(files.map(f => f.id)));
+            setSelectAll(true);
+        }
+    };
+
+    const clearSelection = () => {
+        setSelectedFiles(new Set());
+        setSelectAll(false);
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedFiles.size === 0) return;
+
+        const count = selectedFiles.size;
+        if (!window.confirm(`¿Seguro de eliminar ${count} archivo(s)?`)) return;
+
+        setDeletingBatch(true);
+        let successCount = 0;
+        let errorCount = 0;
+
+        try {
+            // Delete files in parallel
+            const deletePromises = Array.from(selectedFiles).map(async (fileId) => {
+                try {
+                    const params = new URLSearchParams({
+                        botId: credentials.botId,
+                        answerId: credentials.answerId,
+                        apiKey: credentials.apiKey,
+                        type: 'files',
+                        fileId
+                    });
+
+                    const res = await fetch(`/api/assistant?${params}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (res.ok) {
+                        successCount++;
+                        return { success: true, fileId };
+                    } else {
+                        errorCount++;
+                        return { success: false, fileId };
+                    }
+                } catch (error) {
+                    errorCount++;
+                    return { success: false, fileId, error };
+                }
+            });
+
+            await Promise.all(deletePromises);
+
+            // Show results
+            if (successCount > 0) {
+                showToast(`${successCount} archivo(s) eliminado(s) correctamente`, 'success');
+            }
+            if (errorCount > 0) {
+                showToast(`Error eliminando ${errorCount} archivo(s)`, 'error');
+            }
+
+            // Refresh and clear selection
+            fetchFiles();
+            clearSelection();
+        } catch (error) {
+            showToast('Error en operación de borrado masivo', 'error');
+        } finally {
+            setDeletingBatch(false);
+        }
+    };
+
     if (!credentials) {
         return (
             <Card title="Configuración de Asistente" icon={Bot}>
@@ -370,9 +456,20 @@ const AssistantSection = ({ showToast }) => {
                         {/* Files List */}
                         <div>
                             <div className="flex justify-between items-center mb-4">
-                                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-                                    Archivos Cargados ({files.length})
-                                </h3>
+                                <div className="flex items-center space-x-3">
+                                    {files.length > 0 && (
+                                        <input
+                                            type="checkbox"
+                                            checked={selectAll}
+                                            onChange={handleSelectAll}
+                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer"
+                                            title="Seleccionar todos"
+                                        />
+                                    )}
+                                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                                        Archivos Cargados ({files.length})
+                                    </h3>
+                                </div>
                                 <Button
                                     size="sm"
                                     variant="outline"
@@ -384,10 +481,36 @@ const AssistantSection = ({ showToast }) => {
                                 </Button>
                             </div>
 
+                            {/* Bulk Action Toolbar */}
+                            {selectedFiles.size > 0 && (
+                                <div className="sticky top-0 z-10 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4 animate-in slide-in-from-top duration-200">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                                            {selectedFiles.size} archivo(s) seleccionado(s)
+                                        </span>
+                                        <div className="flex space-x-2">
+                                            <Button size="sm" variant="outline" onClick={clearSelection}>
+                                                Cancelar
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                icon={Trash2}
+                                                onClick={handleBulkDelete}
+                                                loading={deletingBatch}
+                                                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                            >
+                                                Eliminar Seleccionados
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {loadingFiles ? (
-                                <div className="space-y-3">
-                                    {[1, 2, 3].map(i => (
-                                        <div key={i} className="h-16 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                    {[1, 2, 3, 4, 5, 6].map(i => (
+                                        <div key={i} className="h-20 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
                                     ))}
                                 </div>
                             ) : files.length === 0 ? (
@@ -396,28 +519,38 @@ const AssistantSection = ({ showToast }) => {
                                     <p className="text-gray-500 dark:text-gray-400">No hay archivos en la base de conocimiento</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                                     {files.map((file, idx) => (
-                                        <div key={file.id || idx} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:shadow-sm transition-shadow">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
-                                                    <File className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium text-gray-900 dark:text-white truncate max-w-xs sm:max-w-md">
-                                                        {file.filename || file.name || `Archivo ${idx + 1}`}
-                                                    </p>
-                                                    <p className="text-xs text-gray-500 font-mono">
-                                                        ID: {file.id}
-                                                    </p>
-                                                </div>
+                                        <div
+                                            key={file.id || idx}
+                                            className={`flex items-center space-x-2 p-3 bg-white dark:bg-gray-800 border rounded-lg hover:shadow-sm transition-all ${selectedFiles.has(file.id)
+                                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500'
+                                                    : 'border-gray-200 dark:border-gray-700'
+                                                }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedFiles.has(file.id)}
+                                                onChange={() => handleSelectFile(file.id)}
+                                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer flex-shrink-0"
+                                            />
+                                            <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded flex items-center justify-center flex-shrink-0">
+                                                <File className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-medium text-sm text-gray-900 dark:text-white truncate" title={file.filename || file.name || `Archivo ${idx + 1}`}>
+                                                    {file.filename || file.name || `Archivo ${idx + 1}`}
+                                                </p>
+                                                <p className="text-xs text-gray-500 font-mono truncate">
+                                                    {file.id.substring(0, 8)}...
+                                                </p>
                                             </div>
                                             <button
                                                 onClick={() => handleDeleteFile(file.id)}
-                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
                                                 title="Eliminar archivo"
                                             >
-                                                <Trash2 className="w-5 h-5" />
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     ))}
