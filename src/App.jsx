@@ -5,6 +5,7 @@ import Button from './components/ui/Button';
 import Sidebar from './components/Sidebar';
 import CandidatesSection from './components/CandidatesSection';
 import SettingsSection from './components/SettingsSection';
+import AssistantSection from './components/AssistantSection';
 import { getTheme, saveTheme, exportConfig, importConfig, clearAllStorage } from './utils/storage';
 
 function App() {
@@ -115,12 +116,14 @@ function App() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {activeSection === 'candidates' ? 'Candidatos' : 'Configuración'}
+                  {activeSection === 'candidates' ? 'Candidatos'
+                    : activeSection === 'assistant' ? 'Update Bot'
+                      : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {activeSection === 'candidates'
-                    ? 'Gestión de candidatos de WhatsApp'
-                    : 'Configuración de BuilderBot API'
+                  {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
+                    : activeSection === 'assistant' ? 'Gestión del Prompt y Archivos del Asistente'
+                      : 'Configuración de BuilderBot API'
                   }
                 </p>
               </div>
@@ -173,6 +176,8 @@ function App() {
         <main className="flex-1 px-8 py-8 overflow-y-auto">
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
+          ) : activeSection === 'assistant' ? (
+            <AssistantSection showToast={showToast} />
           ) : (
             <SettingsSection
               botId={botId}
