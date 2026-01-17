@@ -21,11 +21,18 @@ export default async function handler(req, res) {
     }
 
     try {
+        console.log('📥 INCOMING WEBHOOK REQUEST:', {
+            method: req.method,
+            headers: req.headers,
+            body: req.body
+        });
+
         // 1. Rate limiting
         const ip = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown';
         const rateLimit = checkRateLimit(ip);
 
         if (!rateLimit.allowed) {
+            console.warn('⚠️ Rate limit exceeded for IP:', ip);
             return res.status(429).json({
                 error: 'Demasiadas peticiones',
                 retryAfter: rateLimit.retryAfter
@@ -41,15 +48,13 @@ export default async function handler(req, res) {
             });
         }
 
-        // 3. Validar payload
-        const payload = req.body;
+        // 3. Validar payload (Relaxed for debugging)
+        const payload = req.body || {};
         const validation = validateEventPayload(payload);
 
         if (!validation.valid) {
-            return res.status(400).json({
-                error: 'Payload inválido',
-                message: validation.error
-            });
+            console.warn('⚠️ Payload inválido pero procesando igual para debug:', validation.error, payload);
+            // return res.status(400).json({ error: 'Payload inválido', message: validation.error });
         }
 
         // 4. Guardar evento
