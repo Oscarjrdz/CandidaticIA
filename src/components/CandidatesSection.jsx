@@ -467,13 +467,13 @@ const CandidatesSection = ({ showToast }) => {
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-gray-200 dark:border-gray-700">
-                                    <th className="text-left py-2 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
-                                    <th className="text-left py-2 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
-                                    <th className="text-left py-2 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
-                                    <th className="text-center py-2 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
-                                    <th className="text-center py-2 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
-                                    <th className="text-center py-2 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
-                                    <th className="text-center py-2 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
+                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
+                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
+                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
+                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
+                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
+                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
+                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -485,7 +485,7 @@ const CandidatesSection = ({ showToast }) => {
                                         {exportingMap[candidate.id] && (
                                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500 animate-pulse rounded-r-full" title="Exportando historial..."></div>
                                         )}
-                                        <td className="py-2 px-4">
+                                        <td className="py-1 px-4">
                                             <div className="text-sm text-gray-900 dark:text-white font-mono font-medium">
                                                 {formatPhone(candidate.whatsapp)}
                                             </div>
@@ -493,12 +493,12 @@ const CandidatesSection = ({ showToast }) => {
                                                 Desde {formatDate(candidate.primerContacto)}
                                             </div>
                                         </td>
-                                        <td className="py-4 px-4">
+                                        <td className="py-1 px-4">
                                             <div className="text-sm text-gray-900 dark:text-white font-medium">
                                                 {candidate.nombre}
                                             </div>
                                         </td>
-                                        <td className="py-2 px-4">
+                                        <td className="py-1 px-4">
                                             <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
                                                 {formatDateTime(candidate.ultimoMensaje)}
                                             </div>
@@ -506,7 +506,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 {formatDate(candidate.ultimoMensaje)}
                                             </div>
                                         </td>
-                                        <td className="py-2 px-4 text-center">
+                                        <td className="py-1 px-4 text-center">
                                             {(() => {
                                                 // Si no hay timer configurado, mostrar "-"
                                                 if (!exportTimer || exportTimer <= 0) {
@@ -552,7 +552,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 );
                                             })()}
                                         </td>
-                                        <td className="py-2 px-4 text-center">
+                                        <td className="py-1 px-4 text-center">
                                             {exportingMap[candidate.whatsapp] === 'uploading' ? (
                                                 <Loader2 className="w-5 h-5 text-blue-500 animate-spin mx-auto" title="Subiendo historial..." />
                                             ) : localChatFiles[candidate.whatsapp] || exportingMap[candidate.whatsapp] === 'uploaded' || getChatFileId(candidate.whatsapp) ? (
@@ -573,7 +573,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="py-2 px-4 text-center">
+                                        <td className="py-1 px-4 text-center">
                                             <button
                                                 onClick={() => handleOpenChat(candidate)}
                                                 className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative"
@@ -583,7 +583,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
                                             </button>
                                         </td>
-                                        <td className="py-2 px-4 text-center">
+                                        <td className="py-1 px-4 text-center">
                                             <button
                                                 onClick={() => handleDelete(candidate.id, candidate.nombre)}
                                                 className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
