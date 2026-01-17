@@ -574,9 +574,9 @@ const AssistantSection = ({ showToast }) => {
                             )}
 
                             {loadingFiles ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                                    {[1, 2, 3, 4, 5, 6].map(i => (
-                                        <div key={i} className="h-20 bg-gray-100 dark:bg-gray-800 rounded-lg animate-pulse" />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(i => (
+                                        <div key={i} className="h-14 bg-gray-100 dark:bg-gray-800 rounded-md animate-pulse" />
                                     ))}
                                 </div>
                             ) : !Array.isArray(files) ? (
@@ -589,7 +589,7 @@ const AssistantSection = ({ showToast }) => {
                                     <p className="text-gray-500 dark:text-gray-400">No hay archivos en la base de conocimiento</p>
                                 </div>
                             ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2">
                                     {files.map((file, idx) => {
                                         try {
                                             // Defensive check for file object
@@ -604,7 +604,7 @@ const AssistantSection = ({ showToast }) => {
                                             return (
                                                 <div
                                                     key={fileId}
-                                                    className={`flex items-center space-x-2 p-3 bg-white dark:bg-gray-800 border rounded-lg hover:shadow-sm transition-all ${selectedFiles.has(fileId)
+                                                    className={`flex items-center space-x-1.5 p-2 bg-white dark:bg-gray-800 border rounded-md hover:shadow-sm transition-all ${selectedFiles.has(fileId)
                                                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500'
                                                         : 'border-gray-200 dark:border-gray-700'
                                                         }`}
@@ -613,25 +613,25 @@ const AssistantSection = ({ showToast }) => {
                                                         type="checkbox"
                                                         checked={selectedFiles.has(fileId)}
                                                         onChange={() => handleSelectFile(fileId)}
-                                                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer flex-shrink-0"
+                                                        className="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer flex-shrink-0"
                                                     />
-                                                    <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded flex items-center justify-center flex-shrink-0">
-                                                        <File className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                                                    <div className="w-6 h-6 bg-orange-100 dark:bg-orange-900/30 rounded flex items-center justify-center flex-shrink-0">
+                                                        <File className="w-3 h-3 text-orange-600 dark:text-orange-400" />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="font-medium text-sm text-gray-900 dark:text-white truncate" title={fileName}>
+                                                        <p className="font-medium text-xs text-gray-900 dark:text-white truncate" title={fileName}>
                                                             {fileName}
                                                         </p>
-                                                        <p className="text-xs text-gray-500 font-mono truncate">
+                                                        <p className="text-[10px] text-gray-500 font-mono truncate">
                                                             {fileId.substring(0, 8)}...
                                                         </p>
                                                     </div>
                                                     <button
                                                         onClick={() => handleDeleteFile(fileId)}
-                                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
+                                                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors flex-shrink-0"
                                                         title="Eliminar archivo"
                                                     >
-                                                        <Trash2 className="w-4 h-4" />
+                                                        <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
                                             );
@@ -645,8 +645,9 @@ const AssistantSection = ({ showToast }) => {
                         </div>
                     </div>
                 </Card>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 };
 
