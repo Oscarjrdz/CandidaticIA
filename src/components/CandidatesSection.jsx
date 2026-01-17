@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
+import ChatHistoryModal from './ChatHistoryModal';
 import { getCandidates, deleteCandidate, CandidatesSubscription } from '../services/candidatesService';
-import { getChatHistory, uploadFile, deleteFile, getFiles } from '../services/assistantService';
-import { saveExportSettings, getExportSettings, saveExportStatus, getExportStatus } from '../utils/storage';
+import { getExportSettings, saveExportSettings, getChatFileId, saveChatFileId, deleteChatFileId } from '../utils/storage';
+import { exportChatToFile, deleteOldChatFile, generateChatHistoryText } from '../services/chatExportService';
 
 /**
  * Sección de Candidatos con Auto-Exportación
@@ -20,10 +21,19 @@ const CandidatesSection = ({ showToast }) => {
     const [selectedCandidate, setSelectedCandidate] = useState(null);
     const [credentials, setCredentials] = useState(null);
 
+    // Estado para historial modal
+    const [historyModalOpen, setHistoryModalOpen] = useState(false);
+    const [historyModalCandidate, setHistoryModalCandidate] = useState(null);
+    const [historyModalContent, setHistoryModalContent] = useState('');
+
     // Configuración de Exportación
     const [showSettings, setShowSettings] = useState(false);
     const [exportTimer, setExportTimer] = useState(0); // Minutos. 0 = Desactivado.
-    const [exportingMap, setExportingMap] = useState({}); // { candidateId: true/false }
+    const [exportingMap, setExportingMap] = useState({}); // { whatsapp: 'uploading'|'uploaded'|'error' }
+    const [fileStatusMap, setFileStatusMap] = useState({}); // { whatsapp: fileId }
+
+    // Timers para cada candidato (se reinician con mensajes salientes)
+    const exportTimersRef = useRef({});
 
     useEffect(() => {
         // Cargar credenciales
@@ -48,100 +58,71 @@ const CandidatesSection = ({ showToast }) => {
         return () => subscription.stop();
     }, []);
 
-    // --- AUTO-EXPORT LOGIC ---
+    // Auto-export logic - triggers when candidates change and timer is configured
     useEffect(() => {
         if (!exportTimer || exportTimer <= 0 || !credentials || candidates.length === 0) return;
 
-        const checkAndExport = async () => {
-            const exportStatus = getExportStatus();
-            const now = new Date();
+        candidates.forEach(candidate => {
+            if (!candidate.messages || candidate.messages.length === 0) return;
 
-            for (const candidate of candidates) {
-                if (!candidate.ultimoMensaje) continue;
+            // Find last outgoing message
+            const outgoingMessages = candidate.messages.filter(msg => !msg.incoming);
+            if (outgoingMessages.length === 0) return;
 
-                const lastMsgTime = new Date(candidate.ultimoMensaje);
-                const diffMinutes = (now - lastMsgTime) / 60000;
-
-                // Si ha pasado el tiempo configurado desde el último mensaje
-                if (diffMinutes >= exportTimer) {
-
-                    // Chequear si ya se exportó ESTADO actual de este candidato
-                    // Usamos timestamp del ultimo mensaje como "hash" de version
-                    const lastExportStats = exportStatus[candidate.id];
-
-                    // Si ya exportamos este "estado" exacto (mismo timestamp de último mensaje), saltamos
-                    if (lastExportStats && lastExportStats.lastMessageTime === candidate.ultimoMensaje) {
-                        continue;
-                    }
-
-                    // Iniciamos exportación
-                    // console.log(`Triggering export for ${candidate.nombre} (Idle: ${diffMinutes.toFixed(1)}m)`);
-
-                    setExportingMap(prev => ({ ...prev, [candidate.id]: true }));
-
-                    try {
-                        // 1. Obtener chat completo
-                        const hist = await getChatHistory(candidate.id);
-                        if (!hist.success) throw new Error('Error fetching chat');
-
-                        // 2. Formatear a TXT
-                        // Formato: [Fecha] Autor: Mensaje
-                        const content = hist.messages.map(msg =>
-                            `[${new Date(msg.timestamp).toLocaleString()}] ${msg.from === 'me' ? 'Bot' : 'Candidato'}: ${msg.content}`
-                        ).join('\n');
-
-                        const blob = new Blob([content], { type: 'text/plain' });
-                        const filename = `${candidate.whatsapp}.txt`;
-                        const file = new File([blob], filename, { type: 'text/plain' });
-
-                        // 3. Subir (uploadFile ya maneja el POST)
-                        // NOTA: Para reemplazar limpio, idealmente borraríamos el anterior primero.
-                        // Pero no sabemos el ID del archivo anterior fácilmente sin listar todo.
-                        // La API de assistantService no tiene 'deleteByName'.
-                        // Sin embargo, si subimos con mismo nombre, BuilderBot API suele crear duplicado o renombrar.
-                        // Para cumplir el requisito "validar si existe, borrarlo y subir nuevo":
-
-                        // Lista rápida (optimizable: cachear lista de archivos)
-                        const filesList = await getFiles(credentials);
-                        if (filesList.success) {
-                            const existing = filesList.files.find(f => f.filename === filename || f.name === filename);
-                            if (existing) {
-                                await deleteFile(credentials, existing.id);
-                            }
-                        }
-
-                        // Subir nuevo
-                        const uploadRes = await uploadFile(credentials, file);
-
-                        if (uploadRes.success) {
-                            // Guardar estado de éxito
-                            saveExportStatus(candidate.id, {
-                                lastExport: now.toISOString(),
-                                lastMessageTime: candidate.ultimoMensaje
-                            });
-                            // showToast(`Historial de ${candidate.nombre} exportado`, 'info'); // Opcional: muy ruidoso
-                        }
-
-                    } catch (e) {
-                        console.error('Auto-export error:', e);
-                    } finally {
-                        setExportingMap(prev => ({ ...prev, [candidate.id]: false }));
-                    }
-                }
+            // Clear existing timer for this candidate
+            if (exportTimersRef.current[candidate.whatsapp]) {
+                clearTimeout(exportTimersRef.current[candidate.whatsapp]);
             }
-        };
 
-        // Correr check cada 30s
-        const interval = setInterval(checkAndExport, 30000);
-        // Correr uno inicial a los 2s
-        const initialTimeout = setTimeout(checkAndExport, 2000);
+            // Set new timer
+            const timerMs = exportTimer * 60 * 1000;
+            exportTimersRef.current[candidate.whatsapp] = setTimeout(() => {
+                handleAutoExport(candidate, credentials);
+            }, timerMs);
+        });
 
+        // Cleanup timers on unmount
         return () => {
-            clearInterval(interval);
-            clearTimeout(initialTimeout);
+            Object.values(exportTimersRef.current).forEach(timer => clearTimeout(timer));
+            exportTimersRef.current = {};
         };
+    }, [candidates, exportTimer, credentials]);
 
-    }, [candidates, exportTimer, credentials]); // Re-run si cambia la lista o el timer
+    const handleAutoExport = async (candidate, creds) => {
+        if (!creds) return;
+
+        setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'uploading' }));
+
+        try {
+            // Delete old file if exists
+            const oldFileId = getChatFileId(candidate.whatsapp);
+            if (oldFileId) {
+                await deleteOldChatFile(oldFileId, creds);
+                deleteChatFileId(candidate.whatsapp);
+            }
+
+            // Export and upload new file
+            const result = await exportChatToFile(candidate, creds);
+
+            if (result.success) {
+                saveChatFileId(candidate.whatsapp, result.fileId);
+                setFileStatusMap(prev => ({ ...prev, [candidate.whatsapp]: result.fileId }));
+                setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'uploaded' }));
+            } else {
+                setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'error' }));
+            }
+        } catch (error) {
+            console.error('Auto-export error:', error);
+            setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'error' }));
+        }
+    };
+
+    const handleViewHistory = (candidate) => {
+        const content = generateChatHistoryText(candidate);
+        setHistoryModalCandidate(candidate);
+        setHistoryModalContent(content);
+        setHistoryModalOpen(true);
+    };
 
     const handleSaveSettings = () => {
         saveExportSettings(exportTimer);
@@ -336,6 +317,7 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Mensajes</th>
+                                    <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
                                     <th className="text-center py-4 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
@@ -386,6 +368,27 @@ const CandidatesSection = ({ showToast }) => {
                                             </span>
                                         </td>
                                         <td className="py-4 px-4 text-center">
+                                            {exportingMap[candidate.whatsapp] === 'uploading' ? (
+                                                <Loader2 className="w-5 h-5 text-blue-500 animate-spin mx-auto" title="Subiendo historial..." />
+                                            ) : exportingMap[candidate.whatsapp] === 'uploaded' || getChatFileId(candidate.whatsapp) ? (
+                                                <button
+                                                    onClick={() => handleViewHistory(candidate)}
+                                                    className="p-2 hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg smooth-transition"
+                                                    title="Ver historial"
+                                                >
+                                                    <FileText className="w-5 h-5" />
+                                                </button>
+                                            ) : exportingMap[candidate.whatsapp] === 'error' ? (
+                                                <div className="text-red-500 text-xs" title="Error al exportar">
+                                                    Error
+                                                </div>
+                                            ) : (
+                                                <div className="text-gray-400 text-xs">
+                                                    -
+                                                </div>
+                                            )}
+                                        </td>
+                                        <td className="py-4 px-4 text-center">
                                             <button
                                                 onClick={() => handleOpenChat(candidate)}
                                                 className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative"
@@ -418,6 +421,14 @@ const CandidatesSection = ({ showToast }) => {
                 onClose={() => setSelectedCandidate(null)}
                 candidate={selectedCandidate}
                 credentials={credentials}
+            />
+
+            {/* Modal de Historial */}
+            <ChatHistoryModal
+                isOpen={historyModalOpen}
+                onClose={() => setHistoryModalOpen(false)}
+                candidate={historyModalCandidate}
+                chatContent={historyModalContent}
             />
         </div >
     );

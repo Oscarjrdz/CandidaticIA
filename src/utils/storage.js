@@ -206,6 +206,61 @@ export const getExportStatus = () => {
     return saved ? JSON.parse(saved) : {};
 };
 
+// --- Chat File IDs Management ---
+/**
+ * Get all chat file IDs
+ * @returns {Object} Map of whatsapp number to file ID
+ */
+export const getChatFileIds = () => {
+    try {
+        const saved = localStorage.getItem('chat_file_ids');
+        return saved ? JSON.parse(saved) : {};
+    } catch (error) {
+        return {};
+    }
+};
+
+/**
+ * Save chat file ID for a candidate
+ * @param {string} whatsapp - WhatsApp number
+ * @param {string} fileId - File ID from Knowledge Base
+ */
+export const saveChatFileId = (whatsapp, fileId) => {
+    try {
+        const fileIds = getChatFileIds();
+        fileIds[whatsapp] = fileId;
+        localStorage.setItem('chat_file_ids', JSON.stringify(fileIds));
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: 'Error saving file ID' };
+    }
+};
+
+/**
+ * Delete chat file ID for a candidate
+ * @param {string} whatsapp - WhatsApp number
+ */
+export const deleteChatFileId = (whatsapp) => {
+    try {
+        const fileIds = getChatFileIds();
+        delete fileIds[whatsapp];
+        localStorage.setItem('chat_file_ids', JSON.stringify(fileIds));
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: 'Error deleting file ID' };
+    }
+};
+
+/**
+ * Get chat file ID for a specific candidate
+ * @param {string} whatsapp - WhatsApp number
+ * @returns {string|null} File ID or null
+ */
+export const getChatFileId = (whatsapp) => {
+    const fileIds = getChatFileIds();
+    return fileIds[whatsapp] || null;
+};
+
 export const clearAllStorage = () => {
     try {
         Object.values(STORAGE_KEYS).forEach(key => {
