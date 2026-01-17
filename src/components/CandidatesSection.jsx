@@ -17,11 +17,11 @@ const CandidatesSection = ({ showToast }) => {
         // Cargar candidatos al montar
         loadCandidates();
 
-        // Polling cada 10 segundos
+        // Polling cada 2 segundos para actualizaciones casi instantáneas
         const subscription = new CandidatesSubscription((newCandidates) => {
             setCandidates(newCandidates);
             setLastUpdate(new Date());
-        }, 10000);
+        }, 2000); // 2 segundos
 
         subscription.start();
 
