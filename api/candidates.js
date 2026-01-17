@@ -5,7 +5,7 @@
  * DELETE /api/candidates/:id
  */
 
-import { getCandidates, getCandidateById, deleteCandidate, getCandidatesStats } from './utils/storage.js';
+import { getCandidates, getCandidateById, deleteCandidate, getCandidatesStats, saveMessage, getMessages } from './utils/storage.js';
 
 export default async function handler(req, res) {
     // CORS preflight

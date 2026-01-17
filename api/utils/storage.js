@@ -428,3 +428,53 @@ const getCandidatesStatsFromMemory = () => {
         ultimoContacto: candidatesMemory[0] || null
     };
 };
+/**
+ * ==========================================
+ * FUNCIONES PARA MENSAJES (CHAT)
+ * ==========================================
+ */
+
+export const saveMessage = async (candidateId, messageData) => {
+    // Estructura: { id, from: 'user'|'bot', content, type, timestamp }
+    const message = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: new Date().toISOString(),
+        type: 'text',
+        ...messageData
+    };
+
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            // Guardar en lista
+            await redis.rpush(`messages:${candidateId}`, JSON.stringify(message));
+            // Opcional: Trim para no guardar historia infinita (ej: ultimos 1000)
+            await redis.ltrim(`messages:${candidateId}`, -1000, -1);
+            return message;
+        } catch (error) {
+            console.error('Error guardando mensaje Redis:', error);
+            // Fallback memoria (implementar si es necesario)
+            return message;
+        }
+    } else {
+        // Memoria para desarrollo
+        if (!memoryStore[`msg_${candidateId}`]) memoryStore[`msg_${candidateId}`] = [];
+        memoryStore[`msg_${candidateId}`].push(message);
+        return message;
+    }
+};
+
+export const getMessages = async (candidateId, limit = 100) => {
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            const messages = await redis.lrange(`messages:${candidateId}`, -limit, -1);
+            return messages.map(m => JSON.parse(m));
+        } catch (error) {
+            console.error('Error obteniendo mensajes Redis:', error);
+            return [];
+        }
+    } else {
+        return (memoryStore[`msg_${candidateId}`] || []).slice(-limit);
+    }
+};
