@@ -265,7 +265,7 @@ const CandidatesSection = ({ showToast }) => {
                 isOpen={!!selectedCandidate}
                 onClose={() => setSelectedCandidate(null)}
                 candidate={selectedCandidate}
-                credentials={builderBotCreds}
+                credentials={credentials}
             />
         </div>
     );
