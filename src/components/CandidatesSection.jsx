@@ -274,23 +274,6 @@ const CandidatesSection = ({ showToast }) => {
                             </p>
                         </div>
                     </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                    <Button
-                        onClick={() => setShowSettings(!showSettings)}
-                        variant="outline"
-                        size="sm"
-                        icon={Settings}
-                        className={exportTimer > 0 ? "text-green-600 border-green-200 bg-green-50" : ""}
-                    >
-                        {exportTimer > 0 ? `${exportTimer}m` : 'Off'}
-                    </Button>
-
-                    {lastUpdate && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400 hidden sm:inline">
-                            {lastUpdate.toLocaleTimeString()}
-                        </span>
-                    )}
                     <Button
                         onClick={loadCandidates}
                         icon={RefreshCw}
@@ -301,14 +284,20 @@ const CandidatesSection = ({ showToast }) => {
                         Refrescar
                     </Button>
                 </div>
-            </div>
 
-            {/* Settings Modal (Inline) */}
-            {showSettings && (
-                <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 animate-fade-in">
+                {/* Timer Settings - Always Visible */}
+                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 mb-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
-                            <Clock className="w-5 h-5 text-gray-500" />
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                icon={Settings}
+                                className={exportTimer > 0 ? "text-green-600 border-green-200 bg-green-50" : ""}
+                                disabled
+                            >
+                                {exportTimer > 0 ? `${exportTimer}m` : 'Off'}
+                            </Button>
                             <div>
                                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Auto-Exportar Historial (Minutos de inactividad)
@@ -331,7 +320,7 @@ const CandidatesSection = ({ showToast }) => {
                         </div>
                     </div>
                 </div>
-            )}
+            </div>
 
             {/* Búsqueda */}
             <form onSubmit={handleSearchSubmit} className="flex items-center space-x-2">
