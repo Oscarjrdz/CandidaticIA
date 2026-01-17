@@ -104,9 +104,18 @@ async function processEvent(payload) {
     const from = data.from;
     const name = data.name || data.pushName || 'Sin nombre';
     const body = data.body || (data.message && data.message.content) || '';
-    const timestamp = payload.timestamp || payload.ts || new Date().toISOString();
 
-    console.log(`🔄 Procesando evento: ${eventType}`, { from, name });
+    // Timestamp: BuilderBot v6 usa messageTimestamp (Unix timestamp)
+    let timestamp = new Date().toISOString();
+    if (data.messageTimestamp) {
+        // Convertir Unix timestamp (segundos) a milisegundos si es necesario
+        const ts = typeof data.messageTimestamp === 'string' ? parseInt(data.messageTimestamp) : data.messageTimestamp;
+        timestamp = new Date(ts > 1000000000000 ? ts : ts * 1000).toISOString();
+    } else if (payload.timestamp || payload.ts) {
+        timestamp = payload.timestamp || payload.ts;
+    }
+
+    console.log(`🔄 Procesando evento: ${eventType}`, { from, name, timestamp });
 
     switch (eventType) {
         case 'status.ready':
