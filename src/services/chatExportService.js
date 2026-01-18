@@ -63,8 +63,45 @@ export const exportChatToFile = async (candidate, credentials) => {
         throw new Error('Credenciales no configuradas');
     }
 
+
+    // --- 🧹 DEDUPLICACIÓN INTELIGENTE (13 caracteres) ---
+    try {
+        // 1. Listar archivos existentes en BuilderBot
+        const listParams = new URLSearchParams({
+            botId: credentials.botId,
+            answerId: credentials.answerId,
+            apiKey: credentials.apiKey,
+            type: 'files'
+        });
+
+        const listRes = await fetch(`/api/assistant?${listParams}`);
+
+        if (listRes.ok) {
+            const files = await listRes.json();
+
+            if (Array.isArray(files)) {
+                // 2. Filtrar duplicados: Comparar primeros 13 caracteres del nombre
+                const targetPrefix = String(candidate.whatsapp).substring(0, 13);
+
+                const duplicates = files.filter(f =>
+                    f.filename && f.filename.startsWith(targetPrefix)
+                );
+
+                // 3. Eliminar archivos duplicados encontrados
+                if (duplicates.length > 0) {
+                    console.log(`🧹 Limpieza: Eliminando ${duplicates.length} archivo(s) duplicado(s) (Prefijo: ${targetPrefix})`);
+                    await Promise.all(duplicates.map(f => deleteOldChatFile(f.id || f.file_id, credentials)));
+                }
+            }
+        }
+    } catch (cleanupErr) {
+        console.warn('⚠️ Error en limpieza automática de duplicados:', cleanupErr);
+        // Continuar con la subida aunque falle la limpieza
+    }
+
     // Generate text content
     const textContent = generateChatHistoryText(candidate);
+
 
     // Create blob
     const blob = new Blob([textContent], { type: 'text/plain' });
