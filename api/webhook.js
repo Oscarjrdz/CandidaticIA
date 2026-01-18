@@ -141,7 +141,6 @@ async function processEvent(payload) {
                     whatsapp: from,
                     nombre: name,
                     foto: data.profilePicUrl || null,
-                    ultimoMensaje: timestamp,
                     ultimoPayload: payload
                 };
 
