@@ -223,14 +223,8 @@ const CandidatesSection = ({ showToast }) => {
             // Create candidate object with messages
             const candidateWithMessages = { ...candidate, messages: data.messages };
 
-            // Delete old file if exists
-            const oldFileId = getChatFileId(candidate.whatsapp);
-            if (oldFileId) {
-                await deleteOldChatFile(oldFileId, creds);
-                deleteChatFileId(candidate.whatsapp);
-            }
 
-            // Export and upload new file
+            // Export and upload new file (deduplication handled inside exportChatToFile)
             console.log(`📤 Starting export for ${candidate.whatsapp}...`);
             console.log(`📊 Messages count: ${candidateWithMessages.messages.length}`);
             console.log(`🔑 Credentials:`, {
