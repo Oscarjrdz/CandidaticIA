@@ -195,8 +195,7 @@ export const saveCandidate = async (candidateData) => {
                         ...candidateData,           // 2. Sobrescribir con lo nuevo
                         id: existing.id,            // 3. Proteger ID
                         primerContacto: existing.primerContacto, // 4. Proteger fecha original
-                        totalMensajes: (existing.totalMensajes || 0) + 1,
-                        ultimoMensaje: new Date().toISOString()
+                        totalMensajes: (existing.totalMensajes || 0) + 1
                     };
                 } else {
                     // Caso raro: ID existe en mapeo pero no data
@@ -258,8 +257,7 @@ export const saveCandidate = async (candidateData) => {
                     ...candidateData,           // 2. Sobrescribir nuevo
                     id: existing.id,            // 3. Proteger ID
                     primerContacto: existing.primerContacto, // 4. Proteger fecha original
-                    totalMensajes: (existing.totalMensajes || 0) + 1,
-                    ultimoMensaje: new Date().toISOString()
+                    totalMensajes: (existing.totalMensajes || 0) + 1
                 };
                 candidatesMemory[existingIndex] = candidate;
                 return candidate;
