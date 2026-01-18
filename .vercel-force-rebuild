@@ -1,0 +1,3 @@
+# Force Vercel to rebuild from scratch
+# This file triggers a cache invalidation
+Timestamp: 2026-01-18T09:09:54-06:00
