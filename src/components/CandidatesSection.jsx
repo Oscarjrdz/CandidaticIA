@@ -226,7 +226,17 @@ const CandidatesSection = ({ showToast }) => {
             }
 
             // Export and upload new file
+            console.log(`📤 Starting export for ${candidate.whatsapp}...`);
+            console.log(`📊 Messages count: ${candidateWithMessages.messages.length}`);
+            console.log(`🔑 Credentials:`, {
+                hasBotId: !!creds.botId,
+                hasAnswerId: !!creds.answerId,
+                hasApiKey: !!creds.apiKey
+            });
+
             const result = await exportChatToFile(candidateWithMessages, creds);
+
+            console.log(`📥 Export result:`, result);
 
             if (result.success) {
                 saveChatFileId(candidate.whatsapp, result.fileId);
