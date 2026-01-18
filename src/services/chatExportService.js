@@ -19,8 +19,13 @@ export const generateChatHistoryText = (candidate) => {
 
     let header = `HISTORIAL DE CONVERSACIÓN\n`;
     header += `----------------------------------------\n`;
-    header += `Candidato: ${candidate.nombre || 'Desconocido'}\n`;
     header += `WhatsApp: ${candidate.whatsapp}\n`;
+    header += `Nombre Real: ${candidate.nombreReal || '-'}\n`;
+    header += `Nombre (WhatsApp): ${candidate.nombre || '-'}\n`;
+    header += `Fecha Nacimiento: ${candidate.fechaNacimiento || '-'}\n`;
+    header += `Edad: ${calculateAge(candidate.fechaNacimiento)}\n`;
+    header += `Municipio: ${candidate.municipio || '-'}\n`;
+    header += `Categoría: ${candidate.categoria || '-'}\n`;
     header += `Fecha de exportación: ${formattedDate} a las ${formattedTime}\n`;
     header += `----------------------------------------\n\n`;
 
@@ -142,4 +147,60 @@ export const downloadChatHistory = (candidate) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+};
+
+/**
+ * Calculate age from date of birth
+ * @param {string} dob - Date of birth string
+ * @returns {string} Age in years or '-'
+ */
+const calculateAge = (dob) => {
+    if (!dob) return '-';
+    let birthDate = new Date(dob);
+
+    // Intentar parsear si la fecha estándar falló
+    if (isNaN(birthDate.getTime())) {
+        const cleanDob = dob.toLowerCase().trim();
+
+        // 1. Formato "19 de 05 de 1983" o "19 de mayo de 1983"
+        const deRegex = /(\d{1,2})\s+de\s+([a-z0-9áéíóú]+)\s+de\s+(\d{4})/;
+        const match = cleanDob.match(deRegex);
+
+        if (match) {
+            const day = parseInt(match[1]);
+            let month = match[2];
+            const year = parseInt(match[3]);
+            let monthIndex = -1;
+
+            // Si mes es número
+            if (!isNaN(month)) {
+                monthIndex = parseInt(month) - 1;
+            } else {
+                // Si mes es texto
+                const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                // Buscar coincidencia parcial (ej. "sep" o "septiembre")
+                monthIndex = months.findIndex(m => m.startsWith(month.slice(0, 3)));
+            }
+
+            if (monthIndex >= 0) {
+                birthDate = new Date(year, monthIndex, day);
+            }
+        } else {
+            // 2. Fallback a DD/MM/YYYY o DD-MM-YYYY
+            const parts = dob.split(/[/-]/);
+            if (parts.length === 3) {
+                birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            }
+        }
+    }
+
+    if (isNaN(birthDate.getTime())) return '-';
+
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return isNaN(age) ? '-' : `${age} años`;
 };
