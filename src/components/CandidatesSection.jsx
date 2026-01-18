@@ -366,6 +366,32 @@ const CandidatesSection = ({ showToast }) => {
         return `${dateStr}, ${timeStr}`;
     };
 
+    const calculateAge = (dob) => {
+        if (!dob) return '-';
+        let birthDate = new Date(dob);
+
+        // Intentar parsear formatos DD/MM/YYYY si no es ISO
+        if (isNaN(birthDate.getTime())) {
+            // Intentar DD/MM/YYYY
+            const parts = dob.split(/[/-]/);
+            if (parts.length === 3) {
+                // Asumir DD/MM/YYYY si el primer número es > 12 (día) o por convención español
+                // Pero para mayor seguridad en español: DD/MM/YYYY
+                birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            }
+        }
+
+        if (isNaN(birthDate.getTime())) return '-';
+
+        const today = new Date();
+        let age = today.getFullYear() - birthDate.getFullYear();
+        const m = today.getMonth() - birthDate.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+        }
+        return isNaN(age) ? '-' : `${age} años`;
+    };
+
     return (
         <div className="space-y-6">
             {/* Header con búsqueda */}
@@ -471,6 +497,7 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre Real</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Fecha Nacimiento</th>
+                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Edad</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
@@ -508,6 +535,11 @@ const CandidatesSection = ({ showToast }) => {
                                         <td className="py-1 px-4">
                                             <div className="text-sm text-gray-900 dark:text-white font-medium">
                                                 {candidate.fechaNacimiento || <span className="text-gray-400 italic font-normal">-</span>}
+                                            </div>
+                                        </td>
+                                        <td className="py-1 px-4">
+                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                {calculateAge(candidate.fechaNacimiento)}
                                             </div>
                                         </td>
                                         <td className="py-1 px-4">
