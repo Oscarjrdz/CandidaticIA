@@ -250,6 +250,17 @@ async function processEvent(payload) {
                             updateData.nombreReal = capturedName;
                         }
 
+                        // 📅 DETECCIÓN DE FECHA DE NACIMIENTO
+                        // Buscar patrón "tu fecha de nacimiento es: [Fecha]"
+                        const dobRegex = /(?:tu|la) fecha de nacimiento es:\s*([^.!?\n]+)/i;
+                        const dobMatch = content.match(dobRegex);
+
+                        if (dobMatch && dobMatch[1]) {
+                            const capturedDob = dobMatch[1].trim();
+                            console.log(`🎂 FECHA DE NACIMIENTO DETECTADA: "${capturedDob}" para ${cleanNumber}`);
+                            updateData.fechaNacimiento = capturedDob;
+                        }
+
                         await updateCandidate(candidateId, updateData);
                         console.log(`🕐 ultimoMensaje actualizado para ${candidateName}: ${timestamp}`);
                     }

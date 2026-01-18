@@ -470,6 +470,7 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre Real</th>
+                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Fecha Nacimiento</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
@@ -502,6 +503,11 @@ const CandidatesSection = ({ showToast }) => {
                                         <td className="py-1 px-4">
                                             <div className="text-sm text-gray-900 dark:text-white font-medium">
                                                 {candidate.nombreReal || <span className="text-gray-400 italic font-normal">-</span>}
+                                            </div>
+                                        </td>
+                                        <td className="py-1 px-4">
+                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                {candidate.fechaNacimiento || <span className="text-gray-400 italic font-normal">-</span>}
                                             </div>
                                         </td>
                                         <td className="py-1 px-4">
