@@ -83,6 +83,14 @@ const CandidatesSection = ({ showToast }) => {
     useEffect(() => {
         if (!exportTimer || exportTimer <= 0 || candidates.length === 0) return;
 
+        // Wait for cloud status to load before processing
+        // If we have candidates but cloudFileStatus is empty, it means we haven't loaded it yet
+        const hasLoadedCloudStatus = Object.keys(cloudFileStatus).length > 0 || candidates.length === 0;
+        if (!hasLoadedCloudStatus && credentials) {
+            console.log('⏳ Waiting for cloud status to load before processing timers...');
+            return;
+        }
+
         const processGreenTimers = async () => {
             const promises = candidates.map(async (candidate) => {
                 if (!candidate.ultimoMensaje) return;
@@ -154,7 +162,7 @@ const CandidatesSection = ({ showToast }) => {
         };
 
         processGreenTimers();
-    }, [currentTime, candidates, exportTimer]);
+    }, [currentTime, candidates, exportTimer, cloudFileStatus, credentials]);
 
     // Auto-export logic - triggers when candidates change and timer is configured
     useEffect(() => {
