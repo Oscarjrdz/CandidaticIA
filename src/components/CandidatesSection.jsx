@@ -38,6 +38,7 @@ const CandidatesSection = ({ showToast }) => {
     const [currentTime, setCurrentTime] = useState(Date.now()); // For countdown updates
     const [localChatFiles, setLocalChatFiles] = useState({}); // { whatsapp: true/false } - tracks which candidates have local files
     const previousTimerStates = useRef({}); // Track previous timer states to detect green transitions
+    const [cloudFileStatus, setCloudFileStatus] = useState({}); // { prefix: true/false } - tracks BuilderBot cloud files
 
     useEffect(() => {
         // Cargar credenciales
@@ -218,6 +219,10 @@ const CandidatesSection = ({ showToast }) => {
                 saveChatFileId(candidate.whatsapp, result.fileId);
                 setFileStatusMap(prev => ({ ...prev, [candidate.whatsapp]: result.fileId }));
                 setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'uploaded' }));
+
+                // Update cloud file status
+                const prefix = String(candidate.whatsapp).substring(0, 13);
+                setCloudFileStatus(prev => ({ ...prev, [prefix]: true }));
             } else {
                 setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'error' }));
             }
@@ -286,11 +291,53 @@ const CandidatesSection = ({ showToast }) => {
         if (result.success) {
             setCandidates(result.candidates);
             setLastUpdate(new Date());
+
+            // Check cloud file status
+            checkCloudFileStatus(result.candidates);
         } else {
             showToast('Error cargando candidatos', 'error');
         }
 
         setLoading(false);
+    };
+
+    const checkCloudFileStatus = async (candidateList) => {
+        if (!credentials || !credentials.botId || !credentials.answerId || !credentials.apiKey) {
+            return;
+        }
+
+        try {
+            // List files from BuilderBot
+            const listParams = new URLSearchParams({
+                botId: credentials.botId,
+                answerId: credentials.answerId,
+                apiKey: credentials.apiKey,
+                type: 'files'
+            });
+
+            const listRes = await fetch(`/api/assistant?${listParams}`);
+
+            if (listRes.ok) {
+                const files = await listRes.json();
+
+                if (Array.isArray(files)) {
+                    const statusMap = {};
+
+                    // Check each candidate
+                    candidateList.forEach(candidate => {
+                        const prefix = String(candidate.whatsapp).substring(0, 13);
+                        const hasFile = files.some(f =>
+                            f.filename && f.filename.startsWith(prefix)
+                        );
+                        statusMap[prefix] = hasFile;
+                    });
+
+                    setCloudFileStatus(statusMap);
+                }
+            }
+        } catch (error) {
+            console.warn('Error checking cloud file status:', error);
+        }
     };
 
     const handleSearch = (e) => {
@@ -533,6 +580,7 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
+                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial en Nube</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
@@ -660,6 +708,24 @@ const CandidatesSection = ({ showToast }) => {
                                                     -
                                                 </div>
                                             )}
+                                        </td>
+                                        <td className="py-1 px-4 text-center">
+                                            {(() => {
+                                                const prefix = String(candidate.whatsapp).substring(0, 13);
+                                                const hasCloudFile = cloudFileStatus[prefix];
+
+                                                return (
+                                                    <div className="flex justify-center">
+                                                        <div
+                                                            className={`w-3 h-3 rounded-full ${hasCloudFile
+                                                                ? 'bg-green-500 dark:bg-green-400'
+                                                                : 'bg-red-500 dark:bg-red-400'
+                                                                }`}
+                                                            title={hasCloudFile ? 'Archivo en nube' : 'No hay archivo en nube'}
+                                                        />
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="py-1 px-4 text-center">
                                             <button
