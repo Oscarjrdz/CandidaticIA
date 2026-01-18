@@ -231,8 +231,11 @@ const CandidatesSection = ({ showToast }) => {
         // Try to get content from local file first
         const localFile = getLocalChatFile(candidate.whatsapp);
 
-        // Validate local file content - check if it has "undefined" messages
-        const isValidContent = localFile && localFile.content && !localFile.content.includes("Bot: undefined") && !localFile.content.includes("Candidato: undefined");
+        // Validate local file content - check if it has "undefined" messages AND if it has the new header format
+        const isValidContent = localFile && localFile.content &&
+            !localFile.content.includes("Bot: undefined") &&
+            !localFile.content.includes("Candidato: undefined") &&
+            localFile.content.includes("Categoría:"); // Force refresh if using old header format
 
         if (isValidContent) {
             setHistoryModalCandidate(candidate);
