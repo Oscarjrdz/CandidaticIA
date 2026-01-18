@@ -39,6 +39,7 @@ const CandidatesSection = ({ showToast }) => {
     const [localChatFiles, setLocalChatFiles] = useState({}); // { whatsapp: true/false } - tracks which candidates have local files
     const previousTimerStates = useRef({}); // Track previous timer states to detect green transitions
     const [cloudFileStatus, setCloudFileStatus] = useState({}); // { prefix: true/false } - tracks BuilderBot cloud files
+    const [cloudStatusLoaded, setCloudStatusLoaded] = useState(false); // Track if we've loaded cloud status at least once
 
     useEffect(() => {
         // Cargar credenciales
@@ -84,9 +85,7 @@ const CandidatesSection = ({ showToast }) => {
         if (!exportTimer || exportTimer <= 0 || candidates.length === 0) return;
 
         // Wait for cloud status to load before processing
-        // If we have candidates but cloudFileStatus is empty, it means we haven't loaded it yet
-        const hasLoadedCloudStatus = Object.keys(cloudFileStatus).length > 0 || candidates.length === 0;
-        if (!hasLoadedCloudStatus && credentials) {
+        if (!cloudStatusLoaded && credentials && candidates.length > 0) {
             console.log('⏳ Waiting for cloud status to load before processing timers...');
             return;
         }
@@ -164,7 +163,7 @@ const CandidatesSection = ({ showToast }) => {
         };
 
         processGreenTimers();
-    }, [currentTime, candidates, exportTimer, cloudFileStatus, credentials]);
+    }, [currentTime, candidates, exportTimer, cloudFileStatus, credentials, cloudStatusLoaded]);
 
     // Auto-export logic - triggers when candidates change and timer is configured
     useEffect(() => {
@@ -376,10 +375,12 @@ const CandidatesSection = ({ showToast }) => {
                     });
 
                     setCloudFileStatus(statusMap);
+                    setCloudStatusLoaded(true); // Mark as loaded
                 }
             }
         } catch (error) {
             console.warn('Error checking cloud file status:', error);
+            setCloudStatusLoaded(true); // Mark as loaded even on error to prevent infinite waiting
         }
     };
 
