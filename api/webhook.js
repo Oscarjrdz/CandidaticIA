@@ -280,6 +280,17 @@ async function processEvent(payload) {
                             updateData.municipio = capturedCity;
                         }
 
+                        // 💼 DETECCIÓN DE CATEGORÍA
+                        // Patrón: "estas buscando empleo de: [Categoría]"
+                        const jobRegex = /(?:estas|estás)\s+buscando\s+empleo\s+de\s*[:]?\s*([^.!?\n]+)/i;
+                        const jobMatch = content.match(jobRegex);
+
+                        if (jobMatch && jobMatch[1]) {
+                            const capturedJob = jobMatch[1].trim().replace(/[*_]/g, '');
+                            console.log(`💼 CATEGORÍA DETECTADA: "${capturedJob}" para ${cleanNumber}`);
+                            updateData.categoria = capturedJob;
+                        }
+
                         await updateCandidate(candidateId, updateData);
                         console.log(`🕐 ultimoMensaje actualizado para ${candidateName}: ${timestamp}`);
                     }
