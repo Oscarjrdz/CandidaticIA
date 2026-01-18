@@ -600,12 +600,14 @@ const CandidatesSection = ({ showToast }) => {
                                                 }
 
                                                 // Si no hay último mensaje, no podemos calcular
-                                                if (!candidate.ultimoMensaje) {
+                                                const timerTimestamp = candidate.ultimoMensajeBot || candidate.ultimoMensaje;
+
+                                                if (!timerTimestamp) {
                                                     return <span className="text-xs text-gray-400">-</span>;
                                                 }
 
-                                                // Calcular hora objetivo (último mensaje + minutos configurados)
-                                                const lastMessageTime = new Date(candidate.ultimoMensaje).getTime();
+                                                // Calcular hora objetivo (último mensaje BOT + minutos configurados)
+                                                const lastMessageTime = new Date(timerTimestamp).getTime();
                                                 const targetTime = lastMessageTime + (exportTimer * 60 * 1000);
                                                 const now = currentTime;
 

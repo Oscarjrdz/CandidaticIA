@@ -234,9 +234,11 @@ async function processEvent(payload) {
                         });
                         console.log(`💾 Mensaje de AUTOPILOTO guardado para ${candidateName}`);
 
-                        // ✅ NUEVO: Actualizar ultimoMensaje del candidato
+                        // ✅ NUEVO: Actualizar ultimoMensaje del candidato (para orden)
+                        // y ultimoMensajeBot (para el timer)
                         const updateData = {
-                            ultimoMensaje: timestamp
+                            ultimoMensaje: timestamp,
+                            ultimoMensajeBot: timestamp
                         };
 
                         // 🕵️‍♂️ DETECCIÓN DE NOMBRE REAL
