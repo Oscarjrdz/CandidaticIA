@@ -205,6 +205,19 @@ const CandidatesSection = ({ showToast }) => {
         setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'uploading' }));
 
         try {
+            // Fetch messages for the candidate first
+            const res = await fetch(`/api/chat?candidateId=${candidate.id}`);
+            const data = await res.json();
+
+            if (!data.success || !data.messages || data.messages.length === 0) {
+                console.warn(`No messages found for ${candidate.whatsapp}, skipping export`);
+                setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'error' }));
+                return;
+            }
+
+            // Create candidate object with messages
+            const candidateWithMessages = { ...candidate, messages: data.messages };
+
             // Delete old file if exists
             const oldFileId = getChatFileId(candidate.whatsapp);
             if (oldFileId) {
@@ -213,7 +226,7 @@ const CandidatesSection = ({ showToast }) => {
             }
 
             // Export and upload new file
-            const result = await exportChatToFile(candidate, creds);
+            const result = await exportChatToFile(candidateWithMessages, creds);
 
             if (result.success) {
                 saveChatFileId(candidate.whatsapp, result.fileId);
