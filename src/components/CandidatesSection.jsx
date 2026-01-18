@@ -120,10 +120,18 @@ const CandidatesSection = ({ showToast }) => {
                                 console.log(`✅ Chat history file created: ${candidate.whatsapp}.txt`);
                                 setLocalChatFiles(prev => ({ ...prev, [candidate.whatsapp]: true }));
 
-                                // Upload to BuilderBot cloud
-                                if (credentials) {
+
+                                // Upload to BuilderBot cloud ONLY if not already there
+                                const prefix = String(candidate.whatsapp).substring(0, 13);
+                                const alreadyInCloud = cloudFileStatus[prefix];
+
+                                if (credentials && !alreadyInCloud) {
+                                    console.log(`📤 Uploading to cloud (first time)...`);
                                     handleAutoExport(candidateWithMessages, credentials);
+                                } else if (alreadyInCloud) {
+                                    console.log(`⏭️ Skipping upload - file already in cloud`);
                                 }
+
                             } else {
                                 console.error(`❌ Error creating chat history file for ${candidate.whatsapp}`);
                             }
