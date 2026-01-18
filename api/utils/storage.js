@@ -183,25 +183,46 @@ export const saveCandidate = async (candidateData) => {
             // Buscar ID existente por teléfono
             const existingId = await redis.get(`candidate:phone:${whatsapp}`);
 
-            const candidate = {
-                id: existingId || `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                nombre: nombre || 'Sin nombre',
-                whatsapp: whatsapp,
-                foto: candidateData.foto || null,
-                primerContacto: existingId ? undefined : new Date().toISOString(),
-                ultimoMensaje: new Date().toISOString(),
-                totalMensajes: existingId ? undefined : 1,
-                ...candidateData
-            };
+            let candidate;
 
             if (existingId) {
-                // Si existe, recuperar para mantener datos históricos
+                // Si existe, recuperar para mantener datos históricos Y campos custom (nombreReal, etc)
                 const existingData = await redis.get(`candidate:${existingId}`);
                 if (existingData) {
                     const existing = JSON.parse(existingData);
-                    candidate.primerContacto = existing.primerContacto;
-                    candidate.totalMensajes = (existing.totalMensajes || 0) + 1;
+                    candidate = {
+                        ...existing,                // 1. Mantener TODO lo anterior
+                        ...candidateData,           // 2. Sobrescribir con lo nuevo
+                        id: existing.id,            // 3. Proteger ID
+                        primerContacto: existing.primerContacto, // 4. Proteger fecha original
+                        totalMensajes: (existing.totalMensajes || 0) + 1,
+                        ultimoMensaje: new Date().toISOString()
+                    };
+                } else {
+                    // Caso raro: ID existe en mapeo pero no data
+                    candidate = {
+                        id: existingId,
+                        nombre: nombre || 'Sin nombre',
+                        whatsapp: whatsapp,
+                        foto: candidateData.foto || null,
+                        primerContacto: new Date().toISOString(),
+                        ultimoMensaje: new Date().toISOString(),
+                        totalMensajes: 1,
+                        ...candidateData
+                    };
                 }
+            } else {
+                // Nuevo candidato
+                candidate = {
+                    id: `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    nombre: nombre || 'Sin nombre',
+                    whatsapp: whatsapp,
+                    foto: candidateData.foto || null,
+                    primerContacto: new Date().toISOString(),
+                    ultimoMensaje: new Date().toISOString(),
+                    totalMensajes: 1,
+                    ...candidateData
+                };
             }
 
             // Guardar candidato (stringify para Redis)
@@ -226,33 +247,45 @@ export const saveCandidate = async (candidateData) => {
         }
     } else {
         const existingId = await getCandidateIdByPhone(whatsapp);
-        const candidate = {
-            id: existingId || `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        let candidate;
+
+        if (existingId) {
+            const existingIndex = candidatesMemory.findIndex(c => c.id === existingId);
+            if (existingIndex !== -1) {
+                const existing = candidatesMemory[existingIndex];
+                candidate = {
+                    ...existing,                // 1. Mantener anterior
+                    ...candidateData,           // 2. Sobrescribir nuevo
+                    id: existing.id,            // 3. Proteger ID
+                    primerContacto: existing.primerContacto, // 4. Proteger fecha original
+                    totalMensajes: (existing.totalMensajes || 0) + 1,
+                    ultimoMensaje: new Date().toISOString()
+                };
+                candidatesMemory[existingIndex] = candidate;
+                return candidate;
+            }
+        }
+
+        // Nuevo candidato
+        candidate = {
+            id: `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             nombre: nombre || 'Sin nombre',
             whatsapp: whatsapp,
-            foto: null,
-            primerContacto: existingId ? undefined : new Date().toISOString(),
+            foto: candidateData.foto || null,
+            primerContacto: new Date().toISOString(),
             ultimoMensaje: new Date().toISOString(),
-            totalMensajes: existingId ? undefined : 1,
+            totalMensajes: 1,
             ...candidateData
         };
-        return saveCandidateToMemory(candidate, existingId);
+        candidatesMemory.unshift(candidate);
+        return candidate;
     }
 };
 
+// Helper eliminado (saveCandidateToMemory) ya no es necesario o se puede dejar por si acaso se usa en otro lado,
+// pero parece que solo se usaba aquí. Lo comentaré o eliminaré.
 const saveCandidateToMemory = (candidate, isUpdate) => {
-    if (isUpdate) {
-        const index = candidatesMemory.findIndex(c => c.id === candidate.id);
-        if (index !== -1) {
-            candidatesMemory[index] = {
-                ...candidatesMemory[index],
-                ...candidate,
-                totalMensajes: (candidatesMemory[index].totalMensajes || 0) + 1
-            };
-            return candidatesMemory[index];
-        }
-    }
-    candidatesMemory.unshift(candidate);
+    // Legacy function placeholder
     return candidate;
 };
 
