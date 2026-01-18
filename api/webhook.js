@@ -261,13 +261,22 @@ async function processEvent(payload) {
                         }
 
                         // 🏙️ DETECCIÓN DE MUNICIPIO
-                        // Patrón flexible: "tu vives en : [Municipio]"
-                        const cityRegex = /(?:tu|usted)\s+vives?\s+en\s*[:]?\s*([^.!?\n]+)/i;
+                        // Patrón flexible: "tu vives en : [Municipio]" o simplemente "vives en [Municipio]"
+                        // Eliminamos dependencia estricta de "tu/usted" para ser más robustos
+                        const cityRegex = /(?:vives?|resides?)\s+en\s*[:]?\s*([^.!?\n]+)/i;
                         const cityMatch = content.match(cityRegex);
+
+                        // Fallback: "tu municipio es [Municipio]"
+                        const cityRegex2 = /municipio\s+es\s*[:]?\s*([^.!?\n]+)/i;
+                        const cityMatch2 = content.match(cityRegex2);
 
                         if (cityMatch && cityMatch[1]) {
                             const capturedCity = cityMatch[1].trim().replace(/[*_]/g, '');
-                            console.log(`🏙️ MUNICIPIO DETECTADO: "${capturedCity}" para ${cleanNumber}`);
+                            console.log(`🏙️ MUNICIPIO DETECTADO (vives en): "${capturedCity}" para ${cleanNumber}`);
+                            updateData.municipio = capturedCity;
+                        } else if (cityMatch2 && cityMatch2[1]) {
+                            const capturedCity = cityMatch2[1].trim().replace(/[*_]/g, '');
+                            console.log(`🏙️ MUNICIPIO DETECTADO (municipio es): "${capturedCity}" para ${cleanNumber}`);
                             updateData.municipio = capturedCity;
                         }
 
