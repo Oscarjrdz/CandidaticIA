@@ -80,6 +80,21 @@ const CandidatesSection = ({ showToast }) => {
         return () => clearInterval(interval);
     }, []);
 
+    // Periodic refresh of cloud status to detect external changes in BuilderBot
+    useEffect(() => {
+        if (!credentials || !exportTimer || exportTimer <= 0) return;
+
+        // Refresh cloud status every 30 seconds
+        const interval = setInterval(() => {
+            if (candidates.length > 0) {
+                console.log('🔄 Refreshing cloud status...');
+                checkCloudFileStatus(candidates);
+            }
+        }, 30000); // 30 seconds
+
+        return () => clearInterval(interval);
+    }, [credentials, exportTimer, candidates]);
+
     // Auto-create chat history file when timer reaches green
     useEffect(() => {
         if (!exportTimer || exportTimer <= 0 || candidates.length === 0) return;
@@ -437,11 +452,18 @@ const CandidatesSection = ({ showToast }) => {
                     console.warn('Error deleting cloud file:', error);
                 }
             }
-
             // Delete local file
             if (candidate) {
                 deleteLocalChatFile(candidate.whatsapp);
                 deleteChatFileId(candidate.whatsapp);
+
+                // Update cloud status immediately
+                const prefix = String(candidate.whatsapp).substring(0, 13);
+                setCloudFileStatus(prev => {
+                    const updated = { ...prev };
+                    delete updated[prefix];
+                    return updated;
+                });
             }
 
             showToast('Candidato eliminado correctamente', 'success');
