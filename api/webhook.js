@@ -261,6 +261,18 @@ async function processEvent(payload) {
                             updateData.fechaNacimiento = capturedDob;
                         }
 
+                        // 🏙️ DETECCIÓN DE MUNICIPIO
+                        // Buscar patrón "tu vives en: [Municipio]"
+                        // Se permiten variaciones ligeras como "entonces tu vives en:"
+                        const cityRegex = /(?:tu|usted)\s+vives?\s+en:\s*([^.!?\n]+)/i;
+                        const cityMatch = content.match(cityRegex);
+
+                        if (cityMatch && cityMatch[1]) {
+                            const capturedCity = cityMatch[1].trim();
+                            console.log(`🏙️ MUNICIPIO DETECTADO: "${capturedCity}" para ${cleanNumber}`);
+                            updateData.municipio = capturedCity;
+                        }
+
                         await updateCandidate(candidateId, updateData);
                         console.log(`🕐 ultimoMensaje actualizado para ${candidateName}: ${timestamp}`);
                     }
