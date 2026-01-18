@@ -119,6 +119,11 @@ const CandidatesSection = ({ showToast }) => {
                             if (result.success) {
                                 console.log(`✅ Chat history file created: ${candidate.whatsapp}.txt`);
                                 setLocalChatFiles(prev => ({ ...prev, [candidate.whatsapp]: true }));
+
+                                // Upload to BuilderBot cloud
+                                if (credentials) {
+                                    handleAutoExport(candidateWithMessages, credentials);
+                                }
                             } else {
                                 console.error(`❌ Error creating chat history file for ${candidate.whatsapp}`);
                             }
