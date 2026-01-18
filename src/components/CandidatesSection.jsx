@@ -133,11 +133,13 @@ const CandidatesSection = ({ showToast }) => {
                                 const prefix = String(candidate.whatsapp).substring(0, 13);
                                 const alreadyInCloud = cloudFileStatus[prefix];
 
-                                if (credentials && !alreadyInCloud) {
+                                if (credentials && !alreadyInCloud && exportTimer > 0) {
                                     console.log(`📤 Uploading to cloud (first time)...`);
                                     handleAutoExport(candidateWithMessages, credentials);
                                 } else if (alreadyInCloud) {
                                     console.log(`⏭️ Skipping upload - file already in cloud`);
+                                } else if (exportTimer <= 0) {
+                                    console.log(`⏭️ Skipping upload - timer is disabled`);
                                 }
 
                             } else {
