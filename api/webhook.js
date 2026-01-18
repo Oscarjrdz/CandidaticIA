@@ -281,8 +281,8 @@ async function processEvent(payload) {
                         }
 
                         // 💼 DETECCIÓN DE CATEGORÍA
-                        // Patrón: "estas buscando empleo de: [Categoría]"
-                        const jobRegex = /(?:estas|estás)\s+buscando\s+empleo\s+de\s*[:]?\s*([^.!?\n]+)/i;
+                        // Patrón flexible: "estas buscando empleo de: [Categoría]" o "buscando empleo de [Categoría]"
+                        const jobRegex = /buscando\s+empleo\s+de\s*[:]?\s*([^.!?\n]+)/i;
                         const jobMatch = content.match(jobRegex);
 
                         if (jobMatch && jobMatch[1]) {
