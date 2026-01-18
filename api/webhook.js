@@ -240,35 +240,33 @@ async function processEvent(payload) {
                         };
 
                         // 🕵️‍♂️ DETECCIÓN DE NOMBRE REAL
-                        // Buscar patrón "tu nombre es: [Nombre]"
-                        const nameRegex = /tu nombre es:\s*([^.!?\n]+)/i;
+                        // Patrón flexible: "tu nombre es : [Nombre]" o "tu nombre es: [Nombre]"
+                        const nameRegex = /tu nombre es\s*[:]?\s*([^.!?\n]+)/i;
                         const nameMatch = content.match(nameRegex);
 
                         if (nameMatch && nameMatch[1]) {
-                            const capturedName = nameMatch[1].trim();
+                            const capturedName = nameMatch[1].trim().replace(/[*_]/g, '');
                             console.log(`🎯 NOMBRE REAL DETECTADO: "${capturedName}" para ${cleanNumber}`);
                             updateData.nombreReal = capturedName;
                         }
 
                         // 📅 DETECCIÓN DE FECHA DE NACIMIENTO
-                        // Buscar patrón "tu fecha de nacimiento es: [Fecha]"
-                        const dobRegex = /(?:tu|la) fecha de nacimiento es:\s*([^.!?\n]+)/i;
+                        const dobRegex = /(?:tu|la) fecha de nacimiento es\s*[:]?\s*([^.!?\n]+)/i;
                         const dobMatch = content.match(dobRegex);
 
                         if (dobMatch && dobMatch[1]) {
-                            const capturedDob = dobMatch[1].trim();
+                            const capturedDob = dobMatch[1].trim().replace(/[*_]/g, '');
                             console.log(`🎂 FECHA DE NACIMIENTO DETECTADA: "${capturedDob}" para ${cleanNumber}`);
                             updateData.fechaNacimiento = capturedDob;
                         }
 
                         // 🏙️ DETECCIÓN DE MUNICIPIO
-                        // Buscar patrón "tu vives en: [Municipio]"
-                        // Se permiten variaciones ligeras como "entonces tu vives en:"
-                        const cityRegex = /(?:tu|usted)\s+vives?\s+en:\s*([^.!?\n]+)/i;
+                        // Patrón flexible: "tu vives en : [Municipio]"
+                        const cityRegex = /(?:tu|usted)\s+vives?\s+en\s*[:]?\s*([^.!?\n]+)/i;
                         const cityMatch = content.match(cityRegex);
 
                         if (cityMatch && cityMatch[1]) {
-                            const capturedCity = cityMatch[1].trim();
+                            const capturedCity = cityMatch[1].trim().replace(/[*_]/g, '');
                             console.log(`🏙️ MUNICIPIO DETECTADO: "${capturedCity}" para ${cleanNumber}`);
                             updateData.municipio = capturedCity;
                         }
