@@ -119,16 +119,26 @@ export const exportChatToFile = async (candidate, credentials) => {
         type: 'files'
     });
 
+    console.log(`🚀 Uploading file to BuilderBot:`, filename);
+    console.log(`📍 API URL: /api/assistant?type=files`);
+
     const response = await fetch(`/api/assistant?${params}`, {
         method: 'POST',
         body: formData
     });
 
+    console.log(`📡 Response status:`, response.status, response.statusText);
+
     const data = await response.json();
 
+    console.log(`📦 Response data:`, data);
+
     if (!response.ok) {
+        console.error(`❌ Upload failed:`, data.error || 'Unknown error');
         throw new Error(data.error || 'Error al subir archivo');
     }
+
+    console.log(`✅ File uploaded successfully! ID:`, data.id || data.file_id);
 
     return {
         success: true,
