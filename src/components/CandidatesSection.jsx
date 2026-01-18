@@ -223,6 +223,9 @@ const CandidatesSection = ({ showToast }) => {
                 // Update cloud file status
                 const prefix = String(candidate.whatsapp).substring(0, 13);
                 setCloudFileStatus(prev => ({ ...prev, [prefix]: true }));
+
+                // Refresh all cloud statuses after 1 second to ensure sync
+                setTimeout(() => checkCloudFileStatus(candidates), 1000);
             } else {
                 setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'error' }));
             }
