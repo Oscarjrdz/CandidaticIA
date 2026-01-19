@@ -435,6 +435,7 @@ const CandidatesSection = ({ showToast }) => {
                         statusMap[prefix] = hasFile;
                     });
 
+                    console.log('📊 Cloud file status updated:', statusMap);
                     setCloudFileStatus(statusMap);
                     cloudStatusLoadedRef.current = true; // Mark as loaded
                 }
