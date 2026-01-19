@@ -194,30 +194,33 @@ async function exportAndUpload(candidate, credentials) {
         const files = await listRes.json();
 
         if (Array.isArray(files)) {
-            existingFile = files.find(f => f.filename && f.filename.startsWith(prefix));
+            // Find ALL matching files (BuilderBot adds suffixes like _1735...)
+            const matchingFiles = files.filter(f => f.filename && f.filename.startsWith(candidate.whatsapp));
 
-            if (existingFile) {
-                console.log(`📌 Found existing file: ${existingFile.filename} (ID: ${existingFile.id})`);
+            if (matchingFiles.length > 0) {
+                console.log(`📌 Found ${matchingFiles.length} existing files for ${candidate.whatsapp}`);
 
-                // STEP 3: Delete old file (Direct Call)
-                console.log(`🗑️ Deleting old file...`);
-                // Note: DELETE URL requires fileId as query param
-                const deleteUrl = `${builderBotUrl}?fileId=${existingFile.id}`;
+                // Delete ALL found files (cleanup duplicates)
+                for (const file of matchingFiles) {
+                    console.log(`🗑️ Deleting old file: ${file.filename} (ID: ${file.id})...`);
 
-                const deleteRes = await fetch(deleteUrl, {
-                    method: 'DELETE',
-                    headers: { 'x-api-builderbot': credentials.apiKey }
-                });
+                    const deleteUrl = `${builderBotUrl}?fileId=${file.id}`;
 
-                if (!deleteRes.ok) {
-                    const errorText = await deleteRes.text();
-                    throw new Error(`Failed to delete old file: ${errorText}`);
+                    const deleteRes = await fetch(deleteUrl, {
+                        method: 'DELETE',
+                        headers: { 'x-api-builderbot': credentials.apiKey }
+                    });
+
+                    if (!deleteRes.ok) {
+                        console.warn(`⚠️ Failed to delete file ${file.id}, continuing...`);
+                    } else {
+                        console.log(`✅ File ${file.id} deleted successfully`);
+                    }
                 }
 
                 deletedSuccessfully = true;
-                console.log(`✅ Old file deleted successfully`);
             } else {
-                console.log(`ℹ️ No existing file found, uploading new one`);
+                console.log(`ℹ️ No existing files found for ${candidate.whatsapp}, clean slate`);
             }
         }
 
