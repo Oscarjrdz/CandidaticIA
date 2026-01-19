@@ -168,26 +168,24 @@ export default async function handler(req, res) {
 async function exportAndUpload(candidate, credentials) {
     const prefix = String(candidate.whatsapp).substring(0, 13);
     const filename = `${candidate.whatsapp}.txt`;
-    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+
+    // Direct BuilderBot API URL
+    const builderBotUrl = `https://app.builderbot.cloud/api/v2/${credentials.botId}/answer/${credentials.answerId}/plugin/assistant/files`;
 
     let existingFile = null;
     let deletedSuccessfully = false;
 
     try {
-        // STEP 1: Generate new content first (in memory, no side effects)
+        // STEP 1: Generate new content first
         console.log(`📝 Generating content for ${candidate.whatsapp}...`);
         const chatContent = generateChatContent(candidate);
 
-        // STEP 2: Check if file already exists
-        console.log(`🔍 Checking for existing file for ${candidate.whatsapp}...`);
-        const listParams = new URLSearchParams({
-            botId: credentials.botId,
-            answerId: credentials.answerId,
-            apiKey: credentials.apiKey,
-            type: 'files'
-        });
+        // STEP 2: Check if file already exists (Direct API)
+        console.log(`🔍 Checking for existing file (Direct API)...`);
 
-        const listRes = await fetch(`${baseUrl}/api/assistant?${listParams}`);
+        const listRes = await fetch(builderBotUrl, {
+            headers: { 'x-api-builderbot': credentials.apiKey }
+        });
 
         if (!listRes.ok) {
             throw new Error(`Failed to list files: ${listRes.status}`);
@@ -201,36 +199,20 @@ async function exportAndUpload(candidate, credentials) {
             if (existingFile) {
                 console.log(`📌 Found existing file: ${existingFile.filename} (ID: ${existingFile.id})`);
 
-                // STEP 3: Delete old file before uploading new one
+                // STEP 3: Delete old file (Direct Call)
                 console.log(`🗑️ Deleting old file...`);
-                console.log(`   File ID: ${existingFile.id}`);
-                console.log(`   Filename: ${existingFile.filename}`);
-
-                const deleteParams = new URLSearchParams({
-                    botId: credentials.botId,
-                    answerId: credentials.answerId,
-                    apiKey: credentials.apiKey,
-                    type: 'files',
-                    fileId: existingFile.id
-                });
-
-                const deleteUrl = `${baseUrl}/api/assistant?${deleteParams}`;
-                console.log(`   DELETE URL: ${deleteUrl}`);
+                // Note: DELETE URL requires fileId as query param
+                const deleteUrl = `${builderBotUrl}?fileId=${existingFile.id}`;
 
                 const deleteRes = await fetch(deleteUrl, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: { 'x-api-builderbot': credentials.apiKey }
                 });
-
-                console.log(`   DELETE Response Status: ${deleteRes.status}`);
 
                 if (!deleteRes.ok) {
                     const errorText = await deleteRes.text();
-                    console.error(`   DELETE Error: ${errorText}`);
                     throw new Error(`Failed to delete old file: ${errorText}`);
                 }
-
-                const deleteResult = await deleteRes.json();
-                console.log(`   DELETE Result:`, deleteResult);
 
                 deletedSuccessfully = true;
                 console.log(`✅ Old file deleted successfully`);
@@ -239,7 +221,7 @@ async function exportAndUpload(candidate, credentials) {
             }
         }
 
-        // STEP 4: Upload new file
+        // STEP 4: Upload new file (Direct Call)
         console.log(`📤 Uploading new file for ${candidate.whatsapp}...`);
 
         const FormData = (await import('form-data')).default;
@@ -250,17 +232,13 @@ async function exportAndUpload(candidate, credentials) {
             contentType: 'text/plain'
         });
 
-        const uploadParams = new URLSearchParams({
-            botId: credentials.botId,
-            answerId: credentials.answerId,
-            apiKey: credentials.apiKey,
-            type: 'files'
-        });
-
-        const uploadRes = await fetch(`${baseUrl}/api/assistant?${uploadParams}`, {
+        const uploadRes = await fetch(builderBotUrl, {
             method: 'POST',
             body: formData,
-            headers: formData.getHeaders()
+            headers: {
+                ...formData.getHeaders(),
+                'x-api-builderbot': credentials.apiKey
+            }
         });
 
         if (!uploadRes.ok) {
@@ -279,15 +257,6 @@ async function exportAndUpload(candidate, credentials) {
 
     } catch (error) {
         console.error(`❌ Error in exportAndUpload for ${candidate.whatsapp}:`, error.message);
-
-        // STEP 5: Rollback attempt (if we deleted but failed to upload)
-        if (deletedSuccessfully && existingFile) {
-            console.warn(`⚠️ Upload failed after deletion. Old file is lost. This is expected behavior for atomic updates.`);
-            // Note: We don't try to restore the old file because:
-            // 1. We don't have the old content
-            // 2. The new content is more up-to-date anyway
-            // 3. Next cron run will create a new file
-        }
 
         return {
             success: false,
