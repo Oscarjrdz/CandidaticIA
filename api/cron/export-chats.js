@@ -192,7 +192,9 @@ async function exportAndUpload(candidate, credentials) {
                 console.log(`📌 Found existing file: ${existingFile.filename} (ID: ${existingFile.id})`);
 
                 // STEP 3: Delete old file before uploading new one
-                console.log(`🗑️ Deleting old file ${existingFile.id}...`);
+                console.log(`🗑️ Deleting old file...`);
+                console.log(`   File ID: ${existingFile.id}`);
+                console.log(`   Filename: ${existingFile.filename}`);
 
                 const deleteParams = new URLSearchParams({
                     botId: credentials.botId,
@@ -202,14 +204,23 @@ async function exportAndUpload(candidate, credentials) {
                     fileId: existingFile.id
                 });
 
-                const deleteRes = await fetch(`${baseUrl}/api/assistant?${deleteParams}`, {
+                const deleteUrl = `${baseUrl}/api/assistant?${deleteParams}`;
+                console.log(`   DELETE URL: ${deleteUrl}`);
+
+                const deleteRes = await fetch(deleteUrl, {
                     method: 'DELETE'
                 });
 
+                console.log(`   DELETE Response Status: ${deleteRes.status}`);
+
                 if (!deleteRes.ok) {
                     const errorText = await deleteRes.text();
+                    console.error(`   DELETE Error: ${errorText}`);
                     throw new Error(`Failed to delete old file: ${errorText}`);
                 }
+
+                const deleteResult = await deleteRes.json();
+                console.log(`   DELETE Result:`, deleteResult);
 
                 deletedSuccessfully = true;
                 console.log(`✅ Old file deleted successfully`);
