@@ -27,20 +27,29 @@ export default async function handler(req, res) {
     console.log('🔄 Starting auto-export cron job...');
 
     try {
-        // Get BuilderBot credentials from environment
-        const credentials = {
-            botId: process.env.BUILDERBOT_BOT_ID,
-            answerId: process.env.BUILDERBOT_ANSWER_ID,
-            apiKey: process.env.BUILDERBOT_API_KEY
-        };
+        // Get BuilderBot credentials from Redis (same as frontend Settings)
+        const credentials = await getBuilderBotCredentials();
 
-        if (!credentials.botId || !credentials.answerId || !credentials.apiKey) {
-            console.error('❌ BuilderBot credentials not configured');
-            return res.status(500).json({ error: 'BuilderBot credentials missing' });
+        if (!credentials || !credentials.botId || !credentials.answerId || !credentials.apiKey) {
+            console.error('❌ BuilderBot credentials not configured in Settings');
+            return res.status(500).json({
+                error: 'BuilderBot credentials missing',
+                message: 'Please configure credentials in Settings section'
+            });
         }
 
-        // Get export timer setting (default 1 minute)
-        const exportTimer = parseInt(process.env.EXPORT_TIMER_MINUTES || '1');
+        // Get export timer setting from Redis (same as frontend)
+        const exportTimer = await getExportTimer();
+
+        if (!exportTimer || exportTimer <= 0) {
+            console.log('ℹ️ Export timer is disabled or not configured');
+            return res.status(200).json({
+                success: true,
+                processed: 0,
+                message: 'Export timer is disabled'
+            });
+        }
+
 
         // Get all candidates
         const result = await getCandidates(1000, 0, '');
@@ -269,5 +278,39 @@ async function setLastExportTime(key, timestamp) {
         await redis.set(key, timestamp.toString());
     } catch (error) {
         console.warn('Error setting last export time:', error);
+    }
+}
+
+/**
+ * Get BuilderBot credentials from Redis (same as frontend Settings)
+ */
+async function getBuilderBotCredentials() {
+    if (!process.env.REDIS_URL) return null;
+
+    try {
+        const { getRedisClient } = await import('../utils/storage.js');
+        const redis = getRedisClient();
+        const value = await redis.get('builderbot_credentials');
+        return value ? JSON.parse(value) : null;
+    } catch (error) {
+        console.warn('Error getting BuilderBot credentials:', error);
+        return null;
+    }
+}
+
+/**
+ * Get export timer setting from Redis (same as frontend)
+ */
+async function getExportTimer() {
+    if (!process.env.REDIS_URL) return null;
+
+    try {
+        const { getRedisClient } = await import('../utils/storage.js');
+        const redis = getRedisClient();
+        const value = await redis.get('export_timer');
+        return value ? parseInt(value) : null;
+    } catch (error) {
+        console.warn('Error getting export timer:', error);
+        return null;
     }
 }
