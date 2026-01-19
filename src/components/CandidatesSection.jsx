@@ -99,6 +99,12 @@ const CandidatesSection = ({ showToast }) => {
     useEffect(() => {
         if (!credentials || !exportTimer || exportTimer <= 0) return;
 
+        // Immediate refresh on mount or when candidates change
+        if (candidates.length > 0) {
+            console.log('🔄 Checking cloud status...');
+            checkCloudFileStatus(candidates);
+        }
+
         // Refresh cloud status every 30 seconds
         const interval = setInterval(() => {
             if (candidates.length > 0) {
