@@ -39,6 +39,7 @@ const CandidatesSection = ({ showToast }) => {
     const [localChatFiles, setLocalChatFiles] = useState({}); // { whatsapp: true/false } - tracks which candidates have local files
     const previousTimerStates = useRef({}); // Track previous timer states to detect green transitions
     const [cloudFileStatus, setCloudFileStatus] = useState({}); // { prefix: true/false } - tracks BuilderBot cloud files
+    const [cloudStatusLoading, setCloudStatusLoading] = useState(true); // Loading state for cloud icons
     const cloudStatusLoadedRef = useRef(false); // Track if we've loaded cloud status at least once (persists across remounts)
     const uploadingRef = useRef({}); // Track which candidates are currently being uploaded { whatsapp: true/false }
     const isCheckingCloudStatus = useRef(false); // Prevent simultaneous checks
@@ -374,11 +375,11 @@ const CandidatesSection = ({ showToast }) => {
 
         // Prevent simultaneous checks (debounce)
         if (isCheckingCloudStatus.current) {
-            console.log('⏭️ Skipping cloud check, already in progress...');
             return;
         }
 
         isCheckingCloudStatus.current = true;
+        setCloudStatusLoading(true);
 
         try {
             // STEP 1: Get file IDs from Redis API (set by cron job)
@@ -388,10 +389,10 @@ const CandidatesSection = ({ showToast }) => {
                 if (fileIdsRes.ok) {
                     const fileIdsData = await fileIdsRes.json();
                     chatFileIds = fileIdsData.fileIds || {};
-                    console.log('📋 Loaded file IDs from Redis:', chatFileIds);
+                    // Loaded successfully
                 }
             } catch (e) {
-                console.warn('Failed to fetch file IDs from Redis, using localStorage fallback:', e);
+                // Fallback to localStorage silently
                 chatFileIds = getChatFileIds(); // Fallback to localStorage
             }
 
@@ -431,17 +432,16 @@ const CandidatesSection = ({ showToast }) => {
                         statusMap[prefix] = hasFileInRedis || hasFileInCloud;
                     });
 
-                    console.log('📊 Cloud file status updated:', statusMap);
                     setCloudFileStatus(statusMap);
                     cloudStatusLoadedRef.current = true; // Mark as loaded
                 }
             }
         } catch (error) {
-            console.warn('Error checking cloud file status:', error);
-            cloudStatusLoadedRef.current = true; // Mark as loaded even on error to prevent infinite waiting
+            console.error('Error checking cloud file status:', error);
+            cloudStatusLoadedRef.current = true;
         } finally {
-            // Reset flag to allow next check
             isCheckingCloudStatus.current = false;
+            setCloudStatusLoading(false);
         }
     };
 
@@ -871,13 +871,20 @@ const CandidatesSection = ({ showToast }) => {
 
                                                 return (
                                                     <div className="flex justify-center">
-                                                        <div
-                                                            className={`w-3 h-3 rounded-full ${hasCloudFile
-                                                                ? 'bg-green-500 dark:bg-green-400'
-                                                                : 'bg-red-500 dark:bg-red-400'
-                                                                }`}
-                                                            title={hasCloudFile ? 'Archivo en nube' : 'No hay archivo en nube'}
-                                                        />
+                                                        {cloudStatusLoading ? (
+                                                            <div
+                                                                className="w-3 h-3 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse"
+                                                                title="Cargando estado..."
+                                                            />
+                                                        ) : (
+                                                            <div
+                                                                className={`w-3 h-3 rounded-full ${hasCloudFile
+                                                                    ? 'bg-green-500 dark:bg-green-400'
+                                                                    : 'bg-red-500 dark:bg-red-400'
+                                                                    }`}
+                                                                title={hasCloudFile ? 'Archivo en nube' : 'No hay archivo en nube'}
+                                                            />
+                                                        )}
                                                     </div>
                                                 );
                                             })()}
