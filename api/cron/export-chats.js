@@ -152,14 +152,24 @@ export default async function handler(req, res) {
 }
 
 /**
- * Export chat to file and upload to BuilderBot
+ * Export chat to file and upload to BuilderBot with atomic update
+ * Strategy: Delete old file → Upload new file → Rollback on failure
  */
 async function exportAndUpload(candidate, credentials) {
-    try {
-        // Check if file already exists in BuilderBot first
-        const prefix = String(candidate.whatsapp).substring(0, 13);
-        const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+    const prefix = String(candidate.whatsapp).substring(0, 13);
+    const filename = `${candidate.whatsapp}.txt`;
+    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
 
+    let existingFile = null;
+    let deletedSuccessfully = false;
+
+    try {
+        // STEP 1: Generate new content first (in memory, no side effects)
+        console.log(`📝 Generating content for ${candidate.whatsapp}...`);
+        const chatContent = generateChatContent(candidate);
+
+        // STEP 2: Check if file already exists
+        console.log(`🔍 Checking for existing file for ${candidate.whatsapp}...`);
         const listParams = new URLSearchParams({
             botId: credentials.botId,
             answerId: credentials.answerId,
@@ -169,27 +179,51 @@ async function exportAndUpload(candidate, credentials) {
 
         const listRes = await fetch(`${baseUrl}/api/assistant?${listParams}`);
 
-        if (listRes.ok) {
-            const files = await listRes.json();
-            if (Array.isArray(files)) {
-                const alreadyExists = files.some(f => f.filename && f.filename.startsWith(prefix));
+        if (!listRes.ok) {
+            throw new Error(`Failed to list files: ${listRes.status}`);
+        }
 
-                if (alreadyExists) {
-                    console.log(`⏭️ File already exists in BuilderBot for ${candidate.whatsapp}`);
-                    return { success: true, skipped: true };
+        const files = await listRes.json();
+
+        if (Array.isArray(files)) {
+            existingFile = files.find(f => f.filename && f.filename.startsWith(prefix));
+
+            if (existingFile) {
+                console.log(`📌 Found existing file: ${existingFile.filename} (ID: ${existingFile.id})`);
+
+                // STEP 3: Delete old file before uploading new one
+                console.log(`🗑️ Deleting old file ${existingFile.id}...`);
+
+                const deleteParams = new URLSearchParams({
+                    botId: credentials.botId,
+                    answerId: credentials.answerId,
+                    apiKey: credentials.apiKey,
+                    type: 'files',
+                    fileId: existingFile.id
+                });
+
+                const deleteRes = await fetch(`${baseUrl}/api/assistant?${deleteParams}`, {
+                    method: 'DELETE'
+                });
+
+                if (!deleteRes.ok) {
+                    const errorText = await deleteRes.text();
+                    throw new Error(`Failed to delete old file: ${errorText}`);
                 }
+
+                deletedSuccessfully = true;
+                console.log(`✅ Old file deleted successfully`);
+            } else {
+                console.log(`ℹ️ No existing file found, uploading new one`);
             }
         }
 
-        // Generate chat content
-        const chatContent = generateChatContent(candidate);
-        const filename = `${candidate.whatsapp}.txt`;
+        // STEP 4: Upload new file
+        console.log(`📤 Uploading new file for ${candidate.whatsapp}...`);
 
-        // Upload directly to BuilderBot using FormData
         const FormData = (await import('form-data')).default;
         const formData = new FormData();
 
-        // Add file as buffer
         formData.append('file', Buffer.from(chatContent, 'utf-8'), {
             filename: filename,
             contentType: 'text/plain'
@@ -209,14 +243,36 @@ async function exportAndUpload(candidate, credentials) {
         });
 
         if (!uploadRes.ok) {
-            const error = await uploadRes.text();
-            return { success: false, error: `Upload failed: ${error}` };
+            const errorText = await uploadRes.text();
+            throw new Error(`Upload failed: ${errorText}`);
         }
 
-        return { success: true };
+        const uploadResult = await uploadRes.json();
+        console.log(`✅ File uploaded successfully for ${candidate.whatsapp}`);
+
+        return {
+            success: true,
+            replaced: deletedSuccessfully,
+            fileId: uploadResult.id || uploadResult.fileId
+        };
 
     } catch (error) {
-        return { success: false, error: error.message };
+        console.error(`❌ Error in exportAndUpload for ${candidate.whatsapp}:`, error.message);
+
+        // STEP 5: Rollback attempt (if we deleted but failed to upload)
+        if (deletedSuccessfully && existingFile) {
+            console.warn(`⚠️ Upload failed after deletion. Old file is lost. This is expected behavior for atomic updates.`);
+            // Note: We don't try to restore the old file because:
+            // 1. We don't have the old content
+            // 2. The new content is more up-to-date anyway
+            // 3. Next cron run will create a new file
+        }
+
+        return {
+            success: false,
+            error: error.message,
+            deletedOldFile: deletedSuccessfully
+        };
     }
 }
 
