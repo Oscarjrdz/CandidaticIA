@@ -39,7 +39,7 @@
     "crons": [
         {
             "path": "/api/cron/export-chats",
-            "schedule": "*/5 * * * *"
+            "schedule": "* * * * *"
         }
     ]
 }
