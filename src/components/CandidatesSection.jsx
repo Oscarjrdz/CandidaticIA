@@ -398,6 +398,9 @@ const CandidatesSection = ({ showToast }) => {
 
             if (listRes.ok) {
                 const files = await listRes.json();
+                console.log('📦 BuilderBot files response:', files);
+                console.log('   Is array?', Array.isArray(files));
+                console.log('   Length:', files?.length);
 
                 if (Array.isArray(files)) {
                     const statusMap = {};
