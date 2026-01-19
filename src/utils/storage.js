@@ -11,11 +11,33 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Guardar credenciales
+ * Guardar credenciales (Redis + localStorage)
  */
-export const saveCredentials = (botId, answerId, apiKey) => {
+export const saveCredentials = async (botId, answerId, apiKey) => {
     try {
         const credentials = { botId, answerId, apiKey };
+
+        // Save to Redis via API (for backend cron access)
+        try {
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'credentials',
+                    data: credentials
+                })
+            });
+
+            if (!response.ok) {
+                console.warn('⚠️ Failed to save credentials to Redis, using localStorage only');
+            } else {
+                console.log('✅ Credentials saved to Redis and localStorage');
+            }
+        } catch (error) {
+            console.warn('⚠️ Failed to save credentials to Redis:', error);
+        }
+
+        // Also save to localStorage as backup
         localStorage.setItem(STORAGE_KEYS.CREDENTIALS, JSON.stringify(credentials));
         return { success: true };
     } catch (error) {

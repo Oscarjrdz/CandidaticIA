@@ -28,7 +28,7 @@ const CredentialsSection = ({ onCredentialsChange, showToast }) => {
         }
     }, []);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setLoading(true);
         setErrors({});
 
@@ -56,19 +56,17 @@ const CredentialsSection = ({ onCredentialsChange, showToast }) => {
             return;
         }
 
-        // Guardar en localStorage
-        const result = saveCredentials(botId, answerId, apiKey);
+        // Guardar en Redis + localStorage
+        const result = await saveCredentials(botId, answerId, apiKey);
 
-        setTimeout(() => {
-            setLoading(false);
+        setLoading(false);
 
-            if (result.success) {
-                showToast('Credenciales guardadas correctamente', 'success');
-                onCredentialsChange(botId, answerId, apiKey);
-            } else {
-                showToast(result.error || 'Error al guardar credenciales', 'error');
-            }
-        }, 500);
+        if (result.success) {
+            showToast('Credenciales guardadas correctamente', 'success');
+            onCredentialsChange(botId, answerId, apiKey);
+        } else {
+            showToast(result.error || 'Error al guardar credenciales', 'error');
+        }
     };
 
     return (
