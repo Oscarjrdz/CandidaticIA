@@ -339,82 +339,32 @@ const CandidatesSection = ({ showToast }) => {
         setLoading(false);
     };
 
-    const checkCloudFileStatus = async (candidateList) => {
-        if (!credentials || !credentials.botId || !credentials.answerId || !credentials.apiKey) {
-            return;
-        }
-
-        // Prevent simultaneous checks (debounce)
-        if (isCheckingCloudStatus.current) {
-            return;
-        }
-
-        isCheckingCloudStatus.current = true;
-        setCloudStatusLoading(true);
-
+    /**
+     * Load cloud file status from Redis (set by cron job)
+     * Simple: if cron uploaded successfully → key exists in Redis → green
+     */
+    const loadCloudFileStatusFromRedis = async () => {
         try {
-            // STEP 1: Get file IDs from Redis API (set by cron job)
-            let chatFileIds = {};
-            try {
-                const fileIdsRes = await fetch('/api/chat-file-ids');
-                if (fileIdsRes.ok) {
-                    const fileIdsData = await fileIdsRes.json();
-                    chatFileIds = fileIdsData.fileIds || {};
-                    // Loaded successfully
-                }
-            } catch (e) {
-                // Fallback to localStorage silently
-                chatFileIds = getChatFileIds(); // Fallback to localStorage
-            }
-
-            // List files from BuilderBot
-            const listParams = new URLSearchParams({
-                botId: credentials.botId,
-                answerId: credentials.answerId,
-                apiKey: credentials.apiKey,
-                type: 'files'
-            });
-
-            const listRes = await fetch(`/api/assistant?${listParams}`);
-
-            if (listRes.ok) {
-                const response = await listRes.json();
-                console.log('📦 BuilderBot files response:', response);
-
-                // BuilderBot returns {files: [...]} not [...]
-                const files = Array.isArray(response) ? response : (response.files || []);
-                console.log('   Extracted files array, length:', files.length);
-
-                if (Array.isArray(files) && files.length >= 0) {
-                    const statusMap = {};
-
-                    // Check each candidate
-                    candidateList.forEach(candidate => {
-                        // Priority 1: Check Redis (synced by cron)
-                        const hasFileInRedis = !!chatFileIds[candidate.whatsapp];
-
-                        // Priority 2: Check BuilderBot API (fallback)
-                        const prefix = String(candidate.whatsapp).substring(0, 13);
-                        const hasFileInCloud = files.some(f =>
-                            f.filename && f.filename.startsWith(prefix)
-                        );
-
-                        // Use Redis as primary source, BuilderBot as fallback
-                        statusMap[prefix] = hasFileInRedis || hasFileInCloud;
-                    });
-
-                    setCloudFileStatus(statusMap);
-                    cloudStatusLoadedRef.current = true; // Mark as loaded
-                }
+            const response = await fetch('/api/chat-file-ids');
+            if (response.ok) {
+                const data = await response.json();
+                const fileIds = data.fileIds || {};
+                
+                // Convert to status map for UI
+                const statusMap = {};
+                candidates.forEach(candidate => {
+                    const prefix = String(candidate.whatsapp).substring(0, 13);
+                    // Green if cron marked as uploaded, red otherwise
+                    statusMap[prefix] = !!fileIds[candidate.whatsapp];
+                });
+                
+                setCloudFileStatus(statusMap);
             }
         } catch (error) {
-            console.error('Error checking cloud file status:', error);
-            cloudStatusLoadedRef.current = true;
-        } finally {
-            isCheckingCloudStatus.current = false;
-            setCloudStatusLoading(false);
+            console.error('Error loading cloud file status:', error);
         }
     };
+
 
     const handleSearch = (e) => {
         setSearch(e.target.value);
