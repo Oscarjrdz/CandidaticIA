@@ -39,10 +39,7 @@ const CandidatesSection = ({ showToast }) => {
     const [localChatFiles, setLocalChatFiles] = useState({}); // { whatsapp: true/false } - tracks which candidates have local files
     const previousTimerStates = useRef({}); // Track previous timer states to detect green transitions
     const [cloudFileStatus, setCloudFileStatus] = useState({}); // { prefix: true/false } - tracks BuilderBot cloud files
-    const [cloudStatusLoading, setCloudStatusLoading] = useState(true); // Loading state for cloud icons
-    const cloudStatusLoadedRef = useRef(false); // Track if we've loaded cloud status at least once (persists across remounts)
     const uploadingRef = useRef({}); // Track which candidates are currently being uploaded { whatsapp: true/false }
-    const isCheckingCloudStatus = useRef(false); // Prevent simultaneous checks
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -53,6 +50,9 @@ const CandidatesSection = ({ showToast }) => {
             // Cargar timer guardado (async - from Redis)
             const savedTimer = await getExportSettings();
             setExportTimer(savedTimer);
+
+            // Cargar estado de archivos en nube (desde Redis, una sola vez)
+            await loadCloudFileStatusFromRedis();
 
             // Cargar archivos locales existentes
             const existingFiles = {};
@@ -90,35 +90,6 @@ const CandidatesSection = ({ showToast }) => {
     }, []);
 
     // Update current time every second for countdown display
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setCurrentTime(Date.now());
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
-
-    // Periodic refresh of cloud status to detect external changes in BuilderBot
-    useEffect(() => {
-        if (!credentials || !exportTimer || exportTimer <= 0) return;
-
-        // Immediate refresh on mount or when candidates change
-        if (candidates.length > 0) {
-            console.log('🔄 Checking cloud status...');
-            checkCloudFileStatus(candidates);
-        }
-
-        // Refresh cloud status every 30 seconds
-        const interval = setInterval(() => {
-            if (candidates.length > 0) {
-                console.log('🔄 Refreshing cloud status...');
-                checkCloudFileStatus(candidates);
-            }
-        }, 30000); // 30 seconds
-
-        return () => clearInterval(interval);
-    }, [credentials, exportTimer, candidates]);
-
-    // Auto-create chat history file when timer reaches green
     useEffect(() => {
         if (!exportTimer || exportTimer <= 0 || candidates.length === 0) return;
 
@@ -359,8 +330,8 @@ const CandidatesSection = ({ showToast }) => {
             setCandidates(result.candidates);
             setLastUpdate(new Date());
 
-            // Check cloud file status
-            checkCloudFileStatus(result.candidates);
+            // Cloud file status loaded once on mount
+            // Will refresh after uploads via loadCloudFileStatusFromRedis()
         } else {
             showToast('Error cargando candidatos', 'error');
         }
@@ -871,20 +842,13 @@ const CandidatesSection = ({ showToast }) => {
 
                                                 return (
                                                     <div className="flex justify-center">
-                                                        {cloudStatusLoading ? (
-                                                            <div
-                                                                className="w-3 h-3 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse"
-                                                                title="Cargando estado..."
-                                                            />
-                                                        ) : (
-                                                            <div
-                                                                className={`w-3 h-3 rounded-full ${hasCloudFile
-                                                                    ? 'bg-green-500 dark:bg-green-400'
-                                                                    : 'bg-red-500 dark:bg-red-400'
-                                                                    }`}
-                                                                title={hasCloudFile ? 'Archivo en nube' : 'No hay archivo en nube'}
-                                                            />
-                                                        )}
+                                                        <div
+                                                            className={`w-3 h-3 rounded-full ${hasCloudFile
+                                                                ? 'bg-green-500 dark:bg-green-400'
+                                                                : 'bg-red-500 dark:bg-red-400'
+                                                                }`}
+                                                            title={hasCloudFile ? 'Archivo subido' : 'No subido aún'}
+                                                        />
                                                     </div>
                                                 );
                                             })()}
