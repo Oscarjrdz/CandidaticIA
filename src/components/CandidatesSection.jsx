@@ -397,12 +397,14 @@ const CandidatesSection = ({ showToast }) => {
             const listRes = await fetch(`/api/assistant?${listParams}`);
 
             if (listRes.ok) {
-                const files = await listRes.json();
-                console.log('📦 BuilderBot files response:', files);
-                console.log('   Is array?', Array.isArray(files));
-                console.log('   Length:', files?.length);
+                const response = await listRes.json();
+                console.log('📦 BuilderBot files response:', response);
 
-                if (Array.isArray(files)) {
+                // BuilderBot returns {files: [...]} not [...]
+                const files = Array.isArray(response) ? response : (response.files || []);
+                console.log('   Extracted files array, length:', files.length);
+
+                if (Array.isArray(files) && files.length >= 0) {
                     const statusMap = {};
 
                     // Check each candidate
