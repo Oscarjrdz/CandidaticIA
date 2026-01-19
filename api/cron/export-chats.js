@@ -183,59 +183,40 @@ async function exportAndUpload(candidate, credentials) {
         // STEP 2: Check if file already exists (Direct API)
         console.log(`🔍 Checking for existing file (Direct API)...`);
 
-        const listRes = await fetch(builderBotUrl, {
+        // Add query params to prevent 500 error
+        const listUrl = `${builderBotUrl}?type=files`;
+
+        const listRes = await fetch(listUrl, {
             headers: { 'x-api-builderbot': credentials.apiKey }
         });
 
         if (!listRes.ok) {
-            throw new Error(`Failed to list files: ${listRes.status}`);
-        }
-
-        const listData = await listRes.json();
-        console.log(`📋 API Response Type: ${typeof listData}`);
-        console.log(`📋 API Response Sample: ${JSON.stringify(listData).substring(0, 200)}...`);
-
-        let files = [];
-        if (Array.isArray(listData)) {
-            files = listData;
-        } else if (listData && Array.isArray(listData.files)) {
-            files = listData.files;
-        } else if (listData && Array.isArray(listData.data)) {
-            files = listData.data;
+            // Log but don't crash if list fails - try to upload anyway
+            console.warn(`⚠️ Failed to list files (${listRes.status}), skipping duplicate check.`);
         } else {
-            console.warn(`⚠️ Unexpected API response structure:`, listData);
-        }
+            const listData = await listRes.json();
+            console.log(`📋 API Response Sample: ${JSON.stringify(listData).substring(0, 100)}...`);
 
-        console.log(`🔢 Found ${files.length} total files in bot`);
+            let files = [];
+            if (Array.isArray(listData)) files = listData;
+            else if (listData && Array.isArray(listData.files)) files = listData.files;
+            else if (listData && Array.isArray(listData.data)) files = listData.data;
 
-        if (files.length > 0) {
-            // Find ALL matching files (BuilderBot adds suffixes like _1735...)
-            const matchingFiles = files.filter(f => f.filename && f.filename.startsWith(candidate.whatsapp));
-
-            if (matchingFiles.length > 0) {
-                console.log(`📌 Found ${matchingFiles.length} existing files for ${candidate.whatsapp}`);
-
-                // Delete ALL found files (cleanup duplicates)
+            if (files.length > 0) {
+                // Find and delete matching files
+                const matchingFiles = files.filter(f => f.filename && f.filename.startsWith(candidate.whatsapp));
                 for (const file of matchingFiles) {
-                    console.log(`🗑️ Deleting old file: ${file.filename} (ID: ${file.id})...`);
-
-                    const deleteUrl = `${builderBotUrl}?fileId=${file.id}`;
-
-                    const deleteRes = await fetch(deleteUrl, {
-                        method: 'DELETE',
-                        headers: { 'x-api-builderbot': credentials.apiKey }
-                    });
-
-                    if (!deleteRes.ok) {
-                        console.warn(`⚠️ Failed to delete file ${file.id}, continuing...`);
-                    } else {
-                        console.log(`✅ File ${file.id} deleted successfully`);
+                    try {
+                        console.log(`🗑️ Deleting old file: ${file.filename}...`);
+                        await fetch(`${builderBotUrl}?fileId=${file.id}`, {
+                            method: 'DELETE',
+                            headers: { 'x-api-builderbot': credentials.apiKey }
+                        });
+                        deletedSuccessfully = true;
+                    } catch (e) {
+                        console.warn('Error deleting file:', e.message);
                     }
                 }
-
-                deletedSuccessfully = true;
-            } else {
-                console.log(`ℹ️ No existing files found for ${candidate.whatsapp}, clean slate`);
             }
         }
 
@@ -246,18 +227,21 @@ async function exportAndUpload(candidate, credentials) {
         const { default: axios } = await import('axios');
         const formData = new FormData();
 
-        formData.append('file', Buffer.from(chatContent, 'utf-8'), {
+        // Send string directly (safer than bad buffer conversion)
+        formData.append('file', chatContent, {
             filename: filename,
-            contentType: 'text/plain'
+            contentType: 'text/plain',
+            knownLength: Buffer.byteLength(chatContent) // Explicit length helper
         });
 
-        // Use axios for better FormData handling
+        // Use axios with calculated headers
         const uploadRes = await axios.post(builderBotUrl, formData, {
             headers: {
                 ...formData.getHeaders(),
+                'Content-Length': formData.getLengthSync(), // CRITICAL for proper upload
                 'x-api-builderbot': credentials.apiKey
             },
-            maxBodyLength: Infinity, // Prevent errors with large files
+            maxBodyLength: Infinity,
             maxContentLength: Infinity
         });
 
