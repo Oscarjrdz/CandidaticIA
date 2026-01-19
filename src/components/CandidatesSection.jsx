@@ -372,8 +372,19 @@ const CandidatesSection = ({ showToast }) => {
         }
 
         try {
-            // STEP 1: Get file IDs from Redis (set by cron job)
-            const chatFileIds = getChatFileIds(); // From storage.js
+            // STEP 1: Get file IDs from Redis API (set by cron job)
+            let chatFileIds = {};
+            try {
+                const fileIdsRes = await fetch('/api/chat-file-ids');
+                if (fileIdsRes.ok) {
+                    const fileIdsData = await fileIdsRes.json();
+                    chatFileIds = fileIdsData.fileIds || {};
+                    console.log('📋 Loaded file IDs from Redis:', chatFileIds);
+                }
+            } catch (e) {
+                console.warn('Failed to fetch file IDs from Redis, using localStorage fallback:', e);
+                chatFileIds = getChatFileIds(); // Fallback to localStorage
+            }
 
             // List files from BuilderBot
             const listParams = new URLSearchParams({
