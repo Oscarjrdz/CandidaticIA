@@ -183,14 +183,56 @@ export const importConfig = (jsonString) => {
 /**
  * Limpiar todo el almacenamiento
  */
-// --- Export Settings ---
-export const saveExportSettings = (minutes) => {
-    localStorage.setItem('export_timer', minutes.toString());
+// --- Export Settings (Redis-backed with localStorage fallback) ---
+export const saveExportSettings = async (minutes) => {
+    try {
+        // Save to Redis via API
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                type: 'timer',
+                data: minutes
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save to Redis');
+        }
+
+        // Also save to localStorage as backup
+        localStorage.setItem('export_timer', minutes.toString());
+        console.log('✅ Export timer saved to Redis and localStorage');
+
+    } catch (error) {
+        console.warn('⚠️ Failed to save to Redis, using localStorage only:', error);
+        localStorage.setItem('export_timer', minutes.toString());
+    }
 };
 
-export const getExportSettings = () => {
-    const saved = localStorage.getItem('export_timer');
-    return saved ? parseInt(saved, 10) : 0; // 0 = disabled by default
+export const getExportSettings = async () => {
+    try {
+        // Try to get from Redis first
+        const response = await fetch('/api/settings?type=timer');
+
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.data !== null) {
+                // Update localStorage cache
+                localStorage.setItem('export_timer', result.data.toString());
+                return result.data;
+            }
+        }
+
+        // Fallback to localStorage
+        const saved = localStorage.getItem('export_timer');
+        return saved ? parseInt(saved, 10) : 0;
+
+    } catch (error) {
+        console.warn('⚠️ Failed to get from Redis, using localStorage:', error);
+        const saved = localStorage.getItem('export_timer');
+        return saved ? parseInt(saved, 10) : 0;
+    }
 };
 
 // --- Exported Chats Tracking ---
@@ -305,6 +347,54 @@ export const getLocalChatFiles = () => {
 export const getLocalChatFile = (whatsapp) => {
     const files = getLocalChatFiles();
     return files[whatsapp] || null;
+};
+
+// --- Timer States (Redis-backed with localStorage fallback) ---
+export const setTimerState = async (whatsapp, state) => {
+    try {
+        const response = await fetch('/api/timer-states', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ whatsapp, state })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to save timer state to Redis');
+        }
+
+        // Also save to localStorage as backup
+        const states = JSON.parse(localStorage.getItem('timer_states') || '{}');
+        states[whatsapp] = (state === 'green');
+        localStorage.setItem('timer_states', JSON.stringify(states));
+
+    } catch (error) {
+        console.warn('⚠️ Failed to save timer state to Redis, using localStorage only:', error);
+        const states = JSON.parse(localStorage.getItem('timer_states') || '{}');
+        states[whatsapp] = (state === 'green');
+        localStorage.setItem('timer_states', JSON.stringify(states));
+    }
+};
+
+export const getTimerState = async (whatsapp) => {
+    try {
+        const response = await fetch(`/api/timer-states?whatsapp=${whatsapp}`);
+
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                return result.isGreen;
+            }
+        }
+
+        // Fallback to localStorage
+        const states = JSON.parse(localStorage.getItem('timer_states') || '{}');
+        return states[whatsapp] || false;
+
+    } catch (error) {
+        console.warn('⚠️ Failed to get timer state from Redis, using localStorage:', error);
+        const states = JSON.parse(localStorage.getItem('timer_states') || '{}');
+        return states[whatsapp] || false;
+    }
 };
 
 /**

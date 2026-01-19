@@ -43,34 +43,38 @@ const CandidatesSection = ({ showToast }) => {
     const uploadingRef = useRef({}); // Track which candidates are currently being uploaded { whatsapp: true/false }
 
     useEffect(() => {
-        // Cargar credenciales
-        const savedCreds = localStorage.getItem('builderbot_credentials');
-        if (savedCreds) setCredentials(JSON.parse(savedCreds));
+        const loadInitialData = async () => {
+            // Cargar credenciales
+            const savedCreds = localStorage.getItem('builderbot_credentials');
+            if (savedCreds) setCredentials(JSON.parse(savedCreds));
 
-        // Cargar timer guardado
-        const savedTimer = getExportSettings();
-        setExportTimer(savedTimer);
+            // Cargar timer guardado (async - from Redis)
+            const savedTimer = await getExportSettings();
+            setExportTimer(savedTimer);
 
-        // Cargar archivos locales existentes
-        const existingFiles = {};
-        const allLocalFiles = JSON.parse(localStorage.getItem('local_chat_files') || '{}');
-        Object.keys(allLocalFiles).forEach(whatsapp => {
-            existingFiles[whatsapp] = true;
-        });
-        setLocalChatFiles(existingFiles);
+            // Cargar archivos locales existentes
+            const existingFiles = {};
+            const allLocalFiles = JSON.parse(localStorage.getItem('local_chat_files') || '{}');
+            Object.keys(allLocalFiles).forEach(whatsapp => {
+                existingFiles[whatsapp] = true;
+            });
+            setLocalChatFiles(existingFiles);
 
-        // Cargar estados de timers previos
-        try {
-            const savedTimerStates = localStorage.getItem('timer_states');
-            if (savedTimerStates) {
-                previousTimerStates.current = JSON.parse(savedTimerStates);
+            // Cargar estados de timers previos
+            try {
+                const savedTimerStates = localStorage.getItem('timer_states');
+                if (savedTimerStates) {
+                    previousTimerStates.current = JSON.parse(savedTimerStates);
+                }
+            } catch (e) {
+                console.warn('Error loading timer states:', e);
             }
-        } catch (e) {
-            console.warn('Error loading timer states:', e);
-        }
 
-        // Cargar candidatos
-        loadCandidates();
+            // Cargar candidatos
+            loadCandidates();
+        };
+
+        loadInitialData();
 
         // Polling de candidatos
         const subscription = new CandidatesSubscription((newCandidates) => {
@@ -381,8 +385,8 @@ const CandidatesSection = ({ showToast }) => {
         }
     };
 
-    const handleSaveSettings = () => {
-        saveExportSettings(exportTimer);
+    const handleSaveSettings = async () => {
+        await saveExportSettings(exportTimer);
         setShowSettings(false);
         showToast(`Timer configurado a ${exportTimer} minutos`, 'success');
     };

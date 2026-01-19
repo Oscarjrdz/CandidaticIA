@@ -4,46 +4,42 @@
 
 Add these environment variables in Vercel Dashboard → Settings → Environment Variables:
 
-### 1. CRON_SECRET
+### 1. CRON_SECRET (Required)
 **Purpose**: Security token to prevent unauthorized cron execution  
 **Value**: Generate a random secret (e.g., `openssl rand -hex 32`)  
 **Example**: `a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6`
 
-### 2. BUILDERBOT_BOT_ID
-**Purpose**: Your BuilderBot bot ID  
-**Value**: Copy from BuilderBot dashboard  
-**Example**: `473949d6-a850-4ba3-8e62-f7965ccee8a5`
-
-### 3. BUILDERBOT_ANSWER_ID
-**Purpose**: Your BuilderBot answer ID  
-**Value**: Copy from BuilderBot dashboard  
-**Example**: `3cc8c38a-7cb0-478a-b3c4-e987d15ec278`
-
-### 4. BUILDERBOT_API_KEY
-**Purpose**: Your BuilderBot API key  
-**Value**: Copy from BuilderBot dashboard  
-**Example**: `bb-a0df09f9-449b-4436-83c3-bba1980d1e14`
-
-### 5. EXPORT_TIMER_MINUTES (Optional)
-**Purpose**: Minutes to wait after last message before exporting  
-**Default**: `1`  
-**Example**: `5`
-
-### 6. REDIS_URL (Already configured)
-**Purpose**: Upstash Redis connection for tracking exports  
+### 2. REDIS_URL (Already configured)
+**Purpose**: Upstash Redis connection for storing settings and tracking exports  
 **Note**: Should already be configured if using Upstash integration
 
-## How to Add Variables in Vercel
+## Settings from Database
 
-1. Go to https://vercel.com
-2. Select your project "candidatic-ia"
-3. Go to Settings → Environment Variables
-4. Add each variable:
+The following settings are read from Redis (configured in the frontend Settings section):
+
+- ✅ **BuilderBot Bot ID** - Configured in Settings → Update Bot
+- ✅ **BuilderBot Answer ID** - Configured in Settings → Update Bot  
+- ✅ **BuilderBot API Key** - Configured in Settings → Update Bot
+- ✅ **Export Timer** - Configured in Candidatos section
+
+**No need to add these as environment variables!** The cron job reads them from the same database as the frontend.
+
+## How to Add CRON_SECRET in Vercel
+
+1. Generate a secret:
+   ```bash
+   openssl rand -hex 32
+   ```
+
+2. Go to https://vercel.com
+3. Select your project "candidatic-ia"
+4. Go to Settings → Environment Variables
+5. Add variable:
    - Name: `CRON_SECRET`
    - Value: (your generated secret)
    - Environment: Production, Preview, Development (select all)
-5. Click "Save"
-6. Redeploy the project for changes to take effect
+6. Click "Save"
+7. Redeploy the project for changes to take effect
 
 ## Testing the Cron Job
 
