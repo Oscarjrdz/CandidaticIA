@@ -191,9 +191,24 @@ async function exportAndUpload(candidate, credentials) {
             throw new Error(`Failed to list files: ${listRes.status}`);
         }
 
-        const files = await listRes.json();
+        const listData = await listRes.json();
+        console.log(`📋 API Response Type: ${typeof listData}`);
+        console.log(`📋 API Response Sample: ${JSON.stringify(listData).substring(0, 200)}...`);
 
-        if (Array.isArray(files)) {
+        let files = [];
+        if (Array.isArray(listData)) {
+            files = listData;
+        } else if (listData && Array.isArray(listData.files)) {
+            files = listData.files;
+        } else if (listData && Array.isArray(listData.data)) {
+            files = listData.data;
+        } else {
+            console.warn(`⚠️ Unexpected API response structure:`, listData);
+        }
+
+        console.log(`🔢 Found ${files.length} total files in bot`);
+
+        if (files.length > 0) {
             // Find ALL matching files (BuilderBot adds suffixes like _1735...)
             const matchingFiles = files.filter(f => f.filename && f.filename.startsWith(candidate.whatsapp));
 
