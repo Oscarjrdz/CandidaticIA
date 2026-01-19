@@ -155,56 +155,8 @@ const CandidatesSection = ({ showToast }) => {
 
                             if (result.success) {
                                 console.log(`✅ Chat history file created: ${candidate.whatsapp}.txt`);
+                                console.log(`ℹ️ Backend cron will upload to BuilderBot automatically`);
                                 setLocalChatFiles(prev => ({ ...prev, [candidate.whatsapp]: true }));
-
-
-                                // Check if file already exists in cloud before uploading
-                                if (credentials) {
-                                    const prefix = String(candidate.whatsapp).substring(0, 13);
-
-                                    // Skip if already uploading this candidate
-                                    if (uploadingRef.current[candidate.whatsapp]) {
-                                        console.log(`⏭️ Skipping - already uploading ${candidate.whatsapp}`);
-                                        return;
-                                    }
-
-                                    let alreadyInCloud = false;
-
-                                    try {
-                                        const listParams = new URLSearchParams({
-                                            botId: credentials.botId,
-                                            answerId: credentials.answerId,
-                                            apiKey: credentials.apiKey,
-                                            type: 'files'
-                                        });
-
-                                        const listRes = await fetch(`/api/assistant?${listParams}`);
-                                        if (listRes.ok) {
-                                            const files = await listRes.json();
-                                            if (Array.isArray(files)) {
-                                                alreadyInCloud = files.some(f =>
-                                                    f.filename && f.filename.startsWith(prefix)
-                                                );
-                                            }
-                                        }
-                                    } catch (error) {
-                                        console.warn('Error checking cloud status:', error);
-                                    }
-
-                                    if (!alreadyInCloud) {
-                                        console.log(`📤 Uploading to cloud (first time)...`);
-                                        uploadingRef.current[candidate.whatsapp] = true; // Mark as uploading
-
-                                        try {
-                                            await handleAutoExport(candidateWithMessages, credentials);
-                                        } finally {
-                                            uploadingRef.current[candidate.whatsapp] = false; // Clear flag
-                                        }
-                                    } else {
-                                        console.log(`⏭️ Skipping upload - file already in cloud`);
-                                    }
-                                }
-
                             } else {
                                 console.error(`❌ Error creating chat history file for ${candidate.whatsapp}`);
                             }
