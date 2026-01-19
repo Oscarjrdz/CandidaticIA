@@ -35,5 +35,11 @@
         "api/**/*.js": {
             "maxDuration": 10
         }
-    }
+    },
+    "crons": [
+        {
+            "path": "/api/cron/export-chats",
+            "schedule": "*/5 * * * *"
+        }
+    ]
 }
