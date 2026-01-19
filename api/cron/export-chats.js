@@ -38,10 +38,15 @@ export default async function handler(req, res) {
             });
         }
 
-        console.log('✅ Credentials loaded from Redis:');
-        console.log(`   Bot ID: ${credentials.botId.substring(0, 8)}...`);
-        console.log(`   Answer ID: ${credentials.answerId.substring(0, 8)}...`);
-        console.log(`   API Key: ${credentials.apiKey.substring(0, 8)}...`);
+        // Clean credentials (remove potential hidden spaces)
+        credentials.botId = credentials.botId.trim();
+        credentials.answerId = credentials.answerId.trim();
+        credentials.apiKey = credentials.apiKey.trim();
+
+        console.log('✅ Credentials loaded from Redis (cleaned):');
+        console.log(`   Bot ID: ${credentials.botId.substring(0, 8)}... (len: ${credentials.botId.length})`);
+        console.log(`   Answer ID: ${credentials.answerId.substring(0, 8)}... (len: ${credentials.answerId.length})`);
+        console.log(`   API Key: ${credentials.apiKey.substring(0, 8)}... (len: ${credentials.apiKey.length})`);
 
         // Get export timer setting from Redis (same as frontend)
         const exportTimer = await getExportTimer();
