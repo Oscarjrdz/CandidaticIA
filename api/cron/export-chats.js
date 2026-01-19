@@ -221,10 +221,11 @@ async function exportAndUpload(candidate, credentials) {
             }
         }
 
-        // STEP 4: Upload new file (Direct Call)
+        // STEP 4: Upload new file (Direct Call with Axios)
         console.log(`📤 Uploading new file for ${candidate.whatsapp}...`);
 
         const FormData = (await import('form-data')).default;
+        const { default: axios } = await import('axios');
         const formData = new FormData();
 
         formData.append('file', Buffer.from(chatContent, 'utf-8'), {
@@ -232,21 +233,17 @@ async function exportAndUpload(candidate, credentials) {
             contentType: 'text/plain'
         });
 
-        const uploadRes = await fetch(builderBotUrl, {
-            method: 'POST',
-            body: formData,
+        // Use axios for better FormData handling
+        const uploadRes = await axios.post(builderBotUrl, formData, {
             headers: {
                 ...formData.getHeaders(),
                 'x-api-builderbot': credentials.apiKey
-            }
+            },
+            maxBodyLength: Infinity, // Prevent errors with large files
+            maxContentLength: Infinity
         });
 
-        if (!uploadRes.ok) {
-            const errorText = await uploadRes.text();
-            throw new Error(`Upload failed: ${errorText}`);
-        }
-
-        const uploadResult = await uploadRes.json();
+        const uploadResult = uploadRes.data;
         console.log(`✅ File uploaded successfully for ${candidate.whatsapp}`);
 
         return {
