@@ -395,15 +395,29 @@ async function setChatFileId(whatsapp, fileId) {
  * Get BuilderBot credentials from Redis (same as frontend Settings)
  */
 async function getBuilderBotCredentials() {
-    if (!process.env.REDIS_URL) return null;
+    console.log('🔍 Attempting to get BuilderBot credentials from Redis...');
+    console.log('   REDIS_URL exists:', !!process.env.REDIS_URL);
+
+    if (!process.env.REDIS_URL) {
+        console.error('❌ REDIS_URL not configured in environment');
+        return null;
+    }
 
     try {
         const { getRedisClient } = await import('../utils/storage.js');
         const redis = getRedisClient();
+        console.log('   Redis client created successfully');
+
         const value = await redis.get('builderbot_credentials');
-        return value ? JSON.parse(value) : null;
+        console.log('   Raw value from Redis:', value ? value.substring(0, 50) + '...' : null);
+
+        const parsed = value ? JSON.parse(value) : null;
+        console.log('   Parsed credentials:', parsed ? 'Found ✅' : 'Not found ❌');
+
+        return parsed;
     } catch (error) {
-        console.warn('Error getting BuilderBot credentials:', error);
+        console.error('❌ Error getting BuilderBot credentials:', error.message);
+        console.error('   Stack:', error.stack);
         return null;
     }
 }
