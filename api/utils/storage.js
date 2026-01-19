@@ -40,6 +40,10 @@ const getRedisClient = () => {
     return redisClient;
 };
 
+// Export for use in API endpoints
+export { getRedisClient };
+
+
 // Almacenamiento en memoria para desarrollo (fallback)
 let memoryStore = [];
 let candidatesMemory = [];
