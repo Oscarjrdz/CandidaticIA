@@ -59,6 +59,16 @@ const CandidatesSection = ({ showToast }) => {
         });
         setLocalChatFiles(existingFiles);
 
+        // Cargar estados de timers previos
+        try {
+            const savedTimerStates = localStorage.getItem('timer_states');
+            if (savedTimerStates) {
+                previousTimerStates.current = JSON.parse(savedTimerStates);
+            }
+        } catch (e) {
+            console.warn('Error loading timer states:', e);
+        }
+
         // Cargar candidatos
         loadCandidates();
 
@@ -201,6 +211,13 @@ const CandidatesSection = ({ showToast }) => {
                 // Better: update the ref here, assuming sequential or non-conflicting updates.
                 // Since this runs often, we must be careful with async.
                 previousTimerStates.current[candidate.whatsapp] = isReady;
+
+                // Persist to localStorage to survive section navigation
+                try {
+                    localStorage.setItem('timer_states', JSON.stringify(previousTimerStates.current));
+                } catch (e) {
+                    console.warn('Error saving timer states:', e);
+                }
             });
 
             await Promise.all(promises);
