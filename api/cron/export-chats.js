@@ -92,7 +92,14 @@ export default async function handler(req, res) {
 
                 // Only export if never exported or last export was before last message
                 if (!lastExport || lastExport < lastMessageTime) {
-                    candidatesReady.push(candidate);
+                    // CRITICAL: Fetch messages for this candidate (stored separately in Redis)
+                    const messages = await getMessages(candidate.id);
+                    if (messages && messages.length > 0) {
+                        candidate.messages = messages;
+                        candidatesReady.push(candidate);
+                    } else {
+                        console.log(`ℹ️ Candidate ${candidate.whatsapp} has no messages in Redis, skipping`);
+                    }
                 }
             }
         }
