@@ -294,7 +294,9 @@ function generateChatContent(candidate) {
     for (const msg of sortedMessages) {
         const timestamp = new Date(msg.timestamp).toLocaleString('es-MX');
         const sender = msg.from === candidate.whatsapp ? candidate.nombre || 'Candidato' : 'Bot';
-        content += `[${timestamp}] ${sender}:\n${msg.body}\n\n`;
+        // Fix: Use msg.content (stored in Redis) instead of msg.body
+        const messageText = msg.content || msg.body || '[Mensaje vacío]';
+        content += `[${timestamp}] ${sender}:\n${messageText}\n\n`;
     }
 
     return content;
