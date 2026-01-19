@@ -40,6 +40,7 @@ const CandidatesSection = ({ showToast }) => {
     const previousTimerStates = useRef({}); // Track previous timer states to detect green transitions
     const [cloudFileStatus, setCloudFileStatus] = useState({}); // { prefix: true/false } - tracks BuilderBot cloud files
     const cloudStatusLoadedRef = useRef(false); // Track if we've loaded cloud status at least once (persists across remounts)
+    const uploadingRef = useRef({}); // Track which candidates are currently being uploaded { whatsapp: true/false }
 
     useEffect(() => {
         // Cargar credenciales
@@ -140,6 +141,13 @@ const CandidatesSection = ({ showToast }) => {
                                 // Check if file already exists in cloud before uploading
                                 if (credentials) {
                                     const prefix = String(candidate.whatsapp).substring(0, 13);
+
+                                    // Skip if already uploading this candidate
+                                    if (uploadingRef.current[candidate.whatsapp]) {
+                                        console.log(`⏭️ Skipping - already uploading ${candidate.whatsapp}`);
+                                        return;
+                                    }
+
                                     let alreadyInCloud = false;
 
                                     try {
@@ -165,7 +173,13 @@ const CandidatesSection = ({ showToast }) => {
 
                                     if (!alreadyInCloud) {
                                         console.log(`📤 Uploading to cloud (first time)...`);
-                                        handleAutoExport(candidateWithMessages, credentials);
+                                        uploadingRef.current[candidate.whatsapp] = true; // Mark as uploading
+
+                                        try {
+                                            await handleAutoExport(candidateWithMessages, credentials);
+                                        } finally {
+                                            uploadingRef.current[candidate.whatsapp] = false; // Clear flag
+                                        }
                                     } else {
                                         console.log(`⏭️ Skipping upload - file already in cloud`);
                                     }
