@@ -372,6 +372,9 @@ const CandidatesSection = ({ showToast }) => {
         }
 
         try {
+            // STEP 1: Get file IDs from Redis (set by cron job)
+            const chatFileIds = getChatFileIds(); // From storage.js
+
             // List files from BuilderBot
             const listParams = new URLSearchParams({
                 botId: credentials.botId,
@@ -390,11 +393,17 @@ const CandidatesSection = ({ showToast }) => {
 
                     // Check each candidate
                     candidateList.forEach(candidate => {
+                        // Priority 1: Check Redis (synced by cron)
+                        const hasFileInRedis = !!chatFileIds[candidate.whatsapp];
+
+                        // Priority 2: Check BuilderBot API (fallback)
                         const prefix = String(candidate.whatsapp).substring(0, 13);
-                        const hasFile = files.some(f =>
+                        const hasFileInCloud = files.some(f =>
                             f.filename && f.filename.startsWith(prefix)
                         );
-                        statusMap[prefix] = hasFile;
+
+                        // Use Redis as primary source, BuilderBot as fallback
+                        statusMap[prefix] = hasFileInRedis || hasFileInCloud;
                     });
 
                     console.log('📊 Cloud file status updated:', statusMap);
