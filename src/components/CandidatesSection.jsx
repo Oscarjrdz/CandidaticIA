@@ -41,6 +41,7 @@ const CandidatesSection = ({ showToast }) => {
     const [cloudFileStatus, setCloudFileStatus] = useState({}); // { prefix: true/false } - tracks BuilderBot cloud files
     const cloudStatusLoadedRef = useRef(false); // Track if we've loaded cloud status at least once (persists across remounts)
     const uploadingRef = useRef({}); // Track which candidates are currently being uploaded { whatsapp: true/false }
+    const isCheckingCloudStatus = useRef(false); // Prevent simultaneous checks
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -371,6 +372,14 @@ const CandidatesSection = ({ showToast }) => {
             return;
         }
 
+        // Prevent simultaneous checks (debounce)
+        if (isCheckingCloudStatus.current) {
+            console.log('⏭️ Skipping cloud check, already in progress...');
+            return;
+        }
+
+        isCheckingCloudStatus.current = true;
+
         try {
             // STEP 1: Get file IDs from Redis API (set by cron job)
             let chatFileIds = {};
@@ -430,6 +439,9 @@ const CandidatesSection = ({ showToast }) => {
         } catch (error) {
             console.warn('Error checking cloud file status:', error);
             cloudStatusLoadedRef.current = true; // Mark as loaded even on error to prevent infinite waiting
+        } finally {
+            // Reset flag to allow next check
+            isCheckingCloudStatus.current = false;
         }
     };
 
