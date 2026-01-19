@@ -275,11 +275,23 @@ async function exportAndUpload(candidate, credentials) {
 /**
  * Generate chat content from candidate messages
  */
+/**
+ * Generate chat content from candidate messages
+ */
 function generateChatContent(candidate) {
-    let content = `=== Chat History for ${candidate.nombre || candidate.whatsapp} ===\n`;
+    const mexicoTime = new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City', hour12: true });
+
+    let content = `HISTORIAL DE CONVERSACIÓN\n`;
+    content += `----------------------------------------\n`;
     content += `WhatsApp: ${candidate.whatsapp}\n`;
-    content += `Exported: ${new Date().toISOString()}\n`;
-    content += `\n${'='.repeat(50)}\n\n`;
+    content += `Nombre Real: ${candidate.nombreReal || 'No registrado'}\n`;
+    content += `Nombre (WhatsApp): ${candidate.nombre || 'No registrado'}\n`;
+    content += `Fecha Nacimiento: ${candidate.fechaNacimiento || 'No registrado'}\n`;
+    content += `Edad: ${candidate.edad || 'No registrado'}\n`;
+    content += `Municipio: ${candidate.municipio || 'No registrado'}\n`;
+    content += `Categoría: ${candidate.categoria || 'No registrado'}\n`;
+    content += `Fecha de exportación: ${mexicoTime}\n`;
+    content += `----------------------------------------\n\n`;
 
     if (!candidate.messages || candidate.messages.length === 0) {
         content += 'No messages found.\n';
@@ -292,10 +304,23 @@ function generateChatContent(candidate) {
     );
 
     for (const msg of sortedMessages) {
-        const timestamp = new Date(msg.timestamp).toLocaleString('es-MX');
-        const sender = msg.from === candidate.whatsapp ? candidate.nombre || 'Candidato' : 'Bot';
-        // Fix: Use msg.content (stored in Redis) instead of msg.body
+        // Format: [09:19 p.m.]
+        const timestamp = new Date(msg.timestamp).toLocaleString('es-MX', {
+            timeZone: 'America/Mexico_City',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        });
+
+        const sender = msg.from === 'bot' ? 'Bot' : (candidate.nombreReal || candidate.whatsapp);
+
+        // Use msg.content (stored in Redis) instead of msg.body
         const messageText = msg.content || msg.body || '[Mensaje vacío]';
+
         content += `[${timestamp}] ${sender}:\n${messageText}\n\n`;
     }
 
