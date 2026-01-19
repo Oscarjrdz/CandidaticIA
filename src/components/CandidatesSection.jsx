@@ -99,12 +99,6 @@ const CandidatesSection = ({ showToast }) => {
     useEffect(() => {
         if (!exportTimer || exportTimer <= 0 || candidates.length === 0) return;
 
-        // Wait for cloud status to load before processing
-        if (!cloudStatusLoadedRef.current && credentials && candidates.length > 0) {
-            console.log('⏳ Waiting for cloud status to load before processing timers...');
-            return;
-        }
-
         const processGreenTimers = async () => {
             const promises = candidates.map(async (candidate) => {
                 if (!candidate.ultimoMensaje) return;
@@ -143,15 +137,38 @@ const CandidatesSection = ({ showToast }) => {
                                 setLocalChatFiles(prev => ({ ...prev, [candidate.whatsapp]: true }));
 
 
-                                // Upload to BuilderBot cloud ONLY if not already there
-                                const prefix = String(candidate.whatsapp).substring(0, 13);
-                                const alreadyInCloud = cloudFileStatus[prefix];
+                                // Check if file already exists in cloud before uploading
+                                if (credentials) {
+                                    const prefix = String(candidate.whatsapp).substring(0, 13);
+                                    let alreadyInCloud = false;
 
-                                if (credentials && !alreadyInCloud) {
-                                    console.log(`📤 Uploading to cloud (first time)...`);
-                                    handleAutoExport(candidateWithMessages, credentials);
-                                } else if (alreadyInCloud) {
-                                    console.log(`⏭️ Skipping upload - file already in cloud`);
+                                    try {
+                                        const listParams = new URLSearchParams({
+                                            botId: credentials.botId,
+                                            answerId: credentials.answerId,
+                                            apiKey: credentials.apiKey,
+                                            type: 'files'
+                                        });
+
+                                        const listRes = await fetch(`/api/assistant?${listParams}`);
+                                        if (listRes.ok) {
+                                            const files = await listRes.json();
+                                            if (Array.isArray(files)) {
+                                                alreadyInCloud = files.some(f =>
+                                                    f.filename && f.filename.startsWith(prefix)
+                                                );
+                                            }
+                                        }
+                                    } catch (error) {
+                                        console.warn('Error checking cloud status:', error);
+                                    }
+
+                                    if (!alreadyInCloud) {
+                                        console.log(`📤 Uploading to cloud (first time)...`);
+                                        handleAutoExport(candidateWithMessages, credentials);
+                                    } else {
+                                        console.log(`⏭️ Skipping upload - file already in cloud`);
+                                    }
                                 }
 
                             } else {
