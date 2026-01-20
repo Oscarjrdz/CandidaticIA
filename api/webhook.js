@@ -292,6 +292,18 @@ async function processEvent(payload) {
                             updateData.categoria = capturedJob;
                         }
 
+                        // 💼 DETECCIÓN DE ESTADO DE EMPLEO
+                        // Patrón: "Bien, entonces No Tienes empleo" o "Bien, entonces Sí Tienes empleo"
+                        const employmentRegex = /entonces\s+(No|Sí)\s+Tienes\s+empleo/i;
+                        const employmentMatch = content.match(employmentRegex);
+
+                        if (employmentMatch && employmentMatch[1]) {
+                            const status = employmentMatch[1]; // "No" o "Sí"
+                            console.log(`💼 ESTADO DE EMPLEO DETECTADO: "${status}" para ${cleanNumber}`);
+                            updateData.tieneEmpleo = status;
+                        }
+
+
                         await updateCandidate(candidateId, updateData);
                         console.log(`🕐 ultimoMensaje actualizado para ${candidateName}: ${timestamp}`);
                     }

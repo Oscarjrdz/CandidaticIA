@@ -628,6 +628,7 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Edad</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Municipio</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Categoría</th>
+                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Tiene empleo</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
@@ -681,6 +682,17 @@ const CandidatesSection = ({ showToast }) => {
                                         <td className="py-1 px-4">
                                             <div className="text-sm text-gray-900 dark:text-white font-medium">
                                                 {candidate.categoria || <span className="text-gray-400 italic font-normal">-</span>}
+                                            </div>
+                                        </td>
+                                        <td className="py-1 px-4">
+                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                {candidate.tieneEmpleo ? (
+                                                    <span className={candidate.tieneEmpleo === 'Sí' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}>
+                                                        {candidate.tieneEmpleo}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-400 italic font-normal">-</span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="py-1 px-4">
