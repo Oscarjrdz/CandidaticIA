@@ -38,7 +38,7 @@ const CandidatesSection = ({ showToast }) => {
     const [currentTime, setCurrentTime] = useState(Date.now()); // For countdown updates
     const [localChatFiles, setLocalChatFiles] = useState({}); // { whatsapp: true/false } - tracks which candidates have local files
     const previousTimerStates = useRef({}); // Track previous timer states to detect green transitions
-    const [cloudFileStatus, setCloudFileStatus] = useState({}); // { prefix: true/false } - tracks BuilderBot cloud files
+
     const uploadingRef = useRef({}); // Track which candidates are currently being uploaded { whatsapp: true/false }
 
     useEffect(() => {
@@ -51,8 +51,7 @@ const CandidatesSection = ({ showToast }) => {
             const savedTimer = await getExportSettings();
             setExportTimer(savedTimer);
 
-            // Cargar estado de archivos en nube (desde Redis, una sola vez)
-            await loadCloudFileStatusFromRedis();
+
 
             // Cargar archivos locales existentes
             const existingFiles = {};
@@ -159,7 +158,7 @@ const CandidatesSection = ({ showToast }) => {
         };
 
         processGreenTimers();
-    }, [currentTime, candidates, exportTimer, cloudFileStatus, credentials]);
+    }, [currentTime, candidates, exportTimer, credentials]);
 
     // Auto-export logic - triggers when candidates change and timer is configured
     useEffect(() => {
@@ -339,31 +338,7 @@ const CandidatesSection = ({ showToast }) => {
         setLoading(false);
     };
 
-    /**
-     * Load cloud file status from Redis (set by cron job)
-     * Simple: if cron uploaded successfully → key exists in Redis → green
-     */
-    const loadCloudFileStatusFromRedis = async () => {
-        try {
-            const response = await fetch('/api/chat-file-ids');
-            if (response.ok) {
-                const data = await response.json();
-                const fileIds = data.fileIds || {};
-                
-                // Convert to status map for UI
-                const statusMap = {};
-                candidates.forEach(candidate => {
-                    const prefix = String(candidate.whatsapp).substring(0, 13);
-                    // Green if cron marked as uploaded, red otherwise
-                    statusMap[prefix] = !!fileIds[candidate.whatsapp];
-                });
-                
-                setCloudFileStatus(statusMap);
-            }
-        } catch (error) {
-            console.error('Error loading cloud file status:', error);
-        }
-    };
+
 
 
     const handleSearch = (e) => {
@@ -657,7 +632,7 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial en Nube</th>
-                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
+
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
                             </thead>
@@ -785,24 +760,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 </div>
                                             )}
                                         </td>
-                                        <td className="py-1 px-4 text-center">
-                                            {(() => {
-                                                const prefix = String(candidate.whatsapp).substring(0, 13);
-                                                const hasCloudFile = cloudFileStatus[prefix];
 
-                                                return (
-                                                    <div className="flex justify-center">
-                                                        <div
-                                                            className={`w-3 h-3 rounded-full ${hasCloudFile
-                                                                ? 'bg-green-500 dark:bg-green-400'
-                                                                : 'bg-red-500 dark:bg-red-400'
-                                                                }`}
-                                                            title={hasCloudFile ? 'Archivo subido' : 'No subido aún'}
-                                                        />
-                                                    </div>
-                                                );
-                                            })()}
-                                        </td>
                                         <td className="py-1 px-4 text-center">
                                             <button
                                                 onClick={() => handleOpenChat(candidate)}

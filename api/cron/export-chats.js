@@ -258,13 +258,14 @@ async function exportAndUpload(candidate, credentials) {
             maxBodyLength: Infinity,
             maxContentLength: Infinity
         });
+        console.log('🚀 Upload response status:', uploadRes.status);
+        console.log('🚀 Upload response data:', uploadRes.data);
 
         const uploadResult = uploadRes.data;
         const newFileId = uploadResult.id || uploadResult.fileId;
         console.log(`✅ File uploaded successfully for ${candidate.whatsapp}`);
 
-        // Sync with frontend (Red -> Green indicator)
-        await setChatFileId(candidate.whatsapp, newFileId);
+
 
         return {
             success: true,
@@ -380,29 +381,7 @@ async function setLastExportTime(key, timestamp) {
     }
 }
 
-/**
- * Save chat file ID to Redis (syncs with frontend)
- */
-async function setChatFileId(whatsapp, fileId) {
-    if (!process.env.REDIS_URL) return;
 
-    try {
-        const { getRedisClient } = await import('../utils/storage.js');
-        const redis = getRedisClient();
-
-        // Update the hash map used by frontend
-        // Get existing IDs first (to preserve others)
-        const storedIds = await redis.get('chat_file_ids');
-        const fileIds = storedIds ? JSON.parse(storedIds) : {};
-
-        fileIds[whatsapp] = fileId;
-
-        await redis.set('chat_file_ids', JSON.stringify(fileIds));
-        console.log(`✅ Synced file ID for ${whatsapp} to Redis`);
-    } catch (error) {
-        console.warn('Error syncing file ID to Redis:', error);
-    }
-}
 
 /**
  * Get BuilderBot credentials from Redis (same as frontend Settings)
