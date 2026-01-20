@@ -140,11 +140,10 @@ async function sendBuilderBotMessage(phone, message) {
     try {
         // Configuration
         const port = process.env.BUILDERBOT_PORT || '3008';
-        // Base URL: User provided 'https://app.builderbot.cloud' in example, but we should respect env var if exists
-        // If running locally with standard provider, it might be http://localhost:3008
-        // Let's try to detect or use a flexible approach.
-
-        let url = process.env.BUILDERBOT_URL || `http://localhost:${port}`;
+        // Base URL: Align with chat.js which uses Cloud API v2 by default
+        // If the user hasn't defined BUILDERBOT_URL, we default to the cloud URL
+        // instead of localhost, which fixes the issue for Cloud-hosted bots.
+        let url = process.env.BUILDERBOT_URL || 'https://app.builderbot.cloud';
         const botId = process.env.BUILDERBOT_BOT_ID || process.env.BOT_ID;
         const apiKey = process.env.BUILDERBOT_API_KEY || process.env.API_KEY;
 
