@@ -36,6 +36,8 @@ const AutomationsSection = () => {
     const [schedEditingId, setSchedEditingId] = useState(null);
     const [schedEditingField, setSchedEditingField] = useState(''); // 'name', 'userMinutes', 'botMinutes', 'message'
     const [schedEditValue, setSchedEditValue] = useState('');
+    const [testNumbers, setTestNumbers] = useState({});
+    const [testingRuleId, setTestingRuleId] = useState(null);
 
     // Load rules and fields on mount
     useEffect(() => {
@@ -261,6 +263,39 @@ const AutomationsSection = () => {
     const cancelSchedEdit = () => {
         setSchedEditingId(null);
         setSchedEditValue('');
+    };
+
+    const handleTestMessage = async (rule) => {
+        const phone = testNumbers[rule.id];
+        if (!phone || phone.length < 10) {
+            alert('Por favor, ingresa un número de WhatsApp válido (10 dígitos).');
+            return;
+        }
+
+        setTestingRuleId(rule.id);
+        try {
+            const res = await fetch('/api/test-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone,
+                    message: rule.message,
+                    // Optional: pass bot credentials if available in context, otherwise backend uses env
+                })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                alert('Mensaje de prueba enviado con éxito a ' + phone);
+            } else {
+                alert('Error enviando prueba: ' + (data.details?.error || data.error || 'Error desconocido'));
+            }
+        } catch (error) {
+            console.error('Test error:', error);
+            alert('Error de conexión al enviar prueba.');
+        } finally {
+            setTestingRuleId(null);
+        }
     };
 
     if (loading) {
@@ -536,6 +571,8 @@ const AutomationsSection = () => {
                                 <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-1/3">Mensaje</th>
                                 <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-20">Tipo</th>
                                 <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-24">Estado</th>
+                                <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-32 bg-blue-50/50 dark:bg-blue-900/10">Número Prueba</th>
+                                <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-24 bg-blue-50/50 dark:bg-blue-900/10">Probar</th>
                                 <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-20">Acción</th>
                             </tr>
                         </thead>
@@ -668,6 +705,36 @@ const AutomationsSection = () => {
                                             </button>
                                         </td>
 
+                                        {/* Test Number Input */}
+                                        < td className="py-3 px-4 text-center bg-blue-50/30 dark:bg-blue-900/5" >
+                                            <input
+                                                type="tel"
+                                                placeholder="52..."
+                                                value={testNumbers[rule.id] || ''}
+                                                onChange={(e) => setTestNumbers(prev => ({ ...prev, [rule.id]: e.target.value }))}
+                                                className="w-full text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                                            />
+                                        </td>
+
+                                        {/* Test Button */}
+                                        <td className="py-3 px-4 text-center bg-blue-50/30 dark:bg-blue-900/5">
+                                            <button
+                                                onClick={() => handleTestMessage(rule)}
+                                                disabled={testingRuleId === rule.id}
+                                                className={`p-1.5 rounded-lg transition-colors flex items-center justify-center mx-auto ${testingRuleId === rule.id
+                                                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                    : 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900'
+                                                    }`}
+                                                title="Enviar mensaje de prueba"
+                                            >
+                                                {testingRuleId === rule.id ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <Send className="w-4 h-4" />
+                                                )}
+                                            </button>
+                                        </td>
+
                                         {/* Actions */}
                                         <td className="py-3 px-4 text-center">
                                             <button
@@ -684,32 +751,36 @@ const AutomationsSection = () => {
                         </tbody>
                     </table>
                 </div>
-            </div>
+            </div >
 
             {/* Create Modal */}
-            {showCreateModal && (
-                <CreateRuleModal
-                    onClose={() => setShowCreateModal(false)}
-                    fields={fields}
-                    onCreateField={handleCreateField}
-                    onSuccess={() => {
-                        setShowCreateModal(false);
-                        loadRules();
-                    }}
-                />
-            )}
+            {
+                showCreateModal && (
+                    <CreateRuleModal
+                        onClose={() => setShowCreateModal(false)}
+                        fields={fields}
+                        onCreateField={handleCreateField}
+                        onSuccess={() => {
+                            setShowCreateModal(false);
+                            loadRules();
+                        }}
+                    />
+                )
+            }
 
             {/* Create Scheduled Modal */}
-            {showSchedModal && (
-                <CreateScheduledRuleModal
-                    onClose={() => setShowSchedModal(false)}
-                    onSuccess={() => {
-                        setShowSchedModal(false);
-                        loadSchedRules();
-                    }}
-                />
-            )}
-        </div>
+            {
+                showSchedModal && (
+                    <CreateScheduledRuleModal
+                        onClose={() => setShowSchedModal(false)}
+                        onSuccess={() => {
+                            setShowSchedModal(false);
+                            loadSchedRules();
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 };
 
