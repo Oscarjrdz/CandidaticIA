@@ -58,22 +58,71 @@ const AutomationsSection = () => {
     const startEditing = (rule, field) => {
         setEditingId(rule.id);
         setEditingField(field);
-        setEditValue(rule[field] || '');
+        // For 'field' editing, store the value (field code)
+        if (field === 'field') {
+            setEditValue(rule.field || '');
+        } else {
+            setEditValue(rule[field] || '');
+        }
     };
 
     const saveEdit = async () => {
         if (!editingId) return;
 
-        const updates = { [editingField]: editValue };
-        const result = await updateAutomationRule(editingId, updates);
+        // Special handling for 'field' change - check for conflicts
+        if (editingField === 'field') {
+            const newFieldValue = editValue;
+            const currentRule = rules.find(r => r.id === editingId);
 
-        if (result.success) {
-            loadRules();
-            setEditingId(null);
-            setEditingField('pattern');
-            setEditValue('');
+            // Find if another rule uses this field
+            const conflictingRule = rules.find(r =>
+                r.id !== editingId &&
+                r.field === newFieldValue &&
+                r.enabled
+            );
+
+            if (conflictingRule) {
+                const fieldLabel = AVAILABLE_FIELDS.find(f => f.value === newFieldValue)?.label || newFieldValue;
+                const confirmMsg = `El campo "${fieldLabel}" ya está siendo usado por otra regla.\n\n¿Desactivar esa regla y usar este campo aquí?`;
+
+                if (!confirm(confirmMsg)) {
+                    cancelEdit();
+                    return;
+                }
+
+                // Disable conflicting rule
+                await updateAutomationRule(conflictingRule.id, { enabled: false });
+            }
+
+            // Update field and fieldLabel
+            const fieldObj = AVAILABLE_FIELDS.find(f => f.value === newFieldValue);
+            const updates = {
+                field: newFieldValue,
+                fieldLabel: fieldObj?.label || newFieldValue
+            };
+            const result = await updateAutomationRule(editingId, updates);
+
+            if (result.success) {
+                loadRules();
+                setEditingId(null);
+                setEditingField('pattern');
+                setEditValue('');
+            } else {
+                alert('Error guardando: ' + result.error);
+            }
         } else {
-            alert('Error guardando: ' + result.error);
+            // Normal edit (pattern/description)
+            const updates = { [editingField]: editValue };
+            const result = await updateAutomationRule(editingId, updates);
+
+            if (result.success) {
+                loadRules();
+                setEditingId(null);
+                setEditingField('pattern');
+                setEditValue('');
+            } else {
+                alert('Error guardando: ' + result.error);
+            }
         }
     };
 
@@ -193,11 +242,44 @@ const AutomationsSection = () => {
                                         )}
                                     </td>
 
-                                    {/* Field Column */}
+                                    {/* Field Column - EDITABLE */}
                                     <td className="py-3 px-4">
-                                        <span className="inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-semibold">
-                                            {rule.fieldLabel || rule.field}
-                                        </span>
+                                        {editingId === rule.id && editingField === 'field' ? (
+                                            <div className="flex items-center space-x-2">
+                                                <select
+                                                    value={editValue}
+                                                    onChange={(e) => setEditValue(e.target.value)}
+                                                    className="flex-1 px-2 py-1 border border-blue-500 rounded text-xs bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    autoFocus
+                                                >
+                                                    {AVAILABLE_FIELDS.map(f => (
+                                                        <option key={f.value} value={f.value}>{f.label}</option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    onClick={saveEdit}
+                                                    className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
+                                                    title="Guardar"
+                                                >
+                                                    <Save className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={cancelEdit}
+                                                    className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                                                    title="Cancelar"
+                                                >
+                                                    <X className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <span
+                                                onClick={() => startEditing(rule, 'field')}
+                                                className="inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-semibold cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                                                title="Click para cambiar campo"
+                                            >
+                                                {rule.fieldLabel || rule.field}
+                                            </span>
+                                        )}
                                     </td>
 
                                     {/* Description Column */}
@@ -240,8 +322,8 @@ const AutomationsSection = () => {
                                         <button
                                             onClick={() => handleToggleEnabled(rule)}
                                             className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-semibold transition-colors ${rule.enabled
-                                                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
-                                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50'
+                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
                                                 }`}
                                             title={rule.enabled ? 'Click para desactivar' : 'Click para activar'}
                                         >
