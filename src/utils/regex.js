@@ -86,23 +86,39 @@ export function patternToPhrases(pattern) {
         return phrases.map(p => {
             let s = p;
 
-            // Remove remaining regex syntax
-            s = s.replace(/\(\?\:/g, '');      // (?:
-            s = s.replace(/\[\:\?\]\?/g, '');  // [:?]?
-            s = s.replace(/\[\^.*?\]\+/g, ''); // [^...]+
-            s = s.replace(/\(\.\*\)/g, '');    // (.*)
+            // Handle double escaped patterns first (common in JSON/Storage)
+            s = s.replace(/\\\\s[\*\+]?/g, ' '); // \\s* -> space
+            s = s.replace(/\\\\b/g, '');          // \\b -> empty
 
-            // Remove loose brackets and parens
-            s = s.replace(/[\[\]\(\)\{\}\?\^\$\+\*]/g, ''); // remove [ ] ( ) { } ? ^ $ + *
+            // Handle single escaped patterns
+            s = s.replace(/\\s[\*\+]?/g, ' ');    // \s* -> space
+            s = s.replace(/\\b/g, '');            // \b -> empty
+            s = s.replace(/\\./g, '.');           // \. -> .
 
-            // Remove backslashes
+            // Remove specific regex constructs
+            s = s.replace(/\(\?\:/g, '');         // (?:
+            s = s.replace(/\[\:\?\]\??/g, '');    // [:?]? or [:?]
+            s = s.replace(/\[\^.*?\][\+\*]/g, ''); // [^...]+ or [^...]*
+            s = s.replace(/\(\.\*\)/g, '');       // (.*)
+            s = s.replace(/\(\.\+\)/g, '');       // (.+)
+
+            // Remove common capturing group artifacts if they differ
+            s = s.replace(/\(\?\=.*?\)/g, '');    // (?=...) Lookahead
+
+            // Remove remaining brackets, braces, parens
+            s = s.replace(/[\[\]\{\}\(\)\^\$\|]/g, '');
+
+            // Remove qualifiers that might remain if not caught above
+            s = s.replace(/[\?\+\*]/g, '');
+
+            // Remove backslashes last
             s = s.replace(/\\/g, '');
 
             // Normalize spaces
             s = s.replace(/\s+/g, ' ');
 
             return s.trim();
-        }).filter(p => p.length > 0 && p !== 's'); // Filter empty or artifacts like 's' (from \s)
+        }).filter(p => p.length > 0 && p.toLowerCase() !== 's'); // Filter artifacts
 
     } catch (error) {
         console.warn('Could not parse pattern to phrases:', error);
