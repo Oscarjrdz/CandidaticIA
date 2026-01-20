@@ -687,7 +687,7 @@ const CandidatesSection = ({ showToast }) => {
                                         <td className="py-1 px-4">
                                             <div className="text-sm text-gray-900 dark:text-white font-medium">
                                                 {candidate.tieneEmpleo ? (
-                                                    <span className={candidate.tieneEmpleo === 'Sí' ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}>
+                                                    <span className="font-bold uppercase">
                                                         {candidate.tieneEmpleo}
                                                     </span>
                                                 ) : (
