@@ -241,6 +241,12 @@ async function exportAndUpload(candidate, credentials) {
             knownLength: Buffer.byteLength(chatContent) // Explicit length helper
         });
 
+        console.log('📋 Upload attempt details:');
+        console.log('   URL:', builderBotUrl);
+        console.log('   Content length:', Buffer.byteLength(chatContent));
+        console.log('   Form-Data length:', formData.getLengthSync());
+        console.log('   Headers:', { ...formData.getHeaders(), 'Content-Length': formData.getLengthSync() });
+
         // Use axios with calculated headers
         const uploadRes = await axios.post(builderBotUrl, formData, {
             headers: {
@@ -267,6 +273,12 @@ async function exportAndUpload(candidate, credentials) {
 
     } catch (error) {
         console.error(`❌ Error in exportAndUpload for ${candidate.whatsapp}:`, error.message);
+        if (error.response) {
+            console.error('   Status:', error.response.status);
+            console.error('   Data:', JSON.stringify(error.response.data).substring(0, 200));
+            console.error('   Headers:', error.response.headers);
+        }
+
 
         return {
             success: false,
