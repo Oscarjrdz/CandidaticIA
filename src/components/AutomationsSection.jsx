@@ -8,6 +8,8 @@ import {
     deleteAutomationRule,
     AVAILABLE_FIELDS
 } from '../services/automationsService';
+import PhraseTagInput from './ui/PhraseTagInput';
+import { phrasesToPattern, patternToPhrases } from '../utils/regex';
 
 const AutomationsSection = () => {
     const [rules, setRules] = useState([]);
@@ -58,9 +60,15 @@ const AutomationsSection = () => {
     const startEditing = (rule, field) => {
         setEditingId(rule.id);
         setEditingField(field);
-        // For 'field' editing, store the value (field code)
+
+        // Handle different field types
         if (field === 'field') {
             setEditValue(rule.field || '');
+        } else if (field === 'pattern') {
+            // Convert regex pattern back to phrases for editing
+            const phrases = patternToPhrases(rule.pattern);
+            // If parsing fails (complex custom regex), fallback to raw string in array
+            setEditValue(phrases.length > 0 ? phrases : [rule.pattern]);
         } else {
             setEditValue(rule[field] || '');
         }
@@ -110,8 +118,33 @@ const AutomationsSection = () => {
             } else {
                 alert('Error guardando: ' + result.error);
             }
+        } else if (editingField === 'pattern') {
+            // Handle Pattern save (Tag Input -> Regex)
+            let newPattern;
+
+            // Helper to check if it looks like raw regex (contains special chars logic not handled by phrasesToPattern)
+            // But for simplicity, we assume user is editing phrases. 
+            // If they cleared all tags and typed nothing, we block.
+            if (!editValue || editValue.length === 0) {
+                alert("Debes agregar al menos una frase clave");
+                return;
+            }
+
+            newPattern = phrasesToPattern(editValue);
+
+            const updates = { pattern: newPattern };
+            const result = await updateAutomationRule(editingId, updates);
+
+            if (result.success) {
+                loadRules();
+                setEditingId(null);
+                setEditingField('pattern');
+                setEditValue('');
+            } else {
+                alert('Error guardando: ' + result.error);
+            }
         } else {
-            // Normal edit (pattern/description)
+            // Normal edit (description)
             const updates = { [editingField]: editValue };
             const result = await updateAutomationRule(editingId, updates);
 
@@ -165,8 +198,8 @@ const AutomationsSection = () => {
             <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start space-x-3">
                 <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                 <div className="text-sm text-blue-900 dark:text-blue-100">
-                    <p className="font-semibold mb-1">¿Cómo funcionan las automatizaciones?</p>
-                    <p>Cuando el bot envía un mensaje, se buscan coincidencias con estos patrones regex. Si hay coincidencia, el valor capturado se guarda automáticamente en el campo especificado.</p>
+                    <p className="font-semibold mb-1">Palabras Clave (Triggers)</p>
+                    <p>Escribe las frases que activarán la captura. Por ejemplo: "tu nombre es", "su nombre es". El sistema capturará automáticamente el valor que aparezca después de estas frases.</p>
                 </div>
             </div>
 
@@ -175,8 +208,8 @@ const AutomationsSection = () => {
                 <table className="w-full">
                     <thead>
                         <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-                            <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm">
-                                Patrón Regex
+                            <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-1/3">
+                                Frases Clave (Triggers)
                             </th>
                             <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-48">
                                 Campo Destino
@@ -205,39 +238,50 @@ const AutomationsSection = () => {
                                     key={rule.id}
                                     className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors"
                                 >
-                                    {/* Pattern Column */}
+                                    {/* Pattern Column - TAGS INPUT */}
                                     <td className="py-3 px-4">
                                         {editingId === rule.id && editingField === 'pattern' ? (
-                                            <div className="flex items-center space-x-2">
-                                                <textarea
-                                                    value={editValue}
-                                                    onChange={(e) => setEditValue(e.target.value)}
-                                                    className="flex-1 px-2 py-1 border border-blue-500 rounded text-xs font-mono bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                    rows={2}
-                                                    autoFocus
+                                            <div className="flex flex-col space-y-2">
+                                                <PhraseTagInput
+                                                    phrases={editValue}
+                                                    onChange={setEditValue}
+                                                    placeholder="Escribe y presiona Enter..."
                                                 />
-                                                <button
-                                                    onClick={saveEdit}
-                                                    className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
-                                                    title="Guardar"
-                                                >
-                                                    <Save className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={cancelEdit}
-                                                    className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
-                                                    title="Cancelar"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
+                                                <div className="flex items-center space-x-2">
+                                                    <button
+                                                        onClick={saveEdit}
+                                                        className="px-2 py-1 bg-green-100 hover:bg-green-200 text-green-700 rounded text-xs font-semibold flex items-center"
+                                                    >
+                                                        <Save className="w-3 h-3 mr-1" /> Guardar
+                                                    </button>
+                                                    <button
+                                                        onClick={cancelEdit}
+                                                        className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded text-xs font-semibold flex items-center"
+                                                    >
+                                                        <X className="w-3 h-3 mr-1" /> Cancelar
+                                                    </button>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div
                                                 onClick={() => startEditing(rule, 'pattern')}
-                                                className="text-xs font-mono text-gray-900 dark:text-white cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded transition-colors"
-                                                title="Click para editar"
+                                                className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded transition-colors min-h-[40px]"
+                                                title="Click para editar frases"
                                             >
-                                                {rule.pattern}
+                                                {/* Display Tags */}
+                                                <div className="flex flex-wrap gap-1">
+                                                    {patternToPhrases(rule.pattern).length > 0 ? (
+                                                        patternToPhrases(rule.pattern).map((phrase, idx) => (
+                                                            <span key={idx} className="inline-block px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs border border-gray-300 dark:border-gray-600">
+                                                                {phrase}
+                                                            </span>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-xs font-mono text-gray-400 bg-gray-50 p-1 rounded border border-gray-100">
+                                                            {rule.pattern.length > 30 ? rule.pattern.substring(0, 30) + '...' : rule.pattern}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                     </td>
@@ -376,7 +420,8 @@ const AutomationsSection = () => {
  * Modal for creating new automation rule
  */
 const CreateRuleModal = ({ onClose, onSuccess }) => {
-    const [pattern, setPattern] = useState('');
+    // pattern state is now an array of phrases
+    const [phrases, setPhrases] = useState([]);
     const [field, setField] = useState('');
     const [description, setDescription] = useState('');
     const [saving, setSaving] = useState(false);
@@ -386,12 +431,16 @@ const CreateRuleModal = ({ onClose, onSuccess }) => {
         e.preventDefault();
         setError('');
 
-        if (!pattern || !field) {
-            setError('Patrón y campo son requeridos');
+        if (phrases.length === 0 || !field) {
+            setError('Debes agregar al menos una frase y seleccionar un campo');
             return;
         }
 
         setSaving(true);
+
+        // Convert tags to regex pattern
+        const pattern = phrasesToPattern(phrases);
+
         const fieldObj = AVAILABLE_FIELDS.find(f => f.value === field);
         const result = await createAutomationRule({
             pattern,
@@ -432,18 +481,15 @@ const CreateRuleModal = ({ onClose, onSuccess }) => {
 
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                            Patrón Regex *
+                            Frases Clave (Triggers) *
                         </label>
-                        <textarea
-                            value={pattern}
-                            onChange={(e) => setPattern(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            rows={3}
-                            placeholder="tu nombre es\s*[:]?\s*([^.!?\n]+)"
-                            required
+                        <PhraseTagInput
+                            phrases={phrases}
+                            onChange={setPhrases}
+                            placeholder="Ej: tu nombre es"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Usa grupos de captura () para extraer el valor deseado
+                            Escribe una frase y presiona Enter. Agrega tantas variantes como necesites.
                         </p>
                     </div>
 
