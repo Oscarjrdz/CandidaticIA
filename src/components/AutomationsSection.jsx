@@ -10,7 +10,7 @@ import {
 } from '../services/automationsService';
 import PhraseTagInput from './ui/PhraseTagInput';
 import { phrasesToPattern, patternToPhrases } from '../utils/regex';
-import { phrasesToPattern, patternToPhrases } from '../utils/regex';
+
 import {
     getScheduledRules,
     createScheduledRule,
