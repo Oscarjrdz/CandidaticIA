@@ -117,6 +117,9 @@ export function patternToPhrases(pattern) {
             // Normalize spaces
             s = s.replace(/\s+/g, ' ');
 
+            // Remove trailing colons (common artifact)
+            s = s.replace(/:\s*$/, '');
+
             return s.trim();
         }).filter(p => p.length > 0 && p.toLowerCase() !== 's'); // Filter artifacts
 
