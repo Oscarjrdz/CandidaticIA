@@ -147,7 +147,7 @@ const AutomationsSection = () => {
             );
 
             if (conflictingRule) {
-                const fieldLabel = AVAILABLE_FIELDS.find(f => f.value === newFieldValue)?.label || newFieldValue;
+                const fieldLabel = fields.find(f => f.value === newFieldValue)?.label || newFieldValue;
                 const confirmMsg = `El campo "${fieldLabel}" ya está siendo usado por otra regla.\n\n¿Desactivar esa regla y usar este campo aquí?`;
 
                 if (!confirm(confirmMsg)) {
@@ -160,7 +160,7 @@ const AutomationsSection = () => {
             }
 
             // Update field and fieldLabel
-            const fieldObj = AVAILABLE_FIELDS.find(f => f.value === newFieldValue);
+            const fieldObj = fields.find(f => f.value === newFieldValue);
             const updates = {
                 field: newFieldValue,
                 fieldLabel: fieldObj?.label || newFieldValue
