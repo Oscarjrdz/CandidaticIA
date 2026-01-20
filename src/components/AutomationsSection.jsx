@@ -38,9 +38,12 @@ const AutomationsSection = () => {
     const [schedEditValue, setSchedEditValue] = useState('');
     const [testNumbers, setTestNumbers] = useState({});
     const [testingRuleId, setTestingRuleId] = useState(null);
+    const [credentials, setCredentials] = useState(null);
 
     // Load rules and fields on mount
     useEffect(() => {
+        const savedCreds = localStorage.getItem('builderbot_credentials');
+        if (savedCreds) setCredentials(JSON.parse(savedCreds));
         loadRules();
         loadSchedRules();
         loadFields();
@@ -280,7 +283,8 @@ const AutomationsSection = () => {
                 body: JSON.stringify({
                     phone,
                     message: rule.message,
-                    // Optional: pass bot credentials if available in context, otherwise backend uses env
+                    botId: credentials?.botId,
+                    apiKey: credentials?.apiKey
                 })
             });
             const data = await res.json();
