@@ -6,7 +6,8 @@ import {
     createAutomationRule,
     updateAutomationRule,
     deleteAutomationRule,
-    AVAILABLE_FIELDS
+    getFields,
+    createField
 } from '../services/automationsService';
 import PhraseTagInput from './ui/PhraseTagInput';
 import { phrasesToPattern, patternToPhrases } from '../utils/regex';
@@ -29,16 +30,47 @@ const AutomationsSection = () => {
     const [editingField, setEditingField] = useState('pattern');
     const [editValue, setEditValue] = useState('');
 
-    // Scheduled Rules Editing State
+    // Dynamic Fields State
+    const [fields, setFields] = useState([]);
+    const [loadingFields, setLoadingFields] = useState(true);
     const [schedEditingId, setSchedEditingId] = useState(null);
     const [schedEditingField, setSchedEditingField] = useState(''); // 'name', 'userMinutes', 'botMinutes', 'message'
     const [schedEditValue, setSchedEditValue] = useState('');
 
-    // Load rules on mount
+    // Load rules and fields on mount
     useEffect(() => {
         loadRules();
         loadSchedRules();
+        loadFields();
     }, []);
+
+    const loadFields = async () => {
+        setLoadingFields(true);
+        const result = await getFields();
+        if (result.success) {
+            setFields(result.fields);
+        } else {
+            console.error('Error loading fields:', result.error);
+        }
+        setLoadingFields(false);
+    };
+
+    const handleCreateField = async () => {
+        const label = prompt('Nombre del nuevo campo (ej. Nivel de Inglés):');
+        if (!label) return;
+
+        const result = await createField(label);
+        if (result.success) {
+            // Reload fields to get the new one
+            await loadFields();
+            // If we are editing, set the value to the new field
+            if (editingId) {
+                setEditValue(result.field.value);
+            }
+        } else {
+            alert('Error creando campo: ' + result.error);
+        }
+    };
 
     const loadRules = async () => {
         setLoading(true);
@@ -362,10 +394,17 @@ const AutomationsSection = () => {
                                                     className="flex-1 px-2 py-1 border border-blue-500 rounded text-xs bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     autoFocus
                                                 >
-                                                    {AVAILABLE_FIELDS.map(f => (
+                                                    {fields.map(f => (
                                                         <option key={f.value} value={f.value}>{f.label}</option>
                                                     ))}
                                                 </select>
+                                                <button
+                                                    onClick={handleCreateField}
+                                                    className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                                                    title="Crear nuevo campo"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                </button>
                                                 <button
                                                     onClick={saveEdit}
                                                     className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
@@ -651,6 +690,8 @@ const AutomationsSection = () => {
             {showCreateModal && (
                 <CreateRuleModal
                     onClose={() => setShowCreateModal(false)}
+                    fields={fields}
+                    onCreateField={handleCreateField}
                     onSuccess={() => {
                         setShowCreateModal(false);
                         loadRules();
@@ -675,7 +716,7 @@ const AutomationsSection = () => {
 /**
  * Modal for creating new automation rule
  */
-const CreateRuleModal = ({ onClose, onSuccess }) => {
+const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
     // pattern state is now an array of phrases
     const [phrases, setPhrases] = useState([]);
     const [field, setField] = useState('');
@@ -697,7 +738,7 @@ const CreateRuleModal = ({ onClose, onSuccess }) => {
         // Convert tags to regex pattern
         const pattern = phrasesToPattern(phrases);
 
-        const fieldObj = AVAILABLE_FIELDS.find(f => f.value === field);
+        const fieldObj = fields.find(f => f.value === field);
         const result = await createAutomationRule({
             pattern,
             field,
@@ -753,17 +794,27 @@ const CreateRuleModal = ({ onClose, onSuccess }) => {
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
                             Campo Destino *
                         </label>
-                        <select
-                            value={field}
-                            onChange={(e) => setField(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            required
-                        >
-                            <option value="">Selecciona un campo...</option>
-                            {AVAILABLE_FIELDS.map(f => (
-                                <option key={f.value} value={f.value}>{f.label}</option>
-                            ))}
-                        </select>
+                        <div className="flex space-x-2">
+                            <select
+                                value={field}
+                                onChange={(e) => setField(e.target.value)}
+                                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                required
+                            >
+                                <option value="">Selecciona un campo...</option>
+                                {fields.map(f => (
+                                    <option key={f.value} value={f.value}>{f.label}</option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                onClick={onCreateField}
+                                className="p-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400"
+                                title="Crear nuevo campo"
+                            >
+                                <Plus className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
 
                     <div>

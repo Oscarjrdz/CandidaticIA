@@ -77,12 +77,37 @@ export const deleteAutomationRule = async (id) => {
 };
 
 /**
- * Available fields for capture
+ * Get available fields (Default + Custom)
  */
-export const AVAILABLE_FIELDS = [
-    { value: 'nombreReal', label: 'Nombre Real' },
-    { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
-    { value: 'municipio', label: 'Municipio' },
-    { value: 'categoria', label: 'Categoría' },
-    { value: 'tieneEmpleo', label: 'Tiene empleo' }
-];
+export const getFields = async () => {
+    try {
+        const res = await fetch('/api/fields');
+        const data = await res.json();
+        if (data.success) {
+            return { success: true, fields: data.fields };
+        }
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Create a new custom field
+ */
+export const createField = async (label) => {
+    try {
+        const res = await fetch('/api/fields', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label })
+        });
+        const data = await res.json();
+        if (data.success) {
+            return { success: true, field: data.field };
+        }
+        return { success: false, error: data.error };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+};

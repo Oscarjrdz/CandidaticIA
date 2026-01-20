@@ -5,6 +5,7 @@ import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
 import ChatHistoryModal from './ChatHistoryModal';
 import { getCandidates, deleteCandidate, CandidatesSubscription } from '../services/candidatesService';
+import { getFields } from '../services/automationsService';
 import { getExportSettings, saveExportSettings, getChatFileId, saveChatFileId, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
 import { exportChatToFile, deleteOldChatFile, generateChatHistoryText } from '../services/chatExportService';
 
@@ -14,6 +15,7 @@ import { exportChatToFile, deleteOldChatFile, generateChatHistoryText } from '..
 const CandidatesSection = ({ showToast }) => {
     const [candidates, setCandidates] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [fields, setFields] = useState([]); // Dynamic fields
     const [search, setSearch] = useState('');
     const [lastUpdate, setLastUpdate] = useState(null);
 
@@ -73,6 +75,16 @@ const CandidatesSection = ({ showToast }) => {
 
             // Cargar candidatos
             loadCandidates();
+
+            // Cargar campos dinámicos
+            loadFields();
+        };
+
+        const loadFields = async () => {
+            const result = await getFields();
+            if (result.success) {
+                setFields(result.fields);
+            }
         };
 
         loadInitialData();
@@ -623,17 +635,26 @@ const CandidatesSection = ({ showToast }) => {
                                 <tr className="border-b border-gray-200 dark:border-gray-700">
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre Real</th>
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Fecha Nacimiento</th>
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Edad</th>
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Municipio</th>
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Categoría</th>
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Tiene empleo</th>
+
+                                    {/* Dynamic Headers */}
+                                    {fields.map(field => (
+                                        <React.Fragment key={field.value}>
+                                            <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">
+                                                {field.label}
+                                            </th>
+                                            {/* Special Case: Age column after Birth Date */}
+                                            {field.value === 'fechaNacimiento' && (
+                                                <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">
+                                                    Edad
+                                                </th>
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
-
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
                             </thead>
@@ -659,42 +680,26 @@ const CandidatesSection = ({ showToast }) => {
                                                 {candidate.nombre}
                                             </div>
                                         </td>
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
-                                                {candidate.nombreReal || <span className="text-gray-400 italic font-normal">-</span>}
-                                            </div>
-                                        </td>
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
-                                                {candidate.fechaNacimiento || <span className="text-gray-400 italic font-normal">-</span>}
-                                            </div>
-                                        </td>
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
-                                                {calculateAge(candidate.fechaNacimiento)}
-                                            </div>
-                                        </td>
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
-                                                {candidate.municipio || <span className="text-gray-400 italic font-normal">-</span>}
-                                            </div>
-                                        </td>
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
-                                                {candidate.categoria || <span className="text-gray-400 italic font-normal">-</span>}
-                                            </div>
-                                        </td>
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
-                                                {candidate.tieneEmpleo ? (
-                                                    <span className="font-bold uppercase">
-                                                        {candidate.tieneEmpleo}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-400 italic font-normal">-</span>
+
+                                        {/* Dynamic Cells */}
+                                        {fields.map(field => (
+                                            <React.Fragment key={field.value}>
+                                                <td className="py-1 px-4">
+                                                    <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                        {candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>}
+                                                    </div>
+                                                </td>
+                                                {/* Special Case: Age calculation */}
+                                                {field.value === 'fechaNacimiento' && (
+                                                    <td className="py-1 px-4">
+                                                        <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                            {calculateAge(candidate.fechaNacimiento)}
+                                                        </div>
+                                                    </td>
                                                 )}
-                                            </div>
-                                        </td>
+                                            </React.Fragment>
+                                        ))}
+
                                         <td className="py-1 px-4">
                                             <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
                                                 {formatDateTime(candidate.ultimoMensaje)}
