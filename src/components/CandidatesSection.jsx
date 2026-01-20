@@ -631,7 +631,7 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
-                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial en Nube</th>
+                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
 
                                     <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
