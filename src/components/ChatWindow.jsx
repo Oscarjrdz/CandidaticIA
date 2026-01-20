@@ -46,9 +46,14 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
         }
     }, [isOpen, candidate]);
 
-    // Auto-scroll
+    // Auto-scroll ONLY on new messages (detect length change)
+    const prevMessagesLength = useRef(0);
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (messages.length > prevMessagesLength.current) {
+            // New message arrived, scroll to bottom
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+        prevMessagesLength.current = messages.length;
     }, [messages]);
 
     const loadMessages = async () => {
@@ -218,7 +223,6 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                     onMouseDown={handleMouseDown}
                 >
                     <div className="flex items-center space-x-2 pointer-events-none">
-                        <Move className="w-4 h-4 text-gray-400" />
                         <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold text-xs">
                             {candidate?.nombre?.charAt(0) || '?'}
                         </div>
@@ -252,6 +256,7 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                     ) : (
                         messages.map((msg, idx) => {
                             const isMe = msg.from === 'me' || msg.from === 'bot';
+                            const senderName = isMe ? 'Bot' : (candidate?.nombre || 'Usuario');
                             return (
                                 <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`
@@ -260,6 +265,7 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                                             ? 'bg-[#d9fdd3] dark:bg-green-900 text-gray-900 dark:text-white rounded-tr-none'
                                             : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-tl-none'}
                                     `}>
+                                        <p className="text-[10px] font-semibold mb-0.5 opacity-70">{senderName}</p>
                                         <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                                         <p className="text-[9px] text-gray-500 dark:text-gray-400 mt-0.5 text-right opacity-70">
                                             {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
