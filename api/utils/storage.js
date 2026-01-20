@@ -199,7 +199,8 @@ export const saveCandidate = async (candidateData) => {
                         ...candidateData,           // 2. Sobrescribir con lo nuevo
                         id: existing.id,            // 3. Proteger ID
                         primerContacto: existing.primerContacto, // 4. Proteger fecha original
-                        totalMensajes: (existing.totalMensajes || 0) + 1
+                        totalMensajes: (existing.totalMensajes || 0) + 1,
+                        // NO actualizar ultimoMensaje aquí - solo desde webhook outgoing
                     };
                 } else {
                     // Caso raro: ID existe en mapeo pero no data
@@ -209,7 +210,7 @@ export const saveCandidate = async (candidateData) => {
                         whatsapp: whatsapp,
                         foto: candidateData.foto || null,
                         primerContacto: new Date().toISOString(),
-                        ultimoMensaje: new Date().toISOString(),
+                        // ultimoMensaje: SOLO se actualiza desde webhook outgoing
                         totalMensajes: 1,
                         ...candidateData
                     };
@@ -222,7 +223,7 @@ export const saveCandidate = async (candidateData) => {
                     whatsapp: whatsapp,
                     foto: candidateData.foto || null,
                     primerContacto: new Date().toISOString(),
-                    ultimoMensaje: new Date().toISOString(),
+                    // ultimoMensaje: SOLO se actualiza desde webhook outgoing
                     totalMensajes: 1,
                     ...candidateData
                 };
