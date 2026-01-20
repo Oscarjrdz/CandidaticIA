@@ -240,69 +240,43 @@ async function processEvent(payload) {
                             ultimoMensajeBot: timestamp
                         };
 
-                        // 🕵️‍♂️ DETECCIÓN DE NOMBRE REAL
-                        // Patrón flexible: "tu nombre es : [Nombre]" o "tu nombre es: [Nombre]"
-                        const nameRegex = /tu nombre es\s*[:]?\s*([^.!?\n]+)/i;
-                        const nameMatch = content.match(nameRegex);
+                        // 🤖 DETECCIÓN DINÁMICA CON REGLAS DE AUTOMATIZACIÓN
+                        // Load automation rules from Redis and apply them
+                        try {
+                            const { getRedisClient } = await import('./utils/storage.js');
+                            const redis = getRedisClient();
+                            const rulesJson = await redis.get('automation_rules');
 
-                        if (nameMatch && nameMatch[1]) {
-                            const capturedName = nameMatch[1].trim().replace(/[*_]/g, '');
-                            console.log(`🎯 NOMBRE REAL DETECTADO: "${capturedName}" para ${cleanNumber}`);
-                            updateData.nombreReal = capturedName;
+                            if (rulesJson) {
+                                const rules = JSON.parse(rulesJson);
+                                console.log(`🔍 Processing ${rules.length} automation rules...`);
+
+                                rules.forEach(rule => {
+                                    if (rule.enabled) {
+                                        try {
+                                            const regex = new RegExp(rule.pattern, 'i');
+                                            const match = content.match(regex);
+
+                                            if (match && match[1]) {
+                                                const captured = match[1].trim().replace(/[*_]/g, '');
+                                                console.log(`✅ RULE "${rule.fieldLabel}" matched: "${captured}" para ${cleanNumber}`);
+                                                updateData[rule.field] = captured;
+                                            }
+                                        } catch (error) {
+                                            console.warn(`⚠️ Invalid regex in rule ${rule.id}:`, error.message);
+                                        }
+                                    }
+                                });
+                            } else {
+                                console.warn('⚠️ No automation rules found in Redis, using fallback');
+                                // Fallback to hardcoded if Redis fails
+                                applyLegacyRules(content, updateData, cleanNumber);
+                            }
+                        } catch (error) {
+                            console.error('❌ Error loading automation rules:', error);
+                            // Fallback to hardcoded if error
+                            applyLegacyRules(content, updateData, cleanNumber);
                         }
-
-                        // 📅 DETECCIÓN DE FECHA DE NACIMIENTO
-                        const dobRegex = /(?:tu|la) fecha de nacimiento es\s*[:]?\s*([^.!?\n]+)/i;
-                        const dobMatch = content.match(dobRegex);
-
-                        if (dobMatch && dobMatch[1]) {
-                            const capturedDob = dobMatch[1].trim().replace(/[*_]/g, '');
-                            console.log(`🎂 FECHA DE NACIMIENTO DETECTADA: "${capturedDob}" para ${cleanNumber}`);
-                            updateData.fechaNacimiento = capturedDob;
-                        }
-
-                        // 🏙️ DETECCIÓN DE MUNICIPIO
-                        // Patrón flexible: "tu vives en : [Municipio]" o simplemente "vives en [Municipio]"
-                        // Eliminamos dependencia estricta de "tu/usted" para ser más robustos
-                        const cityRegex = /(?:vives?|resides?)\s+en\s*[:]?\s*([^.!?\n]+)/i;
-                        const cityMatch = content.match(cityRegex);
-
-                        // Fallback: "tu municipio es [Municipio]"
-                        const cityRegex2 = /municipio\s+es\s*[:]?\s*([^.!?\n]+)/i;
-                        const cityMatch2 = content.match(cityRegex2);
-
-                        if (cityMatch && cityMatch[1]) {
-                            const capturedCity = cityMatch[1].trim().replace(/[*_]/g, '');
-                            console.log(`🏙️ MUNICIPIO DETECTADO (vives en): "${capturedCity}" para ${cleanNumber}`);
-                            updateData.municipio = capturedCity;
-                        } else if (cityMatch2 && cityMatch2[1]) {
-                            const capturedCity = cityMatch2[1].trim().replace(/[*_]/g, '');
-                            console.log(`🏙️ MUNICIPIO DETECTADO (municipio es): "${capturedCity}" para ${cleanNumber}`);
-                            updateData.municipio = capturedCity;
-                        }
-
-                        // 💼 DETECCIÓN DE CATEGORÍA
-                        // Patrón flexible: "estas buscando empleo de: [Categoría]" o "buscando empleo de [Categoría]"
-                        const jobRegex = /buscando\s+empleo\s+de\s*[:]?\s*([^.!?\n]+)/i;
-                        const jobMatch = content.match(jobRegex);
-
-                        if (jobMatch && jobMatch[1]) {
-                            const capturedJob = jobMatch[1].trim().replace(/[*_]/g, '');
-                            console.log(`💼 CATEGORÍA DETECTADA: "${capturedJob}" para ${cleanNumber}`);
-                            updateData.categoria = capturedJob;
-                        }
-
-                        // 💼 DETECCIÓN DE ESTADO DE EMPLEO
-                        // Patrón: "Bien, entonces No Tienes empleo" o "Bien, entonces Sí Tienes empleo"
-                        const employmentRegex = /entonces\s+(No|Sí)\s+Tienes\s+empleo/i;
-                        const employmentMatch = content.match(employmentRegex);
-
-                        if (employmentMatch && employmentMatch[1]) {
-                            const status = employmentMatch[1]; // "No" o "Sí"
-                            console.log(`💼 ESTADO DE EMPLEO DETECTADO: "${status}" para ${cleanNumber}`);
-                            updateData.tieneEmpleo = status;
-                        }
-
 
                         await updateCandidate(candidateId, updateData);
                         console.log(`🕐 ultimoMensaje actualizado para ${candidateName}: ${timestamp}`);
@@ -315,5 +289,41 @@ async function processEvent(payload) {
 
         default:
             console.log('📋 Evento desconocido:', eventType);
+    }
+}
+
+/**
+ * Legacy fallback: Apply hardcoded rules if Redis fails
+ */
+function applyLegacyRules(content, updateData, cleanNumber) {
+    // Nombre
+    const nameMatch = content.match(/tu nombre es\s*[:]?\s*([^.!?\n]+)/i);
+    if (nameMatch?.[1]) {
+        updateData.nombreReal = nameMatch[1].trim().replace(/[*_]/g, '');
+        console.log(`🎯 LEGACY: Nombre detectado para ${cleanNumber}`);
+    }
+
+    // Fecha nacimiento
+    const dobMatch = content.match(/(?:tu|la) fecha de nacimiento es\s*[:]?\s*([^.!?\n]+)/i);
+    if (dobMatch?.[1]) {
+        updateData.fechaNacimiento = dobMatch[1].trim().replace(/[*_]/g, '');
+    }
+
+    // Municipio
+    const cityMatch = content.match(/(?:vives?|resides?)\s+en\s*[:]?\s*([^.!?\n]+)/i);
+    if (cityMatch?.[1]) {
+        updateData.municipio = cityMatch[1].trim().replace(/[*_]/g, '');
+    }
+
+    // Categoría
+    const jobMatch = content.match(/buscando\s+empleo\s+de\s*[:]?\s*([^.!?\n]+)/i);
+    if (jobMatch?.[1]) {
+        updateData.categoria = jobMatch[1].trim().replace(/[*_]/g, '');
+    }
+
+    // Empleo
+    const employmentMatch = content.match(/entonces\s+(No|Sí)\s+Tienes\s+empleo/i);
+    if (employmentMatch?.[1]) {
+        updateData.tieneEmpleo = employmentMatch[1];
     }
 }

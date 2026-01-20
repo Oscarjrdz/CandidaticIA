@@ -7,6 +7,7 @@ import CandidatesSection from './components/CandidatesSection';
 import HistorySection from './components/HistorySection';
 import SettingsSection from './components/SettingsSection';
 import AssistantSection from './components/AssistantSection';
+import AutomationsSection from './components/AutomationsSection';
 import { getTheme, saveTheme, exportConfig, importConfig, clearAllStorage } from './utils/storage';
 
 
@@ -121,7 +122,9 @@ function App() {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {activeSection === 'candidates' ? 'Candidatos'
                     : activeSection === 'assistant' ? 'Update Bot'
-                      : 'Configuración'}
+                      : activeSection === 'automations' ? 'Automatizaciones'
+                        : activeSection === 'history' ? 'Historial'
+                          : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
@@ -183,6 +186,8 @@ function App() {
             <HistorySection showToast={showToast} />
           ) : activeSection === 'assistant' ? (
             <AssistantSection showToast={showToast} />
+          ) : activeSection === 'automations' ? (
+            <AutomationsSection showToast={showToast} />
           ) : (
             <SettingsSection
               botId={botId}
