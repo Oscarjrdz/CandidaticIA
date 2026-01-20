@@ -234,11 +234,12 @@ async function exportAndUpload(candidate, credentials) {
         const { default: axios } = await import('axios');
         const formData = new FormData();
 
-        // Send string directly (safer than bad buffer conversion)
-        formData.append('file', chatContent, {
+        // Send Buffer directly (required by BuilderBot)
+        const bufferContent = Buffer.from(chatContent, 'utf-8');
+        formData.append('file_1', bufferContent, {
             filename: filename,
             contentType: 'text/plain',
-            knownLength: Buffer.byteLength(chatContent) // Explicit length helper
+            knownLength: bufferContent.length
         });
 
         console.log('📋 Upload attempt details:');
