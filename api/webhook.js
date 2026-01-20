@@ -153,6 +153,7 @@ async function processEvent(payload) {
                 }
 
                 // Guardar mensaje en historial
+                // Guardar mensaje en historial
                 if (savedCandidate && savedCandidate.id) {
                     await saveMessage(savedCandidate.id, {
                         from: 'candidate',
@@ -160,7 +161,15 @@ async function processEvent(payload) {
                         type: 'text', // TODO: Detectar tipo real (image, voice, etc)
                         timestamp: timestamp
                     });
-                    console.log('💾 Mensaje guardado en historial');
+
+                    // Update user inactivity timestamp
+                    const { updateCandidate } = await import('./utils/storage.js');
+                    await updateCandidate(savedCandidate.id, {
+                        lastUserMessageAt: timestamp,
+                        ultimoMensaje: timestamp
+                    });
+
+                    console.log('💾 Mensaje guardado en historial y timestamps actualizados');
                 }
             }
             break;
@@ -234,11 +243,16 @@ async function processEvent(payload) {
                         console.log(`💾 Mensaje de AUTOPILOTO guardado para ${candidateName}`);
 
                         // ✅ NUEVO: Actualizar ultimoMensaje del candidato (para orden)
-                        // y ultimoMensajeBot (para el timer)
+                        // y lastBotMessageAt (para el timer de inactividad)
                         const updateData = {
                             ultimoMensaje: timestamp,
+                            lastBotMessageAt: timestamp,
+                            // Legacy support
                             ultimoMensajeBot: timestamp
                         };
+
+                        // Apply updates immediately
+                        await updateCandidate(candidateId, updateData);
 
                         // 🤖 DETECCIÓN DINÁMICA CON REGLAS DE AUTOMATIZACIÓN
                         // Load automation rules from Redis and apply them

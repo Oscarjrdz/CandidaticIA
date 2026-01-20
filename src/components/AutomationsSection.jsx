@@ -10,18 +10,34 @@ import {
 } from '../services/automationsService';
 import PhraseTagInput from './ui/PhraseTagInput';
 import { phrasesToPattern, patternToPhrases } from '../utils/regex';
-
+import { phrasesToPattern, patternToPhrases } from '../utils/regex';
+import {
+    getScheduledRules,
+    createScheduledRule,
+    updateScheduledRule,
+    deleteScheduledRule
+} from '../services/scheduledMessagesService';
+import { Clock, MessageSquare, Timer } from 'lucide-react';
 const AutomationsSection = () => {
     const [rules, setRules] = useState([]);
+    const [schedRules, setSchedRules] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [schedLoading, setSchedLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showSchedModal, setShowSchedModal] = useState(false);
     const [editingId, setEditingId] = useState(null);
-    const [editingField, setEditingField] = useState('pattern'); // 'pattern' or 'description'
+    const [editingField, setEditingField] = useState('pattern');
     const [editValue, setEditValue] = useState('');
+
+    // Scheduled Rules Editing State
+    const [schedEditingId, setSchedEditingId] = useState(null);
+    const [schedEditingField, setSchedEditingField] = useState(''); // 'name', 'userMinutes', 'botMinutes', 'message'
+    const [schedEditValue, setSchedEditValue] = useState('');
 
     // Load rules on mount
     useEffect(() => {
         loadRules();
+        loadSchedRules();
     }, []);
 
     const loadRules = async () => {
@@ -33,6 +49,15 @@ const AutomationsSection = () => {
             console.error('Error loading rules:', result.error);
         }
         setLoading(false);
+    };
+
+    const loadSchedRules = async () => {
+        setSchedLoading(true);
+        const result = await getScheduledRules();
+        if (result.success) {
+            setSchedRules(result.rules);
+        }
+        setSchedLoading(false);
     };
 
     const handleToggleEnabled = async (rule) => {
@@ -163,6 +188,47 @@ const AutomationsSection = () => {
         setEditingId(null);
         setEditingField('pattern');
         setEditValue('');
+    };
+
+    // --- SCHEDULED MESSAGES HANDLERS ---
+
+    const handleSchedToggle = async (rule) => {
+        const result = await updateScheduledRule(rule.id, { enabled: !rule.enabled });
+        if (result.success) loadSchedRules();
+        else alert('Error: ' + result.error);
+    };
+
+    const handleSchedDelete = async (ruleId) => {
+        if (!confirm('¿Eliminar esta regla de mensaje programado?')) return;
+        const result = await deleteScheduledRule(ruleId);
+        if (result.success) loadSchedRules();
+        else alert('Error: ' + result.error);
+    };
+
+    const startSchedEditing = (rule, field) => {
+        setSchedEditingId(rule.id);
+        setSchedEditingField(field);
+        setSchedEditValue(rule[field]);
+    };
+
+    const saveSchedEdit = async () => {
+        if (!schedEditingId) return;
+
+        const updates = { [schedEditingField]: schedEditValue };
+        const result = await updateScheduledRule(schedEditingId, updates);
+
+        if (result.success) {
+            loadSchedRules();
+            setSchedEditingId(null);
+            setSchedEditValue('');
+        } else {
+            alert('Error guardando: ' + result.error);
+        }
+    };
+
+    const cancelSchedEdit = () => {
+        setSchedEditingId(null);
+        setSchedEditValue('');
     };
 
     if (loading) {
@@ -402,6 +468,185 @@ const AutomationsSection = () => {
                 </table>
             </div>
 
+            {/* --- SCHEDULED MESSAGES SECTION --- */}
+            <div className="mt-12">
+                <div className="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                            <Clock className="w-6 h-6 mr-2 text-blue-600" />
+                            Mensajes Programados
+                        </h2>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            Configura mensajes de seguimiento automático basados en inactividad
+                        </p>
+                    </div>
+                    <Button onClick={() => setShowSchedModal(true)} className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700">
+                        <Plus className="w-4 h-4" />
+                        <span>Crear Seguimiento</span>
+                    </Button>
+                </div>
+
+                {/* Scheduled Table */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                                <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm">Nombre</th>
+                                <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm text-center">Inactividad<br /><span className="text-xs font-normal text-gray-500">(Usuario min)</span></th>
+                                <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm text-center">Inactividad<br /><span className="text-xs font-normal text-gray-500">(Bot min)</span></th>
+                                <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-1/3">Mensaje</th>
+                                <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-20">Tipo</th>
+                                <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-24">Estado</th>
+                                <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-20">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {schedLoading ? (
+                                <tr><td colSpan="7" className="text-center py-8">Cargando...</td></tr>
+                            ) : schedRules.length === 0 ? (
+                                <tr><td colSpan="7" className="text-center py-8 text-gray-500">No hay mensajes programados</td></tr>
+                            ) : (
+                                schedRules.map(rule => (
+                                    <tr key={rule.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                                        {/* Name */}
+                                        <td className="py-3 px-4">
+                                            {schedEditingId === rule.id && schedEditingField === 'name' ? (
+                                                <div className="flex items-center space-x-1">
+                                                    <input
+                                                        value={schedEditValue}
+                                                        onChange={e => setSchedEditValue(e.target.value)}
+                                                        className="w-full text-xs p-1 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                                        autoFocus
+                                                    />
+                                                    <button onClick={saveSchedEdit}><Save className="w-3 h-3 text-green-600" /></button>
+                                                </div>
+                                            ) : (
+                                                <span
+                                                    onClick={() => startSchedEditing(rule, 'name')}
+                                                    className="font-medium text-gray-900 dark:text-gray-100 text-sm cursor-pointer hover:underline"
+                                                >
+                                                    {rule.name}
+                                                </span>
+                                            )}
+                                        </td>
+
+                                        {/* User Inactivity */}
+                                        <td className="py-3 px-4 text-center">
+                                            {schedEditingId === rule.id && schedEditingField === 'userInactivityMinutes' ? (
+                                                <div className="flex items-center justify-center space-x-1">
+                                                    <input
+                                                        type="number"
+                                                        value={schedEditValue}
+                                                        onChange={e => setSchedEditValue(e.target.value)}
+                                                        className="w-16 text-xs p-1 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                                        autoFocus
+                                                    />
+                                                    <button onClick={saveSchedEdit}><Save className="w-3 h-3 text-green-600" /></button>
+                                                </div>
+                                            ) : (
+                                                <span
+                                                    onClick={() => startSchedEditing(rule, 'userInactivityMinutes')}
+                                                    className="inline-block px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono cursor-pointer hover:bg-gray-200"
+                                                >
+                                                    {rule.userInactivityMinutes}
+                                                </span>
+                                            )}
+                                        </td>
+
+                                        {/* Bot Inactivity */}
+                                        <td className="py-3 px-4 text-center">
+                                            {schedEditingId === rule.id && schedEditingField === 'botInactivityMinutes' ? (
+                                                <div className="flex items-center justify-center space-x-1">
+                                                    <input
+                                                        type="number"
+                                                        value={schedEditValue}
+                                                        onChange={e => setSchedEditValue(e.target.value)}
+                                                        className="w-16 text-xs p-1 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                                        autoFocus
+                                                    />
+                                                    <button onClick={saveSchedEdit}><Save className="w-3 h-3 text-green-600" /></button>
+                                                </div>
+                                            ) : (
+                                                <span
+                                                    onClick={() => startSchedEditing(rule, 'botInactivityMinutes')}
+                                                    className="inline-block px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs font-mono cursor-pointer hover:bg-gray-200"
+                                                >
+                                                    {rule.botInactivityMinutes}
+                                                </span>
+                                            )}
+                                        </td>
+
+                                        {/* Message */}
+                                        <td className="py-3 px-4">
+                                            {schedEditingId === rule.id && schedEditingField === 'message' ? (
+                                                <div className="flex flex-col space-y-2">
+                                                    <textarea
+                                                        value={schedEditValue}
+                                                        onChange={e => setSchedEditValue(e.target.value)}
+                                                        className="w-full text-xs p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                                        rows={2}
+                                                        autoFocus
+                                                    />
+                                                    <div className="flex space-x-2">
+                                                        <button onClick={saveSchedEdit} className="text-xs text-green-600 font-bold flex items-center"><Save className="w-3 h-3 mr-1" /> Guardar</button>
+                                                        <button onClick={cancelSchedEdit} className="text-xs text-red-600 flex items-center"><X className="w-3 h-3 mr-1" /> Cancelar</button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div
+                                                    onClick={() => startSchedEditing(rule, 'message')}
+                                                    className="text-xs text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 p-1 rounded"
+                                                >
+                                                    {rule.message}
+                                                </div>
+                                            )}
+                                        </td>
+
+                                        {/* Type (One Time) */}
+                                        <td className="py-3 px-4 text-center">
+                                            {rule.oneTime ? (
+                                                <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-full border border-purple-200 uppercase tracking-wider">
+                                                    1 Vez
+                                                </span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full border border-indigo-200 uppercase tracking-wider">
+                                                    Ciclo
+                                                </span>
+                                            )}
+                                        </td>
+
+                                        {/* Status */}
+                                        <td className="py-3 px-4 text-center">
+                                            <button
+                                                onClick={() => handleSchedToggle(rule)}
+                                                className={`p-1.5 rounded-full transition-colors ${rule.enabled
+                                                    ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                                                    : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                                    }`}
+                                                title={rule.enabled ? 'Desactivar' : 'Activar'}
+                                            >
+                                                <Power className="w-4 h-4" />
+                                            </button>
+                                        </td>
+
+                                        {/* Actions */}
+                                        <td className="py-3 px-4 text-center">
+                                            <button
+                                                onClick={() => handleSchedDelete(rule.id)}
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                                                title="Eliminar regla"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             {/* Create Modal */}
             {showCreateModal && (
                 <CreateRuleModal
@@ -409,6 +654,17 @@ const AutomationsSection = () => {
                     onSuccess={() => {
                         setShowCreateModal(false);
                         loadRules();
+                    }}
+                />
+            )}
+
+            {/* Create Scheduled Modal */}
+            {showSchedModal && (
+                <CreateScheduledRuleModal
+                    onClose={() => setShowSchedModal(false)}
+                    onSuccess={() => {
+                        setShowSchedModal(false);
+                        loadSchedRules();
                     }}
                 />
             )}
@@ -542,3 +798,114 @@ const CreateRuleModal = ({ onClose, onSuccess }) => {
 };
 
 export default AutomationsSection;
+
+const CreateScheduledRuleModal = ({ onClose, onSuccess }) => {
+    const [name, setName] = useState('');
+    const [userMinutes, setUserMinutes] = useState(1440); // 24h default
+    const [botMinutes, setBotMinutes] = useState(0);
+    const [message, setMessage] = useState('');
+    const [oneTime, setOneTime] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSaving(true);
+
+        const result = await createScheduledRule({
+            name,
+            userInactivityMinutes: userMinutes,
+            botInactivityMinutes: botMinutes,
+            message,
+            oneTime
+        });
+
+        if (result.success) {
+            onSuccess();
+        } else {
+            setError(result.error);
+        }
+        setSaving(false);
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                        <Clock className="w-5 h-5 mr-2 text-indigo-500" />
+                        Crear Mensaje Programado
+                    </h3>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"><X className="w-5 h-5" /></button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    {error && <div className="p-3 bg-red-50 text-red-600 rounded border border-red-200 text-sm">{error}</div>}
+
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nombre del Seguimiento *</label>
+                        <input
+                            value={name} onChange={e => setName(e.target.value)} required
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="Ej: Recordatorio 24h"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Min. Inactividad Usuario</label>
+                            <input
+                                type="number" min="0" required
+                                value={userMinutes} onChange={e => setUserMinutes(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">1440 min = 24 horas</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Min. Inactividad Bot (Opcional)</label>
+                            <input
+                                type="number" min="0" required
+                                value={botMinutes} onChange={e => setBotMinutes(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Tiempo min. desde último mensaje nuestro</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Mensaje a enviar *</label>
+                        <textarea
+                            value={message} onChange={e => setMessage(e.target.value)} required rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            placeholder="Hola, ¿sigues interesado en la vacante?"
+                        />
+                    </div>
+
+                    <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
+                        <div className="flex items-center h-5">
+                            <input
+                                id="oneTime"
+                                type="checkbox"
+                                checked={oneTime}
+                                onChange={(e) => setOneTime(e.target.checked)}
+                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                            />
+                        </div>
+                        <div className="ml-2 text-sm">
+                            <label htmlFor="oneTime" className="font-medium text-gray-900 dark:text-gray-100">Regla de una sola ocasión</label>
+                            <p className="text-gray-500 dark:text-gray-400 text-xs">Si se activa, el mensaje se enviará solo una vez por candidato cuando se cumpla la condición.</p>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-3 pt-4">
+                        <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                        <Button type="submit" disabled={saving}>
+                            {saving ? 'Guardando...' : 'Crear Programación'}
+                        </Button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
