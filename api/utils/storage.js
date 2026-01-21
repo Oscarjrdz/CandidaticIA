@@ -581,3 +581,71 @@ export const getLastActiveUser = async () => {
     }
     return null;
 };
+
+/**
+ * ==========================================
+ * FUNCIONES PARA BULKS (ENVÍOS MASIVOS)
+ * ==========================================
+ */
+
+export const getBulks = async (limit = 100, offset = 0) => {
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            const bulkIds = await redis.zrevrange('bulks:list', offset, offset + limit - 1);
+            if (!bulkIds || bulkIds.length === 0) return [];
+
+            const pipeline = redis.pipeline();
+            bulkIds.forEach(id => pipeline.get(`bulk:${id}`));
+            const results = await pipeline.exec();
+
+            return results
+                .map(([err, res]) => res ? JSON.parse(res) : null)
+                .filter(b => b !== null);
+        } catch (error) {
+            console.error('Error fetching bulks:', error);
+            return [];
+        }
+    }
+    return [];
+};
+
+export const saveBulk = async (bulkData) => {
+    const id = bulkData.id || `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const bulk = {
+        ...bulkData,
+        id,
+        createdAt: bulkData.createdAt || new Date().toISOString(),
+        status: bulkData.status || 'pending',
+        sentCount: bulkData.sentCount || 0,
+        lastProcessedAt: bulkData.lastProcessedAt || null
+    };
+
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            await redis.set(`bulk:${id}`, JSON.stringify(bulk));
+            await redis.zadd('bulks:list', Date.now(), id);
+            return bulk;
+        } catch (error) {
+            console.error('Error saving bulk:', error);
+            return null;
+        }
+    }
+    return null;
+};
+
+export const deleteBulk = async (id) => {
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            await redis.del(`bulk:${id}`);
+            await redis.zrem('bulks:list', id);
+            return true;
+        } catch (error) {
+            console.error('Error deleting bulk:', error);
+            return false;
+        }
+    }
+    return false;
+};
