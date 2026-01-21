@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Settings, Bot, History, Zap } from 'lucide-react';
+import { Users, Settings, Bot, History, Zap, Briefcase } from 'lucide-react';
 
 /**
  * Sidebar de navegación
@@ -22,6 +22,12 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
             id: 'automations',
             label: 'Automatizaciones',
             icon: Zap,
+            position: 'top'
+        },
+        {
+            id: 'vacancies',
+            label: 'Vacantes',
+            icon: Briefcase,
             position: 'top'
         },
         {
