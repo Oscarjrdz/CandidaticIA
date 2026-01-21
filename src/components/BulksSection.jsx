@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Send, Users, MessageSquare, CheckSquare, Square,
     Loader2, AlertCircle, Plus, Calendar, Clock,
-    Trash2, RefreshCw, Filter, ChevronRight, Check, Pencil, Play
+    Trash2, RefreshCw, Filter, ChevronRight, Check, Pencil, Play, Tag, Copy
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -36,7 +36,21 @@ const BulksSection = ({ showToast }) => {
     // Candidates cache for filtering
     const [allCandidates, setAllCandidates] = useState([]);
     const [filteredCandidates, setFilteredCandidates] = useState([]);
-    const [availableFields, setAvailableFields] = useState([]);
+    const [lastActiveInput, setLastActiveInput] = useState(null);
+
+    const availableTags = [
+        { label: 'Nombre', value: '{{nombre}}' },
+        { label: 'WhatsApp', value: '{{whatsapp}}' },
+        { label: 'Municipio', value: '{{municipio}}' },
+        { label: 'Puesto', value: '{{puesto}}' },
+        { label: 'Categoría', value: '{{categoria}}' },
+        { label: 'Fecha Nac.', value: '{{fechaNacimiento}}' }
+    ];
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        showToast(`Copiado: ${text}`, 'success');
+    };
 
     useEffect(() => {
         loadCampaigns();
@@ -320,6 +334,27 @@ const BulksSection = ({ showToast }) => {
                                     <Button size="sm" variant="outline" icon={Plus} onClick={() => setNewCampaign({ ...newCampaign, messages: [...newCampaign.messages, ''] })}>
                                         Agregar Variante
                                     </Button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center space-x-2">
+                                        <Tag className="w-4 h-4" />
+                                        <span>Etiquetas dinámicas (Haz clic para copiar):</span>
+                                    </label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {availableTags.map(tag => (
+                                            <button
+                                                key={tag.value}
+                                                onClick={() => copyToClipboard(tag.value)}
+                                                className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center space-x-1.5 group smooth-transition"
+                                            >
+                                                <span>{tag.label}</span>
+                                                <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded opacity-70 group-hover:opacity-100">{tag.value}</code>
+                                                <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100" />
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 italic">Haz clic en cualquier etiqueta y pégala en tu mensaje.</p>
                                 </div>
 
                                 <div className="space-y-4">
