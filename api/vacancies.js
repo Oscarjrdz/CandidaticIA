@@ -50,44 +50,7 @@ const syncVacanciesToBuilderBot = async (redis, vacancies) => {
 
         // 3. Robust Cleanup: List and delete ALL old 'vacantes' files
         // This prevents duplicates even if Redis ID was lost
-        console.log('🧹 Cleaning up old vacancies files...');
-        try {
-            // List files
-            const listRes = await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files`, {
-                method: 'GET',
-                headers: { 'x-api-builderbot': apiKey }
-            });
-
-            if (listRes.ok) {
-                const files = await listRes.json();
-                if (Array.isArray(files)) {
-                    // Filter files that look like our vacancies file
-                    // BuilderBot might rename to vacantes_timestamp.txt
-                    const duplicates = files.filter(f =>
-                        f.filename && (f.filename === 'vacantes.txt' || f.filename.startsWith('vacantes'))
-                    );
-
-                    console.log(`Found ${duplicates.length} old files to delete.`);
-
-                    // Delete all found duplicates
-                    for (const file of duplicates) {
-                        try {
-                            const fileId = file.id || file.file_id;
-                            if (fileId) {
-                                await deleteFileFromBuilderBot(botId, apiKey, answerId, fileId);
-                            }
-                        } catch (delErr) {
-                            console.warn('Error deleting specific file:', delErr);
-                        }
-                    }
-                }
-            }
-        } catch (listErr) {
-            console.error('Failed to list files for cleanup:', listErr);
-            // Fallback: Try to delete the one from Redis if list failed?
-            const oldFileId = await redis.get('vacancies_file_id');
-            if (oldFileId) await deleteFileFromBuilderBot(botId, apiKey, answerId, oldFileId);
-        }
+        await cleanupOldFiles(botId, apiKey, answerId);
 
         // 4. Upload New File
         const newFileId = await uploadFileToBuilderBot(botId, apiKey, answerId, content);
@@ -104,9 +67,53 @@ const syncVacanciesToBuilderBot = async (redis, vacancies) => {
     }
 };
 
+/**
+ * Helper: List and delete old 'vacantes' files
+ * Returns count of deleted files
+ */
+const cleanupOldFiles = async (botId, apiKey, answerId) => {
+    console.log('🧹 Cleaning up old vacancies files...');
+    let deletedCount = 0;
+    try {
+        const listRes = await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files`, {
+            method: 'GET',
+            headers: { 'x-api-builderbot': apiKey }
+        });
+
+        if (listRes.ok) {
+            const files = await listRes.json();
+            if (Array.isArray(files)) {
+                // Filter: Check 'filename' OR 'name'
+                const duplicates = files.filter(f => {
+                    const name = f.filename || f.name || '';
+                    return name === 'vacantes.txt' || name.startsWith('vacantes');
+                });
+
+                console.log(`Found ${duplicates.length} old files to delete.`);
+
+                for (const file of duplicates) {
+                    try {
+                        const fileId = file.id || file.file_id;
+                        if (fileId) {
+                            await deleteFileFromBuilderBot(botId, apiKey, answerId, fileId);
+                            deletedCount++;
+                        }
+                    } catch (delErr) {
+                        console.warn('Error deleting specific file:', delErr);
+                    }
+                }
+            }
+        }
+    } catch (listErr) {
+        console.error('Failed to list files for cleanup:', listErr);
+    }
+    return deletedCount;
+};
+
 const deleteFileFromBuilderBot = async (botId, apiKey, answerId, fileId) => {
     try {
-        await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files?fileId=${fileId}`, {
+        // Updated to use PATH parameter which is more standard for REST
+        await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files/${fileId}`, {
             method: 'DELETE',
             headers: { 'x-api-builderbot': apiKey }
         });
@@ -119,6 +126,7 @@ const uploadFileToBuilderBot = async (botId, apiKey, answerId, content) => {
     try {
         const formData = new FormData();
         const blob = new Blob([content], { type: 'text/plain' });
+        // Ensure just 'vacantes.txt' is requested, BuilderBot adds timestamp
         formData.append('file', blob, 'vacantes.txt');
 
         const res = await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files`, {
@@ -134,6 +142,8 @@ const uploadFileToBuilderBot = async (botId, apiKey, answerId, content) => {
         return null;
     }
 };
+
+export { cleanupOldFiles }; // Export for internal use if needed, though handler uses it directly
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -222,9 +232,24 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, data: vacancies[index] });
         }
 
-        // DELETE - Remove vacancy
+        // DELETE - Remove vacancy OR Purge All Files
         if (req.method === 'DELETE') {
-            const { id } = req.query;
+            const { id, purge } = req.query;
+
+            // Manual Purge Action
+            if (purge === 'true') {
+                try {
+                    const credsJson = await redis.get('builderbot_credentials');
+                    if (!credsJson) throw new Error('No credentials');
+                    const { botId, apiKey, answerId } = JSON.parse(credsJson);
+
+                    // Run the cleanup logic directly
+                    const count = await cleanupOldFiles(botId, apiKey, answerId);
+                    return res.status(200).json({ success: true, message: `Purged ${count} files.` });
+                } catch (err) {
+                    return res.status(500).json({ error: 'Purge failed', details: err.message });
+                }
+            }
 
             if (!id) return res.status(400).json({ error: 'Missing id query parameter' });
 
