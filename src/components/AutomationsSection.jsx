@@ -18,7 +18,7 @@ import {
     updateScheduledRule,
     deleteScheduledRule
 } from '../services/scheduledMessagesService';
-import { Clock, MessageSquare, Timer } from 'lucide-react';
+import { Clock, MessageSquare, Timer, Copy } from 'lucide-react';
 const AutomationsSection = ({ showToast }) => {
     const [rules, setRules] = useState([]);
     const [schedRules, setSchedRules] = useState([]);
@@ -965,6 +965,11 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast }) => {
         else alert(`Copiado: ${text}`);
     };
 
+    const handleTagClick = (tagValue) => {
+        copyToClipboard(tagValue);
+        setMessage(prev => prev + tagValue);
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
@@ -1038,7 +1043,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast }) => {
                                     <button
                                         key={tag.value}
                                         type="button"
-                                        onClick={() => copyToClipboard(tag.value)}
+                                        onClick={() => handleTagClick(tag.value)}
                                         className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-[10px] font-mono text-gray-600 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 transition-all"
                                         title={`Copiar ${tag.label}`}
                                     >

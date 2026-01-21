@@ -37,6 +37,16 @@ const VacanciesSection = ({ showToast }) => {
         showToast(`Copiado: ${text}`, 'success');
     };
 
+    const handleTagClick = (tagValue) => {
+        copyToClipboard(tagValue);
+        // If description is the only field that uses tags, we can just append it here
+        setFormData(prev => ({
+            ...prev,
+            description: prev.description + tagValue
+        }));
+        showToast(`Insertado: ${tagValue}`, 'success');
+    };
+
     // Load Vacancies
     useEffect(() => {
         loadVacancies();
@@ -322,9 +332,10 @@ const VacanciesSection = ({ showToast }) => {
                                 {availableTags.map(tag => (
                                     <button
                                         key={tag.value}
-                                        onClick={() => copyToClipboard(tag.value)}
+                                        type="button"
+                                        onClick={() => handleTagClick(tag.value)}
                                         className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-[10px] font-mono text-gray-600 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 transition-all"
-                                        title={`Copiar ${tag.label}`}
+                                        title={`Copiar e insertar ${tag.label}`}
                                     >
                                         <span>{tag.value}</span>
                                         <Copy className="w-2.5 h-2.5 opacity-50" />

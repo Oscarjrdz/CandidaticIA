@@ -52,6 +52,18 @@ const BulksSection = ({ showToast }) => {
         showToast(`Copiado: ${text}`, 'success');
     };
 
+    const handleTagClick = (tagValue) => {
+        copyToClipboard(tagValue);
+
+        if (lastActiveInput !== null) {
+            const newMsgs = [...newCampaign.messages];
+            const currentText = newMsgs[lastActiveInput];
+            newMsgs[lastActiveInput] = currentText + tagValue;
+            setNewCampaign({ ...newCampaign, messages: newMsgs });
+            showToast(`Insertado: ${tagValue}`, 'success');
+        }
+    };
+
     useEffect(() => {
         loadCampaigns();
         loadAllCandidates();
@@ -345,7 +357,7 @@ const BulksSection = ({ showToast }) => {
                                         {availableTags.map(tag => (
                                             <button
                                                 key={tag.value}
-                                                onClick={() => copyToClipboard(tag.value)}
+                                                onClick={() => handleTagClick(tag.value)}
                                                 className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center space-x-1.5 group smooth-transition"
                                             >
                                                 <span>{tag.label}</span>
@@ -361,9 +373,10 @@ const BulksSection = ({ showToast }) => {
                                     {newCampaign.messages.map((m, idx) => (
                                         <div key={idx} className="relative group">
                                             <textarea
-                                                className="w-full h-24 px-3 py-2 border rounded-lg dark:bg-gray-700 pr-10"
+                                                className="w-full h-24 px-3 py-2 border rounded-lg dark:bg-gray-700 pr-10 focus:ring-2 focus:ring-blue-500"
                                                 placeholder={`Variante ${idx + 1}: Hola {{nombre}}, ¿cómo estás?`}
                                                 value={m}
+                                                onFocus={() => setLastActiveInput(idx)}
                                                 onChange={e => {
                                                     const newMsgs = [...newCampaign.messages];
                                                     newMsgs[idx] = e.target.value;

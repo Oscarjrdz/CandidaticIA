@@ -41,6 +41,11 @@ const AssistantSection = ({ showToast }) => {
         safeShowToast(`Copiado: ${text}`, 'success');
     };
 
+    const handleTagClick = (tagValue) => {
+        copyToClipboard(tagValue);
+        setInstructions(prev => prev + tagValue);
+    };
+
     useEffect(() => {
         const creds = getCredentials();
         if (creds && creds.botId && creds.answerId && creds.apiKey) {
@@ -489,7 +494,7 @@ const AssistantSection = ({ showToast }) => {
                                     <button
                                         key={tag.value}
                                         type="button"
-                                        onClick={() => copyToClipboard(tag.value)}
+                                        onClick={() => handleTagClick(tag.value)}
                                         className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-[10px] font-mono text-gray-600 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 transition-all"
                                         title={`Copiar ${tag.label}`}
                                     >
