@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Send, Users, MessageSquare, CheckSquare, Square,
     Loader2, AlertCircle, Plus, Calendar, Clock,
-    Trash2, RefreshCw, Filter, ChevronRight, Check, Pencil, Play, Tag, Copy
+    Trash2, RefreshCw, Filter, ChevronRight, Check, Pencil, Play, Tag, Copy, Eye
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -37,6 +37,35 @@ const BulksSection = ({ showToast }) => {
     const [allCandidates, setAllCandidates] = useState([]);
     const [filteredCandidates, setFilteredCandidates] = useState([]);
     const [lastActiveInput, setLastActiveInput] = useState(null);
+    const [previewCandidate, setPreviewCandidate] = useState(null);
+
+    // Update preview candidate when filtered list changes
+    useEffect(() => {
+        if (filteredCandidates.length > 0 && !previewCandidate) {
+            setPreviewCandidate(filteredCandidates[0]);
+        } else if (filteredCandidates.length === 0) {
+            setPreviewCandidate(null);
+        }
+    }, [filteredCandidates]);
+
+    const substituteVariables = (text, candidate) => {
+        if (!candidate || !text) return text;
+        let result = text;
+        result = result.replace(/{{nombre}}/g, candidate.nombre || 'Candidato');
+        result = result.replace(/{{whatsapp}}/g, candidate.whatsapp || '');
+        result = result.replace(/{{municipio}}/g, candidate.municipio || 'N/A');
+        result = result.replace(/{{puesto}}/g, candidate.puesto || 'N/A');
+        result = result.replace(/{{categoria}}/g, candidate.categoria || 'N/A');
+        result = result.replace(/{{fechaNacimiento}}/g, candidate.fechaNacimiento || 'N/A');
+        return result;
+    };
+
+    const cyclePreviewCandidate = () => {
+        if (filteredCandidates.length <= 1) return;
+        const currentIndex = filteredCandidates.indexOf(previewCandidate);
+        const nextIndex = (currentIndex + 1) % filteredCandidates.length;
+        setPreviewCandidate(filteredCandidates[nextIndex]);
+    };
 
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
@@ -397,6 +426,36 @@ const BulksSection = ({ showToast }) => {
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Live Preview Section */}
+                                {previewCandidate && (
+                                    <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center space-x-2">
+                                                <Eye className="w-4 h-4 text-blue-500" />
+                                                <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Vista Previa Real</span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={cyclePreviewCandidate}
+                                                className="text-[10px] text-blue-600 hover:underline flex items-center"
+                                            >
+                                                <RefreshCw className="w-3 h-3 mr-1" /> Ver con otro candidato
+                                            </button>
+                                        </div>
+                                        <div className="bg-white dark:bg-gray-900 p-4 rounded-lg border border-gray-100 dark:border-gray-800 shadow-inner">
+                                            <div className="flex items-center space-x-2 mb-2">
+                                                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-[10px] font-bold text-blue-600 uppercase">
+                                                    {previewCandidate.nombre?.charAt(0) || 'C'}
+                                                </div>
+                                                <span className="text-xs font-medium text-gray-500">Para: {previewCandidate.nombre || 'Candidato'}</span>
+                                            </div>
+                                            <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap italic">
+                                                {substituteVariables(newCampaign.messages[lastActiveInput || 0] || 'Escribe un mensaje para ver la vista previa...', previewCandidate)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-200 dark:border-yellow-700/50">
                                     <p className="text-sm text-yellow-700 dark:text-yellow-300 flex items-start space-x-2">
