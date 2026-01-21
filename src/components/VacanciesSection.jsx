@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2 } from 'lucide-react';
+import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -13,6 +13,7 @@ const VacanciesSection = ({ showToast }) => {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [editingId, setEditingId] = useState(null);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -42,6 +43,23 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
+    const handleOpenCreate = () => {
+        setEditingId(null);
+        setFormData({ name: '', company: '', category: '', description: '' });
+        setIsModalOpen(true);
+    };
+
+    const handleEdit = (vacancy) => {
+        setEditingId(vacancy.id);
+        setFormData({
+            name: vacancy.name,
+            company: vacancy.company,
+            category: vacancy.category,
+            description: vacancy.description || ''
+        });
+        setIsModalOpen(true);
+    };
+
     const handleSave = async () => {
         // Validation
         if (!formData.name || !formData.company || !formData.category) {
@@ -51,17 +69,21 @@ const VacanciesSection = ({ showToast }) => {
 
         setSaving(true);
         try {
+            const method = editingId ? 'PUT' : 'POST';
+            const body = editingId ? { ...formData, id: editingId } : formData;
+
             const res = await fetch('/api/vacancies', {
-                method: 'POST',
+                method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(body)
             });
             const data = await res.json();
 
             if (data.success) {
-                showToast('Vacante creada exitosamente', 'success');
+                showToast(editingId ? 'Vacante actualizada' : 'Vacante creada exitosamente', 'success');
                 setIsModalOpen(false);
                 setFormData({ name: '', company: '', category: '', description: '' });
+                setEditingId(null);
                 loadVacancies(); // Reload list
             } else {
                 showToast(data.error || 'Error al guardar', 'error');
@@ -152,7 +174,7 @@ const VacanciesSection = ({ showToast }) => {
                         <span className="hidden sm:inline">Limpiar</span>
                     </button>
                     <Button
-                        onClick={() => setIsModalOpen(true)}
+                        onClick={handleOpenCreate}
                         icon={Plus}
                     >
                         Nueva Vacante
@@ -176,7 +198,7 @@ const VacanciesSection = ({ showToast }) => {
                         <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6">
                             Comienza creando tu primera vacante para asignar candidatos.
                         </p>
-                        <Button onClick={() => setIsModalOpen(true)} variant="outline">
+                        <Button onClick={handleOpenCreate} variant="outline">
                             Crear Vacante
                         </Button>
                     </div>
@@ -220,6 +242,13 @@ const VacanciesSection = ({ showToast }) => {
                                         {vacancy.active ? 'ACTIVA' : 'INACTIVA'}
                                     </button>
                                     <button
+                                        onClick={() => handleEdit(vacancy)}
+                                        className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
+                                        title="Editar vacante"
+                                    >
+                                        <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button
                                         onClick={() => handleDelete(vacancy.id)}
                                         className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                                         title="Eliminar vacante"
@@ -239,11 +268,11 @@ const VacanciesSection = ({ showToast }) => {
                 </div>
             )}
 
-            {/* Create Modal */}
+            {/* Create/Edit Modal */}
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title="Nueva Vacante"
+                title={editingId ? "Editar Vacante" : "Nueva Vacante"}
             >
                 <div className="space-y-4">
                     <Input
@@ -296,7 +325,7 @@ const VacanciesSection = ({ showToast }) => {
                             disabled={saving}
                             icon={saving ? Loader2 : Save}
                         >
-                            {saving ? 'Guardando...' : 'Guardar Vacante'}
+                            {saving ? (editingId ? 'Guardando...' : 'Creando...') : (editingId ? 'Actualizar Vacante' : 'Guardar Vacante')}
                         </Button>
                     </div>
                 </div>
