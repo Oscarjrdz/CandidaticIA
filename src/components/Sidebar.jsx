@@ -13,12 +13,6 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
             position: 'top'
         },
         {
-            id: 'candidates',
-            label: 'Candidatos',
-            icon: Users,
-            position: 'top'
-        },
-        {
             id: 'assistant',
             label: 'Update Bot',
             icon: Bot,
@@ -46,6 +40,12 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
             id: 'history',
             label: 'Historial',
             icon: History,
+            position: 'top'
+        },
+        {
+            id: 'candidates',
+            label: 'Candidatos',
+            icon: Users,
             position: 'top'
         },
         {
