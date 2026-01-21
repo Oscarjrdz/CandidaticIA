@@ -74,6 +74,40 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
+    const handleToggleActive = async (vacancy) => {
+        try {
+            const res = await fetch('/api/vacancies', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: vacancy.id, active: !vacancy.active })
+            });
+            if (res.ok) {
+                showToast('Estado actualizado', 'success');
+                loadVacancies();
+            }
+        } catch (error) {
+            console.error('Error updating vacancy:', error);
+            showToast('Error al actualizar', 'error');
+        }
+    };
+
+    const handleDelete = async (id) => {
+        if (!confirm('¿Seguro que deseas eliminar esta vacante?')) return;
+
+        try {
+            const res = await fetch(`/api/vacancies?id=${id}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) {
+                showToast('Vacante eliminada', 'success');
+                loadVacancies();
+            }
+        } catch (error) {
+            console.error('Error deleting vacancy:', error);
+            showToast('Error al eliminar', 'error');
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -139,9 +173,28 @@ const VacanciesSection = ({ showToast }) => {
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${vacancy.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                    <button
+                                        onClick={() => handleToggleActive(vacancy)}
+                                        className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${vacancy.active
+                                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                                            }`}
+                                    >
                                         {vacancy.active ? 'ACTIVA' : 'INACTIVA'}
-                                    </span>
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(vacancy.id)}
+                                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                        title="Eliminar vacante"
+                                    >
+                                        <div className="w-5 h-5 flex items-center justify-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M3 6h18"></path>
+                                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                                            </svg>
+                                        </div>
+                                    </button>
                                 </div>
                             </div>
                         </Card>

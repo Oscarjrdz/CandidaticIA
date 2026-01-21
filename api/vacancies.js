@@ -2,10 +2,104 @@
  * Vacancies API - Manage job vacancies
  * GET /api/vacancies - List all vacancies
  * POST /api/vacancies - Create a new vacancy
+ * PUT /api/vacancies - Update a vacancy
+ * DELETE /api/vacancies - Delete a vacancy
  */
 
 import { getRedisClient } from './utils/storage.js';
 import { randomUUID } from 'crypto';
+
+const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
+
+/**
+ * Sync vacancies list to BuilderBot Knowledge Base
+ */
+const syncVacanciesToBuilderBot = async (redis, vacancies) => {
+    try {
+        console.log('🔄 Syncing vacancies to BuilderBot...');
+
+        // 1. Get Credentials
+        const credsJson = await redis.get('builderbot_credentials');
+        if (!credsJson) {
+            console.warn('⚠️ No credentials found in Redis. Skipping sync.');
+            return;
+        }
+        const { botId, apiKey } = JSON.parse(credsJson);
+
+        if (!botId || !apiKey) {
+            console.warn('⚠️ Incomplete credentials. Skipping sync.');
+            return;
+        }
+
+        // 2. Generate Content
+        let content = "LISTA DE VACANTES DISPONIBLES\n===============================\n\n";
+        if (vacancies.length === 0) {
+            content += "No hay vacantes disponibles actualmente.";
+        } else {
+            vacancies.forEach((v, i) => {
+                if (v.active) {
+                    content += `VACANTE #${i + 1}\n`;
+                    content += `Nombre: ${v.name}\n`;
+                    content += `Empresa: ${v.company}\n`;
+                    content += `Categoría: ${v.category}\n`;
+                    content += `Descripción: ${v.description}\n`;
+                    content += `-------------------------------\n`;
+                }
+            });
+        }
+
+        // 3. Delete Old File
+        const oldFileId = await redis.get('vacancies_file_id');
+        if (oldFileId) {
+            console.log('🗑️ Deleting old vacancies file:', oldFileId);
+            await deleteFileFromBuilderBot(botId, apiKey, oldFileId);
+        }
+
+        // 4. Upload New File
+        const newFileId = await uploadFileToBuilderBot(botId, apiKey, content);
+
+        // 5. Save New ID
+        if (newFileId) {
+            await redis.set('vacancies_file_id', newFileId);
+            console.log('✅ Vacancies synced successfully. New File ID:', newFileId);
+        }
+
+    } catch (error) {
+        console.error('❌ Error syncing vacancies:', error);
+        // Don't throw, just log. We don't want to break the API response.
+    }
+};
+
+const deleteFileFromBuilderBot = async (botId, apiKey, fileId) => {
+    try {
+        await fetch(`${BUILDERBOT_API_URL}/${botId}/files/${fileId}`, {
+            method: 'DELETE',
+            headers: { 'api-key': apiKey }
+        });
+    } catch (e) {
+        console.warn('Failed to delete old file:', e.message);
+    }
+};
+
+const uploadFileToBuilderBot = async (botId, apiKey, content) => {
+    try {
+        const formData = new FormData();
+        const blob = new Blob([content], { type: 'text/plain' });
+        formData.append('file', blob, 'vacantes.txt');
+
+        const res = await fetch(`${BUILDERBOT_API_URL}/${botId}/files`, {
+            method: 'POST',
+            headers: { 'api-key': apiKey }, // FormData sets Content-Type automatically
+            body: formData
+        });
+
+        const data = await res.json();
+        return data.id || data.file_id;
+    } catch (e) {
+        console.error('Failed to upload file:', e);
+        return null;
+    }
+};
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -53,20 +147,64 @@ export default async function handler(req, res) {
                 active: true
             };
 
-            // Get existing
             const data = await redis.get(KEY);
             const vacancies = data ? JSON.parse(data) : [];
 
-            // Add new (prepend to list)
             vacancies.unshift(newVacancy);
 
-            // Save
             await redis.set(KEY, JSON.stringify(vacancies));
+
+            // TRIGGER SYNC
+            // Run in background to keep API fast? Node serverless functions might kill it. 
+            // Better to await it to ensure it completes, even if it adds latency.
+            await syncVacanciesToBuilderBot(redis, vacancies);
 
             return res.status(201).json({
                 success: true,
                 data: newVacancy
             });
+        }
+
+        // PUT - Update vacancy
+        if (req.method === 'PUT') {
+            const body = await parseJsonBody(req);
+            const { id, ...updates } = body;
+
+            if (!id) return res.status(400).json({ error: 'Missing id' });
+
+            const data = await redis.get(KEY);
+            let vacancies = data ? JSON.parse(data) : [];
+
+            const index = vacancies.findIndex(v => v.id === id);
+            if (index === -1) return res.status(404).json({ error: 'Vacancy not found' });
+
+            vacancies[index] = { ...vacancies[index], ...updates };
+
+            await redis.set(KEY, JSON.stringify(vacancies));
+
+            // TRIGGER SYNC
+            await syncVacanciesToBuilderBot(redis, vacancies);
+
+            return res.status(200).json({ success: true, data: vacancies[index] });
+        }
+
+        // DELETE - Remove vacancy
+        if (req.method === 'DELETE') {
+            const { id } = req.query;
+
+            if (!id) return res.status(400).json({ error: 'Missing id query parameter' });
+
+            const data = await redis.get(KEY);
+            let vacancies = data ? JSON.parse(data) : [];
+
+            const newVacancies = vacancies.filter(v => v.id !== id);
+
+            await redis.set(KEY, JSON.stringify(newVacancies));
+
+            // TRIGGER SYNC
+            await syncVacanciesToBuilderBot(redis, newVacancies);
+
+            return res.status(200).json({ success: true });
         }
 
         return res.status(405).json({ error: 'Method not allowed' });
@@ -91,7 +229,8 @@ async function parseJsonBody(req) {
         });
         req.on('end', () => {
             try {
-                resolve(JSON.parse(body));
+                if (!body) resolve({});
+                else resolve(JSON.parse(body));
             } catch (error) {
                 reject(error);
             }
