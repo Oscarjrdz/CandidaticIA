@@ -147,6 +147,24 @@ async function sendBuilderBotMessage(phone, message) {
         const botId = process.env.BUILDERBOT_BOT_ID || process.env.BOT_ID;
         const apiKey = process.env.BUILDERBOT_API_KEY || process.env.API_KEY;
 
+        // Fallback: Try to load credentials from Redis if not in env
+        let effectiveBotId = botId;
+        let effectiveApiKey = apiKey;
+
+        if (!effectiveBotId || !effectiveApiKey) {
+            try {
+                const redis = getRedisClient();
+                const credsJson = await redis.get('builderbot_credentials');
+                if (credsJson) {
+                    const creds = JSON.parse(credsJson);
+                    if (!effectiveBotId) effectiveBotId = creds.botId;
+                    if (!effectiveApiKey) effectiveApiKey = creds.apiKey;
+                }
+            } catch (err) {
+                console.warn('Failed to load credentials from Redis fallback:', err);
+            }
+        }
+
         // Ensure clean number
         const number = phone.replace(/\D/g, '');
 
@@ -158,7 +176,7 @@ async function sendBuilderBotMessage(phone, message) {
             'Content-Type': 'application/json',
         };
 
-        if (botId && apiKey) {
+        if (effectiveBotId && effectiveApiKey) {
             // V2 Cloud API Logic
             // Example: https://app.builderbot.cloud/api/v2/{id}/messages
             // Adjust URL if it doesn't already contain /api/v2
@@ -166,12 +184,12 @@ async function sendBuilderBotMessage(phone, message) {
                 // Remove trailing slash
                 url = url.replace(/\/$/, '');
                 // If url is just the domain, append path
-                endpoint = `${url}/api/v2/${botId}/messages`;
+                endpoint = `${url}/api/v2/${effectiveBotId}/messages`;
             } else {
-                endpoint = `${url}/${botId}/messages`;
+                endpoint = `${url}/${effectiveBotId}/messages`;
             }
 
-            headers['x-api-builderbot'] = apiKey;
+            headers['x-api-builderbot'] = effectiveApiKey;
             payload = {
                 messages: {
                     content: message
