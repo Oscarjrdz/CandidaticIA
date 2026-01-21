@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, FileText, Upload, Trash2, Save, RefreshCw, File, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Bot, FileText, Upload, Trash2, Save, RefreshCw, File, Loader2, CheckCircle, AlertCircle, Tag, Copy } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { getCredentials } from '../utils/storage';
@@ -27,6 +27,19 @@ const AssistantSection = ({ showToast }) => {
     const [selectedFiles, setSelectedFiles] = useState(new Set());
     const [selectAll, setSelectAll] = useState(false);
     const [deletingBatch, setDeletingBatch] = useState(false);
+
+    const availableTags = [
+        { label: 'Nombre', value: '{{nombre}}' },
+        { label: 'WhatsApp', value: '{{whatsapp}}' },
+        { label: 'Municipio', value: '{{municipio}}' },
+        { label: 'Puesto', value: '{{puesto}}' },
+        { label: 'Categoría', value: '{{categoria}}' }
+    ];
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        safeShowToast(`Copiado: ${text}`, 'success');
+    };
 
     useEffect(() => {
         const creds = getCredentials();
@@ -468,6 +481,23 @@ const AssistantSection = ({ showToast }) => {
                             >
                                 Recargar
                             </Button>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="flex flex-wrap gap-1">
+                                {availableTags.map(tag => (
+                                    <button
+                                        key={tag.value}
+                                        type="button"
+                                        onClick={() => copyToClipboard(tag.value)}
+                                        className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-[10px] font-mono text-gray-600 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 transition-all"
+                                        title={`Copiar ${tag.label}`}
+                                    >
+                                        <span>{tag.value}</span>
+                                        <Copy className="w-2.5 h-2.5 opacity-50" />
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         {loadingPrompt ? (

@@ -19,7 +19,7 @@ import {
     deleteScheduledRule
 } from '../services/scheduledMessagesService';
 import { Clock, MessageSquare, Timer } from 'lucide-react';
-const AutomationsSection = () => {
+const AutomationsSection = ({ showToast }) => {
     const [rules, setRules] = useState([]);
     const [schedRules, setSchedRules] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -793,6 +793,7 @@ const AutomationsSection = () => {
                 showSchedModal && (
                     <CreateScheduledRuleModal
                         onClose={() => setShowSchedModal(false)}
+                        showToast={showToast}
                         onSuccess={() => {
                             setShowSchedModal(false);
                             loadSchedRules();
@@ -941,7 +942,7 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
 
 export default AutomationsSection;
 
-const CreateScheduledRuleModal = ({ onClose, onSuccess }) => {
+const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast }) => {
     const [name, setName] = useState('');
     const [userMinutes, setUserMinutes] = useState(1440); // 24h default
     const [botMinutes, setBotMinutes] = useState(0);
@@ -949,6 +950,20 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess }) => {
     const [oneTime, setOneTime] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    const availableTags = [
+        { label: 'Nombre', value: '{{nombre}}' },
+        { label: 'WhatsApp', value: '{{whatsapp}}' },
+        { label: 'Municipio', value: '{{municipio}}' },
+        { label: 'Puesto', value: '{{puesto}}' },
+        { label: 'Categoría', value: '{{categoria}}' }
+    ];
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        if (showToast) showToast(`Copiado: ${text}`, 'success');
+        else alert(`Copiado: ${text}`);
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -1016,7 +1031,23 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess }) => {
                     </div>
 
                     <div>
-                        <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Mensaje a enviar *</label>
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">Mensaje a enviar *</label>
+                            <div className="flex flex-wrap gap-1 justify-end">
+                                {availableTags.map(tag => (
+                                    <button
+                                        key={tag.value}
+                                        type="button"
+                                        onClick={() => copyToClipboard(tag.value)}
+                                        className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-[10px] font-mono text-gray-600 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 transition-all"
+                                        title={`Copiar ${tag.label}`}
+                                    >
+                                        <span>{tag.value}</span>
+                                        <Copy className="w-2.5 h-2.5 opacity-50" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         <textarea
                             value={message} onChange={e => setMessage(e.target.value)} required rows={3}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
