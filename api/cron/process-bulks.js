@@ -5,12 +5,20 @@ import { getRedisClient, saveBulk, getCandidateById, saveMessage, updateCandidat
  * Runs every minute to send pending/scheduled messages in batches.
  */
 export default async function handler(req, res) {
-    // Basic security
+    // Basic security: Allow Bearer (Cron) or BuilderBot API Key (Manual/Admin)
     const authHeader = req.headers.authorization;
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && process.env.NODE_ENV === 'production') {
-        if (process.env.CRON_SECRET) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
+    const providedApiKey = req.headers['x-api-builderbot'];
+
+    // Recuperar credenciales guardadas para comparar si es un disparo manual
+    const redis = getRedisClient();
+    const credsJson = await redis.get('builderbot_credentials');
+    const storedApiKey = credsJson ? JSON.parse(credsJson).apiKey : process.env.BOT_TOKEN;
+
+    const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+    const isManual = providedApiKey && providedApiKey === storedApiKey;
+
+    if (!isCron && !isManual && process.env.NODE_ENV === 'production' && process.env.CRON_SECRET) {
+        return res.status(401).json({ error: 'Unauthorized' });
     }
 
     try {

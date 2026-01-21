@@ -148,11 +148,21 @@ const BulksSection = ({ showToast }) => {
 
     const handleProcessNow = async () => {
         setLoading(true);
+        const savedCreds = localStorage.getItem('builderbot_credentials');
+        const creds = savedCreds ? JSON.parse(savedCreds) : {};
+
         try {
-            const res = await fetch('/api/cron/process-bulks');
+            const res = await fetch('/api/cron/process-bulks', {
+                headers: {
+                    'x-api-builderbot': creds.apiKey || ''
+                }
+            });
             const data = await res.json();
             if (data.success) {
                 showToast(`Procesado: ${data.totalSentInRun} mensajes enviados`, 'success');
+                if (data.summary?.length > 0) {
+                    console.log('Bulk Summary:', data.summary);
+                }
                 loadCampaigns();
             } else {
                 showToast('Error: ' + (data.error || 'No se pudo procesar'), 'error');
