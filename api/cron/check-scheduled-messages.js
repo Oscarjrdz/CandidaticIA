@@ -1,4 +1,4 @@
-import { getRedisClient, getCandidates } from '../../api/utils/storage.js';
+import { getRedisClient, getCandidates, saveMessage, updateCandidate } from '../../api/utils/storage.js';
 
 /**
  * CRON JOB: Check Scheduled Messages
@@ -30,7 +30,6 @@ export default async function handler(req, res) {
         }
 
         // 2. Get Candidates (All)
-        // Pass a large limit to check everyone
         const candidates = await getCandidates(1000, 0);
         if (!candidates || candidates.length === 0) {
             console.log('⏰ No candidates found in database.');
@@ -38,62 +37,41 @@ export default async function handler(req, res) {
         }
 
         const now = Date.now();
+        const timestamp = new Date().toISOString();
         let sentCount = 0;
         const sentDetails = [];
-        const skipDetails = [];
 
         console.log(`⏰ Checking ${candidates.length} candidates against ${rules.length} rules...`);
 
         // 3. Check Candidates against Rules
         for (const candidate of candidates) {
-            // FIX: Use candidate.whatsapp instead of telefono
             const phone = candidate.whatsapp || candidate.telefono || candidate.phone;
-            if (!phone) {
-                skipDetails.push({ name: candidate.nombre, reason: 'No phone number' });
-                continue;
-            }
+            if (!phone) continue;
 
-            // FIX: In the dashboard we use ultimoMensajeBot || ultimoMensaje
-            // lastUserMessageAt and lastBotMessageAt are updated in webhook.js
             const lastUserMsg = candidate.lastUserMessageAt ? new Date(candidate.lastUserMessageAt).getTime() : 0;
             const lastBotMsg = candidate.lastBotMessageAt ? new Date(candidate.lastBotMessageAt).getTime() : 0;
 
-            // Reference time for user inactivity
             const userRefTime = lastUserMsg || new Date(candidate.createdAt || candidate.primerContacto || 0).getTime();
 
-            // Minutes elapsed
             const userInactivityMins = (now - userRefTime) / (1000 * 60);
             const botInactivityMins = lastBotMsg > 0 ? (now - lastBotMsg) / (1000 * 60) : 999999;
 
             for (const rule of rules) {
-                // Condition 1: User Inactivity
-                if (userInactivityMins < rule.userInactivityMinutes) {
-                    // Too early for this candidate
-                    continue;
-                }
+                if (userInactivityMins < rule.userInactivityMinutes) continue;
 
-                // Condition 2: Bot Inactivity (Cooldown)
-                if (rule.botInactivityMinutes > 0 && botInactivityMins < rule.botInactivityMinutes) {
-                    continue;
-                }
+                if (rule.botInactivityMinutes > 0 && botInactivityMins < rule.botInactivityMinutes) continue;
 
-                // Condition 3: One Time / Recurrence Check
-                // FIX: Use phone (whatsapp) for key
                 const trackKey = `sched_sent:${phone}:${rule.id}`;
                 const lastSentTs = await redis.get(trackKey);
 
-                if (rule.oneTime && lastSentTs) {
-                    continue;
-                }
+                if (rule.oneTime && lastSentTs) continue;
 
                 if (!rule.oneTime && lastSentTs) {
                     const minsSinceLastSent = (now - parseInt(lastSentTs)) / (1000 * 60);
                     const definedCooldown = rule.botInactivityMinutes || rule.userInactivityMinutes;
-                    const safeCooldown = Math.max(1, definedCooldown); // 1 min minimum safety
+                    const safeCooldown = Math.max(1, definedCooldown);
 
-                    if (minsSinceLastSent < safeCooldown) {
-                        continue;
-                    }
+                    if (minsSinceLastSent < safeCooldown) continue;
                 }
 
                 // SEND MESSAGE
@@ -105,41 +83,47 @@ export default async function handler(req, res) {
                     sentCount++;
                     sentDetails.push({ candidate: candidate.nombre, phone, rule: rule.name });
 
-                    // Mark as sent in Redis
+                    // Mark as sent in Redis (recurrence control)
                     await redis.set(trackKey, now.toString());
 
-                    // We don't break the rules loop here because one candidate could technically trigger 
-                    // multiple DIFFERENT rules if they meet conditions, but usually you'd want to stop after one.
-                    // To stay safe and avoid spam, let's break after one scheduled message per minute per candidate.
+                    // ✅ PROACTIVE SAVE: Save to chat history immediately
+                    // This ensures it appears in exported history even if webhook is slow or missing
+                    await saveMessage(candidate.id, {
+                        from: 'bot',
+                        content: rule.message,
+                        type: 'text',
+                        timestamp: timestamp,
+                        scheduled: true
+                    });
+
+                    // Update candidate timestamps to reset inactivity timer
+                    await updateCandidate(candidate.id, {
+                        lastBotMessageAt: timestamp,
+                        ultimoMensaje: timestamp
+                    });
+
                     break;
                 }
             }
         }
-
-        console.log(`✅ Finished. Sent: ${sentCount}.`);
 
         return res.status(200).json({
             success: true,
             sent: sentCount,
             details: sentDetails,
             checked: candidates.length,
-            timestamp: new Date().toISOString()
+            timestamp: timestamp
         });
 
     } catch (error) {
         console.error('Cron Error:', error);
-        return res.status(500).json({ error: error.message, stack: error.stack });
+        return res.status(500).json({ error: error.message });
     }
 }
 
-/**
- * Helper to send message via BuilderBot API
- * Simplified and corrected
- */
 async function sendBuilderBotMessage(phone, message) {
     try {
         const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
-
         const redis = getRedisClient();
         const credsJson = await redis.get('builderbot_credentials');
 
@@ -152,10 +136,7 @@ async function sendBuilderBotMessage(phone, message) {
             if (!apiKey) apiKey = creds.apiKey;
         }
 
-        if (!botId || !apiKey) {
-            console.error('❌ Missing credentials for scheduled message');
-            return false;
-        }
+        if (!botId || !apiKey) return false;
 
         const cleanPhone = phone.replace(/\D/g, '');
 
@@ -166,22 +147,13 @@ async function sendBuilderBotMessage(phone, message) {
                 'x-api-builderbot': apiKey,
             },
             body: JSON.stringify({
-                messages: {
-                    type: "text",
-                    content: message
-                },
+                messages: { type: "text", content: message },
                 number: cleanPhone,
                 checkIfExists: false
             }),
         });
 
-        if (!response.ok) {
-            const err = await response.text();
-            console.error(`❌ BuilderBot API Error (${response.status}):`, err);
-            return false;
-        }
-
-        return true;
+        return response.ok;
     } catch (error) {
         console.error('❌ Send Message Error:', error);
         return false;

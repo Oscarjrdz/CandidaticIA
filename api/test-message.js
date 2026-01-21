@@ -1,4 +1,4 @@
-import { getRedisClient } from './utils/storage.js';
+import { getRedisClient, saveMessage, updateCandidate, getCandidateIdByPhone } from './utils/storage.js';
 
 /**
  * Endpoint for testing scheduled messages
@@ -21,7 +21,8 @@ const sendBuilderBotMessage = async (botId, apiKey, number, message) => {
                     type: "text",
                     content: message
                 },
-                number: number
+                number: number,
+                checkIfExists: false
             }),
         });
 
@@ -54,11 +55,8 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Phone and message are required' });
         }
 
-        // Clean phone number
         const cleanPhone = phone.replace(/\D/g, '');
 
-        // Use provided credentials or env vars
-        // Fallback: Try to load credentials from Redis if not provided or in env
         let effectiveBotId = botId || process.env.BOT_ID;
         let effectiveApiKey = apiKey || process.env.BOT_TOKEN;
 
@@ -77,12 +75,35 @@ export default async function handler(req, res) {
         }
 
         if (!effectiveBotId || !effectiveApiKey) {
-            return res.status(400).json({ error: 'BuilderBot credentials missing (BOT_ID or BOT_TOKEN)' });
+            return res.status(400).json({ error: 'BuilderBot credentials missing' });
         }
 
         const result = await sendBuilderBotMessage(effectiveBotId, effectiveApiKey, cleanPhone, message);
 
         if (result.success) {
+            // ✅ PROACTIVE SAVE
+            try {
+                const candidateId = await getCandidateIdByPhone(cleanPhone);
+                if (candidateId) {
+                    const timestamp = new Date().toISOString();
+                    await saveMessage(candidateId, {
+                        from: 'bot',
+                        content: message,
+                        type: 'text',
+                        timestamp: timestamp,
+                        test: true
+                    });
+
+                    await updateCandidate(candidateId, {
+                        lastBotMessageAt: timestamp,
+                        ultimoMensaje: timestamp
+                    });
+                    console.log(`💾 Test message saved to history for candidate ${candidateId}`);
+                }
+            } catch (saveErr) {
+                console.warn('⚠️ Could not save test message to history:', saveErr);
+            }
+
             return res.status(200).json({ success: true, data: result.data });
         } else {
             return res.status(502).json({ error: 'Failed to send message', details: result.error });

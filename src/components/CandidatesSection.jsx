@@ -282,25 +282,12 @@ const CandidatesSection = ({ showToast }) => {
     };
 
     const handleViewHistory = async (candidate) => {
-        // Try to get content from local file first
-        const localFile = getLocalChatFile(candidate.whatsapp);
+        setHistoryModalCandidate(candidate);
+        setHistoryModalOpen(true);
+        setHistoryModalContent('Cargando historial...');
 
-        // Validate local file content - check if it has "undefined" messages AND if it has the new header format
-        const isValidContent = localFile && localFile.content &&
-            !localFile.content.includes("Bot: undefined") &&
-            !localFile.content.includes("Candidato: undefined") &&
-            localFile.content.includes("Categoría:"); // Force refresh if using old header format
+        console.log("🔍 Fetching fresh history for modal...");
 
-        if (isValidContent) {
-            setHistoryModalCandidate(candidate);
-            setHistoryModalContent(localFile.content);
-            setHistoryModalOpen(true);
-            return;
-        }
-
-        console.log("⚠️ Local file content invalid or missing, fetching fresh history...");
-
-        // Fallback: Fetch messages and generate content
         try {
             const res = await fetch(`/api/chat?candidateId=${candidate.id}`);
             const data = await res.json();
@@ -308,22 +295,23 @@ const CandidatesSection = ({ showToast }) => {
             if (data.success && data.messages) {
                 const candidateWithMessages = { ...candidate, messages: data.messages };
                 const content = generateChatHistoryText(candidateWithMessages);
-                setHistoryModalCandidate(candidate);
                 setHistoryModalContent(content);
-                setHistoryModalOpen(true);
+
+                // Optional: Update local storage with this fresh content
+                saveLocalChatFile(candidate.whatsapp, content);
             } else {
-                // Show empty or error state
-                const content = generateChatHistoryText(candidate); // Will show "No hay mensajes"
-                setHistoryModalCandidate(candidate);
+                const content = generateChatHistoryText(candidate);
                 setHistoryModalContent(content);
-                setHistoryModalOpen(true);
             }
         } catch (error) {
             console.error("Error fetching history:", error);
-            const content = generateChatHistoryText(candidate);
-            setHistoryModalCandidate(candidate);
-            setHistoryModalContent(content);
-            setHistoryModalOpen(true);
+            // Backup: use local file only if API fails
+            const localFile = getLocalChatFile(candidate.whatsapp);
+            if (localFile && localFile.content) {
+                setHistoryModalContent(localFile.content);
+            } else {
+                setHistoryModalContent(generateChatHistoryText(candidate));
+            }
         }
     };
 

@@ -38,9 +38,13 @@ export const generateChatHistoryText = (candidate) => {
                 hour12: true
             });
 
-            // Detect sender correctly based on 'from' property or 'incoming' flag fallback
-            const isCandidate = msg.from === 'candidate' || msg.from === 'user' || msg.incoming === true;
-            const sender = isCandidate ? (candidate.whatsapp || 'Desconocido') : 'Bot';
+            // Detect sender correctly
+            let sender = 'Bot';
+            if (msg.from === 'candidate' || msg.from === 'user' || msg.incoming === true) {
+                sender = candidate.whatsapp || 'Candidato';
+            } else if (msg.from === 'me') {
+                sender = 'Agente';
+            }
 
             const messageText = msg.content || msg.body || msg.text || '';
             const paddedIndex = (index + 1).toString().padStart(3, '0');
