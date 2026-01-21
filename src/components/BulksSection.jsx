@@ -146,35 +146,6 @@ const BulksSection = ({ showToast }) => {
         }
     };
 
-    const handleProcessNow = async () => {
-        setLoading(true);
-        const savedCreds = localStorage.getItem('builderbot_credentials');
-        const creds = savedCreds ? JSON.parse(savedCreds) : {};
-
-        try {
-            const res = await fetch('/api/cron/process-bulks', {
-                headers: {
-                    'x-api-builderbot': creds.apiKey || ''
-                }
-            });
-            const data = await res.json();
-            if (data.success) {
-                if (data.totalSentInRun > 0) {
-                    showToast(`Procesado: ${data.totalSentInRun} mensajes enviados`, 'success');
-                } else {
-                    const reason = data.summary?.[0] || 'No hay campañas listas para enviar ahora.';
-                    showToast(reason, 'info');
-                }
-                loadCampaigns();
-            } else {
-                showToast('Error: ' + (data.error || 'No se pudo procesar'), 'error');
-            }
-        } catch (e) {
-            showToast('Error de conexión con el motor', 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleEditCampaign = (campaign) => {
         // Convertir de UTC a LOCAL para el input datetime-local
