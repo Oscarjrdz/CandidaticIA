@@ -48,17 +48,51 @@ const syncVacanciesToBuilderBot = async (redis, vacancies) => {
             });
         }
 
-        // 3. Delete Old File
-        const oldFileId = await redis.get('vacancies_file_id');
-        if (oldFileId) {
-            console.log('🗑️ Deleting old vacancies file:', oldFileId);
-            await deleteFileFromBuilderBot(botId, apiKey, answerId, oldFileId);
+        // 3. Robust Cleanup: List and delete ALL old 'vacantes' files
+        // This prevents duplicates even if Redis ID was lost
+        console.log('🧹 Cleaning up old vacancies files...');
+        try {
+            // List files
+            const listRes = await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files`, {
+                method: 'GET',
+                headers: { 'x-api-builderbot': apiKey }
+            });
+
+            if (listRes.ok) {
+                const files = await listRes.json();
+                if (Array.isArray(files)) {
+                    // Filter files that look like our vacancies file
+                    // BuilderBot might rename to vacantes_timestamp.txt
+                    const duplicates = files.filter(f =>
+                        f.filename && (f.filename === 'vacantes.txt' || f.filename.startsWith('vacantes'))
+                    );
+
+                    console.log(`Found ${duplicates.length} old files to delete.`);
+
+                    // Delete all found duplicates
+                    for (const file of duplicates) {
+                        try {
+                            const fileId = file.id || file.file_id;
+                            if (fileId) {
+                                await deleteFileFromBuilderBot(botId, apiKey, answerId, fileId);
+                            }
+                        } catch (delErr) {
+                            console.warn('Error deleting specific file:', delErr);
+                        }
+                    }
+                }
+            }
+        } catch (listErr) {
+            console.error('Failed to list files for cleanup:', listErr);
+            // Fallback: Try to delete the one from Redis if list failed?
+            const oldFileId = await redis.get('vacancies_file_id');
+            if (oldFileId) await deleteFileFromBuilderBot(botId, apiKey, answerId, oldFileId);
         }
 
         // 4. Upload New File
         const newFileId = await uploadFileToBuilderBot(botId, apiKey, answerId, content);
 
-        // 5. Save New ID
+        // 5. Save New ID (Still useful for reference)
         if (newFileId) {
             await redis.set('vacancies_file_id', newFileId);
             console.log('✅ Vacancies synced successfully. New File ID:', newFileId);
