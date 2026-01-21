@@ -24,10 +24,10 @@ const syncVacanciesToBuilderBot = async (redis, vacancies) => {
             console.warn('⚠️ No credentials found in Redis. Skipping sync.');
             return;
         }
-        const { botId, apiKey } = JSON.parse(credsJson);
+        const { botId, apiKey, answerId } = JSON.parse(credsJson);
 
-        if (!botId || !apiKey) {
-            console.warn('⚠️ Incomplete credentials. Skipping sync.');
+        if (!botId || !apiKey || !answerId) {
+            console.warn('⚠️ Incomplete credentials (botId, apiKey, answerId required). Skipping sync.');
             return;
         }
 
@@ -52,11 +52,11 @@ const syncVacanciesToBuilderBot = async (redis, vacancies) => {
         const oldFileId = await redis.get('vacancies_file_id');
         if (oldFileId) {
             console.log('🗑️ Deleting old vacancies file:', oldFileId);
-            await deleteFileFromBuilderBot(botId, apiKey, oldFileId);
+            await deleteFileFromBuilderBot(botId, apiKey, answerId, oldFileId);
         }
 
         // 4. Upload New File
-        const newFileId = await uploadFileToBuilderBot(botId, apiKey, content);
+        const newFileId = await uploadFileToBuilderBot(botId, apiKey, answerId, content);
 
         // 5. Save New ID
         if (newFileId) {
@@ -70,26 +70,26 @@ const syncVacanciesToBuilderBot = async (redis, vacancies) => {
     }
 };
 
-const deleteFileFromBuilderBot = async (botId, apiKey, fileId) => {
+const deleteFileFromBuilderBot = async (botId, apiKey, answerId, fileId) => {
     try {
-        await fetch(`${BUILDERBOT_API_URL}/${botId}/files/${fileId}`, {
+        await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files?fileId=${fileId}`, {
             method: 'DELETE',
-            headers: { 'api-key': apiKey }
+            headers: { 'x-api-builderbot': apiKey }
         });
     } catch (e) {
         console.warn('Failed to delete old file:', e.message);
     }
 };
 
-const uploadFileToBuilderBot = async (botId, apiKey, content) => {
+const uploadFileToBuilderBot = async (botId, apiKey, answerId, content) => {
     try {
         const formData = new FormData();
         const blob = new Blob([content], { type: 'text/plain' });
         formData.append('file', blob, 'vacantes.txt');
 
-        const res = await fetch(`${BUILDERBOT_API_URL}/${botId}/files`, {
+        const res = await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files`, {
             method: 'POST',
-            headers: { 'api-key': apiKey }, // FormData sets Content-Type automatically
+            headers: { 'x-api-builderbot': apiKey },
             body: formData
         });
 
