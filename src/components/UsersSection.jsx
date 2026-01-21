@@ -15,7 +15,8 @@ const UsersSection = ({ showToast }) => {
 
     const [formData, setFormData] = useState({
         name: '',
-        email: '',
+        whatsapp: '',
+        pin: '',
         role: 'Recruiter',
         status: 'Active'
     });
@@ -44,7 +45,8 @@ const UsersSection = ({ showToast }) => {
             setEditingUser(user);
             setFormData({
                 name: user.name,
-                email: user.email,
+                whatsapp: user.whatsapp || '',
+                pin: user.pin || '',
                 role: user.role,
                 status: user.status
             });
@@ -52,7 +54,8 @@ const UsersSection = ({ showToast }) => {
             setEditingUser(null);
             setFormData({
                 name: '',
-                email: '',
+                whatsapp: '',
+                pin: '',
                 role: 'Recruiter',
                 status: 'Active'
             });
@@ -105,7 +108,7 @@ const UsersSection = ({ showToast }) => {
 
     const filteredUsers = users.filter(u =>
         (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
-        (u.email || '').toLowerCase().includes(search.toLowerCase())
+        (u.whatsapp || '').includes(search)
     );
 
     return (
@@ -143,9 +146,9 @@ const UsersSection = ({ showToast }) => {
                             <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
                                 <tr>
                                     <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Usuario</th>
+                                    <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">WhatsApp</th>
                                     <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Rol</th>
                                     <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Estado</th>
-                                    <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Fecha Registro</th>
                                     <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm text-right">Acciones</th>
                                 </tr>
                             </thead>
@@ -154,19 +157,31 @@ const UsersSection = ({ showToast }) => {
                                     <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
                                         <td className="py-4 px-6">
                                             <div className="flex items-center space-x-3">
-                                                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold">
+                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${user.role === 'SuperAdmin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300' :
+                                                        user.role === 'Admin' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300' :
+                                                            'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                                    }`}>
                                                     {(user.name || 'U').charAt(0).toUpperCase()}
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-gray-900 dark:text-white text-sm">{user.name}</p>
-                                                    <p className="text-xs text-gray-500">{user.email}</p>
+                                                    <p className="text-xs text-gray-500">PIN: {user.pin || '****'}</p>
                                                 </div>
                                             </div>
                                         </td>
+                                        <td className="py-4 px-6 text-sm text-gray-700 dark:text-gray-300">
+                                            {user.whatsapp}
+                                        </td>
                                         <td className="py-4 px-6">
-                                            <span className="flex items-center space-x-1.5 text-sm text-gray-700 dark:text-gray-300">
-                                                <Shield className="w-3.5 h-3.5 text-indigo-500" />
-                                                <span>{user.role}</span>
+                                            <span className="flex items-center space-x-1.5 text-sm">
+                                                <Shield className={`w-3.5 h-3.5 ${user.role === 'SuperAdmin' ? 'text-purple-500' :
+                                                        user.role === 'Admin' ? 'text-blue-500' :
+                                                            'text-gray-400'
+                                                    }`} />
+                                                <span className="text-gray-700 dark:text-gray-300">
+                                                    {user.role === 'SuperAdmin' ? 'Super Administrador' :
+                                                        user.role === 'Admin' ? 'Administrador' : 'Reclutador'}
+                                                </span>
                                             </span>
                                         </td>
                                         <td className="py-4 px-6">
@@ -174,9 +189,6 @@ const UsersSection = ({ showToast }) => {
                                                 }`}>
                                                 {user.status === 'Active' ? 'Activo' : 'Inactivo'}
                                             </span>
-                                        </td>
-                                        <td className="py-4 px-6 text-sm text-gray-500">
-                                            {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
                                         </td>
                                         <td className="py-4 px-6 text-right">
                                             <div className="flex items-center justify-end space-x-2">
@@ -213,16 +225,25 @@ const UsersSection = ({ showToast }) => {
                         value={formData.name}
                         onChange={(v) => setFormData({ ...formData, name: v })}
                         required
-                        placeholder="Ej: Juan Perez"
+                        placeholder="Ej: Oscar Rodriguez"
                     />
-                    <Input
-                        label="Correo Electrónico"
-                        value={formData.email}
-                        onChange={(v) => setFormData({ ...formData, email: v })}
-                        required
-                        type="email"
-                        placeholder="ejemplo@candidatic.com"
-                    />
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input
+                            label="WhatsApp"
+                            value={formData.whatsapp}
+                            onChange={(v) => setFormData({ ...formData, whatsapp: v })}
+                            required
+                            placeholder="Ej: 8116038195"
+                        />
+                        <Input
+                            label="PIN de Autorización"
+                            value={formData.pin}
+                            onChange={(v) => setFormData({ ...formData, pin: v })}
+                            required
+                            maxLength={4}
+                            placeholder="Ej: 1234"
+                        />
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Rol</label>
@@ -233,6 +254,7 @@ const UsersSection = ({ showToast }) => {
                             >
                                 <option value="Recruiter">Reclutador</option>
                                 <option value="Admin">Administrador</option>
+                                <option value="SuperAdmin">Super Administrador</option>
                             </select>
                         </div>
                         <div>

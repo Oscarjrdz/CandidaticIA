@@ -11,8 +11,8 @@ export default async function handler(req, res) {
 
         if (req.method === 'POST') {
             const userData = req.body;
-            if (!userData.email || !userData.name) {
-                return res.status(400).json({ success: false, error: 'Name and email are required' });
+            if (!userData.whatsapp || !userData.name) {
+                return res.status(400).json({ success: false, error: 'Name and WhatsApp are required' });
             }
             const user = await saveUser(userData);
             return res.status(200).json({ success: true, user });
