@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Send, Users, MessageSquare, CheckSquare, Square,
     Loader2, AlertCircle, Plus, Calendar, Clock,
-    Trash2, RefreshCw, Filter, ChevronRight, Check
+    Trash2, RefreshCw, Filter, ChevronRight, Check, Pencil
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -110,9 +110,11 @@ const BulksSection = ({ showToast }) => {
             return;
         }
 
+        const isEditing = !!newCampaign.id;
+
         try {
             const res = await fetch('/api/bulks', {
-                method: 'POST',
+                method: isEditing ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...newCampaign,
@@ -121,7 +123,7 @@ const BulksSection = ({ showToast }) => {
             });
 
             if (res.ok) {
-                showToast('Campaña creada y programada', 'success');
+                showToast(isEditing ? 'Campaña actualizada' : 'Campaña creada y programada', 'success');
                 setView('list');
                 loadCampaigns();
                 // Reset form
@@ -136,8 +138,17 @@ const BulksSection = ({ showToast }) => {
                 });
             }
         } catch (error) {
-            showToast('Error al crear campaña', 'error');
+            showToast('Error al procesar campaña', 'error');
         }
+    };
+
+    const handleEditCampaign = (campaign) => {
+        setNewCampaign({
+            ...campaign,
+            scheduledAt: new Date(campaign.scheduledAt).toISOString().slice(0, 16)
+        });
+        setStep(1);
+        setView('create');
     };
 
     const handleDeleteCampaign = async (id) => {
@@ -164,10 +175,13 @@ const BulksSection = ({ showToast }) => {
     );
 
     if (view === 'create') {
+        const isEditing = !!newCampaign.id;
         return (
             <div className="max-w-4xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Nueva Campaña Inteligente</h2>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {isEditing ? 'Editar Campaña' : 'Nueva Campaña Inteligente'}
+                    </h2>
                     <Button variant="outline" onClick={() => setView('list')}>Cancelar</Button>
                 </div>
 
@@ -401,7 +415,7 @@ const BulksSection = ({ showToast }) => {
                                         </td>
                                         <td className="py-4 px-6">
                                             <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${c.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                    c.status === 'sending' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+                                                c.status === 'sending' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
                                                 }`}>
                                                 {c.status === 'completed' ? 'Completado' : c.status === 'sending' ? 'Enviando' : 'Pendiente'}
                                             </span>
@@ -421,12 +435,22 @@ const BulksSection = ({ showToast }) => {
                                             {new Date(c.scheduledAt).toLocaleString()}
                                         </td>
                                         <td className="py-4 px-6">
-                                            <button
-                                                onClick={() => handleDeleteCampaign(c.id)}
-                                                className="p-2 text-gray-400 hover:text-red-500 smooth-transition"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={() => handleEditCampaign(c)}
+                                                    className="p-2 text-gray-400 hover:text-blue-500 smooth-transition"
+                                                    title="Editar"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteCampaign(c.id)}
+                                                    className="p-2 text-gray-400 hover:text-red-500 smooth-transition"
+                                                    title="Eliminar"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

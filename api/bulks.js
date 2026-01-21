@@ -16,7 +16,7 @@ export default async function handler(req, res) {
         }
     }
 
-    if (req.method === 'POST') {
+    if (req.method === 'POST' || req.method === 'PUT') {
         try {
             const bulkData = req.body;
 
@@ -33,16 +33,17 @@ export default async function handler(req, res) {
                 : [bulkData.messages];
 
             const campaign = {
+                ...bulkData, // Conservar ID y otros campos si es PUT
                 name: bulkData.name,
-                status: 'pending',
+                status: bulkData.status || 'pending',
                 scheduledAt: bulkData.scheduledAt || new Date().toISOString(),
                 delaySeconds: parseInt(bulkData.delaySeconds) || 30,
                 messages: messages,
-                recipients: bulkData.recipients, // Array de IDs de candidatos
+                recipients: bulkData.recipients,
                 filters: bulkData.filters || null,
                 totalCount: bulkData.recipients.length,
-                sentCount: 0,
-                lastProcessedAt: null
+                sentCount: bulkData.sentCount !== undefined ? bulkData.sentCount : 0,
+                lastProcessedAt: bulkData.lastProcessedAt || null
             };
 
             const saved = await saveBulk(campaign);
