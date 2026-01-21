@@ -302,6 +302,21 @@ const AutomationsSection = () => {
         }
     };
 
+    const handleToggleOneTime = async (rule) => {
+        try {
+            const updates = { oneTime: !rule.oneTime };
+            const result = await updateScheduledRule(rule.id, updates);
+            if (result.success) {
+                loadSchedRules();
+            } else {
+                alert('Error actualizando tipo: ' + result.error);
+            }
+        } catch (error) {
+            console.error('Toggle error:', error);
+            alert('Error de conexión');
+        }
+    };
+
     if (loading) {
         return (
             <div className="p-6">
@@ -684,15 +699,16 @@ const AutomationsSection = () => {
 
                                         {/* Type (One Time) */}
                                         <td className="py-3 px-4 text-center">
-                                            {rule.oneTime ? (
-                                                <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[10px] font-bold rounded-full border border-purple-200 uppercase tracking-wider">
-                                                    1 Vez
-                                                </span>
-                                            ) : (
-                                                <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-full border border-indigo-200 uppercase tracking-wider">
-                                                    Ciclo
-                                                </span>
-                                            )}
+                                            <button
+                                                onClick={() => handleToggleOneTime(rule)}
+                                                className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 ${rule.oneTime
+                                                    ? 'bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200'
+                                                    : 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200'
+                                                    }`}
+                                                title="Clic para cambiar tipo (1 Vez / Ciclo)"
+                                            >
+                                                {rule.oneTime ? '1 Vez' : 'Ciclo'}
+                                            </button>
                                         </td>
 
                                         {/* Status */}
