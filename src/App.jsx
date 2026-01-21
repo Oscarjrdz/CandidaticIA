@@ -9,6 +9,7 @@ import SettingsSection from './components/SettingsSection';
 import AssistantSection from './components/AssistantSection';
 import AutomationsSection from './components/AutomationsSection';
 import VacanciesSection from './components/VacanciesSection';
+import BulksSection from './components/BulksSection';
 import { getTheme, saveTheme, exportConfig, importConfig, clearAllStorage } from './utils/storage';
 
 
@@ -126,12 +127,14 @@ function App() {
                       : activeSection === 'automations' ? 'Automatizaciones'
                         : activeSection === 'vacancies' ? 'Vacantes'
                           : activeSection === 'history' ? 'Historial'
-                            : 'Configuración'}
+                            : activeSection === 'bulks' ? 'Bulks'
+                              : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
                     : activeSection === 'assistant' ? 'Gestión del Prompt y Archivos del Asistente'
-                      : 'Configuración de BuilderBot API'
+                      : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
+                        : 'Configuración de BuilderBot API'
                   }
                 </p>
               </div>
@@ -192,6 +195,8 @@ function App() {
             <AutomationsSection showToast={showToast} />
           ) : activeSection === 'vacancies' ? (
             <VacanciesSection showToast={showToast} />
+          ) : activeSection === 'bulks' ? (
+            <BulksSection showToast={showToast} />
           ) : (
             <SettingsSection
               botId={botId}
