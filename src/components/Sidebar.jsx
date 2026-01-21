@@ -7,9 +7,9 @@ import { Users, Settings, Bot, History, Zap, Briefcase, Send, User } from 'lucid
 const Sidebar = ({ activeSection, onSectionChange }) => {
     const menuItems = [
         {
-            id: 'users',
-            label: 'Usuarios',
-            icon: User,
+            id: 'candidates',
+            label: 'Candidatos',
+            icon: Users,
             position: 'top'
         },
         {
@@ -43,9 +43,9 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
             position: 'top'
         },
         {
-            id: 'candidates',
-            label: 'Candidatos',
-            icon: Users,
+            id: 'users',
+            label: 'Usuarios',
+            icon: User,
             position: 'top'
         },
         {
