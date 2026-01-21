@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save } from 'lucide-react';
+import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -108,6 +108,28 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
+    const handlePurgeFiles = async () => {
+        if (!confirm('¿Estás seguro de que deseas limpiar los archivos duplicados en BuilderBot? Esto no afectará a las vacantes en tu base de datos local.')) return;
+
+        setLoading(true);
+        try {
+            const res = await fetch('/api/vacancies?purge=true', {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                showToast(data.message || 'Archivos limpiados correctamente', 'success');
+            } else {
+                showToast(data.error || 'Error al limpiar archivos', 'error');
+            }
+        } catch (error) {
+            showToast('Error de conexión', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -115,12 +137,23 @@ const VacanciesSection = ({ showToast }) => {
                     <Briefcase className="w-6 h-6 text-blue-600" />
                     Gestión de Vacantes
                 </h2>
-                <Button
-                    onClick={() => setIsModalOpen(true)}
-                    icon={Plus}
-                >
-                    Nueva Vacante
-                </Button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={handlePurgeFiles}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 text-sm font-medium border border-red-100"
+                        title="Eliminar archivos duplicados en BuilderBot"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                        <span className="hidden sm:inline">Limpiar</span>
+                    </button>
+                    <Button
+                        onClick={() => setIsModalOpen(true)}
+                        icon={Plus}
+                    >
+                        Nueva Vacante
+                    </Button>
+                </div>
             </div>
 
             {loading ? (

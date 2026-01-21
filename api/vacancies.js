@@ -112,11 +112,19 @@ const cleanupOldFiles = async (botId, apiKey, answerId) => {
 
 const deleteFileFromBuilderBot = async (botId, apiKey, answerId, fileId) => {
     try {
-        // Updated to use PATH parameter which is more standard for REST
-        await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files/${fileId}`, {
+        console.log(`🗑️ Deleting file ${fileId} via Query Param...`);
+        // Reverted to Query Param style as per export-chats.js pattern which works
+        const res = await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files?fileId=${fileId}`, {
             method: 'DELETE',
             headers: { 'x-api-builderbot': apiKey }
         });
+
+        if (!res.ok) {
+            console.warn(`⚠️ Delete failed for ${fileId}: ${res.status} ${res.statusText}`);
+            // Try Path param as fallback just in case? No, sticking to one proven way is better.
+        } else {
+            console.log(`✅ Deleted ${fileId}`);
+        }
     } catch (e) {
         console.warn('Failed to delete old file:', e.message);
     }
