@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Send, Users, MessageSquare, CheckSquare, Square,
     Loader2, AlertCircle, Plus, Calendar, Clock,
-    Trash2, RefreshCw, Filter, ChevronRight, Check, Pencil
+    Trash2, RefreshCw, Filter, ChevronRight, Check, Pencil, Play
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -112,12 +112,16 @@ const BulksSection = ({ showToast }) => {
 
         const isEditing = !!newCampaign.id;
 
+        // CONVERTIR A ISO UTC ANTES DE ENVIAR (Crucial para el servidor)
+        const scheduledAtISO = new Date(newCampaign.scheduledAt).toISOString();
+
         try {
             const res = await fetch('/api/bulks', {
                 method: isEditing ? 'PUT' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...newCampaign,
+                    scheduledAt: scheduledAtISO,
                     messages: newCampaign.messages.filter(m => m.trim())
                 })
             });
@@ -139,6 +143,24 @@ const BulksSection = ({ showToast }) => {
             }
         } catch (error) {
             showToast('Error al procesar campaña', 'error');
+        }
+    };
+
+    const handleProcessNow = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/cron/process-bulks');
+            const data = await res.json();
+            if (data.success) {
+                showToast(`Procesado: ${data.totalSentInRun} mensajes enviados`, 'success');
+                loadCampaigns();
+            } else {
+                showToast('Error: ' + (data.error || 'No se pudo procesar'), 'error');
+            }
+        } catch (e) {
+            showToast('Error de conexión con el motor', 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -369,6 +391,7 @@ const BulksSection = ({ showToast }) => {
                     <p className="text-sm text-gray-500">Gestión inteligente de contactos a escala</p>
                 </div>
                 <div className="flex items-center space-x-2">
+                    <Button onClick={handleProcessNow} icon={Play} variant="outline" size="sm" disabled={loading} className="text-orange-600 border-orange-200">Ejecutar Motor Ahora</Button>
                     <Button onClick={loadCampaigns} icon={RefreshCw} variant="outline" size="sm" disabled={loading} />
                     <Button onClick={() => setView('create')} icon={Plus}>Crear Nueva Campaña</Button>
                 </div>

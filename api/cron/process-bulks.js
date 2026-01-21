@@ -34,15 +34,23 @@ export default async function handler(req, res) {
             const bulk = JSON.parse(bulkJson);
 
             // Only process pending or sending
-            if (bulk.status !== 'pending' && bulk.status !== 'sending') continue;
+            if (bulk.status !== 'pending' && bulk.status !== 'sending') {
+                logs.push(`Campaign '${bulk.name}' skipped: status is ${bulk.status}`);
+                continue;
+            }
 
-            // Check schedule
-            if (new Date(bulk.scheduledAt).getTime() > now) continue;
+            // Check schedule (with 5s buffer to avoid race conditions)
+            const scheduledTime = new Date(bulk.scheduledAt).getTime();
+            if (scheduledTime > now + 5000) {
+                logs.push(`Campaign '${bulk.name}' is scheduled for later (${new Date(bulk.scheduledAt).toLocaleString()})`);
+                continue;
+            }
 
             // Check progress
             if (bulk.sentCount >= bulk.recipients.length) {
                 bulk.status = 'completed';
                 await saveBulk(bulk);
+                logs.push(`Campaign '${bulk.name}' marked as completed`);
                 continue;
             }
 
