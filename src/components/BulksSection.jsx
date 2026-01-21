@@ -159,9 +159,11 @@ const BulksSection = ({ showToast }) => {
             });
             const data = await res.json();
             if (data.success) {
-                showToast(`Procesado: ${data.totalSentInRun} mensajes enviados`, 'success');
-                if (data.summary?.length > 0) {
-                    console.log('Bulk Summary:', data.summary);
+                if (data.totalSentInRun > 0) {
+                    showToast(`Procesado: ${data.totalSentInRun} mensajes enviados`, 'success');
+                } else {
+                    const reason = data.summary?.[0] || 'No hay campañas listas para enviar ahora.';
+                    showToast(reason, 'info');
                 }
                 loadCampaigns();
             } else {
@@ -175,9 +177,15 @@ const BulksSection = ({ showToast }) => {
     };
 
     const handleEditCampaign = (campaign) => {
+        // Convertir de UTC a LOCAL para el input datetime-local
+        const d = new Date(campaign.scheduledAt);
+        const z = d.getTimezoneOffset() * 60 * 1000;
+        const localDate = new Date(d - z);
+        const formatted = localDate.toISOString().slice(0, 16);
+
         setNewCampaign({
             ...campaign,
-            scheduledAt: new Date(campaign.scheduledAt).toISOString().slice(0, 16)
+            scheduledAt: formatted
         });
         setStep(1);
         setView('create');
@@ -401,7 +409,6 @@ const BulksSection = ({ showToast }) => {
                     <p className="text-sm text-gray-500">Gestión inteligente de contactos a escala</p>
                 </div>
                 <div className="flex items-center space-x-2">
-                    <Button onClick={handleProcessNow} icon={Play} variant="outline" size="sm" disabled={loading} className="text-orange-600 border-orange-200">Ejecutar Motor Ahora</Button>
                     <Button onClick={loadCampaigns} icon={RefreshCw} variant="outline" size="sm" disabled={loading} />
                     <Button onClick={() => setView('create')} icon={Plus}>Crear Nueva Campaña</Button>
                 </div>

@@ -71,14 +71,15 @@ export default async function handler(req, res) {
                 continue;
             }
 
-            // Determine how many to send in THIS run (Vercel timeout limits)
-            // We'll send up to 5 messages per run per campaign to be safe and stay within seconds
-            const nextIndex = bulk.sentCount;
-            const candidatesToSend = bulk.recipients.slice(nextIndex, nextIndex + 5);
+            // Si el delay es grande (>=10s), enviamos SOLO UNO por cada corrida de cron (cada minuto)
+            // Esto garantiza que el delay se respeta de forma segura en serverless (cron = 1min).
+            const candidatesToProcess = bulk.delaySeconds >= 10
+                ? [bulk.recipients[bulk.sentCount]]
+                : bulk.recipients.slice(bulk.sentCount, bulk.sentCount + 3);
 
             bulk.status = 'sending';
 
-            for (const candidateId of candidatesToSend) {
+            for (const candidateId of candidatesToProcess) {
                 const candidate = await getCandidateById(candidateId);
                 if (!candidate) {
                     bulk.sentCount++;
@@ -91,37 +92,43 @@ export default async function handler(req, res) {
                     continue;
                 }
 
-                // Pick a RANDOM message variant
-                const messageVariants = bulk.messages;
-                const message = messageVariants[Math.floor(Math.random() * messageVariants.length)];
+                // --- Substitución de Variables ---
+                const variants = bulk.messages;
+                let messageBody = variants[Math.floor(Math.random() * variants.length)];
 
-                // SEND via BuilderBot
-                const success = await sendBuilderBotMessage(phone, message);
+                // Reemplazo dinámico: {{nombre}}, {{municipio}}, etc.
+                Object.keys(candidate).forEach(key => {
+                    const value = candidate[key] || '';
+                    const regex = new RegExp(`{{${key}}}`, 'gi');
+                    messageBody = messageBody.replace(regex, value);
+                });
+
+                // Enviar mensaje
+                const success = await sendBuilderBotMessage(phone, messageBody);
 
                 if (success) {
                     totalSentInRun++;
                     bulk.sentCount++;
                     bulk.lastProcessedAt = new Date().toISOString();
 
-                    // Proactive save to history
                     await saveMessage(candidate.id, {
                         from: 'bot',
-                        content: message,
+                        content: messageBody,
                         type: 'text',
                         timestamp: new Date().toISOString(),
                         bulkId: bulk.id
                     });
 
-                    // Update candidate timestamps
                     await updateCandidate(candidate.id, {
-                        lastBotMessageAt: new Date().toISOString(),
                         ultimoMensaje: new Date().toISOString()
                     });
 
-                    // Break if we hit a limit or simply process sequentially with the delay
-                    // Since Vercel hits timeouts, sending a few then stopping is best.
+                    // Si enviamos una ráfaga corta (delay < 10s), esperamos 2s entre ellos
+                    if (candidatesToProcess.length > 1) {
+                        await new Promise(r => setTimeout(r, 2000));
+                    }
                 } else {
-                    logs.push(`Failed to send to ${candidate.nombre}`);
+                    logs.push(`Fallo al enviar a ${candidate.nombre}`);
                 }
             }
 
