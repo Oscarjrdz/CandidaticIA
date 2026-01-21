@@ -1,3 +1,5 @@
+import { getRedisClient } from './utils/storage.js';
+
 /**
  * Endpoint for testing scheduled messages
  * POST /api/test-message
@@ -56,8 +58,23 @@ export default async function handler(req, res) {
         const cleanPhone = phone.replace(/\D/g, '');
 
         // Use provided credentials or env vars
-        const effectiveBotId = botId || process.env.BOT_ID;
-        const effectiveApiKey = apiKey || process.env.BOT_TOKEN;
+        // Fallback: Try to load credentials from Redis if not provided or in env
+        let effectiveBotId = botId || process.env.BOT_ID;
+        let effectiveApiKey = apiKey || process.env.BOT_TOKEN;
+
+        if (!effectiveBotId || !effectiveApiKey) {
+            try {
+                const redis = getRedisClient();
+                const credsJson = await redis.get('builderbot_credentials');
+                if (credsJson) {
+                    const creds = JSON.parse(credsJson);
+                    if (!effectiveBotId) effectiveBotId = creds.botId;
+                    if (!effectiveApiKey) effectiveApiKey = creds.apiKey;
+                }
+            } catch (err) {
+                console.warn('Failed to load credentials from Redis fallback:', err);
+            }
+        }
 
         if (!effectiveBotId || !effectiveApiKey) {
             return res.status(400).json({ error: 'BuilderBot credentials missing (BOT_ID or BOT_TOKEN)' });
