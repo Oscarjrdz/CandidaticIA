@@ -62,23 +62,20 @@ export default async function handler(req, res) {
                 continue;
             }
 
-            // --- Lógica de Pacing (Retraso exacto) ---
+            // --- Lógica de Pacing (Optimización para Vercel) ---
             const lastProcessed = bulk.lastProcessedAt ? new Date(bulk.lastProcessedAt).getTime() : 0;
             const elapsedSeconds = (now - lastProcessed) / 1000;
 
-            // Si no ha pasado el tiempo del delay desde el último mensaje enviado, esperamos a la siguiente ejecución
             if (elapsedSeconds < bulk.delaySeconds) {
-                logs.push(`Campaña '${bulk.name}' esperando cooldown (${elapsedSeconds.toFixed(0)}s de ${bulk.delaySeconds}s)`);
+                logs.push(`Campaña '${bulk.name}' esperando (${elapsedSeconds.toFixed(0)}s/${bulk.delaySeconds}s)`);
                 continue;
             }
 
-            // Calculamos cuántos mensajes podemos enviar en este minuto (60s) respetando el delay.
-            // Ejemplo: Si delay = 30s, podemos enviar 2 mensajes por minuto.
-            // Si delay = 10s, podemos enviar 6 mensajes por minuto.
-            // Limitamos a un máximo de 5 por ejecución por seguridad con el tiempo de Vercel (10s).
-            const messagesPerMinute = Math.max(1, Math.floor(60 / (bulk.delaySeconds || 1)));
-            const batchSize = Math.min(5, messagesPerMinute);
-
+            // Para asegurar estabilidad en Vercel (límite 10s) y no romper el proceso:
+            // 1. Si el delay configurado es >= 7s, solo mandamos 1 por cada cron (cada minuto)
+            //    Esto es lo más seguro y respeta el delay con creces.
+            // 2. Si es < 7s, podemos mandar una pequeña ráfaga con esperas reales.
+            const batchSize = bulk.delaySeconds >= 7 ? 1 : Math.min(3, Math.floor(8 / (bulk.delaySeconds || 1)));
             const candidatesToProcess = bulk.recipients.slice(bulk.sentCount, bulk.sentCount + batchSize);
 
             bulk.status = 'sending';
@@ -128,9 +125,8 @@ export default async function handler(req, res) {
                         ultimoMensaje: new Date().toISOString()
                     });
 
-                    // Si hay más en la cola de esta ejecución, esperamos el delay configurado
-                    if (i < candidatesToProcess.length - 1) {
-                        logs.push(`Esperando delay de ${bulk.delaySeconds}s antes del siguiente envío...`);
+                    // Si hay ráfaga, esperamos el delay corto
+                    if (candidatesToProcess.length > 1 && i < candidatesToProcess.length - 1) {
                         await new Promise(r => setTimeout(r, bulk.delaySeconds * 1000));
                     }
                 } else {
