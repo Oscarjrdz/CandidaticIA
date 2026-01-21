@@ -44,6 +44,10 @@
         {
             "path": "/api/cron/check-scheduled-messages",
             "schedule": "* * * * *"
+        },
+        {
+            "path": "/api/cron/process-bulks",
+            "schedule": "* * * * *"
         }
     ]
 }
