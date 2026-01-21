@@ -109,7 +109,7 @@ const VacanciesSection = ({ showToast }) => {
     };
 
     const handlePurgeFiles = async () => {
-        if (!confirm('¿Estás seguro de que deseas limpiar los archivos duplicados en BuilderBot? Esto no afectará a las vacantes en tu base de datos local.')) return;
+        if (!confirm('¿Estás seguro de que deseas limpiar los archivos duplicados en BuilderBot?')) return;
 
         setLoading(true);
         try {
@@ -119,11 +119,15 @@ const VacanciesSection = ({ showToast }) => {
             const data = await res.json();
 
             if (res.ok) {
-                showToast(data.message || 'Archivos limpiados correctamente', 'success');
+                // Show detailed report in alert for debugging
+                alert(`REPORTE DE LIMPIEZA:\n\n${data.message}\n\nDetalles:\nEncontrados: ${data.debug?.found}\nCoincidencias: ${data.debug?.filesFound?.length}\nBorrados Exitosos: ${data.debug?.deleted}\nErrores: ${data.debug?.errors?.join(', ')}`);
+                showToast('Limpieza completada', 'success');
             } else {
-                showToast(data.error || 'Error al limpiar archivos', 'error');
+                alert(`ERROR EN LIMPIEZA:\n${data.error}\nDetalles: ${data.details}`);
+                showToast('Error al limpiar archivos', 'error');
             }
         } catch (error) {
+            console.error(error);
             showToast('Error de conexión', 'error');
         } finally {
             setLoading(false);

@@ -69,45 +69,64 @@ const syncVacanciesToBuilderBot = async (redis, vacancies) => {
 
 /**
  * Helper: List and delete old 'vacantes' files
- * Returns count of deleted files
+ * Returns debug info object
  */
 const cleanupOldFiles = async (botId, apiKey, answerId) => {
     console.log('🧹 Cleaning up old vacancies files...');
-    let deletedCount = 0;
+    const result = {
+        found: 0,
+        deleted: 0,
+        errors: [],
+        filesFound: []
+    };
+
     try {
-        const listRes = await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files`, {
+        // MATCH export-chats.js: Add ?type=files
+        const listRes = await fetch(`${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files?type=files`, {
             method: 'GET',
             headers: { 'x-api-builderbot': apiKey }
         });
 
         if (listRes.ok) {
-            const files = await listRes.json();
-            if (Array.isArray(files)) {
-                // Filter: Check 'filename' OR 'name'
-                const duplicates = files.filter(f => {
-                    const name = f.filename || f.name || '';
-                    return name === 'vacantes.txt' || name.startsWith('vacantes');
-                });
+            const rawData = await listRes.json();
+            // Handle various response structrues
+            let files = [];
+            if (Array.isArray(rawData)) files = rawData;
+            else if (rawData && Array.isArray(rawData.files)) files = rawData.files;
+            else if (rawData && Array.isArray(rawData.data)) files = rawData.data;
 
-                console.log(`Found ${duplicates.length} old files to delete.`);
+            result.found = files.length;
 
-                for (const file of duplicates) {
-                    try {
-                        const fileId = file.id || file.file_id;
-                        if (fileId) {
-                            await deleteFileFromBuilderBot(botId, apiKey, answerId, fileId);
-                            deletedCount++;
-                        }
-                    } catch (delErr) {
-                        console.warn('Error deleting specific file:', delErr);
+            // Filter: Check 'filename' OR 'name'
+            const duplicates = files.filter(f => {
+                const name = f.filename || f.name || '';
+                // Strict check: must start with vacantes
+                return name === 'vacantes.txt' || name.startsWith('vacantes');
+            });
+
+            result.filesFound = duplicates.map(f => f.filename || f.name);
+            console.log(`Found ${duplicates.length} old files to delete.`);
+
+            for (const file of duplicates) {
+                try {
+                    const fileId = file.id || file.file_id;
+                    if (fileId) {
+                        await deleteFileFromBuilderBot(botId, apiKey, answerId, fileId);
+                        result.deleted++;
                     }
+                } catch (delErr) {
+                    console.warn('Error deleting specific file:', delErr);
+                    result.errors.push(delErr.message);
                 }
             }
+        } else {
+            result.errors.push(`List failed: ${listRes.status}`);
         }
     } catch (listErr) {
         console.error('Failed to list files for cleanup:', listErr);
+        result.errors.push(listErr.message);
     }
-    return deletedCount;
+    return result;
 };
 
 const deleteFileFromBuilderBot = async (botId, apiKey, answerId, fileId) => {
@@ -207,8 +226,6 @@ export default async function handler(req, res) {
             await redis.set(KEY, JSON.stringify(vacancies));
 
             // TRIGGER SYNC
-            // Run in background to keep API fast? Node serverless functions might kill it. 
-            // Better to await it to ensure it completes, even if it adds latency.
             await syncVacanciesToBuilderBot(redis, vacancies);
 
             return res.status(201).json({
@@ -252,8 +269,13 @@ export default async function handler(req, res) {
                     const { botId, apiKey, answerId } = JSON.parse(credsJson);
 
                     // Run the cleanup logic directly
-                    const count = await cleanupOldFiles(botId, apiKey, answerId);
-                    return res.status(200).json({ success: true, message: `Purged ${count} files.` });
+                    const debug = await cleanupOldFiles(botId, apiKey, answerId);
+
+                    return res.status(200).json({
+                        success: true,
+                        message: `Purge Complete. Found: ${debug.found}, Matches: ${debug.filesFound.length}, Deleted: ${debug.deleted}`,
+                        debug: debug
+                    });
                 } catch (err) {
                     return res.status(500).json({ error: 'Purge failed', details: err.message });
                 }
