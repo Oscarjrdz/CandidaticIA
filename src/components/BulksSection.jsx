@@ -38,6 +38,7 @@ const BulksSection = ({ showToast }) => {
     const [filteredCandidates, setFilteredCandidates] = useState([]);
     const [lastActiveInput, setLastActiveInput] = useState(null);
     const [previewCandidate, setPreviewCandidate] = useState(null);
+    const [availableFields, setAvailableFields] = useState([]);
 
     // Update preview candidate when filtered list changes
     useEffect(() => {
@@ -51,12 +52,17 @@ const BulksSection = ({ showToast }) => {
     const substituteVariables = (text, candidate) => {
         if (!candidate || !text) return text;
         let result = text;
+
+        // Standard fields
         result = result.replace(/{{nombre}}/g, candidate.nombre || 'Candidato');
         result = result.replace(/{{whatsapp}}/g, candidate.whatsapp || '');
-        result = result.replace(/{{municipio}}/g, candidate.municipio || 'N/A');
-        result = result.replace(/{{puesto}}/g, candidate.puesto || 'N/A');
-        result = result.replace(/{{categoria}}/g, candidate.categoria || 'N/A');
-        result = result.replace(/{{fechaNacimiento}}/g, candidate.fechaNacimiento || 'N/A');
+
+        // Dynamic fields from availableFields
+        availableFields.forEach(field => {
+            const regex = new RegExp(`{{${field.value}}}`, 'g');
+            result = result.replace(regex, candidate[field.value] || 'N/A');
+        });
+
         return result;
     };
 
@@ -70,10 +76,7 @@ const BulksSection = ({ showToast }) => {
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
         { label: 'WhatsApp', value: '{{whatsapp}}' },
-        { label: 'Municipio', value: '{{municipio}}' },
-        { label: 'Puesto', value: '{{puesto}}' },
-        { label: 'Categoría', value: '{{categoria}}' },
-        { label: 'Fecha Nac.', value: '{{fechaNacimiento}}' }
+        ...availableFields.map(f => ({ label: f.label, value: `{{${f.value}}}` }))
     ];
 
     const copyToClipboard = (text) => {

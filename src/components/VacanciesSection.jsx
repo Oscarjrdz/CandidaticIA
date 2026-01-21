@@ -23,13 +23,12 @@ const VacanciesSection = ({ showToast }) => {
         description: ''
     });
 
+    const [availableFields, setAvailableFields] = useState([]);
+
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
         { label: 'WhatsApp', value: '{{whatsapp}}' },
-        { label: 'Municipio', value: '{{municipio}}' },
-        { label: 'Puesto', value: '{{puesto}}' },
-        { label: 'Categoría', value: '{{categoria}}' },
-        { label: 'Fecha Nac.', value: '{{fechaNacimiento}}' }
+        ...availableFields.map(f => ({ label: f.label, value: `{{${f.value}}}` }))
     ];
 
     const copyToClipboard = (text) => {
@@ -47,10 +46,23 @@ const VacanciesSection = ({ showToast }) => {
         showToast(`Insertado: ${tagValue}`, 'success');
     };
 
-    // Load Vacancies
+    // Load Initial Data
     useEffect(() => {
         loadVacancies();
+        loadFields();
     }, []);
+
+    const loadFields = async () => {
+        try {
+            const res = await fetch('/api/fields');
+            const data = await res.json();
+            if (data.success) {
+                setAvailableFields(data.fields || []);
+            }
+        } catch (e) {
+            console.error('Error loading fields:', e);
+        }
+    };
 
     const loadVacancies = async () => {
         try {

@@ -27,13 +27,12 @@ const AssistantSection = ({ showToast }) => {
     const [selectedFiles, setSelectedFiles] = useState(new Set());
     const [selectAll, setSelectAll] = useState(false);
     const [deletingBatch, setDeletingBatch] = useState(false);
+    const [availableFields, setAvailableFields] = useState([]);
 
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
         { label: 'WhatsApp', value: '{{whatsapp}}' },
-        { label: 'Municipio', value: '{{municipio}}' },
-        { label: 'Puesto', value: '{{puesto}}' },
-        { label: 'Categoría', value: '{{categoria}}' }
+        ...availableFields.map(f => ({ label: f.label, value: `{{${f.value}}}` }))
     ];
 
     const copyToClipboard = (text) => {
@@ -50,10 +49,22 @@ const AssistantSection = ({ showToast }) => {
         const creds = getCredentials();
         if (creds && creds.botId && creds.answerId && creds.apiKey) {
             setCredentials(creds);
-            // Load initial data based on simplified logic (maybe just prompt first)
             fetchInstructions(creds);
         }
+        loadFields();
     }, []);
+
+    const loadFields = async () => {
+        try {
+            const res = await fetch('/api/fields');
+            const data = await res.json();
+            if (data.success) {
+                setAvailableFields(data.fields || []);
+            }
+        } catch (e) {
+            console.error('Error loading fields:', e);
+        }
+    };
 
     useEffect(() => {
         console.log('🔄 AssistantSection useEffect triggered:', {

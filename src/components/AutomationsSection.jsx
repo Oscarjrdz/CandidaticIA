@@ -794,6 +794,7 @@ const AutomationsSection = ({ showToast }) => {
                     <CreateScheduledRuleModal
                         onClose={() => setShowSchedModal(false)}
                         showToast={showToast}
+                        fields={fields}
                         onSuccess={() => {
                             setShowSchedModal(false);
                             loadSchedRules();
@@ -942,7 +943,7 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
 
 export default AutomationsSection;
 
-const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast }) => {
+const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => {
     const [name, setName] = useState('');
     const [userMinutes, setUserMinutes] = useState(1440); // 24h default
     const [botMinutes, setBotMinutes] = useState(0);
@@ -954,9 +955,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast }) => {
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
         { label: 'WhatsApp', value: '{{whatsapp}}' },
-        { label: 'Municipio', value: '{{municipio}}' },
-        { label: 'Puesto', value: '{{puesto}}' },
-        { label: 'Categoría', value: '{{categoria}}' }
+        ...(fields || []).map(f => ({ label: f.label, value: `{{${f.value}}}` }))
     ];
 
     const copyToClipboard = (text) => {
