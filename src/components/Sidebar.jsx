@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Settings, Bot, History, Zap, Briefcase, Send } from 'lucide-react';
+import { Users, Settings, Bot, History, Zap, Briefcase, Send, User } from 'lucide-react';
 
 /**
  * Sidebar de navegación
@@ -10,6 +10,12 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
             id: 'candidates',
             label: 'Candidatos',
             icon: Users,
+            position: 'top'
+        },
+        {
+            id: 'users',
+            label: 'Usuarios',
+            icon: Users, // Used Users temporarily to check if it appears
             position: 'top'
         },
         {
@@ -34,6 +40,12 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
             id: 'bulks',
             label: 'Bulks',
             icon: Send,
+            position: 'top'
+        },
+        {
+            id: 'history',
+            label: 'Historial',
+            icon: History,
             position: 'top'
         },
         {
@@ -65,7 +77,7 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
                 title={item.label}
             >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400'}`} />
-                <span className="font-medium">{item.label}</span>
+                <span className="font-medium text-sm">{item.label}</span>
             </button>
         );
     };
@@ -73,24 +85,24 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
     return (
         <aside className="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col h-screen sticky top-0">
             {/* Logo/Header */}
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-red-500">
                 <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
                         <Users className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">
                             Candidatic IA
                         </h2>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                            v1.0
+                        <p className="text-xs text-white">
+                            v1.0 - DEBUG_RED
                         </p>
                     </div>
                 </div>
             </div>
 
             {/* Menu Items - Top */}
-            <nav className="flex-1 p-4 space-y-2">
+            <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
                 {topItems.map(item => (
                     <MenuItem key={item.id} item={item} />
                 ))}

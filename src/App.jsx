@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Moon, Sun, Download, Upload, Trash2 } from 'lucide-react';
-import { useToast } from './components/ui/Toast';
+import { useToast } from './hooks/useToast';
 import Button from './components/ui/Button';
 import Sidebar from './components/Sidebar';
 import CandidatesSection from './components/CandidatesSection';
@@ -10,6 +10,7 @@ import AssistantSection from './components/AssistantSection';
 import AutomationsSection from './components/AutomationsSection';
 import VacanciesSection from './components/VacanciesSection';
 import BulksSection from './components/BulksSection';
+import UsersSection from './components/UsersSection';
 import { getTheme, saveTheme, exportConfig, importConfig, clearAllStorage } from './utils/storage';
 
 
@@ -128,13 +129,15 @@ function App() {
                         : activeSection === 'vacancies' ? 'Vacantes'
                           : activeSection === 'history' ? 'Historial'
                             : activeSection === 'bulks' ? 'Bulks'
-                              : 'Configuración'}
+                              : activeSection === 'users' ? 'Usuarios'
+                                : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
                     : activeSection === 'assistant' ? 'Gestión del Prompt y Archivos del Asistente'
                       : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
-                        : 'Configuración de BuilderBot API'
+                        : activeSection === 'users' ? 'Gestión de equipo y permisos'
+                          : 'Configuración de BuilderBot API'
                   }
                 </p>
               </div>
@@ -197,6 +200,8 @@ function App() {
             <VacanciesSection showToast={showToast} />
           ) : activeSection === 'bulks' ? (
             <BulksSection showToast={showToast} />
+          ) : activeSection === 'users' ? (
+            <UsersSection showToast={showToast} />
           ) : (
             <SettingsSection
               botId={botId}

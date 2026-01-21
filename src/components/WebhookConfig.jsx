@@ -14,24 +14,29 @@ const WebhookConfig = ({ botId, apiKey, showToast }) => {
     const [loading, setLoading] = useState(true);
     const [environment, setEnvironment] = useState('development');
 
+    const loadWebhookConfig = async () => {
+        setLoading(true);
+        try {
+            const result = await getWebhookConfig();
+            if (result.success) {
+                setWebhookUrl(result.data.webhookUrl || '');
+                setEnvironment(result.data.environment || 'development'); // Keep environment update
+            } else {
+                setWebhookUrl('Error cargando URL'); // Keep error state for webhookUrl
+                showToast('Error obteniendo configuración del webhook', 'error'); // Keep toast for error
+            }
+        } catch {
+            console.error('Error cargando config');
+            setWebhookUrl('Error cargando URL'); // Ensure webhookUrl shows error on catch
+            showToast('Error obteniendo configuración del webhook', 'error'); // Ensure toast on catch
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         loadWebhookConfig();
     }, []);
-
-    const loadWebhookConfig = async () => {
-        setLoading(true);
-        const result = await getWebhookConfig();
-
-        if (result.success) {
-            setWebhookUrl(result.data.webhookUrl);
-            setEnvironment(result.data.environment);
-        } else {
-            setWebhookUrl('Error cargando URL');
-            showToast('Error obteniendo configuración del webhook', 'error');
-        }
-
-        setLoading(false);
-    };
 
     const handleCopy = async () => {
         try {
@@ -39,7 +44,7 @@ const WebhookConfig = ({ botId, apiKey, showToast }) => {
             setCopied(true);
             showToast('URL copiada al portapapeles', 'success');
             setTimeout(() => setCopied(false), 2000);
-        } catch (error) {
+        } catch {
             showToast('Error al copiar URL', 'error');
         }
     };
@@ -96,8 +101,8 @@ const WebhookConfig = ({ botId, apiKey, showToast }) => {
                         </p>
                         {environment && (
                             <span className={`text-xs px-2 py-1 rounded ${environment === 'production'
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                                 }`}>
                                 {environment}
                             </span>

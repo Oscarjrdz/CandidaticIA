@@ -104,35 +104,6 @@ const EventMonitor = ({ showToast }) => {
     const [showRealEvents, setShowRealEvents] = useState(true);
     const [lastUpdate, setLastUpdate] = useState(null);
 
-    useEffect(() => {
-        const saved = getEventSettings();
-        if (Object.keys(saved).length > 0) {
-            setEnabledEvents(saved);
-        } else {
-            // Por defecto, todos activos
-            const defaultSettings = {};
-            AVAILABLE_EVENTS.forEach(event => {
-                defaultSettings[event.name] = true;
-            });
-            setEnabledEvents(defaultSettings);
-        }
-
-        // Cargar eventos reales al montar
-        loadRealEvents();
-
-        // Polling cada 5 segundos
-        const subscription = new EventSubscription((events) => {
-            setRealEvents(events);
-            setLastUpdate(new Date());
-        }, 5000);
-
-        subscription.start();
-
-        return () => {
-            subscription.stop();
-        };
-    }, []);
-
     const loadRealEvents = async () => {
         setLoading(true);
         const result = await getEvents(50, 0);
@@ -149,6 +120,35 @@ const EventMonitor = ({ showToast }) => {
 
         setLoading(false);
     };
+
+    useEffect(() => {
+        const checkSaved = () => {
+            const saved = getEventSettings();
+            if (Object.keys(saved).length > 0) {
+                setEnabledEvents(saved);
+            } else {
+                const defaultSettings = {};
+                AVAILABLE_EVENTS.forEach(event => {
+                    defaultSettings[event.name] = true;
+                });
+                setEnabledEvents(defaultSettings);
+            }
+        };
+        checkSaved();
+        loadRealEvents();
+
+        // Polling cada 5 segundos
+        const subscription = new EventSubscription((events) => {
+            setRealEvents(events);
+            setLastUpdate(new Date());
+        }, 5000);
+
+        subscription.start();
+
+        return () => {
+            subscription.stop();
+        };
+    }, []);
 
     const toggleEvent = (eventName) => {
         const newSettings = {

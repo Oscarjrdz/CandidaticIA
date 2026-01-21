@@ -649,3 +649,68 @@ export const deleteBulk = async (id) => {
     }
     return false;
 };
+
+/**
+ * ==========================================
+ * FUNCIONES PARA USUARIOS DEL SISTEMA
+ * ==========================================
+ */
+
+export const getUsers = async () => {
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            const ids = await redis.zrevrange('users:list', 0, -1);
+            if (!ids || ids.length === 0) return [];
+
+            const pipeline = redis.pipeline();
+            ids.forEach(id => pipeline.get(`user:${id}`));
+            const results = await pipeline.exec();
+
+            return results
+                .map(([err, res]) => res ? JSON.parse(res) : null)
+                .filter(u => u !== null);
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            return [];
+        }
+    }
+    return [];
+};
+
+export const saveUser = async (userData) => {
+    const id = userData.id || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const user = {
+        ...userData,
+        id,
+        createdAt: userData.createdAt || new Date().toISOString()
+    };
+
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            await redis.set(`user:${id}`, JSON.stringify(user));
+            await redis.zadd('users:list', Date.now(), id);
+            return user;
+        } catch (error) {
+            console.error('Error saving user:', error);
+            return null;
+        }
+    }
+    return null;
+};
+
+export const deleteUser = async (id) => {
+    if (isKVAvailable()) {
+        try {
+            const redis = getRedisClient();
+            await redis.del(`user:${id}`);
+            await redis.zrem('users:list', id);
+            return true;
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            return false;
+        }
+    }
+    return false;
+};
