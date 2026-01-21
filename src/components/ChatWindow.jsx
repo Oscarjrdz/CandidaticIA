@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Loader2, MessageCircle, Move } from 'lucide-react';
+import { X, Send, Loader2, MessageCircle, Move, Copy, Tag } from 'lucide-react';
 import Button from './ui/Button';
 
 /**
@@ -9,6 +9,7 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [sending, setSending] = useState(false);
+    const [availableFields, setAvailableFields] = useState([]);
 
     // Draggable Logic
     const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -41,10 +42,23 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
     useEffect(() => {
         if (isOpen && candidate) {
             loadMessages();
+            loadFields();
             const interval = setInterval(loadMessages, 3000);
             return () => clearInterval(interval);
         }
     }, [isOpen, candidate]);
+
+    const loadFields = async () => {
+        try {
+            const res = await fetch('/api/fields');
+            const data = await res.json();
+            if (data.success) {
+                setAvailableFields(data.fields || []);
+            }
+        } catch (e) {
+            console.error('Error loading fields:', e);
+        }
+    };
 
     // Auto-scroll ONLY on new messages (detect length change)
     const prevMessagesLength = useRef(0);
@@ -279,8 +293,31 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                     <div ref={messagesEndRef} />
                 </div>
 
+                {/* Variable Tray */}
+                {(availableFields.length > 0) && (
+                    <div className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700 overflow-x-auto whitespace-nowrap scrollbar-hide">
+                        <div className="flex space-x-1.5">
+                            {[
+                                { label: 'Nombre', value: '{{nombre}}' },
+                                { label: 'WhatsApp', value: '{{whatsapp}}' },
+                                ...availableFields.map(f => ({ label: f.label, value: `{{${f.value}}}` }))
+                            ].map(tag => (
+                                <button
+                                    key={tag.value}
+                                    type="button"
+                                    onClick={() => setNewMessage(prev => prev + tag.value)}
+                                    className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded border border-blue-100 dark:border-blue-800 text-[10px] font-medium hover:bg-blue-100 dark:hover:bg-blue-900/60 transition-colors"
+                                    title={`Insertar ${tag.label}`}
+                                >
+                                    {tag.value}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Input Area */}
-                <div className="p-3 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                <div className="p-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
                     <form onSubmit={handleSend} className="flex space-x-2">
                         <input
                             type="text"
