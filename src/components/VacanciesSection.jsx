@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil } from 'lucide-react';
+import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -22,6 +22,20 @@ const VacanciesSection = ({ showToast }) => {
         category: '',
         description: ''
     });
+
+    const availableTags = [
+        { label: 'Nombre', value: '{{nombre}}' },
+        { label: 'WhatsApp', value: '{{whatsapp}}' },
+        { label: 'Municipio', value: '{{municipio}}' },
+        { label: 'Puesto', value: '{{puesto}}' },
+        { label: 'Categoría', value: '{{categoria}}' },
+        { label: 'Fecha Nac.', value: '{{fechaNacimiento}}' }
+    ];
+
+    const copyToClipboard = (text) => {
+        navigator.clipboard.writeText(text);
+        showToast(`Copiado: ${text}`, 'success');
+    };
 
     // Load Vacancies
     useEffect(() => {
@@ -300,9 +314,24 @@ const VacanciesSection = ({ showToast }) => {
                     />
 
                     <div className="space-y-1">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Descripción
-                        </label>
+                        <div className="flex items-center justify-between">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Descripción
+                            </label>
+                            <div className="flex flex-wrap gap-1 justify-end">
+                                {availableTags.map(tag => (
+                                    <button
+                                        key={tag.value}
+                                        onClick={() => copyToClipboard(tag.value)}
+                                        className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-[10px] font-mono text-gray-600 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 transition-all"
+                                        title={`Copiar ${tag.label}`}
+                                    >
+                                        <span>{tag.value}</span>
+                                        <Copy className="w-2.5 h-2.5 opacity-50" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                         <textarea
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm"
                             rows={4}
