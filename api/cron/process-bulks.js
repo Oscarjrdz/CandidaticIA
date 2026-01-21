@@ -62,25 +62,31 @@ export default async function handler(req, res) {
                 continue;
             }
 
-            // Check delay (cooldown between messages in this campaign)
+            // --- Lógica de Pacing (Retraso exacto) ---
             const lastProcessed = bulk.lastProcessedAt ? new Date(bulk.lastProcessedAt).getTime() : 0;
             const elapsedSeconds = (now - lastProcessed) / 1000;
 
+            // Si no ha pasado el tiempo del delay desde el último mensaje enviado, esperamos a la siguiente ejecución
             if (elapsedSeconds < bulk.delaySeconds) {
-                logs.push(`Campaign '${bulk.name}' is on cooldown (${elapsedSeconds.toFixed(0)}s < ${bulk.delaySeconds}s)`);
+                logs.push(`Campaña '${bulk.name}' esperando cooldown (${elapsedSeconds.toFixed(0)}s de ${bulk.delaySeconds}s)`);
                 continue;
             }
 
-            // Si el delay es grande (>=10s), enviamos SOLO UNO por cada corrida de cron (cada minuto)
-            // Esto garantiza que el delay se respeta de forma segura en serverless (cron = 1min).
-            const candidatesToProcess = bulk.delaySeconds >= 10
-                ? [bulk.recipients[bulk.sentCount]]
-                : bulk.recipients.slice(bulk.sentCount, bulk.sentCount + 3);
+            // Calculamos cuántos mensajes podemos enviar en este minuto (60s) respetando el delay.
+            // Ejemplo: Si delay = 30s, podemos enviar 2 mensajes por minuto.
+            // Si delay = 10s, podemos enviar 6 mensajes por minuto.
+            // Limitamos a un máximo de 5 por ejecución por seguridad con el tiempo de Vercel (10s).
+            const messagesPerMinute = Math.max(1, Math.floor(60 / (bulk.delaySeconds || 1)));
+            const batchSize = Math.min(5, messagesPerMinute);
+
+            const candidatesToProcess = bulk.recipients.slice(bulk.sentCount, bulk.sentCount + batchSize);
 
             bulk.status = 'sending';
 
-            for (const candidateId of candidatesToProcess) {
+            for (let i = 0; i < candidatesToProcess.length; i++) {
+                const candidateId = candidatesToProcess[i];
                 const candidate = await getCandidateById(candidateId);
+
                 if (!candidate) {
                     bulk.sentCount++;
                     continue;
@@ -92,11 +98,10 @@ export default async function handler(req, res) {
                     continue;
                 }
 
-                // --- Substitución de Variables ---
+                // Substitución de Variables
                 const variants = bulk.messages;
                 let messageBody = variants[Math.floor(Math.random() * variants.length)];
 
-                // Reemplazo dinámico: {{nombre}}, {{municipio}}, etc.
                 Object.keys(candidate).forEach(key => {
                     const value = candidate[key] || '';
                     const regex = new RegExp(`{{${key}}}`, 'gi');
@@ -123,9 +128,10 @@ export default async function handler(req, res) {
                         ultimoMensaje: new Date().toISOString()
                     });
 
-                    // Si enviamos una ráfaga corta (delay < 10s), esperamos 2s entre ellos
-                    if (candidatesToProcess.length > 1) {
-                        await new Promise(r => setTimeout(r, 2000));
+                    // Si hay más en la cola de esta ejecución, esperamos el delay configurado
+                    if (i < candidatesToProcess.length - 1) {
+                        logs.push(`Esperando delay de ${bulk.delaySeconds}s antes del siguiente envío...`);
+                        await new Promise(r => setTimeout(r, bulk.delaySeconds * 1000));
                     }
                 } else {
                     logs.push(`Fallo al enviar a ${candidate.nombre}`);
