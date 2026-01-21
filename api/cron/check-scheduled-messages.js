@@ -136,21 +136,20 @@ export default async function handler(req, res) {
 /**
  * Helper to send message via BuilderBot API
  */
+/**
+ * Helper to send message via BuilderBot API
+ * Simplified to match test-message.js logic
+ */
 async function sendBuilderBotMessage(phone, message) {
     try {
-        // Configuration
         const port = process.env.BUILDERBOT_PORT || '3008';
-        // Base URL: Align with chat.js which uses Cloud API v2 by default
-        // If the user hasn't defined BUILDERBOT_URL, we default to the cloud URL
-        // instead of localhost, which fixes the issue for Cloud-hosted bots.
-        let url = process.env.BUILDERBOT_URL || 'https://app.builderbot.cloud';
-        const botId = process.env.BUILDERBOT_BOT_ID || process.env.BOT_ID;
-        const apiKey = process.env.BUILDERBOT_API_KEY || process.env.API_KEY;
+        // Base assuming Cloud API unless strictly localhost specified
+        const url = process.env.BUILDERBOT_URL || 'https://app.builderbot.cloud/api/v2';
 
-        // Fallback: Try to load credentials from Redis if not in env
-        let effectiveBotId = botId;
-        let effectiveApiKey = apiKey;
+        let effectiveBotId = process.env.BUILDERBOT_BOT_ID || process.env.BOT_ID;
+        let effectiveApiKey = process.env.BUILDERBOT_API_KEY || process.env.API_KEY || process.env.BOT_TOKEN;
 
+        // Fallback: Try to load credentials from Redis
         if (!effectiveBotId || !effectiveApiKey) {
             try {
                 const redis = getRedisClient();
@@ -165,47 +164,43 @@ async function sendBuilderBotMessage(phone, message) {
             }
         }
 
-        // Ensure clean number
         const number = phone.replace(/\D/g, '');
 
-        // Determine correct endpoint and payload based on available config
-        // If we have BOT_ID, assume v2 Cloud API structure provided by user
-        let endpoint = `${url}/v1/messages`; // Default local
+        // Construct Endpoint
+        // Matches test-message.js structure
+        // If url is localhost, it might need v1 logic, but we prioritize cloud v2 for now based on user context
+        let endpoint = '';
+        let headers = { 'Content-Type': 'application/json' };
         let payload = {};
-        let headers = {
-            'Content-Type': 'application/json',
-        };
 
         if (effectiveBotId && effectiveApiKey) {
-            // V2 Cloud API Logic
-            // Example: https://app.builderbot.cloud/api/v2/{id}/messages
-            // Adjust URL if it doesn't already contain /api/v2
-            if (!url.includes('/api/v2')) {
-                // Remove trailing slash
-                url = url.replace(/\/$/, '');
-                // If url is just the domain, append path
-                endpoint = `${url}/api/v2/${effectiveBotId}/messages`;
-            } else {
-                endpoint = `${url}/${effectiveBotId}/messages`;
-            }
+            // Cloud V2
+            // Handle if url already has /api/v2 or not
+            const baseUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+            // Ensure we don't duplicate /api/v2 if it's already in the var
+            const apiPath = baseUrl.includes('/api/v2') ? baseUrl : `${baseUrl}/api/v2`;
+
+            endpoint = `${apiPath}/${effectiveBotId}/messages`;
 
             headers['x-api-builderbot'] = effectiveApiKey;
             payload = {
                 messages: {
+                    type: "text",
                     content: message
                 },
                 number: number,
                 checkIfExists: false
             };
         } else {
-            // Fallback to V1 Local Provider (Standard BuilderBot Local)
+            // Localhost V1 Fallback (Legacy)
+            endpoint = `http://localhost:${port}/v1/messages`;
             payload = {
                 number: number,
                 body: message
             };
         }
 
-        console.log(`📡 Sending to BuilderBot: ${endpoint}`, { number });
+        console.log(`📡 Sending [Scheduled] to ${endpoint}`, { number });
 
         const response = await fetch(endpoint, {
             method: 'POST',
@@ -214,7 +209,8 @@ async function sendBuilderBotMessage(phone, message) {
         });
 
         if (!response.ok) {
-            console.error('BuilderBot API Failed:', await response.text());
+            const errText = await response.text();
+            console.error('BuilderBot API Failed:', errText);
             return false;
         }
 
