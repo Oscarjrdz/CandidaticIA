@@ -78,7 +78,10 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         console.log(`🔍 [AI Query] Initializing Gemini Model...`);
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+        // Intentar con flash (más barato/rápido) y caer a pro si no existe
+        let modelIdentifier = "gemini-1.5-flash";
+        let model = genAI.getGenerativeModel({ model: modelIdentifier });
 
         const systemPrompt = `
 Eres un experto en extracción de datos para un CRM de reclutamiento. 
@@ -104,8 +107,21 @@ Estructura del JSON:
 Consulta del usuario: "${query}"
 `;
 
-        console.log(`🔍 [AI Query] Sending to Gemini...`);
-        const result = await model.generateContent(systemPrompt);
+        console.log(`🔍 [AI Query] Sending to Gemini (${modelIdentifier})...`);
+        let result;
+        try {
+            result = await model.generateContent(systemPrompt);
+        } catch (e) {
+            if (e.message.includes('404') || e.message.includes('not found')) {
+                console.log('⚠️ Flash not found in query, trying gemini-pro...');
+                modelIdentifier = "gemini-pro";
+                model = genAI.getGenerativeModel({ model: modelIdentifier });
+                result = await model.generateContent(systemPrompt);
+            } else {
+                throw e;
+            }
+        }
+
         const response = await result.response;
         const text = response.text();
         console.log(`🔍 [AI Query] Gemini raw response text:`, text);
