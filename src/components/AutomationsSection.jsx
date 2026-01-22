@@ -445,7 +445,7 @@ const AutomationsSection = ({ showToast }) => {
                                                 <select
                                                     value={editValue}
                                                     onChange={(e) => setEditValue(e.target.value)}
-                                                    className="flex-1 px-2 py-1 border border-blue-500 rounded text-xs bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="flex-1 px-2 py-1 border border-blue-500 rounded text-xs bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50"
                                                     autoFocus
                                                 >
                                                     {fields.map(f => (
@@ -493,7 +493,7 @@ const AutomationsSection = ({ showToast }) => {
                                                     type="text"
                                                     value={editValue}
                                                     onChange={(e) => setEditValue(e.target.value)}
-                                                    className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                    className="flex-1 px-2 py-1 border border-blue-500 rounded text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50"
                                                     autoFocus
                                                 />
                                                 <button
@@ -573,7 +573,7 @@ const AutomationsSection = ({ showToast }) => {
                             Configura mensajes de seguimiento automático basados en inactividad
                         </p>
                     </div>
-                    <Button onClick={() => setShowSchedModal(true)} className="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700">
+                    <Button onClick={() => setShowSchedModal(true)} className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700">
                         <Plus className="w-4 h-4" />
                         <span>Crear Seguimiento</span>
                     </Button>
@@ -703,7 +703,7 @@ const AutomationsSection = ({ showToast }) => {
                                                 onClick={() => handleToggleOneTime(rule)}
                                                 className={`px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-all hover:scale-105 ${rule.oneTime
                                                     ? 'bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200'
-                                                    : 'bg-indigo-100 text-indigo-700 border-indigo-200 hover:bg-indigo-200'
+                                                    : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'
                                                     }`}
                                                 title="Clic para cambiar tipo (1 Vez / Ciclo)"
                                             >
@@ -732,7 +732,7 @@ const AutomationsSection = ({ showToast }) => {
                                                 placeholder="52..."
                                                 value={testNumbers[rule.id] || ''}
                                                 onChange={(e) => setTestNumbers(prev => ({ ...prev, [rule.id]: e.target.value }))}
-                                                className="w-full text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                                                className="w-full text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-gray-200 dark:focus:ring-gray-700/50"
                                             />
                                         </td>
 
@@ -891,7 +891,7 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
                             <select
                                 value={field}
                                 onChange={(e) => setField(e.target.value)}
-                                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                                 required
                             >
                                 <option value="">Selecciona un campo...</option>
@@ -918,7 +918,7 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
                             type="text"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             placeholder="Breve descripción de qué captura esta regla"
                         />
                     </div>
@@ -995,7 +995,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-2xl mx-4 overflow-hidden">
                 <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
                     <h3 className="text-xl font-bold text-gray-900 dark:text-white flex items-center">
-                        <Clock className="w-5 h-5 mr-2 text-indigo-500" />
+                        <Clock className="w-5 h-5 mr-2 text-blue-500" />
                         Crear Mensaje Programado
                     </h3>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"><X className="w-5 h-5" /></button>
@@ -1008,7 +1008,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Nombre del Seguimiento *</label>
                         <input
                             value={name} onChange={e => setName(e.target.value)} required
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             placeholder="Ej: Recordatorio 24h"
                         />
                     </div>
@@ -1019,7 +1019,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                             <input
                                 type="number" min="0" required
                                 value={userMinutes} onChange={e => setUserMinutes(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             />
                             <p className="text-xs text-gray-500 mt-1">1440 min = 24 horas</p>
                         </div>
@@ -1028,7 +1028,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                             <input
                                 type="number" min="0" required
                                 value={botMinutes} onChange={e => setBotMinutes(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             />
                             <p className="text-xs text-gray-500 mt-1">Tiempo min. desde último mensaje nuestro</p>
                         </div>
@@ -1043,7 +1043,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                                         key={tag.value}
                                         type="button"
                                         onClick={() => handleTagClick(tag.value)}
-                                        className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-[10px] font-mono text-gray-600 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 transition-all"
+                                        className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-[10px] font-mono text-gray-600 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 transition-all"
                                         title={`Copiar ${tag.label}`}
                                     >
                                         <span>{tag.value}</span>
@@ -1054,7 +1054,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                         </div>
                         <textarea
                             value={message} onChange={e => setMessage(e.target.value)} required rows={3}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             placeholder="Hola, ¿sigues interesado en la vacante?"
                         />
                     </div>
@@ -1066,7 +1066,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                                 type="checkbox"
                                 checked={oneTime}
                                 onChange={(e) => setOneTime(e.target.checked)}
-                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-gray-200 dark:focus:ring-gray-700/50 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                             />
                         </div>
                         <div className="ml-2 text-sm">

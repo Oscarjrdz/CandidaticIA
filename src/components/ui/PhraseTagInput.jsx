@@ -29,7 +29,7 @@ const PhraseTagInput = ({ phrases = [], onChange, placeholder = "Escribe una fra
     };
 
     return (
-        <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-2 bg-white dark:bg-gray-900 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+        <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-2 bg-white dark:bg-gray-900 focus-within:ring-2 focus-within:ring-gray-200 dark:focus-within:ring-gray-700/50 focus-within:border-gray-400 dark:focus-within:border-gray-500">
             <div className="flex flex-wrap gap-2 mb-2">
                 {phrases.map((phrase, index) => (
                     <span

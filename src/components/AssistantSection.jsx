@@ -524,7 +524,7 @@ const AssistantSection = ({ showToast }) => {
                             <textarea
                                 value={instructions}
                                 onChange={(e) => setInstructions(e.target.value)}
-                                className="w-full h-96 p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-sans text-sm leading-relaxed resize-y"
+                                className="w-full h-96 p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-transparent font-sans text-sm leading-relaxed resize-y"
                                 placeholder="Escribe aquí las instrucciones para tu asistente..."
                             />
                         )}
@@ -574,7 +574,7 @@ const AssistantSection = ({ showToast }) => {
                                             type="checkbox"
                                             checked={selectAll}
                                             onChange={handleSelectAll}
-                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer"
+                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-200 dark:focus:ring-gray-700/50 dark:focus:ring-gray-700/50 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer"
                                             title="Seleccionar todos"
                                         />
                                     )}
@@ -651,7 +651,7 @@ const AssistantSection = ({ showToast }) => {
                                                 <div
                                                     key={fileId}
                                                     className={`flex items-center space-x-1.5 p-2 bg-white dark:bg-gray-800 border rounded-md hover:shadow-sm transition-all ${selectedFiles.has(fileId)
-                                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-blue-500'
+                                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1 ring-gray-400'
                                                         : 'border-gray-200 dark:border-gray-700'
                                                         }`}
                                                 >
@@ -659,7 +659,7 @@ const AssistantSection = ({ showToast }) => {
                                                         type="checkbox"
                                                         checked={selectedFiles.has(fileId)}
                                                         onChange={() => handleSelectFile(fileId)}
-                                                        className="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer flex-shrink-0"
+                                                        className="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-200 dark:focus:ring-gray-700/50 dark:focus:ring-gray-700/50 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600 cursor-pointer flex-shrink-0"
                                                     />
                                                     <div className="w-6 h-6 bg-orange-100 dark:bg-orange-900/30 rounded flex items-center justify-center flex-shrink-0">
                                                         <File className="w-3 h-3 text-orange-600 dark:text-orange-400" />
@@ -732,7 +732,7 @@ const DragDropUpload = ({ fileInputRef, handleFileUpload, uploading, uploadStatu
             className={`
                 relative border-2 border-dashed rounded-xl p-10 text-center transition-all duration-200
                 ${dragActive
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-4 ring-blue-100 dark:ring-blue-900/40'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30 ring-4 ring-gray-100 dark:ring-gray-800/40'
                     : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500 bg-gray-50 dark:bg-gray-800/50'
                 }
                 ${uploading ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}

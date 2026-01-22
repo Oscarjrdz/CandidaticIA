@@ -405,7 +405,7 @@ const BulksSection = ({ showToast }) => {
                                     {newCampaign.messages.map((m, idx) => (
                                         <div key={idx} className="relative group">
                                             <textarea
-                                                className="w-full h-24 px-3 py-2 border rounded-lg dark:bg-gray-700 pr-10 focus:ring-2 focus:ring-blue-500"
+                                                className="w-full h-24 px-3 py-2 border rounded-lg dark:bg-gray-700 pr-10 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50"
                                                 placeholder={`Variante ${idx + 1}: Hola {{nombre}}, ¿cómo estás?`}
                                                 value={m}
                                                 onFocus={() => setLastActiveInput(idx)}

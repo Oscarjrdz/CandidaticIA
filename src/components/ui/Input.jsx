@@ -21,7 +21,7 @@ const Input = forwardRef(({
     text-gray-900 dark:text-gray-100
     placeholder-gray-400 dark:placeholder-gray-500
     smooth-transition
-    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+    focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500
     disabled:opacity-50 disabled:cursor-not-allowed
     ${error ? 'border-error focus:ring-error' : 'border-gray-300 dark:border-gray-600'}
     ${Icon ? 'pl-10' : ''}

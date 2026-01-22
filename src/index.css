@@ -11,8 +11,8 @@
   --text-primary: #1a1d29;
   --text-secondary: #6b7280;
   --border-color: #e5e7eb;
-  --accent-brand: #000000;
-  --accent-brand-light: #f3f4f6;
+  --accent-brand: #3b82f6;
+  --accent-brand-light: #eff6ff;
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
@@ -25,8 +25,8 @@
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --border-color: #2d3142;
-  --accent-brand: #ffffff;
-  --accent-brand-light: #1f2937;
+  --accent-brand: #60a5fa;
+  --accent-brand-light: #1e293b;
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
@@ -201,7 +201,8 @@ body {
 
 /* Smooth focus rings */
 *:focus-visible {
-  outline: 2px solid var(--accent-brand);
+  outline: 2px solid #9ca3af;
+  /* Gray 400 */
   outline-offset: 2px;
   border-radius: 8px;
 }

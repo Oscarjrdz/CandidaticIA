@@ -540,7 +540,7 @@ const CandidatesSection = ({ showToast }) => {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
                             <Users className="w-6 h-6 text-white" />
                         </div>
                         <div>
@@ -612,11 +612,11 @@ const CandidatesSection = ({ showToast }) => {
                 />
 
                 <div className="relative w-full sm:w-64 group">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-blue-500 transition-colors" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-600 transition-colors" />
                     <input
                         type="text"
                         placeholder="Buscar candidato..."
-                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all dark:text-gray-200"
+                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500 outline-none transition-all dark:text-gray-200"
                         value={search}
                         onChange={(e) => {
                             setSearch(e.target.value);
@@ -631,7 +631,7 @@ const CandidatesSection = ({ showToast }) => {
                         setAiFilteredCandidates(null);
                         loadCandidates();
                     }}
-                    className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
                     title="Recargar"
                 >
                     <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -643,8 +643,8 @@ const CandidatesSection = ({ showToast }) => {
                 <div className="mb-6 animate-spring-in">
                     <div className="ios-glass p-5 rounded-[20px] flex items-center justify-between shadow-ios border-gray-200 dark:border-gray-700/50">
                         <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-gray-900 dark:bg-white rounded-[12px] flex items-center justify-center shadow-sm">
-                                <Sparkles className="w-5 h-5 text-white dark:text-gray-900" />
+                            <div className="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-[12px] flex items-center justify-center shadow-sm">
+                                <Sparkles className="w-5 h-5 text-white" />
                             </div>
                             <div>
                                 <h3 className="text-sm font-bold text-gray-900 dark:text-white">
