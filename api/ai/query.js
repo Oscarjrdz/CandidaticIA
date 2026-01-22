@@ -102,7 +102,13 @@ Reglas:
    Operadores permitidos: ">", "<", ">=", "<=", "==", "contains".
 4. Edad: Si piden "más de 40 años", usa { "filters": { "edad": { "op": ">", "val": 40 } } }.
 5. Keywords: Usa 'keywords' para conceptos abstractos o habilidades (ej: "React", "buena actitud", "responsable") que buscaremos en el chat.
-6. Si menciona una ciudad, usa "municipio". Si menciona un puesto, usa "categoria".
+6. Si menciona una ciudad, usa "municipio". 
+7. Si menciona un puesto (ej: "Ingeniero", "Ventas"), usa "categoria".
+8. Si pregunta si "tiene empleo", "trabaja actualmente" o "desempleado":
+   - Usa el campo 'tieneEmpleo'.
+   - Los valores típicos son "Sí" (para tiene empleo) o "No" (para desempleado).
+   - Ejemplo: "que tenga empleo" -> { "filters": { "tieneEmpleo": "Sí" } }
+   - Ejemplo: "sin trabajo" -> { "filters": { "tieneEmpleo": "No" } }
 
 Estructura del JSON:
 {
