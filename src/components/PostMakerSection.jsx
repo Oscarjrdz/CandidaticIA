@@ -73,10 +73,44 @@ const PostMakerSection = () => {
         setUploadedUrl(null);
     };
 
+    // Helper: Resize Image using Canvas
+    const resizeImage = (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Max width 1200px (standard social media)
+                    const MAX_WIDTH = 1200;
+                    if (width > MAX_WIDTH) {
+                        height = Math.round(height * (MAX_WIDTH / width));
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Compress to JPEG 0.8
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    resolve(dataUrl);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
     const handleFileSelect = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
+        // Preview local immediately (using raw file for speed)
         const reader = new FileReader();
         reader.onload = (ev) => {
             setMedia({ type: 'image', url: ev.target.result, file });
@@ -85,26 +119,26 @@ const PostMakerSection = () => {
 
         setIsUploading(true);
         try {
-            const base64Data = await new Promise((resolve) => {
-                const r = new FileReader();
-                r.onload = () => resolve(r.result);
-                r.readAsDataURL(file);
-            });
+            // Compress before upload
+            const compressedBase64 = await resizeImage(file);
 
             const res = await fetch('/api/upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64Data, type: file.type })
+                body: JSON.stringify({ image: compressedBase64, type: 'image/jpeg' })
             });
 
             const data = await res.json();
             if (data.success) {
                 const finalUrl = data.url.startsWith('http') ? data.url : `${window.location.origin}${data.url}`;
                 setUploadedUrl(finalUrl);
-                showToast('Foto actualizada', 'success');
+                showToast('Foto optimizada y subida correctamente', 'success');
+            } else {
+                showToast('Error en el servidor al subir', 'error');
             }
         } catch (error) {
-            showToast('Error subiendo foto', 'error');
+            console.error(error);
+            showToast('Error de conexión o archivo muy pesado', 'error');
         } finally {
             setIsUploading(false);
         }
@@ -133,7 +167,7 @@ const PostMakerSection = () => {
                 if (res.ok) {
                     showToast('Post actualizado correctamente', 'success');
                     fetchGallery(user.id);
-                    handleCancelEdit(); // Reset
+                    handleCancelEdit();
                 }
             } else {
                 // CREATE
@@ -153,7 +187,7 @@ const PostMakerSection = () => {
                 if (data.success) {
                     showToast('Link Creado. Encuéntralo en tu galería.', 'success');
                     fetchGallery(user?.id);
-                    handleCancelEdit(); // Acts as reset
+                    handleCancelEdit();
                 }
             }
         } catch (e) {
@@ -183,7 +217,7 @@ const PostMakerSection = () => {
                     <div className="space-y-5">
                         {/* Destino */}
                         <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500 uppercase">Link de Destino</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase">Redirect (A dónde irán al dar clic)</label>
                             <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-2 border border-gray-200">
                                 <Link className="w-4 h-4 text-gray-400" />
                                 <input
@@ -191,21 +225,21 @@ const PostMakerSection = () => {
                                     value={targetUrl}
                                     onChange={(e) => setTargetUrl(e.target.value)}
                                     className="w-full bg-transparent border-none text-gray-700 text-sm focus:ring-0"
-                                    placeholder="https://..."
+                                    placeholder="https://tudestino.com/oferta-empleo"
                                 />
                             </div>
                         </div>
 
                         {/* Imagen */}
                         <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500 uppercase">Foto del Post</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase">Foto del Post (Se ajusta a 1200x630)</label>
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
                                     className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors flex items-center gap-2"
                                 >
                                     {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-                                    {isUploading ? 'Subiendo...' : 'Subir Foto'}
+                                    {isUploading ? 'Optimizando...' : 'Subir Foto'}
                                 </button>
                                 <span className="text-xs text-gray-400 truncate max-w-[200px]">
                                     {media?.file?.name || (uploadedUrl ? 'Imagen cargada' : 'Sin imagen')}
