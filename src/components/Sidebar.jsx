@@ -52,9 +52,9 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
     };
 
     return (
-        <aside className="w-64 bg-slate-950 flex flex-col h-screen sticky top-0 overflow-hidden shadow-2xl">
+        <aside className="w-64 bg-blue-700 flex flex-col h-screen sticky top-0 overflow-hidden shadow-2xl transition-colors duration-500">
             {/* Background pattern/gradient */}
-            <div className="absolute inset-0 bg-gradient-to-b from-blue-900/40 via-transparent to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-800 pointer-events-none" />
 
             {/* Logo/Header - LOGIN STYLE */}
             <div className="relative p-6 mb-2">
