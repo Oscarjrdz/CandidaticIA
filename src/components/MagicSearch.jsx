@@ -77,61 +77,67 @@ const MagicSearch = ({ onResults, showToast }) => {
     );
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
             <div
                 ref={modalRef}
-                className="w-full max-w-2xl ios-glass rounded-[24px] shadow-ios overflow-hidden animate-spring-in relative"
+                className="w-full max-w-3xl bg-white dark:bg-gray-900 rounded-3xl shadow-2xl overflow-hidden animate-spring-in border border-gray-100 dark:border-gray-800"
             >
-                <div className="p-8 space-y-6">
+                <div className="p-10 space-y-8">
                     {/* Header: Clean & Personal */}
-                    <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                Hola, <span className="capitalize">{userName || 'Oscar'}</span>
+                    <div className="flex items-start justify-between">
+                        <div className="space-y-1">
+                            <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+                                Hola, <span className="text-blue-600 dark:text-blue-400">{userName || 'Recruiter'}</span>
                             </h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 font-medium opacity-80">
-                                ¿Cómo puedo ayudarte hoy?
+                            <p className="text-lg text-gray-500 dark:text-gray-400 font-medium">
+                                ¿Qué talento estás buscando hoy?
                             </p>
                         </div>
                         <button
                             type="button"
                             onClick={() => setIsOpen(false)}
-                            className="p-2 rounded-full bg-gray-200/50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                            className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
                         >
-                            <X className="w-5 h-5" />
+                            <X className="w-6 h-6" />
                         </button>
                     </div>
 
-                    {/* Neutral Search Input - NO BLUE RINGS */}
+                    {/* Neutral Search Input - Modern & Large */}
                     <form onSubmit={handleSearch} className="relative group">
-                        <div className="relative flex items-center bg-gray-100 dark:bg-gray-900/60 rounded-2xl px-5 border-2 border-transparent transition-all focus-within:border-gray-300 dark:focus-within:border-gray-700">
-                            <div className="mr-3">
+                        <div className="relative flex items-center bg-white dark:bg-gray-950 rounded-2xl px-6 py-2 border-2 border-gray-100 dark:border-gray-800 shadow-sm transition-all focus-within:border-gray-300 dark:focus-within:border-gray-700 focus-within:shadow-md">
+                            <div className="mr-5">
                                 {loading ? (
-                                    <Loader2 className="w-6 h-6 text-gray-900 dark:text-white animate-spin" />
+                                    <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin" />
                                 ) : (
-                                    <Search className="w-5 h-5 text-gray-400" />
+                                    <Sparkles className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                                 )}
                             </div>
                             <input
                                 type="text"
                                 autoFocus
-                                placeholder="Ej: Candidatos mayores a 40 años en Monterrey..."
+                                placeholder="Describe a tu candidato ideal y deja que la IA haga su magia..."
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
-                                className="w-full py-5 bg-transparent outline-none ring-0 border-none shadow-none text-xl font-medium text-gray-900 dark:text-white placeholder-gray-400"
+                                className="w-full py-6 bg-transparent outline-none ring-0 border-none shadow-none text-2xl font-medium text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600"
                             />
                         </div>
                     </form>
 
                     {/* Status Footer - Neutral */}
-                    <div className="flex items-center justify-between pt-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-                        <div className="flex items-center space-x-4">
-                            <div className="flex items-center space-x-1.5 opacity-60">
-                                <Sparkles className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
-                                <span>Powered by Gemini AI</span>
-                            </div>
-                            <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-                            <span className="opacity-40 font-medium">Búsqueda Inteligente v2.0</span>
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-800">
+                        <div className="flex items-center space-x-2 text-xs font-bold tracking-widest text-gray-400 uppercase">
+                            <Sparkles className="w-3 h-3" />
+                            <span>Powered by Gemini AI</span>
+                        </div>
+                        <div className="flex items-center space-x-4 text-xs font-medium text-gray-400">
+                            <span className="flex items-center space-x-1">
+                                <span className="px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">↵</span>
+                                <span>para buscar</span>
+                            </span>
+                            <span className="flex items-center space-x-1">
+                                <span className="px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">esc</span>
+                                <span>para cerrar</span>
+                            </span>
                         </div>
                     </div>
                 </div>
