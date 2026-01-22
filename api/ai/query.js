@@ -40,10 +40,14 @@ export default async function handler(req, res) {
             }
         }
 
-        if (!apiKey) {
+        if (apiKey) {
+            apiKey = String(apiKey).trim();
+        }
+
+        if (!apiKey || apiKey === 'undefined' || apiKey === 'null') {
             return res.status(500).json({
                 error: 'AI no configurada',
-                message: 'Falta GEMINI_API_KEY en Vercel o en la configuración de Settings.'
+                message: 'Falta GEMINI_API_KEY en Vercel o en la configuración de Settings. Por favor verifica que la llave sea válida.'
             });
         }
 
