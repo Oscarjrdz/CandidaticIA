@@ -1,11 +1,29 @@
-import { getUsers, saveUser, deleteUser } from './utils/storage';
-
 export default async function handler(req, res) {
-    // Basic auth check could be added here later if needed
-
     try {
+        // Dynamic import to prevent boot crashes and ensure path resolution
+        const { getUsers, saveUser, deleteUser } = await import('./utils/storage.js');
+
         if (req.method === 'GET') {
-            const users = await getUsers();
+            let users = await getUsers();
+
+            // Auto-seed if no users exist (Always runs on cold start)
+            if (!users || users.length === 0) {
+                console.log('No users found. Seeding default Admin...');
+                const defaultUser = {
+                    id: 'user_default_admin',
+                    name: 'Oscar Rodriguez',
+                    whatsapp: '8116038195',
+                    pin: '1234',
+                    role: 'SuperAdmin',
+                    status: 'Active',
+                    createdAt: new Date().toISOString()
+                };
+
+                // Try to save and capture the result
+                await saveUser(defaultUser);
+                users = await getUsers();
+            }
+
             return res.status(200).json({ success: true, users });
         }
 

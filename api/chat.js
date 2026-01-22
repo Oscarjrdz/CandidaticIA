@@ -6,6 +6,7 @@
 
 import { getMessages, saveMessage, getCandidateById } from './utils/storage.js';
 import { sendTestMessage } from '../src/services/builderbot.js';
+import { substituteVariables } from './utils/shortcuts.js';
 
 // NOTA: Para usar sendTestMessage en el backend, necesitamos adaptar la importación o replicar la lógica
 // ya que builderbot.js usa sintaxis de frontend (fetch) que funciona en Node 18+, pero el path puede ser un problema.
@@ -14,6 +15,7 @@ import { sendTestMessage } from '../src/services/builderbot.js';
 const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
 
 const sendBuilderBotMessage = async (botId, apiKey, number, message) => {
+    console.log('🚀 [sendBuilderBotMessage] Sending:', message);
     try {
         const response = await fetch(`${BUILDERBOT_API_URL}/${botId}/messages`, {
             method: 'POST',
@@ -85,8 +87,21 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'Credenciales de BuilderBot no proporcionadas' });
             }
 
+            // HEADER DE PRUEBA PARA VERIFICAR DESPLIEGUE
+            res.setHeader('X-Debug-Engine', 'Antigravity-v5');
+
+            // Aplicar sustitución de shortcuts (ej: {{nombre}})
+            console.log(`🔍 [Chat API] Self-test {{nombre}}:`, substituteVariables('{{nombre}}', { nombre: 'OK' }));
+            console.log(`🔍 [Chat API] Candidate ID: ${candidateId}`);
+            console.log(`🔍 [Chat API] Candidate keys:`, Object.keys(candidate));
+            console.log(`🔍 [Chat API] Original message: "${message}"`);
+
+            const finalMessage = substituteVariables(message, candidate);
+
+            console.log(`🔍 [Chat API] Final message: "${finalMessage}"`);
+
             // Enviar a BuilderBot
-            const result = await sendBuilderBotMessage(effectiveBotId, effectiveApiKey, candidate.whatsapp, message);
+            const result = await sendBuilderBotMessage(effectiveBotId, effectiveApiKey, candidate.whatsapp, finalMessage);
 
             if (!result.success) {
                 return res.status(502).json({ error: 'Error enviando a BuilderBot', details: result.error });
@@ -95,12 +110,25 @@ export default async function handler(req, res) {
             // Guardar en historial local como mensaje saliente
             const savedMsg = await saveMessage(candidateId, {
                 from: 'me',
-                content: message,
+                content: finalMessage,
                 type: 'text',
                 timestamp: new Date().toISOString()
             });
 
-            return res.status(200).json({ success: true, message: savedMsg });
+            return res.status(200).json({
+                success: true,
+                message: savedMsg,
+                _debug: {
+                    original: message,
+                    processed: finalMessage,
+                    candidateFields: Object.keys(candidate),
+                    candidateData: {
+                        nombre: candidate.nombre,
+                        nombreReal: candidate.nombreReal,
+                        whatsapp: candidate.whatsapp
+                    }
+                }
+            });
         }
 
         return res.status(405).json({ error: 'Método no permitido' });

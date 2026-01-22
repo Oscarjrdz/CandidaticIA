@@ -1,4 +1,5 @@
 import { getRedisClient, saveBulk, getCandidateById, saveMessage, updateCandidate } from '../../api/utils/storage.js';
+import { substituteVariables } from '../utils/shortcuts.js';
 
 /**
  * CRON JOB: Process Bulk Campaigns
@@ -95,15 +96,10 @@ export default async function handler(req, res) {
                     continue;
                 }
 
-                // Substitución de Variables
+                // Substitución de Variables (Centralizada)
                 const variants = bulk.messages;
                 let messageBody = variants[Math.floor(Math.random() * variants.length)];
-
-                Object.keys(candidate).forEach(key => {
-                    const value = candidate[key] || '';
-                    const regex = new RegExp(`{{${key}}}`, 'gi');
-                    messageBody = messageBody.replace(regex, value);
-                });
+                messageBody = substituteVariables(messageBody, candidate);
 
                 // Enviar mensaje
                 const success = await sendBuilderBotMessage(phone, messageBody);

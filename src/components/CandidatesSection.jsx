@@ -106,10 +106,10 @@ const CandidatesSection = ({ showToast }) => {
 
         const processGreenTimers = async () => {
             const promises = candidates.map(async (candidate) => {
-                if (!candidate.ultimoMensaje) return;
+                if (!candidate.ultimoMensajeBot) return;
 
                 // Calculate if timer is ready (green)
-                const lastMessageTime = new Date(candidate.ultimoMensaje).getTime();
+                const lastMessageTime = new Date(candidate.ultimoMensajeBot).getTime();
                 const targetTime = lastMessageTime + (exportTimer * 60 * 1000);
                 const isReady = currentTime >= targetTime;
 
@@ -439,12 +439,17 @@ const CandidatesSection = ({ showToast }) => {
         const minutes = Math.floor(diff / 60000);
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
+        const months = Math.floor(days / 30);
+        const years = Math.floor(days / 365);
 
         if (minutes < 1) return 'Ahora';
         if (minutes < 60) return `Hace ${minutes}m`;
         if (hours < 24) return `Hace ${hours}h`;
-        if (days < 7) return `Hace ${days}d`;
-        return date.toLocaleDateString();
+        if (days < 30) return `Hace ${days}d`;
+        if (months < 12) return `Hace ${months} mes${months !== 1 ? 'es' : ''}`;
+        if (years < 100) return `Hace ${years} año${years !== 1 ? 's' : ''}`;
+
+        return 'Hace siglos';
     };
 
     const formatDateTime = (dateString) => {
@@ -704,7 +709,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 }
 
                                                 // Si no hay último mensaje, no podemos calcular
-                                                const timerTimestamp = candidate.ultimoMensajeBot || candidate.ultimoMensaje;
+                                                const timerTimestamp = candidate.ultimoMensajeBot;
 
                                                 if (!timerTimestamp) {
                                                     return <span className="text-xs text-gray-400">-</span>;

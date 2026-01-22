@@ -6,7 +6,6 @@
  * DELETE /api/vacancies - Delete a vacancy
  */
 
-import { getRedisClient } from './utils/storage.js';
 import { randomUUID } from 'crypto';
 
 const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
@@ -177,16 +176,34 @@ export default async function handler(req, res) {
         return res.status(200).end();
     }
 
-    const redis = getRedisClient();
-
-    if (!redis) {
-        return res.status(500).json({
-            error: 'Redis not available',
-            message: 'REDIS_URL not configured'
-        });
-    }
-
     try {
+        // DYNAMIC IMPORT: Load storage safely
+        const { getRedisClient } = await import('./utils/storage.js');
+        const redis = getRedisClient();
+
+        // En memoria local (storage.js) getRedisClient retorna null,
+        // así que debemos manejar ese caso si estamos en modo "sin redis".
+        // Sin embargo, si storage.js está en modo memoria, getRedisClient retorna null
+        // y este endpoint falla con "redis.get is not a function" o similar.
+        // Adaptaremos para usar memoria si redis es null?
+        // NO, este endpoint está diseñado alrededor de Redis por su uso de 'getKey', etc.
+        // PERO, si estamos en modo memoria, quizás deberíamos simular?
+        // Por ahora, asumimos que si getRedisClient retorna null es un problema de config o modo memoria.
+        // Si es null, retornamos lista vacía para no romper el frontend.
+
+        if (!redis) {
+            console.warn('⚠️ Vacancies API: Redis client is null (Memory Mode?). 返回空列表.');
+            // Si el método es GET, retornamos vacío. Si es POST/PUT, error 501 Not Implemented?
+            // Para mejor UX, permitamos que el frontend cargue vacío en vez de error.
+            if (req.method === 'GET') {
+                return res.status(200).json({ success: true, data: [] });
+            }
+            return res.status(503).json({
+                error: 'Service Unavailable',
+                message: 'Storage service not available (Redis missing)'
+            });
+        }
+
         const KEY = 'candidatic_vacancies';
 
         // GET - List vacancies

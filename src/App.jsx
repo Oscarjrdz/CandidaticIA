@@ -11,17 +11,29 @@ import AutomationsSection from './components/AutomationsSection';
 import VacanciesSection from './components/VacanciesSection';
 import BulksSection from './components/BulksSection';
 import UsersSection from './components/UsersSection';
+import LoginPage from './components/LoginPage'; // LOGIN ENABLED
 import { getTheme, saveTheme, exportConfig, importConfig, clearAllStorage } from './utils/storage';
 
-
-
 function App() {
+  const [user, setUser] = useState(null); // AUTH STATE RESTORED
   const [botId, setBotId] = useState('');
   const [answerId, setAnswerId] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
   const { toast, showToast, hideToast, ToastComponent } = useToast();
+
+  // Check LocalStorage for session
+  useEffect(() => {
+    const savedUser = localStorage.getItem('candidatic_user_session');
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        console.error('Invalid session', e);
+      }
+    }
+  }, []);
 
   // Cargar tema al iniciar
   useEffect(() => {
@@ -45,7 +57,12 @@ function App() {
     }
   };
 
-  // Manejar cambio de credenciales
+  const handleLogout = () => {
+    localStorage.removeItem('candidatic_user_session');
+    setUser(null);
+    showToast('Sesión cerrada', 'info');
+  };
+
   const handleCredentialsChange = (newBotId, newAnswerId, newApiKey) => {
     setBotId(newBotId);
     setAnswerId(newAnswerId);
@@ -107,12 +124,23 @@ function App() {
     }
   };
 
+  // AUTH GUARD
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+        <LoginPage onLogin={setUser} showToast={showToast} />
+        {ToastComponent}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       {/* Sidebar */}
       <Sidebar
         activeSection={activeSection}
         onSectionChange={setActiveSection}
+        onLogout={handleLogout}
       />
 
       {/* Main Content */}
@@ -142,7 +170,26 @@ function App() {
                 </p>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-4">
+                {/* Greeting */}
+                {user && user.name && (
+                  <div className="hidden md:flex items-center space-x-2 animate-in fade-in slide-in-from-right-4 duration-700">
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        Hola, <span className="text-blue-600 dark:text-blue-400 font-bold">
+                          {user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1).toLowerCase()}
+                        </span>
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {user.role === 'SuperAdmin' ? 'Super Admin' : 'Recruiter'}
+                      </p>
+                    </div>
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg transform hover:scale-105 transition-transform">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                  </div>
+                )}
+
                 {activeSection === 'settings' && (
                   <>
                     <Button

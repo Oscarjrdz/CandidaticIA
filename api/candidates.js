@@ -5,7 +5,7 @@
  * DELETE /api/candidates/:id
  */
 
-import { getCandidates, getCandidateById, deleteCandidate, getCandidatesStats, saveMessage, getMessages } from './utils/storage.js';
+// NO TOP LEVEL IMPORTS to prevent boot crashes
 
 export default async function handler(req, res) {
     // CORS preflight
@@ -14,6 +14,9 @@ export default async function handler(req, res) {
     }
 
     try {
+        // DYNAMIC IMPORTS
+        const { getCandidates, getCandidateById, deleteCandidate, getCandidatesStats } = await import('./utils/storage.js');
+
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {
             const { limit = '50', offset = '0', search = '', stats, id } = req.query;
@@ -97,7 +100,8 @@ export default async function handler(req, res) {
 
         return res.status(500).json({
             error: 'Error interno del servidor',
-            message: process.env.NODE_ENV === 'development' ? error.message : 'Error procesando solicitud'
+            message: process.env.NODE_ENV === 'development' ? error.message : 'Error procesando solicitud',
+            details: error.message
         });
     }
 }

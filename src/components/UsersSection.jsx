@@ -113,24 +113,26 @@ const UsersSection = ({ showToast }) => {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        type="search"
-                        placeholder="Buscar usuarios..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white text-sm"
-                    />
-                </div>
-                <div className="flex items-center space-x-2">
-                    <Button onClick={loadUsers} icon={RefreshCw} variant="outline" size="sm" disabled={loading} />
-                    <Button onClick={() => handleOpenModal()} icon={UserPlus}>Nuevo Usuario</Button>
-                </div>
-            </div>
-
             <Card>
+                <div className="p-4 border-b border-gray-100 dark:border-gray-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">Usuarios</h2>
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="search"
+                                placeholder="Buscar usuarios..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none dark:text-white text-sm"
+                            />
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Button onClick={loadUsers} icon={RefreshCw} variant="outline" size="sm" disabled={loading} />
+                            <Button onClick={() => handleOpenModal()} icon={UserPlus}>Nuevo Usuario</Button>
+                        </div>
+                    </div>
+                </div>
                 <div className="overflow-x-auto">
                     {loading ? (
                         <div className="p-12 text-center">
@@ -158,8 +160,8 @@ const UsersSection = ({ showToast }) => {
                                         <td className="py-4 px-6">
                                             <div className="flex items-center space-x-3">
                                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${user.role === 'SuperAdmin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300' :
-                                                        user.role === 'Admin' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300' :
-                                                            'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                                    user.role === 'Admin' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300' :
+                                                        'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                                                     }`}>
                                                     {(user.name || 'U').charAt(0).toUpperCase()}
                                                 </div>
@@ -175,8 +177,8 @@ const UsersSection = ({ showToast }) => {
                                         <td className="py-4 px-6">
                                             <span className="flex items-center space-x-1.5 text-sm">
                                                 <Shield className={`w-3.5 h-3.5 ${user.role === 'SuperAdmin' ? 'text-purple-500' :
-                                                        user.role === 'Admin' ? 'text-blue-500' :
-                                                            'text-gray-400'
+                                                    user.role === 'Admin' ? 'text-blue-500' :
+                                                        'text-gray-400'
                                                     }`} />
                                                 <span className="text-gray-700 dark:text-gray-300">
                                                     {user.role === 'SuperAdmin' ? 'Super Administrador' :
@@ -198,12 +200,15 @@ const UsersSection = ({ showToast }) => {
                                                 >
                                                     <Pencil className="w-4 h-4" />
                                                 </button>
-                                                <button
-                                                    onClick={() => handleDelete(user.id)}
-                                                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                                {user.role !== 'SuperAdmin' && (
+                                                    <button
+                                                        onClick={() => handleDelete(user.id)}
+                                                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                                        title="Eliminar usuario"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -223,7 +228,7 @@ const UsersSection = ({ showToast }) => {
                     <Input
                         label="Nombre Completo"
                         value={formData.name}
-                        onChange={(v) => setFormData({ ...formData, name: v })}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         required
                         placeholder="Ej: Oscar Rodriguez"
                     />
@@ -231,14 +236,14 @@ const UsersSection = ({ showToast }) => {
                         <Input
                             label="WhatsApp"
                             value={formData.whatsapp}
-                            onChange={(v) => setFormData({ ...formData, whatsapp: v })}
+                            onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                             required
                             placeholder="Ej: 8116038195"
                         />
                         <Input
                             label="PIN de Autorización"
                             value={formData.pin}
-                            onChange={(v) => setFormData({ ...formData, pin: v })}
+                            onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
                             required
                             maxLength={4}
                             placeholder="Ej: 1234"

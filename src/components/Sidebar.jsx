@@ -1,10 +1,10 @@
 import React from 'react';
-import { Users, Settings, Bot, History, Zap, Briefcase, Send, User } from 'lucide-react';
+import { Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut } from 'lucide-react';
 
 /**
  * Sidebar de navegación
  */
-const Sidebar = ({ activeSection, onSectionChange }) => {
+const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
     const menuItems = [
         {
             id: 'candidates',
@@ -113,6 +113,16 @@ const Sidebar = ({ activeSection, onSectionChange }) => {
                 {bottomItems.map(item => (
                     <MenuItem key={item.id} item={item} />
                 ))}
+
+                {/* Logout Button */}
+                <button
+                    onClick={onLogout}
+                    className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg smooth-transition group text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    title="Cerrar Sesión"
+                >
+                    <LogOut className="w-5 h-5 text-red-500 group-hover:text-red-600" />
+                    <span className="font-medium text-sm">Cerrar Sesión</span>
+                </button>
             </nav>
         </aside>
     );

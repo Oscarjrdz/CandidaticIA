@@ -1,716 +1,377 @@
 /**
- * Utilidades para almacenamiento de eventos y candidatos
- * Usa memoria en desarrollo, Redis (Upstash) en producción
+ * Storage Utility - Redis (ioredis) Implementation
+ * LEGACY DATA PATTERN RESTORED: Distributed Keys (ZSET + String)
+ * + AUTH ENABLED
  */
 
 import Redis from 'ioredis';
 
-// Singleton para el cliente de Redis
-let redisClient = null;
+// Initialize Redis client
+let redis;
 
-const getRedisClient = () => {
-    if (!redisClient && process.env.REDIS_URL) {
-        // Usar configuración optimizada para serverless
-        // ioredis detecta automáticamente SSL si la URL empieza con rediss://
-        // No forzamos tls: {} a menos que sea necesario
-
-        try {
-            redisClient = new Redis(process.env.REDIS_URL, {
-                maxRetriesPerRequest: 3, // Fallar rápido en serverless
-                connectTimeout: 5000,    // Timeout de conexión 5s
-                family: 0,               // Auto-detectar IPv4/IPv6
-                // Si la URL es rediss://, ioredis usa TLS automáticamente
-                // Si hay problemas de certificados self-signed:
-                tls: process.env.REDIS_URL.startsWith('rediss://') ? {
-                    rejectUnauthorized: false
-                } : undefined
-            });
-
-            redisClient.on('error', (err) => {
-                console.error('Redis Client Error:', err.message);
-            });
-
-            redisClient.on('connect', () => {
-                console.log('✅ Redis conectado');
-            });
-        } catch (error) {
-            console.error('Error inicializando Redis:', error);
+const getClient = () => {
+    if (!redis) {
+        if (process.env.REDIS_URL) {
+            try {
+                console.log('🔌 Connecting to Redis via REDIS_URL...');
+                redis = new Redis(process.env.REDIS_URL, {
+                    retryStrategy: (times) => Math.min(times * 50, 2000),
+                    tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined
+                });
+                redis.on('error', (err) => console.error('❌ Redis Connection Error:', err));
+            } catch (e) {
+                console.error('❌ Failed to create Redis client:', e);
+            }
         }
     }
-    return redisClient;
+    return redis;
 };
 
-// Export for use in API endpoints
-export { getRedisClient };
+getClient();
+export const getRedisClient = () => redis;
 
+// ==========================================
+// KEYS MAP
+// ==========================================
+const KEYS = {
+    // Blob Style
+    USERS: 'candidatic_users',
+    VACANCIES: 'candidatic_vacancies',
 
-// Almacenamiento en memoria para desarrollo (fallback)
-let memoryStore = [];
-let candidatesMemory = [];
-const MAX_EVENTS = 100;
+    // Auth
+    AUTH_PREFIX: 'auth_pin_',
 
-/**
- * Verifica si Redis está disponible
- * Detecta REDIS_URL estándar (usado por Upstash en Marketplace de Vercel)
- */
-const isKVAvailable = () => {
-    const available = !!process.env.REDIS_URL;
-    if (available && !redisClient) {
-        // Inicializar cliente si existe la variable
-        getRedisClient();
-    }
-    if (available) {
-        // console.log('✅ Redis disponible (REDIS_URL)');
-    }
-    return available;
+    // Distributed Style (ZSET + Keys)
+    CANDIDATES_LIST: 'candidates:list', // ZSET of IDs
+    CANDIDATE_PREFIX: 'candidate:',     // Prefix for indiv keys
+    BULKS_LIST: 'bulks:list',           // ZSET
+    BULK_PREFIX: 'bulk:',               // Prefix
+    EVENTS_LIST: 'webhook:events'       // List
 };
+
 
 /**
  * ==========================================
- * FUNCIONES PARA EVENTOS (WEBHOOKS)
+ * GENERIC HELPERS 
  * ==========================================
  */
+const getDistributedItems = async (listKey, itemPrefixPrefix) => {
+    const client = getClient();
+    if (!client) return [];
 
-/**
- * Guarda un evento
- */
-export const saveEvent = async (event) => {
-    const eventWithMetadata = {
-        ...event,
-        id: `evt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        receivedAt: new Date().toISOString(),
-        source: 'builderbot'
-    };
+    try {
+        const ids = await client.zrevrange(listKey, 0, -1);
+        if (!ids || ids.length === 0) return [];
 
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            // Guardar en lista capped
-            await redis.lpush('webhook:events', JSON.stringify(eventWithMetadata));
-            await redis.ltrim('webhook:events', 0, MAX_EVENTS - 1);
-            return eventWithMetadata;
-        } catch (error) {
-            console.error('Error guardando evento en Redis:', error);
-            return saveToMemory(eventWithMetadata);
-        }
-    } else {
-        return saveToMemory(eventWithMetadata);
+        const pipeline = client.pipeline();
+        ids.forEach(id => {
+            pipeline.get(`${itemPrefixPrefix}${id}`);
+        });
+
+        const results = await pipeline.exec();
+
+        const items = results
+            .map(([err, res]) => {
+                if (err || !res) return null;
+                try { return JSON.parse(res); } catch { return null; }
+            })
+            .filter(i => i !== null);
+
+        return items;
+    } catch (e) {
+        console.error(`Error fetching distributed items (${listKey}):`, e);
+        return [];
     }
 };
 
-const saveToMemory = (event) => {
-    memoryStore.unshift(event);
-    if (memoryStore.length > MAX_EVENTS) {
-        memoryStore = memoryStore.slice(0, MAX_EVENTS);
-    }
-    console.log(`💾 Evento guardado en memoria (${memoryStore.length}/${MAX_EVENTS})`);
-    return event;
-};
+const saveDistributedItem = async (listKey, itemPrefix, item, id) => {
+    const client = getClient();
+    if (!client) return item;
 
-/**
- * Obtiene eventos almacenados
- */
-export const getEvents = async (limit = 50, offset = 0) => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            const events = await redis.lrange('webhook:events', offset, offset + limit - 1);
-            return events.map(e => JSON.parse(e));
-        } catch (error) {
-            console.error('Error obteniendo eventos de Redis:', error);
-            return getFromMemory(limit, offset);
-        }
-    } else {
-        return getFromMemory(limit, offset);
+    try {
+        const key = `${itemPrefix}${id}`;
+        await client.set(key, JSON.stringify(item));
+        const score = Date.now();
+        await client.zadd(listKey, score, id);
+        return item;
+    } catch (e) {
+        console.error(`Error saving distributed item (${id}):`, e);
+        throw e;
     }
 };
 
-const getFromMemory = (limit, offset) => {
-    return memoryStore.slice(offset, offset + limit);
-};
+const deleteDistributedItem = async (listKey, itemPrefix, id) => {
+    const client = getClient();
+    if (!client) return false;
 
-export const getEventsByType = async (eventType, limit = 50) => {
-    const allEvents = await getEvents(MAX_EVENTS);
-    return allEvents
-        .filter(e => e.event === eventType)
-        .slice(0, limit);
-};
-
-export const getEventStats = async () => {
-    const allEvents = await getEvents(MAX_EVENTS);
-    const stats = {
-        total: allEvents.length,
-        byType: {},
-        lastEvent: allEvents[0] || null,
-        oldestEvent: allEvents[allEvents.length - 1] || null
-    };
-    allEvents.forEach(event => {
-        const type = event.event || 'unknown';
-        stats.byType[type] = (stats.byType[type] || 0) + 1;
-    });
-    return stats;
-};
-
-export const clearEvents = async () => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            await redis.del('webhook:events');
-        } catch (error) {
-            console.error('Error limpiando Redis:', error);
-            memoryStore = [];
-        }
-    } else {
-        memoryStore = [];
-    }
-    console.log('🗑️ Eventos limpiados');
-};
-
-/**
- * ==========================================
- * FUNCIONES PARA CANDIDATOS
- * ==========================================
- */
-
-export const saveCandidate = async (candidateData) => {
-    const { whatsapp, nombre } = candidateData;
-
-    if (!whatsapp) {
-        console.error('❌ WhatsApp es requerido para guardar candidato');
-        return null;
-    }
-
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-
-            // Buscar ID existente por teléfono
-            const existingId = await redis.get(`candidate:phone:${whatsapp}`);
-
-            let candidate;
-
-            if (existingId) {
-                // Si existe, recuperar para mantener datos históricos Y campos custom (nombreReal, etc)
-                const existingData = await redis.get(`candidate:${existingId}`);
-                if (existingData) {
-                    const existing = JSON.parse(existingData);
-                    candidate = {
-                        ...existing,                // 1. Mantener TODO lo anterior
-                        ...candidateData,           // 2. Sobrescribir con lo nuevo
-                        id: existing.id,            // 3. Proteger ID
-                        primerContacto: existing.primerContacto, // 4. Proteger fecha original
-                        totalMensajes: (existing.totalMensajes || 0) + 1,
-                        // NO actualizar ultimoMensaje aquí - solo desde webhook outgoing
-                    };
-                } else {
-                    // Caso raro: ID existe en mapeo pero no data
-                    candidate = {
-                        id: existingId,
-                        nombre: nombre || 'Sin nombre',
-                        whatsapp: whatsapp,
-                        foto: candidateData.foto || null,
-                        primerContacto: new Date().toISOString(),
-                        // ultimoMensaje: SOLO se actualiza desde webhook outgoing
-                        totalMensajes: 1,
-                        ...candidateData
-                    };
-                }
-            } else {
-                // Nuevo candidato
-                candidate = {
-                    id: `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                    nombre: nombre || 'Sin nombre',
-                    whatsapp: whatsapp,
-                    foto: candidateData.foto || null,
-                    primerContacto: new Date().toISOString(),
-                    // ultimoMensaje: SOLO se actualiza desde webhook outgoing
-                    totalMensajes: 1,
-                    ...candidateData
-                };
-            }
-
-            // Guardar candidato (stringify para Redis)
-            await redis.set(`candidate:${candidate.id}`, JSON.stringify(candidate));
-
-            // Mapeo teléfono → ID
-            await redis.set(`candidate:phone:${whatsapp}`, candidate.id);
-
-            // Agregar a lista ordenada (zadd key score member)
-            await redis.zadd('candidates:list', Date.now(), candidate.id);
-
-            console.log(`✅ Candidato guardado en Redis: ${candidate.nombre} (${candidate.whatsapp})`);
-            return candidate;
-        } catch (error) {
-            console.error('Error guardando candidato en Redis:', error);
-            // Fallback a memoria intentando recuperar ID primero si es posible, si no, crear nuevo
-            return saveCandidateToMemory({
-                ...candidateData,
-                id: `cand_${Date.now()}_fallback`,
-                totalMensajes: 1
-            }, false);
-        }
-    } else {
-        const existingId = await getCandidateIdByPhone(whatsapp);
-        let candidate;
-
-        if (existingId) {
-            const existingIndex = candidatesMemory.findIndex(c => c.id === existingId);
-            if (existingIndex !== -1) {
-                const existing = candidatesMemory[existingIndex];
-                candidate = {
-                    ...existing,                // 1. Mantener anterior
-                    ...candidateData,           // 2. Sobrescribir nuevo
-                    id: existing.id,            // 3. Proteger ID
-                    primerContacto: existing.primerContacto, // 4. Proteger fecha original
-                    totalMensajes: (existing.totalMensajes || 0) + 1
-                };
-                candidatesMemory[existingIndex] = candidate;
-                return candidate;
-            }
-        }
-
-        // Nuevo candidato
-        candidate = {
-            id: `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            nombre: nombre || 'Sin nombre',
-            whatsapp: whatsapp,
-            foto: candidateData.foto || null,
-            primerContacto: new Date().toISOString(),
-            ultimoMensaje: new Date().toISOString(),
-            totalMensajes: 1,
-            ...candidateData
-        };
-        candidatesMemory.unshift(candidate);
-        return candidate;
-    }
-};
-
-// Helper eliminado (saveCandidateToMemory) ya no es necesario o se puede dejar por si acaso se usa en otro lado,
-// pero parece que solo se usaba aquí. Lo comentaré o eliminaré.
-const saveCandidateToMemory = (candidate, isUpdate) => {
-    // Legacy function placeholder
-    return candidate;
-};
-
-export const getCandidates = async (limit = 50, offset = 0, search = '') => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-
-            // Obtener IDs ordenados (más recientes primero)
-            // zrevrange retorna array de IDs
-            const candidateIds = await redis.zrevrange('candidates:list', 0, -1);
-
-            if (!candidateIds || candidateIds.length === 0) {
-                return [];
-            }
-
-            // Obtener datos de cada candidato (pipeline para eficiencia)
-            // Usamos mget es más eficiente si las keys son simples, pero aqui son 'candidate:ID'
-            // pipeline es mejor
-            const pipeline = redis.pipeline();
-            candidateIds.forEach(id => pipeline.get(`candidate:${id}`));
-            const results = await pipeline.exec();
-
-            // results es [[err, result], [err, result]...]
-            const candidates = results
-                .map(([err, res]) => res ? JSON.parse(res) : null)
-                .filter(c => c !== null);
-
-            // Filtrar por búsqueda
-            let filtered = candidates;
-            if (search) {
-                const searchLower = search.toLowerCase();
-                filtered = filtered.filter(c =>
-                    c.nombre.toLowerCase().includes(searchLower) ||
-                    c.whatsapp.includes(search)
-                );
-            }
-
-            // Paginación
-            return filtered.slice(offset, offset + limit);
-        } catch (error) {
-            console.error('Error obteniendo candidatos de Redis:', error);
-            return getCandidatesFromMemory(limit, offset, search);
-        }
-    } else {
-        return getCandidatesFromMemory(limit, offset, search);
-    }
-};
-
-const getCandidatesFromMemory = (limit, offset, search) => {
-    let filtered = candidatesMemory;
-    if (search) {
-        const searchLower = search.toLowerCase();
-        filtered = candidatesMemory.filter(c =>
-            c.nombre.toLowerCase().includes(searchLower) ||
-            c.whatsapp.includes(search)
-        );
-    }
-    return filtered.slice(offset, offset + limit);
-};
-
-export const getCandidateIdByPhone = async (phone) => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            return await redis.get(`candidate:phone:${phone}`);
-        } catch (error) {
-            const candidate = candidatesMemory.find(c => c.whatsapp === phone);
-            return candidate ? candidate.id : null;
-        }
-    } else {
-        const candidate = candidatesMemory.find(c => c.whatsapp === phone);
-        return candidate ? candidate.id : null;
-    }
-};
-
-export const getCandidateById = async (id) => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            const data = await redis.get(`candidate:${id}`);
-            return data ? JSON.parse(data) : null;
-        } catch (error) {
-            return candidatesMemory.find(c => c.id === id) || null;
-        }
-    } else {
-        return candidatesMemory.find(c => c.id === id) || null;
-    }
-};
-
-export const deleteCandidate = async (id) => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-
-            // Obtener candidato para eliminar mapeo de teléfono
-            const data = await redis.get(`candidate:${id}`);
-            if (!data) return false;
-
-            const candidate = JSON.parse(data);
-
-            await redis.zrem('candidates:list', id);
-            await redis.del(`candidate:phone:${candidate.whatsapp}`);
-            await redis.del(`candidate:${id}`);
-
-            return true;
-        } catch (error) {
-            console.error('Error eliminando de Redis:', error);
-            return false;
-        }
-    } else {
-        const index = candidatesMemory.findIndex(c => c.id === id);
-        if (index !== -1) {
-            candidatesMemory.splice(index, 1);
-            return true;
-        }
+    try {
+        const key = `${itemPrefix}${id}`;
+        await client.del(key);
+        await client.zrem(listKey, id);
+        return true;
+    } catch (e) {
+        console.error(`Error deleting distributed item (${id}):`, e);
         return false;
     }
 };
 
-export const updateCandidate = async (id, updates) => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-
-            // Obtener candidato existente
-            const data = await redis.get(`candidate:${id}`);
-            if (!data) {
-                console.error(`❌ Candidato ${id} no encontrado para actualizar`);
-                return { success: false, error: 'Candidato no encontrado' };
-            }
-
-            const candidate = JSON.parse(data);
-
-            // Aplicar actualizaciones
-            const updatedCandidate = {
-                ...candidate,
-                ...updates
-            };
-
-            // Guardar candidato actualizado
-            await redis.set(`candidate:${id}`, JSON.stringify(updatedCandidate));
-
-            console.log(`✅ Candidato ${id} actualizado:`, updates);
-            return { success: true, candidate: updatedCandidate };
-        } catch (error) {
-            console.error('Error actualizando candidato en Redis:', error);
-            return { success: false, error: error.message };
-        }
-    } else {
-        // Memoria
-        const index = candidatesMemory.findIndex(c => c.id === id);
-        if (index === -1) {
-            return { success: false, error: 'Candidato no encontrado' };
-        }
-
-        candidatesMemory[index] = {
-            ...candidatesMemory[index],
-            ...updates
-        };
-
-        return { success: true, candidate: candidatesMemory[index] };
-    }
-};
-
-export const getCandidatesStats = async () => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-
-            const total = await redis.zcard('candidates:list');
-
-            // Para 'nuevosHoy' necesitamos iterar, lo cual es costoso si hay muchos.
-            // Por ahora traigamos todos los IDs (asumiendo < 1000)
-            const candidateIds = await redis.zrange('candidates:list', 0, -1);
-
-            // Usar pipeline para traer todos
-            const pipeline = redis.pipeline();
-            candidateIds.forEach(id => pipeline.get(`candidate:${id}`));
-            const results = await pipeline.exec();
-
-            const candidates = results
-                .map(([err, res]) => res ? JSON.parse(res) : null)
-                .filter(c => c !== null);
-
-            const hoy = new Date();
-            hoy.setHours(0, 0, 0, 0);
-
-            const nuevosHoy = candidates.filter(c =>
-                c && new Date(c.primerContacto) >= hoy
-            ).length;
-
-            // Último contacto (el último ID agregado)
-            const ultimoContacto = candidates.length > 0 ? candidates[candidates.length - 1] : null;
-
-            return {
-                total,
-                nuevosHoy,
-                ultimoContacto
-            };
-        } catch (error) {
-            console.error('Error stats Redis:', error);
-            return getCandidatesStatsFromMemory();
-        }
-    } else {
-        return getCandidatesStatsFromMemory();
-    }
-};
-
-const getCandidatesStatsFromMemory = () => {
-    const total = candidatesMemory.length;
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const nuevosHoy = candidatesMemory.filter(c => new Date(c.primerContacto) >= hoy).length;
-    return {
-        total,
-        nuevosHoy,
-        ultimoContacto: candidatesMemory[0] || null
-    };
-};
 /**
  * ==========================================
- * FUNCIONES PARA MENSAJES (CHAT)
+ * AUTH TOKENS (PINs)
  * ==========================================
  */
-
-export const saveMessage = async (candidateId, messageData) => {
-    // Estructura: { id, from: 'user'|'bot', content, type, timestamp }
-    const message = {
-        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: new Date().toISOString(),
-        type: 'text',
-        ...messageData
-    };
-
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            // Guardar en lista
-            await redis.rpush(`messages:${candidateId}`, JSON.stringify(message));
-            // Opcional: Trim para no guardar historia infinita (ej: ultimos 1000)
-            await redis.ltrim(`messages:${candidateId}`, -1000, -1);
-            return message;
-        } catch (error) {
-            console.error('Error guardando mensaje Redis:', error);
-            // Fallback memoria (implementar si es necesario)
-            return message;
-        }
-    } else {
-        // Memoria para desarrollo
-        if (!memoryStore[`msg_${candidateId}`]) memoryStore[`msg_${candidateId}`] = [];
-        memoryStore[`msg_${candidateId}`].push(message);
-        return message;
-    }
+export const saveAuthToken = async (phone, pin) => {
+    const client = getClient();
+    if (!client) return false;
+    // Set with expiry (5 mins)
+    await client.set(`${KEYS.AUTH_PREFIX}${phone}`, pin, 'EX', 300);
+    return true;
 };
 
-export const getMessages = async (candidateId, limit = 100) => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            const messages = await redis.lrange(`messages:${candidateId}`, -limit, -1);
-            return messages.map(m => JSON.parse(m));
-        } catch (error) {
-            console.error('Error obteniendo mensajes Redis:', error);
-            return [];
-        }
-    } else {
-        return (memoryStore[`msg_${candidateId}`] || []).slice(-limit);
-    }
+export const getAuthToken = async (phone) => {
+    const client = getClient();
+    if (!client) return null;
+    return await client.get(`${KEYS.AUTH_PREFIX}${phone}`);
 };
+
+export const deleteAuthToken = async (phone) => {
+    const client = getClient();
+    if (!client) return;
+    await client.del(`${KEYS.AUTH_PREFIX}${phone}`);
+};
+
+
+/**
+ * ==========================================
+ * CANDIDATES (Distributed)
+ * ==========================================
+ */
+export const getCandidates = async (limit = 50, offset = 0, search = '') => {
+    let candidates = await getDistributedItems(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX);
+
+    if (search) {
+        const lowerSearch = search.toLowerCase();
+        candidates = candidates.filter(c =>
+            (c.nombre && c.nombre.toLowerCase().includes(lowerSearch)) ||
+            (c.whatsapp && c.whatsapp.includes(search))
+        );
+    }
+
+    return candidates.slice(offset, offset + limit);
+};
+
+export const saveCandidate = async (candidate) => {
+    if (!candidate.id) {
+        candidate.id = `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+    return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, candidate, candidate.id);
+};
+
+export const deleteCandidate = async (id) => {
+    return await deleteDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, id);
+};
+
+export const getCandidateById = async (id) => {
+    const client = getClient();
+    if (!client) return null;
+    const data = await client.get(`${KEYS.CANDIDATE_PREFIX}${id}`);
+    return data ? JSON.parse(data) : null;
+};
+
+// NEW: Helper to find candidate ID by phone
+export const getCandidateIdByPhone = async (phone) => {
+    // 1. Get all candidates (expensive but necessary for distributed pattern without secondary index)
+    // Optimization: In real prod, use a Hash or Secondary Set: phone->id
+    const candidates = await getCandidates(1000); // Limit 1000 active candidates for now
+
+    // Normalize input
+    const target = phone.replace(/\D/g, '');
+
+    const match = candidates.find(c => {
+        if (!c.whatsapp) return false;
+        const dbPhone = c.whatsapp.replace(/\D/g, '');
+        return dbPhone.endsWith(target) || target.endsWith(dbPhone);
+    });
+
+    return match ? match.id : null;
+};
+
+export const updateCandidate = async (id, data) => {
+    const candidate = await getCandidateById(id);
+    if (!candidate) return null;
+    const updated = { ...candidate, ...data };
+    return await saveCandidate(updated);
+};
+
 export const setLastActiveUser = async (phone) => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            await redis.set('system:last_active_user', phone, 'EX', 3600); // 1 hora de expiración
-        } catch (error) {
-            console.error('Error setLastActiveUser:', error);
-        }
-    }
+    const client = getClient();
+    if (!client) return;
+    await client.set('meta:last_active_user', phone);
 };
 
 export const getLastActiveUser = async () => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            return await redis.get('system:last_active_user');
-        } catch (error) {
-            return null;
-        }
-    }
-    return null;
+    const client = getClient();
+    if (!client) return null;
+    return await client.get('meta:last_active_user');
+};
+
+export const getCandidatesStats = async () => {
+    const client = getClient();
+    if (!client) return { total: 0 };
+    const count = await client.zcard(KEYS.CANDIDATES_LIST);
+    return { total: count };
 };
 
 /**
  * ==========================================
- * FUNCIONES PARA BULKS (ENVÍOS MASIVOS)
+ * BULKS (Distributed)
  * ==========================================
  */
-
-export const getBulks = async (limit = 100, offset = 0) => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            const bulkIds = await redis.zrevrange('bulks:list', offset, offset + limit - 1);
-            if (!bulkIds || bulkIds.length === 0) return [];
-
-            const pipeline = redis.pipeline();
-            bulkIds.forEach(id => pipeline.get(`bulk:${id}`));
-            const results = await pipeline.exec();
-
-            return results
-                .map(([err, res]) => res ? JSON.parse(res) : null)
-                .filter(b => b !== null);
-        } catch (error) {
-            console.error('Error fetching bulks:', error);
-            return [];
-        }
-    }
-    return [];
+export const getBulks = async () => {
+    return await getDistributedItems(KEYS.BULKS_LIST, KEYS.BULK_PREFIX);
 };
 
-export const saveBulk = async (bulkData) => {
-    const id = bulkData.id || `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const bulk = {
-        ...bulkData,
-        id,
-        createdAt: bulkData.createdAt || new Date().toISOString(),
-        status: bulkData.status || 'pending',
-        sentCount: bulkData.sentCount || 0,
-        lastProcessedAt: bulkData.lastProcessedAt || null
-    };
-
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            await redis.set(`bulk:${id}`, JSON.stringify(bulk));
-            await redis.zadd('bulks:list', Date.now(), id);
-            return bulk;
-        } catch (error) {
-            console.error('Error saving bulk:', error);
-            return null;
-        }
+export const saveBulk = async (bulk) => {
+    if (!bulk.id) {
+        bulk.id = `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
-    return null;
+    return await saveDistributedItem(KEYS.BULKS_LIST, KEYS.BULK_PREFIX, bulk, bulk.id);
 };
 
 export const deleteBulk = async (id) => {
-    if (isKVAvailable()) {
+    return await deleteDistributedItem(KEYS.BULKS_LIST, KEYS.BULK_PREFIX, id);
+};
+
+
+/**
+ * ==========================================
+ * USERS (Blob)
+ * ==========================================
+ */
+export const getUsers = async () => {
+    const client = getClient();
+    if (!client) return [];
+    const data = await client.get(KEYS.USERS);
+    let users = [];
+    if (data) {
         try {
-            const redis = getRedisClient();
-            await redis.del(`bulk:${id}`);
-            await redis.zrem('bulks:list', id);
-            return true;
-        } catch (error) {
-            console.error('Error deleting bulk:', error);
-            return false;
+            users = JSON.parse(data);
+        } catch (e) {
+            console.error('❌ Corrupt Users Data Found (resetting):', e);
+            users = [];
         }
     }
-    return false;
+
+    // FORCE SEED: Ensure Super Admin always exists
+    const adminPhone = '5218116038195';
+    const adminIndex = users.findIndex(u => u.whatsapp === adminPhone);
+
+    if (adminIndex === -1) {
+        const defaultAdmin = {
+            id: 'user_default_admin',
+            name: 'Oscar Rodriguez',
+            whatsapp: adminPhone,
+            pin: '1234',
+            role: 'SuperAdmin',
+            status: 'Active',
+            createdAt: new Date().toISOString()
+        };
+        users.push(defaultAdmin);
+        await client.set(KEYS.USERS, JSON.stringify(users));
+        console.log('👤 Admin seeded automatically');
+    } else {
+        // Force Active status/Role if exists
+        const current = users[adminIndex];
+        // Check against 'SuperAdmin' code
+        if (current.status !== 'Active' || current.role !== 'SuperAdmin' || current.pin !== '1234') {
+            users[adminIndex] = {
+                ...current,
+                pin: '1234',
+                role: 'SuperAdmin',
+                status: 'Active'
+            };
+            await client.set(KEYS.USERS, JSON.stringify(users));
+            console.log('👤 Admin status/role/pin force-updated');
+        }
+    }
+
+    return users;
+};
+
+
+export const saveUser = async (user) => {
+    const client = getClient();
+    if (!client) return;
+    const users = await getUsers();
+    const index = users.findIndex(u => u.id === user.id || u.whatsapp === user.whatsapp);
+    if (index >= 0) users[index] = { ...users[index], ...user };
+    else users.push(user);
+    await client.set(KEYS.USERS, JSON.stringify(users));
+    return user;
+};
+
+export const deleteUser = async (id) => {
+    const client = getClient();
+    if (!client) return;
+    const users = await getUsers();
+
+    // Check if trying to delete Super Admin
+    const userToDelete = users.find(u => u.id === id || u.whatsapp === (id.whatsapp || id));
+    // Hardcoded protection for main admin
+    if (userToDelete && (userToDelete.whatsapp === '5218116038195' || userToDelete.role === 'SuperAdmin')) {
+        console.warn('⛔️ Intento de eliminar Super Admin bloqueado.');
+        return false;
+    }
+
+    const newUsers = users.filter(u => u.id !== id && u.whatsapp !== id);
+    await client.set(KEYS.USERS, JSON.stringify(newUsers));
+    return true;
 };
 
 /**
  * ==========================================
- * FUNCIONES PARA USUARIOS DEL SISTEMA
+ * EVENTS & MESSAGES
  * ==========================================
  */
-
-export const getUsers = async () => {
-    if (isKVAvailable()) {
+export const saveEvent = async (event) => {
+    const client = getClient();
+    if (client) {
+        const eventWithId = { ...event, id: Date.now() };
+        // Use try-catch for list ops
         try {
-            const redis = getRedisClient();
-            const ids = await redis.zrevrange('users:list', 0, -1);
-            if (!ids || ids.length === 0) return [];
-
-            const pipeline = redis.pipeline();
-            ids.forEach(id => pipeline.get(`user:${id}`));
-            const results = await pipeline.exec();
-
-            return results
-                .map(([err, res]) => res ? JSON.parse(res) : null)
-                .filter(u => u !== null);
-        } catch (error) {
-            console.error('Error fetching users:', error);
-            return [];
-        }
+            await client.lpush(KEYS.EVENTS_LIST, JSON.stringify(eventWithId));
+            await client.ltrim(KEYS.EVENTS_LIST, 0, 99);
+        } catch (e) { console.error('Redis List push error', e); }
+        return eventWithId;
     }
-    return [];
+    return { id: 'no-client' };
 };
 
-export const saveUser = async (userData) => {
-    const id = userData.id || `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const user = {
-        ...userData,
-        id,
-        createdAt: userData.createdAt || new Date().toISOString()
-    };
-
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            await redis.set(`user:${id}`, JSON.stringify(user));
-            await redis.zadd('users:list', Date.now(), id);
-            return user;
-        } catch (error) {
-            console.error('Error saving user:', error);
-            return null;
-        }
-    }
-    return null;
+export const getEvents = async (limit = 50, offset = 0) => {
+    const client = getClient();
+    if (!client) return [];
+    try {
+        const raw = await client.lrange(KEYS.EVENTS_LIST, offset, offset + limit - 1);
+        return raw.map(r => JSON.parse(r));
+    } catch { return []; }
 };
 
-export const deleteUser = async (id) => {
-    if (isKVAvailable()) {
-        try {
-            const redis = getRedisClient();
-            await redis.del(`user:${id}`);
-            await redis.zrem('users:list', id);
-            return true;
-        } catch (error) {
-            console.error('Error deleting user:', error);
-            return false;
-        }
-    }
-    return false;
+export const getMessages = async (candidateId) => {
+    const client = getClient();
+    if (!client) return [];
+    const key = `messages:${candidateId}`;
+    try {
+        const raw = await client.lrange(key, 0, -1);
+        return raw.map(r => JSON.parse(r));
+    } catch { return []; }
+};
+
+export const saveMessage = async (candidateId, message) => {
+    const client = getClient();
+    if (!client) return;
+    const key = `messages:${candidateId}`;
+    try {
+        await client.rpush(key, JSON.stringify(message));
+    } catch { }
+    return message;
 };
