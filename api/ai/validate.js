@@ -74,12 +74,12 @@ export default async function handler(req, res) {
         // Diagnóstico para el usuario
         let finalError = error.message;
         if (finalError.includes('404') || finalError.includes('not found')) {
-            finalError = `Error 404: El modelo no está disponible. Asegúrate de tener activada la "Generative Language API" en tu proyecto de Google AI Studio.`;
+            finalError = `Error 404: El modelo no está disponible. DEBES ACTIVAR la "Generative Language API" aquí: https://aistudio.google.com/app/apikey (haz clic en tu proyecto y busca 'Enable API')`;
         }
         const apiKeyUsed = String(req.body?.apiKey || '').trim();
         const maskedDiagnostic = apiKeyUsed.length > 10
-            ? `(Llave usada: ${apiKeyUsed.substring(0, 6)}...${apiKeyUsed.substring(apiKeyUsed.length - 4)})`
-            : '(Llave muy corta o vacía)';
+            ? `(Llave: ${apiKeyUsed.substring(0, 6)}...${apiKeyUsed.substring(apiKeyUsed.length - 4)})`
+            : '(Llave vacía)';
 
         return res.status(200).json({
             success: false,
