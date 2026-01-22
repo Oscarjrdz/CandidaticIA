@@ -1,5 +1,4 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getCandidates, getMessages } from '../utils/storage.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -24,12 +23,12 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Falta el parámetro "query"' });
         }
 
+        // DYNAMIC IMPORTS
+        const { getRedisClient, getCandidates, getMessages } = await import('../utils/storage.js');
+        const redis = getRedisClient();
+
         let apiKey = process.env.GEMINI_API_KEY;
         console.log(`🔍 [AI Query] Env API Key present: ${!!apiKey}`);
-
-        // 1. Obtener configuración de Redis (Fallback si no hay ENV var)
-        const { getRedisClient } = await import('../utils/storage.js');
-        const redis = getRedisClient();
 
         if (!apiKey && redis) {
             console.log(`🔍 [AI Query] Key missing in Env, checking Redis...`);
@@ -59,11 +58,17 @@ export default async function handler(req, res) {
             { value: 'whatsapp', label: 'Teléfono/WhatsApp' }
         ];
 
-        const customFieldsJson = await redis.get('custom_fields');
-        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
-        const allFields = [...DEFAULT_FIELDS, ...customFields];
+        let allFields = [...DEFAULT_FIELDS];
+        try {
+            const customFieldsJson = await redis.get('custom_fields');
+            const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+            allFields = [...DEFAULT_FIELDS, ...customFields];
+        } catch (e) {
+            console.warn('⚠️ No se pudieron cargar los campos personalizados:', e.message);
+        }
 
         // 2. Configurar Gemini
+        console.log(`🔍 [AI Query] Initializing Gemini Model...`);
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
@@ -95,19 +100,19 @@ Consulta del usuario: "${query}"
         const result = await model.generateContent(systemPrompt);
         const response = await result.response;
         const text = response.text();
-        console.log(`🔍 [AI Query] Gemini raw response:`, text.substring(0, 100) + '...');
+        console.log(`🔍 [AI Query] Gemini raw response text:`, text);
 
         // Limpiar el texto si Gemini devuelve markdown ```json ... ```
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-            throw new Error("La IA no devolvió un formato válido.");
+            throw new Error(`La IA no devolvió un JSON válido. Respuesta: ${text}`);
         }
 
         const aiResponse = JSON.parse(jsonMatch[0]);
         console.log('🤖 AI Parsed Query:', aiResponse);
 
         // 3. Ejecutar la búsqueda en los datos reales
-        // Obtenemos todos los candidatos (hasta 1000 para este MVP)
+        console.log(`🔍 [AI Query] Searching records...`);
         const candidates = await getCandidates(1000, 0);
 
         let filtered = candidates;
@@ -148,10 +153,11 @@ Consulta del usuario: "${query}"
         });
 
     } catch (error) {
-        console.error('❌ AI Query Error:', error);
+        console.error('❌ AI Query ERROR:', error);
         return res.status(500).json({
-            error: 'Error procesando búsqueda inteligente',
-            details: error.message
+            success: false,
+            error: `API ERROR: ${error.message}`,
+            details: error.stack
         });
     }
 }
