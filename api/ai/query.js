@@ -40,16 +40,20 @@ export default async function handler(req, res) {
             }
         }
 
-        if (apiKey) {
-            apiKey = String(apiKey).trim();
-        }
-
         if (!apiKey || apiKey === 'undefined' || apiKey === 'null') {
             return res.status(500).json({
                 error: 'AI no configurada',
                 message: 'Falta GEMINI_API_KEY en Vercel o en la configuración de Settings. Por favor verifica que la llave sea válida.'
             });
         }
+
+        // SANITIZACIÓN ROBUSTA
+        apiKey = String(apiKey).trim();
+        apiKey = apiKey.replace(/^["']|["']$/g, '');
+        apiKey = apiKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
+        apiKey = apiKey.trim();
+
+        const maskedKey = `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}`;
 
         // 2. Obtener campos disponibles para que la IA sepa qué buscar
         const DEFAULT_FIELDS = [

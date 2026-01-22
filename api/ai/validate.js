@@ -28,9 +28,16 @@ export default async function handler(req, res) {
             return res.status(400).json({ success: false, error: 'No se proporcionó una llave de API' });
         }
 
-        const cleanKey = String(apiKey).trim();
+        // SANITIZACIÓN ROBUSTA
+        let cleanKey = String(apiKey).trim();
+        // Eliminar comillas si las pegó con ellas
+        cleanKey = cleanKey.replace(/^["']|["']$/g, '');
+        // Eliminar prefijos si pegó el nombre de la variable
+        cleanKey = cleanKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
+        cleanKey = cleanKey.trim();
 
-        console.log(`🔌 [AI Validation] Testing key: ${cleanKey.substring(0, 10)}...`);
+        const maskedKey = `${cleanKey.substring(0, 6)}...${cleanKey.substring(cleanKey.length - 4)}`;
+        console.log(`🔌 [AI Validation] Testing key: ${maskedKey}`);
 
         const genAI = new GoogleGenerativeAI(cleanKey);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
@@ -50,9 +57,16 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('❌ [AI Validation] Failed:', error.message);
+
+        // Diagnóstico para el usuario
+        const apiKeyUsed = String(req.body?.apiKey || '').trim();
+        const maskedDiagnostic = apiKeyUsed.length > 10
+            ? `(Llave usada: ${apiKeyUsed.substring(0, 6)}...${apiKeyUsed.substring(apiKeyUsed.length - 4)})`
+            : '(Llave muy corta o vacía)';
+
         return res.status(200).json({
             success: false,
-            error: error.message
+            error: `${error.message} ${maskedDiagnostic}`
         });
     }
 }
