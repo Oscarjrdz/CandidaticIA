@@ -3,7 +3,7 @@ import {
     Layout, Image as ImageIcon, Smile, MapPin,
     MoreHorizontal, Globe, ThumbsUp, MessageCircle, Share2,
     Monitor, Smartphone, Copy, ExternalLink, Hash, X, Loader2, Link,
-    Edit2, Save
+    Edit2, Save, Trash2
 } from 'lucide-react';
 import Button from './ui/Button';
 import Card from './ui/Card';
@@ -334,7 +334,8 @@ const PostMakerSection = () => {
                                 <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative">
                                     <img src={post.image} className="w-full h-full object-cover" />
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                        <button onClick={() => handleEdit(post)} className="bg-white p-2 rounded-full text-blue-600 hover:scale-110 transition-transform"><Edit2 className="w-4 h-4" /></button>
+                                        <button onClick={() => handleEdit(post)} className="bg-white p-2 rounded-full text-blue-600 hover:scale-110 transition-transform" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                                        <button onClick={(e) => handleDelete(post.id, e)} className="bg-white p-2 rounded-full text-red-500 hover:scale-110 transition-transform" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                                 <div>

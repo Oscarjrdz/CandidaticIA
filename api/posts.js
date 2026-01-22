@@ -59,5 +59,30 @@ export default async function handler(req, res) {
         }
     }
 
+    // DELETE: Remove Post
+    if (req.method === 'DELETE') {
+        const { id, userId } = req.body;
+        if (!id || !userId) return res.status(400).json({ error: 'Missing ID or UserId' });
+
+        try {
+            const listKey = `posts:${userId}`;
+            const metaKey = `share:${id}`;
+            const imageKey = `image:${id}`; // We might want to clear the image too if we knew its ID, but usually we just delete the post ref.
+
+            // Remove from User List
+            await client.lrem(listKey, 0, id);
+
+            // Delete Metadata
+            await client.del(metaKey);
+
+            // Note: We don't delete the image key here because we store the URL, not the image ID directly in the post. 
+            // The image will expire automatically in 30 days.
+
+            return res.json({ success: true });
+        } catch (e) {
+            return res.status(500).json({ error: 'Error deleting post' });
+        }
+    }
+
     return res.status(405).json({ error: 'Method not allowed' });
 }
