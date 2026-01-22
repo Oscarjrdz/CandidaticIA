@@ -10,6 +10,7 @@ export default async function handler(req, res) {
     try {
         const client = getRedisClient();
         if (!client) {
+            console.error('Redis client not available in /api/image');
             return res.status(500).send('Database Error');
         }
 
@@ -17,29 +18,25 @@ export default async function handler(req, res) {
         const data = await client.get(key);
 
         if (!data) {
-            return res.status(404).send('Image not found or expired');
+            return res.status(404).send('Image not found');
         }
 
-        // data is base64 string, likely with data:image/jpeg;base64, prefix
-        // We need to serve it as binary
         let imageBuffer;
-        let contentType = 'image/jpeg'; // Default
 
-        if (data.includes('base64,')) {
-            const matches = data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-            if (matches && matches.length === 3) {
-                contentType = matches[1];
-                imageBuffer = Buffer.from(matches[2], 'base64');
-            } else {
-                // Fallback if regex fails but has prefix
-                imageBuffer = Buffer.from(data.split('base64,')[1], 'base64');
-            }
+        // Robust Base64 Parsing
+        if (data.includes(',')) {
+            // Likely "data:image/jpeg;base64,..."
+            const parts = data.split(',');
+            imageBuffer = Buffer.from(parts[1], 'base64');
         } else {
+            // Raw base64
             imageBuffer = Buffer.from(data, 'base64');
         }
 
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+        // Just assume JPEG for simplicity/robustness unless we stored type (which we didn't strictly)
+        // Browsers are good at sniffing, but consistent header helps.
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // Long cache
         res.status(200).send(imageBuffer);
 
     } catch (error) {

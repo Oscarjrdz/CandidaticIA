@@ -1,15 +1,18 @@
 import { getRedisClient } from './utils/storage.js';
 
 export default async function handler(req, res) {
-    const { id } = req.query; // Derived from /s/:id rewrite or query param
+    const { id } = req.query;
 
     // Default fallback values
     let metaTitle = req.query.title || 'Candidatic IA';
-    let metaDesc = req.query.description || 'Check out this post!';
-    let metaImage = req.query.image || 'https://via.placeholder.com/1200x630.png?text=No+Image';
-    let targetUrl = req.query.url || 'https://google.com';
+    let metaDesc = req.query.description || '';
+    let metaImage = req.query.image || ''; // Leave empty if not provided
 
-    // If ID is present (short link), try to fetch from Redis
+    // We no longer have a "targetUrl" because the post IS the destination
+    // But we need the current URL for og:url
+    const currentUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}${req.url}`;
+
+    // If ID is present, try to fetch from Redis
     if (id) {
         try {
             const client = getRedisClient();
@@ -20,7 +23,6 @@ export default async function handler(req, res) {
                     metaTitle = data.title || metaTitle;
                     metaDesc = data.description || metaDesc;
                     metaImage = data.image || metaImage;
-                    targetUrl = data.url || targetUrl;
                 }
             }
         } catch (e) {
@@ -30,37 +32,109 @@ export default async function handler(req, res) {
 
     const html = `
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="es">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${metaTitle}</title>
         
         <!-- Open Graph / Facebook -->
-        <meta property="og:type" content="website">
-        <meta property="og:url" content="${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}${req.url}">
+        <meta property="og:type" content="article">
+        <meta property="og:url" content="${currentUrl}">
         <meta property="og:title" content="${metaTitle}">
         <meta property="og:description" content="${metaDesc}">
         <meta property="og:image" content="${metaImage}">
-        <meta property="og:image:width" content="1200">
-        <meta property="og:image:height" content="630">
-
+        
         <!-- Twitter -->
         <meta property="twitter:card" content="summary_large_image">
-        <meta property="twitter:url" content="${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}${req.url}">
+        <meta property="twitter:url" content="${currentUrl}">
         <meta property="twitter:title" content="${metaTitle}">
         <meta property="twitter:description" content="${metaDesc}">
         <meta property="twitter:image" content="${metaImage}">
 
-        <!-- Redirect Logic -->
-        <meta http-equiv="refresh" content="0;url=${targetUrl}">
-        
-        <script type="text/javascript">
-            // Immediate redirect in JS as well
-            window.location.href = "${targetUrl}";
-        </script>
+        <!-- Simple Clean CSS -->
+        <style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background-color: #f9fafb;
+                margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                min-height: 100vh;
+                color: #111;
+            }
+            .container {
+                width: 100%;
+                max-width: 680px;
+                background: white;
+                margin: 20px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+                border-radius: 12px;
+                overflow: hidden;
+            }
+            .hero-image {
+                width: 100%;
+                height: auto;
+                display: block;
+                max-height: 600px;
+                object-fit: cover;
+            }
+            .content {
+                padding: 30px;
+            }
+            h1 {
+                font-size: 28px;
+                font-weight: 800;
+                margin-top: 0;
+                margin-bottom: 16px;
+                line-height: 1.3;
+                color: #1a1a1a;
+            }
+            p {
+                font-size: 18px;
+                line-height: 1.6;
+                color: #4a4a4a;
+                white-space: pre-wrap;
+            }
+            .footer {
+                padding: 20px 30px;
+                border-top: 1px solid #eee;
+                font-size: 13px;
+                color: #888;
+                text-align: center;
+            }
+            .whatsapp-btn {
+                display: inline-block;
+                background-color: #25D366;
+                color: white;
+                font-weight: bold;
+                text-decoration: none;
+                padding: 12px 24px;
+                border-radius: 50px;
+                margin-top: 20px;
+                font-size: 16px;
+            }
+            /* If no image, hide it */
+            .hidden { display: none; }
+        </style>
     </head>
     <body>
-        <p>Redirecting to <a href="${targetUrl}">${targetUrl}</a>...</p>
+        <div class="container">
+            ${metaImage ? `<img src="${metaImage}" class="hero-image" alt="Post Image" onerror="this.style.display='none'"/>` : ''}
+            
+            <div class="content">
+                <h1>${metaTitle}</h1>
+                <p>${metaDesc}</p>
+                
+                <!-- Optional: Add a general Call to Action if desirable, or keeps it clean -->
+                <!-- <a href="https://wa.me/5218116038195" class="whatsapp-btn">Contactar por WhatsApp</a> -->
+            </div>
+            
+            <div class="footer">
+                Publicado vía Candidatic AI
+            </div>
+        </div>
     </body>
     </html>
     `;

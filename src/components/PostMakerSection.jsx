@@ -314,7 +314,7 @@ const PostMakerSection = () => {
                         </div>
                         <div className="bg-[#242526] p-3 border-t border-[#3e4042]">
                             <p className="text-[#b0b3b8] text-[12px] uppercase mb-0.5 truncate tracking-wide">
-                                {new URL(targetUrl).hostname.toUpperCase()}
+                                CANDIDATIC.AI
                             </p>
                             <h3 className="text-[#e4e6eb] font-bold text-[16px] leading-5 mb-1 line-clamp-1">{title}</h3>
                             <p className="text-[#b0b3b8] text-[14px] leading-5 line-clamp-1">{content}</p>
