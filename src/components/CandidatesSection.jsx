@@ -638,18 +638,21 @@ const CandidatesSection = ({ showToast }) => {
                 </button>
             </div>
 
-            {/* Alerta de filtrado por IA */}
+            {/* Alerta de filtrado por IA: iOS Style */}
             {aiFilteredCandidates && (
-                <div className="mb-6 animate-in slide-in-from-top-4 duration-500">
-                    <div className="crystal-effect p-6 rounded-[24px] flex items-center justify-between relative overflow-hidden group shadow-[0_0_20px_-5px_rgba(139,92,246,0.2)]">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 blur-[40px] pointer-events-none group-hover:bg-purple-500/20 transition-all duration-700" />
-                        <div className="flex items-center space-x-4 relative">
-                            <div className="w-12 h-12 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform duration-500">
-                                <Sparkles className="w-6 h-6 text-white animate-pulse" />
+                <div className="mb-6 animate-spring-in">
+                    <div className="ios-glass p-5 rounded-[20px] flex items-center justify-between shadow-ios border-gray-200 dark:border-gray-700/50">
+                        <div className="flex items-center space-x-4">
+                            <div className="w-10 h-10 bg-blue-500 rounded-[12px] flex items-center justify-center shadow-sm">
+                                <Sparkles className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Candidatic Intelligence: {displayedCandidates.length} Candidatos</h3>
-                                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">{aiExplanation}</p>
+                                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                                    {displayedCandidates.length} Candidatos Encontrados
+                                </h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                    {aiExplanation}
+                                </p>
                             </div>
                         </div>
                         <button
@@ -657,9 +660,9 @@ const CandidatesSection = ({ showToast }) => {
                                 setAiFilteredCandidates(null);
                                 setAiExplanation('');
                             }}
-                            className="text-[10px] font-black uppercase tracking-tighter text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-4 py-2 rounded-full shadow-lg transform hover:scale-105 transition-all duration-300 active:scale-95"
+                            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-2 rounded-full transition-colors"
                         >
-                            Limpiar Filtros
+                            Limpiar
                         </button>
                     </div>
                 </div>
