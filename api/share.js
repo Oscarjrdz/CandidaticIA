@@ -37,7 +37,7 @@ export default async function handler(req, res) {
         
         <!-- Open Graph / Facebook -->
         <meta property="og:type" content="website">
-        <meta property="og:url" content="${targetUrl}">
+        <meta property="og:url" content="${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}${req.url}">
         <meta property="og:title" content="${metaTitle}">
         <meta property="og:description" content="${metaDesc}">
         <meta property="og:image" content="${metaImage}">
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
         <!-- Twitter -->
         <meta property="twitter:card" content="summary_large_image">
-        <meta property="twitter:url" content="${targetUrl}">
+        <meta property="twitter:url" content="${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}${req.url}">
         <meta property="twitter:title" content="${metaTitle}">
         <meta property="twitter:description" content="${metaDesc}">
         <meta property="twitter:image" content="${metaImage}">
