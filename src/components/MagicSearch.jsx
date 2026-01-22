@@ -87,7 +87,9 @@ const MagicSearch = ({ onResults, showToast }) => {
                     <div className="flex items-start justify-between">
                         <div className="space-y-1">
                             <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
-                                Hola, <span className="text-blue-600 dark:text-blue-400">{userName || 'Recruiter'}</span>
+                                Hola, <span className="text-blue-600 dark:text-blue-400">
+                                    {userName ? userName.charAt(0).toUpperCase() + userName.slice(1).toLowerCase() : 'Recruiter'}
+                                </span>
                             </h2>
                             <p className="text-lg text-gray-500 dark:text-gray-400 font-medium">
                                 ¿Qué talento estás buscando hoy?
@@ -104,7 +106,7 @@ const MagicSearch = ({ onResults, showToast }) => {
 
                     {/* Neutral Search Input - Modern & Large */}
                     <form onSubmit={handleSearch} className="relative group">
-                        <div className="relative flex items-center bg-white dark:bg-gray-950 rounded-2xl px-6 py-2 border-2 border-gray-100 dark:border-gray-800 shadow-sm transition-all focus-within:border-gray-300 dark:focus-within:border-gray-700 focus-within:shadow-md">
+                        <div className="relative flex items-center bg-transparent px-2 py-2 transition-all">
                             <div className="mr-5">
                                 {loading ? (
                                     <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin" />
