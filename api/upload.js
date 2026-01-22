@@ -25,10 +25,8 @@ export default async function handler(req, res) {
         // We store the raw base64 data to keep it simple
         await client.set(key, image, 'EX', 30 * 24 * 60 * 60);
 
-        // Return the public URL (assuming Vercel deployment domain or relative)
-        // In local/production, relative path works if on same domain
-        const appUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '';
-        const publicUrl = `${appUrl}/api/image?id=${id}`;
+        // Return relative path to avoid VERCEL_URL domain mismatch issues
+        const publicUrl = `/api/image?id=${id}`;
 
         return res.status(200).json({ success: true, url: publicUrl, id });
 
