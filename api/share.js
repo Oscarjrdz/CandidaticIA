@@ -146,19 +146,25 @@ export default async function handler(req, res) {
                 <!-- Optional: Add a general Call to Action if desirable, or keeps it clean -->
                 <!-- <a href="https://wa.me/5218116038195" class="whatsapp-btn">Contactar por WhatsApp</a> -->
                 
-                ${(data.redirectEnabled && data.redirectUrl) ? `
+                ${(data.redirectEnabled && data.redirectUrl) ? (() => {
+            let safeUrl = data.redirectUrl;
+            if (!safeUrl.startsWith('http://') && !safeUrl.startsWith('https://')) {
+                safeUrl = 'https://' + safeUrl;
+            }
+            return `
                     <div class="redirect-box" style="margin-top:20px; text-align:center; padding:20px; background:#f0f9ff; border-radius:8px; border:1px solid #bae6fd;">
                         <p style="margin-bottom:10px; font-weight:bold; color:#0284c7;">Redirigiendo...</p>
-                        <a href="${data.redirectUrl}" style="display:inline-block; background:#0284c7; color:white; padding:10px 20px; text-decoration:none; border-radius:6px; font-weight:bold;">
+                        <a href="${safeUrl}" style="display:inline-block; background:#0284c7; color:white; padding:10px 20px; text-decoration:none; border-radius:6px; font-weight:bold;">
                             Clic si no te redirige automáticamente
                         </a>
                         <script>
                             setTimeout(function() {
-                                window.location.href = "${data.redirectUrl}";
-                            }, 500); // 500ms delay to allow analytics or just smooth trans
+                                window.location.href = "${safeUrl}";
+                            }, 500);
                         </script>
                     </div>
-                ` : ''}
+                `;
+        })() : ''}
             </div>
             
             <div class="footer">
