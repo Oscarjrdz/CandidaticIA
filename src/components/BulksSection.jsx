@@ -100,6 +100,22 @@ const BulksSection = ({ showToast }) => {
         loadCampaigns();
         loadAllCandidates();
         loadFields();
+
+        // Check for AI Draft
+        const draftMsg = localStorage.getItem('draft_bulk_message');
+        if (draftMsg) {
+            setNewCampaign(prev => ({
+                ...prev,
+                messages: [draftMsg],
+                name: 'Campaña Sugerida por IA',
+            }));
+            setView('create');
+            setStep(3); // Jump straight to content
+
+            // Clear draft so it doesn't persist forever
+            localStorage.removeItem('draft_bulk_message');
+            showToast('Borrador de IA cargado', 'success');
+        }
     }, []);
 
     const loadCampaigns = async () => {
