@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     Layout, Image as ImageIcon, Smile, MapPin,
     MoreHorizontal, Globe, ThumbsUp, MessageCircle, Share2,
-    Monitor, Smartphone, Copy, ExternalLink, Hash, X, Loader2, Link,
+    Monitor, Smartphone, Copy, ExternalLink, Hash, X, Loader2,
     Edit2, Save, Trash2, Check
 } from 'lucide-react';
 import Button from './ui/Button';
@@ -17,6 +17,10 @@ const PostMakerSection = () => {
     const [editingId, setEditingId] = useState(null);
     const [title, setTitle] = useState('BUSCAMOS AYUDANTES GENERALES');
     const [content, setContent] = useState('Mándanos un Whatsapp clic aqui');
+
+    // Redirect State
+    const [redirectEnabled, setRedirectEnabled] = useState(false);
+    const [redirectUrl, setRedirectUrl] = useState('');
 
     const [media, setMedia] = useState(null);
     const [uploadedUrl, setUploadedUrl] = useState(null);
@@ -34,11 +38,15 @@ const PostMakerSection = () => {
 
     // Initial Load
     useEffect(() => {
-        const savedUser = localStorage.getItem('candidatic_user_session');
-        if (savedUser) {
-            const u = JSON.parse(savedUser);
-            setUser(u);
-            fetchGallery(u.id);
+        try {
+            const savedUser = localStorage.getItem('candidatic_user_session');
+            if (savedUser) {
+                const u = JSON.parse(savedUser);
+                setUser(u);
+                fetchGallery(u.id);
+            }
+        } catch (e) {
+            console.error("Error loading user:", e);
         }
     }, []);
 
@@ -78,7 +86,108 @@ const PostMakerSection = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    // ... (rest of code) ...
+    const handleCopy = (text, id) => {
+        navigator.clipboard.writeText(text);
+        setCopiedId(id);
+        showToast('Link copiado al portapapeles', 'success');
+        setTimeout(() => setCopiedId(null), 2000);
+    };
+
+    // Helper: Resize & Compress Image
+    const resizeImage = (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Limit to 800px width (Safe for Vercel/Redis)
+                    const MAX_WIDTH = 800;
+                    if (width > MAX_WIDTH) {
+                        height = Math.round(height * (MAX_WIDTH / width));
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Compress to JPEG 0.6 (High compression)
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                    resolve(dataUrl);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handleDelete = async (postId, e) => {
+        e.stopPropagation(); // Prevent edit mode
+        if (!confirm('¿Seguro que quieres eliminar esta publicación?')) return;
+
+        try {
+            const res = await fetch('/api/posts', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: postId, userId: user.id })
+            });
+            if (res.ok) {
+                showToast('Publicación eliminada', 'success');
+                fetchGallery(user.id);
+                if (editingId === postId) handleCancelEdit();
+            } else {
+                showToast('No se pudo eliminar', 'error');
+            }
+        } catch (error) {
+            showToast('Error de conexión', 'error');
+        }
+    };
+
+    const handleFileSelect = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Preview local
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            setMedia({ type: 'image', url: ev.target.result, file });
+        };
+        reader.readAsDataURL(file);
+
+        setIsUploading(true);
+        try {
+            console.log('Compressing image...');
+            const compressedBase64 = await resizeImage(file);
+            console.log('Uploading payload size:', compressedBase64.length);
+
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: compressedBase64, type: 'image/jpeg' })
+            });
+
+            if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+            const data = await res.json();
+            if (data.success) {
+                const finalUrl = data.url.startsWith('http') ? data.url : `${window.location.origin}${data.url}`;
+                setUploadedUrl(finalUrl);
+                showToast('Foto optimizada y lista', 'success');
+            } else {
+                throw new Error(data.error || 'Error desconocido');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast(`Error: ${error.message || 'Intenta con una foto más pequeña'}`, 'error');
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
     const handleSavePost = async () => {
         if (isUploading) {
@@ -91,19 +200,21 @@ const PostMakerSection = () => {
         }
 
         try {
+            const payload = {
+                title,
+                description: content,
+                image: uploadedUrl,
+                redirectEnabled,
+                redirectUrl,
+                userId: user?.id
+            };
+
             if (editingId) {
                 // UPDATE
                 const res = await fetch('/api/posts', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        id: editingId,
-                        title,
-                        description: content,
-                        image: uploadedUrl,
-                        redirectEnabled,
-                        redirectUrl
-                    })
+                    body: JSON.stringify({ ...payload, id: editingId })
                 });
                 if (res.ok) {
                     showToast('Post actualizado correctamente', 'success');
@@ -115,14 +226,7 @@ const PostMakerSection = () => {
                 const res = await fetch('/api/create-link', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        userId: user?.id,
-                        title,
-                        description: content,
-                        image: uploadedUrl,
-                        redirectEnabled,
-                        redirectUrl
-                    })
+                    body: JSON.stringify(payload)
                 });
                 const data = await res.json();
 
@@ -149,7 +253,9 @@ const PostMakerSection = () => {
     // Helper for Title Case
     const toTitleCase = (str) => {
         if (!str) return '';
-        return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        try {
+            return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        } catch (e) { return str; }
     };
 
     return (
