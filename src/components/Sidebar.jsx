@@ -70,13 +70,13 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
                     w-full flex items-center space-x-3 px-4 py-3 rounded-lg
                     smooth-transition group
                     ${isActive
-                        ? 'bg-blue-600 text-white shadow-lg'
+                        ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg'
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }
                 `}
                 title={item.label}
             >
-                <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500 dark:text-gray-400 group-hover:text-blue-600 dark:group-hover:text-blue-400'}`} />
+                <Icon className={`w-5 h-5 ${isActive ? 'text-inherit' : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white'}`} />
                 <span className="font-medium text-sm">{item.label}</span>
             </button>
         );
@@ -87,8 +87,8 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
             {/* Logo/Header */}
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                        <Users className="w-6 h-6 text-white" />
+                    <div className="w-10 h-10 bg-gray-900 dark:bg-white rounded-xl flex items-center justify-center shadow-lg">
+                        <Users className="w-6 h-6 text-white dark:text-gray-900" />
                     </div>
                     <div>
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">

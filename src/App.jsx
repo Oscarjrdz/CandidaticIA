@@ -176,7 +176,7 @@ function App() {
                   <div className="hidden md:flex items-center space-x-2 animate-in fade-in slide-in-from-right-4 duration-700">
                     <div className="text-right">
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        Hola, <span className="text-blue-600 dark:text-blue-400 font-bold">
+                        Hola, <span className="text-gray-900 dark:text-white font-bold">
                           {user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1).toLowerCase()}
                         </span>
                       </p>
@@ -184,7 +184,7 @@ function App() {
                         {user.role === 'SuperAdmin' ? 'Super Admin' : 'Recruiter'}
                       </p>
                     </div>
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg transform hover:scale-105 transition-transform">
+                    <div className="w-10 h-10 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center text-white dark:text-gray-900 font-bold shadow-lg transform hover:scale-105 transition-transform">
                       {user.name.charAt(0).toUpperCase()}
                     </div>
                   </div>
