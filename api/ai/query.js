@@ -16,19 +16,28 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Falta el parámetro "query"' });
         }
 
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            return res.status(500).json({
-                error: 'AI no configurada',
-                message: 'Falta GEMINI_API_KEY en las variables de entorno.'
-            });
-        }
+        let apiKey = process.env.GEMINI_API_KEY;
 
-        // 1. Obtener campos disponibles para que la IA sepa qué buscar
-        // Reutilizamos la lógica de api/fields.js
+        // 1. Obtener configuración de Redis (Fallback si no hay ENV var)
         const { getRedisClient } = await import('../utils/storage.js');
         const redis = getRedisClient();
 
+        if (!apiKey && redis) {
+            const aiConfigJson = await redis.get('ai_config');
+            if (aiConfigJson) {
+                const aiConfig = JSON.parse(aiConfigJson);
+                apiKey = aiConfig.geminiApiKey;
+            }
+        }
+
+        if (!apiKey) {
+            return res.status(500).json({
+                error: 'AI no configurada',
+                message: 'Falta GEMINI_API_KEY en Vercel o en la configuración de Settings.'
+            });
+        }
+
+        // 2. Obtener campos disponibles para que la IA sepa qué buscar
         const DEFAULT_FIELDS = [
             { value: 'nombreReal', label: 'Nombre Real' },
             { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },

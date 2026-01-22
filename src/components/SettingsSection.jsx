@@ -4,6 +4,7 @@ import ConnectionStatus from './ConnectionStatus';
 import WebhookConfig from './WebhookConfig';
 import EventMonitor from './EventMonitor';
 import QuickTest from './QuickTest';
+import AISettings from './AISettings';
 
 /**
  * Sección de Settings (configuración)
@@ -35,6 +36,8 @@ const SettingsSection = ({ botId, apiKey, onCredentialsChange, showToast }) => {
             {/* Columna derecha */}
             <div className="space-y-6">
                 <EventMonitor showToast={showToast} />
+
+                <AISettings showToast={showToast} />
 
                 <QuickTest
                     botId={botId}

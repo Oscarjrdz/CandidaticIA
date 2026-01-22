@@ -47,6 +47,14 @@ export default async function handler(req, res) {
                 });
             }
 
+            if (type === 'ai_config') {
+                value = await redis.get('ai_config');
+                return res.status(200).json({
+                    success: true,
+                    data: value ? JSON.parse(value) : { geminiApiKey: '' }
+                });
+            }
+
             return res.status(400).json({ error: 'Invalid type' });
         }
 
@@ -87,6 +95,20 @@ export default async function handler(req, res) {
                 return res.status(200).json({
                     success: true,
                     message: 'Timer saved'
+                });
+            }
+
+            if (type === 'ai_config') {
+                if (!data || typeof data !== 'object') {
+                    return res.status(400).json({ error: 'Invalid AI config format' });
+                }
+
+                await redis.set('ai_config', JSON.stringify(data));
+                console.log('✅ AI configuration saved to Redis');
+
+                return res.status(200).json({
+                    success: true,
+                    message: 'AI config saved'
                 });
             }
 
