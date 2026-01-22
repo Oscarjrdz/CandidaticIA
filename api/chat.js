@@ -4,7 +4,7 @@
  * POST /api/chat (Enviar mensaje)
  */
 
-import { getMessages, saveMessage, getCandidateById } from './utils/storage.js';
+import { getMessages, saveMessage, getCandidateById, updateCandidate } from './utils/storage.js';
 import { sendTestMessage } from '../src/services/builderbot.js';
 import { substituteVariables } from './utils/shortcuts.js';
 
@@ -98,11 +98,19 @@ export default async function handler(req, res) {
             }
 
             // Guardar en historial local como mensaje saliente
+            const timestamp = new Date().toISOString();
             const savedMsg = await saveMessage(candidateId, {
                 from: 'me',
                 content: finalMessage,
                 type: 'text',
-                timestamp: new Date().toISOString()
+                timestamp: timestamp
+            });
+
+            // Actualizar estado del candidato para disparar el exportador (cron)
+            await updateCandidate(candidateId, {
+                ultimoMensaje: timestamp,
+                ultimoMensajeBot: timestamp,
+                lastBotMessageAt: timestamp
             });
 
             return res.status(200).json({ success: true, message: savedMsg });

@@ -282,45 +282,47 @@ async function processEvent(payload) {
                             timestamp: timestamp
                         });
                         console.log(`💾 Mensaje de AUTOPILOTO guardado para ${candidateName}`);
+                    }
 
-                        const updateData = {
-                            ultimoMensaje: timestamp,
-                            lastBotMessageAt: timestamp,
-                            ultimoMensajeBot: timestamp
-                        };
+                    // Actualizar estado del candidato SIEMPRE (incluso si es duplicado) 
+                    // para asegurar que el exportador cron vea la actividad
+                    const updateData = {
+                        ultimoMensaje: timestamp,
+                        lastBotMessageAt: timestamp,
+                        ultimoMensajeBot: timestamp
+                    };
 
-                        // 🤖 DETECCIÓN DINÁMICA CON REGLAS DE AUTOMATIZACIÓN
-                        try {
-                            const { getRedisClient } = await import('./utils/storage.js');
-                            const redis = getRedisClient();
-                            const rulesJson = await redis.get('automation_rules');
+                    // 🤖 DETECCIÓN DINÁMICA CON REGLAS DE AUTOMATIZACIÓN
+                    try {
+                        const { getRedisClient } = await import('./utils/storage.js');
+                        const redis = getRedisClient();
+                        const rulesJson = await redis.get('automation_rules');
 
-                            if (rulesJson) {
-                                const rules = JSON.parse(rulesJson);
-                                rules.forEach(rule => {
-                                    if (rule.enabled) {
-                                        try {
-                                            const regex = new RegExp(rule.pattern, 'i');
-                                            const match = content.match(regex);
-                                            if (match && match[1]) {
-                                                const captured = match[1].trim().replace(/[*_]/g, '');
-                                                updateData[rule.field] = captured;
-                                            }
-                                        } catch (error) {
-                                            console.warn(`⚠️ Invalid regex in rule ${rule.id}:`, error.message);
+                        if (rulesJson) {
+                            const rules = JSON.parse(rulesJson);
+                            rules.forEach(rule => {
+                                if (rule.enabled) {
+                                    try {
+                                        const regex = new RegExp(rule.pattern, 'i');
+                                        const match = content.match(regex);
+                                        if (match && match[1]) {
+                                            const captured = match[1].trim().replace(/[*_]/g, '');
+                                            updateData[rule.field] = captured;
                                         }
+                                    } catch (error) {
+                                        console.warn(`⚠️ Invalid regex in rule ${rule.id}:`, error.message);
                                     }
-                                });
-                            } else {
-                                applyLegacyRules(content, updateData, cleanNumber);
-                            }
-                        } catch (error) {
-                            console.error('❌ Error loading automation rules:', error);
+                                }
+                            });
+                        } else {
                             applyLegacyRules(content, updateData, cleanNumber);
                         }
-
-                        await updateCandidate(candidateId, updateData);
+                    } catch (error) {
+                        console.error('❌ Error loading automation rules:', error);
+                        applyLegacyRules(content, updateData, cleanNumber);
                     }
+
+                    await updateCandidate(candidateId, updateData);
                 }
             } else {
                 console.warn('⚠️ message.outgoing recibido sin campo "to" ni "remoteJid". No se puede asignar al historial.', data);
