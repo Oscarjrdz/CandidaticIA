@@ -104,14 +104,13 @@ const MagicSearch = ({ onResults, showToast }) => {
                         </button>
                     </div>
 
-                    {/* iOS-style Search Bar */}
                     <form onSubmit={handleSearch} className="relative group">
-                        <div className="relative flex items-center bg-gray-200/60 dark:bg-gray-800/60 rounded-2xl px-5 transition-all">
+                        <div className="relative flex items-center bg-gray-200/60 dark:bg-gray-800/60 rounded-2xl px-5 transition-all ring-offset-2 ring-blue-500/0 focus-within:ring-2 focus-within:ring-blue-500/40">
                             <div className="mr-3">
                                 {loading ? (
                                     <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
                                 ) : (
-                                    <Search className="w-5 h-5 text-gray-400" />
+                                    <Search className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                                 )}
                             </div>
                             <input
@@ -120,7 +119,7 @@ const MagicSearch = ({ onResults, showToast }) => {
                                 placeholder="Ej: Candidatos de más de 40 años en Monterrey..."
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
-                                className="w-full py-5 bg-transparent outline-none ring-0 focus:ring-0 text-xl font-medium text-gray-900 dark:text-white placeholder-gray-400"
+                                className="w-full py-5 bg-transparent outline-none ring-0 placeholder-gray-400 text-xl font-medium text-gray-900 dark:text-white"
                             />
                         </div>
                     </form>
