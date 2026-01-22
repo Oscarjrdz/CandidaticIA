@@ -36,10 +36,11 @@ const MagicSearch = ({ onResults, showToast }) => {
                 setIsOpen(false);
                 showToast(`IA encontró ${result.count} candidatos`, 'success');
             } else {
-                showToast(result.error, 'error');
+                showToast(result.error || 'Error en la búsqueda', 'error');
+                console.error('AI Query Error:', result.error);
             }
         } catch (error) {
-            showToast('Error de conexión con la IA', 'error');
+            showToast(`Error: ${error.message}`, 'error');
         } finally {
             setLoading(false);
         }

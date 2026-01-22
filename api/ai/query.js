@@ -11,22 +11,33 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { query } = req.body;
+        // Robust body parsing for Vercel
+        let body = req.body;
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (e) { }
+        }
+
+        const { query } = body || {};
+        console.log(`🔍 [AI Query] Query received: "${query}"`);
+
         if (!query) {
             return res.status(400).json({ error: 'Falta el parámetro "query"' });
         }
 
         let apiKey = process.env.GEMINI_API_KEY;
+        console.log(`🔍 [AI Query] Env API Key present: ${!!apiKey}`);
 
         // 1. Obtener configuración de Redis (Fallback si no hay ENV var)
         const { getRedisClient } = await import('../utils/storage.js');
         const redis = getRedisClient();
 
         if (!apiKey && redis) {
+            console.log(`🔍 [AI Query] Key missing in Env, checking Redis...`);
             const aiConfigJson = await redis.get('ai_config');
             if (aiConfigJson) {
                 const aiConfig = JSON.parse(aiConfigJson);
                 apiKey = aiConfig.geminiApiKey;
+                console.log(`🔍 [AI Query] Found key in Redis: ${!!apiKey}`);
             }
         }
 
@@ -80,9 +91,11 @@ Estructura del JSON:
 Consulta del usuario: "${query}"
 `;
 
+        console.log(`🔍 [AI Query] Sending to Gemini...`);
         const result = await model.generateContent(systemPrompt);
         const response = await result.response;
         const text = response.text();
+        console.log(`🔍 [AI Query] Gemini raw response:`, text.substring(0, 100) + '...');
 
         // Limpiar el texto si Gemini devuelve markdown ```json ... ```
         const jsonMatch = text.match(/\{[\s\S]*\}/);
