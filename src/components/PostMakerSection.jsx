@@ -14,10 +14,9 @@ const PostMakerSection = () => {
     const [user, setUser] = useState(null);
 
     // Form State
-    const [editingId, setEditingId] = useState(null); // If set, we are updating
+    const [editingId, setEditingId] = useState(null);
     const [title, setTitle] = useState('BUSCAMOS AYUDANTES GENERALES');
     const [content, setContent] = useState('Mándanos un Whatsapp clic aqui');
-    // const [targetUrl, setTargetUrl] = useState('https://wa.me/5218116038195'); // REMOVED
 
     const [media, setMedia] = useState(null);
     const [uploadedUrl, setUploadedUrl] = useState(null);
@@ -29,6 +28,9 @@ const PostMakerSection = () => {
 
     const [previewMode, setPreviewMode] = useState('desktop');
     const fileInputRef = useRef(null);
+
+    // Copy Feedback State
+    const [copiedId, setCopiedId] = useState(null);
 
     // Initial Load
     useEffect(() => {
@@ -58,7 +60,6 @@ const PostMakerSection = () => {
         setEditingId(post.id);
         setTitle(post.title);
         setContent(post.description);
-        // setTargetUrl(post.url); // Legacy
         setUploadedUrl(post.image);
         setMedia({ type: 'image', url: post.image });
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -73,7 +74,108 @@ const PostMakerSection = () => {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    // ... (resizeImage stays same)
+    const handleCopy = (text, id) => {
+        navigator.clipboard.writeText(text);
+        setCopiedId(id);
+        showToast('Link copiado al portapapeles', 'success');
+        setTimeout(() => setCopiedId(null), 2000);
+    };
+
+    // Helper: Resize & Compress Image (High Aggression for Vercel)
+    const resizeImage = (file) => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Limit to 800px width (Safe for Vercel/Redis)
+                    const MAX_WIDTH = 800;
+                    if (width > MAX_WIDTH) {
+                        height = Math.round(height * (MAX_WIDTH / width));
+                        width = MAX_WIDTH;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Compress to JPEG 0.6 (High compression)
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                    resolve(dataUrl);
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
+    const handleDelete = async (postId, e) => {
+        e.stopPropagation(); // Prevent edit mode
+        if (!confirm('¿Seguro que quieres eliminar esta publicación?')) return;
+
+        try {
+            const res = await fetch('/api/posts', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: postId, userId: user.id })
+            });
+            if (res.ok) {
+                showToast('Publicación eliminada', 'success');
+                fetchGallery(user.id);
+                if (editingId === postId) handleCancelEdit();
+            } else {
+                showToast('No se pudo eliminar', 'error');
+            }
+        } catch (error) {
+            showToast('Error de conexión', 'error');
+        }
+    };
+
+    const handleFileSelect = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Preview local
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            setMedia({ type: 'image', url: ev.target.result, file });
+        };
+        reader.readAsDataURL(file);
+
+        setIsUploading(true);
+        try {
+            console.log('Compressing image (Aggressive)...');
+            const compressedBase64 = await resizeImage(file);
+            console.log('Uploading payload size:', compressedBase64.length);
+
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: compressedBase64, type: 'image/jpeg' })
+            });
+
+            if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+            const data = await res.json();
+            if (data.success) {
+                const finalUrl = data.url.startsWith('http') ? data.url : `${window.location.origin}${data.url}`;
+                setUploadedUrl(finalUrl);
+                showToast('Foto optimizada y lista', 'success');
+            } else {
+                throw new Error(data.error || 'Error desconocido');
+            }
+        } catch (error) {
+            console.error(error);
+            showToast(`Error: ${error.message || 'Intenta con una foto más pequeña'}`, 'error');
+        } finally {
+            setIsUploading(false);
+        }
+    };
 
     const handleSavePost = async () => {
         if (isUploading) {
@@ -120,8 +222,8 @@ const PostMakerSection = () => {
                 if (data.success) {
                     showToast('Post creado con éxito', 'success');
                     fetchGallery(user?.id);
-                    // Clear fields logic
-                    setTitle('Nuevo Post'); // Reset to default or empty
+                    // Clear fields
+                    setTitle('Nuevo Post');
                     setContent('');
                     setUploadedUrl(null);
                     setMedia(null);
@@ -133,16 +235,6 @@ const PostMakerSection = () => {
         } catch (e) {
             showToast('Error de conexión', 'error');
         }
-    };
-
-    // Copy Button Feedback State
-    const [copiedId, setCopiedId] = useState(null);
-
-    const handleCopy = (text, id) => {
-        navigator.clipboard.writeText(text);
-        setCopiedId(id);
-        showToast('Link copiado al portapapeles', 'success');
-        setTimeout(() => setCopiedId(null), 2000);
     };
 
     return (
@@ -163,17 +255,90 @@ const PostMakerSection = () => {
                             </button>
                         )}
                     </div>
-                    {/* ... Rest of form ... */}
+
                     <div className="space-y-5">
-                        {/* ... */}
+                        {/* Imagen First now */}
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-gray-500 uppercase">Foto del Post</label>
-                            {/* ... */}
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors flex items-center gap-2"
+                                >
+                                    {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                                    {isUploading ? 'Optimizando...' : 'Subir Foto'}
+                                </button>
+                                <span className="text-xs text-gray-400 truncate max-w-[200px]">
+                                    {media?.file?.name || (uploadedUrl ? 'Imagen cargada' : 'Sin imagen')}
+                                </span>
+                                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
+                            </div>
                         </div>
-                        {/* ... */}
+
+                        {/* Título & Desc */}
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase">Título (Negritas en FB)</label>
+                            <input
+                                type="text"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                placeholder="Título llamativo..."
+                            />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-gray-500 uppercase">Mensaje (Gris en FB)</label>
+                            <textarea
+                                value={content}
+                                onChange={(e) => setContent(e.target.value)}
+                                rows={2}
+                                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
+                                placeholder="Descripción..."
+                            />
+                        </div>
+
+                        <div className="pt-4 border-t border-gray-100 flex justify-end">
+                            <Button
+                                onClick={handleSavePost}
+                                icon={Save}
+                                className={`
+                                    ${!uploadedUrl ? 'opacity-70' : 'shadow-lg shadow-blue-600/20'} 
+                                    bg-blue-600 hover:bg-blue-700 text-white
+                                `}
+                            >
+                                {isUploading ? 'Subiendo Foto...' : (editingId ? 'Guardar Cambios' : 'Crear y Guardar')}
+                            </Button>
+                        </div>
                     </div>
                 </div>
-                {/* ... */}
+
+                {/* RIGHT: PREVIEW (Facebook Style) */}
+                <div className="w-[450px] shrink-0 flex flex-col items-center justify-center p-4">
+                    <div className="w-full flex justify-between items-center mb-3">
+                        <span className="text-xs font-bold text-gray-400 uppercase">Vista Previa</span>
+                        <div className="flex gap-2 text-gray-400">
+                            <Monitor className={`w-4 h-4 cursor-pointer ${previewMode === 'desktop' ? 'text-blue-500' : ''}`} onClick={() => setPreviewMode('desktop')} />
+                            <Smartphone className={`w-4 h-4 cursor-pointer ${previewMode === 'mobile' ? 'text-blue-500' : ''}`} onClick={() => setPreviewMode('mobile')} />
+                        </div>
+                    </div>
+
+                    <div className="bg-[#18191a] border border-[#3e4042] rounded-lg overflow-hidden shadow-2xl w-full max-w-full">
+                        <div className="bg-black aspect-[1.91/1] overflow-hidden flex items-center justify-center relative">
+                            {media || uploadedUrl ? (
+                                <img src={media?.url || uploadedUrl} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="text-gray-600 flex flex-col items-center opacty-50"><ImageIcon className="w-8 h-8" /></div>
+                            )}
+                        </div>
+                        <div className="bg-[#242526] p-3 border-t border-[#3e4042]">
+                            <p className="text-[#b0b3b8] text-[12px] uppercase mb-0.5 truncate tracking-wide">
+                                CANDIDATIC.AI
+                            </p>
+                            <h3 className="text-[#e4e6eb] font-bold text-[16px] leading-5 mb-1 line-clamp-1">{title}</h3>
+                            <p className="text-[#b0b3b8] text-[14px] leading-5 line-clamp-1">{content}</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* BOTTOM: POST GALLERY */}
@@ -210,133 +375,14 @@ const PostMakerSection = () => {
                             </div>
                         );
                     })}
-                    {/* ... */}
-                </div>
-            </div>
-        </div>
-    );
-    <div className="flex items-center gap-3">
-        <button
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors flex items-center gap-2"
-        >
-            {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
-            {isUploading ? 'Optimizando...' : 'Subir Foto'}
-        </button>
-        <span className="text-xs text-gray-400 truncate max-w-[200px]">
-            {media?.file?.name || (uploadedUrl ? 'Imagen cargada' : 'Sin imagen')}
-        </span>
-        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileSelect} />
-    </div>
-                        </div >
-
-    {/* Título & Desc */ }
-    < div className = "space-y-1" >
-                            <label className="text-xs font-bold text-gray-500 uppercase">Título (Negritas en FB)</label>
-                            <input
-                                type="text"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                placeholder="Título llamativo..."
-                            />
-                        </div >
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500 uppercase">Mensaje (Gris en FB)</label>
-                            <textarea
-                                value={content}
-                                onChange={(e) => setContent(e.target.value)}
-                                rows={2}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
-                                placeholder="Descripción..."
-                            />
-                        </div>
-
-                        <div className="pt-4 border-t border-gray-100 flex justify-end">
-                            <Button
-                                onClick={handleSavePost}
-                                icon={Save}
-                                className={`
-                                    ${!uploadedUrl ? 'opacity-70' : 'shadow-lg shadow-blue-600/20'} 
-                                    bg-blue-600 hover:bg-blue-700 text-white
-                                `}
-                            >
-                                {isUploading ? 'Subiendo Foto...' : (editingId ? 'Guardar Cambios' : 'Crear y Guardar')}
-                            </Button>
-                        </div>
-                    </div >
-                </div >
-
-    {/* RIGHT: PREVIEW (Facebook Style) */ }
-    < div className = "w-[450px] shrink-0 flex flex-col items-center justify-center p-4" >
-                    <div className="w-full flex justify-between items-center mb-3">
-                        <span className="text-xs font-bold text-gray-400 uppercase">Vista Previa</span>
-                        <div className="flex gap-2 text-gray-400">
-                            <Monitor className={`w-4 h-4 cursor-pointer ${previewMode === 'desktop' ? 'text-blue-500' : ''}`} onClick={() => setPreviewMode('desktop')} />
-                            <Smartphone className={`w-4 h-4 cursor-pointer ${previewMode === 'mobile' ? 'text-blue-500' : ''}`} onClick={() => setPreviewMode('mobile')} />
-                        </div>
-                    </div>
-
-                    <div className="bg-[#18191a] border border-[#3e4042] rounded-lg overflow-hidden shadow-2xl w-full max-w-full">
-                        <div className="bg-black aspect-[1.91/1] overflow-hidden flex items-center justify-center relative">
-                            {media || uploadedUrl ? (
-                                <img src={media?.url || uploadedUrl} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="text-gray-600 flex flex-col items-center opacty-50"><ImageIcon className="w-8 h-8" /></div>
-                            )}
-                        </div>
-                        <div className="bg-[#242526] p-3 border-t border-[#3e4042]">
-                            <p className="text-[#b0b3b8] text-[12px] uppercase mb-0.5 truncate tracking-wide">
-                                CANDIDATIC.AI
-                            </p>
-                            <h3 className="text-[#e4e6eb] font-bold text-[16px] leading-5 mb-1 line-clamp-1">{title}</h3>
-                            <p className="text-[#b0b3b8] text-[14px] leading-5 line-clamp-1">{content}</p>
-                        </div>
-                    </div>
-                </div >
-            </div >
-
-    {/* BOTTOM: POST GALLERY */ }
-    < div className = "mt-8" >
-                <h3 className="text-lg font-bold text-gray-800 mb-4 px-1">Mis Publicaciones ({posts.length})</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {posts.map(post => {
-                        const shortUrl = `${window.location.origin}/s/${post.id || post.key?.split(':')[1]}`; // Handle legacy/new
-                        return (
-                            <div key={post.id || Math.random()} className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow p-3 flex flex-col gap-3 group">
-                                <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative">
-                                    <img src={post.image} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                        <button onClick={() => handleEdit(post)} className="bg-white p-2 rounded-full text-blue-600 hover:scale-110 transition-transform" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                                        <button onClick={(e) => handleDelete(post.id, e)} className="bg-white p-2 rounded-full text-red-500 hover:scale-110 transition-transform" title="Eliminar"><Trash2 className="w-4 h-4" /></button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-gray-800 text-sm truncate">{post.title}</h4>
-                                    <p className="text-xs text-gray-500 truncate">{new Date(post.createdAt || Date.now()).toLocaleDateString()}</p>
-                                </div>
-                                <div className="mt-auto pt-2 border-t border-gray-50 flex gap-2">
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(shortUrl);
-                                            showToast('Link copiado', 'success');
-                                        }}
-                                        className="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs py-2 rounded-lg font-medium flex items-center justify-center gap-1"
-                                    >
-                                        <Copy className="w-3 h-3" /> Copiar Link
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
                     {posts.length === 0 && !isLoadingPosts && (
                         <div className="col-span-full py-12 text-center text-gray-400 bg-gray-50/50 rounded-xl border-dashed border-2 border-gray-100">
                             Crea tu primer link inteligente arriba 👆
                         </div>
                     )}
                 </div>
-            </div >
-        </div >
+            </div>
+        </div>
     );
 };
 
