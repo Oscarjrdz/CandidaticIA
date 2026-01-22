@@ -41,26 +41,32 @@ export default async function handler(req, res) {
 
         const genAI = new GoogleGenerativeAI(cleanKey);
 
-        // Intentar con flash primero, luego con pro si falla con 404
+        // Intentar varios modelos hasta que uno funcione
+        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
+        let successModel = '';
         let text = '';
-        try {
-            const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-            const result = await model.generateContent("Valida esta conexión respondiendo solo 'OK'");
-            const response = await result.response;
-            text = response.text();
-        } catch (e) {
-            if (e.message.includes('404') || e.message.includes('not found')) {
-                console.log('⚠️ Flash not found, trying gemini-pro...');
-                const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-                const result = await model.generateContent("Valida esta conexión");
+        let lastError = '';
+
+        for (const modelName of modelsToTry) {
+            try {
+                console.log(`🔌 [AI Validation] Testing: ${modelName}`);
+                const model = genAI.getGenerativeModel({ model: modelName });
+                const result = await model.generateContent("OK");
                 const response = await result.response;
                 text = response.text();
-            } else {
-                throw e;
+                successModel = modelName;
+                break;
+            } catch (e) {
+                lastError = e.message;
+                console.warn(`⚠️ [AI Validation] ${modelName} failed:`, e.message);
             }
         }
 
-        console.log(`✅ [AI Validation] Success:`, text);
+        if (!successModel) {
+            throw new Error(`Ningún modelo respondió (probados: ${modelsToTry.join(', ')}). Último error: ${lastError}`);
+        }
+
+        console.log(`✅ [AI Validation] Success with: ${successModel}`);
 
         return res.status(200).json({
             success: true,
