@@ -79,10 +79,6 @@ export default async function handler(req, res) {
         console.log(`🔍 [AI Query] Initializing Gemini Model...`);
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        // Intentar con flash (más barato/rápido) y caer a pro si no existe
-        let modelIdentifier = "gemini-1.5-flash";
-        let model = genAI.getGenerativeModel({ model: modelIdentifier });
-
         const systemPrompt = `
 Eres un experto en extracción de datos para un CRM de reclutamiento. 
 Tu tarea es convertir una consulta en lenguaje natural en un objeto JSON de filtros.
@@ -107,19 +103,27 @@ Estructura del JSON:
 Consulta del usuario: "${query}"
 `;
 
-        console.log(`🔍 [AI Query] Sending to Gemini (${modelIdentifier})...`);
+        // Intentar varios modelos hasta que uno funcione
+        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
         let result;
-        try {
-            result = await model.generateContent(systemPrompt);
-        } catch (e) {
-            if (e.message.includes('404') || e.message.includes('not found')) {
-                console.log('⚠️ Flash not found in query, trying gemini-pro...');
-                modelIdentifier = "gemini-pro";
-                model = genAI.getGenerativeModel({ model: modelIdentifier });
+        let successModel = '';
+        let lastError = '';
+
+        for (const mName of modelsToTry) {
+            try {
+                console.log(`🔍 [AI Query] Sending to Gemini (${mName})...`);
+                const model = genAI.getGenerativeModel({ model: mName });
                 result = await model.generateContent(systemPrompt);
-            } else {
-                throw e;
+                successModel = mName;
+                break;
+            } catch (e) {
+                lastError = e.message;
+                console.warn(`⚠️ [AI Query] ${mName} failed:`, e.message);
             }
+        }
+
+        if (!successModel) {
+            throw new Error(`Ningún modelo respondió (probados: ${modelsToTry.join(', ')}). Último error: ${lastError}`);
         }
 
         const response = await result.response;
