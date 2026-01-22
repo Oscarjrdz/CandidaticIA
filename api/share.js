@@ -9,8 +9,11 @@ export default async function handler(req, res) {
     let metaImage = req.query.image || ''; // Leave empty if not provided
 
     // We no longer have a "targetUrl" because the post IS the destination
-    // But we need the current URL for og:url
-    const currentUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}${req.url}`;
+    // Base URL construction
+    const protocol = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+    const currentUrl = `${baseUrl}${req.url}`;
 
     // If ID is present, try to fetch from Redis
     if (id) {
@@ -30,9 +33,15 @@ export default async function handler(req, res) {
         }
     }
 
+    // CRITICAL: Facebook/Twitter require ABSOLUTE URLs for images
+    let absoluteImage = metaImage;
+    if (metaImage && metaImage.startsWith('/')) {
+        absoluteImage = `${baseUrl}${metaImage}`;
+    }
+
     const html = `
     <!DOCTYPE html>
-    <html lang="es">
+    <html lang="es" prefix="og: https://ogp.me/ns#">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -43,14 +52,19 @@ export default async function handler(req, res) {
         <meta property="og:url" content="${currentUrl}">
         <meta property="og:title" content="${metaTitle}">
         <meta property="og:description" content="${metaDesc}">
-        <meta property="og:image" content="${metaImage}">
+        
+        <meta property="og:image" content="${absoluteImage}">
+        <meta property="og:image:secure_url" content="${absoluteImage}">
+        <meta property="og:image:type" content="image/jpeg">
+        <meta property="og:image:width" content="1200">
+        <meta property="og:image:height" content="630">
         
         <!-- Twitter -->
         <meta property="twitter:card" content="summary_large_image">
         <meta property="twitter:url" content="${currentUrl}">
         <meta property="twitter:title" content="${metaTitle}">
         <meta property="twitter:description" content="${metaDesc}">
-        <meta property="twitter:image" content="${metaImage}">
+        <meta property="twitter:image" content="${absoluteImage}">
 
         <!-- Simple Clean CSS -->
         <style>
