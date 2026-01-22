@@ -12,6 +12,23 @@ const PostMakerSection = () => {
     const [link, setLink] = useState('');
     const [previewMode, setPreviewMode] = useState('desktop'); // desktop | mobile
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [media, setMedia] = useState(null); // { type: 'image' | 'video', url: string }
+    const fileInputRef = React.useRef(null);
+
+    // ... (user mock remains)
+
+    const handleFileSelect = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const type = file.type.startsWith('video') ? 'video' : 'image';
+                setMedia({ type, url: e.target.result });
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
 
     // Mock user for preview
     const user = {
@@ -126,9 +143,20 @@ const PostMakerSection = () => {
                         <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-3 flex items-center justify-between shadow-sm">
                             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 pl-2">Agregar a tu publicación</span>
                             <div className="flex space-x-2">
-                                <button title="Foto/Video" className="p-2 hover:bg-green-50 rounded-full text-green-600 smooth-transition">
+                                <button
+                                    title="Foto/Video"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="p-2 hover:bg-green-50 rounded-full text-green-600 smooth-transition"
+                                >
                                     <ImageIcon className="w-6 h-6" />
                                 </button>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    accept="image/*,video/*"
+                                    onChange={handleFileSelect}
+                                />
                                 <button title="Sentimiento/Actividad" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-2 hover:bg-yellow-50 rounded-full text-yellow-500 smooth-transition">
                                     <Smile className="w-6 h-6" />
                                 </button>
@@ -204,8 +232,19 @@ const PostMakerSection = () => {
 
                         {/* Content */}
                         <div className="px-3 pb-3 text-[#050505] dark:text-[#E4E6EB] whitespace-pre-wrap">
-                            {content || <span className="text-gray-400 italic">Tu publicación aparecerá aquí...</span>}
+                            {content || <span className={`text-gray-400 italic ${media ? 'hidden' : ''}`}>Tu publicación aparecerá aquí...</span>}
                         </div>
+
+                        {/* Media Preview */}
+                        {media && (
+                            <div className="w-full bg-black">
+                                {media.type === 'video' ? (
+                                    <video src={media.url} controls className="w-full max-h-96 object-contain" />
+                                ) : (
+                                    <img src={media.url} alt="Post content" className="w-full max-h-96 object-contain" />
+                                )}
+                            </div>
+                        )}
 
                         {/* Link Preview (Mock) */}
                         {link && (
