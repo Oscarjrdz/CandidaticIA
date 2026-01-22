@@ -89,7 +89,7 @@ const MagicSearch = ({ onResults, showToast }) => {
                     <div className="flex items-center justify-between">
                         <div className="space-y-0.5">
                             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                Hola, {userName || 'Oscar'}
+                                Hola, <span className="capitalize">{userName || 'Oscar'}</span>
                             </h2>
                             <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
                                 ¿Cómo puedo ayudarte con tus candidatos?
@@ -106,7 +106,7 @@ const MagicSearch = ({ onResults, showToast }) => {
 
                     {/* iOS-style Search Bar */}
                     <form onSubmit={handleSearch} className="relative group">
-                        <div className="relative flex items-center bg-gray-200/50 dark:bg-gray-800/50 rounded-2xl px-5 transition-all focus-within:ring-2 focus-within:ring-blue-500/30">
+                        <div className="relative flex items-center bg-gray-200/60 dark:bg-gray-800/60 rounded-2xl px-5 transition-all">
                             <div className="mr-3">
                                 {loading ? (
                                     <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
@@ -120,7 +120,7 @@ const MagicSearch = ({ onResults, showToast }) => {
                                 placeholder="Ej: Candidatos de más de 40 años en Monterrey..."
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
-                                className="w-full py-5 bg-transparent outline-none text-xl font-medium text-gray-900 dark:text-white placeholder-gray-400"
+                                className="w-full py-5 bg-transparent outline-none ring-0 focus:ring-0 text-xl font-medium text-gray-900 dark:text-white placeholder-gray-400"
                             />
                         </div>
                     </form>
@@ -133,7 +133,10 @@ const MagicSearch = ({ onResults, showToast }) => {
                                 <span>IA Optimizada</span>
                             </div>
                             <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-                            <span>Presiona <span className="font-bold">Enter</span> para buscar</span>
+                            <div className="flex items-center space-x-1 opacity-60">
+                                <span>Powered by</span>
+                                <span className="font-bold text-gray-700 dark:text-gray-300">Gemini 1.5 Ultra</span>
+                            </div>
                         </div>
                         <span className="opacity-50">v2.0 Beta</span>
                     </div>
