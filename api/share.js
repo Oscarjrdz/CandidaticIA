@@ -22,7 +22,7 @@ export default async function handler(req, res) {
             if (client) {
                 const rawData = await client.get(`share:${id}`);
                 if (rawData) {
-                    const data = JSON.parse(rawData);
+                    var data = JSON.parse(rawData); // Use var or let in outer scope for template access
                     metaTitle = data.title || metaTitle;
                     metaDesc = data.description || metaDesc;
                     metaImage = data.image || metaImage;
@@ -33,13 +33,20 @@ export default async function handler(req, res) {
         }
     }
 
-    // CRITICAL: Facebook/Twitter require ABSOLUTE URLs for images
-    let absoluteImage = metaImage;
-    if (metaImage && metaImage.startsWith('/')) {
-        absoluteImage = `${baseUrl}${metaImage}`;
+    // Safety check for data object if not found
+    if (typeof data === 'undefined') var data = {};
+} catch (e) {
+    console.error('Share ID Lookup Error:', e);
+}
     }
 
-    const html = `
+// CRITICAL: Facebook/Twitter require ABSOLUTE URLs for images
+let absoluteImage = metaImage;
+if (metaImage && metaImage.startsWith('/')) {
+    absoluteImage = `${baseUrl}${metaImage}`;
+}
+
+const html = `
     <!DOCTYPE html>
     <html lang="es" prefix="og: https://ogp.me/ns#">
     <head>
@@ -143,6 +150,20 @@ export default async function handler(req, res) {
                 
                 <!-- Optional: Add a general Call to Action if desirable, or keeps it clean -->
                 <!-- <a href="https://wa.me/5218116038195" class="whatsapp-btn">Contactar por WhatsApp</a> -->
+                
+                ${(data.redirectEnabled && data.redirectUrl) ? `
+                    <div class="redirect-box" style="margin-top:20px; text-align:center; padding:20px; background:#f0f9ff; border-radius:8px; border:1px solid #bae6fd;">
+                        <p style="margin-bottom:10px; font-weight:bold; color:#0284c7;">Redirigiendo...</p>
+                        <a href="${data.redirectUrl}" style="display:inline-block; background:#0284c7; color:white; padding:10px 20px; text-decoration:none; border-radius:6px; font-weight:bold;">
+                            Clic si no te redirige automáticamente
+                        </a>
+                        <script>
+                            setTimeout(function() {
+                                window.location.href = "${data.redirectUrl}";
+                            }, 500); // 500ms delay to allow analytics or just smooth trans
+                        </script>
+                    </div>
+                ` : ''}
             </div>
             
             <div class="footer">
@@ -153,6 +174,6 @@ export default async function handler(req, res) {
     </html>
     `;
 
-    res.setHeader('Content-Type', 'text/html');
-    res.status(200).send(html);
+res.setHeader('Content-Type', 'text/html');
+res.status(200).send(html);
 }

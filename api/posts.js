@@ -47,6 +47,8 @@ export default async function handler(req, res) {
                 description: description || existing.description,
                 image: image || existing.image,
                 url: url || existing.url,
+                redirectEnabled: req.body.redirectEnabled !== undefined ? req.body.redirectEnabled : existing.redirectEnabled,
+                redirectUrl: req.body.redirectUrl !== undefined ? req.body.redirectUrl : existing.redirectUrl,
                 updatedAt: new Date().toISOString()
             };
 

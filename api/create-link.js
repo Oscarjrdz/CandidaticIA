@@ -20,7 +20,11 @@ export default async function handler(req, res) {
         const createdAt = new Date().toISOString();
 
         // Save metadata to Redis (Expire in 90 days)
-        const metadata = { id, title, description, image, url, createdAt, userId };
+        const metadata = {
+            id, title, description, image, url, createdAt, userId,
+            redirectEnabled: req.body.redirectEnabled || false,
+            redirectUrl: req.body.redirectUrl || ''
+        };
         await client.set(key, JSON.stringify(metadata), 'EX', 90 * 24 * 60 * 60);
 
         // Add to User's History

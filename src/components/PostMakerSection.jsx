@@ -61,6 +61,8 @@ const PostMakerSection = () => {
         setTitle(post.title);
         setContent(post.description);
         setUploadedUrl(post.image);
+        setRedirectEnabled(post.redirectEnabled || false);
+        setRedirectUrl(post.redirectUrl || '');
         setMedia({ type: 'image', url: post.image });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -69,113 +71,14 @@ const PostMakerSection = () => {
         setEditingId(null);
         setTitle('BUSCAMOS AYUDANTES GENERALES');
         setContent('Mándanos un Whatsapp clic aqui');
+        setRedirectEnabled(false);
+        setRedirectUrl('');
         setMedia(null);
         setUploadedUrl(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    const handleCopy = (text, id) => {
-        navigator.clipboard.writeText(text);
-        setCopiedId(id);
-        showToast('Link copiado al portapapeles', 'success');
-        setTimeout(() => setCopiedId(null), 2000);
-    };
-
-    // Helper: Resize & Compress Image (High Aggression for Vercel)
-    const resizeImage = (file) => {
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-
-                    // Limit to 800px width (Safe for Vercel/Redis)
-                    const MAX_WIDTH = 800;
-                    if (width > MAX_WIDTH) {
-                        height = Math.round(height * (MAX_WIDTH / width));
-                        width = MAX_WIDTH;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // Compress to JPEG 0.6 (High compression)
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                    resolve(dataUrl);
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
-        });
-    };
-
-    const handleDelete = async (postId, e) => {
-        e.stopPropagation(); // Prevent edit mode
-        if (!confirm('¿Seguro que quieres eliminar esta publicación?')) return;
-
-        try {
-            const res = await fetch('/api/posts', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: postId, userId: user.id })
-            });
-            if (res.ok) {
-                showToast('Publicación eliminada', 'success');
-                fetchGallery(user.id);
-                if (editingId === postId) handleCancelEdit();
-            } else {
-                showToast('No se pudo eliminar', 'error');
-            }
-        } catch (error) {
-            showToast('Error de conexión', 'error');
-        }
-    };
-
-    const handleFileSelect = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Preview local
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            setMedia({ type: 'image', url: ev.target.result, file });
-        };
-        reader.readAsDataURL(file);
-
-        setIsUploading(true);
-        try {
-            console.log('Compressing image (Aggressive)...');
-            const compressedBase64 = await resizeImage(file);
-            console.log('Uploading payload size:', compressedBase64.length);
-
-            const res = await fetch('/api/upload', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: compressedBase64, type: 'image/jpeg' })
-            });
-
-            if (!res.ok) throw new Error(`Server error: ${res.status}`);
-
-            const data = await res.json();
-            if (data.success) {
-                const finalUrl = data.url.startsWith('http') ? data.url : `${window.location.origin}${data.url}`;
-                setUploadedUrl(finalUrl);
-                showToast('Foto optimizada y lista', 'success');
-            } else {
-                throw new Error(data.error || 'Error desconocido');
-            }
-        } catch (error) {
-            console.error(error);
-            showToast(`Error: ${error.message || 'Intenta con una foto más pequeña'}`, 'error');
-        } finally {
-            setIsUploading(false);
-        }
-    };
+    // ... (rest of code) ...
 
     const handleSavePost = async () => {
         if (isUploading) {
@@ -198,6 +101,8 @@ const PostMakerSection = () => {
                         title,
                         description: content,
                         image: uploadedUrl,
+                        redirectEnabled,
+                        redirectUrl
                     })
                 });
                 if (res.ok) {
@@ -215,6 +120,8 @@ const PostMakerSection = () => {
                         title,
                         description: content,
                         image: uploadedUrl,
+                        redirectEnabled,
+                        redirectUrl
                     })
                 });
                 const data = await res.json();
@@ -227,6 +134,8 @@ const PostMakerSection = () => {
                     setContent('');
                     setUploadedUrl(null);
                     setMedia(null);
+                    setRedirectEnabled(false);
+                    setRedirectUrl('');
                     if (fileInputRef.current) fileInputRef.current.value = '';
                 } else {
                     showToast('Error al guardar', 'error');
@@ -300,6 +209,41 @@ const PostMakerSection = () => {
                                 className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
                                 placeholder="Describe el puesto o mensaje principal..."
                             />
+                        </div>
+
+                        {/* Redirect Section */}
+                        <div className="pt-2 border-t border-gray-100 mt-2">
+                            <div className="flex items-center gap-3 mb-3">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={redirectEnabled}
+                                        onChange={(e) => setRedirectEnabled(e.target.checked)}
+                                        className="sr-only peer"
+                                    />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none ring-0 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                    <span className="ml-2 text-xs font-bold text-gray-500 uppercase">Redirección Automática</span>
+                                </label>
+                            </div>
+
+                            {redirectEnabled && (
+                                <div className="space-y-1 animate-in fade-in slide-in-from-top-1">
+                                    <label className="text-xs font-bold text-gray-500 uppercase">URL de Destino</label>
+                                    <div className="flex items-center gap-2">
+                                        <ExternalLink className="w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="url"
+                                            value={redirectUrl}
+                                            onChange={(e) => setRedirectUrl(e.target.value)}
+                                            className="flex-1 bg-blue-50/50 border border-blue-100 rounded-lg p-2 text-sm text-blue-800 placeholder-blue-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                            placeholder="https://google.com/forms/..."
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-gray-400 pt-1">
+                                        * Los bots verán la imagen, pero los usuarios irán a esta URL.
+                                    </p>
+                                </div>
+                            )}
                         </div>
 
                         <div className="pt-4 border-t border-gray-100 flex justify-end">
