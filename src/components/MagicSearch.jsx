@@ -29,15 +29,19 @@ const MagicSearch = ({ onResults, showToast }) => {
         if (!query.trim() || loading) return;
 
         setLoading(true);
+        console.log('🚀 AI Search starting for:', query);
         try {
             const result = await aiQuery(query);
+            console.log('📦 AI Query result:', result);
             if (result.success) {
+                console.log('✅ Search success, calling onResults');
                 onResults(result.candidates, result.ai);
+                console.log('👋 Closing MagicSearch modal');
                 setIsOpen(false);
                 showToast(`IA encontró ${result.count} candidatos`, 'success');
             } else {
+                console.error('❌ AI Query Error (result not success):', result.error);
                 showToast(result.error || 'Error en la búsqueda', 'error');
-                console.error('AI Query Error:', result.error);
             }
         } catch (error) {
             showToast(`Error: ${error.message}`, 'error');

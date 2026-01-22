@@ -604,8 +604,9 @@ const CandidatesSection = ({ showToast }) => {
             <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center">
                 <MagicSearch
                     onResults={(results, ai) => {
+                        console.log('🔮 AI Results received:', results.length, 'candidates');
                         setAiFilteredCandidates(results);
-                        setAiExplanation(ai.explanation);
+                        setAiExplanation(ai?.explanation || 'Búsqueda completada');
                     }}
                     showToast={showToast}
                 />
