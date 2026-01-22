@@ -17,7 +17,7 @@ const PostMakerSection = () => {
     const [editingId, setEditingId] = useState(null); // If set, we are updating
     const [title, setTitle] = useState('BUSCAMOS AYUDANTES GENERALES');
     const [content, setContent] = useState('Mándanos un Whatsapp clic aqui');
-    const [targetUrl, setTargetUrl] = useState('https://wa.me/5218116038195');
+    // const [targetUrl, setTargetUrl] = useState('https://wa.me/5218116038195'); // REMOVED
 
     const [media, setMedia] = useState(null);
     const [uploadedUrl, setUploadedUrl] = useState(null);
@@ -58,9 +58,9 @@ const PostMakerSection = () => {
         setEditingId(post.id);
         setTitle(post.title);
         setContent(post.description);
-        setTargetUrl(post.url);
+        // setTargetUrl(post.url); // Legacy
         setUploadedUrl(post.image);
-        setMedia({ type: 'image', url: post.image }); // For preview
+        setMedia({ type: 'image', url: post.image });
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -68,12 +68,12 @@ const PostMakerSection = () => {
         setEditingId(null);
         setTitle('BUSCAMOS AYUDANTES GENERALES');
         setContent('Mándanos un Whatsapp clic aqui');
-        setTargetUrl('https://wa.me/5218116038195');
+        // setTargetUrl('https://wa.me/5218116038195');
         setMedia(null);
         setUploadedUrl(null);
     };
 
-    // Helper: Resize & Compress Image
+    // Helper: Resize & Compress Image (High Aggression for Vercel)
     const resizeImage = (file) => {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -84,8 +84,8 @@ const PostMakerSection = () => {
                     let width = img.width;
                     let height = img.height;
 
-                    // Limit to 1000px width for safety (Vercel Limit is 4.5MB request body)
-                    const MAX_WIDTH = 1000;
+                    // Limit to 800px width (Safe for Vercel/Redis)
+                    const MAX_WIDTH = 800;
                     if (width > MAX_WIDTH) {
                         height = Math.round(height * (MAX_WIDTH / width));
                         width = MAX_WIDTH;
@@ -96,14 +96,36 @@ const PostMakerSection = () => {
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // Compress to JPEG 0.7 (Good balance, small size)
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                    // Compress to JPEG 0.6 (High compression)
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
                     resolve(dataUrl);
                 };
                 img.src = event.target.result;
             };
             reader.readAsDataURL(file);
         });
+    };
+
+    const handleDelete = async (postId, e) => {
+        e.stopPropagation(); // Prevent edit mode
+        if (!confirm('¿Seguro que quieres eliminar esta publicación?')) return;
+
+        try {
+            const res = await fetch('/api/posts', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: postId, userId: user.id })
+            });
+            if (res.ok) {
+                showToast('Publicación eliminada', 'success');
+                fetchGallery(user.id);
+                if (editingId === postId) handleCancelEdit();
+            } else {
+                showToast('No se pudo eliminar', 'error');
+            }
+        } catch (error) {
+            showToast('Error de conexión', 'error');
+        }
     };
 
     const handleFileSelect = async (e) => {
@@ -119,7 +141,7 @@ const PostMakerSection = () => {
 
         setIsUploading(true);
         try {
-            console.log('Compressing image...');
+            console.log('Compressing image (Aggressive)...');
             const compressedBase64 = await resizeImage(file);
             console.log('Uploading payload size:', compressedBase64.length);
 
@@ -135,13 +157,13 @@ const PostMakerSection = () => {
             if (data.success) {
                 const finalUrl = data.url.startsWith('http') ? data.url : `${window.location.origin}${data.url}`;
                 setUploadedUrl(finalUrl);
-                showToast('Foto subida con éxito', 'success');
+                showToast('Foto optimizada y lista', 'success');
             } else {
                 throw new Error(data.error || 'Error desconocido');
             }
         } catch (error) {
             console.error(error);
-            showToast(`Error: ${error.message || 'No se pudo subir'}`, 'error');
+            showToast(`Error: ${error.message || 'Intenta con una foto más pequeña'}`, 'error');
         } finally {
             setIsUploading(false);
         }
@@ -168,7 +190,7 @@ const PostMakerSection = () => {
                         title,
                         description: content,
                         image: uploadedUrl,
-                        url: targetUrl
+                        // url removed
                     })
                 });
                 if (res.ok) {
@@ -186,7 +208,7 @@ const PostMakerSection = () => {
                         title,
                         description: content,
                         image: uploadedUrl,
-                        url: targetUrl
+                        // url removed
                     })
                 });
                 const data = await res.json();
@@ -224,24 +246,9 @@ const PostMakerSection = () => {
                     </div>
 
                     <div className="space-y-5">
-                        {/* Destino */}
+                        {/* Imagen First now */}
                         <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500 uppercase">Redirect (A dónde irán al dar clic)</label>
-                            <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-2 border border-gray-200">
-                                <Link className="w-4 h-4 text-gray-400" />
-                                <input
-                                    type="url"
-                                    value={targetUrl}
-                                    onChange={(e) => setTargetUrl(e.target.value)}
-                                    className="w-full bg-transparent border-none text-gray-700 text-sm focus:ring-0"
-                                    placeholder="https://tudestino.com/oferta-empleo"
-                                />
-                            </div>
-                        </div>
-
-                        {/* Imagen */}
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500 uppercase">Foto del Post (Se ajusta a 1200x630)</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase">Foto del Post</label>
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
