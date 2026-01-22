@@ -87,24 +87,31 @@ export default async function handler(req, res) {
         const genAI = new GoogleGenerativeAI(apiKey);
 
         const systemPrompt = `
-Eres un experto en extracción de datos para un CRM de reclutamiento. 
-Tu tarea es convertir una consulta en lenguaje natural en un objeto JSON de filtros.
+Eres un experto en extracción de datos para un CRM de reclutamiento (Candidatic). 
+Tu tarea es convertir una consulta en lenguaje natural en un objeto JSON de filtros lógicos.
 
 Campos disponibles en la base de datos:
 ${allFields.map(f => `- ${f.value} (${f.label})`).join('\n')}
 
+IMPORTANTE: El campo 'edad' NO existe directamente, pero puedes pedirlo en 'filters' y lo calcularemos desde 'fechaNacimiento'.
+
 Reglas:
-1. Devuelve SIEMPRE un JSON válido.
-2. Identifica filtros exactos para los campos disponibles.
-3. Si el usuario busca algo que no es un campo (ej: "busca gente que parezca enojada" o "que tenga buena actitud"), ponlo en el array "keywords".
-4. Si menciona una ciudad o municipio, usa el campo "municipio".
-5. Si menciona un puesto o vacante, usa el campo "categoria".
+1. Devuelve SIEMPRE un JSON válido. No incluyas explicaciones fuera del JSON.
+2. Filtros: Usa el campo 'filters' para criterios técnicos.
+3. Operadores: Si el usuario pide "mayor a", "menor que", "más de", usa un objeto con { "op": ">", "val": valor }. 
+   Operadores permitidos: ">", "<", ">=", "<=", "==", "contains".
+4. Edad: Si piden "más de 40 años", usa { "filters": { "edad": { "op": ">", "val": 40 } } }.
+5. Keywords: Usa 'keywords' para conceptos abstractos o habilidades (ej: "React", "buena actitud", "responsable") que buscaremos en el chat.
+6. Si menciona una ciudad, usa "municipio". Si menciona un puesto, usa "categoria".
 
 Estructura del JSON:
 {
-  "filters": { "campo": "valor" },
-  "keywords": ["palabra1", "palabra2"],
-  "explanation": "Breve explicación de lo que entendí"
+  "filters": { 
+    "municipio": "Monterrey", 
+    "edad": { "op": ">", "val": 30 } 
+  },
+  "keywords": ["React", "liderazgo"],
+  "explanation": "Busco candidatos de Monterrey mayores de 30 que mencionen React o liderazgo."
 }
 
 Consulta del usuario: "${query}"
@@ -157,30 +164,77 @@ Consulta del usuario: "${query}"
         console.log(`🔍 [AI Query] Searching records...`);
         const candidates = await getCandidates(1000, 0);
 
+        // Función para calcular edad
+        const calculateAge = (dob) => {
+            if (!dob) return null;
+            const birthDate = new Date(dob);
+            if (isNaN(birthDate.getTime())) return null;
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+            return age;
+        };
+
         let filtered = candidates;
 
-        // A. Filtrar por metadatos (campos exactos)
+        // A. Aplicar Filtros Inteligentes (Metadatos)
         if (aiResponse.filters && Object.keys(aiResponse.filters).length > 0) {
             filtered = filtered.filter(candidate => {
-                return Object.entries(aiResponse.filters).every(([key, value]) => {
-                    if (!candidate[key]) return false;
-                    return String(candidate[key]).toLowerCase().includes(String(value).toLowerCase());
+                return Object.entries(aiResponse.filters).every(([key, criteria]) => {
+                    let candidateVal = candidate[key];
+
+                    // Manejo especial de EDAD
+                    if (key === 'edad') {
+                        candidateVal = calculateAge(candidate.fechaNacimiento);
+                    }
+
+                    if (candidateVal === undefined || candidateVal === null) return false;
+
+                    // Si criteria es un objeto con operador { op: ">", val: 40 }
+                    if (typeof criteria === 'object' && criteria.op) {
+                        const { op, val } = criteria;
+                        const numVal = parseFloat(val);
+                        const numCand = parseFloat(candidateVal);
+
+                        switch (op) {
+                            case '>': return numCand > numVal;
+                            case '<': return numCand < numVal;
+                            case '>=': return numCand >= numVal;
+                            case '<=': return numCand <= numVal;
+                            case '==': return String(candidateVal).toLowerCase() === String(val).toLowerCase();
+                            case 'contains': return String(candidateVal).toLowerCase().includes(String(val).toLowerCase());
+                            default: return String(candidateVal).toLowerCase().includes(String(val).toLowerCase());
+                        }
+                    }
+
+                    // Si es un filtro simple (string)
+                    return String(candidateVal).toLowerCase().includes(String(criteria).toLowerCase());
                 });
             });
         }
 
-        // B. Filtrar por palabras clave en el historial de chat (Búsqueda Profunda)
-        if (aiResponse.keywords && aiResponse.keywords.length > 0 && filtered.length > 0) {
+        // B. Búsqueda Profunda (Keywords en Chat + Metadatos)
+        if (aiResponse.keywords && aiResponse.keywords.length > 0) {
             const finalResults = [];
             for (const candidate of filtered) {
+                // 1. Buscar en metadatos (todos los campos)
+                const metadataMatch = Object.values(candidate).some(val =>
+                    aiResponse.keywords.some(kw => String(val).toLowerCase().includes(kw.toLowerCase()))
+                );
+
+                if (metadataMatch) {
+                    finalResults.push(candidate);
+                    continue;
+                }
+
+                // 2. Buscar en el chat
                 const messages = await getMessages(candidate.id);
                 const chatText = messages.map(m => m.content).join(' ').toLowerCase();
 
-                const matchesKeywords = aiResponse.keywords.some(kw =>
-                    chatText.includes(kw.toLowerCase())
-                );
+                const chatMatch = aiResponse.keywords.some(kw => chatText.includes(kw.toLowerCase()));
 
-                if (matchesKeywords) {
+                if (chatMatch) {
                     finalResults.push(candidate);
                 }
             }
