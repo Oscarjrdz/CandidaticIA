@@ -127,7 +127,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                         </div>
                         <button
                             type="button"
-                            onClick={() => setIsOpen(false)}
+                            onClick={handleClose}
                             className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
                         >
                             <X className="w-6 h-6" />

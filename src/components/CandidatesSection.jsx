@@ -35,6 +35,8 @@ const CandidatesSection = ({ showToast }) => {
     const [showSettings, setShowSettings] = useState(false);
     const [exportTimer, setExportTimer] = useState(0); // Minutos. 0 = Desactivado.
     // AI Action Flow
+    const [exportingMap, setExportingMap] = useState({}); // { whatsapp: 'uploading'|'uploaded'|'error' }
+    const [fileStatusMap, setFileStatusMap] = useState({}); // { whatsapp: fileId }
     const [aiActionOpen, setAiActionOpen] = useState(false);
     const [aiActionContext, setAiActionContext] = useState(null); // { candidates }
 
