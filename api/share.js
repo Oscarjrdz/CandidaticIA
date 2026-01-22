@@ -8,7 +8,9 @@ export default async function handler(req, res) {
     let metaDesc = req.query.description || '';
     let metaImage = req.query.image || ''; // Leave empty if not provided
 
-    // We no longer have a "targetUrl" because the post IS the destination
+    // We declare data in outer scope to be accessible for the template
+    let data = {};
+
     // Base URL construction
     const protocol = req.headers['x-forwarded-proto'] || 'https';
     const host = req.headers.host;
@@ -22,7 +24,7 @@ export default async function handler(req, res) {
             if (client) {
                 const rawData = await client.get(`share:${id}`);
                 if (rawData) {
-                    var data = JSON.parse(rawData); // Use var or let in outer scope for template access
+                    data = JSON.parse(rawData);
                     metaTitle = data.title || metaTitle;
                     metaDesc = data.description || metaDesc;
                     metaImage = data.image || metaImage;
@@ -33,20 +35,13 @@ export default async function handler(req, res) {
         }
     }
 
-    // Safety check for data object if not found
-    if (typeof data === 'undefined') var data = {};
-} catch (e) {
-    console.error('Share ID Lookup Error:', e);
-}
+    // CRITICAL: Facebook/Twitter require ABSOLUTE URLs for images
+    let absoluteImage = metaImage;
+    if (metaImage && metaImage.startsWith('/')) {
+        absoluteImage = `${baseUrl}${metaImage}`;
     }
 
-// CRITICAL: Facebook/Twitter require ABSOLUTE URLs for images
-let absoluteImage = metaImage;
-if (metaImage && metaImage.startsWith('/')) {
-    absoluteImage = `${baseUrl}${metaImage}`;
-}
-
-const html = `
+    const html = `
     <!DOCTYPE html>
     <html lang="es" prefix="og: https://ogp.me/ns#">
     <head>
@@ -174,6 +169,6 @@ const html = `
     </html>
     `;
 
-res.setHeader('Content-Type', 'text/html');
-res.status(200).send(html);
+    res.setHeader('Content-Type', 'text/html');
+    res.status(200).send(html);
 }
