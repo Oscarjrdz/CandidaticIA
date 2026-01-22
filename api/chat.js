@@ -87,18 +87,8 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'Credenciales de BuilderBot no proporcionadas' });
             }
 
-            // HEADER DE PRUEBA PARA VERIFICAR DESPLIEGUE
-            res.setHeader('X-Debug-Engine', 'Antigravity-v5');
-
             // Aplicar sustitución de shortcuts (ej: {{nombre}})
-            console.log(`🔍 [Chat API] Self-test {{nombre}}:`, substituteVariables('{{nombre}}', { nombre: 'OK' }));
-            console.log(`🔍 [Chat API] Candidate ID: ${candidateId}`);
-            console.log(`🔍 [Chat API] Candidate keys:`, Object.keys(candidate));
-            console.log(`🔍 [Chat API] Original message: "${message}"`);
-
             const finalMessage = substituteVariables(message, candidate);
-
-            console.log(`🔍 [Chat API] Final message: "${finalMessage}"`);
 
             // Enviar a BuilderBot
             const result = await sendBuilderBotMessage(effectiveBotId, effectiveApiKey, candidate.whatsapp, finalMessage);
@@ -115,20 +105,7 @@ export default async function handler(req, res) {
                 timestamp: new Date().toISOString()
             });
 
-            return res.status(200).json({
-                success: true,
-                message: savedMsg,
-                _debug: {
-                    original: message,
-                    processed: finalMessage,
-                    candidateFields: Object.keys(candidate),
-                    candidateData: {
-                        nombre: candidate.nombre,
-                        nombreReal: candidate.nombreReal,
-                        whatsapp: candidate.whatsapp
-                    }
-                }
-            });
+            return res.status(200).json({ success: true, message: savedMsg });
         }
 
         return res.status(405).json({ error: 'Método no permitido' });
