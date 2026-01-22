@@ -16,9 +16,10 @@ export default async function handler(req, res) {
         }
 
         const { query, context } = body || {};
-        console.log(`🔍 [AI Action] Query: "${query}"`);
+        console.log(`🔍 [AI Action] Incoming Request:`, { query, contextSize: context?.candidateCount });
 
         if (!query) {
+            console.error('❌ [AI Action] Missing query');
             return res.status(400).json({ error: 'Falta el parámetro "query"' });
         }
 
@@ -84,6 +85,7 @@ Consulta del usuario: "${query}"
         const result = await model.generateContent(systemPrompt);
         const response = await result.response;
         const text = response.text();
+        console.log('🤖 [AI Action] Raw Output:', text);
 
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
