@@ -11,6 +11,7 @@ import AutomationsSection from './components/AutomationsSection';
 import VacanciesSection from './components/VacanciesSection';
 import BulksSection from './components/BulksSection';
 import UsersSection from './components/UsersSection';
+import PostMakerSection from './components/PostMakerSection';
 import LoginPage from './components/LoginPage'; // LOGIN ENABLED
 import { getTheme, saveTheme, exportConfig, importConfig, clearAllStorage } from './utils/storage';
 
@@ -158,7 +159,8 @@ function App() {
                           : activeSection === 'history' ? 'Historial'
                             : activeSection === 'bulks' ? 'Bulks'
                               : activeSection === 'users' ? 'Usuarios'
-                                : 'Configuración'}
+                                : activeSection === 'post-maker' ? 'Post Maker (Meta Style)'
+                                  : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
@@ -249,6 +251,8 @@ function App() {
             <BulksSection showToast={showToast} />
           ) : activeSection === 'users' ? (
             <UsersSection showToast={showToast} />
+          ) : activeSection === 'post-maker' ? (
+            <PostMakerSection showToast={showToast} />
           ) : (
             <SettingsSection
               botId={botId}

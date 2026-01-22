@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Send, Users, MessageSquare, CheckSquare, Square,
     Loader2, AlertCircle, Plus, Calendar, Clock,
-    Trash2, RefreshCw, Filter, ChevronRight, Check, Pencil, Play, Tag, Copy, Eye
+    Trash2, RefreshCw, Filter, ChevronRight, Check, Pencil, Play, Tag, Copy, Eye, Sparkles
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -39,6 +39,7 @@ const BulksSection = ({ showToast }) => {
     const [lastActiveInput, setLastActiveInput] = useState(null);
     const [previewCandidate, setPreviewCandidate] = useState(null);
     const [availableFields, setAvailableFields] = useState([]);
+    const [isManualSelection, setIsManualSelection] = useState(false);
 
     // Update preview candidate when filtered list changes
     useEffect(() => {
@@ -103,18 +104,45 @@ const BulksSection = ({ showToast }) => {
 
         // Check for AI Draft
         const draftMsg = localStorage.getItem('draft_bulk_message');
+        const draftIds = localStorage.getItem('draft_bulk_ids');
+
         if (draftMsg) {
+            let recipients = [];
+            let manualMode = false;
+
+            if (draftIds) {
+                try {
+                    const ids = JSON.parse(draftIds);
+                    if (Array.isArray(ids) && ids.length > 0) {
+                        recipients = ids; // We store IDs, but state needs checking against allCandidates? 
+                        // Actually recipients state stores IDs.
+                        manualMode = true;
+                    }
+                } catch (e) {
+                    console.error('Error parsing draft ids', e);
+                }
+            }
+
             setNewCampaign(prev => ({
                 ...prev,
                 messages: [draftMsg],
                 name: 'Campaña Sugerida por IA',
+                recipients: manualMode ? recipients : prev.recipients
             }));
+
+            if (manualMode) {
+                setIsManualSelection(true);
+                // We need to wait for allCandidates to load to set filteredCandidates properly
+                // But we can set a flag to do it in the candidates effect
+            }
+
             setView('create');
             setStep(3); // Jump straight to content
 
-            // Clear draft so it doesn't persist forever
+            // Clear draft
             localStorage.removeItem('draft_bulk_message');
-            showToast('Borrador de IA cargado', 'success');
+            localStorage.removeItem('draft_bulk_ids');
+            showToast(manualMode ? 'Borrador y destinatarios cargados' : 'Borrador de IA cargado', 'success');
         }
     }, []);
 
@@ -162,7 +190,18 @@ const BulksSection = ({ showToast }) => {
     };
 
     // Filtering Logic
+    // Filtering Logic & Manual Mode Sync
     useEffect(() => {
+        // If we are in manual selection mode, we verify the IDs against allCandidates to show the preview
+        if (isManualSelection) {
+            if (allCandidates.length > 0 && newCampaign.recipients.length > 0) {
+                const manualSubset = allCandidates.filter(c => newCampaign.recipients.includes(c.id));
+                console.log('Manual subset found:', manualSubset.length);
+                setFilteredCandidates(manualSubset);
+            }
+            return;
+        }
+
         const { field, operator, value } = newCampaign.filters;
         let list = [...allCandidates];
 
@@ -176,7 +215,7 @@ const BulksSection = ({ showToast }) => {
 
         setFilteredCandidates(list);
         setNewCampaign(prev => ({ ...prev, recipients: list.map(c => c.id) }));
-    }, [newCampaign.filters, allCandidates]);
+    }, [newCampaign.filters, allCandidates, isManualSelection, newCampaign.recipients]);
 
     const handleCreateCampaign = async () => {
         if (!newCampaign.name || newCampaign.messages.filter(m => m.trim()).length === 0) {
@@ -327,48 +366,133 @@ const BulksSection = ({ showToast }) => {
 
                         {step === 2 && (
                             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                                <h3 className="text-lg font-semibold border-b pb-2">Filtrado Inteligente</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-dashed border-gray-300">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold uppercase text-gray-500">Columna/Campo</label>
-                                        <select
-                                            className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700"
-                                            value={newCampaign.filters.field}
-                                            onChange={e => setNewCampaign({ ...newCampaign, filters: { ...newCampaign.filters, field: e.target.value } })}
-                                        >
-                                            <option value="">Selecciona un campo...</option>
-                                            <option value="municipio">Municipio</option>
-                                            <option value="categoria">Categoría</option>
-                                            <option value="fechaNacimiento">Fecha Nacimiento</option>
-                                            <option value="nombreReal">Nombre Real</option>
-                                            {availableFields.map(f => (
-                                                <option key={f.id} value={f.name}>{f.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold uppercase text-gray-500">Condición</label>
-                                        <select
-                                            className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700"
-                                            value={newCampaign.filters.operator}
-                                            onChange={e => setNewCampaign({ ...newCampaign, filters: { ...newCampaign.filters, operator: e.target.value } })}
-                                        >
-                                            <option value="empty">Está vacío / falta dato</option>
-                                            <option value="equals">Contiene texto...</option>
-                                        </select>
-                                    </div>
-                                    {newCampaign.filters.operator === 'equals' && (
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-bold uppercase text-gray-500">Valor a buscar</label>
-                                            <input
-                                                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700"
-                                                placeholder="Texto a filtrar..."
-                                                value={newCampaign.filters.value}
-                                                onChange={e => setNewCampaign({ ...newCampaign, filters: { ...newCampaign.filters, value: e.target.value } })}
-                                            />
+                                <h3 className="text-lg font-semibold border-b pb-2">Destinatarios</h3>
+
+                                {isManualSelection ? (
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-10 h-10 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center">
+                                                    <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-bold text-gray-900 dark:text-white">Selección Manual por IA</h4>
+                                                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                                                        Se han seleccionado <strong>{filteredCandidates.length} candidatos</strong> específicos.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    if (window.confirm('¿Quieres descartar esta selección y usar filtros manuales?')) {
+                                                        setIsManualSelection(false);
+                                                        setNewCampaign(prev => ({ ...prev, recipients: [] }));
+                                                    }
+                                                }}
+                                            >
+                                                Descartar y Filtrar Manualmente
+                                            </Button>
                                         </div>
-                                    )}
-                                </div>
+
+                                        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                            <div className="overflow-y-auto max-h-[300px]">
+                                                <table className="w-full text-left text-sm">
+                                                    <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
+                                                        <tr>
+                                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Candidato</th>
+                                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Teléfono</th>
+                                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300">Categoría</th>
+                                                            <th className="py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 w-10"></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                                                        {filteredCandidates.map(c => (
+                                                            <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                                                                <td className="py-2 px-4">
+                                                                    <p className="font-medium text-gray-900 dark:text-white">{c.nombre || c.nombreReal || 'Sin nombre'}</p>
+                                                                    <p className="text-xs text-gray-500">{c.municipio || '-'}</p>
+                                                                </td>
+                                                                <td className="py-2 px-4 text-gray-600 dark:text-gray-300 font-mono text-xs">{c.telefono}</td>
+                                                                <td className="py-2 px-4 text-gray-600 dark:text-gray-300 text-xs">
+                                                                    <span className="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                                                                        {c.categoria || 'General'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="py-2 px-4 text-right">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const newList = filteredCandidates.filter(can => can.id !== c.id);
+                                                                            setFilteredCandidates(newList);
+                                                                            setNewCampaign(prev => ({
+                                                                                ...prev,
+                                                                                recipients: prev.recipients.filter(id => id !== c.id)
+                                                                            }));
+                                                                        }}
+                                                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition"
+                                                                        title="Quitar de la lista"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {filteredCandidates.length === 0 && (
+                                                            <tr>
+                                                                <td colSpan="4" className="py-8 text-center text-gray-500">
+                                                                    No quedan candidatos seleccionados.
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-dashed border-gray-300">
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase text-gray-500">Columna/Campo</label>
+                                            <select
+                                                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700"
+                                                value={newCampaign.filters.field}
+                                                onChange={e => setNewCampaign({ ...newCampaign, filters: { ...newCampaign.filters, field: e.target.value } })}
+                                            >
+                                                <option value="">Selecciona un campo...</option>
+                                                <option value="municipio">Municipio</option>
+                                                <option value="categoria">Categoría</option>
+                                                <option value="fechaNacimiento">Fecha Nacimiento</option>
+                                                <option value="nombreReal">Nombre Real</option>
+                                                {availableFields.map(f => (
+                                                    <option key={f.id} value={f.name}>{f.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold uppercase text-gray-500">Condición</label>
+                                            <select
+                                                className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700"
+                                                value={newCampaign.filters.operator}
+                                                onChange={e => setNewCampaign({ ...newCampaign, filters: { ...newCampaign.filters, operator: e.target.value } })}
+                                            >
+                                                <option value="empty">Está vacío / falta dato</option>
+                                                <option value="equals">Contiene texto...</option>
+                                            </select>
+                                        </div>
+                                        {newCampaign.filters.operator === 'equals' && (
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold uppercase text-gray-500">Valor a buscar</label>
+                                                <input
+                                                    className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700"
+                                                    placeholder="Texto a filtrar..."
+                                                    value={newCampaign.filters.value}
+                                                    onChange={e => setNewCampaign({ ...newCampaign, filters: { ...newCampaign.filters, value: e.target.value } })}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
@@ -382,7 +506,7 @@ const BulksSection = ({ showToast }) => {
 
                                 <div className="flex justify-between pt-4">
                                     <Button variant="outline" onClick={() => setStep(1)}>Atrás</Button>
-                                    <Button onClick={() => setStep(3)} icon={ChevronRight}>Siguiente: Contenido</Button>
+                                    <Button onClick={() => setStep(3)} icon={ChevronRight}>Siguiente: Redactar y Programar</Button>
                                 </div>
                             </div>
                         )}
@@ -476,13 +600,73 @@ const BulksSection = ({ showToast }) => {
                                     </div>
                                 )}
 
-                                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-200 dark:border-yellow-700/50">
-                                    <p className="text-sm text-yellow-700 dark:text-yellow-300 flex items-start space-x-2">
-                                        <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                                        <span>
-                                            <strong>Tip de Google AdSense e Industry:</strong> Usar variaciones de mensaje y un delay aleatorio (el sistema lo hará entre el tiempo base y +10s) reduce drásticamente las posibilidades de ser marcado como SPAM por WhatsApp.
-                                        </span>
-                                    </p>
+
+
+                                {/* Schedule Controls */}
+                                <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
+                                    <div className="flex items-center space-x-2">
+                                        <Calendar className="w-5 h-5 text-gray-400" />
+                                        <span className="font-bold text-gray-700 dark:text-gray-300">Programación del Envío</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <label className={`cursor-pointer p-3 rounded-lg border-2 flex items-center space-x-3 transition-all ${new Date(newCampaign.scheduledAt) <= new Date(Date.now() + 60000)
+                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                                            }`}>
+                                            <input
+                                                type="radio"
+                                                name="scheduleType"
+                                                className="hidden"
+                                                checked={new Date(newCampaign.scheduledAt) <= new Date(Date.now() + 60000)}
+                                                onChange={() => setNewCampaign({ ...newCampaign, scheduledAt: new Date().toISOString() })}
+                                            />
+                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${new Date(newCampaign.scheduledAt) <= new Date(Date.now() + 60000) ? 'border-blue-500' : 'border-gray-400'
+                                                }`}>
+                                                {new Date(newCampaign.scheduledAt) <= new Date(Date.now() + 60000) && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                                            </div>
+                                            <span className="font-medium text-sm">Enviar Ahora Mismo</span>
+                                        </label>
+
+                                        <label className={`cursor-pointer p-3 rounded-lg border-2 flex flex-col space-y-2 transition-all ${new Date(newCampaign.scheduledAt) > new Date(Date.now() + 60000)
+                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                                            }`}>
+                                            <div className="flex items-center space-x-3">
+                                                <input
+                                                    type="radio"
+                                                    name="scheduleType"
+                                                    className="hidden"
+                                                    checked={new Date(newCampaign.scheduledAt) > new Date(Date.now() + 60000)}
+                                                    onChange={() => {
+                                                        const tomorrow = new Date();
+                                                        tomorrow.setDate(tomorrow.getDate() + 1);
+                                                        tomorrow.setHours(9, 0, 0, 0);
+                                                        // Account for timezone offset for input
+                                                        const z = tomorrow.getTimezoneOffset() * 60 * 1000;
+                                                        const local = new Date(tomorrow - z);
+                                                        setNewCampaign({ ...newCampaign, scheduledAt: local.toISOString().slice(0, 16) });
+                                                    }}
+                                                />
+                                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${new Date(newCampaign.scheduledAt) > new Date(Date.now() + 60000) ? 'border-blue-500' : 'border-gray-400'
+                                                    }`}>
+                                                    {new Date(newCampaign.scheduledAt) > new Date(Date.now() + 60000) && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                                                </div>
+                                                <span className="font-medium text-sm">Programar Fecha/Hora</span>
+                                            </div>
+
+                                            {/* Show input only if selected */}
+                                            {new Date(newCampaign.scheduledAt) > new Date(Date.now() + 60000) && (
+                                                <input
+                                                    type="datetime-local"
+                                                    className="w-full px-2 py-1 text-sm border rounded bg-white dark:bg-gray-900"
+                                                    value={newCampaign.scheduledAt}
+                                                    onChange={e => setNewCampaign({ ...newCampaign, scheduledAt: e.target.value })}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                            )}
+                                        </label>
+                                    </div>
                                 </div>
 
                                 <div className="flex justify-between pt-4">
@@ -492,8 +676,8 @@ const BulksSection = ({ showToast }) => {
                             </div>
                         )}
                     </div>
-                </Card>
-            </div>
+                </Card >
+            </div >
         );
     }
 
