@@ -23,20 +23,28 @@ export default async function handler(req, res) {
 
         let imageBuffer;
 
-        // Robust Base64 Parsing
-        if (data.includes(',')) {
-            // Likely "data:image/jpeg;base64,..."
-            const parts = data.split(',');
-            imageBuffer = Buffer.from(parts[1], 'base64');
-        } else {
-            // Raw base64
-            imageBuffer = Buffer.from(data, 'base64');
+        // Robust Base64 Parsing with sanitization
+        try {
+            // Remove whitespace/newlines just in case as Redis result might have them (unlikely but safe)
+            const cleanData = data.toString().replace(/\s/g, '');
+
+            if (cleanData.includes(',')) {
+                // "data:image/jpeg;base64,..."
+                const parts = cleanData.split(',');
+                imageBuffer = Buffer.from(parts[1], 'base64');
+            } else {
+                // Raw base64
+                imageBuffer = Buffer.from(cleanData, 'base64');
+            }
+        } catch (e) {
+            console.error('Base64 Parse Error:', e);
+            return res.status(500).send('Image Corrupt');
         }
 
-        // Just assume JPEG for simplicity/robustness unless we stored type (which we didn't strictly)
-        // Browsers are good at sniffing, but consistent header helps.
+        // Assume JPEG because we convert everything to JPEG 0.6/0.7 in frontend
         res.setHeader('Content-Type', 'image/jpeg');
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // Long cache
+        // Cache long-term as images are immutable by ID
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         res.status(200).send(imageBuffer);
 
     } catch (error) {
