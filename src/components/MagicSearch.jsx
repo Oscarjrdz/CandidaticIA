@@ -154,11 +154,6 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                                 placeholder={customPlaceholder || "Describe a tu candidato ideal y deja que la IA haga su magia..."}
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        handleSearch(e);
-                                    }
-                                }}
                                 className="w-full py-6 bg-transparent outline-none ring-0 border-none shadow-none text-2xl font-medium text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600"
                             />
                         </div>

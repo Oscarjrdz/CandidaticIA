@@ -24,7 +24,7 @@ export default async function handler(req, res) {
         }
 
         // DYNAMIC IMPORTS & AUTH (Same as query.js)
-        const { getRedisClient } = await import('../../utils/storage.js');
+        const { getRedisClient } = await import('../utils/storage.js');
         const redis = getRedisClient();
 
         let apiKey = process.env.GEMINI_API_KEY;

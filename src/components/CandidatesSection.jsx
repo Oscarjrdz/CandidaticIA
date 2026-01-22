@@ -334,11 +334,14 @@ const CandidatesSection = ({ showToast }) => {
                 candidateIds: displayedCandidates.map(c => c.id)
             };
 
+            console.log('🚀 [AI Action] Triggered with query:', query);
             const res = await fetch('/api/ai/action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query, context })
             });
+
+            console.log('🚀 [AI Action] API Status:', res.status);
 
             const data = await res.json();
 
