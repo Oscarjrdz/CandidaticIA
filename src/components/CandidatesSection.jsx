@@ -640,15 +640,16 @@ const CandidatesSection = ({ showToast }) => {
 
             {/* Alerta de filtrado por IA */}
             {aiFilteredCandidates && (
-                <div className="mb-6 animate-in slide-in-from-top-2 duration-300">
-                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 p-4 rounded-xl flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                            <div className="bg-purple-100 dark:bg-purple-800 p-2 rounded-lg">
-                                <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-300" />
+                <div className="mb-6 animate-in slide-in-from-top-4 duration-500">
+                    <div className="crystal-effect p-6 rounded-[24px] flex items-center justify-between relative overflow-hidden group shadow-[0_0_20px_-5px_rgba(139,92,246,0.2)]">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 blur-[40px] pointer-events-none group-hover:bg-purple-500/20 transition-all duration-700" />
+                        <div className="flex items-center space-x-4 relative">
+                            <div className="w-12 h-12 bg-gradient-to-tr from-purple-500 to-blue-500 rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform duration-500">
+                                <Sparkles className="w-6 h-6 text-white animate-pulse" />
                             </div>
                             <div>
-                                <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">Candidatic Intelligence: {displayedCandidates.length} resultados</p>
-                                <p className="text-xs text-purple-600 dark:text-purple-400">{aiExplanation}</p>
+                                <h3 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Candidatic Intelligence: {displayedCandidates.length} Candidatos</h3>
+                                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">{aiExplanation}</p>
                             </div>
                         </div>
                         <button
@@ -656,9 +657,9 @@ const CandidatesSection = ({ showToast }) => {
                                 setAiFilteredCandidates(null);
                                 setAiExplanation('');
                             }}
-                            className="text-xs font-bold text-purple-600 dark:text-purple-300 hover:underline px-3 py-1 bg-white dark:bg-purple-900/40 rounded-lg border border-purple-100 dark:border-purple-800"
+                            className="text-[10px] font-black uppercase tracking-tighter text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 px-4 py-2 rounded-full shadow-lg transform hover:scale-105 transition-all duration-300 active:scale-95"
                         >
-                            Limpiar filtros IA
+                            Limpiar Filtros
                         </button>
                     </div>
                 </div>
