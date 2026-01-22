@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Sparkles } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
