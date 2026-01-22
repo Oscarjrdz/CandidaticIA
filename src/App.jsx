@@ -159,7 +159,7 @@ function App() {
                           : activeSection === 'history' ? 'Historial'
                             : activeSection === 'bulks' ? 'Bulks'
                               : activeSection === 'users' ? 'Usuarios'
-                                : activeSection === 'post-maker' ? 'Post Maker (Meta Style)'
+                                : activeSection === 'post-maker' ? 'Post Maker'
                                   : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -167,7 +167,8 @@ function App() {
                     : activeSection === 'assistant' ? 'Gestión del Prompt y Archivos del Asistente'
                       : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
                         : activeSection === 'users' ? 'Gestión de equipo y permisos'
-                          : 'Configuración de BuilderBot API'
+                          : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
+                            : 'Configuración de BuilderBot API'
                   }
                 </p>
               </div>
