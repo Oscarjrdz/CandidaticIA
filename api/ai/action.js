@@ -16,7 +16,7 @@ export default async function handler(req, res) {
         }
 
         const { query, context } = body || {};
-        console.log(`🔍 [AI Action] Incoming Request:`, { query, contextSize: context?.candidateCount });
+        console.log(`🔍 [AI Action] Incoming Request:`, { query, contextCount: context?.candidateCount });
 
         if (!query) {
             console.error('❌ [AI Action] Missing query');
@@ -30,22 +30,33 @@ export default async function handler(req, res) {
         let apiKey = process.env.GEMINI_API_KEY;
 
         if (!apiKey && redis) {
-            const aiConfigJson = await redis.get('ai_config');
-            if (aiConfigJson) {
-                const aiConfig = JSON.parse(aiConfigJson);
-                apiKey = aiConfig.geminiApiKey;
+            try {
+                const aiConfigJson = await redis.get('ai_config');
+                if (aiConfigJson) {
+                    const aiConfig = JSON.parse(aiConfigJson);
+                    apiKey = aiConfig.geminiApiKey;
+                    console.log(`🔍 [AI Action] Found key in Redis`);
+                }
+            } catch (e) {
+                console.warn('⚠️ [AI Action] Redis check failed:', e);
             }
         }
 
         if (!apiKey || apiKey === 'undefined' || apiKey === 'null') {
+            console.error('❌ [AI Action] No API Key provided');
             return res.status(500).json({ error: 'AI no configurada' });
         }
 
-        // Sanitización de Key
-        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
+        // Sanitización de Key (Robusta, igual que query.js)
+        apiKey = String(apiKey).trim();
+        apiKey = apiKey.replace(/^["']|["']$/g, '');
         const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-        if (match) apiKey = match[0];
-        else apiKey = apiKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '').trim();
+        if (match) {
+            apiKey = match[0];
+        } else {
+            apiKey = apiKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
+        }
+        apiKey = apiKey.trim();
 
 
         // Configurar Gemini
@@ -71,7 +82,7 @@ REGLAS:
 {
   "intent": "REFINE_FILTER" | "BULK_MESSAGE" | "UNKNOWN",
   "filters": { ... }, // Solo si intent es REFINE_FILTER
-  "message": "..." // Solo si intent es BULK_MESSAGE. Genera un mensaje corto y profesional si el usuario no especificó uno exacto.
+  "message": "Hola {{nombre}}, ... " // Solo si intent es BULK_MESSAGE. Usa variables como {{nombre}}.
   "explanation": "..." // Breve explicación de lo que harás.
 }
 
@@ -81,8 +92,38 @@ Datos de contexto:
 Consulta del usuario: "${query}"
 `;
 
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const result = await model.generateContent(systemPrompt);
+        // Intentar varios modelos hasta que uno funcione (Igual que query.js)
+        const modelsToTry = [
+            "gemini-flash-latest",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-pro-latest",
+            "gemini-pro"
+        ];
+        let result;
+        let successModel = '';
+        let lastError = '';
+
+        for (const mName of modelsToTry) {
+            try {
+                console.log(`🔍 [AI Action] Sending to Gemini (${mName})...`);
+                const model = genAI.getGenerativeModel({ model: mName });
+                result = await model.generateContent(systemPrompt);
+                successModel = mName;
+                console.log(`✅ [AI Action] Success with ${mName}`);
+                break;
+            } catch (e) {
+                lastError = e.message;
+                console.warn(`⚠️ [AI Action] ${mName} failed:`, e.message);
+            }
+        }
+
+        if (!successModel) {
+            console.error('❌ [AI Action] All models failed. Last error:', lastError);
+            throw new Error(`Ningún modelo respondió. Último error: ${lastError}`);
+        }
+
         const response = await result.response;
         const text = response.text();
         console.log('🤖 [AI Action] Raw Output:', text);
