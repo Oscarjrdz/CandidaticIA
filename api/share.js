@@ -1,12 +1,32 @@
-export default function handler(req, res) {
-    const { title, description, image, url } = req.query;
+import { getRedisClient } from './utils/storage.js';
+
+export default async function handler(req, res) {
+    const { id } = req.query; // Derived from /s/:id rewrite or query param
 
     // Default fallback values
-    const metaTitle = title || 'Candidatic IA';
-    const metaDesc = description || 'Check out this post!';
-    // If image param is passed, it should be the full URL we generated
-    const metaImage = image || 'https://via.placeholder.com/1200x630.png?text=No+Image';
-    const targetUrl = url || 'https://google.com';
+    let metaTitle = req.query.title || 'Candidatic IA';
+    let metaDesc = req.query.description || 'Check out this post!';
+    let metaImage = req.query.image || 'https://via.placeholder.com/1200x630.png?text=No+Image';
+    let targetUrl = req.query.url || 'https://google.com';
+
+    // If ID is present (short link), try to fetch from Redis
+    if (id) {
+        try {
+            const client = getRedisClient();
+            if (client) {
+                const rawData = await client.get(`share:${id}`);
+                if (rawData) {
+                    const data = JSON.parse(rawData);
+                    metaTitle = data.title || metaTitle;
+                    metaDesc = data.description || metaDesc;
+                    metaImage = data.image || metaImage;
+                    targetUrl = data.url || targetUrl;
+                }
+            }
+        } catch (e) {
+            console.error('Share ID Lookup Error:', e);
+        }
+    }
 
     const html = `
     <!DOCTYPE html>
@@ -40,7 +60,7 @@ export default function handler(req, res) {
         </script>
     </head>
     <body>
-        <p>Redirecting...</p>
+        <p>Redirecting to <a href="${targetUrl}">${targetUrl}</a>...</p>
     </body>
     </html>
     `;

@@ -72,28 +72,38 @@ const PostMakerSection = () => {
         }
     };
 
-    const handleGenerateLink = () => {
+    const handleGenerateLink = async () => {
         if (!uploadedUrl) {
             showToast('Espera a que se suba la imagen', 'warning');
             return;
         }
 
-        const baseUrl = window.location.origin;
-        const shareApi = `${baseUrl}/api/share`;
+        try {
+            const res = await fetch('/api/create-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title,
+                    description: content,
+                    image: uploadedUrl,
+                    url: targetUrl
+                })
+            });
 
-        const params = new URLSearchParams({
-            title: title,
-            description: content,
-            image: uploadedUrl,
-            url: targetUrl
-        });
+            const data = await res.json();
 
-        const finalLink = `${shareApi}?${params.toString()}`;
-        setGeneratedLink(finalLink);
-
-        // Open Facebook Sharer
-        const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(finalLink)}`;
-        window.open(fbUrl, '_blank', 'width=600,height=400');
+            if (data.success) {
+                setGeneratedLink(data.shortUrl);
+                // Open Facebook Sharer with Short URL
+                const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(data.shortUrl)}`;
+                window.open(fbUrl, '_blank', 'width=600,height=400');
+            } else {
+                showToast('Error generando link corto', 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            showToast('Error de conexión con el acortador', 'error');
+        }
     };
 
     const handleCopyLink = () => {
