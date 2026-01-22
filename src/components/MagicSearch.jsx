@@ -105,12 +105,12 @@ const MagicSearch = ({ onResults, showToast }) => {
                     </div>
 
                     <form onSubmit={handleSearch} className="relative group">
-                        <div className="relative flex items-center bg-gray-200/60 dark:bg-gray-800/60 rounded-2xl px-5 transition-all ring-offset-2 ring-blue-500/0 focus-within:ring-2 focus-within:ring-blue-500/40">
+                        <div className="relative flex items-center bg-gray-200/60 dark:bg-gray-800/60 rounded-2xl px-5 transition-all ring-offset-2 ring-gray-900/0 focus-within:ring-2 focus-within:ring-gray-900/20 dark:focus-within:ring-white/20">
                             <div className="mr-3">
                                 {loading ? (
-                                    <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                                    <Loader2 className="w-6 h-6 text-gray-900 dark:text-white animate-spin" />
                                 ) : (
-                                    <Search className="w-5 h-5 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                    <Search className="w-5 h-5 text-gray-400 group-focus-within:text-gray-900 dark:group-focus-within:text-white transition-colors" />
                                 )}
                             </div>
                             <input
@@ -128,7 +128,7 @@ const MagicSearch = ({ onResults, showToast }) => {
                     <div className="flex items-center justify-between pt-2 text-[11px] text-gray-400 font-medium">
                         <div className="flex items-center space-x-4">
                             <div className="flex items-center space-x-1.5 translate-y-[-1px]">
-                                <Sparkles className="w-3.5 h-3.5 text-blue-500 opacity-70" />
+                                <Sparkles className="w-3.5 h-3.5 text-gray-900 dark:text-white opacity-70" />
                                 <span>IA Optimizada</span>
                             </div>
                             <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />

@@ -643,8 +643,8 @@ const CandidatesSection = ({ showToast }) => {
                 <div className="mb-6 animate-spring-in">
                     <div className="ios-glass p-5 rounded-[20px] flex items-center justify-between shadow-ios border-gray-200 dark:border-gray-700/50">
                         <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-blue-500 rounded-[12px] flex items-center justify-center shadow-sm">
-                                <Sparkles className="w-5 h-5 text-white" />
+                            <div className="w-10 h-10 bg-gray-900 dark:bg-white rounded-[12px] flex items-center justify-center shadow-sm">
+                                <Sparkles className="w-5 h-5 text-white dark:text-gray-900" />
                             </div>
                             <div>
                                 <h3 className="text-sm font-bold text-gray-900 dark:text-white">
@@ -660,7 +660,7 @@ const CandidatesSection = ({ showToast }) => {
                                 setAiFilteredCandidates(null);
                                 setAiExplanation('');
                             }}
-                            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 px-4 py-2 rounded-full transition-colors"
+                            className="text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 px-4 py-2 rounded-full transition-colors"
                         >
                             Limpiar
                         </button>
