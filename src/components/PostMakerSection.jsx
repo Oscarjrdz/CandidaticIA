@@ -241,10 +241,10 @@ const PostMakerSection = () => {
         <div className="h-[calc(100vh-2rem)] flex flex-col gap-6 p-4 overflow-y-auto">
 
             {/* TOP AREA: EDITOR & PREVIEW */}
-            <div className="flex flex-col lg:flex-row gap-8 min-h-[500px]">
+            <div className="flex flex-col lg:flex-row gap-8 mb-4"> {/* Reduced bottom margin */}
 
                 {/* LEFT: EDITOR (Clean White) */}
-                <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 self-start">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-gray-800">
                             {editingId ? 'Editando Publicación' : 'Crea un post'}
@@ -257,7 +257,7 @@ const PostMakerSection = () => {
                     </div>
 
                     <div className="space-y-5">
-                        {/* Imagen First now */}
+                        {/* Inputs */}
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-gray-500 uppercase">Foto del Post</label>
                             <div className="flex items-center gap-3">
@@ -275,15 +275,14 @@ const PostMakerSection = () => {
                             </div>
                         </div>
 
-                        {/* Título & Desc */}
                         <div className="space-y-1">
                             <label className="text-xs font-bold text-gray-500 uppercase">Título (Negritas en FB)</label>
                             <input
                                 type="text"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                placeholder="Título llamativo..."
+                                className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-900 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-bold placeholder-gray-400"
+                                placeholder="Ej: ¡GRAN OPORTUNIDAD LABORAL!"
                             />
                         </div>
                         <div className="space-y-1">
@@ -291,9 +290,9 @@ const PostMakerSection = () => {
                             <textarea
                                 value={content}
                                 onChange={(e) => setContent(e.target.value)}
-                                rows={2}
+                                rows={3}
                                 className="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-600 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
-                                placeholder="Descripción..."
+                                placeholder="Describe el puesto o mensaje principal..."
                             />
                         </div>
 
@@ -303,39 +302,101 @@ const PostMakerSection = () => {
                                 icon={Save}
                                 className={`
                                     ${!uploadedUrl ? 'opacity-70' : 'shadow-lg shadow-blue-600/20'} 
-                                    bg-blue-600 hover:bg-blue-700 text-white
+                                    bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto
                                 `}
                             >
-                                {isUploading ? 'Subiendo Foto...' : (editingId ? 'Guardar Cambios' : 'Crear y Guardar')}
+                                {isUploading ? 'Subiendo Foto...' : (editingId ? 'Guardar Cambios' : 'Crear Post')}
                             </Button>
                         </div>
                     </div>
                 </div>
 
-                {/* RIGHT: PREVIEW (Facebook Style) */}
-                <div className="w-[450px] shrink-0 flex flex-col items-center justify-center p-4">
-                    <div className="w-full flex justify-between items-center mb-3">
-                        <span className="text-xs font-bold text-gray-400 uppercase">Vista Previa</span>
-                        <div className="flex gap-2 text-gray-400">
-                            <Monitor className={`w-4 h-4 cursor-pointer ${previewMode === 'desktop' ? 'text-blue-500' : ''}`} onClick={() => setPreviewMode('desktop')} />
-                            <Smartphone className={`w-4 h-4 cursor-pointer ${previewMode === 'mobile' ? 'text-blue-500' : ''}`} onClick={() => setPreviewMode('mobile')} />
+                {/* RIGHT: PREVIEW (Facebook Feed Style) */}
+                <div className="w-full lg:w-[420px] shrink-0 flex flex-col items-center">
+                    <div className="w-full flex justify-between items-center mb-3 px-1">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Vista Previa (Facebook Feed)</span>
+                        <div className="flex gap-2 text-gray-400 bg-white p-1 rounded-lg border border-gray-100 shadow-sm">
+                            <Monitor className={`w-4 h-4 cursor-pointer hover:text-blue-500 ${previewMode === 'desktop' ? 'text-blue-500' : ''}`} onClick={() => setPreviewMode('desktop')} />
+                            <Smartphone className={`w-4 h-4 cursor-pointer hover:text-blue-500 ${previewMode === 'mobile' ? 'text-blue-500' : ''}`} onClick={() => setPreviewMode('mobile')} />
                         </div>
                     </div>
 
-                    <div className="bg-[#18191a] border border-[#3e4042] rounded-lg overflow-hidden shadow-2xl w-full max-w-full">
-                        <div className="bg-black aspect-[1.91/1] overflow-hidden flex items-center justify-center relative">
-                            {media || uploadedUrl ? (
-                                <img src={media?.url || uploadedUrl} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="text-gray-600 flex flex-col items-center opacty-50"><ImageIcon className="w-8 h-8" /></div>
-                            )}
+                    {/* FB CARD */}
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 w-full overflow-hidden">
+
+                        {/* Header */}
+                        <div className="p-3 flex gap-3 items-center">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg">
+                                {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                            </div>
+                            <div>
+                                <h4 className="font-semibold text-gray-900 text-[15px] leading-tight flex items-center gap-1">
+                                    {user?.name || 'Usuario Candidatic'}
+                                    {/* <img src="/fb-verify.png" className="w-3 h-3"/> (Optional fake verify) */}
+                                </h4>
+                                <div className="flex items-center gap-1 text-gray-500 text-[13px]">
+                                    <span>Justo ahora</span> · <Globe className="w-3 h-3" />
+                                </div>
+                            </div>
+                            <MoreHorizontal className="w-5 h-5 text-gray-500 ml-auto" />
                         </div>
-                        <div className="bg-[#242526] p-3 border-t border-[#3e4042]">
-                            <p className="text-[#b0b3b8] text-[12px] uppercase mb-0.5 truncate tracking-wide">
-                                CANDIDATIC.AI
-                            </p>
-                            <h3 className="text-[#e4e6eb] font-bold text-[16px] leading-5 mb-1 line-clamp-1">{title}</h3>
-                            <p className="text-[#b0b3b8] text-[14px] leading-5 line-clamp-1">{content}</p>
+
+                        {/* Link Card Area */}
+                        <div className="bg-[#f0f2f5] border-t border-b border-gray-200/50">
+                            {/* Image */}
+                            <div className="aspect-[1.91/1] overflow-hidden flex items-center justify-center bg-gray-100 relative">
+                                {media || uploadedUrl ? (
+                                    <img src={media?.url || uploadedUrl} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="text-gray-400 flex flex-col items-center gap-2">
+                                        <ImageIcon className="w-8 h-8 opacity-50" />
+                                        <span className="text-xs">Sube una imagen</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Meta Portion */}
+                            <div className="bg-[#f0f2f5] p-3 border-t border-gray-300/50 hover:bg-[#e4e6eb] cursor-pointer transition-colors block">
+                                <p className="text-[#65676b] text-[12px] uppercase mb-0.5 truncate tracking-wide">
+                                    CANDIDATIC.AI
+                                </p>
+                                <div className="font-bold text-[#050505] text-[16px] leading-[20px] mb-1 line-clamp-2">
+                                    {title || 'Título del Enlace'}
+                                </div>
+                                <div className="text-[#65676b] text-[14px] leading-[20px] line-clamp-1">
+                                    {content || 'Descripción corta del enlace...'}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer / Reactions */}
+                        <div className="px-3 py-2">
+                            {/* Stats */}
+                            <div className="flex justify-between items-center text-[#65676b] text-[13px] border-b border-gray-200 pb-2 mb-1">
+                                <div className="flex items-center gap-1">
+                                    <div className="bg-blue-500 rounded-full p-1 flex items-center justify-center w-4 h-4">
+                                        <ThumbsUp className="w-2.5 h-2.5 text-white fill-current" />
+                                    </div>
+                                    <span>12</span>
+                                </div>
+                                <div className="flex gap-3">
+                                    <span>3 comentarios</span>
+                                    <span>1 veces compartido</span>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex justify-between px-2 pt-1">
+                                <button className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-gray-100 rounded-lg text-[#65676b] font-semibold text-[14px] transition-colors">
+                                    <ThumbsUp className="w-5 h-5" /> Me gusta
+                                </button>
+                                <button className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-gray-100 rounded-lg text-[#65676b] font-semibold text-[14px] transition-colors">
+                                    <MessageCircle className="w-5 h-5" /> Comentar
+                                </button>
+                                <button className="flex-1 flex items-center justify-center gap-2 py-2 hover:bg-gray-100 rounded-lg text-[#65676b] font-semibold text-[14px] transition-colors">
+                                    <Share2 className="w-5 h-5" /> Compartir
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
