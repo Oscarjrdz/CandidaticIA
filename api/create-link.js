@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { title, description, image, url } = req.body;
+        const { title, description, image, url, userId } = req.body;
 
         const client = getRedisClient();
         if (!client) {
@@ -17,9 +17,18 @@ export default async function handler(req, res) {
         const id = Math.random().toString(36).substring(2, 8);
         const key = `share:${id}`;
 
+        const createdAt = new Date().toISOString();
+
         // Save metadata to Redis (Expire in 90 days)
-        const metadata = { title, description, image, url };
+        const metadata = { id, title, description, image, url, createdAt, userId };
         await client.set(key, JSON.stringify(metadata), 'EX', 90 * 24 * 60 * 60);
+
+        // Add to User's History
+        if (userId) {
+            const userHistoryKey = `posts:${userId}`;
+            // Store just the ID in the list
+            await client.lpush(userHistoryKey, id);
+        }
 
         // Construct Short URL
         // In Vercel, req.headers.host works well
