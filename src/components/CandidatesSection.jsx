@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Sparkles } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Sparkles, Send } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
@@ -34,8 +34,9 @@ const CandidatesSection = ({ showToast }) => {
     // Configuración de Exportación
     const [showSettings, setShowSettings] = useState(false);
     const [exportTimer, setExportTimer] = useState(0); // Minutos. 0 = Desactivado.
-    const [exportingMap, setExportingMap] = useState({}); // { whatsapp: 'uploading'|'uploaded'|'error' }
-    const [fileStatusMap, setFileStatusMap] = useState({}); // { whatsapp: fileId }
+    // AI Action Flow
+    const [aiActionOpen, setAiActionOpen] = useState(false);
+    const [aiActionContext, setAiActionContext] = useState(null); // { candidates }
 
     // Timers para cada candidato (se reinician con mensajes salientes)
     const exportTimersRef = useRef({});
@@ -324,6 +325,49 @@ const CandidatesSection = ({ showToast }) => {
         showToast(`Timer configurado a ${exportTimer} minutos`, 'success');
     };
 
+    const handleAiAction = async (query) => {
+        try {
+            const context = {
+                candidateCount: displayedCandidates.length,
+                candidateIds: displayedCandidates.map(c => c.id)
+            };
+
+            const res = await fetch('/api/ai/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, context })
+            });
+
+            const data = await res.json();
+
+            if (data.success && data.action) {
+                const { intent, filters, message, explanation } = data.action;
+
+                setAiActionOpen(false); // Close AI Input
+
+                if (intent === 'REFINE_FILTER') {
+                    showToast(explanation || 'Refinando filtros...', 'info');
+                    const result = await aiQuery(query);
+                    if (result.success) {
+                        setAiFilteredCandidates(result.candidates);
+                        setAiExplanation(result.ai?.explanation || 'Refinado por IA');
+                    }
+                } else if (intent === 'BULK_MESSAGE') {
+                    showToast(explanation || 'Preparando envío masivo...', 'success');
+                    if (window.confirm(`IA Sugiere enviar este mensaje:\n\n"${message}"\n\n¿Ir a la sección de Envíos Masivos (Bulks)?`)) {
+                        localStorage.setItem('draft_bulk_message', message);
+                        showToast('Mensaje copiado a borrador', 'success');
+                    }
+                } else {
+                    showToast('No entendí la acción. Intenta de nuevo.', 'warning');
+                }
+            }
+        } catch (e) {
+            console.error('AI Action Error', e);
+            showToast('Error procesando acción', 'error');
+        }
+    };
+
     const loadCandidates = async () => {
         setLoading(true);
         const result = await getCandidates(50, 0, search);
@@ -607,9 +651,29 @@ const CandidatesSection = ({ showToast }) => {
                         console.log('🔮 AI Results received:', results.length, 'candidates');
                         setAiFilteredCandidates(results);
                         setAiExplanation(ai?.explanation || 'Búsqueda completada');
+
+                        // Trigger Follow-up Action after small delay
+                        if (results.length > 0) {
+                            setTimeout(() => {
+                                setAiActionOpen(true);
+                            }, 1500);
+                        }
                     }}
                     showToast={showToast}
                 />
+
+                {/* AI Action Modal (Follow-up) */}
+                {aiActionOpen && (
+                    <MagicSearch
+                        initialMode="action"
+                        customTitle={`¿Qué hacemos con estos ${displayedCandidates.length} candidatos?`}
+                        customPlaceholder="Ej: 'Filtrar solo los que sepan Inglés' o 'Enviarles un saludo'..."
+                        onAction={handleAiAction}
+                        isOpenProp={true}
+                        onClose={() => setAiActionOpen(false)}
+                        showToast={showToast}
+                    />
+                )}
 
                 <div className="relative w-full sm:w-64 group">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-600 transition-colors" />

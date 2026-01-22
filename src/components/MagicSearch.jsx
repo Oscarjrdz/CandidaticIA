@@ -5,12 +5,17 @@ import { aiQuery } from '../services/candidatesService';
 /**
  * Buscador Inteligente - Diseño iOS / Minimalista (Totalmente Neutro)
  */
-const MagicSearch = ({ onResults, showToast }) => {
-    const [isOpen, setIsOpen] = useState(false);
+const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle, customPlaceholder, onAction, isOpenProp, onClose }) => {
+    const [internalOpen, setInternalOpen] = useState(false);
+    const [mode, setMode] = useState(initialMode);
     const [query, setQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [userName, setUserName] = useState('');
     const modalRef = useRef(null);
+
+    // Controlled vs Uncontrolled
+    const isOpen = isOpenProp !== undefined ? isOpenProp : internalOpen;
+    const handleClose = onClose || (() => setInternalOpen(false));
 
     // Cargar nombre del usuario
     useEffect(() => {
@@ -25,21 +30,29 @@ const MagicSearch = ({ onResults, showToast }) => {
         }
     }, []);
 
+    // Reset mode on open
+    useEffect(() => {
+        if (isOpen) {
+            setMode(initialMode);
+            setQuery(''); // Clear query on re-open
+        }
+    }, [isOpen, initialMode]);
+
     // Atajos de teclado
     useEffect(() => {
         const handleKeyDown = (e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
                 e.preventDefault();
-                setIsOpen(prev => !prev);
+                setInternalOpen(prev => !prev);
             }
             if (e.key === 'Escape' && isOpen) {
-                setIsOpen(false);
+                handleClose();
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isOpen]);
+    }, [isOpen, handleClose]);
 
     const handleSearch = async (e) => {
         e.preventDefault();
@@ -47,13 +60,21 @@ const MagicSearch = ({ onResults, showToast }) => {
 
         setLoading(true);
         try {
-            const result = await aiQuery(query);
-            if (result.success) {
-                onResults(result.candidates, result.ai);
-                setIsOpen(false);
-                showToast(`IA encontró ${result.count} candidatos`, 'success');
-            } else {
-                showToast(result.error || 'Error en la búsqueda', 'error');
+            // ACTION MODE
+            if (mode === 'action' && onAction) {
+                await onAction(query);
+                // Don't close automatically here, let parent decide or close after success
+            }
+            // SEARCH MODE
+            else {
+                const result = await aiQuery(query);
+                if (result.success) {
+                    onResults(result.candidates, result.ai);
+                    handleClose();
+                    showToast(`IA encontró ${result.count} candidatos`, 'success');
+                } else {
+                    showToast(result.error || 'Error en la búsqueda', 'error');
+                }
             }
         } catch (error) {
             showToast(`Error: ${error.message}`, 'error');
@@ -62,9 +83,10 @@ const MagicSearch = ({ onResults, showToast }) => {
         }
     };
 
-    if (!isOpen) return (
+    // Trigger button only shows if uncontrolled and search mode
+    if (!isOpen && isOpenProp === undefined) return (
         <button
-            onClick={() => setIsOpen(true)}
+            onClick={() => setInternalOpen(true)}
             className="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-800/80 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full border border-gray-200 dark:border-gray-700/50 transition-all font-medium"
         >
             <Search className="w-4 h-4 opacity-70" />
@@ -75,6 +97,8 @@ const MagicSearch = ({ onResults, showToast }) => {
             </div>
         </button>
     );
+
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-300">
@@ -87,12 +111,18 @@ const MagicSearch = ({ onResults, showToast }) => {
                     <div className="flex items-start justify-between">
                         <div className="space-y-1">
                             <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
-                                Hola, <span className="text-blue-600 dark:text-blue-400">
-                                    {userName ? userName.charAt(0).toUpperCase() + userName.slice(1).toLowerCase() : 'Recruiter'}
-                                </span>
+                                {customTitle ? (
+                                    <span className="text-blue-600 dark:text-blue-400">{customTitle}</span>
+                                ) : (
+                                    <>
+                                        Hola, <span className="text-blue-600 dark:text-blue-400">
+                                            {userName ? userName.charAt(0).toUpperCase() + userName.slice(1).toLowerCase() : 'Recruiter'}
+                                        </span>
+                                    </>
+                                )}
                             </h2>
                             <p className="text-lg text-gray-500 dark:text-gray-400 font-medium">
-                                ¿Qué talento estás buscando hoy?
+                                {mode === 'action' ? '¿Qué hacemos con estos candidatos?' : '¿Qué talento estás buscando hoy?'}
                             </p>
                         </div>
                         <button
@@ -111,13 +141,17 @@ const MagicSearch = ({ onResults, showToast }) => {
                                 {loading ? (
                                     <Loader2 className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-spin" />
                                 ) : (
-                                    <Sparkles className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                                    mode === 'action' ? (
+                                        <Sparkles className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+                                    ) : (
+                                        <Sparkles className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                                    )
                                 )}
                             </div>
                             <input
                                 type="text"
                                 autoFocus
-                                placeholder="Describe a tu candidato ideal y deja que la IA haga su magia..."
+                                placeholder={customPlaceholder || "Describe a tu candidato ideal y deja que la IA haga su magia..."}
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
                                 className="w-full py-6 bg-transparent outline-none ring-0 border-none shadow-none text-2xl font-medium text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-600"
