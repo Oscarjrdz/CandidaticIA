@@ -14,9 +14,10 @@ const getClient = () => {
         if (process.env.REDIS_URL) {
             try {
                 console.log('🔌 Connecting to Redis via REDIS_URL...');
+                const isTLS = process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss://');
                 redis = new Redis(process.env.REDIS_URL, {
                     retryStrategy: (times) => Math.min(times * 50, 2000),
-                    tls: process.env.REDIS_URL.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined
+                    tls: isTLS ? { rejectUnauthorized: false } : undefined
                 });
                 redis.on('error', (err) => console.error('❌ Redis Connection Error:', err));
             } catch (e) {

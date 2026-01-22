@@ -49,8 +49,15 @@ export default async function handler(req, res) {
 
         // SANITIZACIÓN ROBUSTA
         apiKey = String(apiKey).trim();
+        // 1. Quitar comillas
         apiKey = apiKey.replace(/^["']|["']$/g, '');
-        apiKey = apiKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
+        // 2. Extraer solo la parte que parece una API Key de Google (empieza con AIzaSy)
+        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (match) {
+            apiKey = match[0];
+        } else {
+            apiKey = apiKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
+        }
         apiKey = apiKey.trim();
 
         const maskedKey = `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}`;
@@ -104,7 +111,14 @@ Consulta del usuario: "${query}"
 `;
 
         // Intentar varios modelos hasta que uno funcione
-        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
+        const modelsToTry = [
+            "gemini-flash-latest",
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-pro-latest",
+            "gemini-pro"
+        ];
         let result;
         let successModel = '';
         let lastError = '';

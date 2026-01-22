@@ -30,10 +30,20 @@ export default async function handler(req, res) {
 
         // SANITIZACIÓN ROBUSTA
         let cleanKey = String(apiKey).trim();
-        // Eliminar comillas si las pegó con ellas
+
+        // 1. Quitar comillas
         cleanKey = cleanKey.replace(/^["']|["']$/g, '');
-        // Eliminar prefijos si pegó el nombre de la variable
-        cleanKey = cleanKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
+
+        // 2. Extraer solo la parte que parece una API Key de Google (empieza con AIzaSy)
+        // Esto ignora prefijos como "GEMINI_API_KEY=", project IDs, o espacios extraños
+        const match = cleanKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (match) {
+            cleanKey = match[0];
+        } else {
+            // Si no tiene el formato estándar, al menos quitar el prefijo común por si acaso
+            cleanKey = cleanKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
+        }
+
         cleanKey = cleanKey.trim();
 
         const maskedKey = `${cleanKey.substring(0, 6)}...${cleanKey.substring(cleanKey.length - 4)}`;
@@ -42,11 +52,18 @@ export default async function handler(req, res) {
         const genAI = new GoogleGenerativeAI(cleanKey);
 
         // Intentar varios modelos hasta que uno funcione
-        const modelsToTry = ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"];
+        const modelsToTry = [
+            "gemini-flash-latest",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-pro-latest",
+            "gemini-pro",
+            "gemini-2.0-flash"
+        ];
         let successModel = '';
         let text = '';
         let lastError = '';
-
+        let allErrors = [];
         for (const modelName of modelsToTry) {
             try {
                 console.log(`🔌 [AI Validation] Testing: ${modelName}`);
@@ -55,15 +72,22 @@ export default async function handler(req, res) {
                 const response = await result.response;
                 text = response.text();
                 successModel = modelName;
+                console.log(`✅ [AI Validation] Success with: ${modelName}`);
                 break;
             } catch (e) {
-                lastError = e.message;
+                const errorDetail = `${modelName}: ${e.message}`;
+                allErrors.push(errorDetail);
+                lastError = errorDetail;
                 console.warn(`⚠️ [AI Validation] ${modelName} failed:`, e.message);
+
+                if (e.message.includes('429') || e.message.includes('API_KEY_INVALID')) {
+                    break;
+                }
             }
         }
 
         if (!successModel) {
-            throw new Error(`Ningún modelo respondió (probados: ${modelsToTry.join(', ')}). Último error: ${lastError}`);
+            throw new Error(`Detalles: ${allErrors.join(' | ')}`);
         }
 
         console.log(`✅ [AI Validation] Success with: ${successModel}`);
@@ -77,11 +101,14 @@ export default async function handler(req, res) {
     } catch (error) {
         console.error('❌ [AI Validation] Failed:', error.message);
 
-        // Diagnóstico para el usuario
-        let finalError = error.message;
-        if (finalError.includes('404') || finalError.includes('not found')) {
-            finalError = `Error 404: El modelo no está disponible. DEBES ACTIVAR la "Generative Language API" aquí: https://aistudio.google.com/app/apikey (haz clic en tu proyecto y busca 'Enable API')`;
+        // Diagnóstico para el usuario (incluyendo el error técnico real)
+        let technicalError = error.message;
+        let finalError = technicalError;
+
+        if (technicalError.includes('404') || technicalError.includes('not found')) {
+            finalError = `Error 404: El modelo no está disponible. DEBES ACTIVAR la "Generative Language API" o Google AI Studio. Detalles: ${technicalError}`;
         }
+
         const apiKeyUsed = String(req.body?.apiKey || '').trim();
         const maskedDiagnostic = apiKeyUsed.length > 10
             ? `(Llave: ${apiKeyUsed.substring(0, 6)}...${apiKeyUsed.substring(apiKeyUsed.length - 4)})`
@@ -89,7 +116,7 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
             success: false,
-            error: `${finalError} ${maskedDiagnostic}`
+            error: `[DEBUG-B3] ${finalError} ${maskedDiagnostic}`
         });
     }
 }
