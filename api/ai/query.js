@@ -165,10 +165,53 @@ Consulta del usuario: "${query}"
         const candidates = await getCandidates(1000, 0);
 
         // Función para calcular edad
+        // Función para calcular edad (Robusta)
         const calculateAge = (dob) => {
             if (!dob) return null;
-            const birthDate = new Date(dob);
+            let birthDate = new Date(dob);
+
+            // Intentar parsear si la fecha estándar falló
+            if (isNaN(birthDate.getTime())) {
+                const cleanDob = String(dob).toLowerCase().trim();
+
+                // 1. Formato "19 de 05 de 1983" o "19 de mayo de 1983"
+                const deRegex = /(\d{1,2})\s+de\s+([a-z0-9áéíóú]+)\s+de\s+(\d{4})/;
+                const match = cleanDob.match(deRegex);
+
+                if (match) {
+                    const day = parseInt(match[1]);
+                    let month = match[2];
+                    const year = parseInt(match[3]);
+                    let monthIndex = -1;
+
+                    // Si mes es número
+                    if (!isNaN(month)) {
+                        monthIndex = parseInt(month) - 1;
+                    } else {
+                        // Si mes es texto
+                        const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                        monthIndex = months.findIndex(m => m.startsWith(month.slice(0, 3)));
+                    }
+
+                    if (monthIndex >= 0) {
+                        birthDate = new Date(year, monthIndex, day);
+                    }
+                }
+
+                // 2. Fallback a DD/MM/YYYY o DD-MM-YYYY
+                if (isNaN(birthDate.getTime())) {
+                    const parts = cleanDob.split(/[/-]/);
+                    if (parts.length === 3) {
+                        // Asumimos DD-MM-YYYY si el año está al final
+                        if (parts[2].length === 4) {
+                            birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                        }
+                    }
+                }
+            }
+
             if (isNaN(birthDate.getTime())) return null;
+
             const today = new Date();
             let age = today.getFullYear() - birthDate.getFullYear();
             const m = today.getMonth() - birthDate.getMonth();
