@@ -73,7 +73,7 @@ const PostMakerSection = () => {
         setUploadedUrl(null);
     };
 
-    // Helper: Resize Image using Canvas
+    // Helper: Resize & Compress Image
     const resizeImage = (file) => {
         return new Promise((resolve) => {
             const reader = new FileReader();
@@ -84,8 +84,8 @@ const PostMakerSection = () => {
                     let width = img.width;
                     let height = img.height;
 
-                    // Max width 1200px (standard social media)
-                    const MAX_WIDTH = 1200;
+                    // Limit to 1000px width for safety (Vercel Limit is 4.5MB request body)
+                    const MAX_WIDTH = 1000;
                     if (width > MAX_WIDTH) {
                         height = Math.round(height * (MAX_WIDTH / width));
                         width = MAX_WIDTH;
@@ -96,8 +96,8 @@ const PostMakerSection = () => {
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    // Compress to JPEG 0.8
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    // Compress to JPEG 0.7 (Good balance, small size)
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
                     resolve(dataUrl);
                 };
                 img.src = event.target.result;
@@ -110,7 +110,7 @@ const PostMakerSection = () => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Preview local immediately (using raw file for speed)
+        // Preview local
         const reader = new FileReader();
         reader.onload = (ev) => {
             setMedia({ type: 'image', url: ev.target.result, file });
@@ -119,8 +119,9 @@ const PostMakerSection = () => {
 
         setIsUploading(true);
         try {
-            // Compress before upload
+            console.log('Compressing image...');
             const compressedBase64 = await resizeImage(file);
+            console.log('Uploading payload size:', compressedBase64.length);
 
             const res = await fetch('/api/upload', {
                 method: 'POST',
@@ -128,25 +129,31 @@ const PostMakerSection = () => {
                 body: JSON.stringify({ image: compressedBase64, type: 'image/jpeg' })
             });
 
+            if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
             const data = await res.json();
             if (data.success) {
                 const finalUrl = data.url.startsWith('http') ? data.url : `${window.location.origin}${data.url}`;
                 setUploadedUrl(finalUrl);
-                showToast('Foto optimizada y subida correctamente', 'success');
+                showToast('Foto subida con éxito', 'success');
             } else {
-                showToast('Error en el servidor al subir', 'error');
+                throw new Error(data.error || 'Error desconocido');
             }
         } catch (error) {
             console.error(error);
-            showToast('Error de conexión o archivo muy pesado', 'error');
+            showToast(`Error: ${error.message || 'No se pudo subir'}`, 'error');
         } finally {
             setIsUploading(false);
         }
     };
 
     const handleSavePost = async () => {
+        if (isUploading) {
+            showToast('Espera a que termine de subir la foto', 'warning');
+            return;
+        }
         if (!uploadedUrl) {
-            showToast('Necesitas una imagen para crear el link', 'warning');
+            showToast('Sube una foto antes de guardar', 'warning');
             return;
         }
 
@@ -185,13 +192,15 @@ const PostMakerSection = () => {
                 const data = await res.json();
 
                 if (data.success) {
-                    showToast('Link Creado. Encuéntralo en tu galería.', 'success');
+                    showToast('Link Creado. Galería actualizada.', 'success');
                     fetchGallery(user?.id);
                     handleCancelEdit();
+                } else {
+                    showToast('Error al guardar el link', 'error');
                 }
             }
         } catch (e) {
-            showToast('Error guardando post', 'error');
+            showToast('Error de conexión', 'error');
         }
     };
 
@@ -273,11 +282,13 @@ const PostMakerSection = () => {
                         <div className="pt-4 border-t border-gray-100 flex justify-end">
                             <Button
                                 onClick={handleSavePost}
-                                disabled={isUploading || !uploadedUrl}
                                 icon={Save}
-                                className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/20"
+                                className={`
+                                    ${!uploadedUrl ? 'opacity-70' : 'shadow-lg shadow-blue-600/20'} 
+                                    bg-blue-600 hover:bg-blue-700 text-white
+                                `}
                             >
-                                {editingId ? 'Guardar Cambios' : 'Crear y Guardar en Galería'}
+                                {isUploading ? 'Subiendo Foto...' : (editingId ? 'Guardar Cambios' : 'Crear y Guardar')}
                             </Button>
                         </div>
                     </div>
