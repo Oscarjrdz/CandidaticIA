@@ -237,11 +237,17 @@ const PostMakerSection = () => {
         }
     };
 
+    // Helper for Title Case
+    const toTitleCase = (str) => {
+        if (!str) return '';
+        return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
+
     return (
         <div className="h-[calc(100vh-2rem)] flex flex-col gap-6 p-4 overflow-y-auto">
 
             {/* TOP AREA: EDITOR & PREVIEW */}
-            <div className="flex flex-col lg:flex-row gap-8 mb-4"> {/* Reduced bottom margin */}
+            <div className="flex flex-col lg:flex-row gap-8 mb-4">
 
                 {/* LEFT: EDITOR (Clean White) */}
                 <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 self-start">
@@ -331,8 +337,7 @@ const PostMakerSection = () => {
                             </div>
                             <div>
                                 <h4 className="font-semibold text-gray-900 text-[15px] leading-tight flex items-center gap-1">
-                                    {user?.name || 'Usuario Candidatic'}
-                                    {/* <img src="/fb-verify.png" className="w-3 h-3"/> (Optional fake verify) */}
+                                    {user?.name ? toTitleCase(user.name) : 'Usuario Candidatic'}
                                 </h4>
                                 <div className="flex items-center gap-1 text-gray-500 text-[13px]">
                                     <span>Justo ahora</span> · <Globe className="w-3 h-3" />
@@ -403,7 +408,7 @@ const PostMakerSection = () => {
             </div>
 
             {/* BOTTOM: POST GALLERY */}
-            <div className="mt-8">
+            <div className="mt-2">
                 <h3 className="text-lg font-bold text-gray-800 mb-4 px-1">Mis Publicaciones ({posts.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {posts.map(post => {
