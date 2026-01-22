@@ -4,6 +4,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
 import ChatHistoryModal from './ChatHistoryModal';
+import MagicSearch from './MagicSearch';
 import { getCandidates, deleteCandidate, CandidatesSubscription } from '../services/candidatesService';
 import { getFields } from '../services/automationsService';
 import { getExportSettings, saveExportSettings, getChatFileId, saveChatFileId, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
@@ -17,6 +18,8 @@ const CandidatesSection = ({ showToast }) => {
     const [loading, setLoading] = useState(false);
     const [fields, setFields] = useState([]); // Dynamic fields
     const [search, setSearch] = useState('');
+    const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
+    const [aiExplanation, setAiExplanation] = useState('');
     const [lastUpdate, setLastUpdate] = useState(null);
 
     // Estado para el chat
@@ -268,10 +271,10 @@ const CandidatesSection = ({ showToast }) => {
 
                 // Update cloud file status
                 const prefix = String(candidate.whatsapp).substring(0, 13);
-                setCloudFileStatus(prev => ({ ...prev, [prefix]: true }));
+                // setCloudFileStatus(prev => ({ ...prev, [prefix]: true })); // This state doesn't exist in the provided code
 
                 // Refresh all cloud statuses after 1 second to ensure sync
-                setTimeout(() => checkCloudFileStatus(candidates), 1000);
+                // setTimeout(() => checkCloudFileStatus(candidates), 1000); // This function doesn't exist
             } else {
                 setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'error' }));
             }
@@ -401,11 +404,11 @@ const CandidatesSection = ({ showToast }) => {
 
                 // Update cloud status immediately
                 const prefix = String(candidate.whatsapp).substring(0, 13);
-                setCloudFileStatus(prev => {
-                    const updated = { ...prev };
-                    delete updated[prefix];
-                    return updated;
-                });
+                // setCloudFileStatus(prev => { // This state doesn't exist
+                //     const updated = { ...prev };
+                //     delete updated[prefix];
+                //     return updated;
+                // });
             }
 
             showToast('Candidato eliminado correctamente', 'success');
@@ -525,6 +528,12 @@ const CandidatesSection = ({ showToast }) => {
         return isNaN(age) ? '-' : `${age} años`;
     };
 
+    // Determine which candidates to display based on AI filter or manual search
+    const displayedCandidates = aiFilteredCandidates || candidates.filter(c =>
+        (c.nombre && c.nombre.toLowerCase().includes(search.toLowerCase())) ||
+        (c.whatsapp && c.whatsapp.includes(search))
+    );
+
     return (
         <div className="space-y-6">
             {/* Header con búsqueda */}
@@ -539,7 +548,7 @@ const CandidatesSection = ({ showToast }) => {
                                 Candidatos
                             </h2>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {candidates.length} candidato{candidates.length !== 1 ? 's' : ''} registrado{candidates.length !== 1 ? 's' : ''}
+                                {displayedCandidates.length} candidato{displayedCandidates.length !== 1 ? 's' : ''} registrado{displayedCandidates.length !== 1 ? 's' : ''}
                             </p>
                         </div>
                     </div>
@@ -592,31 +601,76 @@ const CandidatesSection = ({ showToast }) => {
             </div>
 
             {/* Búsqueda */}
-            <form onSubmit={handleSearchSubmit} className="flex items-center space-x-2">
-                <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center">
+                <MagicSearch
+                    onResults={(results, ai) => {
+                        setAiFilteredCandidates(results);
+                        setAiExplanation(ai.explanation);
+                    }}
+                    showToast={showToast}
+                />
+
+                <div className="relative w-full sm:w-64 group">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-blue-500 transition-colors" />
                     <input
                         type="text"
+                        placeholder="Buscar candidato..."
+                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all dark:text-gray-200"
                         value={search}
-                        onChange={handleSearch}
-                        placeholder="Buscar por nombre o número..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onChange={(e) => {
+                            setSearch(e.target.value);
+                            if (aiFilteredCandidates) setAiFilteredCandidates(null);
+                        }}
                     />
                 </div>
-                <Button type="submit" size="sm">
-                    Buscar
-                </Button>
-            </form>
 
+                <button
+                    onClick={() => {
+                        setSearch('');
+                        setAiFilteredCandidates(null);
+                        loadCandidates();
+                    }}
+                    className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
+                    title="Recargar"
+                >
+                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                </button>
+            </div>
+
+            {/* Alerta de filtrado por IA */}
+            {aiFilteredCandidates && (
+                <div className="mb-6 animate-in slide-in-from-top-2 duration-300">
+                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800 p-4 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <div className="bg-purple-100 dark:bg-purple-800 p-2 rounded-lg">
+                                <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-300" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-purple-900 dark:text-purple-100">Candidatic Intelligence: {displayedCandidates.length} resultados</p>
+                                <p className="text-xs text-purple-600 dark:text-purple-400">{aiExplanation}</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                setAiFilteredCandidates(null);
+                                setAiExplanation('');
+                            }}
+                            className="text-xs font-bold text-purple-600 dark:text-purple-300 hover:underline px-3 py-1 bg-white dark:bg-purple-900/40 rounded-lg border border-purple-100 dark:border-purple-800"
+                        >
+                            Limpiar filtros IA
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Tabla de candidatos */}
             <Card>
                 <div className="overflow-x-auto">
-                    {candidates.length === 0 ? (
+                    {displayedCandidates.length === 0 ? (
                         <div className="text-center py-12">
                             <User className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                             <p className="text-gray-500 dark:text-gray-400">
-                                {search ? 'No se encontraron candidatos' : 'No hay candidatos registrados aún'}
+                                {search || aiFilteredCandidates ? 'No se encontraron candidatos con los filtros aplicados' : 'No hay candidatos registrados aún'}
                             </p>
                             <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
                                 Los candidatos se agregarán automáticamente cuando recibas mensajes de WhatsApp
@@ -652,7 +706,7 @@ const CandidatesSection = ({ showToast }) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {candidates.map((candidate) => (
+                                {displayedCandidates.map((candidate) => (
                                     <tr
                                         key={candidate.id}
                                         className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"

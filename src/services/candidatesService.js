@@ -156,3 +156,38 @@ export class CandidatesSubscription {
         }
     }
 }
+
+/**
+ * Realiza una búsqueda inteligente usando IA
+ */
+export const aiQuery = async (query) => {
+    try {
+        const response = await fetch(`${API_BASE}/api/ai/query`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ query })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Error en la búsqueda inteligente');
+        }
+
+        return {
+            success: true,
+            candidates: data.candidates || [],
+            count: data.count || 0,
+            ai: data.ai
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message,
+            candidates: [],
+            count: 0
+        };
+    }
+};
