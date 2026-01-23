@@ -794,9 +794,9 @@ const CandidatesSection = ({ showToast }) => {
                         <table className="w-full relative">
                             <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
                                 <tr className="border-b border-gray-200 dark:border-gray-700 text-xs uppercase tracking-wider text-gray-500">
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
                                         <div className="flex items-center space-x-1">
                                             <Sparkles className="w-3.5 h-3.5 text-blue-500" />
                                             <span>Género</span>
@@ -806,23 +806,23 @@ const CandidatesSection = ({ showToast }) => {
                                     {/* Dynamic Headers */}
                                     {fields.map(field => (
                                         <React.Fragment key={field.value}>
-                                            <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">
+                                            <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
                                                 {field.label}
                                             </th>
                                             {/* Special Case: Age column after Birth Date */}
                                             {field.value === 'fechaNacimiento' && (
-                                                <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">
+                                                <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
                                                     Edad
                                                 </th>
                                             )}
                                         </React.Fragment>
                                     ))}
 
-                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
-                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
-                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
-                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
-                                    <th className="text-center py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
+                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
+                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
+                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
+                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -834,21 +834,21 @@ const CandidatesSection = ({ showToast }) => {
                                         {exportingMap[candidate.id] && (
                                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500 animate-pulse rounded-r-full" title="Exportando historial..."></div>
                                         )}
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-900 dark:text-white font-mono font-medium">
+                                        <td className="py-0.5 px-2.5">
+                                            <div className="text-xs text-gray-900 dark:text-white font-mono font-medium">
                                                 {formatPhone(candidate.whatsapp)}
                                             </div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
                                                 Desde {formatDate(candidate.primerContacto)}
                                             </div>
                                         </td>
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                        <td className="py-0.5 px-2.5">
+                                            <div className="text-xs text-gray-900 dark:text-white font-medium">
                                                 {candidate.nombre}
                                             </div>
                                         </td>
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                        <td className="py-0.5 px-2.5">
+                                            <div className="text-xs text-gray-900 dark:text-white font-medium">
                                                 {candidate.genero || <span className="text-gray-400 italic font-normal">-</span>}
                                             </div>
                                         </td>
@@ -856,15 +856,15 @@ const CandidatesSection = ({ showToast }) => {
                                         {/* Dynamic Cells */}
                                         {fields.map(field => (
                                             <React.Fragment key={field.value}>
-                                                <td className="py-1 px-4">
-                                                    <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                <td className="py-0.5 px-2.5">
+                                                    <div className="text-xs text-gray-900 dark:text-white font-medium">
                                                         {candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>}
                                                     </div>
                                                 </td>
                                                 {/* Special Case: Age calculation */}
                                                 {field.value === 'fechaNacimiento' && (
-                                                    <td className="py-1 px-4">
-                                                        <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                    <td className="py-0.5 px-2.5">
+                                                        <div className="text-xs text-gray-900 dark:text-white font-medium">
                                                             {calculateAge(candidate.fechaNacimiento)}
                                                         </div>
                                                     </td>
@@ -872,26 +872,26 @@ const CandidatesSection = ({ showToast }) => {
                                             </React.Fragment>
                                         ))}
 
-                                        <td className="py-1 px-4">
-                                            <div className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                                        <td className="py-0.5 px-2.5">
+                                            <div className="text-xs text-gray-700 dark:text-gray-300 font-medium">
                                                 {formatDateTime(candidate.ultimoMensaje)}
                                             </div>
-                                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
                                                 {formatDate(candidate.ultimoMensaje)}
                                             </div>
                                         </td>
-                                        <td className="py-1 px-4 text-center">
+                                        <td className="py-0.5 px-2.5 text-center">
                                             {(() => {
                                                 // Si no hay timer configurado, mostrar "-"
                                                 if (!exportTimer || exportTimer <= 0) {
-                                                    return <span className="text-xs text-gray-400">-</span>;
+                                                    return <span className="text-[10px] text-gray-400">-</span>;
                                                 }
 
                                                 // Si no hay último mensaje, no podemos calcular
                                                 const timerTimestamp = candidate.ultimoMensajeBot;
 
                                                 if (!timerTimestamp) {
-                                                    return <span className="text-xs text-gray-400">-</span>;
+                                                    return <span className="text-[10px] text-gray-400">-</span>;
                                                 }
 
                                                 // Calcular hora objetivo (último mensaje BOT + minutos configurados)
@@ -912,8 +912,8 @@ const CandidatesSection = ({ showToast }) => {
                                                 });
 
                                                 return (
-                                                    <div className="flex flex-col items-center justify-center space-y-1">
-                                                        <div className={`w-4 h-4 rounded-full ${isReady
+                                                    <div className="flex flex-col items-center justify-center space-y-0.5">
+                                                        <div className={`w-3 h-3 rounded-full ${isReady
                                                             ? 'bg-green-500 dark:bg-green-400'
                                                             : 'bg-red-500 dark:bg-red-400'
                                                             }`} title={
@@ -921,52 +921,52 @@ const CandidatesSection = ({ showToast }) => {
                                                                     ? 'Tiempo de inactividad cumplido'
                                                                     : 'Esperando tiempo de inactividad'
                                                             } />
-                                                        <div className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                                                        <div className="text-[10px] text-gray-600 dark:text-gray-400 font-mono">
                                                             {targetTimeStr}
                                                         </div>
                                                     </div>
                                                 );
                                             })()}
                                         </td>
-                                        <td className="py-1 px-4 text-center">
+                                        <td className="py-0.5 px-2.5 text-center">
                                             {exportingMap[candidate.whatsapp] === 'uploading' ? (
-                                                <Loader2 className="w-5 h-5 text-blue-500 animate-spin mx-auto" title="Subiendo historial..." />
+                                                <Loader2 className="w-4 h-4 text-blue-500 animate-spin mx-auto" title="Subiendo historial..." />
                                             ) : localChatFiles[candidate.whatsapp] || exportingMap[candidate.whatsapp] === 'uploaded' || getChatFileId(candidate.whatsapp) ? (
                                                 <button
                                                     onClick={() => handleViewHistory(candidate)}
-                                                    className="p-2 hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg smooth-transition"
+                                                    className="p-1.5 hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg smooth-transition"
                                                     title="Ver historial"
                                                 >
-                                                    <FileText className="w-5 h-5" />
+                                                    <FileText className="w-4 h-4" />
                                                 </button>
                                             ) : exportingMap[candidate.whatsapp] === 'error' ? (
-                                                <div className="text-red-500 text-xs" title="Error al exportar">
+                                                <div className="text-red-500 text-[10px]" title="Error al exportar">
                                                     Error
                                                 </div>
                                             ) : (
-                                                <div className="text-gray-400 text-xs">
+                                                <div className="text-gray-400 text-[10px]">
                                                     -
                                                 </div>
                                             )}
                                         </td>
 
-                                        <td className="py-1 px-4 text-center">
+                                        <td className="py-0.5 px-2.5 text-center">
                                             <button
                                                 onClick={() => handleOpenChat(candidate)}
-                                                className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative"
+                                                className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative"
                                                 title="Abrir chat"
                                             >
-                                                <MessageCircle className="w-5 h-5" />
-                                                <span className="absolute top-1 right-1 w-2 h-2 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
+                                                <MessageCircle className="w-4 h-4" />
+                                                <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
                                             </button>
                                         </td>
-                                        <td className="py-1 px-4 text-center">
+                                        <td className="py-0.5 px-2.5 text-center">
                                             <button
                                                 onClick={() => handleDelete(candidate.id, candidate.nombre)}
-                                                className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
+                                                className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
                                                 title="Eliminar permanentemente"
                                             >
-                                                <Trash2 className="w-4 h-4 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                                                <Trash2 className="w-3.5 h-3.5 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
                                             </button>
                                         </td>
                                     </tr>
