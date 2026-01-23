@@ -336,14 +336,30 @@ async function processEvent(payload) {
 
                     await updateCandidate(candidateId, updateData);
 
-                    // --- AI GENDER DETECTION (If name was extracted) ---
-                    if (updateData.nombreReal && (!candidate || !candidate.genero)) {
-                        detectGender(updateData.nombreReal).then(gender => {
-                            if (gender !== 'Desconocido') {
-                                console.log(`🤖 AI detectó género extraído para ${updateData.nombreReal}: ${gender}`);
-                                updateCandidate(candidateId, { genero: gender }).catch(e => console.error('Error updating extracted gender:', e));
+                    // --- AI NAME CLEANING & GENDER DETECTION (Background) ---
+                    if (updateData.nombreReal) {
+                        const { cleanNameWithAI } = await import('./utils/ai.js');
+
+                        cleanNameWithAI(updateData.nombreReal).then(async cleanedName => {
+                            if (cleanedName && cleanedName !== updateData.nombreReal) {
+                                console.log(`🤖 AI limpió nombre: ${updateData.nombreReal} -> ${cleanedName}`);
+                                await updateCandidate(candidateId, { nombreReal: cleanedName });
+
+                                // Detect gender FOR THE CLEANED NAME
+                                detectGender(cleanedName).then(gender => {
+                                    if (gender !== 'Desconocido') {
+                                        updateCandidate(candidateId, { genero: gender }).catch(e => console.error('Error updating extracted gender:', e));
+                                    }
+                                }).catch(e => console.error('AI Gender error:', e));
+                            } else if (!candidate || !candidate.genero) {
+                                // Just detect gender if name was already clean
+                                detectGender(updateData.nombreReal).then(gender => {
+                                    if (gender !== 'Desconocido') {
+                                        updateCandidate(candidateId, { genero: gender }).catch(e => console.error('Error updating extracted gender:', e));
+                                    }
+                                }).catch(e => console.error('AI Gender error:', e));
                             }
-                        }).catch(e => console.error('AI Gender error:', e));
+                        }).catch(e => console.error('AI Name Cleaning error:', e));
                     }
                 }
             } else {

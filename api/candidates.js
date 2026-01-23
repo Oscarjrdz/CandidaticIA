@@ -64,6 +64,45 @@ export default async function handler(req, res) {
             });
         }
 
+        // PUT /api/candidates - Actualizar candidato
+        if (req.method === 'PUT') {
+            const body = req.body || {};
+            const { id, ...updates } = body;
+
+            if (!id) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'ID de candidato requerido'
+                });
+            }
+
+            const { updateCandidate, getCandidateById } = await import('./utils/storage.js');
+            const { cleanNameWithAI, detectGender } = await import('./utils/ai.js');
+
+            // --- AI Logic for Nombre Real ---
+            if (updates.nombreReal) {
+                console.log(`🤖 AI cleaning manual name update: ${updates.nombreReal}`);
+                const cleanedName = await cleanNameWithAI(updates.nombreReal);
+                updates.nombreReal = cleanedName;
+
+                // If name changed or gender is missing, trigger gender detection
+                const existing = await getCandidateById(id);
+                if (!existing.genero || existing.nombreReal !== cleanedName) {
+                    const gender = await detectGender(cleanedName);
+                    if (gender !== 'Desconocido') {
+                        updates.genero = gender;
+                    }
+                }
+            }
+
+            const updatedCandidate = await updateCandidate(id, updates);
+
+            return res.status(200).json({
+                success: true,
+                candidate: updatedCandidate
+            });
+        }
+
         // DELETE /api/candidates/:id - Eliminar candidato
         if (req.method === 'DELETE') {
             const { id } = req.query;
