@@ -21,13 +21,17 @@ export async function syncCategoriesToBuilderBot() {
         const fileContent = categories.map(c => c.name).join('\n');
         const fileName = 'categorias.txt';
 
-        // 3. Get Credentials
-        const aiConfigJson = await redis.get('ai_config');
-        if (!aiConfigJson) return;
-        const { botId, answerId, geminiApiKey: apiKey } = JSON.parse(aiConfigJson);
+        // 3. Get Credentials - Use the same source as vacancies.js
+        const credsJson = await redis.get('builderbot_credentials');
+        if (!credsJson) {
+            console.warn('⚠️ No credentials found in Redis (builderbot_credentials). Skipping category sync.');
+            return;
+        }
+
+        const { botId, answerId, apiKey } = JSON.parse(credsJson);
 
         if (!botId || !answerId || !apiKey) {
-            console.warn('⚠️ Missing AI credentials for category sync');
+            console.warn('⚠️ Incomplete credentials in Redis. Skipping category sync.');
             return;
         }
 
