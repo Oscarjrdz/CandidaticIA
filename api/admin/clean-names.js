@@ -18,28 +18,37 @@ export default async function handler(req, res) {
 
         for (const candidate of candidates) {
             const originalName = candidate.nombreReal;
+            const originalMunicipio = candidate.municipio;
 
-            // Skip if no name to clean
-            if (!originalName || originalName === 'Sin nombre') continue;
+            // Prepare Updates
+            const updates = {};
+            let changed = false;
 
             try {
                 // 1. Clean Name with AI
-                const cleanedName = await cleanNameWithAI(originalName);
+                if (originalName && originalName !== 'Sin nombre') {
+                    const cleanedName = await cleanNameWithAI(originalName);
+                    if (cleanedName !== originalName) {
+                        updates.nombreReal = cleanedName;
+                        changed = true;
+                    }
 
-                // 2. Prepare Updates
-                const updates = {};
-                let changed = false;
-
-                if (cleanedName !== originalName) {
-                    updates.nombreReal = cleanedName;
-                    changed = true;
+                    // 2. Gender detection if name changed or missing
+                    if (!candidate.genero || (updates.nombreReal && updates.nombreReal !== originalName)) {
+                        const gender = await detectGender(updates.nombreReal || originalName);
+                        if (gender !== 'Desconocido' && gender !== candidate.genero) {
+                            updates.genero = gender;
+                            changed = true;
+                        }
+                    }
                 }
 
-                // 3. Optional: Detect gender if missing or name changed
-                if (!candidate.genero || changed) {
-                    const gender = await detectGender(cleanedName);
-                    if (gender !== 'Desconocido' && gender !== candidate.genero) {
-                        updates.genero = gender;
+                // 3. Clean Municipio with AI
+                if (originalMunicipio && originalMunicipio !== 'Desconocido') {
+                    const { cleanMunicipioWithAI } = await import('../utils/ai.js');
+                    const cleanedMunicipio = await cleanMunicipioWithAI(originalMunicipio);
+                    if (cleanedMunicipio !== originalMunicipio) {
+                        updates.municipio = cleanedMunicipio;
                         changed = true;
                     }
                 }
@@ -49,13 +58,13 @@ export default async function handler(req, res) {
                     updatedCount++;
                     results.push({
                         whatsapp: candidate.whatsapp,
-                        before: originalName,
-                        after: cleanedName,
+                        name: { before: originalName, after: updates.nombreReal || originalName },
+                        municipio: { before: originalMunicipio, after: updates.municipio || originalMunicipio },
                         gender: updates.genero || candidate.genero
                     });
                 }
             } catch (err) {
-                console.error(`Error cleaning name for ${candidate.whatsapp}:`, err.message);
+                console.error(`Error cleaning data for ${candidate.whatsapp}:`, err.message);
             }
         }
 

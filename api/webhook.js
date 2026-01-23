@@ -361,6 +361,17 @@ async function processEvent(payload) {
                             }
                         }).catch(e => console.error('AI Name Cleaning error:', e));
                     }
+
+                    // --- AI MUNICIPIO CLEANING (Background) ---
+                    if (updateData.municipio) {
+                        const { cleanMunicipioWithAI } = await import('./utils/ai.js');
+                        cleanMunicipioWithAI(updateData.municipio).then(async cleanedMunicipio => {
+                            if (cleanedMunicipio && cleanedMunicipio !== updateData.municipio) {
+                                console.log(`🤖 AI limpió municipio: ${updateData.municipio} -> ${cleanedMunicipio}`);
+                                await updateCandidate(candidateId, { municipio: cleanedMunicipio });
+                            }
+                        }).catch(e => console.error('AI Municipio Cleaning error:', e));
+                    }
                 }
             } else {
                 console.warn('⚠️ message.outgoing recibido sin campo "to" ni "remoteJid". No se puede asignar al historial.', data);

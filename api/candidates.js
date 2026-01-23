@@ -77,7 +77,7 @@ export default async function handler(req, res) {
             }
 
             const { updateCandidate, getCandidateById } = await import('./utils/storage.js');
-            const { cleanNameWithAI, detectGender } = await import('./utils/ai.js');
+            const { cleanNameWithAI, detectGender, cleanMunicipioWithAI } = await import('./utils/ai.js');
 
             // --- AI Logic for Nombre Real ---
             if (updates.nombreReal) {
@@ -93,6 +93,13 @@ export default async function handler(req, res) {
                         updates.genero = gender;
                     }
                 }
+            }
+
+            // --- AI Logic for Municipio ---
+            if (updates.municipio) {
+                console.log(`🤖 AI cleaning manual municipio update: ${updates.municipio}`);
+                const cleanedMunicipio = await cleanMunicipioWithAI(updates.municipio);
+                updates.municipio = cleanedMunicipio;
             }
 
             const updatedCandidate = await updateCandidate(id, updates);

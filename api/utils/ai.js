@@ -139,3 +139,74 @@ Respuesta:`;
         return name;
     }
 }
+
+/**
+ * Cleans and validates a municipality name using Gemini AI
+ * @param {string} municipio - The crude municipality name
+ * @returns {Promise<string>} - Cleaned official municipality name
+ */
+export async function cleanMunicipioWithAI(municipio) {
+    if (!municipio || municipio.length < 2) return municipio;
+
+    try {
+        const { getRedisClient } = await import('./storage.js');
+        const redis = getRedisClient();
+
+        let apiKey = process.env.GEMINI_API_KEY;
+
+        if (!apiKey && redis) {
+            const aiConfigJson = await redis.get('ai_config');
+            if (aiConfigJson) {
+                const aiConfig = JSON.parse(aiConfigJson);
+                apiKey = aiConfig.geminiApiKey;
+            }
+        }
+
+        if (!apiKey || apiKey === 'undefined' || apiKey === 'null') return municipio;
+
+        // Sanitize API Key
+        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
+        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (match) apiKey = match[0];
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
+
+        const prompt = `Corrige la ortografía y devuelve el nombre OFICIAL y COMPLETO del municipio: "${municipio}".
+REGLAS IMPORTANTES:
+1. Prioriza municipios del estado de Nuevo León, México.
+2. Si el usuario dice un nombre corto o informal, conviértelo al oficial.
+   - Ejemplo: "Escobedo" -> "General Mariano Escobedo"
+   - Ejemplo: "San Pedro" -> "San Pedro Garza García"
+   - Ejemplo: "San Nicolás" -> "San Nicolás de los Garza"
+   - Ejemplo: "Apodaca" -> "Ciudad Apodaca"
+   - Ejemplo: "Santa" -> "Santa Catarina"
+3. Si es de otro estado de México, también corrígelo a su nombre oficial.
+4. Si no es un municipio o es ambiguo, devuélvelo corregido ortográficamente en Title Case.
+Responde únicamente con el nombre oficial del municipio, sin estados, sin puntos ni explicaciones.
+Respuesta:`;
+
+        let cleaned = municipio;
+        for (const mName of modelsToTry) {
+            try {
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    generationConfig: { temperature: 0.1 }
+                });
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                cleaned = response.text().trim().replace(/[.]/g, '');
+                if (cleaned) break;
+            } catch (err) {
+                console.warn(`⚠️ [cleanMunicipioWithAI] Model ${mName} failed:`, err.message);
+                continue;
+            }
+        }
+
+        return cleaned || municipio;
+
+    } catch (error) {
+        console.error('❌ cleanMunicipioWithAI error:', error.message);
+        return municipio;
+    }
+}
