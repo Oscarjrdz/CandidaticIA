@@ -171,6 +171,7 @@ async function processEvent(payload) {
             // Guardar candidato automáticamente
             if (from) {
                 const { saveCandidate, saveMessage, setLastActiveUser, updateCandidate, getCandidateIdByPhone } = await import('./utils/storage.js');
+                const { detectGender } = await import('./utils/ai.js');
 
                 // 1. Check if candidate exists (Update vs Create)
                 const existingId = await getCandidateIdByPhone(from);
@@ -192,6 +193,16 @@ async function processEvent(payload) {
                 } else {
                     console.log(`🆕 Creando candidato NUEVO: ${name}`);
                     savedCandidate = await saveCandidate(candidateData);
+
+                    // --- AI GENDER DETECTION (Background) ---
+                    if (name && name !== 'Sin nombre') {
+                        detectGender(name).then(gender => {
+                            if (gender !== 'Desconocido') {
+                                console.log(`🤖 AI detectó género para ${name}: ${gender}`);
+                                updateCandidate(savedCandidate.id, { genero: gender }).catch(e => console.error('Error updating gender:', e));
+                            }
+                        }).catch(e => console.error('AI Gender error:', e));
+                    }
                 }
 
                 if (setLastActiveUser) {
@@ -238,6 +249,7 @@ async function processEvent(payload) {
             }
 
             const { saveMessage, getCandidateIdByPhone, getCandidateById, getLastActiveUser, updateCandidate, getMessages } = await import('./utils/storage.js');
+            const { detectGender } = await import('./utils/ai.js');
 
             // INTENTO 2 (Seguro): Verificar si 'data.from' es en realidad el usuario
             if (!recipientNumber && data.from) {
@@ -323,6 +335,16 @@ async function processEvent(payload) {
                     }
 
                     await updateCandidate(candidateId, updateData);
+
+                    // --- AI GENDER DETECTION (If name was extracted) ---
+                    if (updateData.nombreReal && (!candidate || !candidate.genero)) {
+                        detectGender(updateData.nombreReal).then(gender => {
+                            if (gender !== 'Desconocido') {
+                                console.log(`🤖 AI detectó género extraído para ${updateData.nombreReal}: ${gender}`);
+                                updateCandidate(candidateId, { genero: gender }).catch(e => console.error('Error updating extracted gender:', e));
+                            }
+                        }).catch(e => console.error('AI Gender error:', e));
+                    }
                 }
             } else {
                 console.warn('⚠️ message.outgoing recibido sin campo "to" ni "remoteJid". No se puede asignar al historial.', data);

@@ -65,6 +65,7 @@ export default async function handler(req, res) {
         // 2. Obtener campos disponibles para que la IA sepa qué buscar
         const DEFAULT_FIELDS = [
             { value: 'nombreReal', label: 'Nombre Real' },
+            { value: 'genero', label: 'Género' },
             { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
             { value: 'municipio', label: 'Municipio' },
             { value: 'categoria', label: 'Categoría' },
