@@ -162,69 +162,95 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                         {/* LOGIN DROPDOWN */}
                         {isLoginOpen && (
-                            <div className="absolute right-0 top-full mt-4 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
-                                <div className="absolute -top-2 right-8 w-4 h-4 bg-white transform rotate-45 border-t border-l border-gray-100"></div>
+                            <div className="absolute right-0 top-full mt-6 w-[22rem] bg-white/60 backdrop-blur-2xl rounded-3xl shadow-[0_20px_50px_rgb(8_112_184_/_0.3)] border border-white/50 p-8 z-50 animate-in fade-in slide-in-from-top-4 duration-300 origin-top-right ring-1 ring-white/60">
+                                {/* Decorator Arrow */}
+                                <div className="absolute -top-3 right-8 w-6 h-6 bg-white/60 backdrop-blur-xl transform rotate-45 border-t border-l border-white/50"></div>
 
-                                <div className="mb-4 text-center">
-                                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-2">
-                                        <MessageSquare className="w-6 h-6 text-blue-600" />
-                                    </div>
-                                    <h3 className="font-bold text-gray-900">Iniciar Sesión</h3>
-                                </div>
+                                {/* Floating Gloss Effect */}
+                                <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-white/40 to-transparent pointer-events-none"></div>
 
-                                {loginError && (
-                                    <div className="mb-4 p-2 bg-red-50 text-red-600 text-xs rounded-lg text-center font-medium">
-                                        {loginError}
-                                    </div>
-                                )}
-
-                                {loginStep === 'phone' ? (
-                                    <form onSubmit={handlePhoneSubmit}>
-                                        <div className="space-y-3">
-                                            <Input
-                                                autoFocus
-                                                type="tel"
-                                                placeholder="WhatsApp (10 dígitos)"
-                                                value={phone}
-                                                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                                                className="text-center text-lg tracking-wider"
-                                                maxLength={10}
-                                            />
-                                            <Button type="submit" size="sm" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loginLoading}>
-                                                {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Continuar'}
-                                            </Button>
+                                <div className="relative z-10">
+                                    <div className="mb-6 text-center">
+                                        <div className="relative inline-block mb-3">
+                                            <div className="absolute inset-0 bg-blue-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
+                                            <div className="relative w-14 h-14 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform">
+                                                <MessageSquare className="w-7 h-7 text-white" />
+                                            </div>
                                         </div>
-                                        <p className="text-xs text-gray-400 text-center mt-3">Te enviaremos un código.</p>
-                                    </form>
-                                ) : (
-                                    <div className="space-y-4">
-                                        <p className="text-sm text-center text-gray-500">
-                                            Código enviado a <b>{phone}</b>
-                                        </p>
-                                        <div className="flex justify-center gap-2">
-                                            {pinDigits.map((d, i) => (
-                                                <input
-                                                    key={i}
-                                                    ref={el => pinRefs.current[i] = el}
-                                                    type="text"
-                                                    value={d}
-                                                    maxLength={1}
-                                                    onChange={(e) => handlePinChange(i, e.target.value)}
-                                                    onKeyDown={(e) => handleKeyDown(i, e)}
-                                                    className="w-10 h-12 text-center text-xl font-bold border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
-                                                    autoFocus={i === 0}
+                                        <h3 className="text-xl font-bold text-gray-900 tracking-tight">Bienvenido</h3>
+                                        <p className="text-sm text-gray-500 font-medium">Accede a tu cuenta</p>
+                                    </div>
+
+                                    {loginError && (
+                                        <div className="mb-4 p-3 bg-red-50/50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-semibold shadow-sm backdrop-blur-sm animate-in shake">
+                                            {loginError}
+                                        </div>
+                                    )}
+
+                                    {loginStep === 'phone' ? (
+                                        <form onSubmit={handlePhoneSubmit} className="space-y-4">
+                                            <div className="group relative">
+                                                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-300 to-purple-300 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-200"></div>
+                                                <Input
+                                                    autoFocus
+                                                    type="tel"
+                                                    placeholder="WhatsApp (10 dígitos)"
+                                                    value={phone}
+                                                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                                    className="relative text-center text-lg tracking-widest font-bold bg-white/50 border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition-all rounded-xl h-12 shadow-inner"
+                                                    maxLength={10}
                                                 />
-                                            ))}
+                                            </div>
+                                            <Button
+                                                type="submit"
+                                                className="w-full h-12 text-base font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                                                disabled={loginLoading}
+                                            >
+                                                {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Continuar'}
+                                            </Button>
+                                            <p className="text-[10px] text-gray-400 text-center font-medium">
+                                                Te enviaremos un código de seguridad
+                                            </p>
+                                        </form>
+                                    ) : (
+                                        <div className="space-y-6">
+                                            <div className="text-center">
+                                                <p className="text-sm text-gray-500 font-medium bg-gray-50 inline-block px-3 py-1 rounded-full border border-gray-100">
+                                                    Código enviado a <b className="text-gray-800">{phone}</b>
+                                                </p>
+                                            </div>
+
+                                            <div className="flex justify-center gap-2">
+                                                {pinDigits.map((d, i) => (
+                                                    <input
+                                                        key={i}
+                                                        ref={el => pinRefs.current[i] = el}
+                                                        type="text"
+                                                        value={d}
+                                                        maxLength={1}
+                                                        onChange={(e) => handlePinChange(i, e.target.value)}
+                                                        onKeyDown={(e) => handleKeyDown(i, e)}
+                                                        className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none bg-white/50 shadow-sm transition-all text-gray-800 caret-blue-500"
+                                                        autoFocus={i === 0}
+                                                    />
+                                                ))}
+                                            </div>
+
+                                            {loginLoading && (
+                                                <div className="flex justify-center">
+                                                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                                                </div>
+                                            )}
+
+                                            <button
+                                                onClick={() => setLoginStep('phone')}
+                                                className="block w-full text-xs text-blue-600 hover:text-blue-700 font-semibold hover:underline text-center transition-colors"
+                                            >
+                                                ¿Número incorrecto? Volver
+                                            </button>
                                         </div>
-                                        {loginLoading && <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" />}
-                                        <button
-                                            onClick={() => setLoginStep('phone')}
-                                            className="block w-full text-xs text-blue-600 hover:underline text-center"
-                                        >
-                                            ¿Cambiar número?
-                                        </button>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>
