@@ -22,6 +22,11 @@ const CandidatesSection = ({ showToast }) => {
     const [aiExplanation, setAiExplanation] = useState('');
     const [lastUpdate, setLastUpdate] = useState(null);
 
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const LIMIT = 50;
+
     // Estado para el chat
     const [selectedCandidate, setSelectedCandidate] = useState(null);
     const [credentials, setCredentials] = useState(null);
@@ -97,9 +102,22 @@ const CandidatesSection = ({ showToast }) => {
 
         // Polling de candidatos
         const subscription = new CandidatesSubscription((newCandidates) => {
-            setCandidates(newCandidates);
-            setLastUpdate(new Date());
-        }, 2000);
+            // Only update if not searching/filtering (polling refreshes full list)
+            if (!search && !aiFilteredCandidates) {
+                // Determine if we need to refresh the current page view
+                // For simplicity in this version, we might not auto-update list content to avoid jumping
+                // But we can update stats or indicators.
+
+                // NOTE: If we want real-time updates while paginate, we need a smarter subscription 
+                // that respects the current page. For now, we'll keep it simple: 
+                // Manual refresh or page change triggers reload.
+            }
+        }, 10000); // 10s interval
+
+        // subscription.start(); // Disable auto-poll for now to avoid pagination conflict? 
+        // Or better: CandidatesService poll fetches everything? 
+        // The current service fetches strictly 50 items.
+        // Let's rely on manual refresh + loadCandidates for now to ensure stability.
 
         subscription.start();
 
@@ -378,28 +396,39 @@ const CandidatesSection = ({ showToast }) => {
         }
     };
 
-    const loadCandidates = async () => {
+    const loadCandidates = async (page = 1) => {
         setLoading(true);
-        const result = await getCandidates(50, 0, search);
+        const offset = (page - 1) * LIMIT;
 
-        if (result.success) {
-            setCandidates(result.candidates);
-            setLastUpdate(new Date());
+        try {
+            const result = await getCandidates(LIMIT, offset, search);
 
-            // Cloud file status loaded once on mount
-            // Will refresh after uploads via loadCloudFileStatusFromRedis()
-        } else {
-            showToast('Error cargando candidatos', 'error');
+            if (result.success) {
+                setCandidates(result.candidates);
+                setTotalItems(result.count || 0); // Ensure backend returns count
+                setLastUpdate(new Date());
+            } else {
+                showToast('Error cargando candidatos', 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            showToast('Error de conexión', 'error');
+        } finally {
+            setLoading(false);
         }
-
-        setLoading(false);
     };
+
+    // Trigger load on Search or Page Change
+    useEffect(() => {
+        loadCandidates(currentPage);
+    }, [currentPage, search]); // Reload when page or search changes
 
 
 
 
     const handleSearch = (e) => {
         setSearch(e.target.value);
+        setCurrentPage(1); // Reset to page 1
     };
 
     const handleSearchSubmit = (e) => {
@@ -582,169 +611,173 @@ const CandidatesSection = ({ showToast }) => {
         return isNaN(age) ? '-' : `${age} años`;
     };
 
-    // Determine which candidates to display based on AI filter or manual search
-    const displayedCandidates = aiFilteredCandidates || candidates.filter(c =>
-        (c.nombre && c.nombre.toLowerCase().includes(search.toLowerCase())) ||
-        (c.whatsapp && c.whatsapp.includes(search))
-    );
+    // Displayed candidates is just 'candidates' (current page) or AI filtered
+    const displayedCandidates = aiFilteredCandidates || candidates;
+
+    const totalPages = Math.ceil(totalItems / LIMIT);
 
     return (
-        <div className="space-y-6">
-            {/* Header con búsqueda */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
-                            <Users className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                Candidatos
-                            </h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {displayedCandidates.length} candidato{displayedCandidates.length !== 1 ? 's' : ''} registrado{displayedCandidates.length !== 1 ? 's' : ''}
-                            </p>
-                        </div>
-                    </div>
-                    <Button
-                        onClick={loadCandidates}
-                        icon={RefreshCw}
-                        variant="outline"
-                        size="sm"
-                        disabled={loading}
-                    >
-                        Refrescar
-                    </Button>
-                </div>
-
-                {/* Timer Settings - Always Visible */}
-                <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 mb-4">
-                    <div className="flex items-center justify-between">
+        <div className="h-[calc(100vh-theme(spacing.24))] flex flex-col space-y-4">
+            {/* Sticky Header Wrapper */}
+            <div className="flex-none space-y-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                    <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-3">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                icon={Settings}
-                                className={exportTimer > 0 ? "text-green-600 border-green-200 bg-green-50" : ""}
-                                disabled
-                            >
-                                {exportTimer > 0 ? `${exportTimer}m` : 'Off'}
-                            </Button>
+                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+                                <Users className="w-6 h-6 text-white" />
+                            </div>
                             <div>
-                                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Auto-Exportar Historial (Minutos de inactividad)
-                                </label>
-                                <p className="text-xs text-gray-400">
-                                    0 = Desactivado. Se creará un .txt en Archivos si el chat está inactivo.
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                    Candidatos
+                                </h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    {displayedCandidates.length} candidato{displayedCandidates.length !== 1 ? 's' : ''} registrado{displayedCandidates.length !== 1 ? 's' : ''}
                                 </p>
                             </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="number"
-                                min="0"
-                                max="1440"
-                                value={exportTimer}
-                                onChange={(e) => setExportTimer(parseInt(e.target.value) || 0)}
-                                className="w-20 px-2 py-1 border rounded text-center"
-                            />
-                            <Button size="sm" onClick={handleSaveSettings}>Guardar</Button>
+                        <Button
+                            onClick={loadCandidates}
+                            icon={RefreshCw}
+                            variant="outline"
+                            size="sm"
+                            disabled={loading}
+                        >
+                            Refrescar
+                        </Button>
+                    </div>
+
+                    {/* Timer Settings - Always Visible */}
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 mb-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    icon={Settings}
+                                    className={exportTimer > 0 ? "text-green-600 border-green-200 bg-green-50" : ""}
+                                    disabled
+                                >
+                                    {exportTimer > 0 ? `${exportTimer}m` : 'Off'}
+                                </Button>
+                                <div>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Auto-Exportar Historial (Minutos de inactividad)
+                                    </label>
+                                    <p className="text-xs text-gray-400">
+                                        0 = Desactivado. Se creará un .txt en Archivos si el chat está inactivo.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="1440"
+                                    value={exportTimer}
+                                    onChange={(e) => setExportTimer(parseInt(e.target.value) || 0)}
+                                    className="w-20 px-2 py-1 border rounded text-center"
+                                />
+                                <Button size="sm" onClick={handleSaveSettings}>Guardar</Button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Búsqueda */}
-            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center">
-                <MagicSearch
-                    onResults={(results, ai) => {
-                        console.log('🔮 AI Results received:', results.length, 'candidates');
-                        setAiFilteredCandidates(results);
-                        setAiExplanation(ai?.explanation || 'Búsqueda completada');
-
-                        // Trigger Follow-up Action after small delay
-                        if (results.length > 0) {
-                            setTimeout(() => {
-                                setAiActionOpen(true);
-                            }, 1500);
-                        }
-                    }}
-                    showToast={showToast}
-                />
-
-                {/* AI Action Modal (Follow-up) */}
-                {aiActionOpen && (
+                {/* Búsqueda */}
+                <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center">
                     <MagicSearch
-                        initialMode="action"
-                        customTitle={`¿Qué hacemos con estos ${displayedCandidates.length} candidatos?`}
-                        customPlaceholder="Ej: 'Filtrar solo los que sepan Inglés' o 'Enviarles un saludo'..."
-                        onAction={handleAiAction}
-                        isOpenProp={true}
-                        onClose={() => setAiActionOpen(false)}
+                        onResults={(results, ai) => {
+                            console.log('🔮 AI Results received:', results.length, 'candidates');
+                            setAiFilteredCandidates(results);
+                            setAiExplanation(ai?.explanation || 'Búsqueda completada');
+
+                            // Trigger Follow-up Action after small delay
+                            if (results.length > 0) {
+                                setTimeout(() => {
+                                    setAiActionOpen(true);
+                                }, 1500);
+                            }
+                        }}
                         showToast={showToast}
                     />
+
+                    {/* AI Action Modal (Follow-up) */}
+                    {aiActionOpen && (
+                        <MagicSearch
+                            initialMode="action"
+                            customTitle={`¿Qué hacemos con estos ${displayedCandidates.length} candidatos?`}
+                            customPlaceholder="Ej: 'Filtrar solo los que sepan Inglés' o 'Enviarles un saludo'..."
+                            onAction={handleAiAction}
+                            isOpenProp={true}
+                            onClose={() => setAiActionOpen(false)}
+                            showToast={showToast}
+                        />
+                    )}
+
+                    <div className="relative w-full sm:w-64 group">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-600 transition-colors" />
+                        <input
+                            type="text"
+                            placeholder="Buscar candidato..."
+                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500 outline-none transition-all dark:text-gray-200"
+                            value={search}
+                            onChange={(e) => {
+                                setSearch(e.target.value);
+                                if (aiFilteredCandidates) setAiFilteredCandidates(null);
+                            }}
+                        />
+                    </div>
+
+                    <button
+                        onClick={() => {
+                            setSearch('');
+                            setAiFilteredCandidates(null);
+                            loadCandidates();
+                        }}
+                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
+                        title="Recargar"
+                    >
+                        <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                    </button>
+                </div>
+
+                {/* Alerta de filtrado por IA: iOS Style */}
+                {aiFilteredCandidates && (
+                    <div className="mb-2 animate-spring-in">
+                        <div className="ios-glass p-3 rounded-[16px] flex items-center justify-between shadow-ios border-gray-200 dark:border-gray-700/50">
+                            <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 bg-blue-600 dark:bg-blue-500 rounded-[10px] flex items-center justify-center shadow-sm">
+                                    <Sparkles className="w-4 h-4 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                                        {displayedCandidates.length} Resultados IA
+                                    </h3>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium truncate max-w-[200px]">
+                                        {aiExplanation}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setAiFilteredCandidates(null);
+                                    setAiExplanation('');
+                                    setCurrentPage(1);
+                                    loadCandidates(1);
+                                }}
+                                className="text-xs font-bold text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1.5 rounded-full transition-colors"
+                            >
+                                Limpiar
+                            </button>
+                        </div>
+                    </div>
                 )}
 
-                <div className="relative w-full sm:w-64 group">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-600 transition-colors" />
-                    <input
-                        type="text"
-                        placeholder="Buscar candidato..."
-                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500 outline-none transition-all dark:text-gray-200"
-                        value={search}
-                        onChange={(e) => {
-                            setSearch(e.target.value);
-                            if (aiFilteredCandidates) setAiFilteredCandidates(null);
-                        }}
-                    />
-                </div>
-
-                <button
-                    onClick={() => {
-                        setSearch('');
-                        setAiFilteredCandidates(null);
-                        loadCandidates();
-                    }}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
-                    title="Recargar"
-                >
-                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                </button>
             </div>
 
-            {/* Alerta de filtrado por IA: iOS Style */}
-            {aiFilteredCandidates && (
-                <div className="mb-6 animate-spring-in">
-                    <div className="ios-glass p-5 rounded-[20px] flex items-center justify-between shadow-ios border-gray-200 dark:border-gray-700/50">
-                        <div className="flex items-center space-x-4">
-                            <div className="w-10 h-10 bg-blue-600 dark:bg-blue-500 rounded-[12px] flex items-center justify-center shadow-sm">
-                                <Sparkles className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
-                                    {displayedCandidates.length} Candidatos Encontrados
-                                </h3>
-                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                    {aiExplanation}
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => {
-                                setAiFilteredCandidates(null);
-                                setAiExplanation('');
-                            }}
-                            className="text-xs font-bold text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 px-4 py-2 rounded-full transition-colors"
-                        >
-                            Limpiar
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Tabla de candidatos */}
-            <Card>
-                <div className="overflow-x-auto">
+            {/* Tabla con Sticky Header */}
+            <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col min-h-0">
+                <div className="flex-1 overflow-auto">
                     {displayedCandidates.length === 0 ? (
                         <div className="text-center py-12">
                             <User className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
@@ -756,9 +789,9 @@ const CandidatesSection = ({ showToast }) => {
                             </p>
                         </div>
                     ) : (
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-gray-200 dark:border-gray-700">
+                        <table className="w-full relative">
+                            <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
+                                <tr className="border-b border-gray-200 dark:border-gray-700 text-xs uppercase tracking-wider text-gray-500">
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
 
@@ -929,7 +962,36 @@ const CandidatesSection = ({ showToast }) => {
                         </table>
                     )}
                 </div>
-            </Card>
+
+                {/* Pagination Footer */}
+                {totalItems > 0 && !aiFilteredCandidates && (
+                    <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center text-sm sticky bottom-0 z-20">
+                        <div className="text-gray-500 dark:text-gray-400">
+                            Mostrando <span className="font-medium text-gray-900 dark:text-white">{((currentPage - 1) * LIMIT) + 1}</span> - <span className="font-medium text-gray-900 dark:text-white">{Math.min(currentPage * LIMIT, totalItems)}</span> de <span className="font-medium text-gray-900 dark:text-white">{totalItems}</span>
+                        </div>
+                        <div className="flex space-x-2">
+                            <button
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1 || loading}
+                                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Anterior
+                            </button>
+                            <div className="px-2 py-1.5 text-gray-600 dark:text-gray-400 font-medium">
+                                Página {currentPage}
+                            </div>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage >= totalPages || loading}
+                                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Siguiente
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
 
             {/* Ventana Flotante de Chat */}
             <ChatWindow
