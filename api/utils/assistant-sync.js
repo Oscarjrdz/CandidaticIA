@@ -35,17 +35,32 @@ export async function syncCategoriesToBuilderBot() {
 
         // 4. Find and Delete existing file
         try {
-            const listRes = await axios.get(baseUrl, {
+            // Add ?type=files to match vacancies.js and ensure correct list
+            const listRes = await axios.get(`${baseUrl}?type=files`, {
                 headers: { 'x-api-builderbot': apiKey }
             });
-            const files = listRes.data || [];
+
+            const rawData = listRes.data;
+            let files = [];
+            if (Array.isArray(rawData)) files = rawData;
+            else if (rawData && Array.isArray(rawData.files)) files = rawData.files;
+            else if (rawData && Array.isArray(rawData.data)) files = rawData.data;
+
             if (Array.isArray(files)) {
-                const existing = files.find(f => f.filename === fileName);
-                if (existing) {
-                    console.log(`🗑️ Deleting existing ${fileName} (ID: ${existing.id || existing.file_id})`);
-                    await axios.delete(`${baseUrl}?fileId=${existing.id || existing.file_id}`, {
-                        headers: { 'x-api-builderbot': apiKey }
-                    });
+                // Check filename OR name, and use startsWith to handle possible ID suffixes
+                const duplicates = files.filter(f => {
+                    const name = f.filename || f.name || '';
+                    return name === fileName || name.startsWith('categorias');
+                });
+
+                for (const file of duplicates) {
+                    const fileId = file.id || file.file_id;
+                    if (fileId) {
+                        console.log(`🗑️ Deleting old categories file: ${file.filename || file.name} (ID: ${fileId})`);
+                        await axios.delete(`${baseUrl}?fileId=${fileId}`, {
+                            headers: { 'x-api-builderbot': apiKey }
+                        });
+                    }
                 }
             }
         } catch (err) {
