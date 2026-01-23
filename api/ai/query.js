@@ -123,13 +123,13 @@ Estructura del JSON:
 Consulta del usuario: "${query}"
 `;
 
-        // Intentar varios modelos hasta que uno funcione
+        // Intentar varios modelos hasta que uno funcione (Prioridad Flash 2.0 por velocidad)
         const modelsToTry = [
-            "gemini-flash-latest",
             "gemini-2.0-flash",
+            "gemini-2.0-flash-exp",
             "gemini-1.5-flash",
+            "gemini-flash-latest",
             "gemini-1.5-pro",
-            "gemini-pro-latest",
             "gemini-pro"
         ];
         let result;
@@ -139,7 +139,13 @@ Consulta del usuario: "${query}"
         for (const mName of modelsToTry) {
             try {
                 console.log(`🔍 [AI Query] Sending to Gemini (${mName})...`);
-                const model = genAI.getGenerativeModel({ model: mName });
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    generationConfig: {
+                        temperature: 0.1, // Baja temperatura para más consistencia en JSON
+                        response_mime_type: "application/json"
+                    }
+                });
                 result = await model.generateContent(systemPrompt);
                 successModel = mName;
                 break;
@@ -168,7 +174,7 @@ Consulta del usuario: "${query}"
 
         // 3. Ejecutar la búsqueda en los datos reales
         console.log(`🔍 [AI Query] Searching records...`);
-        const candidates = await getCandidates(1000, 0);
+        const { candidates } = await getCandidates(2000, 0); // Traer hasta 2000 para búsqueda profunda
 
         // Función para calcular edad
         // Función para calcular edad (Robusta)
