@@ -88,9 +88,7 @@ const LandingPage = ({ onLoginClick }) => {
                                 </span>
                             </h1>
 
-                            <p className="text-xl md:text-2xl text-gray-600 mb-12 max-w-2xl mx-auto leading-relaxed">
-                                Automatiza entrevistas, filtra candidatos y encuentra el talento perfecto 10x más rápido con nuestra tecnología de Inteligencia Artificial.
-                            </p>
+
 
                             {/* AI SEARCH BAR */}
                             <div className="max-w-2xl mx-auto mb-12 relative z-20">
