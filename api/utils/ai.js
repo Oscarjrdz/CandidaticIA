@@ -53,7 +53,7 @@ Respuesta:`;
         return 'Desconocido';
 
     } catch (error) {
-        console.error('❌ detectGender error:', error.message);
-        return 'Desconocido';
+        console.error('❌ detectGender error:', error.message, error.stack);
+        return `Error: ${error.message}`;
     }
 }

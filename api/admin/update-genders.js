@@ -37,12 +37,13 @@ export default async function handler(req, res) {
 
             const gender = await detectGender(nameToUse);
 
-            if (gender !== 'Desconocido') {
+            if (gender === 'Hombre' || gender === 'Mujer') {
                 await updateCandidate(candidate.id, { genero: gender });
                 results.updated++;
                 results.logs.push(`${nameToUse} -> ${gender}`);
             } else {
                 results.skipped++;
+                results.logs.push(`${nameToUse} -> ${gender}`); // Will log "Desconocido" or "Error: ..."
             }
 
             // Limit to 50 updates per request to avoid Vercel timeouts (10s/60s)
