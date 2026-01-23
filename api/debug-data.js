@@ -30,8 +30,20 @@ export default async function handler(req, res) {
             }
         }
 
+        // 5. LEGACY DATA CHECK
+        const legacyBlob = await client.get('candidatic_candidates');
+        const legacySimple = await client.get('candidates');
+        let legacyCount = 0;
+        if (legacyBlob) {
+            try { legacyCount = JSON.parse(legacyBlob).length; } catch (e) { }
+        } else if (legacySimple) {
+            try { legacyCount = JSON.parse(legacySimple).length; } catch (e) { }
+        }
+
         return res.json({
-            candidates_zcard: candidatesCount, // The REAL number of IDs
+            candidates_distributed_count: candidatesCount, // Current System
+            legacy_blob_found: !!legacyBlob || !!legacySimple,
+            legacy_blob_count: legacyCount,
             candidates_sample_ids: first5,
             candidates_zrange_check: first100.length,
             pipeline_status: pipelineSuccess,
