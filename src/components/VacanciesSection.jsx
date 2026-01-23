@@ -15,6 +15,11 @@ const VacanciesSection = ({ showToast }) => {
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
 
+    // Categories State
+    const [categories, setCategories] = useState([]);
+    const [newCategoryName, setNewCategoryName] = useState('');
+    const [addingCategory, setAddingCategory] = useState(false);
+
     // Form State
     const [formData, setFormData] = useState({
         name: '',
@@ -50,7 +55,20 @@ const VacanciesSection = ({ showToast }) => {
     useEffect(() => {
         loadVacancies();
         loadFields();
+        loadCategories();
     }, []);
+
+    const loadCategories = async () => {
+        try {
+            const res = await fetch('/api/categories');
+            const data = await res.json();
+            if (data.success) {
+                setCategories(data.data || []);
+            }
+        } catch (e) {
+            console.error('Error loading categories:', e);
+        }
+    };
 
     const loadFields = async () => {
         try {
@@ -192,6 +210,43 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
+    const handleAddCategory = async () => {
+        if (!newCategoryName.trim()) return;
+        setAddingCategory(true);
+        try {
+            const res = await fetch('/api/categories', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newCategoryName })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('Categoría agregada', 'success');
+                setNewCategoryName('');
+                loadCategories();
+            } else {
+                showToast(data.error || 'Error al agregar categoría', 'error');
+            }
+        } catch (e) {
+            showToast('Error de conexión', 'error');
+        } finally {
+            setAddingCategory(false);
+        }
+    };
+
+    const handleDeleteCategory = async (id) => {
+        if (!confirm('¿Seguro que deseas eliminar esta categoría?')) return;
+        try {
+            const res = await fetch(`/api/categories?id=${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                showToast('Categoría eliminada', 'success');
+                loadCategories();
+            }
+        } catch (e) {
+            showToast('Error al eliminar', 'error');
+        }
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -217,6 +272,63 @@ const VacanciesSection = ({ showToast }) => {
                     </Button>
                 </div>
             </div>
+
+            {/* Categorías Section */}
+            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border-blue-100 dark:border-blue-800/50">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                            <Tag className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-gray-800 dark:text-white uppercase tracking-wider">
+                                Gestión de Categorías
+                            </h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                Clasifica tus vacantes para una mejor organización.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="Nueva categoría..."
+                            className="px-3 py-2 text-xs border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500/20 outline-none w-full md:w-48"
+                            value={newCategoryName}
+                            onChange={(e) => setNewCategoryName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                        />
+                        <button
+                            onClick={handleAddCategory}
+                            disabled={addingCategory || !newCategoryName.trim()}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+                        >
+                            {addingCategory ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                            Agregar
+                        </button>
+                    </div>
+                </div>
+
+                {categories.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-blue-100/50 dark:border-blue-800/30">
+                        {categories.map(cat => (
+                            <div
+                                key={cat.id}
+                                className="group flex items-center gap-2 px-3 py-1 bg-white dark:bg-gray-800 border border-blue-100 dark:border-blue-800/50 rounded-full text-xs font-medium text-blue-700 dark:text-blue-300 shadow-sm"
+                            >
+                                <span>{cat.name}</span>
+                                <button
+                                    onClick={() => handleDeleteCategory(cat.id)}
+                                    className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 rounded-full transition-all"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </Card>
 
             {loading ? (
                 <div className="flex justify-center py-12">
@@ -327,13 +439,29 @@ const VacanciesSection = ({ showToast }) => {
                         onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                     />
 
-                    <Input
-                        label="Categoría"
-                        placeholder="Ej. Tecnología, Ventas, RRHH"
-                        icon={Tag}
-                        value={formData.category}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    />
+                    <div className="space-y-1">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Categoría
+                        </label>
+                        <div className="relative">
+                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <select
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm appearance-none"
+                                value={formData.category}
+                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                            >
+                                <option value="">Selecciona una categoría...</option>
+                                {categories.map(cat => (
+                                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                ))}
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
 
                     <div className="space-y-1">
                         <div className="flex items-center justify-between">
