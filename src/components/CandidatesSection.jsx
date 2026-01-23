@@ -796,6 +796,12 @@ const CandidatesSection = ({ showToast }) => {
                                 <tr className="border-b border-gray-200 dark:border-gray-700 text-xs uppercase tracking-wider text-gray-500">
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
+                                    <th className="text-left py-1 px-4 font-semibold text-gray-700 dark:text-gray-300">
+                                        <div className="flex items-center space-x-1">
+                                            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                                            <span>Género</span>
+                                        </div>
+                                    </th>
 
                                     {/* Dynamic Headers */}
                                     {fields.map(field => (
@@ -839,6 +845,11 @@ const CandidatesSection = ({ showToast }) => {
                                         <td className="py-1 px-4">
                                             <div className="text-sm text-gray-900 dark:text-white font-medium">
                                                 {candidate.nombre}
+                                            </div>
+                                        </td>
+                                        <td className="py-1 px-4">
+                                            <div className="text-sm text-gray-900 dark:text-white font-medium">
+                                                {candidate.genero || <span className="text-gray-400 italic font-normal">-</span>}
                                             </div>
                                         </td>
 
