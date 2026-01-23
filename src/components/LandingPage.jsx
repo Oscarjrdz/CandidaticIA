@@ -159,18 +159,7 @@ const LandingPage = ({ onLoginClick }) => {
                                 )}
                             </div>
 
-                            <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-4">
-                                <Button
-                                    onClick={onLoginClick}
-                                    className="h-14 px-8 text-lg rounded-full bg-blue-600 hover:bg-blue-700 text-white shadow-xl shadow-blue-200 hover:shadow-blue-300 transition-all"
-                                >
-                                    Comenzar prueba gratis
-                                    <ArrowRight className="ml-2 w-5 h-5" />
-                                </Button>
-                                <button className="h-14 px-8 text-lg rounded-full bg-white hover:bg-gray-50 text-gray-700 font-medium border border-gray-200 shadow-sm transition-all">
-                                    Ver demostración
-                                </button>
-                            </div>
+
                         </div>
                     </div>
 
