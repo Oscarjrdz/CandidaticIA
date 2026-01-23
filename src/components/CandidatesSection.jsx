@@ -405,7 +405,8 @@ const CandidatesSection = ({ showToast }) => {
 
             if (result.success) {
                 setCandidates(result.candidates);
-                setTotalItems(result.count || 0); // Ensure backend returns count
+                // Fix: use 'total' (filtered/global count) instead of 'count' (page size)
+                setTotalItems(result.total || result.count || 0);
                 setLastUpdate(new Date());
             } else {
                 showToast('Error cargando candidatos', 'error');

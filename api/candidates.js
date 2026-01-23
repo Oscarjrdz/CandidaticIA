@@ -46,7 +46,7 @@ export default async function handler(req, res) {
             }
 
             // Lista de candidatos
-            const candidates = await getCandidates(
+            const { candidates, total } = await getCandidates(
                 parseInt(limit),
                 parseInt(offset),
                 search
@@ -55,6 +55,7 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 success: true,
                 count: candidates.length,
+                total: total,
                 candidates: candidates,
                 pagination: {
                     limit: parseInt(limit),

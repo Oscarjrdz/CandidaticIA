@@ -158,7 +158,10 @@ export const getCandidates = async (limit = 50, offset = 0, search = '') => {
         );
     }
 
-    return candidates.slice(offset, offset + limit);
+    return {
+        candidates: candidates.slice(offset, offset + limit),
+        total: candidates.length
+    };
 };
 
 export const saveCandidate = async (candidate) => {
@@ -183,7 +186,7 @@ export const getCandidateById = async (id) => {
 export const getCandidateIdByPhone = async (phone) => {
     // 1. Get all candidates (expensive but necessary for distributed pattern without secondary index)
     // Optimization: In real prod, use a Hash or Secondary Set: phone->id
-    const candidates = await getCandidates(1000); // Limit 1000 active candidates for now
+    const { candidates } = await getCandidates(1000); // Limit 1000 active candidates for now
 
     // Normalize input
     const target = phone.replace(/\D/g, '');
