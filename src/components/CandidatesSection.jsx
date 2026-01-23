@@ -632,7 +632,7 @@ const CandidatesSection = ({ showToast }) => {
                                     Candidatos
                                 </h2>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    {displayedCandidates.length} candidato{displayedCandidates.length !== 1 ? 's' : ''} registrado{displayedCandidates.length !== 1 ? 's' : ''}
+                                    {totalItems} candidato{totalItems !== 1 ? 's' : ''} registrado{totalItems !== 1 ? 's' : ''}
                                 </p>
                             </div>
                         </div>
