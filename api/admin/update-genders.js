@@ -50,9 +50,9 @@ export default async function handler(req, res) {
                 results.logs.push({ name: nameToUse, reason: `AI returned ${gender}` });
             }
 
-            // Safety limit per batch
-            if (results.updated >= 40) {
-                results.message = "Batch limit reached (40). Run again.";
+            // Safety limit per batch: 5 candidates (AI takes ~2s each, Vercel timeout is 10s)
+            if (results.updated >= 5) {
+                results.message = "Lote de 5 completado para evitar timeout. Refresca para seguir.";
                 break;
             }
         }
