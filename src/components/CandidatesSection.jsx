@@ -807,7 +807,12 @@ const CandidatesSection = ({ showToast }) => {
                                     {fields.map(field => (
                                         <React.Fragment key={field.value}>
                                             <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
-                                                {field.label}
+                                                <div className="flex items-center space-x-1">
+                                                    {['nombreReal', 'municipio'].includes(field.value) && (
+                                                        <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                                                    )}
+                                                    <span>{field.label}</span>
+                                                </div>
                                             </th>
                                             {/* Special Case: Age column after Birth Date */}
                                             {field.value === 'fechaNacimiento' && (
