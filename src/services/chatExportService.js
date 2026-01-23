@@ -4,6 +4,17 @@
  */
 
 /**
+ * Helper to convert text to Title Case
+ * @param {string} str - Text to convert
+ * @returns {string} Formatted text
+ */
+const toTitleCase = (str) => {
+    if (!str) return '-';
+    // Split by spaces, capitalize first letter of each word, lowercase the rest
+    return str.toLowerCase().replace(/(?:^|\s)\S/g, function (a) { return a.toUpperCase(); });
+};
+
+/**
  * Generate formatted chat history text
  * @param {Object} candidate - Candidate object with messages
  * @returns {string} Formatted chat history
@@ -17,15 +28,19 @@ export const generateChatHistoryText = (candidate) => {
     const formattedDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const formattedTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
+    // Calculate age with debugging
+    const calculatedAge = calculateAge(candidate.fechaNacimiento);
+    console.log(`[ChatExport] Calculating age for ${candidate.whatsapp}. DOB: ${candidate.fechaNacimiento}, Result: ${calculatedAge}`);
+
     let header = `HISTORIAL DE CONVERSACIÓN\n`;
     header += `----------------------------------------\n`;
     header += `WhatsApp: ${candidate.whatsapp}\n`;
-    header += `Nombre Real: ${candidate.nombreReal || '-'}\n`;
-    header += `Nombre (WhatsApp): ${candidate.nombre || '-'}\n`;
+    header += `Nombre Real: ${toTitleCase(candidate.nombreReal)}\n`;
+    header += `Nombre (WhatsApp): ${toTitleCase(candidate.nombre)}\n`;
     header += `Fecha Nacimiento: ${candidate.fechaNacimiento || '-'}\n`;
-    header += `Edad: ${calculateAge(candidate.fechaNacimiento)}\n`;
-    header += `Municipio: ${candidate.municipio || '-'}\n`;
-    header += `Categoría: ${candidate.categoria || '-'}\n`;
+    header += `Edad: ${calculatedAge}\n`;
+    header += `Municipio: ${toTitleCase(candidate.municipio)}\n`;
+    header += `Categoría: ${toTitleCase(candidate.categoria)}\n`;
     header += `Fecha de exportación: ${formattedDate} a las ${formattedTime}\n`;
     header += `----------------------------------------\n\n`;
 

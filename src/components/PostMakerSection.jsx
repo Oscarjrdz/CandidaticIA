@@ -3,7 +3,7 @@ import {
     Layout, Image as ImageIcon, Smile, MapPin,
     MoreHorizontal, Globe, ThumbsUp, MessageCircle, Share2,
     Monitor, Smartphone, Copy, ExternalLink, Hash, X, Loader2,
-    Edit2, Save, Trash2, Check
+    Edit2, Save, Trash2, Check, MousePointerClick
 } from 'lucide-react';
 import Button from './ui/Button';
 import Card from './ui/Card';
@@ -53,7 +53,7 @@ const PostMakerSection = () => {
     const fetchGallery = async (userId) => {
         setIsLoadingPosts(true);
         try {
-            const res = await fetch(`/api/posts?userId=${userId}`);
+            const res = await fetch(`/ api / posts ? userId = ${userId} `);
             const data = await res.json();
             if (data.posts) setPosts(data.posts);
         } catch (e) {
@@ -171,11 +171,11 @@ const PostMakerSection = () => {
                 body: JSON.stringify({ image: compressedBase64, type: 'image/jpeg' })
             });
 
-            if (!res.ok) throw new Error(`Server error: ${res.status}`);
+            if (!res.ok) throw new Error(`Server error: ${res.status} `);
 
             const data = await res.json();
-            if (data.success) {
-                const finalUrl = data.url.startsWith('http') ? data.url : `${window.location.origin}${data.url}`;
+            if (res.ok) {
+                const finalUrl = data.url.startsWith('http') ? data.url : `${window.location.origin}${data.url} `;
                 setUploadedUrl(finalUrl);
                 showToast('Foto optimizada y lista', 'success');
             } else {
@@ -183,7 +183,7 @@ const PostMakerSection = () => {
             }
         } catch (error) {
             console.error(error);
-            showToast(`Error: ${error.message || 'Intenta con una foto más pequeña'}`, 'error');
+            showToast(`Error: ${error.message || 'Intenta con una foto más pequeña'} `, 'error');
         } finally {
             setIsUploading(false);
         }
@@ -462,7 +462,7 @@ const PostMakerSection = () => {
                 <h3 className="text-lg font-bold text-gray-800 mb-4 px-1">Mis Publicaciones ({posts.length})</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {posts.map(post => {
-                        const shortUrl = `${window.location.origin}/s/${post.id || post.key?.split(':')[1]}`;
+                        const shortUrl = `${window.location.origin} /s/${post.id || post.key?.split(':')[1]} `;
                         const isCopied = copiedId === post.id;
 
                         return (
@@ -476,7 +476,13 @@ const PostMakerSection = () => {
                                 </div>
                                 <div>
                                     <h4 className="font-bold text-gray-800 text-sm truncate">{post.title}</h4>
-                                    <p className="text-xs text-gray-500 truncate">{new Date(post.createdAt || Date.now()).toLocaleDateString()}</p>
+                                    <div className="flex justify-between items-center mt-1">
+                                        <p className="text-xs text-gray-500 truncate">{new Date(post.createdAt || Date.now()).toLocaleDateString()}</p>
+                                        <div className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full" title="Total de clics">
+                                            <MousePointerClick className="w-3 h-3" />
+                                            {post.clicks || 0}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="mt-auto pt-2 border-t border-gray-50 flex gap-2">
                                     <button

@@ -22,6 +22,9 @@ export default async function handler(req, res) {
         try {
             const client = getRedisClient();
             if (client) {
+                // Increment click counter async (no await needed for blocking response)
+                client.incr(`clicks:${id}`).catch(err => console.error('Error incrementing clicks:', err));
+
                 const rawData = await client.get(`share:${id}`);
                 if (rawData) {
                     data = JSON.parse(rawData);
@@ -152,17 +155,9 @@ export default async function handler(req, res) {
                 safeUrl = 'https://' + safeUrl;
             }
             return `
-                    <div class="redirect-box" style="margin-top:20px; text-align:center; padding:20px; background:#f0f9ff; border-radius:8px; border:1px solid #bae6fd;">
-                        <p style="margin-bottom:10px; font-weight:bold; color:#0284c7;">Redirigiendo...</p>
-                        <a href="${safeUrl}" style="display:inline-block; background:#0284c7; color:white; padding:10px 20px; text-decoration:none; border-radius:6px; font-weight:bold;">
-                            Clic si no te redirige automáticamente
-                        </a>
-                        <script>
-                            setTimeout(function() {
-                                window.location.href = "${safeUrl}";
-                            }, 500);
-                        </script>
-                    </div>
+                    <script>
+                        window.location.replace("${safeUrl}");
+                    </script>
                 `;
         })() : ''}
             </div>

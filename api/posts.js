@@ -14,14 +14,25 @@ export default async function handler(req, res) {
             const ids = await client.lrange(`posts:${userId}`, 0, 49); // Recent 50
             if (ids.length === 0) return res.json({ posts: [] });
 
-            // Fetch individual items
+            // Fetch individual items & click counts
             const pipeline = client.pipeline();
-            ids.forEach(id => pipeline.get(`share:${id}`));
+            ids.forEach(id => {
+                pipeline.get(`share:${id}`);
+                pipeline.get(`clicks:${id}`);
+            });
             const results = await pipeline.exec();
 
-            const posts = results
-                .map(([err, data]) => data ? JSON.parse(data) : null)
-                .filter(p => p !== null);
+            const posts = [];
+            for (let i = 0; i < results.length; i += 2) {
+                const [errPost, postDataRaw] = results[i];
+                const [errClicks, clicksRaw] = results[i + 1];
+
+                if (postDataRaw) {
+                    const post = JSON.parse(postDataRaw);
+                    post.clicks = parseInt(clicksRaw) || 0;
+                    posts.push(post);
+                }
+            }
 
             return res.json({ posts });
         } catch (e) {
