@@ -131,11 +131,13 @@ function App() {
 
   // AUTH GUARD
   if (!user) {
-    <LandingPage onLoginSuccess={(userData) => {
-      localStorage.setItem('candidatic_user_session', JSON.stringify(userData));
-      setUser(userData);
-      showToast(`Bienvenido, ${userData.name}`, 'success');
-    }} />
+    return (
+      <LandingPage onLoginSuccess={(userData) => {
+        localStorage.setItem('candidatic_user_session', JSON.stringify(userData));
+        setUser(userData);
+        showToast(`Bienvenido, ${userData.name}`, 'success');
+      }} />
+    );
   }
 
   return (
