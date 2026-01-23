@@ -64,8 +64,10 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('candidatic_user_session');
     setUser(null);
-    setShowLogin(false); // Reset to landing page on logout
-    showToast('Sesión cerrada', 'info');
+    showToast('Sesión cerrada... 👋', 'info');
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
   };
 
   const handleCredentialsChange = (newBotId, newAnswerId, newApiKey) => {
