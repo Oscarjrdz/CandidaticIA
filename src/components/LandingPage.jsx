@@ -168,7 +168,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                         {/* LOGIN DROPDOWN */}
                         {isLoginOpen && (
-                            <div className="absolute right-0 top-full mt-6 w-[34rem] bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_50px_rgb(8_112_184_/_0.3)] border border-white/50 p-8 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-500 ease-out origin-top-right ring-1 ring-white/60">
+                            <div className="absolute right-0 top-full mt-6 w-[38rem] bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_50px_rgb(8_112_184_/_0.3)] border border-white/50 p-8 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-500 ease-out origin-top-right ring-1 ring-white/60">
                                 {/* Decorator Arrow */}
                                 <div className="absolute -top-3 right-8 w-6 h-6 bg-white/95 backdrop-blur-3xl transform rotate-45 border-t border-l border-white/50"></div>
 
@@ -200,7 +200,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         <form onSubmit={handlePhoneSubmit} className="space-y-6">
                                             <div className="space-y-2 text-center">
                                                 <label className="text-sm font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
-                                                <div className="flex justify-between gap-1">
+                                                <div className="flex justify-center gap-1.5">
                                                     {Array(10).fill(0).map((_, i) => (
                                                         <input
                                                             key={i}
