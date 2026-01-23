@@ -188,29 +188,63 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     )}
 
                                     {loginStep === 'phone' ? (
-                                        <form onSubmit={handlePhoneSubmit} className="space-y-4">
-                                            <div className="group relative">
-                                                <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-300 to-purple-300 rounded-xl blur opacity-20 group-hover:opacity-40 transition duration-200"></div>
-                                                <Input
-                                                    autoFocus
-                                                    type="tel"
-                                                    placeholder="WhatsApp (10 dígitos)"
-                                                    value={phone}
-                                                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                                                    className="relative text-center text-lg tracking-widest font-bold bg-white/50 border-gray-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition-all rounded-xl h-12 shadow-inner"
-                                                    maxLength={10}
-                                                />
+                                        <form onSubmit={handlePhoneSubmit} className="space-y-6">
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">WhatsApp (10 dígitos)</label>
+                                                <div className="flex justify-between gap-1">
+                                                    {Array(10).fill(0).map((_, i) => (
+                                                        <input
+                                                            key={i}
+                                                            id={`phone-${i}`}
+                                                            type="text"
+                                                            inputMode="numeric"
+                                                            maxLength={1}
+                                                            value={phone[i] || ''}
+                                                            onChange={(e) => {
+                                                                const val = e.target.value.replace(/\D/g, '');
+                                                                if (!val && !e.target.value) {
+                                                                    // Handle clear
+                                                                    const newPhone = phone.split('');
+                                                                    newPhone[i] = '';
+                                                                    setPhone(newPhone.join(''));
+                                                                    return;
+                                                                }
+                                                                if (val) {
+                                                                    const newPhone = phone.split('');
+                                                                    newPhone[i] = val;
+                                                                    setPhone(newPhone.join(''));
+                                                                    if (i < 9) document.getElementById(`phone-${i + 1}`).focus();
+                                                                }
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Backspace' && !phone[i] && i > 0) {
+                                                                    document.getElementById(`phone-${i - 1}`).focus();
+                                                                }
+                                                            }}
+                                                            onFocus={(e) => e.target.select()}
+                                                            className={`w-8 h-10 text-center text-lg font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm
+                                                            ${phone[i]
+                                                                    ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105'
+                                                                    : 'border-gray-200 text-gray-400 bg-white/50 focus:border-blue-400 focus:bg-white'
+                                                                }
+                                                        `}
+                                                        />
+                                                    ))}
+                                                </div>
                                             </div>
+
                                             <Button
                                                 type="submit"
-                                                className="w-full h-12 text-base font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/25 rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-                                                disabled={loginLoading}
+                                                className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]
+                                                ${phone.length === 10
+                                                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 text-white'
+                                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                    }
+                                            `}
+                                                disabled={loginLoading || phone.length < 10}
                                             >
-                                                {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Continuar'}
+                                                {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Enviar Código'}
                                             </Button>
-                                            <p className="text-[10px] text-gray-400 text-center font-medium">
-                                                Te enviaremos un código de seguridad
-                                            </p>
                                         </form>
                                     ) : (
                                         <div className="space-y-6">
