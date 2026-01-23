@@ -49,10 +49,33 @@ export default async function handler(req, res) {
             pipeline_status: pipelineSuccess,
             sample_candidate: sampleItem ? { id: sampleItem.id, phone: sampleItem.whatsapp } : 'null',
             bulks_zcard: bulksCount,
+
+            // 6. RAW KEY SCAN (To find lost data)
+            redis_scan_result: await scanKeys(client),
+
             environment: process.env.NODE_ENV,
             timestamp: new Date().toISOString()
         });
     } catch (e) {
         return res.status(500).json({ error: e.message, stack: e.stack });
+    }
+}
+
+// Helper to scan keys safely
+async function scanKeys(client) {
+    try {
+        const stream = client.scanStream({
+            match: '*',
+            count: 100
+        });
+
+        const keys = [];
+        for await (const resultKeys of stream) {
+            keys.push(...resultKeys);
+            if (keys.length > 500) break; // Limit to 500 keys for safety
+        }
+        return keys;
+    } catch (error) {
+        return ['Scan Error: ' + error.message];
     }
 }
