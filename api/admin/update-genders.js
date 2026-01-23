@@ -32,44 +32,42 @@ export default async function handler(req, res) {
 
         for (const candidate of candidates) {
             const nameToUse = candidate.nombreReal || candidate.nombre;
-
-            // CLEAN Junk names
-            if (!nameToUse || nameToUse === 'Sin nombre' || nameToUse.trim().length < 2) {
-                results.skipped++;
-                continue;
-            }
-
-            // Check if already has gender (and it's not an error message)
             const currentGender = candidate.genero;
-            const isError = currentGender && (currentGender.includes('Error') || currentGender.includes('[GoogleGenerativeAI'));
-            const hasValidGender = currentGender && currentGender !== 'Desconocido' && !isError;
 
-            if (hasValidGender && force !== 'true') {
+            // Check if already has a SET gender (Hombre, Mujer, or ALREADY marked as Desconocido)
+            const hasFinalStatus = currentGender === 'Hombre' || currentGender === 'Mujer' || currentGender === 'Desconocido';
+            const isError = currentGender && (currentGender.includes('Error') || currentGender.includes('[GoogleGenerativeAI'));
+
+            if (hasFinalStatus && !isError && force !== 'true') {
                 results.skipped++;
-                // Silently skip to keep logs small
-                continue;
+                continue; // Skip silently
             }
 
-            // If we are here, it's either:
-            // 1. missing gender
-            // 2. it's "Desconocido"
-            // 3. it's an Error message (Auto-retry enabled)
-            // 4. Force mode is ON
+            // CLEAN Junk names (Emojis-only or just numbers)
+            const isJunk = !/[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(nameToUse || "");
+            if (isJunk || !nameToUse || nameToUse === 'Sin nombre' || nameToUse.trim().length < 2) {
+                await updateCandidate(candidate.id, { genero: 'Desconocido' });
+                results.skipped++;
+                results.logs.push({ name: nameToUse || "Empty", reason: "Junk name (emojis/numbers), marked as Desconocido" });
+                continue;
+            }
 
             const gender = await detectGender(nameToUse);
 
+            // SAVE whatever AI says (including Desconocido) to move on
+            await updateCandidate(candidate.id, { genero: gender });
+
             if (gender === 'Hombre' || gender === 'Mujer') {
-                await updateCandidate(candidate.id, { genero: gender });
                 results.updated++;
                 results.logs.push({ name: nameToUse, result: gender });
             } else {
                 results.skipped++;
-                results.logs.push({ name: nameToUse, reason: `AI returned ${gender}` });
+                results.logs.push({ name: nameToUse, reason: `AI confirmed: ${gender}` });
             }
 
-            // Safety limit per batch: 5 candidates (AI is slow, avoid Vercel 10s timeout)
-            if (results.updated >= 5) {
-                results.message = "Batch of 5 complete. Refresh to continue.";
+            // Batch limit to avoid Vercel 10s timeout
+            if (results.updated + results.logs.filter(l => l.reason).length >= 10) {
+                results.message = "Lote procesado. Refresca para seguir con los faltantes.";
                 break;
             }
         }
