@@ -6,18 +6,22 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Security check - optional but good to have a simple key
-    const { key } = req.query;
+    const { key, force } = req.query;
     if (key !== 'oscar_detect_2026') {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
     try {
-        console.log('🚀 Triggering Global Gender Update from API...');
-        const { candidates } = await getCandidates(2000, 0);
+        const { candidates: allCandidates } = await getCandidates(2000, 0);
+
+        // Filter and sort: process those with names first
+        const candidates = allCandidates.filter(c => {
+            const name = c.nombreReal || c.nombre;
+            return name && name !== 'Sin nombre' && name.trim().length >= 2;
+        });
 
         const results = {
-            total: candidates.length,
+            total_filtered: candidates.length,
             updated: 0,
             skipped: 0,
             logs: []
@@ -26,24 +30,12 @@ export default async function handler(req, res) {
         for (const candidate of candidates) {
             const nameToUse = candidate.nombreReal || candidate.nombre;
 
-            // Log for every single candidate
-            const logEntry = {
-                id: candidate.id,
-                name: nameToUse,
-                reason: ''
-            };
+            // Should we skip this one?
+            const hasGender = candidate.genero && candidate.genero !== 'Desconocido';
 
-            if (candidate.genero && candidate.genero !== 'Desconocido') {
+            if (hasGender && force !== 'true') {
                 results.skipped++;
-                logEntry.reason = 'Already has gender';
-                results.logs.push(logEntry);
-                continue;
-            }
-
-            if (!nameToUse || nameToUse === 'Sin nombre' || nameToUse.trim().length < 2) {
-                results.skipped++;
-                logEntry.reason = 'Name too short or empty';
-                results.logs.push(logEntry);
+                results.logs.push({ name: nameToUse, reason: `Skipped: already has "${candidate.genero}" (use force=true to overwrite)` });
                 continue;
             }
 
@@ -52,20 +44,15 @@ export default async function handler(req, res) {
             if (gender === 'Hombre' || gender === 'Mujer') {
                 await updateCandidate(candidate.id, { genero: gender });
                 results.updated++;
-                logEntry.reason = `Success: ${gender}`;
-                results.logs.push(logEntry);
+                results.logs.push({ name: nameToUse, result: gender });
             } else {
                 results.skipped++;
-                logEntry.reason = `AI returned: ${gender}`;
-                results.logs.push(logEntry);
+                results.logs.push({ name: nameToUse, reason: `AI returned ${gender}` });
             }
 
-            // Limit to 100 logs per request to avoid huge payloads
-            if (results.logs.length >= 100) break;
-
-            // Limit to 30 updates per request to be very safe with Vercel timeouts
-            if (results.updated >= 30) {
-                results.message = "Partial update complete (limit 30). Run again.";
+            // Safety limit per batch
+            if (results.updated >= 40) {
+                results.message = "Batch limit reached (40). Run again.";
                 break;
             }
         }
