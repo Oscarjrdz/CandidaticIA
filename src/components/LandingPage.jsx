@@ -168,9 +168,9 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                         {/* LOGIN DROPDOWN */}
                         {isLoginOpen && (
-                            <div className="absolute right-0 top-full mt-6 w-[26rem] bg-white/60 backdrop-blur-2xl rounded-3xl shadow-[0_20px_50px_rgb(8_112_184_/_0.3)] border border-white/50 p-8 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-500 ease-out bg-opacity-80 origin-top-right ring-1 ring-white/60">
+                            <div className="absolute right-0 top-full mt-6 w-[26rem] bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_50px_rgb(8_112_184_/_0.3)] border border-white/50 p-8 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-500 ease-out origin-top-right ring-1 ring-white/60">
                                 {/* Decorator Arrow */}
-                                <div className="absolute -top-3 right-8 w-6 h-6 bg-white/60 backdrop-blur-xl transform rotate-45 border-t border-l border-white/50"></div>
+                                <div className="absolute -top-3 right-8 w-6 h-6 bg-white/95 backdrop-blur-3xl transform rotate-45 border-t border-l border-white/50"></div>
 
                                 {/* Floating Gloss Effect */}
                                 <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-white/40 to-transparent pointer-events-none"></div>
