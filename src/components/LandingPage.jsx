@@ -199,7 +199,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     {loginStep === 'phone' ? (
                                         <form onSubmit={handlePhoneSubmit} className="space-y-6">
                                             <div className="space-y-2 text-center">
-                                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
+                                                <label className="text-sm font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
                                                 <div className="flex justify-between gap-1">
                                                     {Array(10).fill(0).map((_, i) => (
                                                         <input
@@ -242,18 +242,29 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                 </div>
                                             </div>
 
-                                            <Button
+                                            <button
                                                 type="submit"
-                                                className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98]
+                                                onClick={(e) => {
+                                                    if (loginLoading || phone.length < 10) {
+                                                        e.preventDefault();
+                                                        return;
+                                                    }
+                                                }}
+                                                style={{
+                                                    background: phone.length === 10
+                                                        ? undefined
+                                                        : 'linear-gradient(to right, #2563eb, #9333ea)', // Blue-600 to Purple-600
+                                                    opacity: phone.length === 10 ? 1 : 0.7
+                                                }}
+                                                className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] inline-flex items-center justify-center text-white
                                                 ${phone.length === 10
-                                                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 text-white'
-                                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 cursor-pointer'
+                                                        : 'cursor-not-allowed'
                                                     }
                                             `}
-                                                disabled={loginLoading || phone.length < 10}
                                             >
                                                 {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Enviar Código'}
-                                            </Button>
+                                            </button>
                                         </form>
                                     ) : (
                                         <div className="space-y-6">
