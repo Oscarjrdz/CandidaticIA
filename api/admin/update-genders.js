@@ -24,14 +24,26 @@ export default async function handler(req, res) {
         };
 
         for (const candidate of candidates) {
+            const nameToUse = candidate.nombreReal || candidate.nombre;
+
+            // Log for every single candidate
+            const logEntry = {
+                id: candidate.id,
+                name: nameToUse,
+                reason: ''
+            };
+
             if (candidate.genero && candidate.genero !== 'Desconocido') {
                 results.skipped++;
+                logEntry.reason = 'Already has gender';
+                results.logs.push(logEntry);
                 continue;
             }
 
-            const nameToUse = candidate.nombreReal || candidate.nombre;
-            if (!nameToUse || nameToUse === 'Sin nombre') {
+            if (!nameToUse || nameToUse === 'Sin nombre' || nameToUse.trim().length < 2) {
                 results.skipped++;
+                logEntry.reason = 'Name too short or empty';
+                results.logs.push(logEntry);
                 continue;
             }
 
@@ -40,15 +52,20 @@ export default async function handler(req, res) {
             if (gender === 'Hombre' || gender === 'Mujer') {
                 await updateCandidate(candidate.id, { genero: gender });
                 results.updated++;
-                results.logs.push(`${nameToUse} -> ${gender}`);
+                logEntry.reason = `Success: ${gender}`;
+                results.logs.push(logEntry);
             } else {
                 results.skipped++;
-                results.logs.push(`${nameToUse} -> ${gender}`); // Will log "Desconocido" or "Error: ..."
+                logEntry.reason = `AI returned: ${gender}`;
+                results.logs.push(logEntry);
             }
 
-            // Limit to 50 updates per request to avoid Vercel timeouts (10s/60s)
-            if (results.updated >= 50) {
-                results.message = "Partial update complete (limit 50). Run again for more.";
+            // Limit to 100 logs per request to avoid huge payloads
+            if (results.logs.length >= 100) break;
+
+            // Limit to 30 updates per request to be very safe with Vercel timeouts
+            if (results.updated >= 30) {
+                results.message = "Partial update complete (limit 30). Run again.";
                 break;
             }
         }
