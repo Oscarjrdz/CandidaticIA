@@ -25,7 +25,7 @@ const CandidatesSection = ({ showToast }) => {
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
-    const LIMIT = 50;
+    const LIMIT = 100; // Increased to 100 to show more candidates at once
 
     // Estado para el chat
     const [selectedCandidate, setSelectedCandidate] = useState(null);
@@ -630,7 +630,7 @@ const CandidatesSection = ({ showToast }) => {
                             </div>
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                    Candidatos <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full ml-2">v2.1</span>
+                                    Candidatos
                                 </h2>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
                                     {totalItems} candidato{totalItems !== 1 ? 's' : ''} registrado{totalItems !== 1 ? 's' : ''}
