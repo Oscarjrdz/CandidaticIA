@@ -33,19 +33,38 @@ export async function detectGender(name) {
         if (match) apiKey = match[0];
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-            generationConfig: { temperature: 0.1 }
-        });
+
+        const modelsToTry = [
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-latest",
+            "gemini-pro"
+        ];
 
         const prompt = `Dime si el nombre "${name}" es de un hombre o de una mujer.
 Responde únicamente con una palabra: "Hombre", "Mujer" o "Desconocido" (si es totalmente ambiguo o no es un nombre).
 Ignora apellidos si los hay.
 Respuesta:`;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text().trim().replace(/[.]/g, '');
+        let text = 'Desconocido';
+        let lastError = '';
+
+        for (const mName of modelsToTry) {
+            try {
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    generationConfig: { temperature: 0.1 }
+                });
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                text = response.text().trim().replace(/[.]/g, '');
+                if (text) break; // Success
+            } catch (err) {
+                lastError = err.message;
+                console.warn(`⚠️ [detectGender] ${mName} failed:`, err.message);
+                continue;
+            }
+        }
 
         if (text.includes('Hombre')) return 'Hombre';
         if (text.includes('Mujer')) return 'Mujer';
