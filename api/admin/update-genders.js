@@ -23,7 +23,7 @@ export default async function handler(req, res) {
         });
 
         const results = {
-            build: "v1.4-robust",
+            build: "v1.5-final-fix",
             total_in_db: candidates.length,
             updated: 0,
             skipped: 0,
