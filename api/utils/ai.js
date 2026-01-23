@@ -34,10 +34,12 @@ export async function detectGender(name) {
 
         const genAI = new GoogleGenerativeAI(apiKey);
 
+        // List of robust models to try
         const modelsToTry = [
             "gemini-2.0-flash",
+            "gemini-2.0-flash-exp",
             "gemini-1.5-flash",
-            "gemini-1.5-flash-latest",
+            "gemini-1.5-pro",
             "gemini-pro"
         ];
 
@@ -46,9 +48,7 @@ Responde únicamente con una palabra: "Hombre", "Mujer" o "Desconocido" (si es t
 Ignora apellidos si los hay.
 Respuesta:`;
 
-        let text = 'Desconocido';
-        let lastError = '';
-
+        let text = '';
         for (const mName of modelsToTry) {
             try {
                 const model = genAI.getGenerativeModel({
@@ -58,10 +58,9 @@ Respuesta:`;
                 const result = await model.generateContent(prompt);
                 const response = await result.response;
                 text = response.text().trim().replace(/[.]/g, '');
-                if (text) break; // Success
+                if (text) break;
             } catch (err) {
-                lastError = err.message;
-                console.warn(`⚠️ [detectGender] ${mName} failed:`, err.message);
+                console.warn(`⚠️ [detectGender] Model ${mName} failed:`, err.message);
                 continue;
             }
         }
@@ -72,7 +71,7 @@ Respuesta:`;
         return 'Desconocido';
 
     } catch (error) {
-        console.error('❌ detectGender error:', error.message, error.stack);
-        return `Error: ${error.message}`;
+        console.error('❌ detectGender error:', error.message);
+        return 'Desconocido';
     }
 }
