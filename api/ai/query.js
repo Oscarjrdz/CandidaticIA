@@ -177,6 +177,16 @@ Consulta del usuario: "${query}"
         const { candidates } = await getCandidates(2000, 0); // Traer hasta 2000 para búsqueda profunda
 
         // Función para calcular edad
+        // Función para normalizar strings (quitar acentos, minúsculas)
+        const normalizeString = (str) => {
+            if (!str) return '';
+            return String(str)
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .trim();
+        };
+
         // Función para calcular edad (Robusta)
         const calculateAge = (dob) => {
             if (!dob) return null;
@@ -237,6 +247,9 @@ Consulta del usuario: "${query}"
         if (aiResponse.filters && Object.keys(aiResponse.filters).length > 0) {
             filtered = filtered.filter(candidate => {
                 return Object.entries(aiResponse.filters).every(([key, criteria]) => {
+                    const searchStr = normalizeString(criteria.val || criteria);
+                    if (!searchStr) return true;
+
                     let candidateVal = candidate[key];
 
                     // Manejo especial de EDAD
@@ -246,13 +259,26 @@ Consulta del usuario: "${query}"
 
                     // Manejo especial de NOMBRES (Robustez: buscar en Real y WhatsApp)
                     if (key === 'nombreReal' || key === 'nombre') {
-                        const searchStr = String(criteria.val || criteria).toLowerCase();
-                        const valReal = String(candidate.nombreReal || '').toLowerCase();
-                        const valWA = String(candidate.nombre || '').toLowerCase();
+                        const valReal = normalizeString(candidate.nombreReal);
+                        const valWA = normalizeString(candidate.nombre);
                         return valReal.includes(searchStr) || valWA.includes(searchStr);
                     }
 
-                    if (candidateVal === undefined || candidateVal === null) return false;
+                    // APLICAR FILTRO NORMALIZADO
+                    const normalizedCandidateVal = normalizeString(candidateVal);
+
+                    // 1. Coincidencia directa en el campo asignado
+                    if (normalizedCandidateVal.includes(searchStr)) return true;
+
+                    // 2. FALLBACK GLOBAL: Si no coincide en su campo, buscar en CUALQUIER otra columna
+                    // Esto evita errores si la IA asignó mal la columna (ej: Municipio vs Notas)
+                    const matchesAnyField = Object.entries(candidate).some(([cKey, cVal]) => {
+                        // Evitar recursión infinita o campos no-string irrelevantes
+                        if (cKey === 'id' || cKey === 'whatsapp') return false;
+                        return normalizeString(cVal).includes(searchStr);
+                    });
+
+                    if (matchesAnyField) return true;
 
                     // Si criteria es un objeto con operador { op: ">", val: 40 }
                     if (typeof criteria === 'object' && criteria.op) {
@@ -265,14 +291,10 @@ Consulta del usuario: "${query}"
                             case '<': return numCand < numVal;
                             case '>=': return numCand >= numVal;
                             case '<=': return numCand <= numVal;
-                            case '==': return String(candidateVal).toLowerCase() === String(val).toLowerCase();
-                            case 'contains': return String(candidateVal).toLowerCase().includes(String(val).toLowerCase());
-                            default: return String(candidateVal).toLowerCase().includes(String(val).toLowerCase());
                         }
                     }
 
-                    // Si es un filtro simple (string)
-                    return String(candidateVal).toLowerCase().includes(String(criteria).toLowerCase());
+                    return false;
                 });
             });
         }
