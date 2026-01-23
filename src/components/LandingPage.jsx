@@ -231,7 +231,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                                 }
                                                             }}
                                                             onFocus={(e) => e.target.select()}
-                                                            className={`w-8 h-10 text-center text-lg font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm
+                                                            className={`w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm
                                                             ${phone[i]
                                                                     ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105'
                                                                     : 'border-gray-200 text-gray-400 bg-white/50 focus:border-blue-400 focus:bg-white'
@@ -284,7 +284,12 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                         maxLength={1}
                                                         onChange={(e) => handlePinChange(i, e.target.value)}
                                                         onKeyDown={(e) => handleKeyDown(i, e)}
-                                                        className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-100 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none bg-white/50 shadow-sm transition-all text-gray-800 caret-blue-500"
+                                                        className={`w-12 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all duration-300 shadow-sm
+                                                            ${d
+                                                                ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105'
+                                                                : 'border-gray-100 text-gray-400 bg-white/50 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:bg-white'
+                                                            }
+                                                        `}
                                                         autoFocus={i === 0}
                                                     />
                                                 ))}
