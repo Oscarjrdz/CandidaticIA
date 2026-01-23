@@ -174,65 +174,7 @@ const LandingPage = ({ onLoginClick }) => {
                         </div>
                     </div>
 
-                    {/* Stats Section */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-12 mt-24 border-b border-gray-100 pb-24">
-                        <div className="text-center">
-                            <div className="text-4xl md:text-5xl font-bold text-blue-600 mb-2">99%</div>
-                            <div className="text-gray-500 font-medium">Precisión de filtrado</div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-4xl md:text-5xl font-bold text-purple-600 mb-2">10x</div>
-                            <div className="text-gray-500 font-medium">Más rápido</div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-4xl md:text-5xl font-bold text-blue-600 mb-2">10k+</div>
-                            <div className="text-gray-500 font-medium">Usuarios activos</div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-4xl md:text-5xl font-bold text-purple-600 mb-2">24/7</div>
-                            <div className="text-gray-500 font-medium">Automatización</div>
-                        </div>
-                    </div>
 
-                    {/* Features Preview */}
-                    <div className="py-24" id="features">
-                        <div className="text-center max-w-3xl mx-auto mb-16">
-                            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">Ayudando a las empresas a crecer</h2>
-                            <p className="text-lg text-gray-600">
-                                Nuestra plataforma elimina el trabajo manual repetitivo para que puedas concentrarte en lo que realmente importa: las personas.
-                            </p>
-                        </div>
-
-                        <div className="grid md:grid-cols-3 gap-8">
-                            {[
-                                {
-                                    icon: <Zap className="w-6 h-6 text-yellow-500" />,
-                                    title: "Respuestas Instantáneas",
-                                    desc: "Nuestro bot responde a los candidatos en segundos, manteniendo su interés alto."
-                                },
-                                {
-                                    icon: <Users className="w-6 h-6 text-blue-500" />,
-                                    title: "Filtrado Inteligente",
-                                    desc: "La IA analiza perfiles y respuestas para presentarte solo a los mejores candidatos."
-                                },
-                                {
-                                    icon: <BarChart className="w-6 h-6 text-purple-500" />,
-                                    title: "Analíticas en Tiempo Real",
-                                    desc: "Toma decisiones basadas en datos con nuestros paneles de control detallados."
-                                }
-                            ].map((feature, i) => (
-                                <div key={i} className="p-8 rounded-2xl bg-gray-50 hover:bg-white hover:shadow-xl transition-all border border-gray-100 group">
-                                    <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                                        {feature.icon}
-                                    </div>
-                                    <h3 className="text-xl font-bold text-gray-900 mb-3">{feature.title}</h3>
-                                    <p className="text-gray-500 leading-relaxed">
-                                        {feature.desc}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
 
                 </div>
             </main>
