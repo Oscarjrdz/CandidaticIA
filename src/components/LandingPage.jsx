@@ -168,7 +168,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                         {/* LOGIN DROPDOWN */}
                         {isLoginOpen && (
-                            <div className="absolute right-0 top-full mt-6 w-[26rem] bg-white/60 backdrop-blur-2xl rounded-3xl shadow-[0_20px_50px_rgb(8_112_184_/_0.3)] border border-white/50 p-8 z-50 animate-in fade-in slide-in-from-top-4 duration-300 origin-top-right ring-1 ring-white/60">
+                            <div className="absolute right-0 top-full mt-6 w-[26rem] bg-white/60 backdrop-blur-2xl rounded-3xl shadow-[0_20px_50px_rgb(8_112_184_/_0.3)] border border-white/50 p-8 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-500 ease-out bg-opacity-80 origin-top-right ring-1 ring-white/60">
                                 {/* Decorator Arrow */}
                                 <div className="absolute -top-3 right-8 w-6 h-6 bg-white/60 backdrop-blur-xl transform rotate-45 border-t border-l border-white/50"></div>
 
@@ -176,18 +176,18 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-white/40 to-transparent pointer-events-none"></div>
 
                                 <div className="relative z-10">
-                                    <div className="mb-6 text-center">
-                                        <div className="relative inline-block mb-3">
+                                    <div className="mb-8 text-center">
+                                        <div className="relative inline-block mb-4">
                                             <div className="absolute inset-0 bg-blue-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
-                                            <div className="relative w-14 h-14 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform">
-                                                <MessageSquare className="w-7 h-7 text-white" />
+                                            <div className="relative w-16 h-16 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform">
+                                                <MessageSquare className="w-8 h-8 text-white" />
                                             </div>
-                                            <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1 border-2 border-white">
+                                            <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1.5 border-2 border-white shadow-sm">
                                                 <div className="text-white w-3 h-3"><WhatsAppIcon /></div>
                                             </div>
                                         </div>
-                                        <h3 className="text-xl font-bold text-gray-900 tracking-tight">Bienvenido</h3>
-                                        <p className="text-sm text-gray-500 font-medium">Accede a tu cuenta</p>
+                                        <h3 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
+                                        <p className="text-base text-gray-500 font-medium">Accede a tu cuenta</p>
                                     </div>
 
                                     {loginError && (
@@ -198,8 +198,8 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                                     {loginStep === 'phone' ? (
                                         <form onSubmit={handlePhoneSubmit} className="space-y-6">
-                                            <div className="space-y-2">
-                                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest pl-1">WhatsApp (10 dígitos)</label>
+                                            <div className="space-y-2 text-center">
+                                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
                                                 <div className="flex justify-between gap-1">
                                                     {Array(10).fill(0).map((_, i) => (
                                                         <input
