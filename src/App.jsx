@@ -131,23 +131,11 @@ function App() {
 
   // AUTH GUARD
   if (!user) {
-    if (showLogin) {
-      return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-          <LoginPage onLogin={setUser} showToast={showToast} />
-          <button
-            onClick={() => setShowLogin(false)}
-            className="absolute top-4 left-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            ← Volver al inicio
-          </button>
-          {ToastComponent}
-        </div>
-      );
-    }
-    return (
-      <LandingPage onLoginClick={() => setShowLogin(true)} />
-    );
+    <LandingPage onLoginSuccess={(userData) => {
+      localStorage.setItem('candidatic_user_session', JSON.stringify(userData));
+      setUser(userData);
+      showToast(`Bienvenido, ${userData.name}`, 'success');
+    }} />
   }
 
   return (

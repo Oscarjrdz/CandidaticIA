@@ -1,12 +1,14 @@
-import React from 'react';
-import { ArrowRight, CheckCircle, BarChart, Users, Zap } from 'lucide-react';
-import Button from './ui/Button';
 
-const LandingPage = ({ onLoginClick }) => {
+import React, { useState, useRef, useEffect } from 'react';
+import { ArrowRight, CheckCircle, BarChart, Users, Zap, Loader2, MessageSquare } from 'lucide-react';
+import Button from './ui/Button';
+import Input from './ui/Input';
+
+const LandingPage = ({ onLoginSuccess }) => {
     /* SEARCH LOGIC */
-    const [searchQuery, setSearchQuery] = React.useState('');
-    const [isSearching, setIsSearching] = React.useState(false);
-    const [searchResults, setSearchResults] = React.useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchResults, setSearchResults] = useState(null);
 
     const handleSearch = async (e) => {
         e.preventDefault();
@@ -32,12 +34,111 @@ const LandingPage = ({ onLoginClick }) => {
         }
     };
 
+    /* LOGIN DROPDOWN LOGIC */
+    const [isLoginOpen, setIsLoginOpen] = useState(false);
+    const [loginStep, setLoginStep] = useState('phone'); // phone, pin
+    const [loginLoading, setLoginLoading] = useState(false);
+    const [loginError, setLoginError] = useState('');
+    const [phone, setPhone] = useState('');
+    const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+    const pinRefs = useRef([]);
+    const dropdownRef = useRef(null);
+
+    // Close dropdown on click outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsLoginOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const cleanLogin = () => {
+        setLoginError('');
+        setLoginLoading(false);
+    }
+
+    const handlePhoneSubmit = async (e) => {
+        e.preventDefault();
+        cleanLogin();
+        if (phone.length < 10) {
+            setLoginError('Número inválido (10 dígitos).');
+            return;
+        }
+
+        setLoginLoading(true);
+        try {
+            const res = await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'request-pin', phone })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setLoginStep('pin');
+            } else {
+                setLoginError(data.error || 'Error de conexión.');
+            }
+        } catch (err) {
+            setLoginError('Error de red.');
+        } finally {
+            setLoginLoading(false);
+        }
+    };
+
+    const handlePinChange = (index, value) => {
+        if (!/^\d*$/.test(value)) return;
+        const newPin = [...pinDigits];
+        newPin[index] = value;
+        setPinDigits(newPin);
+        if (value && index < 3) pinRefs.current[index + 1]?.focus();
+        if (index === 3 && value) {
+            submitPin(newPin.slice(0, 3).join('') + value);
+        }
+    };
+
+    const handleKeyDown = (index, e) => {
+        if (e.key === 'Backspace' && !pinDigits[index] && index > 0) {
+            pinRefs.current[index - 1]?.focus();
+        }
+    };
+
+    const submitPin = async (fullPin) => {
+        cleanLogin();
+        setLoginLoading(true);
+        try {
+            const res = await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'verify-pin', phone, pin: fullPin })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                if (data.newUser) {
+                    setLoginError('Registro requerido. Contacta admin.'); // Simple flow for dropdown
+                } else {
+                    onLoginSuccess(data.user);
+                }
+            } else {
+                setLoginError('Código incorrecto.');
+                setPinDigits(['', '', '', '']);
+                pinRefs.current[0]?.focus();
+            }
+        } catch (err) {
+            setLoginError('Error de conexión.');
+        } finally {
+            setLoginLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-blue-100 selection:text-blue-900">
 
             {/* Header */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-                <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+                <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between relative">
                     <div className="flex items-center space-x-2">
                         <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
                             C
@@ -51,12 +152,82 @@ const LandingPage = ({ onLoginClick }) => {
                         <a href="#pricing" className="hover:text-blue-600 transition-colors">Precios</a>
                     </nav>
 
-                    <Button
-                        onClick={onLoginClick}
-                        className="rounded-full px-6 bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all transform hover:-translate-y-0.5"
-                    >
-                        Ingresar
-                    </Button>
+                    <div className="relative" ref={dropdownRef}>
+                        <Button
+                            onClick={() => setIsLoginOpen(!isLoginOpen)}
+                            className="rounded-full px-6 bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all transform hover:-translate-y-0.5"
+                        >
+                            Ingresar
+                        </Button>
+
+                        {/* LOGIN DROPDOWN */}
+                        {isLoginOpen && (
+                            <div className="absolute right-0 top-full mt-4 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
+                                <div className="absolute -top-2 right-8 w-4 h-4 bg-white transform rotate-45 border-t border-l border-gray-100"></div>
+
+                                <div className="mb-4 text-center">
+                                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-2">
+                                        <MessageSquare className="w-6 h-6 text-blue-600" />
+                                    </div>
+                                    <h3 className="font-bold text-gray-900">Iniciar Sesión</h3>
+                                </div>
+
+                                {loginError && (
+                                    <div className="mb-4 p-2 bg-red-50 text-red-600 text-xs rounded-lg text-center font-medium">
+                                        {loginError}
+                                    </div>
+                                )}
+
+                                {loginStep === 'phone' ? (
+                                    <form onSubmit={handlePhoneSubmit}>
+                                        <div className="space-y-3">
+                                            <Input
+                                                autoFocus
+                                                type="tel"
+                                                placeholder="WhatsApp (10 dígitos)"
+                                                value={phone}
+                                                onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                                className="text-center text-lg tracking-wider"
+                                                maxLength={10}
+                                            />
+                                            <Button type="submit" size="sm" className="w-full bg-blue-600 hover:bg-blue-700" disabled={loginLoading}>
+                                                {loginLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Continuar'}
+                                            </Button>
+                                        </div>
+                                        <p className="text-xs text-gray-400 text-center mt-3">Te enviaremos un código.</p>
+                                    </form>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <p className="text-sm text-center text-gray-500">
+                                            Código enviado a <b>{phone}</b>
+                                        </p>
+                                        <div className="flex justify-center gap-2">
+                                            {pinDigits.map((d, i) => (
+                                                <input
+                                                    key={i}
+                                                    ref={el => pinRefs.current[i] = el}
+                                                    type="text"
+                                                    value={d}
+                                                    maxLength={1}
+                                                    onChange={(e) => handlePinChange(i, e.target.value)}
+                                                    onKeyDown={(e) => handleKeyDown(i, e)}
+                                                    className="w-10 h-12 text-center text-xl font-bold border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
+                                                    autoFocus={i === 0}
+                                                />
+                                            ))}
+                                        </div>
+                                        {loginLoading && <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-600" />}
+                                        <button
+                                            onClick={() => setLoginStep('phone')}
+                                            className="block w-full text-xs text-blue-600 hover:underline text-center"
+                                        >
+                                            ¿Cambiar número?
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </header>
 
@@ -135,7 +306,7 @@ const LandingPage = ({ onLoginClick }) => {
                                                     Coinciden con tu búsqueda. Regístrate para ver sus perfiles completos y contactarlos.
                                                 </p>
                                             </div>
-                                            <Button onClick={onLoginClick} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
+                                            <Button onClick={() => setIsLoginOpen(true)} size="sm" className="bg-green-600 hover:bg-green-700 text-white">
                                                 Ver Perfiles
                                             </Button>
                                         </div>
