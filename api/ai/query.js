@@ -170,7 +170,7 @@ Consulta del usuario: "${query}"
         }
 
         const aiResponse = JSON.parse(jsonMatch[0]);
-        console.log('🤖 AI Parsed Query:', aiResponse);
+        console.log('🤖 AI Parsed Query:', JSON.stringify(aiResponse, null, 2));
 
         // 3. Ejecutar la búsqueda en los datos reales
         console.log(`🔍 [AI Query] Searching records...`);
@@ -242,6 +242,14 @@ Consulta del usuario: "${query}"
                     // Manejo especial de EDAD
                     if (key === 'edad') {
                         candidateVal = calculateAge(candidate.fechaNacimiento);
+                    }
+
+                    // Manejo especial de NOMBRES (Robustez: buscar en Real y WhatsApp)
+                    if (key === 'nombreReal' || key === 'nombre') {
+                        const searchStr = String(criteria.val || criteria).toLowerCase();
+                        const valReal = String(candidate.nombreReal || '').toLowerCase();
+                        const valWA = String(candidate.nombre || '').toLowerCase();
+                        return valReal.includes(searchStr) || valWA.includes(searchStr);
                     }
 
                     if (candidateVal === undefined || candidateVal === null) return false;
