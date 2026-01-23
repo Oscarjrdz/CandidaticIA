@@ -8,6 +8,11 @@ import { aiQuery } from '../services/candidatesService';
 const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle, customPlaceholder, onAction, isOpenProp, onClose }) => {
     const [statusText, setStatusText] = useState('');
     const [statusInterval, setStatusInterval] = useState(null);
+    const [internalOpen, setInternalOpen] = useState(false);
+    const [mode, setMode] = useState(initialMode);
+    const [query, setQuery] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [userName, setUserName] = useState('');
 
     const STATUS_STEPS = [
         "Interpretando tu solicitud...",
