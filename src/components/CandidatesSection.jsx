@@ -404,6 +404,7 @@ const CandidatesSection = ({ showToast }) => {
             const result = await getCandidates(LIMIT, offset, search);
 
             if (result.success) {
+                console.log('🔍 API Response:', result); // DEBUG
                 setCandidates(result.candidates);
                 // Fix: use 'total' (filtered/global count) instead of 'count' (page size)
                 setTotalItems(result.total || result.count || 0);
@@ -629,7 +630,7 @@ const CandidatesSection = ({ showToast }) => {
                             </div>
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                    Candidatos
+                                    Candidatos <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full ml-2">v2.1</span>
                                 </h2>
                                 <p className="text-sm text-gray-500 dark:text-gray-400">
                                     {totalItems} candidato{totalItems !== 1 ? 's' : ''} registrado{totalItems !== 1 ? 's' : ''}
