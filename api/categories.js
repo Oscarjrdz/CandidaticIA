@@ -54,10 +54,13 @@ export default async function handler(req, res) {
             categories.unshift(newCategory);
             await redis.set(KEY, JSON.stringify(categories));
 
-            // Sync with BuilderBot in background
-            import('./utils/assistant-sync.js').then(({ syncCategoriesToBuilderBot }) => {
-                syncCategoriesToBuilderBot().catch(e => console.error('Background Sync Error:', e));
-            });
+            // Sync with BuilderBot
+            try {
+                const { syncCategoriesToBuilderBot } = await import('./utils/assistant-sync.js');
+                await syncCategoriesToBuilderBot();
+            } catch (e) {
+                console.error('Sync Error:', e);
+            }
 
             return res.status(201).json({ success: true, data: newCategory });
         }
@@ -73,10 +76,13 @@ export default async function handler(req, res) {
             const newCategories = categories.filter(c => c.id !== id);
             await redis.set(KEY, JSON.stringify(newCategories));
 
-            // Sync with BuilderBot in background
-            import('./utils/assistant-sync.js').then(({ syncCategoriesToBuilderBot }) => {
-                syncCategoriesToBuilderBot().catch(e => console.error('Background Sync Error:', e));
-            });
+            // Sync with BuilderBot
+            try {
+                const { syncCategoriesToBuilderBot } = await import('./utils/assistant-sync.js');
+                await syncCategoriesToBuilderBot();
+            } catch (e) {
+                console.error('Sync Error:', e);
+            }
 
             return res.status(200).json({ success: true });
         }
