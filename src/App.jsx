@@ -12,6 +12,7 @@ import BulksSection from './components/BulksSection';
 import UsersSection from './components/UsersSection';
 import PostMakerSection from './components/PostMakerSection';
 import BotIASection from './components/BotIASection';
+import MediaLibrarySection from './components/MediaLibrarySection';
 import LoginPage from './components/LoginPage'; // LOGIN ENABLED
 import { getTheme, saveTheme, exportConfig, importConfig, clearAllStorage } from './utils/storage';
 
@@ -167,7 +168,8 @@ function App() {
                             : activeSection === 'bulks' ? 'Bulks'
                               : activeSection === 'users' ? 'Usuarios'
                                 : activeSection === 'post-maker' ? 'Post Maker'
-                                  : 'Configuración'}
+                                  : activeSection === 'media-library' ? 'Biblioteca Multimedia'
+                                    : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
@@ -175,7 +177,8 @@ function App() {
                       : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
                         : activeSection === 'users' ? 'Gestión de equipo y permisos'
                           : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
-                            : 'Configuración del Sistema'
+                            : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
+                              : 'Configuración del Sistema'
                   }
                 </p>
               </div>
@@ -260,6 +263,8 @@ function App() {
             <UsersSection showToast={showToast} />
           ) : activeSection === 'post-maker' ? (
             <PostMakerSection showToast={showToast} />
+          ) : activeSection === 'media-library' ? (
+            <MediaLibrarySection showToast={showToast} />
           ) : (
             <SettingsSection
               botId={botId}

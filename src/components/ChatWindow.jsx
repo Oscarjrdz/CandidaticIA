@@ -280,11 +280,38 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                                             : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-tl-none'}
                                     `}>
                                         <p className="text-[10px] font-semibold mb-0.5 opacity-70">{senderName}</p>
-                                        <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                                        <p className="text-[9px] text-gray-500 dark:text-gray-400 mt-0.5 text-right opacity-70">
-                                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                            {isMe && <span className="ml-1">✓✓</span>}
-                                        </p>
+
+                                        {/* Media Rendering */}
+                                        {msg.mediaUrl && (
+                                            <div className="mb-2 rounded-lg overflow-hidden border border-black/5">
+                                                {(msg.type === 'image' || msg.type === 'image_received') && (
+                                                    <img src={msg.mediaUrl} alt="Media" className="max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.mediaUrl, '_blank')} />
+                                                )}
+                                                {(msg.type === 'video' || msg.type === 'video_received') && (
+                                                    <video src={msg.mediaUrl} controls className="max-w-full h-auto" />
+                                                )}
+                                                {(msg.type === 'audio' || msg.type === 'voice' || msg.type === 'audio_received') && (
+                                                    <audio src={msg.mediaUrl} controls className="max-w-full h-10 mt-1" />
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {msg.content && <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>}
+
+                                        <div className="flex items-center justify-between mt-1 space-x-2">
+                                            <p className="text-[9px] text-gray-500 dark:text-gray-400 opacity-70">
+                                                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
+                                            <div className="flex items-center space-x-1">
+                                                {msg.status && (
+                                                    <span className={`text-[9px] font-bold uppercase ${msg.status === 'seen' || msg.status === 'read' ? 'text-blue-500' : 'text-gray-400'
+                                                        }`}>
+                                                        {msg.status === 'seen' || msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
+                                                    </span>
+                                                )}
+                                                {isMe && !msg.status && <span className="text-[9px] text-gray-400">✓✓</span>}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             );

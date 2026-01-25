@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, MessageSquare, Layout, Smartphone } from 'lucide-react';
+import { Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, MessageSquare, Layout, Smartphone, Folder } from 'lucide-react';
 
 const WhatsAppIcon = () => (
     <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
@@ -17,6 +17,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
         { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
         { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
         { id: 'bulks', label: 'Bulks', icon: Send, position: 'top' },
+        { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
         { id: 'post-maker', label: 'Post Maker', icon: Layout, position: 'top' },
 
         { id: 'users', label: 'Usuarios', icon: User, position: 'top' },
