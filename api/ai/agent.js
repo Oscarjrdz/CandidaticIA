@@ -135,7 +135,13 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // 6. Send via UltraMsg
         const config = await getUltraMsgConfig();
         const candidateKey = `candidate:${candidateId}`;
-        const candidateData = await redis.hgetall(candidateKey);
+        const rawData = await redis.get(candidateKey);
+        let candidateData = null;
+        if (rawData) {
+            try {
+                candidateData = JSON.parse(rawData);
+            } catch (e) { console.error('Error parsing candidate', e); }
+        }
 
         if (config && candidateData && candidateData.whatsapp) {
             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
