@@ -134,7 +134,7 @@ const BotIASection = ({ showToast }) => {
                                 Webhook URL para UltraMsg:
                             </p>
                             <code className="block w-full p-2 bg-gray-100 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 text-xs font-mono break-all text-gray-700 dark:text-gray-300">
-                                {window.location.origin}/api/webhook/ultramsg
+                                {window.location.origin}/api/whatsapp/webhook
                             </code>
                         </div>
                     </div>
