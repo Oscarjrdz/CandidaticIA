@@ -580,11 +580,15 @@ const CandidatesSection = ({ showToast }) => {
                                     >
                                         <td className="py-0.5 px-2.5">
                                             <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
-                                                {candidate.profilePic ? (
-                                                    <img src={candidate.profilePic} alt="Avatar" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <User className="w-4 h-4 text-gray-400" />
-                                                )}
+                                                <img
+                                                    src={candidate.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.nombre || 'User')}&background=random&color=fff&size=128`}
+                                                    alt="Avatar"
+                                                    className="w-full h-full object-cover"
+                                                    onError={(e) => {
+                                                        e.target.onerror = null;
+                                                        e.target.src = 'https://ui-avatars.com/api/?name=User&background=gray&color=fff';
+                                                    }}
+                                                />
                                             </div>
                                         </td>
                                         <td className="py-0.5 px-2.5">
