@@ -43,29 +43,6 @@ const CandidatesSection = ({ showToast }) => {
             const savedCreds = localStorage.getItem('builderbot_credentials');
             if (savedCreds) setCredentials(JSON.parse(savedCreds));
 
-            // Cargar timer guardado (async - from Redis)
-            const savedTimer = await getExportSettings();
-            setExportTimer(savedTimer);
-
-
-
-            // Cargar archivos locales existentes
-            const existingFiles = {};
-            const allLocalFiles = JSON.parse(localStorage.getItem('local_chat_files') || '{}');
-            Object.keys(allLocalFiles).forEach(whatsapp => {
-                existingFiles[whatsapp] = true;
-            });
-            setLocalChatFiles(existingFiles);
-
-            // Cargar estados de timers previos
-            try {
-                const savedTimerStates = localStorage.getItem('timer_states');
-                if (savedTimerStates) {
-                    previousTimerStates.current = JSON.parse(savedTimerStates);
-                }
-            } catch (e) {
-                console.warn('Error loading timer states:', e);
-            }
 
             // Cargar candidatos
             loadCandidates();
@@ -599,9 +576,6 @@ const CandidatesSection = ({ showToast }) => {
                                         key={candidate.id}
                                         className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
                                     >
-                                        {exportingMap[candidate.id] && (
-                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500 animate-pulse rounded-r-full" title="Exportando historial..."></div>
-                                        )}
                                         <td className="py-0.5 px-2.5">
                                             <div className="text-xs text-gray-900 dark:text-white font-mono font-medium">
                                                 {formatPhone(candidate.whatsapp)}
