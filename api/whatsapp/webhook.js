@@ -68,8 +68,15 @@ export default async function handler(req, res) {
 
             // 3. Trigger AI Agent
             try {
+                // Ensure we get a fresh client
                 const redis = getRedisClient();
-                const isActive = await redis.get('bot_ia_active');
+
+                let isActive = 'false';
+                if (redis) {
+                    isActive = await redis.get('bot_ia_active');
+                } else {
+                    console.warn('⚠️ [Webhook] Redis client not available for AI check, skipping.');
+                }
                 console.log(`🤖 AI Status Check: ${isActive} (Type: ${typeof isActive})`);
 
                 // Default to TRUE if not set (for immediate testing) or if set to 'true'
