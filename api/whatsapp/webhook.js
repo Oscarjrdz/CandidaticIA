@@ -98,13 +98,13 @@ export default async function handler(req, res) {
             // 2. Save Message to History
             const msgToSave = {
                 from: 'user',
-                content: body,
+                content: body || '',
                 type: messageData.type || 'text',
                 timestamp: new Date().toISOString()
             };
 
-            // Capture media if present
-            if (messageData.type === 'image' || messageData.type === 'video' || messageData.type === 'audio' || messageData.type === 'voice') {
+            // Capture media if present (Include ptt and document)
+            if (messageData.media || ['image', 'video', 'audio', 'voice', 'ptt', 'document'].includes(messageData.type)) {
                 msgToSave.mediaUrl = messageData.media;
             }
 

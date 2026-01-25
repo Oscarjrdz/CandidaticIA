@@ -425,10 +425,20 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                                                 {(msg.type === 'video' || msg.type === 'video_received') && (
                                                     <video src={msg.mediaUrl} controls className="max-w-full h-auto" />
                                                 )}
-                                                {(msg.type === 'audio' || msg.type === 'voice' || msg.type === 'audio_received') && (
+                                                {(msg.type === 'audio' || msg.type === 'voice' || msg.type === 'ptt' || msg.type === 'audio_received') && (
                                                     <audio src={msg.mediaUrl} controls className="max-w-full h-10 mt-1" />
                                                 )}
+                                                {(msg.type === 'document' || msg.type === 'doc_received') && (
+                                                    <div className="p-3 bg-black/5 flex items-center space-x-2 cursor-pointer" onClick={() => window.open(msg.mediaUrl, '_blank')}>
+                                                        <Paperclip className="w-4 h-4" />
+                                                        <span className="text-xs font-medium underline">Ver documento</span>
+                                                    </div>
+                                                )}
                                             </div>
+                                        )}
+
+                                        {!msg.content && msg.mediaUrl && (msg.type === 'voice' || msg.type === 'ptt') && (
+                                            <p className="text-[11px] italic opacity-50 mb-1">Nota de voz</p>
                                         )}
 
                                         {msg.content && <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>}
