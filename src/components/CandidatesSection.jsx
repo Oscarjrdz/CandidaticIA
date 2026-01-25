@@ -537,7 +537,7 @@ const CandidatesSection = ({ showToast }) => {
                             <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
                                 <tr className="border-b border-gray-200 dark:border-gray-700 text-xs uppercase tracking-wider text-gray-500">
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Avatar</th>
-                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Whstapp</th>
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp Name</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
                                         <div className="flex items-center space-x-1">
