@@ -63,49 +63,46 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, messages });
         }
 
-        // POST - Enviar mensaje
         if (req.method === 'POST') {
-            const { candidateId, message, type = 'text', mediaUrl } = req.body;
+            const { candidateId, message, type = 'text', mediaUrl, base64Data } = req.body;
 
             if (!candidateId || (!message && !mediaUrl)) {
-                return res.status(400).json({ error: 'Faltan datos requeridos (candidateId, message/mediaUrl)' });
+                return res.status(400).json({ error: 'Faltan datos requeridos' });
             }
 
             const candidate = await getCandidateById(candidateId);
-            if (!candidate) {
-                return res.status(404).json({ error: 'Candidato no encontrado' });
-            }
+            if (!candidate) return res.status(404).json({ error: 'Candidato no encontrado' });
 
             const finalMessage = message ? substituteVariables(message, candidate) : '';
             const ultraConfig = await getUltraMsgConfig();
 
-            if (!ultraConfig) {
-                return res.status(400).json({ error: 'Faltan credenciales de UltraMSG' });
-            }
+            if (!ultraConfig) return res.status(400).json({ error: 'Faltan credenciales' });
 
             const timestamp = new Date().toISOString();
+            const msgId = `msg_${Date.now()}`;
 
-            // 1. Transactional Save: Save as 'queued'
+            // 1. Transactional Save
             const msgToSave = {
-                id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                id: msgId,
                 from: 'me',
                 content: finalMessage,
                 type: type,
                 mediaUrl: mediaUrl,
-                status: 'queued', // Zuckerberg style lifecycle tracking
+                status: 'queued',
                 timestamp: timestamp
             };
 
-            const savedMsg = await saveMessage(candidateId, msgToSave);
+            await saveMessage(candidateId, msgToSave);
 
             // 2. Send via UltraMsg
             try {
                 let sendResult;
+                const deliveryContent = base64Data || mediaUrl;
+
                 if (type === 'text') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, finalMessage, 'chat');
                 } else {
-                    // Send media (image, video, audio, voice)
-                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, mediaUrl, type, {
+                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, deliveryContent, type, {
                         caption: finalMessage
                     });
                 }

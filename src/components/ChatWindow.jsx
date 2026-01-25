@@ -106,7 +106,6 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
 
             // Handle Audio Attachment if present
             if (audioBlob && !forceMedia) {
-                // 1. Convert to Base64
                 const reader = new FileReader();
                 const base64Promise = new Promise((resolve) => {
                     reader.onloadend = () => resolve(reader.result);
@@ -114,7 +113,7 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                 });
                 const base64 = await base64Promise;
 
-                // 2. Upload to get temp URL
+                // 2. Upload to get temp URL (for history visualization)
                 const uploadRes = await fetch('/api/upload', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -124,7 +123,8 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
 
                 if (uploadData.success) {
                     payload.mediaUrl = `${window.location.origin}${uploadData.url}`;
-                    payload.type = 'voice'; // Sends as PTT
+                    payload.type = 'voice';
+                    payload.base64Data = base64; // NEW: Pass direct data for reliability
                 } else {
                     throw new Error('Falló la subida del audio');
                 }

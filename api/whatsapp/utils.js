@@ -38,22 +38,21 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         switch (type) {
             case 'image':
                 endpoint = 'image';
-                payload.image = body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`;
+                payload.image = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : body;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
                 endpoint = 'video';
-                payload.video = body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`;
+                payload.video = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : body;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'audio':
                 endpoint = 'audio';
-                payload.audio = body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`;
+                payload.audio = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`) : body;
                 break;
             case 'voice':
                 endpoint = 'voice';
-                // WhatsApp PTT works best with .ogg/opus, UltraMSG prefers help from extension
-                payload.audio = body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`;
+                payload.audio = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : body;
                 break;
             case 'document':
                 endpoint = 'document';
