@@ -14,15 +14,24 @@ export default async function handler(req, res) {
                 return res.status(500).json({ error: 'Redis no disponible' });
             }
 
-            // Save UltraMsg Config
-            await redis.set('ultramsg_config', JSON.stringify({
-                instanceId,
-                token
-            }));
+            // 1. WhatsApp Config (UltraMsg)
+            if (instanceId !== undefined || token !== undefined) {
+                const existingConfig = await redis.get('ultramsg_config');
+                let config = existingConfig ? JSON.parse(existingConfig) : {};
+                if (instanceId !== undefined) config.instanceId = instanceId;
+                if (token !== undefined) config.token = token;
+                await redis.set('ultramsg_config', JSON.stringify(config));
+            }
 
-            // Save Bot IA Settings
-            await redis.set('bot_ia_prompt', systemPrompt);
-            await redis.set('bot_ia_active', String(isActive));
+            // 2. AI Prompt
+            if (systemPrompt !== undefined) {
+                await redis.set('bot_ia_prompt', systemPrompt);
+            }
+
+            // 3. Bot Status
+            if (isActive !== undefined) {
+                await redis.set('bot_ia_active', String(isActive));
+            }
 
             return res.status(200).json({ success: true });
 

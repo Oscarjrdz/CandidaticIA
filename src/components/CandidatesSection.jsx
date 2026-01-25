@@ -64,13 +64,8 @@ const CandidatesSection = ({ showToast }) => {
         const subscription = new CandidatesSubscription((newCandidates) => {
             // Only update if not searching/filtering (polling refreshes full list)
             if (!search && !aiFilteredCandidates) {
-                // Determine if we need to refresh the current page view
-                // For simplicity in this version, we might not auto-update list content to avoid jumping
-                // But we can update stats or indicators.
-
-                // NOTE: If we want real-time updates while paginate, we need a smarter subscription 
-                // that respects the current page. For now, we'll keep it simple: 
-                // Manual refresh or page change triggers reload.
+                setCandidates(newCandidates);
+                setLastUpdate(new Date());
             }
         }, 10000); // 10s interval
 
