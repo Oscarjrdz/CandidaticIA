@@ -1,6 +1,6 @@
 import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient } from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
-import { getUltraMsgConfig, getUltraMsgContact } from './utils.js';
+import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead } from './utils.js';
 
 export default async function handler(req, res) {
     if (req.method === 'POST') {
@@ -50,6 +50,13 @@ export default async function handler(req, res) {
                 });
                 candidateId = newCandidate.id;
                 console.log(`✨ Created Candidate ID: ${candidateId}`);
+            }
+
+            // --- READ RECEIPT (Instant) ---
+            const config = await getUltraMsgConfig();
+            if (config) {
+                markUltraMsgAsRead(config.instanceId, config.token, from).catch(e => console.error('Read receipt failed', e));
+                console.log('📖 [Webhook] Mark as read requested');
             }
 
             // 2. Save Message to History

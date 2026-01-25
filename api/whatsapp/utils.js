@@ -59,3 +59,16 @@ export const getUltraMsgContact = async (instanceId, token, chatId) => {
         return null;
     }
 };
+export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
+    try {
+        const url = `https://api.ultramsg.com/${instanceId}/chats/read`;
+        const response = await axios.post(url, {
+            token: token,
+            chatId: chatId
+        });
+        return response.data;
+    } catch (error) {
+        console.error('UltraMsg Read Receipt Error:', error.response?.data || error.message);
+        return null; // Non-critical failure
+    }
+};
