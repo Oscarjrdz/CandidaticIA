@@ -5,16 +5,23 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
         const data = req.body; // UltraMsg payload
 
+        console.log('📨 Webhook headers:', JSON.stringify(req.headers));
+        console.log('📨 Webhook payload:', JSON.stringify(data).substring(0, 200));
+
         // Basic Validation
         if (!data || !data.data) {
-            return res.status(200).send('ok'); // Always 200 to satisfy webhook
+            console.log('⚠️ Ignored: No data or invalid payload');
+            return res.status(200).send('ok');
         }
 
         const messageData = data.data;
         const eventType = data.event_type;
 
+        console.log(`TYPE: ${eventType}, FROM: ${messageData.from}, BODY: ${messageData.body}`);
+
         // Only process incoming messages
         if (eventType !== 'message_received') {
+            console.log('⚠️ Ignored event type:', eventType);
             return res.status(200).send('ok');
         }
 
@@ -26,10 +33,11 @@ export default async function handler(req, res) {
             // Clean phone number (remove @c.us and non-digits)
             const phone = from.replace(/\D/g, '');
 
-            console.log(`📩 [Webhook] Message from ${phone} (${pushName}): ${body}`);
+            console.log(`📩 [Webhook] PROCESSING Message from ${phone} (${pushName})`);
 
             // 1. Find or Create Candidate
             let candidateId = await getCandidateIdByPhone(phone);
+            console.log(`🔍 Candidate ID found: ${candidateId}`);
 
             if (!candidateId) {
                 console.log(`✨ New candidate detected: ${phone}`);
@@ -39,31 +47,38 @@ export default async function handler(req, res) {
                     origen: 'whatsapp_v2'
                 });
                 candidateId = newCandidate.id;
+                console.log(`✨ Created Candidate ID: ${candidateId}`);
             }
 
             // 2. Save Message to History
-            await saveMessage(candidateId, {
+            const msgResult = await saveMessage(candidateId, {
                 from: 'user',
                 content: body,
                 type: 'text',
                 timestamp: new Date().toISOString()
             });
+            console.log('💾 Message Saved Result:', msgResult);
 
             // Update candidate last activity
             await updateCandidate(candidateId, {
                 ultimoMensaje: new Date().toISOString(),
                 unread: true
             });
+            console.log('⏱️ Updated Candidate Timestamp');
 
             // 3. Trigger AI Agent
             try {
                 const redis = getRedisClient();
                 const isActive = await redis.get('bot_ia_active');
+                console.log(`🤖 AI Status Check: ${isActive} (Type: ${typeof isActive})`);
 
                 // Default to TRUE if not set (for immediate testing) or if set to 'true'
                 if (isActive !== 'false') {
+                    console.log('🚀 Triggering AI Process...');
                     // Run in background (don't await to return 200 fast to webhook)
-                    processMessage(candidateId, body).catch(err => console.error('Background AI Error:', err));
+                    processMessage(candidateId, body)
+                        .then(res => console.log('🤖 AI Background Process Result:', res))
+                        .catch(err => console.error('❌ AI Background Process Error:', err));
                 } else {
                     console.log('💤 Bot Internal AI is paused.');
                 }
