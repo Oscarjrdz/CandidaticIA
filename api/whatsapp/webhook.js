@@ -45,7 +45,8 @@ export default async function handler(req, res) {
                 const newCandidate = await saveCandidate({
                     whatsapp: phone,
                     nombre: pushName || 'Desconocido',
-                    origen: 'whatsapp_v2'
+                    origen: 'whatsapp_v2',
+                    primerContacto: new Date().toISOString()
                 });
                 candidateId = newCandidate.id;
                 console.log(`✨ Created Candidate ID: ${candidateId}`);
