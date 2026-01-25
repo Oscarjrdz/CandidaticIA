@@ -68,7 +68,6 @@ const BotIASection = ({ showToast }) => {
 
         if (resConfig.ok && resPrompt.ok) {
             showToast('Configuración y Prompt guardados correctamente', 'success');
-        } else {
             showToast('Error guardando configuración', 'error');
         }
     } catch (error) {
