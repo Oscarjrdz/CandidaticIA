@@ -1,6 +1,6 @@
 
 import { getRedisClient, updateCandidate } from './storage.js';
-import { cleanNameWithAI, cleanMunicipioWithAI, detectGender } from './ai.js';
+import { cleanNameWithAI, cleanMunicipioWithAI, cleanCategoryWithAI, detectGender } from './ai.js';
 
 /**
  * Processes a bot message to extract and save candidate data based on automation rules.

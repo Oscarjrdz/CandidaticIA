@@ -109,11 +109,12 @@ export async function cleanNameWithAI(name) {
         const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
 
         const prompt = `Corrige la ortografía, ACENTUACIÓN y sintaxis del nombre de persona: "${name}".
-REGLAS:
-1. Asegúrate de incluir acentos omitidos (ej: "Rodriguez" -> "Rodríguez", "Sanchez" -> "Sánchez", "Ramon" -> "Ramón").
-2. No inventes nombres nuevos, solo limpia y corrige el que te doy.
-3. Formatea el resultado estrictamente con Mayúscula Inicial en cada palabra (Title Case).
-4. Responde únicamente con el nombre corregido, sin puntos finales ni explicaciones.
+REGLAS CRÍTICAS:
+1. DEBES poner acentos en apellidos que los lleven de forma obligatoria (ej: "Rodriguez" -> "Rodríguez", "Sanchez" -> "Sánchez", "Gomez" -> "Gómez", "Martinez" -> "Martínez", "Hernandez" -> "Hernández").
+2. Corrige nombres comunes (ej: "Ramon" -> "Ramón", "Jose" -> "José", "Maria" -> "María").
+3. No inventes nombres nuevos, solo limpia y corrige el que te doy.
+4. Formatea el resultado estrictamente con Mayúscula Inicial en cada palabra (Title Case).
+5. Responde únicamente con el nombre corregido, sin puntos finales ni explicaciones.
 Respuesta:`;
 
         let cleaned = name;
