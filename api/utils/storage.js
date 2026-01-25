@@ -176,6 +176,7 @@ export const saveCandidate = async (candidate) => {
     if (!candidate.id) {
         candidate.id = `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
+    console.log(`💾 [Storage] Saving candidate ${candidate.id} (${candidate.whatsapp})...`);
     return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, candidate, candidate.id);
 };
 
@@ -380,10 +381,17 @@ export const getMessages = async (candidateId) => {
 
 export const saveMessage = async (candidateId, message) => {
     const client = getClient();
-    if (!client) return;
+    if (!client) {
+        console.error('❌ [Storage] saveMessage failed: No Redis client');
+        return null;
+    }
     const key = `messages:${candidateId}`;
     try {
+        console.log(`💾 [Storage] Saving message to ${key}...`);
         await client.rpush(key, JSON.stringify(message));
-    } catch { }
+        console.log(`✅ [Storage] Message saved to ${key}`);
+    } catch (e) {
+        console.error('❌ [Storage] saveMessage Error:', e);
+    }
     return message;
 };
