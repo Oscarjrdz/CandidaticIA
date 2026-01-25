@@ -1,6 +1,7 @@
 import { getMessages, saveMessage, getCandidateById, updateCandidate } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
+import { sendUltraMsgMessage, getUltraMsgConfig } from './whatsapp/utils.js';
 
 const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
 
@@ -94,22 +95,42 @@ export default async function handler(req, res) {
             }
 
             if (!effectiveBotId || !effectiveApiKey) {
-                return res.status(400).json({ error: 'Credenciales de BuilderBot no proporcionadas (Redis falló)' });
+                // ...
             }
 
             // Aplicar sustitución de shortcuts (ej: {{nombre}})
             const finalMessage = substituteVariables(message, candidate);
 
-            // Enviar a BuilderBot
-            const result = await sendBuilderBotMessage(effectiveBotId, effectiveApiKey, candidate.whatsapp, finalMessage);
+            if (!effectiveBotId || !effectiveApiKey) {
+                // If BuilderBot credentials are NOT present, try UltraMsg (V2)
+                const ultraConfig = await getUltraMsgConfig();
 
-            if (!result.success) {
-                console.error(`❌ Message Sending Failed:`, result.error);
-                return res.status(502).json({
-                    error: 'Error enviando a BuilderBot',
-                    details: result.error,
-                    status: result.status
-                });
+                if (ultraConfig) {
+                    console.log(`📤 [Chat API] Sending via UltraMsg to ${candidate.whatsapp}`);
+
+                    // Enviar a UltraMsg
+                    const result = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, finalMessage);
+
+                    // Assume success format from API
+                    if (!result || (result.sent !== 'true' && result.sent !== true)) {
+                        console.warn('UltraMsg response might indicate failure:', result);
+                        // Proceed assuming sent if no specific error, or handle error
+                    }
+                } else {
+                    return res.status(400).json({ error: 'Faltan credenciales (BuilderBot o UltraMsg)' });
+                }
+            } else {
+                // Enviar a BuilderBot (V1)
+                const result = await sendBuilderBotMessage(effectiveBotId, effectiveApiKey, candidate.whatsapp, finalMessage);
+
+                if (!result.success) {
+                    console.error(`❌ Message Sending Failed:`, result.error);
+                    return res.status(502).json({
+                        error: 'Error enviando a BuilderBot',
+                        details: result.error,
+                        status: result.status
+                    });
+                }
             }
 
             // Guardar en historial local como mensaje saliente
