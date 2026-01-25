@@ -5,6 +5,8 @@ import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 const DEFAULT_SYSTEM_PROMPT = `
 Eres el asistente virtual de Candidatic, un experto en reclutamiento amigable y profesional.
 Tu objetivo es ayudar a los candidatos a responder sus dudas sobre vacantes, estatus de postulación o información general.
+IMPORTANTE: Siempre saluda al candidato por su nombre real si está disponible en la base de datos.
+Revisa siempre el historial y los datos del candidato antes de responder.
 Responde de forma concisa, empática y siempre en español latinoamericano.
 No inventes información sobre vacantes específicas si no la tienes en el contexto.
 `;
@@ -15,37 +17,39 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         const redis = getRedisClient();
 
-        // 1. Get History
+        // 1. Get Candidate Data (Database Context)
+        let candidateData = null;
+        const candidateKey = `candidate:${candidateId}`;
+        try {
+            const rawData = await redis.get(candidateKey);
+            if (rawData) candidateData = JSON.parse(rawData);
+        } catch (e) {
+            console.error('Error fetching candidate for context:', e);
+        }
+
+        // 2. Get History
         const allMessages = await getMessages(candidateId);
 
-        // Filter out empty messages or errors
+        // ... (Filter messages logic remains the same)
         const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
-
-        // Exclude the very last message if it matches the current incoming message (to avoid duplication in context)
-        // because we saved it in webhook BEFORE calling this agent.
-        // We want 'history' to be everything BEFORE the current prompt.
         const historyMessages = validMessages.filter((m, index) => {
             const isLast = index === validMessages.length - 1;
             if (isLast && m.content === incomingMessage && m.from === 'user') return false;
             return true;
         });
 
-        // Take last 15 messages for context window (increased from 10)
         // Take last 15 messages for context
         let rawHistory = historyMessages.slice(-15).map(m => ({
             role: (m.from === 'user') ? 'user' : 'model',
             parts: [{ text: m.content }]
         }));
 
-        // IMPORTANT: Gemini requires history to START with 'user'.
-        // We must drop leading 'model' messages.
         while (rawHistory.length > 0 && rawHistory[0].role !== 'user') {
             rawHistory.shift();
         }
-
         const recentHistory = rawHistory;
 
-        // 2. Get Configuration (API Key & System Prompt)
+        // 3. Configuration & Context Injection
         let apiKey = process.env.GEMINI_API_KEY;
         let systemInstruction = DEFAULT_SYSTEM_PROMPT;
 
@@ -58,6 +62,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 const parsed = JSON.parse(aiConfig);
                 if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
             }
+        }
+
+        // INJECT DB CONTEXT INTO PROMPT
+        if (candidateData) {
+            systemInstruction += `\n\n[CONTEXTO DE BASE DE DATOS DEL CANDIDATO]:\n${JSON.stringify(candidateData, null, 2)}\nUsa esta información para personalizar tu respuesta (Nombre, Municipio, Vacante de interés, etc).`;
         }
 
         if (!apiKey) return 'ERROR: No API Key found in env or redis';
@@ -133,21 +142,28 @@ export const processMessage = async (candidateId, incomingMessage) => {
         });
 
         // 6. Send via UltraMsg
+        // 6. Send via UltraMsg
         const config = await getUltraMsgConfig();
-        const candidateKey = `candidate:${candidateId}`;
-        const rawData = await redis.get(candidateKey);
-        let candidateData = null;
-        if (rawData) {
-            try {
-                candidateData = JSON.parse(rawData);
-            } catch (e) { console.error('Error parsing candidate', e); }
-        }
+        // Candidate Data strictly required for WhatsApp number
+        // We already fetched 'candidateData' at the top.
 
         if (config && candidateData && candidateData.whatsapp) {
             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
             console.log(`✅ [AI Agent] Message sent to ${candidateData.whatsapp}`);
         } else {
-            console.warn('⚠️ [AI Agent] Could not send message: Missing config or candidate phone');
+            // Fallback if data was missing or fetch failed
+            console.warn('⚠️ [AI Agent] could not send message using cached data. Re-checking...');
+            const freshKey = `candidate:${candidateId}`;
+            try {
+                const freshRaw = await redis.get(freshKey);
+                if (freshRaw) {
+                    const freshData = JSON.parse(freshRaw);
+                    if (freshData && freshData.whatsapp) {
+                        await sendUltraMsgMessage(config.instanceId, config.token, freshData.whatsapp, responseText);
+                        console.log(`✅ [AI Agent] Message sent (retry) to ${freshData.whatsapp}`);
+                    }
+                }
+            } catch (e) { console.error('Retry failed', e); }
         }
 
         return responseText;
