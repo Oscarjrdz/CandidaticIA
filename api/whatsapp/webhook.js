@@ -67,10 +67,12 @@ export default async function handler(req, res) {
             });
             console.log('⏱️ Updated Candidate Timestamp');
 
-            // PARALLEL EXECUTION: Fetch Profile Pic & Trigger AI
-            // This prevents the profile picture fetch from delaying the AI response
+            // PARALLEL EXECUTION with TIMEOUTS
+            // reliableTimeout helper
+            const timeout = (ms) => new Promise(resolve => setTimeout(() => resolve('TIMEOUT'), ms));
 
-            const profilePicPromise = (async () => {
+            // Profile Pic: Strict 2s timeout. If it's slow, skip it.
+            const profilePicTask = (async () => {
                 try {
                     const config = await getUltraMsgConfig();
                     if (config) {
@@ -85,6 +87,12 @@ export default async function handler(req, res) {
                 }
             })();
 
+            const profilePicPromise = Promise.race([
+                profilePicTask,
+                timeout(2000)
+            ]);
+
+            // AI Process: Critical, but catch errors
             const aiProcessPromise = (async () => {
                 try {
                     const redis = getRedisClient();
@@ -108,7 +116,7 @@ export default async function handler(req, res) {
                 }
             })();
 
-            // Wait for both to complete (or fail) without blocking each other
+            // Wait for AI to finish, but don't let Profile Pic block completely if it somehow evades race (unlikely)
             await Promise.allSettled([profilePicPromise, aiProcessPromise]);
 
             return res.status(200).send('success');
