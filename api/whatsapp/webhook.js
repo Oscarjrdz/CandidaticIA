@@ -67,52 +67,49 @@ export default async function handler(req, res) {
             });
             console.log('⏱️ Updated Candidate Timestamp');
 
-            // 1b. Fetch Profile Pic Logic
-            let profilePicUrl = '';
-            try {
-                const config = await getUltraMsgConfig();
-                if (config) {
-                    const contactInfo = await getUltraMsgContact(config.instanceId, config.token, from);
-                    if (contactInfo && contactInfo.image) {
-                        profilePicUrl = contactInfo.image;
+            // PARALLEL EXECUTION: Fetch Profile Pic & Trigger AI
+            // This prevents the profile picture fetch from delaying the AI response
+
+            const profilePicPromise = (async () => {
+                try {
+                    const config = await getUltraMsgConfig();
+                    if (config) {
+                        const contactInfo = await getUltraMsgContact(config.instanceId, config.token, from);
+                        if (contactInfo && contactInfo.image) {
+                            await updateCandidate(candidateId, { profilePic: contactInfo.image });
+                            console.log('📸 Profile Pic Updated:', contactInfo.image);
+                        }
                     }
+                } catch (pErr) {
+                    console.warn('Profile Pic Fetch Error', pErr.message);
                 }
-            } catch (pErr) { console.warn('Profile Pic Fetch Error', pErr.message); }
+            })();
 
-            // Update candidate with profile pic if found
-            if (profilePicUrl) {
-                await updateCandidate(candidateId, { profilePic: profilePicUrl });
-                console.log('📸 Profile Pic Updated:', profilePicUrl);
-            }
+            const aiProcessPromise = (async () => {
+                try {
+                    const redis = getRedisClient();
+                    let isActive = 'false';
+                    if (redis) {
+                        isActive = await redis.get('bot_ia_active');
+                    } else {
+                        console.warn('⚠️ [Webhook] Redis client not available for AI check, skipping.');
+                    }
+                    console.log(`🤖 AI Status Check: ${isActive}`);
 
-            // 3. Trigger AI Agent
-            try {
-                // Ensure we get a fresh client
-                const redis = getRedisClient();
-
-                let isActive = 'false';
-                if (redis) {
-                    isActive = await redis.get('bot_ia_active');
-                } else {
-                    console.warn('⚠️ [Webhook] Redis client not available for AI check, skipping.');
+                    if (isActive !== 'false') {
+                        console.log('🚀 Triggering AI Process...');
+                        await processMessage(candidateId, body);
+                        console.log('🤖 AI Process Completed');
+                    } else {
+                        console.log('💤 Bot Internal AI is paused.');
+                    }
+                } catch (aiErr) {
+                    console.error('Failed to trigger AI:', aiErr);
                 }
-                console.log(`🤖 AI Status Check: ${isActive} (Type: ${typeof isActive})`);
+            })();
 
-                // Default to TRUE if not set (for immediate testing) or if set to 'true'
-                if (isActive !== 'false') {
-                    console.log('🚀 Triggering AI Process...');
-                    // IMPORTANT: In Vercel Serverless, we MUST await the promise.
-                    // If we return res.send() before this finishes, the runtime freezes the context
-                    // and the message is never sent.
-                    await processMessage(candidateId, body);
-                    console.log('🤖 AI Process Completed');
-                } else {
-                    console.log('💤 Bot Internal AI is paused.');
-                }
-
-            } catch (aiErr) {
-                console.error('Failed to trigger AI:', aiErr);
-            }
+            // Wait for both to complete (or fail) without blocking each other
+            await Promise.allSettled([profilePicPromise, aiProcessPromise]);
 
             return res.status(200).send('success');
 
