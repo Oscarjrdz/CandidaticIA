@@ -16,24 +16,35 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const redis = getRedisClient();
 
         // 1. Get History
-        const messages = await getMessages(candidateId);
-        // Take last 10 messages for context window
-        const recentHistory = messages.slice(-10).map(m => ({
-            role: m.from === 'user' ? 'user' : 'model',
+        const allMessages = await getMessages(candidateId);
+
+        // Filter out empty messages or errors
+        const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
+
+        // Exclude the very last message if it matches the current incoming message (to avoid duplication in context)
+        // because we saved it in webhook BEFORE calling this agent.
+        // We want 'history' to be everything BEFORE the current prompt.
+        const historyMessages = validMessages.filter((m, index) => {
+            const isLast = index === validMessages.length - 1;
+            if (isLast && m.content === incomingMessage && m.from === 'user') return false;
+            return true;
+        });
+
+        // Take last 15 messages for context window (increased from 10)
+        const recentHistory = historyMessages.slice(-15).map(m => ({
+            role: (m.from === 'user') ? 'user' : 'model', // 'me' is also user-generated usually, or model? 'me' = recruiter manually sending. Treat as model context or user? 
+            // Usually 'me' (agent) should be treated as 'model' to give AI context of what "we" said.
             parts: [{ text: m.content }]
+        })).map(m => ({
+            role: m.role === 'me' ? 'model' : m.role, // Normalize 'me' to 'model'
+            parts: m.parts
         }));
 
         // 2. Get Configuration (API Key & System Prompt)
         let apiKey = process.env.GEMINI_API_KEY;
         let systemInstruction = DEFAULT_SYSTEM_PROMPT;
-        let isActive = false;
 
         if (redis) {
-            // Check if Bot is Active
-            // For MVP we assume active if this function is called, 
-            // but webhook should check 'bot_ia_active' flag.
-
-            // Get Custom Prompt
             const customPrompt = await redis.get('bot_ia_prompt');
             if (customPrompt) systemInstruction = customPrompt;
 
@@ -44,19 +55,13 @@ export const processMessage = async (candidateId, incomingMessage) => {
             }
         }
 
-        if (!apiKey) {
-            console.error('❌ [AI Agent] No Gemini API Key found.');
-            return;
-        }
+        if (!apiKey) return;
 
         // 3. Initialize Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
         // 4. Generate Content
-        // Gemini SDK handles history better with startChat, 
-        // but for stateless serverless functions, we rebuild history each time.
-
         const chat = model.startChat({
             history: recentHistory,
             systemInstruction: systemInstruction,
