@@ -67,6 +67,9 @@ export const processMessage = async (candidateId, incomingMessage) => {
             }
         }
 
+        // REINFORCE RULES (Append at the end to override any other instruction)
+        systemInstruction += `\n\n[REGLA SUPREMA]: NO uses markdown, NO uses asteriscos (**), NO uses negritas. Escribe texto plano y limpio.`;
+
         // INJECT DB CONTEXT INTO PROMPT
         if (candidateData) {
             systemInstruction += `\n\n[CONTEXTO DE BASE DE DATOS DEL CANDIDATO]:\n${JSON.stringify(candidateData, null, 2)}\nUsa esta información para personalizar tu respuesta (Nombre, Municipio, Vacante de interés, etc).`;
