@@ -23,13 +23,21 @@ const getClient = () => {
             } catch (e) {
                 console.error('❌ Failed to create Redis client:', e);
             }
+        } else {
+            console.warn('⚠️ REDIS_URL not found in environment variables.');
         }
     }
     return redis;
 };
 
+// Initialize on load
 getClient();
-export const getRedisClient = () => redis;
+
+// Export wrapper that always ensures client is returned (or tries to init again)
+export const getRedisClient = () => {
+    if (!redis) return getClient();
+    return redis;
+};
 
 // ==========================================
 // KEYS MAP
