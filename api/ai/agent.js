@@ -88,11 +88,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // 4. Generate Content (With Fallback Strategy)
         const modelsToTry = [
-            "gemini-2.5-flash",
-            "gemini-flash-latest",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-pro"
+            "gemini-1.5-pro",
+            "gemini-1.5-flash"
         ];
 
         let result;
@@ -111,7 +108,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
                     history: recentHistory,
                     // systemInstruction moved to model init
                     generationConfig: {
-                        maxOutputTokens: 300,
+                        maxOutputTokens: 1000,
                         temperature: 0.7,
                     }
                 });
