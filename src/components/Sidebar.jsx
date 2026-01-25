@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, MessageSquare, Layout } from 'lucide-react';
+import { Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, MessageSquare, Layout, Smartphone } from 'lucide-react';
 
 const WhatsAppIcon = () => (
     <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
