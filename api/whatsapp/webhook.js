@@ -82,10 +82,11 @@ export default async function handler(req, res) {
                 // Default to TRUE if not set (for immediate testing) or if set to 'true'
                 if (isActive !== 'false') {
                     console.log('🚀 Triggering AI Process...');
-                    // Run in background (don't await to return 200 fast to webhook)
-                    processMessage(candidateId, body)
-                        .then(res => console.log('🤖 AI Background Process Result:', res))
-                        .catch(err => console.error('❌ AI Background Process Error:', err));
+                    // IMPORTANT: In Vercel Serverless, we MUST await the promise.
+                    // If we return res.send() before this finishes, the runtime freezes the context
+                    // and the message is never sent.
+                    await processMessage(candidateId, body);
+                    console.log('🤖 AI Process Completed');
                 } else {
                     console.log('💤 Bot Internal AI is paused.');
                 }
