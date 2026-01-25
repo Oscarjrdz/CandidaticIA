@@ -16,6 +16,7 @@ export default async function handler(req, res) {
         const keys = await client.keys('candidate:*');
 
         // 2. Get details for each
+        const candidates = [];
         for (const key of keys) {
             const data = await client.get(key);
             if (data) {
