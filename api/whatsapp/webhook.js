@@ -1,4 +1,5 @@
-import { saveMessage, getCandidateIdByPhone, createCandidate, updateCandidate } from '../utils/storage.js';
+import { saveMessage, getCandidateIdByPhone, createCandidate, updateCandidate, getRedisClient } from '../utils/storage.js';
+import { processMessage } from '../ai/agent.js';
 
 export default async function handler(req, res) {
     if (req.method === 'POST') {
@@ -54,7 +55,22 @@ export default async function handler(req, res) {
                 unread: true
             });
 
-            // TODO: Trigger AI Agent (Phase 3)
+            // 3. Trigger AI Agent
+            try {
+                const redis = getRedisClient();
+                const isActive = await redis.get('bot_ia_active');
+
+                // Default to TRUE if not set (for immediate testing) or if set to 'true'
+                if (isActive !== 'false') {
+                    // Run in background (don't await to return 200 fast to webhook)
+                    processMessage(candidateId, body).catch(err => console.error('Background AI Error:', err));
+                } else {
+                    console.log('💤 Bot Internal AI is paused.');
+                }
+
+            } catch (aiErr) {
+                console.error('Failed to trigger AI:', aiErr);
+            }
 
             return res.status(200).send('success');
 
