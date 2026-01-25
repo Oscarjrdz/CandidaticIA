@@ -40,42 +40,50 @@ export async function processBotResponse(candidateId, botMessage) {
             }
         });
 
-        // 3. Apply basic updates
+        // 3. Apply basic updates (Raw extraction)
         if (Object.keys(updateData).length > 0) {
+            console.log(`💾 [Automations] Saving raw update for ${candidateId}:`, updateData);
             await updateCandidate(candidateId, updateData);
-            console.log(`💾 [Automations] Updated candidate ${candidateId} with extracted data.`);
 
-            // 4. Background: Apply AI Cleaning/Detection for specific fields
+            // 4. AI Cleaning/Detection for specific fields
             if (updateData.nombreReal) {
                 extraTasks.push((async () => {
+                    console.log(`🤖 [Automations] Cleaning name: "${updateData.nombreReal}"...`);
                     const cleaned = await cleanNameWithAI(updateData.nombreReal);
                     const gender = await detectGender(cleaned);
                     await updateCandidate(candidateId, {
                         nombreReal: cleaned,
                         genero: gender !== 'Desconocido' ? gender : undefined
                     });
-                    console.log(`🤖 [Automations] AI Cleaned Name: ${cleaned}, Gender: ${gender}`);
+                    console.log(`✅ [Automations] Name cleaned: "${cleaned}" (${gender})`);
                 })());
             }
 
             if (updateData.municipio) {
                 extraTasks.push((async () => {
+                    console.log(`🤖 [Automations] Cleaning municipio: "${updateData.municipio}"...`);
                     const cleaned = await cleanMunicipioWithAI(updateData.municipio);
                     await updateCandidate(candidateId, { municipio: cleaned });
-                    console.log(`🤖 [Automations] AI Cleaned Municipio: ${cleaned}`);
+                    console.log(`✅ [Automations] Municipio cleaned: "${cleaned}"`);
                 })());
             }
 
             if (updateData.categoria) {
                 extraTasks.push((async () => {
+                    console.log(`🤖 [Automations] Cleaning categoria: "${updateData.categoria}"...`);
                     const cleaned = await cleanCategoryWithAI(updateData.categoria);
                     await updateCandidate(candidateId, { categoria: cleaned });
-                    console.log(`🤖 [Automations] AI Cleaned Categoría: ${cleaned}`);
+                    console.log(`✅ [Automations] Categoria cleaned: "${cleaned}"`);
                 })());
             }
 
-            // Run AI tasks in parallel without blocking main flow
-            Promise.all(extraTasks).catch(err => console.error('❌ [Automations] AI extra tasks error:', err));
+            // Wait for all AI tasks to finish to ensure consistency in serverless
+            if (extraTasks.length > 0) {
+                console.log(`⏳ [Automations] Waiting for ${extraTasks.length} AI cleaning tasks...`);
+                await Promise.all(extraTasks).catch(err => console.error('❌ [Automations] AI tasks error:', err));
+            }
+        } else {
+            console.log('ℹ️ [Automations] No matching patterns found in bot response.');
         }
 
     } catch (error) {

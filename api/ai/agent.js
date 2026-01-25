@@ -150,9 +150,9 @@ export const processMessage = async (candidateId, incomingMessage) => {
         });
 
         // --- AUTH-DATA CAPTURE (New Feature) ---
-        // Run extraction logic in background
+        // Await extraction to ensure it finishes in serverless
         const { processBotResponse } = await import('../utils/automations.js');
-        processBotResponse(candidateId, responseText).catch(e => console.error('Automation Error:', e));
+        await processBotResponse(candidateId, responseText).catch(e => console.error('Automation Error:', e));
 
         // 6. Send via UltraMsg
         // 6. Send via UltraMsg
