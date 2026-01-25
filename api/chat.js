@@ -77,60 +77,29 @@ export default async function handler(req, res) {
                 return res.status(404).json({ error: 'Candidato no encontrado' });
             }
 
-            // Validar credenciales
-            let effectiveBotId = botId;
-            let effectiveApiKey = apiKey;
-
-            if (!effectiveBotId || !effectiveApiKey) {
-                const { getRedisClient } = await import('./utils/storage.js');
-                const redis = getRedisClient();
-                if (redis) {
-                    const credsJson = await redis.get('builderbot_credentials');
-                    if (credsJson) {
-                        const creds = JSON.parse(credsJson);
-                        if (!effectiveBotId) effectiveBotId = creds.botId;
-                        if (!effectiveApiKey) effectiveApiKey = creds.apiKey;
-                    }
-                }
-            }
-
-            if (!effectiveBotId || !effectiveApiKey) {
-                // ...
-            }
-
             // Aplicar sustitución de shortcuts (ej: {{nombre}})
             const finalMessage = substituteVariables(message, candidate);
 
-            if (!effectiveBotId || !effectiveApiKey) {
-                // If BuilderBot credentials are NOT present, try UltraMsg (V2)
-                const ultraConfig = await getUltraMsgConfig();
+            // ALWAYS use UltraMsg (Candidatic 2.0)
+            const ultraConfig = await getUltraMsgConfig();
 
-                if (ultraConfig) {
-                    console.log(`📤 [Chat API] Sending via UltraMsg to ${candidate.whatsapp}`);
+            if (ultraConfig) {
+                console.log(`📤 [Chat API] Sending via UltraMsg to ${candidate.whatsapp}`);
 
-                    // Enviar a UltraMsg
-                    const result = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, finalMessage);
+                // Enviar a UltraMsg
+                const result = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, finalMessage);
 
-                    // Assume success format from API
-                    if (!result || (result.sent !== 'true' && result.sent !== true)) {
-                        console.warn('UltraMsg response might indicate failure:', result);
-                        // Proceed assuming sent if no specific error, or handle error
-                    }
-                } else {
-                    return res.status(400).json({ error: 'Faltan credenciales (BuilderBot o UltraMsg)' });
+                // Check for UltraMsg errors (sometimes they return success but "sent": "false" or similar)
+                if (!result) {
+                    console.error('❌ UltraMsg API returned null/undefined');
+                    return res.status(502).json({ error: 'Error enviando a UltraMsg (Sin respuesta)' });
                 }
+
+                // If needed, check specific UltraMsg properties
+                // but usually if it returns object it's "queued"
             } else {
-                // Enviar a BuilderBot (V1)
-                const result = await sendBuilderBotMessage(effectiveBotId, effectiveApiKey, candidate.whatsapp, finalMessage);
-
-                if (!result.success) {
-                    console.error(`❌ Message Sending Failed:`, result.error);
-                    return res.status(502).json({
-                        error: 'Error enviando a BuilderBot',
-                        details: result.error,
-                        status: result.status
-                    });
-                }
+                console.error('❌ UltraMsg Config Missing');
+                return res.status(400).json({ error: 'Faltan credenciales de UltraMsg/Bot IA' });
             }
 
             // Guardar en historial local como mensaje saliente
