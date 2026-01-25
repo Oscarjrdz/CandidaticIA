@@ -14,7 +14,6 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
     const menuItems = [
         { id: 'candidates', label: 'Candidatos', icon: Users, position: 'top' },
         { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
-        { id: 'assistant', label: 'Update Bot', icon: Bot, position: 'top' },
         { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
         { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
         { id: 'bulks', label: 'Bulks', icon: Send, position: 'top' },

@@ -6,7 +6,6 @@ import Sidebar from './components/Sidebar';
 import CandidatesSection from './components/CandidatesSection';
 import HistorySection from './components/HistorySection';
 import SettingsSection from './components/SettingsSection';
-import AssistantSection from './components/AssistantSection';
 import AutomationsSection from './components/AutomationsSection';
 import VacanciesSection from './components/VacanciesSection';
 import BulksSection from './components/BulksSection';
@@ -161,23 +160,21 @@ function App() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {activeSection === 'candidates' ? 'Candidatos'
-                    : activeSection === 'assistant' ? 'Update Bot'
-                      : activeSection === 'automations' ? 'Automatizaciones'
-                        : activeSection === 'vacancies' ? 'Vacantes'
-                          : activeSection === 'history' ? 'Historial'
-                            : activeSection === 'bulks' ? 'Bulks'
-                              : activeSection === 'users' ? 'Usuarios'
-                                : activeSection === 'post-maker' ? 'Post Maker'
-                                  : 'Configuración'}
+                    : activeSection === 'automations' ? 'Automatizaciones'
+                      : activeSection === 'vacancies' ? 'Vacantes'
+                        : activeSection === 'history' ? 'Historial'
+                          : activeSection === 'bulks' ? 'Bulks'
+                            : activeSection === 'users' ? 'Usuarios'
+                              : activeSection === 'post-maker' ? 'Post Maker'
+                                : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
-                    : activeSection === 'assistant' ? 'Gestión del Prompt y Archivos del Asistente'
-                      : activeSection === 'bot-ia' ? 'Configuración de UltraMsg y Bot IA'
-                        : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
-                          : activeSection === 'users' ? 'Gestión de equipo y permisos'
-                            : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
-                              : 'Configuración del Sistema'
+                    : activeSection === 'bot-ia' ? 'Configuración de UltraMsg y Bot IA'
+                      : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
+                        : activeSection === 'users' ? 'Gestión de equipo y permisos'
+                          : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
+                            : 'Configuración del Sistema'
                   }
                 </p>
               </div>
@@ -251,8 +248,6 @@ function App() {
             <CandidatesSection showToast={showToast} />
           ) : activeSection === 'history' ? (
             <HistorySection showToast={showToast} />
-          ) : activeSection === 'assistant' ? (
-            <AssistantSection showToast={showToast} />
           ) : activeSection === 'bot-ia' ? (
             <BotIASection showToast={showToast} />
           ) : activeSection === 'automations' ? (
