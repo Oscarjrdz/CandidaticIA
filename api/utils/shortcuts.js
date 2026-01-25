@@ -17,11 +17,13 @@ export const substituteVariables = (text, candidate) => {
 
         // prioritize specific field mappings first
         const mappings = {
-            'nombre': candidate.nombre || candidate.nombreReal || 'Candidato',
+            'nombre': candidate.nombre || candidate.nombreReal || candidate.name || 'Candidato',
+            'name': candidate.nombre || candidate.nombreReal || candidate.name || 'Candidato',
             'nombrereal': candidate.nombreReal || candidate.nombre || 'Candidato',
             'whatsapp': candidate.whatsapp || '',
             'telefono': candidate.whatsapp || '',
             'phone': candidate.whatsapp || '',
+            'tel': candidate.whatsapp || '',
             'municipio': candidate.municipio || 'No especificado',
             'fechanacimiento': candidate.fechaNacimiento || 'No especificada',
             'tieneempleo': candidate.tieneEmpleo || 'No especificado',

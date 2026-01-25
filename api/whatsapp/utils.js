@@ -38,21 +38,22 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         switch (type) {
             case 'image':
                 endpoint = 'image';
-                payload.image = body; // URL or Base64
+                payload.image = body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
                 endpoint = 'video';
-                payload.video = body;
+                payload.video = body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'audio':
                 endpoint = 'audio';
-                payload.audio = body;
+                payload.audio = body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`;
                 break;
             case 'voice':
                 endpoint = 'voice';
-                payload.audio = body;
+                // WhatsApp PTT works best with .ogg/opus, UltraMSG prefers help from extension
+                payload.audio = body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`;
                 break;
             case 'document':
                 endpoint = 'document';
@@ -65,10 +66,17 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         }
 
         const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
+        console.log(`📤 [UltraMSG] Sending ${type} message to ${to} via ${endpoint}...`);
+
         const response = await axios.post(url, payload);
         return response.data;
     } catch (error) {
-        console.error(`UltraMSG [${type}] Send Error:`, error.response?.data || error.message);
+        const errorData = error.response?.data;
+        console.error(`❌ UltraMSG [${type}] Critical Error:`, {
+            status: error.response?.status,
+            message: error.message,
+            details: errorData
+        });
         throw error;
     }
 };
