@@ -66,6 +66,14 @@ export async function processBotResponse(candidateId, botMessage) {
                 })());
             }
 
+            if (updateData.categoria) {
+                extraTasks.push((async () => {
+                    const cleaned = await cleanCategoryWithAI(updateData.categoria);
+                    await updateCandidate(candidateId, { categoria: cleaned });
+                    console.log(`🤖 [Automations] AI Cleaned Categoría: ${cleaned}`);
+                })());
+            }
+
             // Run AI tasks in parallel without blocking main flow
             Promise.all(extraTasks).catch(err => console.error('❌ [Automations] AI extra tasks error:', err));
         }

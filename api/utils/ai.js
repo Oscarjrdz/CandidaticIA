@@ -108,11 +108,12 @@ export async function cleanNameWithAI(name) {
         const genAI = new GoogleGenerativeAI(apiKey);
         const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
 
-        const prompt = `Corrige la ortografía y sintaxis del nombre de persona: "${name}".
-No inventes nombres nuevos, solo limpia y corrige el que te doy.
-Formatea el resultado estrictamente con Mayúscula Inicial en cada palabra (Title Case).
-Si no parece ser un nombre de persona, devuélvelo tal cual pero en Title Case.
-Responde únicamente con el nombre corregido, sin puntos finales ni explicaciones.
+        const prompt = `Corrige la ortografía, ACENTUACIÓN y sintaxis del nombre de persona: "${name}".
+REGLAS:
+1. Asegúrate de incluir acentos omitidos (ej: "Rodriguez" -> "Rodríguez", "Sanchez" -> "Sánchez", "Ramon" -> "Ramón").
+2. No inventes nombres nuevos, solo limpia y corrige el que te doy.
+3. Formatea el resultado estrictamente con Mayúscula Inicial en cada palabra (Title Case).
+4. Responde únicamente con el nombre corregido, sin puntos finales ni explicaciones.
 Respuesta:`;
 
         let cleaned = name;
@@ -208,5 +209,68 @@ Respuesta:`;
     } catch (error) {
         console.error('❌ cleanMunicipioWithAI error:', error.message);
         return municipio;
+    }
+}
+
+/**
+ * Cleans and formats a job category name using Gemini AI
+ * @param {string} category - The crude category word/phrase
+ * @returns {Promise<string>} - Cleaned Title Case category
+ */
+export async function cleanCategoryWithAI(category) {
+    if (!category || category.length < 2) return category;
+
+    try {
+        const { getRedisClient } = await import('./storage.js');
+        const redis = getRedisClient();
+
+        let apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey && redis) {
+            const aiConfigJson = await redis.get('ai_config');
+            if (aiConfigJson) {
+                const aiConfig = JSON.parse(aiConfigJson);
+                apiKey = aiConfig.geminiApiKey;
+            }
+        }
+
+        if (!apiKey || apiKey === 'undefined' || apiKey === 'null') return category;
+
+        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
+        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (match) apiKey = match[0];
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
+
+        const prompt = `Corrige la ortografía, ACENTUACIÓN y formato de la categoría de empleo: "${category}".
+REGLAS:
+1. Corrige errores ortográficos y pon acentos (ej: "operario" -> "Operario", "almacen" -> "Almacén", "logistica" -> "Logística").
+2. Formatea en Title Case (Mayúscula Inicial).
+3. Si es una frase, corrígela para que suene profesional.
+Responde únicamente con la categoría limpia, sin puntos ni explicaciones.
+Respuesta:`;
+
+        let cleaned = category;
+        for (const mName of modelsToTry) {
+            try {
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    generationConfig: { temperature: 0.1 }
+                });
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                cleaned = response.text().trim().replace(/[.]/g, '');
+                if (cleaned) break;
+            } catch (err) {
+                console.warn(`⚠️ [cleanCategoryWithAI] Model ${mName} failed:`, err.message);
+                continue;
+            }
+        }
+
+        return cleaned || category;
+
+    } catch (error) {
+        console.error('❌ cleanCategoryWithAI error:', error.message);
+        return category;
     }
 }
