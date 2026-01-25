@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Loader2, MessageCircle, Move, Copy, Tag } from 'lucide-react';
+import { X, Send, Loader2, MessageCircle, Move, Copy, Tag, Mic, Trash, Check } from 'lucide-react';
 import Button from './ui/Button';
 
 /**
@@ -10,6 +10,13 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
     const [newMessage, setNewMessage] = useState('');
     const [sending, setSending] = useState(false);
     const [availableFields, setAvailableFields] = useState([]);
+
+    // Recording State
+    const [isRecording, setIsRecording] = useState(false);
+    const [audioBlob, setAudioBlob] = useState(null);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const mediaRecorderRef = useRef(null);
+    const timerRef = useRef(null);
 
     // Draggable Logic
     const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -23,7 +30,7 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
     // Reset position when opening
     useEffect(() => {
         if (isOpen) {
-            setPosition({ x: 0, y: 0 }); // Center initial (handled by CSS flex centering + translate 0)
+            setPosition({ x: 0, y: 0 }); // Center initial
         }
     }, [isOpen]);
 
@@ -60,11 +67,10 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
         }
     };
 
-    // Auto-scroll ONLY on new messages (detect length change)
+    // Auto-scroll ONLY on new messages
     const prevMessagesLength = useRef(0);
     useEffect(() => {
         if (messages.length > prevMessagesLength.current) {
-            // New message arrived, scroll to bottom
             messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }
         prevMessagesLength.current = messages.length;
@@ -83,26 +89,54 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
     };
 
     const handleSend = async (e) => {
-        e.preventDefault();
-        if (!newMessage.trim() || sending) return;
+        if (e) e.preventDefault();
+        if ((!newMessage.trim() && !audioBlob) || sending) return;
 
         setSending(true);
         try {
+            let payload = {
+                candidateId: candidate.id,
+                message: newMessage,
+                type: 'text'
+            };
+
+            // Handle Audio Attachment if present
+            if (audioBlob) {
+                // 1. Convert to Base64
+                const reader = new FileReader();
+                const base64Promise = new Promise((resolve) => {
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.readAsDataURL(audioBlob);
+                });
+                const base64 = await base64Promise;
+
+                // 2. Upload to get temp URL
+                const uploadRes = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64 }) // Endpoint accepts 'image' but treats as general blob
+                });
+                const uploadData = await uploadRes.json();
+
+                if (uploadData.success) {
+                    payload.mediaUrl = `${window.location.origin}${uploadData.url}`;
+                    payload.type = 'voice'; // Sends as PTT
+                } else {
+                    throw new Error('Falló la subida del audio');
+                }
+            }
+
             const res = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    candidateId: candidate.id,
-                    message: newMessage,
-                    botId: credentials?.botId,
-                    apiKey: credentials?.apiKey
-                })
+                body: JSON.stringify(payload)
             });
 
             const data = await res.json();
 
             if (data.success) {
                 setNewMessage('');
+                setAudioBlob(null);
                 loadMessages();
             } else {
                 const errorMsg = typeof data.details === 'object'
@@ -112,10 +146,59 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
             }
         } catch (error) {
             console.error('Error enviando:', error);
-            alert('Error de conexión');
+            alert('Error de conexión: ' + error.message);
         } finally {
             setSending(false);
         }
+    };
+
+    // Voice Recording Logic
+    const startRecording = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = mediaRecorder;
+            const chunks = [];
+
+            mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'audio/ogg; codecs=opus' });
+                setAudioBlob(blob);
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            setIsRecording(true);
+            setRecordingTime(0);
+            timerRef.current = setInterval(() => {
+                setRecordingTime(prev => prev + 1);
+            }, 1000);
+        } catch (err) {
+            alert('No se pudo acceder al micrófono: ' + err.message);
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && isRecording) {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+            clearInterval(timerRef.current);
+        }
+    };
+
+    const cancelRecording = () => {
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop(); // Stop but we ignore the blob
+            setIsRecording(false);
+            clearInterval(timerRef.current);
+            setAudioBlob(null);
+        }
+    };
+
+    const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
     // Drag handlers
@@ -345,23 +428,74 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
 
                 {/* Input Area */}
                 <div className="p-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
-                    <form onSubmit={handleSend} className="flex space-x-2">
-                        <input
-                            type="text"
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            placeholder="Escribe un mensaje..."
-                            className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none text-sm"
-                            autoFocus
-                        />
-                        <Button
-                            type="submit"
-                            disabled={!newMessage.trim() || sending}
-                            className={`rounded-lg w-10 h-10 flex items-center justify-center p-0 ${sending ? 'opacity-70' : ''}`}
-                        >
-                            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        </Button>
-                    </form>
+                    {isRecording ? (
+                        <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg animate-pulse">
+                            <div className="flex items-center space-x-3 text-red-600 dark:text-red-400">
+                                <div className="w-2 h-2 bg-red-600 rounded-full animate-ping" />
+                                <span className="text-sm font-bold font-mono">{formatTime(recordingTime)}</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={cancelRecording}
+                                    className="p-2 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-full text-red-600 transition-colors"
+                                    title="Cancelar grabación"
+                                >
+                                    <Trash className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={stopRecording}
+                                    className="p-2 bg-red-600 hover:bg-red-700 rounded-full text-white shadow-lg transition-transform active:scale-95"
+                                    title="Detener y adjuntar"
+                                >
+                                    <Check className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <form onSubmit={handleSend} className="flex items-center space-x-2">
+                            {audioBlob ? (
+                                <div className="flex-1 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800">
+                                    <div className="flex items-center space-x-2 text-blue-700 dark:text-blue-300">
+                                        <Mic className="w-4 h-4" />
+                                        <span className="text-xs font-medium">Nota de voz lista</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setAudioBlob(null)}
+                                        className="text-gray-400 hover:text-red-500 transition-colors"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={startRecording}
+                                        className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        title="Grabar audio"
+                                    >
+                                        <Mic className="w-5 h-5" />
+                                    </button>
+                                    <input
+                                        type="text"
+                                        value={newMessage}
+                                        onChange={(e) => setNewMessage(e.target.value)}
+                                        placeholder="Escribe un mensaje..."
+                                        className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none text-sm"
+                                        autoFocus
+                                    />
+                                </>
+                            )}
+                            <Button
+                                type="submit"
+                                disabled={(!newMessage.trim() && !audioBlob) || sending}
+                                className={`rounded-lg w-10 h-10 flex items-center justify-center p-0 ${sending ? 'opacity-70' : ''}`}
+                            >
+                                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                            </Button>
+                        </form>
+                    )}
                 </div>
             </div>
         </div>
