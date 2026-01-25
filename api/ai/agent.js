@@ -59,23 +59,50 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // 3. Initialize Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+        // 4. Generate Content (With Fallback Strategy)
+        const modelsToTry = [
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-pro",
+            "gemini-1.0-pro"
+        ];
 
-        // 4. Generate Content
-        const chat = model.startChat({
-            history: recentHistory,
-            systemInstruction: systemInstruction,
-            generationConfig: {
-                maxOutputTokens: 300,
-                temperature: 0.7,
+        let result;
+        let successModel = '';
+        let lastError = '';
+
+        for (const mName of modelsToTry) {
+            try {
+                // console.log(`🔍 [AI Agent] Trying model: ${mName}...`);
+                const model = genAI.getGenerativeModel({ model: mName });
+
+                const chat = model.startChat({
+                    history: recentHistory,
+                    systemInstruction: systemInstruction,
+                    generationConfig: {
+                        maxOutputTokens: 300,
+                        temperature: 0.7,
+                    }
+                });
+
+                result = await chat.sendMessage(incomingMessage);
+                successModel = mName;
+                // console.log(`✅ [AI Agent] Success with ${mName}`);
+                break;
+            } catch (e) {
+                lastError = e.message;
+                console.warn(`⚠️ [AI Agent] ${mName} failed:`, e.message);
             }
+        }
 
-        });
+        if (!result) {
+            console.error('❌ [AI Agent] All models failed. Last error:', lastError);
+            return null; // Silent fail or fallback message?
+        }
 
-        const result = await chat.sendMessage(incomingMessage);
         const responseText = result.response.text();
 
-        console.log(`🤖 [AI Agent] Response generated: "${responseText}"`);
+        console.log(`🤖 [AI Agent] Response generated (${successModel}): "${responseText}"`);
 
         // 5. Save AI Response to Storage
         await saveMessage(candidateId, {
