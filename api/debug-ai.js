@@ -1,4 +1,4 @@
-
+import axios from 'axios';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getUltraMsgConfig, sendUltraMsgMessage } from './whatsapp/utils.js';
 import { getCandidateIdByPhone, getRedisClient } from './utils/storage.js';
@@ -8,6 +8,7 @@ export default async function handler(req, res) {
     const message = "Hola, prueba de debug.";
 
     const results = {
+        ai_models_available: [],
         ai_generation: { status: 'pending' },
         ultramsg_delivery: { status: 'pending' },
         env_check: {}
@@ -28,23 +29,39 @@ export default async function handler(req, res) {
         results.env_check.hasApiKey = !!apiKey;
         results.env_check.apiKeyPreview = apiKey ? `${apiKey.substring(0, 5)}...` : 'NONE';
 
-        // 1. TEST AI GENERATION
+        // 0. LIST AVAILABLE MODELS (Raw HTTP)
+        if (apiKey) {
+            try {
+                const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+                const listRes = await axios.get(listUrl);
+                results.ai_models_available = listRes.data.models ? listRes.data.models.map(m => m.name) : 'No models field';
+            } catch (e) {
+                results.ai_models_available = { error: e.message, data: e.response?.data };
+            }
+        }
+
+        // 1. TEST AI GENERATION (Try with the first available model if any found, else fallback)
         if (apiKey) {
             const genAI = new GoogleGenerativeAI(apiKey);
-            const models = ["gemini-1.5-flash-latest", "gemini-1.5-flash-001", "gemini-1.0-pro"];
+            // Pick a model from the list if available, or try a default
+            let modelToTest = "gemini-1.5-flash";
+            if (Array.isArray(results.ai_models_available) && results.ai_models_available.length > 0) {
+                // Try to find a generation model
+                const preferred = results.ai_models_available.find(m => m.includes('generate') || m.includes('pro') || m.includes('flash'));
+                if (preferred) modelToTest = preferred.replace('models/', '');
+            }
 
-            results.ai_generation = [];
+            results.ai_generation = { trying_model: modelToTest };
 
-            for (const m of models) {
-                const model = genAI.getGenerativeModel({ model: m });
-                try {
-                    const result = await model.generateContent("Di 'Funciono' en una palabra.");
-                    const response = result.response;
-                    results.ai_generation.push({ model: m, status: 'success', text: response.text() });
-                    break; // Stop at first success
-                } catch (e) {
-                    results.ai_generation.push({ model: m, status: 'failed', error: e.message });
-                }
+            try {
+                const model = genAI.getGenerativeModel({ model: modelToTest });
+                const result = await model.generateContent("Di 'Funciono' en una palabra.");
+                const response = result.response;
+                results.ai_generation.status = 'success';
+                results.ai_generation.text = response.text();
+            } catch (e) {
+                results.ai_generation.status = 'failed';
+                results.ai_generation.error = e.message;
             }
         } else {
             results.ai_generation = { status: 'skipped', reason: 'No API Key' };
