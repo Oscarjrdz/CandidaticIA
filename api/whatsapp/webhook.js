@@ -73,12 +73,17 @@ export default async function handler(req, res) {
                 const config = await getUltraMsgConfig();
                 if (config) {
                     const contactInfo = await getUltraMsgContact(config.instanceId, config.token, from);
-                    if (contactInfo) {
-                        // Simplify: Check for 'image' property directly or in results array
-                        profilePicUrl = contactInfo.image || (contactInfo.results && contactInfo.results[0]?.image) || '';
+                    if (contactInfo && contactInfo.image) {
+                        profilePicUrl = contactInfo.image;
                     }
                 }
             } catch (pErr) { console.warn('Profile Pic Fetch Error', pErr.message); }
+
+            // Update candidate with profile pic if found
+            if (profilePicUrl) {
+                await updateCandidate(candidateId, { profilePic: profilePicUrl });
+                console.log('📸 Profile Pic Updated:', profilePicUrl);
+            }
 
             // 3. Trigger AI Agent
             try {
