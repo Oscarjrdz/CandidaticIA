@@ -1,11 +1,11 @@
 
 import { processMessage } from './ai/agent.js';
-import { getCandidateIdByPhone } from './utils/storage.js';
+import { getCandidateIdByPhone, getRedisClient } from './utils/storage.js';
 
 export default async function handler(req, res) {
     // Default to user's phone if not provided
     const phone = req.query.phone || '5218116038195';
-    const message = req.query.message || 'Cuéntame un dato curioso';
+    const message = req.query.message || 'Cuál es mi edad?'; // The query that causes the issue
 
     try {
         const candidateId = await getCandidateIdByPhone(phone);
@@ -17,7 +17,14 @@ export default async function handler(req, res) {
             });
         }
 
-        console.log(`🧪 [Debug] Testing AI for candidate ${candidateId} (${phone})...`);
+        // Fetch Raw Data to see what we are injecting
+        const redis = getRedisClient();
+        const rawData = await redis.get(`candidate:${candidateId}`);
+        const candidateCtx = rawData ? JSON.parse(rawData) : 'NULL';
+
+        console.log(`🧪 [Debug] Testing AI for candidate ${candidateId}...`);
+        console.log(`🧪 [Debug] Context Data Size: ${JSON.stringify(candidateCtx).length} chars`);
+
         const start = Date.now();
 
         // EXECUTE THE AGENT DIRECTLY
@@ -31,7 +38,7 @@ export default async function handler(req, res) {
             input: message,
             ai_response: result || 'NULL (Agent returned nothing)',
             duration: `${duration}ms`,
-            note: 'If ai_response is text, the Bot Logic works perfectly. If NULL, check logs.'
+            context_injected: candidateCtx
         });
 
     } catch (error) {
