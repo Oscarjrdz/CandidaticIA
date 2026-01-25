@@ -38,13 +38,27 @@ export default async function handler(req, res) {
         }
         report.step3_final_key_status = 'OK';
 
-        // 4. Test Gemini connection
-        const genAI = new GoogleGenerativeAI(finalKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-        const result = await model.generateContent("Hola, esto es una prueba de conexion.");
-        const text = result.response.text();
+        // 4. Test Gemini connection (Raw REST to list models)
+        try {
+            const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${finalKey}`;
+            const response = await fetch(listUrl);
+            const data = await response.json();
 
-        report.step4_gemini_test = `SUCCESS: Generated "${text}"`;
+            if (data.models) {
+                report.step4_gemini_test = `SUCCESS: Found ${data.models.length} models. First 3: ${data.models.slice(0, 3).map(m => m.name).join(', ')}`;
+                report.available_models = data.models.map(m => m.name); // Return full list
+
+                // Try generating with the first available "generateContent" model
+                const chatModel = data.models.find(m => m.supportedGenerationMethods.includes('generateContent'));
+                if (chatModel) {
+                    report.config_recommendation = `Use model: "${chatModel.name.replace('models/', '')}"`;
+                }
+            } else {
+                report.step4_gemini_test = 'FAILED: No models found due to: ' + JSON.stringify(data);
+            }
+        } catch (restErr) {
+            report.step4_gemini_test = 'FAILED_REST: ' + restErr.message;
+        }
 
         return res.json(report);
 
