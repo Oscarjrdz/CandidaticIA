@@ -35,24 +35,31 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         let endpoint = 'chat';
         const payload = { token, to };
 
+        // Sanitize body: If it's a Data URL (base64 with header), strip the header
+        let cleanBody = body;
+        if (body && body.startsWith('data:') && body.includes(';base64,')) {
+            const parts = body.split(';base64,');
+            cleanBody = parts[1];
+        }
+
         switch (type) {
             case 'image':
                 endpoint = 'image';
-                payload.image = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : body;
+                payload.image = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : cleanBody;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
                 endpoint = 'video';
-                payload.video = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : body;
+                payload.video = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : cleanBody;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'audio':
                 endpoint = 'audio';
-                payload.audio = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`) : body;
+                payload.audio = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`) : cleanBody;
                 break;
             case 'voice':
                 endpoint = 'voice';
-                payload.audio = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : body;
+                payload.audio = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : cleanBody;
                 break;
             case 'document':
                 endpoint = 'document';
