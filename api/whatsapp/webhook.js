@@ -77,9 +77,12 @@ export default async function handler(req, res) {
                     const config = await getUltraMsgConfig();
                     if (config) {
                         const contactInfo = await getUltraMsgContact(config.instanceId, config.token, from);
-                        if (contactInfo && contactInfo.image) {
-                            await updateCandidate(candidateId, { profilePic: contactInfo.image });
-                            console.log('📸 Profile Pic Updated:', contactInfo.image);
+                        // UltraMsg 'contacts/image' returns { "success": "url..." } 
+                        const url = contactInfo?.success || contactInfo?.image;
+
+                        if (url && typeof url === 'string' && url.startsWith('http')) {
+                            await updateCandidate(candidateId, { profilePic: url });
+                            console.log('📸 Profile Pic Updated:', url);
                         }
                     }
                 } catch (pErr) {
