@@ -36,23 +36,6 @@ const CandidatesSection = ({ showToast }) => {
     const [historyModalCandidate, setHistoryModalCandidate] = useState(null);
     const [historyModalContent, setHistoryModalContent] = useState('');
 
-    // Configuración de Exportación
-    const [showSettings, setShowSettings] = useState(false);
-    const [exportTimer, setExportTimer] = useState(0); // Minutos. 0 = Desactivado.
-    // AI Action Flow
-    const [exportingMap, setExportingMap] = useState({}); // { whatsapp: 'uploading'|'uploaded'|'error' }
-    const [fileStatusMap, setFileStatusMap] = useState({}); // { whatsapp: fileId }
-    const [aiActionOpen, setAiActionOpen] = useState(false);
-    const [aiActionContext, setAiActionContext] = useState(null); // { candidates }
-
-    // Timers para cada candidato (se reinician con mensajes salientes)
-    const exportTimersRef = useRef({});
-    const [exportSchedules, setExportSchedules] = useState({}); // { whatsapp: { scheduledTime: timestamp, lastOutgoing: timestamp } }
-    const [currentTime, setCurrentTime] = useState(Date.now()); // For countdown updates
-    const [localChatFiles, setLocalChatFiles] = useState({}); // { whatsapp: true/false } - tracks which candidates have local files
-    const previousTimerStates = useRef({}); // Track previous timer states to detect green transitions
-
-    const uploadingRef = useRef({}); // Track which candidates are currently being uploaded { whatsapp: true/false }
 
     useEffect(() => {
         const loadInitialData = async () => {
@@ -124,186 +107,6 @@ const CandidatesSection = ({ showToast }) => {
         return () => subscription.stop();
     }, []);
 
-    // Update current time every second for countdown display
-    useEffect(() => {
-        if (!exportTimer || exportTimer <= 0 || candidates.length === 0) return;
-
-        const processGreenTimers = async () => {
-            const promises = candidates.map(async (candidate) => {
-                if (!candidate.ultimoMensajeBot) return;
-
-                // Calculate if timer is ready (green)
-                const lastMessageTime = new Date(candidate.ultimoMensajeBot).getTime();
-                const targetTime = lastMessageTime + (exportTimer * 60 * 1000);
-                const isReady = currentTime >= targetTime;
-
-                // Get previous state
-                const wasReady = previousTimerStates.current[candidate.whatsapp];
-
-                // Detect transition from red to green (or first time reaching green)
-                if (isReady && !wasReady) {
-                    console.log(`🟢 Timer reached green for ${candidate.whatsapp}, creating chat history file...`);
-
-                    try {
-                        // Fetch messages for the candidate
-                        const res = await fetch(`/api/chat?candidateId=${candidate.id}`);
-                        const data = await res.json();
-
-                        if (data.success && data.messages) {
-                            const candidateWithMessages = { ...candidate, messages: data.messages };
-
-                            // Generate chat history text with actual messages
-                            const chatContent = generateChatHistoryText(candidateWithMessages);
-
-                            // Delete old file if exists
-                            deleteLocalChatFile(candidate.whatsapp);
-
-                            // Save new file
-                            const result = saveLocalChatFile(candidate.whatsapp, chatContent);
-
-                            if (result.success) {
-                                console.log(`✅ Chat history file created: ${candidate.whatsapp}.txt`);
-                                console.log(`ℹ️ Backend cron will upload to BuilderBot automatically`);
-                                setLocalChatFiles(prev => ({ ...prev, [candidate.whatsapp]: true }));
-                            } else {
-                                console.error(`❌ Error creating chat history file for ${candidate.whatsapp}`);
-                            }
-                        } else {
-                            console.warn(`⚠️ Could not fetch messages for ${candidate.whatsapp}`);
-                        }
-                    } catch (error) {
-                        console.error(`❌ Error fetching messages for ${candidate.whatsapp}:`, error);
-                    }
-                }
-
-                // Update previous state inside the map? No, side-effects tricky in map.
-                // We will return the result and update ref outside? 
-                // Better: update the ref here, assuming sequential or non-conflicting updates.
-                // Since this runs often, we must be careful with async.
-                previousTimerStates.current[candidate.whatsapp] = isReady;
-
-                // Persist to localStorage to survive section navigation
-                try {
-                    localStorage.setItem('timer_states', JSON.stringify(previousTimerStates.current));
-                } catch (e) {
-                    console.warn('Error saving timer states:', e);
-                }
-            });
-
-            await Promise.all(promises);
-        };
-
-        processGreenTimers();
-    }, [currentTime, candidates, exportTimer, credentials]);
-
-    // Auto-export logic - triggers when candidates change and timer is configured
-    useEffect(() => {
-        if (!exportTimer || exportTimer <= 0 || !credentials || candidates.length === 0) return;
-
-        candidates.forEach(candidate => {
-            if (!candidate.messages || candidate.messages.length === 0) return;
-
-            // Find last outgoing message
-            const outgoingMessages = candidate.messages.filter(msg => !msg.incoming);
-            if (outgoingMessages.length === 0) return;
-
-            const lastOutgoing = outgoingMessages[outgoingMessages.length - 1];
-            const lastOutgoingTime = new Date(lastOutgoing.timestamp).getTime();
-
-            // Check if this is a NEW outgoing message (different from what we tracked)
-            const currentSchedule = exportSchedules[candidate.whatsapp];
-            const isNewMessage = !currentSchedule || currentSchedule.lastOutgoing !== lastOutgoingTime;
-
-            if (isNewMessage) {
-                const scheduledTime = Date.now() + (exportTimer * 60 * 1000);
-                console.log(`[Auto-Export] New outgoing message for ${candidate.whatsapp}, resetting timer`);
-                console.log(`[Auto-Export] Timer will fire in ${exportTimer} minutes at ${new Date(scheduledTime).toLocaleTimeString('es-MX')}`);
-
-                // Clear existing timer
-                if (exportTimersRef.current[candidate.whatsapp]) {
-                    clearTimeout(exportTimersRef.current[candidate.whatsapp]);
-                }
-
-                // Calculate scheduled export time
-                const timerMs = exportTimer * 60 * 1000;
-
-                // Update schedule tracking
-                setExportSchedules(prev => ({
-                    ...prev,
-                    [candidate.whatsapp]: {
-                        lastOutgoing: lastOutgoingTime,
-                        scheduledTime: scheduledTime
-                    }
-                }));
-
-                // Set new timer
-                exportTimersRef.current[candidate.whatsapp] = setTimeout(() => {
-                    console.log(`[Auto-Export] ⏰ Timer fired for ${candidate.whatsapp}`);
-                    console.log(`[Auto-Export] Starting auto-export process...`);
-                    handleAutoExport(candidate, credentials);
-                }, timerMs);
-            }
-        });
-
-        // Cleanup timers on unmount
-        return () => {
-            Object.values(exportTimersRef.current).forEach(timer => clearTimeout(timer));
-            exportTimersRef.current = {};
-        };
-    }, [candidates, exportTimer, credentials]);
-
-    const handleAutoExport = async (candidate, creds) => {
-        if (!creds) return;
-
-        setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'uploading' }));
-
-        try {
-            // Fetch messages for the candidate first
-            const res = await fetch(`/api/chat?candidateId=${candidate.id}`);
-            const data = await res.json();
-
-            if (!data.success || !data.messages || data.messages.length === 0) {
-                console.warn(`No messages found for ${candidate.whatsapp}, skipping export`);
-                setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'error' }));
-                return;
-            }
-
-            // Create candidate object with messages
-            const candidateWithMessages = { ...candidate, messages: data.messages };
-
-
-            // Export and upload new file (deduplication handled inside exportChatToFile)
-            console.log(`📤 Starting export for ${candidate.whatsapp}...`);
-            console.log(`📊 Messages count: ${candidateWithMessages.messages.length}`);
-            console.log(`🔑 Credentials:`, {
-                hasBotId: !!creds.botId,
-                hasAnswerId: !!creds.answerId,
-                hasApiKey: !!creds.apiKey
-            });
-
-            const result = await exportChatToFile(candidateWithMessages, creds);
-
-            console.log(`📥 Export result:`, result);
-
-            if (result.success) {
-                saveChatFileId(candidate.whatsapp, result.fileId);
-                setFileStatusMap(prev => ({ ...prev, [candidate.whatsapp]: result.fileId }));
-                setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'uploaded' }));
-
-                // Update cloud file status
-                const prefix = String(candidate.whatsapp).substring(0, 13);
-                // setCloudFileStatus(prev => ({ ...prev, [prefix]: true })); // This state doesn't exist in the provided code
-
-                // Refresh all cloud statuses after 1 second to ensure sync
-                // setTimeout(() => checkCloudFileStatus(candidates), 1000); // This function doesn't exist
-            } else {
-                setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'error' }));
-            }
-        } catch (error) {
-            console.error('Auto-export error:', error);
-            setExportingMap(prev => ({ ...prev, [candidate.whatsapp]: 'error' }));
-        }
-    };
 
     const handleViewHistory = async (candidate) => {
         setHistoryModalCandidate(candidate);
@@ -339,11 +142,8 @@ const CandidatesSection = ({ showToast }) => {
         }
     };
 
-    const handleSaveSettings = async () => {
-        await saveExportSettings(exportTimer);
-        setShowSettings(false);
-        showToast(`Timer configurado a ${exportTimer} minutos`, 'success');
-    };
+    // AI Action Flow
+    const [aiActionOpen, setAiActionOpen] = useState(false);
 
     const handleAiAction = async (query) => {
         try {
@@ -648,41 +448,6 @@ const CandidatesSection = ({ showToast }) => {
                         </Button>
                     </div>
 
-                    {/* Timer Settings - Always Visible */}
-                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 mb-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-3">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    icon={Settings}
-                                    className={exportTimer > 0 ? "text-green-600 border-green-200 bg-green-50" : ""}
-                                    disabled
-                                >
-                                    {exportTimer > 0 ? `${exportTimer}m` : 'Off'}
-                                </Button>
-                                <div>
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Auto-Exportar Historial (Minutos de inactividad)
-                                    </label>
-                                    <p className="text-xs text-gray-400">
-                                        0 = Desactivado. Se creará un .txt en Archivos si el chat está inactivo.
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="1440"
-                                    value={exportTimer}
-                                    onChange={(e) => setExportTimer(parseInt(e.target.value) || 0)}
-                                    className="w-20 px-2 py-1 border rounded text-center"
-                                />
-                                <Button size="sm" onClick={handleSaveSettings}>Guardar</Button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Búsqueda */}
@@ -824,7 +589,6 @@ const CandidatesSection = ({ showToast }) => {
                                     ))}
 
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
-                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
@@ -883,54 +647,6 @@ const CandidatesSection = ({ showToast }) => {
                                             <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
                                                 {formatDate(candidate.ultimoMensaje)}
                                             </div>
-                                        </td>
-                                        <td className="py-0.5 px-2.5 text-center">
-                                            {(() => {
-                                                // Si no hay timer configurado, mostrar "-"
-                                                if (!exportTimer || exportTimer <= 0) {
-                                                    return <span className="text-[10px] text-gray-400">-</span>;
-                                                }
-
-                                                // Si no hay último mensaje, no podemos calcular
-                                                const timerTimestamp = candidate.ultimoMensajeBot;
-
-                                                if (!timerTimestamp) {
-                                                    return <span className="text-[10px] text-gray-400">-</span>;
-                                                }
-
-                                                // Calcular hora objetivo (último mensaje BOT + minutos configurados)
-                                                const lastMessageTime = new Date(timerTimestamp).getTime();
-                                                const targetTime = lastMessageTime + (exportTimer * 60 * 1000);
-                                                const now = currentTime;
-
-                                                // Determinar si ya se cumplió el tiempo
-                                                const isReady = now >= targetTime;
-
-                                                // Formatear hora objetivo
-                                                const targetDate = new Date(targetTime);
-                                                const targetTimeStr = targetDate.toLocaleTimeString('es-MX', {
-                                                    hour: '2-digit',
-                                                    minute: '2-digit',
-                                                    second: '2-digit',
-                                                    hour12: false
-                                                });
-
-                                                return (
-                                                    <div className="flex flex-col items-center justify-center space-y-0.5">
-                                                        <div className={`w-3 h-3 rounded-full ${isReady
-                                                            ? 'bg-green-500 dark:bg-green-400'
-                                                            : 'bg-red-500 dark:bg-red-400'
-                                                            }`} title={
-                                                                isReady
-                                                                    ? 'Tiempo de inactividad cumplido'
-                                                                    : 'Esperando tiempo de inactividad'
-                                                            } />
-                                                        <div className="text-[10px] text-gray-600 dark:text-gray-400 font-mono">
-                                                            {targetTimeStr}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
                                         </td>
 
                                         <td className="py-0.5 px-2.5 text-center">
