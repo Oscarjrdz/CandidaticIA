@@ -1,4 +1,4 @@
-import { getMessages, saveMessage, getCandidateById, updateCandidate } from './utils/storage.js';
+import { getMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
 import { sendUltraMsgMessage, getUltraMsgConfig } from './whatsapp/utils.js';

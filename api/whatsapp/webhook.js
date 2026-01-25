@@ -1,4 +1,4 @@
-import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient } from '../utils/storage.js';
+import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient, updateMessageStatus } from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
 import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead } from './utils.js';
 
