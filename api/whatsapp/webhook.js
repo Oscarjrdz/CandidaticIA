@@ -54,9 +54,13 @@ export default async function handler(req, res) {
 
             // --- READ RECEIPT (Instant) ---
             const config = await getUltraMsgConfig();
+            let readReceiptPromise = Promise.resolve();
             if (config) {
-                markUltraMsgAsRead(config.instanceId, config.token, from).catch(e => console.error('Read receipt failed', e));
-                console.log('📖 [Webhook] Mark as read requested');
+                // Add a small delay (1s) to make it look "read" by someone 
+                readReceiptPromise = (async () => {
+                    await timeout(1000);
+                    return markUltraMsgAsRead(config.instanceId, config.token, from);
+                })();
             }
 
             // 2. Save Message to History
@@ -127,8 +131,8 @@ export default async function handler(req, res) {
                 }
             })();
 
-            // Wait for AI to finish, but don't let Profile Pic block completely if it somehow evades race (unlikely)
-            await Promise.allSettled([profilePicPromise, aiProcessPromise]);
+            // Wait for AI and Read Receipt to finish
+            await Promise.allSettled([profilePicPromise, aiProcessPromise, readReceiptPromise]);
 
             return res.status(200).send('success');
 
