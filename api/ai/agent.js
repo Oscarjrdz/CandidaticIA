@@ -87,10 +87,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const genAI = new GoogleGenerativeAI(apiKey);
 
         // 4. Generate Content (With Fallback Strategy)
+        // 4. Generate Content (With Fallback Strategy)
         const modelsToTry = [
+            "gemini-pro", // Stable v1.0 first
             "gemini-1.5-flash",
-            "gemini-1.5-pro",
-            "gemini-pro" // Fallback to stable v1.0
+            "gemini-1.5-pro"
         ];
 
         let result;
