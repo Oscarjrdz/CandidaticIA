@@ -56,6 +56,14 @@ export default async function handler(req, res) {
                 });
             }
 
+            if (type === 'ai_prompt') {
+                value = await redis.get('bot_ia_prompt');
+                return res.status(200).json({
+                    success: true,
+                    data: value || ''
+                });
+            }
+
             return res.status(400).json({ error: 'Invalid type' });
         }
 
@@ -110,6 +118,21 @@ export default async function handler(req, res) {
                 return res.status(200).json({
                     success: true,
                     message: 'AI config saved'
+                });
+            }
+
+            if (type === 'ai_prompt') {
+                // 'data' is the prompt string
+                if (!data || typeof data !== 'string') {
+                    return res.status(400).json({ error: 'Invalid prompt format' });
+                }
+
+                await redis.set('bot_ia_prompt', data);
+                console.log('✅ AI System Prompt saved to Redis');
+
+                return res.status(200).json({
+                    success: true,
+                    message: 'AI prompt saved'
                 });
             }
 
