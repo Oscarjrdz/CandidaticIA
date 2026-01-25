@@ -61,22 +61,33 @@ export const getUltraMsgContact = async (instanceId, token, chatId) => {
 };
 export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
     try {
-        console.log(`📖 [UltraMsg] Marking chat ${chatId} as read...`);
+        // Ensure chatId has the correct format for WhatsApp (number@c.us)
+        let formattedChatId = String(chatId).trim();
+        if (!formattedChatId.includes('@')) {
+            // Clean non-digits and add suffix
+            const cleanPhone = formattedChatId.replace(/\D/g, '');
+            formattedChatId = `${cleanPhone}@c.us`;
+        }
+
+        console.log(`📖 [UltraMsg] Marking chat ${formattedChatId} as read...`);
         const url = `https://api.ultramsg.com/${instanceId}/chats/read`;
 
-        // Use URLSearchParams for form-data style POST (widely supported by WhatsApp APIs)
-        const params = new URLSearchParams();
-        params.append('token', token);
-        params.append('chatId', chatId);
-
-        const response = await axios.post(url, params, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        const response = await axios.post(url, {
+            token: token,
+            chatId: formattedChatId
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            timeout: 5000 // 5s timeout
         });
 
-        console.log(`✅ [UltraMsg] Mark as read response:`, response.data);
+        console.log(`✅ [UltraMsg] Mark as read success for ${formattedChatId}:`, response.data);
         return response.data;
     } catch (error) {
-        console.error('❌ [UltraMsg] Read Receipt Error:', error.response?.data || error.message);
+        const errorData = error.response?.data;
+        console.error(`❌ [UltraMsg] Mark as read FAILED for ${chatId}:`, errorData || error.message);
         return null;
     }
 };
