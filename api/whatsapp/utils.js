@@ -38,8 +38,23 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body) => {
             body: body
         });
         return response.data;
-    } catch (error) {
         console.error('UltraMsg Send Error:', error.response?.data || error.message);
         throw error;
+    }
+};
+
+export const getUltraMsgContact = async (instanceId, token, chatId) => {
+    try {
+        const url = `https://api.ultramsg.com/${instanceId}/contacts/contact`;
+        const response = await axios.get(url, {
+            params: {
+                token: token,
+                chatId: chatId
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('UltraMsg Get Contact Error:', error.response?.data || error.message);
+        return null;
     }
 };

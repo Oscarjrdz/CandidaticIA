@@ -536,6 +536,8 @@ const CandidatesSection = ({ showToast }) => {
                         <table className="w-full relative">
                             <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
                                 <tr className="border-b border-gray-200 dark:border-gray-700 text-xs uppercase tracking-wider text-gray-500">
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Avatar</th>
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Avatar</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Nombre de WhatsApp</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
@@ -576,6 +578,15 @@ const CandidatesSection = ({ showToast }) => {
                                         key={candidate.id}
                                         className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
                                     >
+                                        <td className="py-0.5 px-2.5">
+                                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                                                {candidate.profilePic ? (
+                                                    <img src={candidate.profilePic} alt="Avatar" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <User className="w-4 h-4 text-gray-400" />
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="py-0.5 px-2.5">
                                             <div className="text-xs text-gray-900 dark:text-white font-mono font-medium">
                                                 {formatPhone(candidate.whatsapp)}
