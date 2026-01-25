@@ -403,11 +403,16 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
         const raw = await client.lrange(key, 0, -1);
         const messages = raw.map(r => JSON.parse(r));
 
+        console.log(`🔍 [Storage] updateMessageStatus: searching for ${ultraMsgId} in ${messages.length} messages...`);
+
         const index = messages.findIndex(m => m.ultraMsgId === ultraMsgId || m.id === ultraMsgId);
         if (index !== -1) {
             messages[index] = { ...messages[index], status, ...additionalData };
             await client.lset(key, index, JSON.stringify(messages[index]));
+            console.log(`✅ [Storage] updateMessageStatus: Key ${key} Index ${index} updated to ${status}`);
             return true;
+        } else {
+            console.warn(`⚠️ [Storage] updateMessageStatus: Message ${ultraMsgId} NOT FOUND in ${key}`);
         }
     } catch (e) {
         console.error('❌ [Storage] updateMessageStatus Error:', e);

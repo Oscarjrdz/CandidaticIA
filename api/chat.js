@@ -99,6 +99,10 @@ export default async function handler(req, res) {
                 let sendResult;
                 const deliveryContent = base64Data || mediaUrl;
 
+                if (base64Data) {
+                    console.log(`📦 [Chat] Base64 audio detected (Size: ${base64Data.length})`);
+                }
+
                 if (type === 'text') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, finalMessage, 'chat');
                 } else {

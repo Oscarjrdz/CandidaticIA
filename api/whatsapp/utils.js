@@ -31,15 +31,14 @@ export const getUltraMsgConfig = async () => {
 
 export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     try {
-        // Map type to UltraMSG endpoint
         let endpoint = 'chat';
         const payload = { token, to };
 
         // Sanitize body: If it's a Data URL (base64 with header), strip the header
         let cleanBody = body;
-        if (body && body.startsWith('data:') && body.includes(';base64,')) {
-            const parts = body.split(';base64,');
-            cleanBody = parts[1];
+        const isBase64 = body && body.startsWith('data:') && body.includes(';base64,');
+        if (isBase64) {
+            cleanBody = body.split(';base64,')[1];
         }
 
         switch (type) {
@@ -72,9 +71,13 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         }
 
         const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
-        console.log(`📤 [UltraMSG] Sending ${type} message to ${to} via ${endpoint}...`);
+
+        console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Base64: ${isBase64}, BodyLen: ${body?.length})`);
 
         const response = await axios.post(url, payload);
+
+        console.log(`✅ [UltraMSG] RESPONSE:`, JSON.stringify(response.data));
+
         return response.data;
     } catch (error) {
         const errorData = error.response?.data;
