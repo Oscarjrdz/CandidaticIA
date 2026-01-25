@@ -177,7 +177,7 @@ function App() {
                         : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
                           : activeSection === 'users' ? 'Gestión de equipo y permisos'
                             : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
-                              : 'Configuración de BuilderBot API'
+                              : 'Configuración del Sistema'
                   }
                 </p>
               </div>

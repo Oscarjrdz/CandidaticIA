@@ -71,7 +71,7 @@ const CredentialsSection = ({ onCredentialsChange, showToast }) => {
 
     return (
         <Card
-            title="Credenciales de BuilderBot"
+            title="Credenciales (Legacy)"
             icon={Key}
         >
             <div className="space-y-4">
