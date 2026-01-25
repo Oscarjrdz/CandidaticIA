@@ -9,7 +9,7 @@ export default async function handler(req, res) {
 
     try {
         const { getCandidates, updateCandidate } = await import('../utils/storage.js');
-        const { cleanNameWithAI, detectGender } = await import('../utils/ai.js');
+        const { cleanNameWithAI, detectGender, cleanEmploymentStatusWithAI, cleanMunicipioWithAI } = await import('../utils/ai.js');
 
         const { candidates } = await getCandidates(parseInt(limit), parseInt(offset));
 
@@ -19,6 +19,7 @@ export default async function handler(req, res) {
         for (const candidate of candidates) {
             const originalName = candidate.nombreReal;
             const originalMunicipio = candidate.municipio;
+            const originalEmpleo = candidate.tieneEmpleo;
 
             // Prepare Updates
             const updates = {};
@@ -45,10 +46,19 @@ export default async function handler(req, res) {
 
                 // 3. Clean Municipio with AI
                 if (originalMunicipio && originalMunicipio !== 'Desconocido') {
-                    const { cleanMunicipioWithAI } = await import('../utils/ai.js');
+                    // const { cleanMunicipioWithAI } = await import('../utils/ai.js'); // Already imported at top
                     const cleanedMunicipio = await cleanMunicipioWithAI(originalMunicipio);
                     if (cleanedMunicipio !== originalMunicipio) {
                         updates.municipio = cleanedMunicipio;
+                        changed = true;
+                    }
+                }
+
+                // 4. Clean Employment Status with AI
+                if (originalEmpleo && originalEmpleo.length > 3 && originalEmpleo !== 'Sí' && originalEmpleo !== 'No') {
+                    const cleanedEmpleo = await cleanEmploymentStatusWithAI(originalEmpleo);
+                    if (cleanedEmpleo !== originalEmpleo) {
+                        updates.tieneEmpleo = cleanedEmpleo;
                         changed = true;
                     }
                 }
@@ -60,6 +70,7 @@ export default async function handler(req, res) {
                         whatsapp: candidate.whatsapp,
                         name: { before: originalName, after: updates.nombreReal || originalName },
                         municipio: { before: originalMunicipio, after: updates.municipio || originalMunicipio },
+                        empleo: { before: originalEmpleo, after: updates.tieneEmpleo || originalEmpleo },
                         gender: updates.genero || candidate.genero
                     });
                 }

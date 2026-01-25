@@ -342,6 +342,11 @@ Respuesta (Sí/No):`;
             }
         }
 
+        // FAIL-SAFE: If result is still too long (phrase), default to "No"
+        if (result.length > 5) {
+            return 'No';
+        }
+
         return result;
 
     } catch (error) {
