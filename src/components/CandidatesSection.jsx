@@ -67,7 +67,7 @@ const CandidatesSection = ({ showToast }) => {
                 setCandidates(newCandidates);
                 setLastUpdate(new Date());
             }
-        }, 10000); // 10s interval
+        }, 2000); // 2s interval (Near-instant)
 
         // subscription.start(); // Disable auto-poll for now to avoid pagination conflict? 
         // Or better: CandidatesService poll fetches everything? 
