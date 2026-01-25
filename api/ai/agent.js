@@ -87,11 +87,14 @@ export const processMessage = async (candidateId, incomingMessage) => {
         for (const mName of modelsToTry) {
             try {
                 // console.log(`🔍 [AI Agent] Trying model: ${mName}...`);
-                const model = genAI.getGenerativeModel({ model: mName });
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    systemInstruction: systemInstruction
+                });
 
                 const chat = model.startChat({
                     history: recentHistory,
-                    systemInstruction: systemInstruction,
+                    // systemInstruction moved to model init
                     generationConfig: {
                         maxOutputTokens: 300,
                         temperature: 0.7,
