@@ -160,17 +160,18 @@ function App() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {activeSection === 'candidates' ? 'Candidatos'
-                    : activeSection === 'automations' ? 'Automatizaciones'
-                      : activeSection === 'vacancies' ? 'Vacantes'
-                        : activeSection === 'history' ? 'Historial'
-                          : activeSection === 'bulks' ? 'Bulks'
-                            : activeSection === 'users' ? 'Usuarios'
-                              : activeSection === 'post-maker' ? 'Post Maker'
-                                : 'Configuración'}
+                    : activeSection === 'bot-ia' ? 'Bot IA Candidatic'
+                      : activeSection === 'automations' ? 'Automatizaciones'
+                        : activeSection === 'vacancies' ? 'Vacantes'
+                          : activeSection === 'history' ? 'Historial'
+                            : activeSection === 'bulks' ? 'Bulks'
+                              : activeSection === 'users' ? 'Usuarios'
+                                : activeSection === 'post-maker' ? 'Post Maker'
+                                  : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
-                    : activeSection === 'bot-ia' ? 'Configuración de UltraMsg y Bot IA'
+                    : activeSection === 'bot-ia' ? 'Configuración de Comportamiento del Bot'
                       : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
                         : activeSection === 'users' ? 'Gestión de equipo y permisos'
                           : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
