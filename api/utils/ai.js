@@ -275,3 +275,70 @@ Respuesta:`;
         return category;
     }
 }
+
+/**
+ * Summarizes the employment status into "Sí" or "No" using Gemini AI
+ * @param {string} statusPhrase - The crude phrase provided by candidate
+ * @returns {Promise<string>} - "Sí" | "No"
+ */
+export async function cleanEmploymentStatusWithAI(statusPhrase) {
+    if (!statusPhrase || statusPhrase.length < 1) return statusPhrase;
+
+    try {
+        const { getRedisClient } = await import('./storage.js');
+        const redis = getRedisClient();
+
+        let apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey && redis) {
+            const aiConfigJson = await redis.get('ai_config');
+            if (aiConfigJson) {
+                const aiConfig = JSON.parse(aiConfigJson);
+                apiKey = aiConfig.geminiApiKey;
+            }
+        }
+
+        if (!apiKey || apiKey === 'undefined' || apiKey === 'null') return statusPhrase;
+
+        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
+        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (match) apiKey = match[0];
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
+
+        const prompt = `Analiza la siguiente frase sobre estatus laboral: "${statusPhrase}".
+Determina de forma binaria si la persona TIENE empleo o NO TIENE empleo.
+REGLAS:
+1. Responde ÚNICAMENTE con la palabra "Sí" o la palabra "No".
+2. Si la persona dice que está trabajando, laborando o tiene empleo activo, responde "Sí".
+3. Si la persona dice que está desempleada, desocupada, buscando o no tiene trabajo, responde "No".
+4. Si la frase es ambigua o no se refiere al estatus laboral, devuelve la frase original.
+Respuesta (Sí/No):`;
+
+        let result = statusPhrase;
+        for (const mName of modelsToTry) {
+            try {
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    generationConfig: { temperature: 0.1 }
+                });
+                const apiResult = await model.generateContent(prompt);
+                const response = await apiResult.response;
+                const text = response.text().trim().replace(/[.]/g, '');
+                if (text === 'Sí' || text === 'No') {
+                    result = text;
+                    break;
+                }
+            } catch (err) {
+                console.warn(`⚠️ [cleanEmploymentStatusWithAI] Model ${mName} failed:`, err.message);
+                continue;
+            }
+        }
+
+        return result;
+
+    } catch (error) {
+        console.error('❌ cleanEmploymentStatusWithAI error:', error.message);
+        return statusPhrase;
+    }
+}

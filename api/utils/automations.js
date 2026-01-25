@@ -77,6 +77,15 @@ export async function processBotResponse(candidateId, botMessage) {
                 })());
             }
 
+            if (updateData.tieneEmpleo) {
+                extraTasks.push((async () => {
+                    console.log(`🤖 [Automations] Cleaning employment status: "${updateData.tieneEmpleo}"...`);
+                    const cleaned = await cleanEmploymentStatusWithAI(updateData.tieneEmpleo);
+                    await updateCandidate(candidateId, { tieneEmpleo: cleaned });
+                    console.log(`✅ [Automations] Employment status cleaned: "${cleaned}"`);
+                })());
+            }
+
             // Wait for all AI tasks to finish to ensure consistency in serverless
             if (extraTasks.length > 0) {
                 console.log(`⏳ [Automations] Waiting for ${extraTasks.length} AI cleaning tasks...`);
