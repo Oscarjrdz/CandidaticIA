@@ -1,4 +1,4 @@
-import { getRedisClient } from '../../utils/storage.js';
+import { getRedisClient } from '../utils/storage.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
