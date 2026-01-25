@@ -57,6 +57,12 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         if (!apiKey) return;
 
+        // SANITIZE KEY (Important!)
+        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
+        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (match) apiKey = match[0];
+        else apiKey = apiKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '').trim();
+
         // 3. Initialize Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
         // 4. Generate Content (With Fallback Strategy)

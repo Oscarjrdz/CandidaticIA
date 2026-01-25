@@ -36,11 +36,17 @@ export default async function handler(req, res) {
             report.step3_final_key_status = 'CRITICAL_FAILURE: No API Key found anywhere.';
             return res.json(report);
         }
-        report.step3_final_key_status = 'OK';
+        // 3a. Sanitize Key
+        let cleanKey = String(finalKey).trim().replace(/^["']|["']$/g, '');
+        const match = cleanKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (match) cleanKey = match[0];
+        else cleanKey = cleanKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '').trim();
+
+        report.step3_final_key_status = `OK (Sanitized: ${cleanKey.substring(0, 5)}...)`;
 
         // 4. Test Gemini connection (Raw REST to list models)
         try {
-            const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${finalKey}`;
+            const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`;
             const response = await fetch(listUrl);
             const data = await response.json();
 
