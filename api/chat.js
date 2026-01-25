@@ -65,53 +65,65 @@ export default async function handler(req, res) {
 
         // POST - Enviar mensaje
         if (req.method === 'POST') {
-            const { candidateId, message, botId, apiKey } = req.body;
+            const { candidateId, message, type = 'text', mediaUrl } = req.body;
 
-            if (!candidateId || !message) {
-                return res.status(400).json({ error: 'Faltan datos requeridos (candidateId, message)' });
+            if (!candidateId || (!message && !mediaUrl)) {
+                return res.status(400).json({ error: 'Faltan datos requeridos (candidateId, message/mediaUrl)' });
             }
 
-            // Obtener candidato para saber su número
             const candidate = await getCandidateById(candidateId);
             if (!candidate) {
                 return res.status(404).json({ error: 'Candidato no encontrado' });
             }
 
-            // Aplicar sustitución de shortcuts (ej: {{nombre}})
-            const finalMessage = substituteVariables(message, candidate);
-
-            // ALWAYS use UltraMsg (Candidatic 2.0)
+            const finalMessage = message ? substituteVariables(message, candidate) : '';
             const ultraConfig = await getUltraMsgConfig();
 
-            if (ultraConfig) {
-                console.log(`📤 [Chat API] Sending via UltraMsg to ${candidate.whatsapp}`);
-
-                // Enviar a UltraMsg
-                const result = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, finalMessage);
-
-                // Check for UltraMsg errors (sometimes they return success but "sent": "false" or similar)
-                if (!result) {
-                    console.error('❌ UltraMsg API returned null/undefined');
-                    return res.status(502).json({ error: 'Error enviando a UltraMsg (Sin respuesta)' });
-                }
-
-                // If needed, check specific UltraMsg properties
-                // but usually if it returns object it's "queued"
-            } else {
-                console.error('❌ UltraMsg Config Missing');
-                return res.status(400).json({ error: 'Faltan credenciales de UltraMsg/Bot IA' });
+            if (!ultraConfig) {
+                return res.status(400).json({ error: 'Faltan credenciales de UltraMSG' });
             }
 
-            // Guardar en historial local como mensaje saliente
             const timestamp = new Date().toISOString();
-            const savedMsg = await saveMessage(candidateId, {
+
+            // 1. Transactional Save: Save as 'queued'
+            const msgToSave = {
+                id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 from: 'me',
                 content: finalMessage,
-                type: 'text',
+                type: type,
+                mediaUrl: mediaUrl,
+                status: 'queued', // Zuckerberg style lifecycle tracking
                 timestamp: timestamp
-            });
+            };
 
-            // Actualizar estado del candidato para disparar el exportador (cron)
+            const savedMsg = await saveMessage(candidateId, msgToSave);
+
+            // 2. Send via UltraMsg
+            try {
+                let sendResult;
+                if (type === 'text') {
+                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, finalMessage, 'chat');
+                } else {
+                    // Send media (image, video, audio, voice)
+                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, mediaUrl, type, {
+                        caption: finalMessage
+                    });
+                }
+
+                // If UltraMSG returns success payload, update status to 'sent'
+                if (sendResult && (sendResult.sent === 'true' || sendResult.id)) {
+                    // In a high-volume system, we'd update specifically the message ID
+                    // For now, we update the local object (ACK webhook will update Redis later)
+                    savedMsg.status = 'sent';
+                    savedMsg.ultraMsgId = sendResult.id;
+                }
+            } catch (sendErr) {
+                console.error('❌ Error sending via UltraMsg:', sendErr.message);
+                savedMsg.status = 'failed';
+                savedMsg.error = sendErr.message;
+            }
+
+            // Update candidate last activity
             await updateCandidate(candidateId, {
                 ultimoMensaje: timestamp,
                 ultimoMensajeBot: timestamp,

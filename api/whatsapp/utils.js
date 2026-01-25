@@ -29,17 +29,46 @@ export const getUltraMsgConfig = async () => {
     return null;
 };
 
-export const sendUltraMsgMessage = async (instanceId, token, to, body) => {
+export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     try {
-        const url = `https://api.ultramsg.com/${instanceId}/messages/chat`;
-        const response = await axios.post(url, {
-            token: token,
-            to: to,
-            body: body
-        });
+        // Map type to UltraMSG endpoint
+        let endpoint = 'chat';
+        const payload = { token, to };
+
+        switch (type) {
+            case 'image':
+                endpoint = 'image';
+                payload.image = body; // URL or Base64
+                if (extraParams.caption) payload.caption = extraParams.caption;
+                break;
+            case 'video':
+                endpoint = 'video';
+                payload.video = body;
+                if (extraParams.caption) payload.caption = extraParams.caption;
+                break;
+            case 'audio':
+                endpoint = 'audio';
+                payload.audio = body;
+                break;
+            case 'voice':
+                endpoint = 'voice';
+                payload.audio = body;
+                break;
+            case 'document':
+                endpoint = 'document';
+                payload.document = body;
+                if (extraParams.filename) payload.filename = extraParams.filename;
+                break;
+            default:
+                endpoint = 'chat';
+                payload.body = body;
+        }
+
+        const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
+        const response = await axios.post(url, payload);
         return response.data;
     } catch (error) {
-        console.error('UltraMsg Send Error:', error.response?.data || error.message);
+        console.error(`UltraMSG [${type}] Send Error:`, error.response?.data || error.message);
         throw error;
     }
 };

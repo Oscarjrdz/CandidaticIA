@@ -20,7 +20,39 @@ export default async function handler(req, res) {
 
         console.log(`TYPE: ${eventType}, FROM: ${messageData.from}, BODY: ${messageData.body}`);
 
-        // Only process incoming messages
+        // 1. Handle Message Acknowledgments (Lifecycle Tracking)
+        if (eventType === 'message_ack') {
+            const { id, status, to } = messageData;
+            console.log(`📡 [Webhook] Message ACK: ${id} -> ${status} for ${to}`);
+
+            try {
+                const phone = to.replace(/\D/g, '');
+                const candidateId = await getCandidateIdByPhone(phone);
+
+                if (candidateId) {
+                    const messages = await getMessages(candidateId);
+                    // Find the message by its ultraMsgId and update its status
+                    const msgIndex = messages.findIndex(m => m.ultraMsgId === id);
+                    if (msgIndex !== -1) {
+                        messages[msgIndex].status = status;
+                        // Replace the entire message list (Redis rpush doesn't support easy per-index update)
+                        const client = getRedisClient();
+                        if (client) {
+                            const key = `messages:${candidateId}`;
+                            await client.del(key);
+                            for (const msg of messages) {
+                                await client.rpush(key, JSON.stringify(msg));
+                            }
+                        }
+                    }
+                }
+            } catch (ackErr) {
+                console.error('Error processing ACK:', ackErr.message);
+            }
+            return res.status(200).send('ok');
+        }
+
+        // Only process incoming messages (already handled ack above)
         if (eventType !== 'message_received') {
             console.log('⚠️ Ignored event type:', eventType);
             return res.status(200).send('ok');
@@ -64,12 +96,19 @@ export default async function handler(req, res) {
             }
 
             // 2. Save Message to History
-            const msgResult = await saveMessage(candidateId, {
+            const msgToSave = {
                 from: 'user',
                 content: body,
-                type: 'text',
+                type: messageData.type || 'text',
                 timestamp: new Date().toISOString()
-            });
+            };
+
+            // Capture media if present
+            if (messageData.type === 'image' || messageData.type === 'video' || messageData.type === 'audio' || messageData.type === 'voice') {
+                msgToSave.mediaUrl = messageData.media;
+            }
+
+            const msgResult = await saveMessage(candidateId, msgToSave);
             console.log('💾 Message Saved Result:', msgResult);
 
             // Update candidate last activity
