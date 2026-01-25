@@ -936,14 +936,6 @@ const CandidatesSection = ({ showToast }) => {
                                         <td className="py-0.5 px-2.5 text-center">
                                             {exportingMap[candidate.whatsapp] === 'uploading' ? (
                                                 <Loader2 className="w-4 h-4 text-blue-500 animate-spin mx-auto" title="Subiendo historial..." />
-                                            ) : localChatFiles[candidate.whatsapp] || exportingMap[candidate.whatsapp] === 'uploaded' || getChatFileId(candidate.whatsapp) ? (
-                                                <button
-                                                    onClick={() => handleViewHistory(candidate)}
-                                                    className="p-1.5 hover:bg-green-50 dark:hover:bg-green-900/20 text-green-600 dark:text-green-400 rounded-lg smooth-transition"
-                                                    title="Ver historial"
-                                                >
-                                                    <FileText className="w-4 h-4" />
-                                                </button>
                                             ) : exportingMap[candidate.whatsapp] === 'error' ? (
                                                 <div className="text-red-500 text-[10px]" title="Error al exportar">
                                                     Error
@@ -1017,14 +1009,6 @@ const CandidatesSection = ({ showToast }) => {
                 onClose={() => setSelectedCandidate(null)}
                 candidate={selectedCandidate}
                 credentials={credentials}
-            />
-
-            {/* Modal de Historial */}
-            <ChatHistoryModal
-                isOpen={historyModalOpen}
-                onClose={() => setHistoryModalOpen(false)}
-                candidate={historyModalCandidate}
-                chatContent={historyModalContent}
             />
         </div >
     );
