@@ -21,30 +21,40 @@ export default async function handler(req, res) {
             const data = await client.get(key);
             if (data) {
                 let c;
-                let isCorrupt = false;
                 try {
                     c = JSON.parse(data);
                 } catch (e) {
-                    c = { id: data, nombre: 'CORRUPT_DATA', whatsapp: 'Unknown', raw: data };
-                    isCorrupt = true;
+                    c = { id: 'corrupt', nombre: 'CORRUPT', whatsapp: 'Unknown' };
                 }
 
-                // Count messages for this ID (if we have an ID)
+                // Count messages for this ID
                 const candidateId = c.id || key.split(':')[1];
                 const msgCount = await client.llen(`messages:${candidateId}`);
+
+                // Get last message info if possible
+                let lastMsg = null;
+                if (msgCount > 0) {
+                    const params = await client.lrange(`messages:${candidateId}`, -1, -1);
+                    if (params && params.length > 0) {
+                        try { lastMsg = JSON.parse(params[0]); } catch { lastMsg = params[0]; }
+                    }
+                }
 
                 candidates.push({
                     id: candidateId,
                     name: c.nombre,
                     phone: c.whatsapp,
                     msgs: msgCount,
-                    RAW_KEY: key,
-                    isCorrupt: isCorrupt
+                    lastMsg: lastMsg,
+                    RAW_KEY: key
                 });
             }
         }
 
         await client.quit();
+
+        // Sort by message count desc
+        candidates.sort((a, b) => b.msgs - a.msgs);
 
         return res.json({
             count: candidates.length,
