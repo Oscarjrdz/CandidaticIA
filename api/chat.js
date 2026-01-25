@@ -110,24 +110,32 @@ export default async function handler(req, res) {
                     });
                 }
 
-                // If UltraMSG returns success payload, update status to 'sent'
                 if (sendResult && (sendResult.sent === 'true' || sendResult.id)) {
-                    // In a high-volume system, we'd update specifically the message ID
-                    // For now, we update the local object (ACK webhook will update Redis later)
+                    // PERSIST TO REDIS: Important fix
+                    await updateCandidate(candidateId, {
+                        ultimoMensajeBot: timestamp,
+                        lastBotMessageAt: timestamp
+                    });
+
+                    // Update the message in the Redis list
+                    const updatedData = {
+                        status: 'sent',
+                        ultraMsgId: sendResult.id
+                    };
+                    await updateMessageStatus(candidateId, msgToSave.id, 'sent', updatedData);
+
                     savedMsg.status = 'sent';
                     savedMsg.ultraMsgId = sendResult.id;
                 }
             } catch (sendErr) {
                 console.error('❌ Error sending via UltraMsg:', sendErr.message);
+                await updateMessageStatus(candidateId, msgToSave.id, 'failed', { error: sendErr.message });
                 savedMsg.status = 'failed';
-                savedMsg.error = sendErr.message;
             }
 
-            // Update candidate last activity
+            // Update candidate last activity timestamps globally
             await updateCandidate(candidateId, {
-                ultimoMensaje: timestamp,
-                ultimoMensajeBot: timestamp,
-                lastBotMessageAt: timestamp
+                ultimoMensaje: timestamp
             });
 
             return res.status(200).json({ success: true, message: savedMsg });

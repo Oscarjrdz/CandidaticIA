@@ -426,7 +426,12 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                                                     <video src={msg.mediaUrl} controls className="max-w-full h-auto" />
                                                 )}
                                                 {(msg.type === 'audio' || msg.type === 'voice' || msg.type === 'ptt' || msg.type === 'audio_received') && (
-                                                    <audio src={msg.mediaUrl} controls className="max-w-full h-10 mt-1" />
+                                                    <div className="flex flex-col space-y-1">
+                                                        <audio src={msg.mediaUrl} controls className="max-w-full h-10 mt-1" />
+                                                        <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 dark:text-blue-400 underline pl-1">
+                                                            Abrir audio en pestaña nueva
+                                                        </a>
+                                                    </div>
                                                 )}
                                                 {(msg.type === 'document' || msg.type === 'doc_received') && (
                                                     <div className="p-3 bg-black/5 flex items-center space-x-2 cursor-pointer" onClick={() => window.open(msg.mediaUrl, '_blank')}>

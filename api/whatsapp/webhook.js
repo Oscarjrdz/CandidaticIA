@@ -30,21 +30,7 @@ export default async function handler(req, res) {
                 const candidateId = await getCandidateIdByPhone(phone);
 
                 if (candidateId) {
-                    const messages = await getMessages(candidateId);
-                    // Find the message by its ultraMsgId and update its status
-                    const msgIndex = messages.findIndex(m => m.ultraMsgId === id);
-                    if (msgIndex !== -1) {
-                        messages[msgIndex].status = status;
-                        // Replace the entire message list (Redis rpush doesn't support easy per-index update)
-                        const client = getRedisClient();
-                        if (client) {
-                            const key = `messages:${candidateId}`;
-                            await client.del(key);
-                            for (const msg of messages) {
-                                await client.rpush(key, JSON.stringify(msg));
-                            }
-                        }
-                    }
+                    await updateMessageStatus(candidateId, id, status);
                 }
             } catch (ackErr) {
                 console.error('Error processing ACK:', ackErr.message);
