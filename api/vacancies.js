@@ -218,7 +218,7 @@ export default async function handler(req, res) {
 
         // POST - Create vacancy
         if (req.method === 'POST') {
-            const body = await parseJsonBody(req);
+            const body = req.body;
             const { name, company, category, description } = body;
 
             if (!name || !company || !category) {
@@ -253,7 +253,7 @@ export default async function handler(req, res) {
 
         // PUT - Update vacancy
         if (req.method === 'PUT') {
-            const body = await parseJsonBody(req);
+            const body = req.body;
             const { id, ...updates } = body;
 
             if (!id) return res.status(400).json({ error: 'Missing id' });
@@ -324,23 +324,3 @@ export default async function handler(req, res) {
     }
 }
 
-/**
- * Parse JSON body from request
- */
-async function parseJsonBody(req) {
-    return new Promise((resolve, reject) => {
-        let body = '';
-        req.on('data', chunk => {
-            body += chunk.toString();
-        });
-        req.on('end', () => {
-            try {
-                if (!body) resolve({});
-                else resolve(JSON.parse(body));
-            } catch (error) {
-                reject(error);
-            }
-        });
-        req.on('error', reject);
-    });
-}

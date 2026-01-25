@@ -44,7 +44,7 @@ export default async function handler(req, res) {
 
         // POST - Set timer state
         if (req.method === 'POST') {
-            const body = await parseJsonBody(req);
+            const body = req.body;
             const { whatsapp, state } = body;
 
             if (!whatsapp || !state) {
@@ -102,22 +102,3 @@ export default async function handler(req, res) {
     }
 }
 
-/**
- * Parse JSON body from request
- */
-async function parseJsonBody(req) {
-    return new Promise((resolve, reject) => {
-        let body = '';
-        req.on('data', chunk => {
-            body += chunk.toString();
-        });
-        req.on('end', () => {
-            try {
-                resolve(JSON.parse(body));
-            } catch (error) {
-                reject(error);
-            }
-        });
-        req.on('error', reject);
-    });
-}
