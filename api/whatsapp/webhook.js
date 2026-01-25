@@ -1,4 +1,4 @@
-import { saveMessage, getCandidateIdByPhone, createCandidate, updateCandidate, getRedisClient } from '../utils/storage.js';
+import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient } from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
 
 export default async function handler(req, res) {
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
             if (!candidateId) {
                 console.log(`✨ New candidate detected: ${phone}`);
-                const newCandidate = await createCandidate({
+                const newCandidate = await saveCandidate({
                     whatsapp: phone,
                     nombre: pushName || 'Desconocido',
                     origen: 'whatsapp_v2'
