@@ -308,11 +308,12 @@ export async function cleanEmploymentStatusWithAI(statusPhrase) {
 
         const prompt = `Analiza la siguiente frase sobre estatus laboral: "${statusPhrase}".
 Determina de forma binaria si la persona TIENE empleo o NO TIENE empleo.
-REGLAS:
-1. Responde ÚNICAMENTE con la palabra "Sí" o la palabra "No".
-2. Si la persona dice que está trabajando, laborando o tiene empleo activo, responde "Sí".
-3. Si la persona dice que está desempleada, desocupada, buscando o no tiene trabajo, responde "No".
-4. Si la frase es ambigua o no se refiere al estatus laboral, devuelve la frase original.
+REGLAS ESTRICTAS:
+1. Tu respuesta DEBE ser ÚNICAMENTE la palabra "Sí" o la palabra "No".
+2. Si la persona menciona que tiene trabajo, está laborando, es empleado, o similar -> "Sí".
+3. Si la persona dice que está desempleada, buscando, que no tiene trabajo, o es estudiante/ama de casa sin empleo -> "No".
+4. Si la frase NO ES CLARA (ej: "hola", "info"), asume "No" por defecto para limpieza, o intenta inferir.
+5. JAMÁS devuelvas la frase original. Solo "Sí" o "No".
 Respuesta (Sí/No):`;
 
         let result = statusPhrase;
@@ -325,8 +326,14 @@ Respuesta (Sí/No):`;
                 const apiResult = await model.generateContent(prompt);
                 const response = await apiResult.response;
                 const text = response.text().trim().replace(/[.]/g, '');
-                if (text === 'Sí' || text === 'No') {
-                    result = text;
+
+                // Flexible matching
+                if (text.toLowerCase().includes('sí') || text.toLowerCase().includes('si')) {
+                    result = 'Sí';
+                    break;
+                }
+                if (text.toLowerCase().includes('no')) {
+                    result = 'No';
                     break;
                 }
             } catch (err) {
