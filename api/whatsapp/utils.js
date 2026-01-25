@@ -38,6 +38,7 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body) => {
             body: body
         });
         return response.data;
+    } catch (error) {
         console.error('UltraMsg Send Error:', error.response?.data || error.message);
         throw error;
     }
