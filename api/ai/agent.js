@@ -89,9 +89,10 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // 4. Generate Content (With Fallback Strategy)
         // 4. Generate Content (With Fallback Strategy)
         const modelsToTry = [
-            "gemini-pro", // Stable v1.0 first
-            "gemini-1.5-flash",
-            "gemini-1.5-pro"
+            "gemini-1.5-flash-latest",
+            "gemini-1.5-flash-001",
+            "gemini-1.0-pro",
+            "gemini-pro"
         ];
 
         let result;

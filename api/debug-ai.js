@@ -31,21 +31,20 @@ export default async function handler(req, res) {
         // 1. TEST AI GENERATION
         if (apiKey) {
             const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-            try {
-                const result = await model.generateContent("Di 'Funciono' en una palabra.");
-                const response = result.response;
-                results.ai_generation = {
-                    status: 'success',
-                    text: response.text(),
-                    model: 'gemini-pro'
-                };
-            } catch (e) {
-                results.ai_generation = {
-                    status: 'failed',
-                    error: e.message,
-                    details: e.response?.data || 'No details'
-                };
+            const models = ["gemini-1.5-flash-latest", "gemini-1.5-flash-001", "gemini-1.0-pro"];
+
+            results.ai_generation = [];
+
+            for (const m of models) {
+                const model = genAI.getGenerativeModel({ model: m });
+                try {
+                    const result = await model.generateContent("Di 'Funciono' en una palabra.");
+                    const response = result.response;
+                    results.ai_generation.push({ model: m, status: 'success', text: response.text() });
+                    break; // Stop at first success
+                } catch (e) {
+                    results.ai_generation.push({ model: m, status: 'failed', error: e.message });
+                }
             }
         } else {
             results.ai_generation = { status: 'skipped', reason: 'No API Key' };
