@@ -4,7 +4,7 @@ import { useToast } from './hooks/useToast';
 import Button from './components/ui/Button';
 import Sidebar from './components/Sidebar';
 import CandidatesSection from './components/CandidatesSection';
-import HistorySection from './components/HistorySection';
+
 import SettingsSection from './components/SettingsSection';
 import AutomationsSection from './components/AutomationsSection';
 import VacanciesSection from './components/VacanciesSection';
@@ -246,8 +246,7 @@ function App() {
         <main className="flex-1 px-8 py-8 overflow-y-auto">
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
-          ) : activeSection === 'history' ? (
-            <HistorySection showToast={showToast} />
+
           ) : activeSection === 'bot-ia' ? (
             <BotIASection showToast={showToast} />
           ) : activeSection === 'automations' ? (

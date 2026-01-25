@@ -18,7 +18,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
         { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
         { id: 'bulks', label: 'Bulks', icon: Send, position: 'top' },
         { id: 'post-maker', label: 'Post Maker', icon: Layout, position: 'top' },
-        { id: 'history', label: 'Historial', icon: History, position: 'top' },
+
         { id: 'users', label: 'Usuarios', icon: User, position: 'top' },
         { id: 'settings', label: 'Settings', icon: Settings, position: 'bottom' }
     ];
