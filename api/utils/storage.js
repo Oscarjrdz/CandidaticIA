@@ -379,7 +379,19 @@ export const getMessages = async (candidateId) => {
     } catch { return []; }
 };
 
-return message;
+export const saveMessage = async (candidateId, message) => {
+    const client = getClient();
+    if (!client) {
+        console.error('❌ [Storage] saveMessage failed: No Redis client');
+        return null;
+    }
+    const key = `messages:${candidateId}`;
+    try {
+        await client.rpush(key, JSON.stringify(message));
+    } catch (e) {
+        console.error('❌ [Storage] saveMessage Error:', e);
+    }
+    return message;
 };
 
 export const updateMessageStatus = async (candidateId, ultraMsgId, status, additionalData = {}) => {
