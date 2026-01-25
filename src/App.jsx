@@ -12,6 +12,7 @@ import VacanciesSection from './components/VacanciesSection';
 import BulksSection from './components/BulksSection';
 import UsersSection from './components/UsersSection';
 import PostMakerSection from './components/PostMakerSection';
+import BotIASection from './components/BotIASection';
 import LoginPage from './components/LoginPage'; // LOGIN ENABLED
 import { getTheme, saveTheme, exportConfig, importConfig, clearAllStorage } from './utils/storage';
 
@@ -172,10 +173,11 @@ function App() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
                     : activeSection === 'assistant' ? 'Gestión del Prompt y Archivos del Asistente'
-                      : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
-                        : activeSection === 'users' ? 'Gestión de equipo y permisos'
-                          : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
-                            : 'Configuración de BuilderBot API'
+                      : activeSection === 'bot-ia' ? 'Configuración de UltraMsg y Bot IA'
+                        : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
+                          : activeSection === 'users' ? 'Gestión de equipo y permisos'
+                            : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
+                              : 'Configuración de BuilderBot API'
                   }
                 </p>
               </div>
@@ -251,6 +253,8 @@ function App() {
             <HistorySection showToast={showToast} />
           ) : activeSection === 'assistant' ? (
             <AssistantSection showToast={showToast} />
+          ) : activeSection === 'bot-ia' ? (
+            <BotIASection showToast={showToast} />
           ) : activeSection === 'automations' ? (
             <AutomationsSection showToast={showToast} />
           ) : activeSection === 'vacancies' ? (
