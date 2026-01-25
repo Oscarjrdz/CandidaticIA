@@ -33,6 +33,7 @@ export default async function handler(req, res) {
 
             if (type === 'credentials') {
                 value = await redis.get('builderbot_credentials');
+                console.log(`📥 [Settings API] GET credentials. Found: ${!!value}`);
                 return res.status(200).json({
                     success: true,
                     data: value ? JSON.parse(value) : null

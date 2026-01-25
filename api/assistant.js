@@ -22,52 +22,56 @@ export default async function handler(req, res) {
     const { botId, answerId, apiKey, type, fileId } = req.query;
 
     if (!botId || !answerId || !apiKey) {
+        console.warn('⚠️ Missing credentials in request query:', { botId: !!botId, answerId: !!answerId, apiKey: !!apiKey });
         return res.status(400).json({ error: 'Faltan credenciales (botId, answerId, apiKey)' });
     }
+
+    // Redacted logs for debugging
+    console.log(`🚀 [Assistant API] Type: ${type}, Method: ${req.method}`);
+    console.log(`📍 BotId: ${botId}`);
+    console.log(`🔑 ApiKey: ${apiKey ? (apiKey.substring(0, 5) + '...') : 'MISSING'}`);
 
     try {
         // --- 1. PROMPT / INSTRUCTIONS ---
         if (type === 'instructions') {
-            if (req.method === 'GET') {
-                const url = `${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant`;
+            const url = `${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant`;
 
-                // Necesitamos leer stream o body manualmente si bodyParser está en false
-                // Pero GET no tiene body. Fetch funciona directo.
-                const response = await fetch(url, {
-                    headers: { 'x-api-builderbot': apiKey }
+            if (req.method === 'GET') {
+                const response = await axios.get(url, {
+                    headers: { 'x-api-builderbot': apiKey },
+                    validateStatus: () => true
                 });
 
-                if (!response.ok) {
-                    const err = await response.text();
-                    return res.status(response.status).json({ error: 'Error obteniendo instrucciones', details: err });
+                if (response.status !== 200) {
+                    console.error('❌ Error BuilderBot GET instructions:', response.data);
+                    return res.status(response.status).json({
+                        error: 'Error obteniendo instrucciones',
+                        details: typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+                    });
                 }
 
-                const data = await response.json();
-                return res.status(200).json(data);
+                return res.status(200).json(response.data);
             }
 
             if (req.method === 'POST') {
-                // Parse body manually because we disabled it globally for this route (to support files)
-                // For JSON post, we need to read the stream
                 const body = await parseJsonBody(req);
-
-                const url = `${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant`;
-                const response = await fetch(url, {
-                    method: 'POST',
+                const response = await axios.post(url, body, {
                     headers: {
                         'Content-Type': 'application/json',
                         'x-api-builderbot': apiKey
                     },
-                    body: JSON.stringify(body)
+                    validateStatus: () => true
                 });
 
-                if (!response.ok) {
-                    const err = await response.text();
-                    return res.status(response.status).json({ error: 'Error actualizando instrucciones', details: err });
+                if (response.status !== 200 && response.status !== 201) {
+                    console.error('❌ Error BuilderBot POST instructions:', response.data);
+                    return res.status(response.status).json({
+                        error: 'Error actualizando instrucciones',
+                        details: typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+                    });
                 }
 
-                const data = await response.json();
-                return res.status(200).json(data);
+                return res.status(200).json(response.data);
             }
         }
 
@@ -76,155 +80,93 @@ export default async function handler(req, res) {
             const url = `${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files`;
 
             if (req.method === 'GET') {
-                const response = await fetch(url, {
-                    headers: { 'x-api-builderbot': apiKey }
+                console.log(`📥 Listing files from BuilderBot: ${url}`);
+                const response = await axios.get(url, {
+                    headers: { 'x-api-builderbot': apiKey },
+                    validateStatus: () => true
                 });
 
-                if (!response.ok) {
-                    const err = await response.text();
-                    return res.status(response.status).json({ error: 'Error listando archivos', details: err });
+                if (response.status !== 200) {
+                    console.error('❌ Error BuilderBot GET files:', response.data);
+                    return res.status(response.status).json({
+                        error: 'Error listando archivos',
+                        details: typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+                    });
                 }
 
-                const data = await response.json();
-                return res.status(200).json(data);
+                return res.status(200).json(response.data);
             }
 
             if (req.method === 'POST') {
-                // Subida de archivos con formidable
+                // ... (POST logic already uses axios, but let's ensure it's robust)
                 const formData = await parseMultipartForm(req);
-
-                // Construir multipart form data para enviar a BuilderBot
-                // Necesitamos Node 18+ FormData o usar librería 'form-data'
-                // Vercel serverless usa Node 18+ nativo
-
-                // --- Implementación Final: Depuración + Stream Estándar ---
                 const remoteFormData = new FormData();
-
-                // Depuración de lo que recibe Formidable
-                console.log('📦 Formidable Files:', JSON.stringify(formData.files, (key, value) => {
-                    if (key === 'file') return '[File Object]';
-                    return value;
-                }));
-
                 const file = formData.files.file;
                 const fileObj = Array.isArray(file) ? file[0] : file;
 
                 if (!fileObj) {
-                    console.error('❌ Formidable no encontró el archivo "file". Keys:', Object.keys(formData.files || {}));
-                    return res.status(400).json({
-                        error: 'No se recibió archivo',
-                        details: 'El servidor no recibió el campo "file".',
-                        debug: Object.keys(formData.files || {})
-                    });
+                    return res.status(400).json({ error: 'No se recibió archivo' });
                 }
 
-                // Compatibilidad v2/v3 formidable
                 const filepath = fileObj.filepath || fileObj.path;
                 const filename = fileObj.originalFilename || fileObj.name || 'documento.bin';
+                const mimetype = mime.lookup(filename) || fileObj.mimetype || 'application/octet-stream';
 
-                if (!filepath) {
-                    return res.status(500).json({ error: 'Error procesando archivo', details: 'Filepath perdido', fileObj });
-                }
-
-                // Forzar extensión si falta (ayuda a mime detection)
-                let finalFilename = filename;
-                if (!path.extname(finalFilename) && fileObj.mimetype) {
-                    const ext = mime.extension(fileObj.mimetype);
-                    if (ext) finalFilename = `${filename}.${ext}`;
-                }
-
-                // Detección MIME obligatoria
-                const mimetype = mime.lookup(finalFilename) || fileObj.mimetype || 'application/octet-stream';
-
-                console.log(`📤 Preparando subida con Axios (Buffer): ${finalFilename} (${mimetype}) desde ${filepath}`);
-
-                // Usamos Buffer + Axios para asegurar Length correcto y evitar problemas de stream
                 const fileBuffer = fs.readFileSync(filepath);
-
                 remoteFormData.append('file', fileBuffer, {
-                    filename: finalFilename,
+                    filename: filename,
                     contentType: mimetype,
-                    // knownLength se calcula solo con Buffer
                 });
 
-                const formHeaders = remoteFormData.getHeaders();
+                const response = await axios.post(url, remoteFormData, {
+                    headers: {
+                        'x-api-builderbot': apiKey,
+                        ...remoteFormData.getHeaders()
+                    },
+                    maxBodyLength: Infinity,
+                    validateStatus: () => true
+                });
 
-                console.log(`📤 Enviando request a BuilderBot API (Axios)...`);
-
-                try {
-                    const response = await axios.post(url, remoteFormData, {
-                        headers: {
-                            'x-api-builderbot': apiKey,
-                            ...formHeaders
-                        },
-                        maxBodyLength: Infinity, // Importante para archivos grandes
-                        validateStatus: () => true // No lanzar error en status != 200 para manejarlo manual
-                    });
-
-                    console.log(`📥 Respuesta BuilderBot: ${response.status} ${response.statusText}`);
-
-                    const responseData = response.data;
-
-                    if (response.status !== 200 && response.status !== 201) {
-                        const errStr = typeof responseData === 'string' ? responseData : JSON.stringify(responseData);
-                        console.error('❌ Error BuilderBot:', errStr);
-
-                        // WORKAROUND: BuilderBot devuelve error 500 "Cannot read properties of undefined" 
-                        // pero el archivo SI se sube. Si detectamos este error específico, devolvemos éxito.
-                        if (errStr.includes('Cannot read properties of undefined') || errStr.includes('reading \'0\'')) {
-                            console.log('⚠️ Detectado falso positivo de BuilderBot. Asumiendo éxito.');
-                            return res.status(200).json({ success: true, message: 'Archivo subido (con advertencia de servidor)', raw: responseData });
-                        }
-
-                        return res.status(response.status).json({ error: 'Error subiendo archivo a BuilderBot', details: errStr });
+                if (response.status !== 200 && response.status !== 201) {
+                    // Workaround for falso positivo deleted here to keep it clean, 
+                    // or re-add if really needed. Let's keep it for now as it was there.
+                    const errStr = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+                    if (errStr.includes('Cannot read properties of undefined') || errStr.includes('reading \'0\'')) {
+                        return res.status(200).json({ success: true, message: 'Archivo subido (con advertencia)' });
                     }
-
-                    // Axios ya parsea JSON automáticamente si el header es correcto
-                    // Pero si viene texto plano, responseData será string
-                    let finalData = responseData;
-                    if (typeof responseData === 'string') {
-                        try {
-                            finalData = JSON.parse(responseData);
-                        } catch (e) {
-                            console.log('⚠️ Respuesta no-JSON de BuilderBot (asumiendo éxito):', responseData);
-                            finalData = { success: true, message: 'Archivo subido correctamente', raw: responseData };
-                        }
-                    }
-
-                    return res.status(200).json(finalData);
-
-                } catch (axiosError) {
-                    console.error('❌ Error Axios:', axiosError.message);
-                    return res.status(500).json({ error: 'Error de conexión interno', details: axiosError.message });
+                    return res.status(response.status).json({ error: 'Error subiendo archivo', details: errStr });
                 }
+
+                return res.status(200).json(response.data);
             }
 
             if (req.method === 'DELETE') {
                 if (!fileId) return res.status(400).json({ error: 'Falta fileId' });
 
-                const deleteUrl = `${url}?fileId=${fileId}`;
-                const response = await fetch(deleteUrl, {
-                    method: 'DELETE',
-                    headers: { 'x-api-builderbot': apiKey }
+                const response = await axios.delete(url, {
+                    params: { fileId },
+                    headers: { 'x-api-builderbot': apiKey },
+                    validateStatus: () => true
                 });
 
-                if (!response.ok) {
-                    const err = await response.text();
-                    return res.status(response.status).json({ error: 'Error eliminando archivo', details: err });
+                if (response.status !== 200) {
+                    return res.status(response.status).json({
+                        error: 'Error eliminando archivo',
+                        details: typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+                    });
                 }
 
                 return res.status(200).json({ success: true, message: 'Archivo eliminado' });
             }
         }
 
-        return res.status(400).json({ error: 'Tipo de operación no válido o método no soportado' });
+        return res.status(400).json({ error: 'Tipo de operación no válido' });
 
     } catch (error) {
-        console.error('API Error:', error);
-        return res.status(500).json({ error: 'Error interno', details: error.message });
+        console.error('❌ Assistant API Critical Error:', error.message);
+        return res.status(500).json({ error: 'Error interno del servidor', details: error.message });
     }
 }
-
 // Helpers par formidable y body parsing
 const parseMultipartForm = (req) => {
     return new Promise((resolve, reject) => {
