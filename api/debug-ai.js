@@ -1,79 +1,44 @@
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getRedisClient } from './utils/storage.js';
+import { processMessage } from './ai/agent.js';
+import { getCandidateIdByPhone } from './utils/storage.js';
 
 export default async function handler(req, res) {
-    const report = {
-        step1_env_key: 'PENDING',
-        step2_redis_key: 'PENDING',
-        step3_final_key_status: 'PENDING',
-        step4_gemini_test: 'PENDING',
-        error: null
-    };
+    // Default to user's phone if not provided
+    const phone = req.query.phone || '5218116038195';
+    const message = req.query.message || 'Cuéntame un dato curioso';
 
     try {
-        // 1. Check Env
-        const envKey = process.env.GEMINI_API_KEY;
-        report.step1_env_key = envKey ? `Present (${envKey.substring(0, 5)}...)` : 'MISSING';
+        const candidateId = await getCandidateIdByPhone(phone);
 
-        // 2. Check Redis
-        const redis = getRedisClient();
-        let redisKey = null;
-        if (redis) {
-            const aiConfig = await redis.get('ai_config');
-            if (aiConfig) {
-                const parsed = JSON.parse(aiConfig);
-                redisKey = parsed.geminiApiKey;
-            }
-            report.step2_redis_key = redisKey ? `Present (${redisKey.substring(0, 5)}...)` : 'MISSING';
-        } else {
-            report.step2_redis_key = 'REDIS_CONNECTION_FAILED';
+        if (!candidateId) {
+            return res.status(404).json({
+                error: 'Candidate not found',
+                searchedPhone: phone
+            });
         }
 
-        // 3. Determined Key
-        const finalKey = redisKey || envKey;
-        if (!finalKey) {
-            report.step3_final_key_status = 'CRITICAL_FAILURE: No API Key found anywhere.';
-            return res.json(report);
-        }
-        // 3a. Sanitize Key
-        let cleanKey = String(finalKey).trim().replace(/^["']|["']$/g, '');
-        const match = cleanKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-        if (match) cleanKey = match[0];
-        else cleanKey = cleanKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '').trim();
+        console.log(`🧪 [Debug] Testing AI for candidate ${candidateId} (${phone})...`);
+        const start = Date.now();
 
-        report.step3_final_key_status = `OK (Sanitized: ${cleanKey.substring(0, 5)}...)`;
+        // EXECUTE THE AGENT DIRECTLY
+        const result = await processMessage(candidateId, message);
 
-        // 4. Test Gemini connection (Raw REST to list models)
-        try {
-            const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${cleanKey}`;
-            const response = await fetch(listUrl);
-            const data = await response.json();
+        const duration = Date.now() - start;
 
-            if (data.models) {
-                report.step4_gemini_test = `SUCCESS: Found ${data.models.length} models. First 3: ${data.models.slice(0, 3).map(m => m.name).join(', ')}`;
-                report.available_models = data.models.map(m => m.name); // Return full list
+        return res.json({
+            success: !!result,
+            candidateId,
+            input: message,
+            ai_response: result || 'NULL (Agent returned nothing)',
+            duration: `${duration}ms`,
+            note: 'If ai_response is text, the Bot Logic works perfectly. If NULL, check logs.'
+        });
 
-                // Try generating with the first available "generateContent" model
-                const chatModel = data.models.find(m => m.supportedGenerationMethods.includes('generateContent'));
-                if (chatModel) {
-                    report.config_recommendation = `Use model: "${chatModel.name.replace('models/', '')}"`;
-                }
-            } else {
-                report.step4_gemini_test = 'FAILED: No models found due to: ' + JSON.stringify(data);
-            }
-        } catch (restErr) {
-            report.step4_gemini_test = 'FAILED_REST: ' + restErr.message;
-        }
-
-        return res.json(report);
-
-    } catch (e) {
-        report.error = {
-            message: e.message,
-            stack: e.stack,
-            details: e.response || 'No details'
-        };
-        return res.status(500).json(report);
+    } catch (error) {
+        console.error('Debug Error:', error);
+        return res.status(500).json({
+            error: error.message,
+            stack: error.stack
+        });
     }
 }
