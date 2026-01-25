@@ -121,13 +121,13 @@ export default async function handler(req, res) {
                     };
                     await updateMessageStatus(candidateId, msgToSave.id, 'sent', updatedData);
 
-                    savedMsg.status = 'sent';
-                    savedMsg.ultraMsgId = sendResult.id;
+                    msgToSave.status = 'sent';
+                    msgToSave.ultraMsgId = sendResult.id;
                 }
             } catch (sendErr) {
                 console.error('❌ Error sending via UltraMsg:', sendErr.message);
                 await updateMessageStatus(candidateId, msgToSave.id, 'failed', { error: sendErr.message });
-                savedMsg.status = 'failed';
+                msgToSave.status = 'failed';
             }
 
             // Update candidate last activity timestamps globally
@@ -135,7 +135,7 @@ export default async function handler(req, res) {
                 ultimoMensaje: timestamp
             });
 
-            return res.status(200).json({ success: true, message: savedMsg });
+            return res.status(200).json({ success: true, message: msgToSave });
         }
 
         return res.status(405).json({ error: 'Método no permitido' });
