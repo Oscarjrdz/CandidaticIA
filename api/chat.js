@@ -1,47 +1,46 @@
-/**
- * Endpoint para el Chat con Candidatos
- * GET /api/chat?candidateId=... (Obtener historial)
- * POST /api/chat (Enviar mensaje)
- */
-
 import { getMessages, saveMessage, getCandidateById, updateCandidate } from './utils/storage.js';
-import { sendTestMessage } from '../src/services/builderbot.js';
 import { substituteVariables } from './utils/shortcuts.js';
-
-// NOTA: Para usar sendTestMessage en el backend, necesitamos adaptar la importación o replicar la lógica
-// ya que builderbot.js usa sintaxis de frontend (fetch) que funciona en Node 18+, pero el path puede ser un problema.
-// Por simplicidad, replicaremos la función de envío aquí para asegurar compatibilidad server-side.
+import axios from 'axios';
 
 const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
 
 const sendBuilderBotMessage = async (botId, apiKey, number, message) => {
-    console.log('🚀 [sendBuilderBotMessage] Sending:', message);
+    console.log(`🚀 [sendBuilderBotMessage] Sending to ${number}...`);
+    // Redacted logs for debugging
+    console.log(`📍 BotId: ${botId ? 'PRESENT' : 'MISSING'}`);
+    console.log(`🔑 ApiKey: ${apiKey ? (apiKey.substring(0, 5) + '...') : 'MISSING'}`);
+
     try {
-        const response = await fetch(`${BUILDERBOT_API_URL}/${botId}/messages`, {
-            method: 'POST',
+        const url = `${BUILDERBOT_API_URL}/${botId}/messages`;
+        const response = await axios.post(url, {
+            messages: {
+                type: "text",
+                content: message
+            },
+            number: number,
+            checkIfExists: false
+        }, {
             headers: {
                 'Content-Type': 'application/json',
                 'x-api-builderbot': apiKey,
             },
-            body: JSON.stringify({
-                messages: {
-                    type: "text",
-                    content: message
-                },
-                number: number
-            }),
+            validateStatus: () => true // Handle errors manually
         });
 
-        const data = await response.json().catch(() => ({}));
+        console.log(`📥 BuilderBot Response: ${response.status} ${response.statusText}`);
 
-        // BuilderBot v2 API structure might contain provider response
-        if (!response.ok) {
-            console.error('BuilderBot Error:', data);
-            return { success: false, error: data };
+        if (response.status !== 200 && response.status !== 201) {
+            console.error('❌ BuilderBot Error Data:', response.data);
+            return {
+                success: false,
+                error: typeof response.data === 'string' ? response.data : JSON.stringify(response.data),
+                status: response.status
+            };
         }
-        return { success: true, data };
+
+        return { success: true, data: response.data };
     } catch (error) {
-        console.error('Network Error:', error);
+        console.error('❌ Network Error sending to BuilderBot:', error.message);
         return { success: false, error: error.message };
     }
 };
@@ -78,13 +77,24 @@ export default async function handler(req, res) {
             }
 
             // Validar credenciales
-            // Idealmente estas vendrían de una DB de configuración del usuario, 
-            // pero por ahora las pasamos desde el frontend o usamos env vars
-            const effectiveBotId = botId || process.env.BOT_ID; // Fallback a env si están seteadas
-            const effectiveApiKey = apiKey || process.env.BOT_TOKEN;
+            let effectiveBotId = botId;
+            let effectiveApiKey = apiKey;
 
             if (!effectiveBotId || !effectiveApiKey) {
-                return res.status(400).json({ error: 'Credenciales de BuilderBot no proporcionadas' });
+                const { getRedisClient } = await import('./utils/storage.js');
+                const redis = getRedisClient();
+                if (redis) {
+                    const credsJson = await redis.get('builderbot_credentials');
+                    if (credsJson) {
+                        const creds = JSON.parse(credsJson);
+                        if (!effectiveBotId) effectiveBotId = creds.botId;
+                        if (!effectiveApiKey) effectiveApiKey = creds.apiKey;
+                    }
+                }
+            }
+
+            if (!effectiveBotId || !effectiveApiKey) {
+                return res.status(400).json({ error: 'Credenciales de BuilderBot no proporcionadas (Redis falló)' });
             }
 
             // Aplicar sustitución de shortcuts (ej: {{nombre}})
@@ -94,7 +104,12 @@ export default async function handler(req, res) {
             const result = await sendBuilderBotMessage(effectiveBotId, effectiveApiKey, candidate.whatsapp, finalMessage);
 
             if (!result.success) {
-                return res.status(502).json({ error: 'Error enviando a BuilderBot', details: result.error });
+                console.error(`❌ Message Sending Failed:`, result.error);
+                return res.status(502).json({
+                    error: 'Error enviando a BuilderBot',
+                    details: result.error,
+                    status: result.status
+                });
             }
 
             // Guardar en historial local como mensaje saliente

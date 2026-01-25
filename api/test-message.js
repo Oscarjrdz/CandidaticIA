@@ -1,4 +1,5 @@
 import { getRedisClient, saveMessage, updateCandidate, getCandidateIdByPhone } from './utils/storage.js';
+import axios from 'axios';
 
 /**
  * Endpoint for testing scheduled messages
@@ -9,32 +10,38 @@ import { getRedisClient, saveMessage, updateCandidate, getCandidateIdByPhone } f
 const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
 
 const sendBuilderBotMessage = async (botId, apiKey, number, message) => {
+    console.log(`🚀 [sendTestMessage] Sending to ${number}...`);
+    console.log(`📍 BotId: ${botId ? 'PRESENT' : 'MISSING'}`);
+    console.log(`🔑 ApiKey: ${apiKey ? (apiKey.substring(0, 5) + '...') : 'MISSING'}`);
+
     try {
-        const response = await fetch(`${BUILDERBOT_API_URL}/${botId}/messages`, {
-            method: 'POST',
+        const url = `${BUILDERBOT_API_URL}/${botId}/messages`;
+        const response = await axios.post(url, {
+            messages: {
+                type: "text",
+                content: message
+            },
+            number: number,
+            checkIfExists: false
+        }, {
             headers: {
                 'Content-Type': 'application/json',
                 'x-api-builderbot': apiKey,
             },
-            body: JSON.stringify({
-                messages: {
-                    type: "text",
-                    content: message
-                },
-                number: number,
-                checkIfExists: false
-            }),
+            validateStatus: () => true
         });
 
-        const data = await response.json().catch(() => ({}));
+        console.log(`📥 BuilderBot Response: ${response.status} ${response.statusText}`);
 
-        if (!response.ok) {
-            console.error('BuilderBot Error:', data);
-            return { success: false, error: data };
+        if (response.status !== 200 && response.status !== 201) {
+            return {
+                success: false,
+                error: typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
+            };
         }
-        return { success: true, data };
+        return { success: true, data: response.data };
     } catch (error) {
-        console.error('Network Error:', error);
+        console.error('❌ Network Error:', error.message);
         return { success: false, error: error.message };
     }
 };
@@ -57,17 +64,19 @@ export default async function handler(req, res) {
 
         const cleanPhone = phone.replace(/\D/g, '');
 
-        let effectiveBotId = botId || process.env.BOT_ID;
-        let effectiveApiKey = apiKey || process.env.BOT_TOKEN;
+        let effectiveBotId = botId;
+        let effectiveApiKey = apiKey;
 
         if (!effectiveBotId || !effectiveApiKey) {
             try {
                 const redis = getRedisClient();
-                const credsJson = await redis.get('builderbot_credentials');
-                if (credsJson) {
-                    const creds = JSON.parse(credsJson);
-                    if (!effectiveBotId) effectiveBotId = creds.botId;
-                    if (!effectiveApiKey) effectiveApiKey = creds.apiKey;
+                if (redis) {
+                    const credsJson = await redis.get('builderbot_credentials');
+                    if (credsJson) {
+                        const creds = JSON.parse(credsJson);
+                        if (!effectiveBotId) effectiveBotId = creds.botId;
+                        if (!effectiveApiKey) effectiveApiKey = creds.apiKey;
+                    }
                 }
             } catch (err) {
                 console.warn('Failed to load credentials from Redis fallback:', err);
