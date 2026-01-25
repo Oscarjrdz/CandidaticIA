@@ -39,6 +39,7 @@ export default async function handler(req, res) {
         report.step3_final_key_status = 'OK';
 
         // 4. Test Gemini connection
+        const genAI = new GoogleGenerativeAI(finalKey);
         const model = genAI.getGenerativeModel({ model: "gemini-pro" });
         const text = result.response.text();
 
