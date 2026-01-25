@@ -17,33 +17,56 @@ const BotIASection = ({ showToast }) => {
     const [aiModel, setAiModel] = useState('gemini-1.5-flash');
 
     useEffect(() => {
-        // Load settings from localStorage (mock for now, later Redis)
-        const savedInstance = localStorage.getItem('ultramsg_instance_id');
-        const savedToken = localStorage.getItem('ultramsg_token');
-        const savedPrompt = localStorage.getItem('bot_ia_prompt');
-        const savedStatus = localStorage.getItem('bot_ia_active');
-
-        if (savedInstance) setInstanceId(savedInstance);
-        if (savedToken) setToken(savedToken);
-        if (savedPrompt) setSystemPrompt(savedPrompt);
-        if (savedStatus === 'true') setIsActive(true);
+        // Load settings from API (Redis)
+        const loadSettings = async () => {
+            try {
+                const res = await fetch('/api/bot-ia/settings');
+                if (res.ok) {
+                    const data = await res.json();
+                    setInstanceId(data.instanceId || '');
+                    setToken(data.token || '');
+                    setSystemPrompt(data.systemPrompt || '');
+                    setIsActive(data.isActive);
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        };
+        loadSettings();
     }, []);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setLoading(true);
 
-        // Save to LocalStorage
+        // Save to LocalStorage (Backup)
         localStorage.setItem('ultramsg_instance_id', instanceId);
         localStorage.setItem('ultramsg_token', token);
         localStorage.setItem('bot_ia_prompt', systemPrompt);
         localStorage.setItem('bot_ia_active', isActive);
 
-        // TODO: Save to Redis via API
+        // Save to Redis via API
+        try {
+            const res = await fetch('/api/bot-ia/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    instanceId,
+                    token,
+                    systemPrompt,
+                    isActive
+                })
+            });
 
-        setTimeout(() => {
+            if (res.ok) {
+                showToast('Configuración del Bot IA guardada', 'success');
+            } else {
+                showToast('Error guardando en el servidor', 'error');
+            }
+        } catch (error) {
+            showToast('Error de conexión', 'error');
+        } finally {
             setLoading(false);
-            showToast('Configuración del Bot IA guardada', 'success');
-        }, 800);
+        }
     };
 
     const toggleActive = () => {
