@@ -149,6 +149,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
             ultimoMensaje: new Date().toISOString()
         });
 
+        // --- AUTH-DATA CAPTURE (New Feature) ---
+        // Run extraction logic in background
+        const { processBotResponse } = await import('../utils/automations.js');
+        processBotResponse(candidateId, responseText).catch(e => console.error('Automation Error:', e));
+
         // 6. Send via UltraMsg
         // 6. Send via UltraMsg
         const config = await getUltraMsgConfig();
