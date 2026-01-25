@@ -67,6 +67,19 @@ export default async function handler(req, res) {
             });
             console.log('⏱️ Updated Candidate Timestamp');
 
+            // 1b. Fetch Profile Pic Logic
+            let profilePicUrl = '';
+            try {
+                const config = await getUltraMsgConfig();
+                if (config) {
+                    const contactInfo = await getUltraMsgContact(config.instanceId, config.token, from);
+                    if (contactInfo) {
+                        // Simplify: Check for 'image' property directly or in results array
+                        profilePicUrl = contactInfo.image || (contactInfo.results && contactInfo.results[0]?.image) || '';
+                    }
+                }
+            } catch (pErr) { console.warn('Profile Pic Fetch Error', pErr.message); }
+
             // 3. Trigger AI Agent
             try {
                 // Ensure we get a fresh client

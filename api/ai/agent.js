@@ -53,7 +53,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // 3. Configuration & Context Injection
         let apiKey = process.env.GEMINI_API_KEY;
-        let systemInstruction = DEFAULT_SYSTEM_PROMPT;
+        const today = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        let systemInstruction = `${DEFAULT_SYSTEM_PROMPT}\nHOY ES: ${today}. Usa esta fecha para calcular edades o tiempos relativos.`;
 
         if (redis) {
             const customPrompt = await redis.get('bot_ia_prompt');
