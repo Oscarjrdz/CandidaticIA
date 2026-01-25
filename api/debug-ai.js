@@ -41,6 +41,7 @@ export default async function handler(req, res) {
         // 4. Test Gemini connection
         const genAI = new GoogleGenerativeAI(finalKey);
         const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+        const result = await model.generateContent("Hola, esto es una prueba de conexion.");
         const text = result.response.text();
 
         report.step4_gemini_test = `SUCCESS: Generated "${text}"`;
