@@ -16,19 +16,29 @@ export default async function handler(req, res) {
         const keys = await client.keys('candidate:*');
 
         // 2. Get details for each
-        const candidates = [];
         for (const key of keys) {
             const data = await client.get(key);
             if (data) {
-                const c = JSON.parse(data);
-                // Count messages for this ID
-                const msgCount = await client.llen(`messages:${c.id}`);
+                let c;
+                let isCorrupt = false;
+                try {
+                    c = JSON.parse(data);
+                } catch (e) {
+                    c = { id: data, nombre: 'CORRUPT_DATA', whatsapp: 'Unknown', raw: data };
+                    isCorrupt = true;
+                }
+
+                // Count messages for this ID (if we have an ID)
+                const candidateId = c.id || key.split(':')[1];
+                const msgCount = await client.llen(`messages:${candidateId}`);
+
                 candidates.push({
-                    id: c.id,
+                    id: candidateId,
                     name: c.nombre,
                     phone: c.whatsapp,
                     msgs: msgCount,
-                    RAW_KEY: key
+                    RAW_KEY: key,
+                    isCorrupt: isCorrupt
                 });
             }
         }
