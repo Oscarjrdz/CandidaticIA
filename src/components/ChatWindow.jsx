@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Loader2, MessageCircle, Move, Copy, Tag, Mic, Trash, Check } from 'lucide-react';
+import { X, Send, Loader2, MessageCircle, Move, Copy, Tag, Mic, Trash, Check, Paperclip } from 'lucide-react';
 import Button from './ui/Button';
 
 /**
@@ -22,6 +22,9 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [isDragging, setIsDragging] = useState(false);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+    // File Input Ref
+    const fileInputRef = useRef(null);
 
     // Refs
     const windowRef = useRef(null);
@@ -88,20 +91,21 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
         }
     };
 
-    const handleSend = async (e) => {
+    const handleSend = async (e, forceType = 'text', forceMedia = null) => {
         if (e) e.preventDefault();
-        if ((!newMessage.trim() && !audioBlob) || sending) return;
+        if ((!newMessage.trim() && !audioBlob && !forceMedia) || sending) return;
 
         setSending(true);
         try {
             let payload = {
                 candidateId: candidate.id,
                 message: newMessage,
-                type: 'text'
+                type: forceType,
+                mediaUrl: forceMedia
             };
 
             // Handle Audio Attachment if present
-            if (audioBlob) {
+            if (audioBlob && !forceMedia) {
                 // 1. Convert to Base64
                 const reader = new FileReader();
                 const base64Promise = new Promise((resolve) => {
@@ -114,7 +118,7 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                 const uploadRes = await fetch('/api/upload', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: base64 }) // Endpoint accepts 'image' but treats as general blob
+                    body: JSON.stringify({ image: base64 })
                 });
                 const uploadData = await uploadRes.json();
 
@@ -149,6 +153,46 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
             alert('Error de conexión: ' + error.message);
         } finally {
             setSending(false);
+        }
+    };
+
+    const handleImageSelect = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 4 * 1024 * 1024) {
+            alert('Archivo demasiado grande (Máx 4MB)');
+            return;
+        }
+
+        setSending(true);
+        try {
+            const reader = new FileReader();
+            const base64Promise = new Promise((resolve) => {
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(file);
+            });
+            const base64 = await base64Promise;
+
+            const uploadRes = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64 })
+            });
+            const uploadData = await uploadRes.json();
+
+            if (uploadData.success) {
+                const mediaUrl = `${window.location.origin}${uploadData.url}`;
+                handleSend(null, 'image', mediaUrl);
+            } else {
+                alert('Error al subir imagen');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Error subiendo imagen');
+        } finally {
+            setSending(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
@@ -320,9 +364,17 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                     onMouseDown={handleMouseDown}
                 >
                     <div className="flex items-center space-x-2 pointer-events-none">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold text-xs">
-                            {candidate?.nombre?.charAt(0) || '?'}
-                        </div>
+                        {candidate?.profilePic || candidate?.profilePicUrl ? (
+                            <img
+                                src={candidate.profilePic || candidate.profilePicUrl}
+                                alt="Profile"
+                                className="w-8 h-8 rounded-full object-cover border border-white/20 shadow-sm"
+                            />
+                        ) : (
+                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-600 dark:text-blue-300 font-bold text-xs">
+                                {candidate?.nombre?.charAt(0) || '?'}
+                            </div>
+                        )}
                         <div>
                             <h3 className="font-bold text-sm text-gray-900 dark:text-white leading-tight">
                                 {candidate?.nombre}
@@ -469,6 +521,21 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                                 </div>
                             ) : (
                                 <>
+                                    <input
+                                        type="file"
+                                        ref={fileInputRef}
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={handleImageSelect}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        title="Adjuntar imagen"
+                                    >
+                                        <Paperclip className="w-5 h-5" />
+                                    </button>
                                     <button
                                         type="button"
                                         onClick={startRecording}
