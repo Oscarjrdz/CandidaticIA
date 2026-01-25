@@ -87,12 +87,12 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const genAI = new GoogleGenerativeAI(apiKey);
 
         // 4. Generate Content (With Fallback Strategy)
-        // Reverting to original list that was confirmed working, plus ensuring stable fallbacks
+        // Verified working models for this project: 2.5-flash and flash-latest
         const modelsToTry = [
-            "gemini-flash-latest", // Likely the working one
+            "gemini-2.5-flash",
+            "gemini-flash-latest",
             "gemini-2.0-flash-exp",
             "gemini-1.5-flash",
-            "gemini-1.5-pro",
             "gemini-pro"
         ];
 

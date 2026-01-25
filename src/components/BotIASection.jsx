@@ -14,6 +14,7 @@ const BotIASection = ({ showToast }) => {
 
     // AI Settings
     const [systemPrompt, setSystemPrompt] = useState('');
+    const [apiKey, setApiKey] = useState(''); // Gemini API Key
     const [aiModel, setAiModel] = useState('gemini-1.5-flash');
 
     useEffect(() => {
@@ -27,6 +28,15 @@ const BotIASection = ({ showToast }) => {
                     setToken(data.token || '');
                     setSystemPrompt(data.systemPrompt || '');
                     setIsActive(data.isActive);
+                }
+
+                // Load AI Config specifically for API Key
+                const resAI = await fetch('/api/settings?type=ai_config');
+                if (resAI.ok) {
+                    const dataAI = await resAI.json();
+                    if (dataAI.data && dataAI.data.geminiApiKey) {
+                        setApiKey(dataAI.data.geminiApiKey);
+                    }
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
@@ -57,7 +67,7 @@ const BotIASection = ({ showToast }) => {
                 })
             });
 
-            // 2. Save Prompt (New endpoint type)
+            // 2. Save Prompt
             const resPrompt = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -67,8 +77,18 @@ const BotIASection = ({ showToast }) => {
                 })
             });
 
-            if (resConfig.ok && resPrompt.ok) {
-                showToast('Configuración y Prompt guardados correctamente', 'success');
+            // 3. Save AI Config (API Key)
+            const resAI = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'ai_config',
+                    data: { geminiApiKey: apiKey }
+                })
+            });
+
+            if (resConfig.ok && resPrompt.ok && resAI.ok) {
+                showToast('Configuraciones guardadas correctamente', 'success');
             } else {
                 showToast('Error guardando configuración', 'error');
             }
@@ -168,6 +188,17 @@ const BotIASection = ({ showToast }) => {
                         </div>
 
                         <div>
+                            <Input
+                                label="Gemini API Key"
+                                type="password"
+                                placeholder="AIzaSy..."
+                                value={apiKey}
+                                onChange={(e) => setApiKey(e.target.value)}
+                                helperText="Llave requerida para el funcionamiento de la IA"
+                            />
+                        </div>
+
+                        <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 Modelo
                             </label>
@@ -176,6 +207,7 @@ const BotIASection = ({ showToast }) => {
                                 onChange={(e) => setAiModel(e.target.value)}
                                 className="w-full p-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm"
                             >
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recomendado)</option>
                                 <option value="gemini-1.5-flash">Gemini 1.5 Flash (Rápido)</option>
                                 <option value="gemini-1.5-pro">Gemini 1.5 Pro (Potente)</option>
                             </select>
