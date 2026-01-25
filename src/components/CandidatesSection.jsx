@@ -825,7 +825,6 @@ const CandidatesSection = ({ showToast }) => {
 
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Timer</th>
-                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Historial</th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
                                 </tr>
@@ -932,19 +931,6 @@ const CandidatesSection = ({ showToast }) => {
                                                     </div>
                                                 );
                                             })()}
-                                        </td>
-                                        <td className="py-0.5 px-2.5 text-center">
-                                            {exportingMap[candidate.whatsapp] === 'uploading' ? (
-                                                <Loader2 className="w-4 h-4 text-blue-500 animate-spin mx-auto" title="Subiendo historial..." />
-                                            ) : exportingMap[candidate.whatsapp] === 'error' ? (
-                                                <div className="text-red-500 text-[10px]" title="Error al exportar">
-                                                    Error
-                                                </div>
-                                            ) : (
-                                                <div className="text-gray-400 text-[10px]">
-                                                    -
-                                                </div>
-                                            )}
                                         </td>
 
                                         <td className="py-0.5 px-2.5 text-center">
