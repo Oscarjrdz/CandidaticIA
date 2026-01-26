@@ -32,8 +32,8 @@ export default async function handler(req, res) {
             return res.status(413).json({ error: 'Payload too large' });
         }
 
-        // Generate ID
-        const id = `img_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        // Generate ID (using med_ for generic media to avoid image-only validation)
+        const id = `med_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const key = `image:${id}`;
         const metaKey = `meta:image:${id}`;
 

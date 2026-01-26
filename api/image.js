@@ -54,10 +54,10 @@ export default async function handler(req, res) {
         // Headers for scale and reliability
         res.setHeader('Content-Type', finalMime);
         res.setHeader('Content-Length', buffer.length);
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // 1 year cache
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         res.setHeader('Access-Control-Allow-Origin', '*');
 
-        return res.status(200).send(buffer);
+        return res.end(buffer);
 
     } catch (error) {
         console.error('Error in /api/image:', error);

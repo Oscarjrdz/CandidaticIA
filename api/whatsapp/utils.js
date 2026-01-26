@@ -45,9 +45,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         // NORMALIZE ENDPOINT: 
         // /messages/voice is ONLY for voice notes and expects minimal parameters.
-        // NORMALIZE ENDPOINT: Standardizing on /audio as per the documentation snippet
+        // NORMALIZE ENDPOINT: 
+        // /messages/voice is for PTT notes and expects minimal parameters.
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'audio';
+        if (endpoint === 'voice') finalEndpoint = 'voice';
+        if (endpoint === 'audio') finalEndpoint = 'audio';
 
         switch (endpoint) {
             case 'image':
@@ -60,17 +62,13 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 if (!isHttp) payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
-            case 'audio':
             case 'voice':
+                // ULTRA-MINIMAL: /messages/voice often rejects extra params
                 payload.audio = deliveryBody;
-
-                // If it's a URL, we DON'T send filename (matches official snippet)
-                // If it's Base64, we NEED filename hint.
-                if (!isHttp) {
-                    payload.filename = filenameHint || (type === 'voice' || endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3');
-                }
-
-                // Voice note specific settings
+                break;
+            case 'audio':
+                payload.audio = deliveryBody;
+                if (!isHttp) payload.filename = filenameHint || 'audio.mp3';
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
                 }
