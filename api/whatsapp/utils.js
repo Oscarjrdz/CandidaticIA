@@ -84,7 +84,7 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                     duration,
                     status: response.status,
                     type,
-                    endpoint: finalEndpoint,
+                    endpoint: endpoint,
                     fullPayload: sanitizedPayload,
                     result: response.data
                 }), 'EX', 3600);
@@ -96,7 +96,7 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             if (redis) {
                 await redis.set(`${debugKey}:error`, JSON.stringify({
                     timestamp: new Date().toISOString(),
-                    type, endpoint, error: errData || postErr.message
+                    type, endpoint: endpoint, error: errData || postErr.message
                 }), 'EX', 3600);
             }
             throw postErr;
