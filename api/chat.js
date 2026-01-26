@@ -103,16 +103,13 @@ export default async function handler(req, res) {
                 if (mediaUrl && !mediaUrl.startsWith('http')) {
                     const protocol = req.headers['x-forwarded-proto'] || 'http';
                     const host = req.headers.host;
-                    const absoluteUrl = `${protocol}://${host}${mediaUrl}`;
 
-                    // PREFERENCE: Use DataURL for voice notes (more reliable), Use URL for images/videos
-                    if (type === 'voice' && base64Data) {
-                        deliveryContent = base64Data;
-                        console.log(`📡 [Chat] Using DataURL for voice note (Robustness Priority)`);
-                    } else {
-                        deliveryContent = absoluteUrl;
-                        console.log(`🌐 [Chat] Using Absolute URL for media: ${deliveryContent}`);
-                    }
+                    // Construct absolute URL with an extension hint
+                    // We append .ogg to help UltraMSG's file detection
+                    const extHint = type === 'voice' ? '.ogg' : '';
+                    deliveryContent = `${protocol}://${host}${mediaUrl}${extHint}`;
+
+                    console.log(`🌐 [Chat] CONSTRUCTED ABSOLUTE URL: ${deliveryContent}`);
                 }
 
                 if (base64Data) {

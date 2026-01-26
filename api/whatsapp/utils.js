@@ -44,30 +44,24 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         let filenameHint = extraParams.filename;
 
         if (isDataUrl) {
-            // ULTRA-ROBUST: Strip prefix AND detect extension
             const parts = body.split(',');
             deliveryBody = parts[1] || body;
 
-            const mimeMatch = parts[0].match(/data:(.*?);/);
-            const mime = mimeMatch ? mimeMatch[1] : '';
-
             if (!filenameHint) {
-                if (mime.includes('audio')) {
-                    // Normalize webm/mp4 audio to ogg for WhatsApp voice notes
-                    filenameHint = (type === 'voice' || endpoint === 'voice') ? 'voice.ogg' : 'audio.mp3';
-                } else if (mime.includes('image')) {
-                    filenameHint = 'image.jpg';
-                } else if (mime.includes('video')) {
-                    filenameHint = 'video.mp4';
-                } else {
-                    filenameHint = 'file.pdf';
-                }
+                const mimeMatch = parts[0].match(/data:(.*?);/);
+                const mime = mimeMatch ? mimeMatch[1] : '';
+                if (mime.includes('audio')) filenameHint = (type === 'voice' || endpoint === 'voice') ? 'voice.ogg' : 'audio.mp3';
+                else if (mime.includes('image')) filenameHint = 'image.jpg';
+                else if (mime.includes('video')) filenameHint = 'video.mp4';
+                else filenameHint = 'file.pdf';
             }
         }
 
-        // REDESIGN: Map voice to audio endpoint with PTT flag
+        // ENDPOINT MAPPING:
+        // UltraMsg uses /messages/voice for PTT voice notes.
+        // It uses 'audio' as the parameter name for the file.
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'audio';
+        if (endpoint === 'voice') finalEndpoint = 'voice';
 
         switch (endpoint) {
             case 'image':
@@ -82,14 +76,14 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 break;
             case 'audio':
             case 'voice':
-                // Parameter name for both is 'audio' in UltraMSG
-                payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : deliveryBody;
+                // Parameter name for both /audio and /voice is 'audio'
+                payload.audio = isHttp ? (body.includes('?') ? (body.includes('.ogg') ? body : `${body}&ext=.ogg`) : (body.includes('.ogg') ? body : `${body}?ext=.ogg`)) : deliveryBody;
 
+                // For /audio endpoint, ptt flag is needed. For /voice endpoint, it's implicit but good to have.
                 if (endpoint === 'voice' || type === 'voice') {
                     payload.ptt = 'true';
                 }
 
-                // CRITICAL: Filename is often required for base64 audio
                 if (!isHttp) {
                     payload.filename = filenameHint || (endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3');
                 }
