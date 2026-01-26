@@ -44,41 +44,39 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         let filenameHint = extraParams.filename;
 
         if (isDataUrl) {
-            const parts = body.split(',');
-            deliveryBody = parts[1] || body;
-
-            if (!filenameHint) {
-                const mimeMatch = parts[0].match(/data:(.*?);/);
-                const mime = mimeMatch ? mimeMatch[1] : '';
-                if (mime.includes('audio')) filenameHint = (type === 'voice' || endpoint === 'voice') ? 'voice.ogg' : 'audio.mp3';
-                else if (mime.includes('image')) filenameHint = 'image.jpg';
-                else if (mime.includes('video')) filenameHint = 'video.mp4';
-                else filenameHint = 'file.pdf';
-            }
+            // NORMALIZE: Ensure it is seen as audio/ogg for WhatsApp compatibility
+            deliveryBody = body.replace('audio/webm', 'audio/ogg')
+                .replace('audio/mp4', 'audio/ogg')
+                .replace('audio/mpeg', 'audio/ogg');
         }
 
-        // NORMALIZE ENDPOINT: 
-        // Use /audio for both audio and voice to allow full parameter support (like filename)
+        // ENDPOINT MAPPING:
+        // UltraMsg uses /messages/voice for native PTT voice notes.
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'audio';
+        if (endpoint === 'voice') finalEndpoint = 'voice';
 
         switch (endpoint) {
             case 'image':
                 payload.image = deliveryBody;
-                payload.filename = filenameHint || 'image.jpg';
+                if (!isHttp && !isDataUrl) payload.filename = filenameHint || 'image.jpg';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
                 payload.video = deliveryBody;
-                payload.filename = filenameHint || 'video.mp4';
+                if (!isHttp && !isDataUrl) payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'audio':
             case 'voice':
                 payload.audio = deliveryBody;
-                payload.filename = filenameHint || (type === 'voice' || endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3');
 
-                // Voice note specific settings
+                // CRITICAL: For DataURLs, UltraMSG detects extension from the header.
+                // For raw base64 (no header), it needs filename.
+                // For URLs, it needs filename or extension in URL.
+                if (!isHttp && !isDataUrl) {
+                    payload.filename = filenameHint || (finalEndpoint === 'voice' ? 'voice.ogg' : 'audio.mp3');
+                }
+
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
                 }

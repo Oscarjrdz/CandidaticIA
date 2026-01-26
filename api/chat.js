@@ -104,9 +104,18 @@ export default async function handler(req, res) {
                     const protocol = req.headers['x-forwarded-proto'] || 'http';
                     const host = req.headers.host;
 
-                    // Simple absolute URL. Extension hint will be passed via filename param.
-                    deliveryContent = `${protocol}://${host}${mediaUrl}`;
-                    console.log(`🌐 [Chat] ABSOLUTE MEDIA URL: ${deliveryContent}`);
+                    // Construct absolute URL
+                    const absoluteUrl = `${protocol}://${host}${mediaUrl}`;
+
+                    // DECISION: For voice notes, Base64 with DataURL header is the MOST robust method
+                    // as it avoids any URL-fetching or extension mapping issues on UltraMSG side.
+                    if (type === 'voice' && base64Data) {
+                        deliveryContent = base64Data;
+                        console.log(`📡 [Chat] Using Robust DataURL strategy for voice note`);
+                    } else {
+                        deliveryContent = absoluteUrl;
+                        console.log(`🌐 [Chat] Using URL strategy for media: ${deliveryContent}`);
+                    }
                 }
 
                 if (base64Data) {
