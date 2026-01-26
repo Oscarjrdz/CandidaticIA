@@ -45,29 +45,32 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         // NORMALIZE ENDPOINT: 
         // /messages/voice is ONLY for voice notes and expects minimal parameters.
-        // /messages/audio is for generic audio files.
+        // NORMALIZE ENDPOINT: Standardizing on /audio as per the documentation snippet
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'voice';
+        if (endpoint === 'voice') finalEndpoint = 'audio';
 
         switch (endpoint) {
             case 'image':
                 payload.image = deliveryBody;
-                payload.filename = filenameHint || 'image.jpg';
+                if (!isHttp) payload.filename = filenameHint || 'image.jpg';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
                 payload.video = deliveryBody;
-                payload.filename = filenameHint || 'video.mp4';
+                if (!isHttp) payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
-            case 'voice':
-                // CRITICAL: /messages/voice often REJECTS extra parameters like filename or ptt
-                // It expects ONLY token, to, and audio.
-                payload.audio = deliveryBody;
-                break;
             case 'audio':
+            case 'voice':
                 payload.audio = deliveryBody;
-                payload.filename = filenameHint || 'audio.mp3';
+
+                // If it's a URL, we DON'T send filename (matches official snippet)
+                // If it's Base64, we NEED filename hint.
+                if (!isHttp) {
+                    payload.filename = filenameHint || (type === 'voice' || endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3');
+                }
+
+                // Voice note specific settings
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
                 }
@@ -107,13 +110,16 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             console.log(`✅ [UltraMSG] RESPONSE (${duration}ms): Status=${response.status} | Data=`, JSON.stringify(response.data));
 
             if (redis) {
+                const sanitizedPayload = { ...payload };
+                if (sanitizedPayload.token) sanitizedPayload.token = '***_masked_***';
+
                 await redis.set(debugKey, JSON.stringify({
                     timestamp: new Date().toISOString(),
                     duration,
                     status: response.status,
                     type,
                     endpoint: finalEndpoint,
-                    payloadKeys: Object.keys(payload),
+                    fullPayload: sanitizedPayload,
                     result: response.data
                 }), 'EX', 3600);
             }
