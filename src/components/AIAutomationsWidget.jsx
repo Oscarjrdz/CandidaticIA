@@ -68,9 +68,13 @@ const AIAutomationsWidget = ({ showToast }) => {
             });
             const data = await res.json();
             if (res.ok) {
-                showToast(`✅ Análisis completo: ${data.sent} mensajes enviados de ${data.evaluated} evaluados`, 'success');
+                if (data.sent > 0) {
+                    showToast(`🚀 Éxito: Se enviaron ${data.sent} mensajes a candidatos correspondientes.`, 'success');
+                } else {
+                    showToast(`Análisis finalizado: 0 coincidencias en ${data.evaluated} candidatos analizados. Revisa tu prompt.`, 'default');
+                }
             } else {
-                showToast('Error en ejecución: ' + (data.error || 'Unknown'), 'error');
+                showToast('Error en la ejecución: ' + (data.error || 'Unknown'), 'error');
             }
         } catch (e) {
             showToast('Error de conexión', 'error');

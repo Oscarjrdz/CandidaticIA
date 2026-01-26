@@ -2,9 +2,9 @@ import { getRedisClient, getAIAutomations, getCandidates, saveMessage } from './
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
-const SAFETY_LIMIT_PER_RUN = 10; // Increased safety limit
+const SAFETY_LIMIT_PER_RUN = 10;
 const COOLDOWN_HOURS = 24;
-const BATCH_SIZE = 25; // 25 candidates per AI call for massive speedup
+const BATCH_SIZE = 25;
 
 export async function runAIAutomations(bypassCooldown = false) {
     const logs = [];
@@ -22,14 +22,14 @@ export async function runAIAutomations(bypassCooldown = false) {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        // Get Candidates (Analyzing 500 for better performance vs timeout balance)
-        const { candidates } = await getCandidates(500, 0);
+        // Get Candidates (Analyzing 2000 for wider reach)
+        const { candidates } = await getCandidates(2000, 0);
         const redis = getRedisClient();
 
         for (const rule of activeRules) {
             if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
 
-            logs.push(`🔍 Rule: "${rule.name}"`);
+            logs.push(`🔍 Procesando regla: "${rule.name}"`);
 
             // Filter out candidates on cooldown (if not bypassing)
             let eligibleCandidates = candidates;
@@ -43,7 +43,7 @@ export async function runAIAutomations(bypassCooldown = false) {
                 eligibleCandidates = cooldownResults.filter(r => !r.hasCooldown).map(r => r.c);
             }
 
-            // Batch Process eligible candidates
+            // Batch Process
             for (let i = 0; i < eligibleCandidates.length; i += BATCH_SIZE) {
                 if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
 
@@ -54,25 +54,36 @@ export async function runAIAutomations(bypassCooldown = false) {
                     id: c.id,
                     name: c.nombre,
                     phone: c.whatsapp,
-                    lastMsg: c.ultimoMensaje,
+                    lastMsgTime: c.ultimoMensaje,
                     fields: { ...c }
                 }));
 
                 const prompt = `
-                Rule: "${rule.prompt}"
-                Candidates: ${JSON.stringify(contextBatch)}
+                Role: Smart Automation Engine.
+                User Rule: "${rule.prompt}"
                 
-                Instruction: For each candidate, check if they fit the rule. 
-                If they match, write a friendly WhatsApp message.
+                Candidates Data (Batch of ${batch.length}):
+                ${JSON.stringify(contextBatch)}
                 
-                Return JSON only:
+                Instructions:
+                1. Identify candidates that match the User Rule.
+                2. IMPORTANT: Be flexible with phone numbers. If rule says "8116038195" and candidate is "5218116038195", it's a MATCH.
+                3. If MATCH = TRUE, write a friendly WhatsApp message.
+                
+                Respond ONLY with a JSON object:
                 { "matches": [ { "id": "...", "reason": "...", "message": "..." }, ... ] }
                 `;
 
                 try {
                     const result = await model.generateContent(prompt);
-                    const responseText = result.response.text().replace(/```json/g, '').replace(/```/g, '');
-                    const { matches = [] } = JSON.parse(responseText);
+                    const responseText = result.response.text();
+
+                    // Robust JSON extraction
+                    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+                    if (!jsonMatch) continue;
+
+                    const decision = JSON.parse(jsonMatch[0]);
+                    const matches = decision.matches || [];
 
                     for (const match of matches) {
                         if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
@@ -82,7 +93,10 @@ export async function runAIAutomations(bypassCooldown = false) {
 
                         const config = await getUltraMsgConfig();
                         if (config) {
+                            console.log(`🚀 AI Match found for ${cand.nombre} (${cand.whatsapp})`);
+
                             await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, match.message);
+
                             await saveMessage(cand.id, {
                                 from: 'bot',
                                 content: match.message,
@@ -91,22 +105,21 @@ export async function runAIAutomations(bypassCooldown = false) {
                                 meta: { automationId: rule.id, aiReason: match.reason }
                             });
 
-                            // Set cooldown
                             await redis.set(`ai:automation:last:${cand.id}`, new Date().toISOString(), 'EX', COOLDOWN_HOURS * 3600);
 
                             messagesSent++;
-                            logs.push(`✅ Sent to ${cand.nombre}: "${match.message}"`);
+                            logs.push(`✅ Enviado a ${cand.nombre}: "${match.message}"`);
                         }
                     }
                 } catch (e) {
-                    console.error('Batch AI Error:', e.message);
+                    console.error('Batch AI Engine Error:', e.message);
                 }
             }
         }
 
         return { success: true, evaluated, sent: messagesSent, logs };
     } catch (error) {
-        console.error('AI Engine Error:', error);
+        console.error('Core AI Engine Error:', error);
         throw error;
     }
 }
