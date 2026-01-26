@@ -64,6 +64,15 @@ export default async function handler(req, res) {
 
         const nextOffset = parseInt(offset) + processedCount;
 
+        // Preview of what we found in this batch (first 3)
+        const preview = candidates.slice(0, 3).map(c => ({
+            whatsapp: c.whatsapp,
+            has_fecha: !!c.fecha,
+            has_fechaNac: !!c.fechaNacimiento,
+            val_fecha: c.fecha,
+            val_fechaNac: c.fechaNacimiento
+        }));
+
         return res.status(200).json({
             success: true,
             total_db: total,
@@ -72,6 +81,7 @@ export default async function handler(req, res) {
             stopped_early: stoppedEarly,
             next_offset: nextOffset < total ? nextOffset : null,
             next_url: nextOffset < total ? `https://${req.headers.host}${req.url.split('?')[0]}?key=${key}&limit=${limit}&offset=${nextOffset}` : 'Completado',
+            preview,
             details: results
         });
 

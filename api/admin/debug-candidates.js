@@ -8,9 +8,10 @@ export default async function handler(req, res) {
         const { candidates } = await getCandidates(20, 0);
         const debugInfo = candidates.map(c => ({
             id: c.id,
-            nombre: c.nombre,
+            whatsapp: c.whatsapp,
             nombreReal: c.nombreReal,
-            genero: c.genero
+            fecha: c.fecha,
+            fechaNacimiento: c.fechaNacimiento
         }));
 
         return res.status(200).json({
