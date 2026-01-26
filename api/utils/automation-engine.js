@@ -4,14 +4,20 @@ import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
 const SAFETY_LIMIT_PER_RUN = 10;
 const COOLDOWN_HOURS = 24;
+const BATCH_SIZE = 25;
 
-export async function runAIAutomations(bypassCooldown = false) {
+/**
+ * runAIAutomations
+ * Zuckerberg Style: Optimized for speed and robustness against timeouts.
+ * @param {boolean} isManual - If true, bypasses cooldown and focuses on sniper matches.
+ */
+export async function runAIAutomations(isManual = false) {
     const logs = [];
     let evaluatedCount = 0;
     let messagesSent = 0;
 
     try {
-        console.log(`🤖 AI Engine: Starting Two-Pass Run (Manual: ${bypassCooldown})`);
+        console.log(`🤖 AI Engine: Starting Run (Mode: ${isManual ? 'MANUAL' : 'CRON'})`);
 
         if (!process.env.GEMINI_API_KEY) throw new Error('Missing GEMINI_API_KEY');
 
@@ -19,75 +25,65 @@ export async function runAIAutomations(bypassCooldown = false) {
         const activeRules = automations.filter(a => a.active);
 
         if (activeRules.length === 0) {
-            return { success: true, message: 'No active rules', evaluated: 0, sent: 0, logs: [] };
+            return { success: true, message: 'No rules active', evaluated: 0, sent: 0, logs: ['No hay reglas activas.'] };
         }
+
+        const config = await getUltraMsgConfig();
+        if (!config || !config.instanceId || !config.token) throw new Error('Missing UltraMsg Config');
 
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         for (const rule of activeRules) {
             if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
-            logs.push(`🔍 Analizando regla: "${rule.name}"`);
+            logs.push(`🔍 Analizando: "${rule.name}"`);
 
-            // --- PASS 1: Entity Extraction ---
-            // We ask Gemini what to look for in the database to narrow down candidates.
+            // --- PASS 1: Intention Detection ---
             const extractionPrompt = `
-            Extract search terms from this automation rule: "${rule.prompt}"
-            I need specific:
-            - phone: Any phone number mentioned.
-            - name: Any specific person's name.
-            - status: Any status mentioned (e.g. "active", "missing cv").
-            
-            Respond ONLY in JSON:
-            { "phone": string|null, "name": string|null, "status": string|null }
+            Extract search terms from this rule: "${rule.prompt}"
+            Return JSON: { "phone": string|null, "name": string|null }
             `;
 
-            let entities = { phone: null, name: null, status: null };
+            let entities = { phone: null, name: null };
             try {
                 const extractionResult = await model.generateContent(extractionPrompt);
                 const jsonText = extractionResult.response.text().match(/\{[\s\S]*\}/)?.[0];
                 if (jsonText) entities = JSON.parse(jsonText);
-            } catch (e) {
-                console.error('Extraction Error:', e);
-            }
+            } catch (e) { console.error('Extraction Error:', e); }
 
-            // --- PASS 2: Search & Filter ---
+            // --- PASS 2: Intelligent Candidate Selection ---
             let targetCandidates = [];
 
             if (entities.phone) {
-                // If a phone is mentioned, it's a sniper shot.
                 const cleanPhone = entities.phone.replace(/\D/g, '');
-                logs.push(`🎯 Sniper mode: Buscando número ${cleanPhone}`);
-
-                // Sniper Lookup (O(1)) instead of scanning thousands
+                logs.push(`🎯 Sniper: Buscando número ${cleanPhone}...`);
                 const candidate = await getCandidateByPhone(cleanPhone);
                 if (candidate) {
                     targetCandidates = [candidate];
-                    logs.push(`🎯 Candidato encontrado: ${candidate.nombre}`);
+                    logs.push(`✅ Candidato encontrado: ${candidate.nombre}`);
+                } else {
+                    logs.push(`⚠️ No se encontró el número ${cleanPhone} en la base de datos.`);
                 }
-                else logs.push(`⚠️ No se encontró ningún candidato con el número ${cleanPhone} en el índice.`);
             } else if (entities.name) {
-                logs.push(`🎯 Buscando por nombre: ${entities.name}`);
-                const { candidates: searchRes } = await getCandidates(50, 0, entities.name);
+                logs.push(`🎯 Buscando por nombre: ${entities.name}...`);
+                const { candidates: searchRes } = await getCandidates(20, 0, entities.name);
                 targetCandidates = searchRes;
             } else {
-                // Broad rule (e.g. "inactive for 2 days"). Scan recent 500.
-                logs.push(`📡 Broad scan: Analizando últimos 500 candidatos activos`);
-                const { candidates: scanRes } = await getCandidates(500, 0);
+                // Broad rules: Scaled down for manual runs to prevent Timeouts
+                const scanLimit = isManual ? 100 : 500;
+                logs.push(`📡 Escaneo ${isManual ? 'Rápido' : 'Normal'}: Analizando últimos ${scanLimit} candidatos`);
+                const { candidates: scanRes } = await getCandidates(scanLimit, 0);
                 targetCandidates = scanRes;
             }
 
-            if (targetCandidates.length === 0) {
-                logs.push(`⚠️ No se encontraron candidatos que coincidan con los criterios de búsqueda inicial.`);
-                continue;
-            }
+            if (targetCandidates.length === 0) continue;
 
-            // --- PASS 3: Final Intelligence Evaluation ---
+            // --- PASS 3: AI Evaluation Batching ---
             const redis = getRedisClient();
 
-            // Filter cooldown if needed
+            // Filter cooldown if CRON mode
             let eligible = targetCandidates;
-            if (!bypassCooldown) {
+            if (!isManual) {
                 const results = await Promise.all(targetCandidates.map(async c => {
                     const has = await redis.get(`ai:automation:last:${c.id}`);
                     return has ? null : c;
@@ -95,37 +91,41 @@ export async function runAIAutomations(bypassCooldown = false) {
                 eligible = results.filter(c => c !== null);
             }
 
-            evaluatedCount += eligible.length;
+            for (let j = 0; j < eligible.length; j += BATCH_SIZE) {
+                if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
 
-            if (eligible.length === 0) {
-                logs.push(`🛡️ Los candidatos encontrados están en periodo de enfriamiento (cooldown).`);
-                continue;
-            }
+                const batch = eligible.slice(j, j + BATCH_SIZE);
+                evaluatedCount += batch.length;
 
-            const promptBatch = eligible.map(c => ({ id: c.id, name: c.nombre, phone: c.whatsapp, fields: { ...c } }));
+                const contextBatch = batch.map(c => ({
+                    id: c.id,
+                    nombre: c.nombre,
+                    whatsapp: c.whatsapp,
+                    status: c.status,
+                    ultimoMsg: c.ultimoMensaje
+                }));
 
-            const finalPrompt = `
-            Evaluate these candidates for the rule: "${rule.prompt}"
-            Candidates: ${JSON.stringify(promptBatch)}
-            
-            Confirm match and write a natural WhatsApp message.
-            Respond ONLY in JSON:
-            { "matches": [ { "id": "...", "reason": "...", "message": "..." } ] }
-            `;
+                const finalPrompt = `
+                Rule: "${rule.prompt}"
+                Candidates: ${JSON.stringify(contextBatch)}
+                
+                Instruction: If match=true, write a short, friendly WhatsApp message.
+                Respond ONLY JSON: { "matches": [ { "id": "...", "reason": "...", "message": "..." } ] }
+                `;
 
-            try {
-                const finalResult = await model.generateContent(finalPrompt);
-                const finalJson = finalResult.response.text().match(/\{[\s\S]*\}/)?.[0];
-                const { matches = [] } = JSON.parse(finalJson);
+                try {
+                    const finalResult = await model.generateContent(finalPrompt);
+                    const finalJson = finalResult.response.text().match(/\{[\s\S]*\}/)?.[0];
+                    if (!finalJson) continue;
 
-                for (const match of matches) {
-                    if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
+                    const { matches = [] } = JSON.parse(finalJson);
 
-                    const cand = eligible.find(c => c.id === match.id);
-                    if (!cand) continue;
+                    for (const match of matches) {
+                        if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
 
-                    const config = await getUltraMsgConfig();
-                    if (config) {
+                        const cand = batch.find(c => c.id === match.id);
+                        if (!cand) continue;
+
                         await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, match.message);
                         await saveMessage(cand.id, {
                             from: 'bot',
@@ -134,19 +134,27 @@ export async function runAIAutomations(bypassCooldown = false) {
                             timestamp: new Date().toISOString(),
                             meta: { automationId: rule.id, aiReason: match.reason }
                         });
+
+                        // Set 24h cooldown
                         await redis.set(`ai:automation:last:${cand.id}`, new Date().toISOString(), 'EX', COOLDOWN_HOURS * 3600);
+
                         messagesSent++;
-                        logs.push(`✨ Match encontrado: Envío mensaje a ${cand.nombre}`);
+                        logs.push(`✨ Enviado a ${cand.nombre}: "${match.message}"`);
                     }
+                } catch (e) {
+                    console.error('Final Evaluator Error:', e.message);
+                    logs.push(`❌ Error evaluando lote de candidatos.`);
                 }
-            } catch (e) {
-                console.error('Final Evaluation Error:', e);
             }
+        }
+
+        if (messagesSent === 0 && evaluatedCount > 0) {
+            logs.push(`ℹ️ Análisis completo. Ningún candidato cumplió con los criterios de la IA en esta ejecución.`);
         }
 
         return { success: true, evaluated: evaluatedCount, sent: messagesSent, logs };
     } catch (error) {
-        console.error('Two-Pass Engine Error:', error);
-        throw error;
+        console.error('Core AI Engine Error:', error);
+        return { success: false, error: error.message, logs: [`❌ Error fatal: ${error.message}`] };
     }
 }

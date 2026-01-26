@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Sparkles, Plus, Trash2, Power, PauseCircle, PlayCircle, BrainCircuit, Activity } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Sparkles, Trash2, PauseCircle, PlayCircle, BrainCircuit, Activity, ChevronRight, AlertCircle, Loader2 } from 'lucide-react';
 import Button from './ui/Button';
 
 const AIAutomationsWidget = ({ showToast }) => {
     const [rules, setRules] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [isRunning, setIsRunning] = useState(false);
     const [newRulePrompt, setNewRulePrompt] = useState('');
     const [isCreating, setIsCreating] = useState(false);
-    const [execLogs, setExecLogs] = useState(null); // Execution logs
+    const [execLogs, setExecLogs] = useState(null);
 
     useEffect(() => {
         loadRules();
@@ -17,147 +18,163 @@ const AIAutomationsWidget = ({ showToast }) => {
         setLoading(true);
         try {
             const res = await fetch('/api/ai/automations');
+            if (!res.ok) throw new Error('Failed to fetch automations');
             const data = await res.json();
-            if (data.success) {
-                // Defensive check: Ensure it's always an array to prevent .length crashes
-                setRules(Array.isArray(data.automations) ? data.automations : []);
+            if (data.success && Array.isArray(data.automations)) {
+                setRules(data.automations);
+            } else {
+                setRules([]);
             }
         } catch (error) {
             console.error('Failed to load AI rules', error);
-            showToast?.('Error al cargar reglas', 'error');
+            showToast?.('Error al conectar con el servidor', 'error');
+            setRules([]);
         } finally {
             setLoading(false);
         }
     };
 
     const handleCreateRule = async () => {
-        if (!newRulePrompt.trim()) return;
-        setIsCreating(true);
+        const trimmedPrompt = newRulePrompt?.trim();
+        if (!trimmedPrompt) return;
 
+        setIsCreating(true);
         try {
-            // Auto-generate a name from the prompt (first few words)
-            const name = newRulePrompt.split(' ').slice(0, 5).join(' ') + '...';
+            const name = trimmedPrompt.length > 40
+                ? trimmedPrompt.substring(0, 40) + '...'
+                : trimmedPrompt;
 
             const res = await fetch('/api/ai/automations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name,
-                    prompt: newRulePrompt,
-                    active: true
-                })
+                body: JSON.stringify({ name, prompt: trimmedPrompt, active: true })
             });
 
             if (res.ok) {
                 showToast?.('✨ Regla mágica creada correctamente', 'success');
                 setNewRulePrompt('');
-                loadRules();
+                await loadRules();
             } else {
-                showToast?.('Error al crear la regla', 'error');
+                showToast?.('Error al guardar la regla', 'error');
             }
         } catch (error) {
-            showToast?.('Error de conexión', 'error');
+            showToast?.('Error de red al crear regla', 'error');
         } finally {
             setIsCreating(false);
         }
     };
 
     const handleRunAnalysis = async () => {
-        if (!window.confirm('¿Ejecutar análisis de todas las reglas activas ahora?\n\nEsto enviará mensajes reales a los candidatos que cumplan las condiciones.')) return;
-        setLoading(true);
+        if (!window.confirm('¿Ejecutar análisis inteligente ahora?\n\nLa IA buscará candidatos y enviará mensajes automáticamente según tus reglas.')) return;
+
+        setIsRunning(true);
+        setExecLogs(['Iniciando motor de inteligencia...']);
+
         try {
-            const res = await fetch('/api/ai/automations/run', {
-                method: 'POST'
-            });
+            const res = await fetch('/api/ai/automations/run', { method: 'POST' });
+
+            // Safety: Handle non-JSON responses (Timeouts/Errors)
+            const contentType = res.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                const text = await res.text();
+                throw new Error(text.substring(0, 100) || 'El servidor no respondió en formato JSON (Posible Timeout)');
+            }
+
             const data = await res.json();
+
             if (res.ok) {
-                if (data.sent > 0) {
-                    showToast?.(`🚀 Éxito: Se enviaron ${data.sent} mensajes.`, 'success');
-                } else {
-                    showToast?.(`Análisis finalizado: 0 coincidencias en ${data.evaluated} candidatos.`, 'default');
-                }
                 setExecLogs(data.logs || []);
+                if (data.sent > 0) {
+                    showToast?.(`🚀 ¡Éxito! Se enviaron ${data.sent} mensajes.`, 'success');
+                } else {
+                    showToast?.(`Análisis completo: 0 coincidencias en ${data.evaluated} candidatos.`, 'default');
+                }
             } else {
-                showToast?.('Error en la ejecución: ' + (data.error || 'Unknown'), 'error');
+                throw new Error(data.error || 'Error desconocido en el motor');
             }
         } catch (e) {
-            showToast?.('Error de conexión', 'error');
+            console.error('Run Analysis Error:', e);
+            showToast?.('El análisis tardó demasiado o falló. Revisa los logs abajo.', 'error');
+            setExecLogs(prev => [...(prev || []), `❌ ERROR: ${e.message}`]);
         } finally {
-            setLoading(false);
+            setIsRunning(false);
         }
     };
 
     const handleDeleteRule = async (id) => {
-        if (!window.confirm('¿Eliminar esta regla de automatización?')) return;
+        if (!id) return;
+        if (!window.confirm('¿Estás seguro de eliminar esta regla de forma permanente?')) return;
 
-        // Optimistic Update: Remove from UI immediately
-        const previousRules = [...rules];
-        setRules(prev => prev.filter(r => r.id !== id));
+        // Optimistic update with deep clone safety
+        const rulesBackup = Array.from(rules);
+        setRules(current => current.filter(r => r.id !== id));
 
         try {
             const res = await fetch(`/api/ai/automations?id=${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                showToast?.('Regla eliminada', 'default');
-            } else {
-                throw new Error('Failed to delete');
-            }
+            if (!res.ok) throw new Error('Delete failed');
+            showToast?.('Regla eliminada del servidor', 'default');
         } catch (e) {
-            showToast?.('Error eliminando regla', 'error');
-            // Revert state on error
-            setRules(previousRules);
+            console.error('Delete error:', e);
+            showToast?.('Error al eliminar: Restaurando regla', 'error');
+            setRules(rulesBackup);
         }
     };
 
     const toggleRule = async (rule) => {
+        if (!rule?.id) return;
+        const updated = { ...rule, active: !rule.active };
+
+        // Optimistic update
+        setRules(current => current.map(r => r.id === rule.id ? updated : r));
+
         try {
-            const updated = { ...rule, active: !rule.active };
-
-            // Optimistic update
-            setRules(prev => prev.map(r => r.id === rule.id ? updated : r));
-
             const res = await fetch('/api/ai/automations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updated)
             });
-
-            if (!res.ok) throw new Error('Update failed');
+            if (!res.ok) throw new Error('Toggle failed');
         } catch (e) {
-            loadRules(); // Revert on error
+            console.error('Toggle error:', e);
+            await loadRules();
         }
     };
 
-    const activeRulesCount = Array.isArray(rules) ? rules.length : 0;
+    const safeRules = useMemo(() => Array.isArray(rules) ? rules : [], [rules]);
 
     return (
-        <div className="space-y-6">
-
+        <div className="space-y-6 select-none">
             {/* 🪄 Creation Area */}
-            <div className="ios-glass p-6 rounded-2xl border border-blue-100 dark:border-blue-900/30 relative overflow-hidden group">
+            <div className="ios-glass p-6 rounded-2xl border border-blue-100 dark:border-blue-900/30 relative overflow-hidden group shadow-sm bg-white/40 dark:bg-gray-900/40">
                 <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                     <BrainCircuit className="w-32 h-32 text-blue-500" />
                 </div>
 
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center mb-4 relative z-10">
-                    <Sparkles className="w-5 h-5 text-blue-500 mr-2 animate-pulse" />
-                    Crear Nueva Automatización IA
-                </h3>
+                <div className="flex items-center justify-between mb-4 relative z-10">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center">
+                        <Sparkles className="w-5 h-5 text-blue-500 mr-2 animate-pulse" />
+                        IA Automations
+                    </h3>
+                    <span className="text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full uppercase tracking-widest">
+                        Zuckerberg Edition
+                    </span>
+                </div>
 
                 <div className="relative z-10">
                     <textarea
                         value={newRulePrompt}
                         onChange={(e) => setNewRulePrompt(e.target.value)}
-                        placeholder="Ej: 'Si un candidato no ha contestado en 3 días y le falta el CV, mándale un recordatorio amable...'"
-                        className="w-full h-24 p-4 rounded-xl bg-white/50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500/50 outline-none resize-none text-sm transition-all"
+                        placeholder="Escribe tu regla en lenguaje natural... Ej: 'Saluda al candidato 8116038195'"
+                        className="w-full h-24 p-4 rounded-xl bg-white/60 dark:bg-black/30 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-blue-500/50 outline-none resize-none text-sm transition-all placeholder:text-gray-400"
                     />
 
                     <div className="mt-4 flex justify-end">
                         <Button
                             onClick={handleCreateRule}
-                            disabled={isCreating || !newRulePrompt.trim()}
-                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/30"
+                            disabled={isCreating || !newRulePrompt?.trim()}
+                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 px-6"
                         >
-                            {isCreating ? 'Analizando...' : '✨ Crear Regla Mágica'}
+                            {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : '✨ Crear Regla'}
                         </Button>
                     </div>
                 </div>
@@ -165,49 +182,57 @@ const AIAutomationsWidget = ({ showToast }) => {
 
             {/* 📋 Active Rules List */}
             <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 ml-1">
-                        Reglas Activas ({activeRulesCount})
+                <div className="flex items-center justify-between px-1">
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
+                        Reglas Activas ({safeRules.length})
                     </h4>
                     <button
                         onClick={handleRunAnalysis}
-                        className="text-xs flex items-center space-x-1 text-blue-500 hover:text-blue-600 font-medium px-2 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                        disabled={isRunning || safeRules.length === 0}
+                        className={`text-xs flex items-center space-x-2 font-bold px-3 py-1.5 rounded-full transition-all ${isRunning
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-blue-500 text-white hover:bg-blue-600 shadow-md shadow-blue-500/20'
+                            }`}
                     >
-                        <PlayCircle className="w-3.5 h-3.5" />
-                        <span>Ejecutar Ahora</span>
+                        {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
+                        <span>{isRunning ? 'Ejecutando...' : 'Ejecutar Ahora'}</span>
                     </button>
                 </div>
 
-                {activeRulesCount === 0 ? (
-                    <div className="text-center py-8 text-gray-400 dark:text-gray-600 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl">
-                        <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No hay automatizaciones activas</p>
+                {loading && safeRules.length === 0 ? (
+                    <div className="flex justify-center py-10">
+                        <Loader2 className="w-8 h-8 text-blue-500 animate-spin opacity-20" />
+                    </div>
+                ) : safeRules.length === 0 ? (
+                    <div className="text-center py-10 bg-gray-50/50 dark:bg-black/10 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-2xl">
+                        <Activity className="w-8 h-8 mx-auto mb-3 text-gray-300 dark:text-gray-700" />
+                        <p className="text-xs text-gray-400 font-medium">No hay automatizaciones programadas</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 gap-3">
-                        {Array.isArray(rules) && rules.map(rule => (
-                            <div key={rule.id} className={`p-4 rounded-xl border transition-all duration-300 ${rule.active
+                    <div className="grid grid-cols-1 gap-2.5">
+                        {safeRules.map(rule => (
+                            <div key={rule.id} className={`group p-4 rounded-2xl border transition-all duration-300 ${rule.active
                                 ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm'
-                                : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-800 opacity-60 grayscale'
+                                : 'bg-gray-50/80 dark:bg-gray-900/50 border-gray-100 dark:border-gray-800 opacity-60'
                                 }`}>
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1 pr-4">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex-1 pr-4 min-w-0">
                                         <div className="flex items-center space-x-2 mb-1">
-                                            <span className={`w-2 h-2 rounded-full ${rule.active ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
-                                            <h4 className="font-semibold text-gray-900 dark:text-white text-sm line-clamp-1">
+                                            <div className={`w-1.5 h-1.5 rounded-full ${rule.active ? 'bg-blue-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                                            <h4 className="font-bold text-gray-900 dark:text-white text-sm truncate">
                                                 {rule.name}
                                             </h4>
                                         </div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 italic opacity-80 pl-3.5">
                                             "{rule.prompt}"
                                         </p>
                                     </div>
 
-                                    <div className="flex items-center space-x-2">
+                                    <div className="flex items-center space-x-1">
                                         <button
                                             onClick={() => toggleRule(rule)}
-                                            className={`p-2 rounded-lg transition-colors ${rule.active
-                                                ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                            className={`p-2 rounded-xl transition-all ${rule.active
+                                                ? 'text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                                                 : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                                                 }`}
                                             title={rule.active ? "Pausar" : "Activar"}
@@ -217,11 +242,15 @@ const AIAutomationsWidget = ({ showToast }) => {
 
                                         <button
                                             onClick={() => handleDeleteRule(rule.id)}
-                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                                             title="Eliminar"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
+
+                                        <div className="pl-1">
+                                            <ChevronRight className="w-4 h-4 text-gray-300 dark:text-gray-700" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -230,25 +259,43 @@ const AIAutomationsWidget = ({ showToast }) => {
                 )}
             </div>
 
-            {/* 📝 Execution Logs */}
+            {/* 📝 Execution Logs Display */}
             {execLogs && (
-                <div className="mt-6 p-4 rounded-xl bg-black/5 dark:bg-white/5 border border-gray-200 dark:border-gray-800 animate-in fade-in slide-in-from-bottom-2">
-                    <div className="flex justify-between items-center mb-2">
-                        <h5 className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Log de Ejecución</h5>
-                        <button onClick={() => setExecLogs(null)} className="text-[10px] text-gray-400 hover:text-gray-600">Cerrar</button>
-                    </div>
-                    <div className="space-y-1 max-h-40 overflow-y-auto font-mono text-[10px] text-gray-600 dark:text-gray-400">
-                        {Array.isArray(execLogs) && execLogs.length === 0 ? (
-                            <p className="opacity-50 italic">No se generaron eventos importantes...</p>
-                        ) : (
-                            Array.isArray(execLogs) && execLogs.map((log, idx) => (
-                                <div key={idx} className="flex space-x-2">
-                                    <span className="opacity-30">{idx + 1}.</span>
-                                    <span>{log}</span>
+                <div className="mt-4 animate-in fade-in zoom-in-95 duration-300">
+                    <div className="bg-gray-900 dark:bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-xl">
+                        <div className="flex justify-between items-center px-4 py-2 bg-gray-800 border-b border-gray-700">
+                            <div className="flex items-center space-x-2">
+                                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">System Monitor Control</span>
+                            </div>
+                            <button
+                                onClick={() => setExecLogs(null)}
+                                className="text-[10px] font-bold text-gray-500 hover:text-white transition-colors"
+                            >
+                                CLOSE [×]
+                            </button>
+                        </div>
+                        <div className="p-4 font-mono text-[10px] leading-relaxed max-h-48 overflow-y-auto scrollbar-hide">
+                            {Array.isArray(execLogs) && execLogs.length === 0 ? (
+                                <div className="flex items-center space-x-2 text-gray-500 italic">
+                                    <AlertCircle className="w-3 h-3" />
+                                    <p>Esperando eventos de red...</p>
                                 </div>
-                            ))
-                        )}
+                            ) : (
+                                Array.isArray(execLogs) && execLogs.map((log, idx) => (
+                                    <div key={idx} className={`py-0.5 border-b border-gray-800/30 flex space-x-3 ${log.includes('✅') ? 'text-green-400' :
+                                            log.includes('❌') ? 'text-red-400' :
+                                                log.includes('✨') ? 'text-blue-400 font-bold' :
+                                                    'text-gray-400'
+                                        }`}>
+                                        <span className="opacity-20 shrink-0">[{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                                        <span className="break-words">{log}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
+                    <p className="text-[9px] text-center mt-2 text-gray-400 italic">Logs generados en tiempo real por el Candidatic AI Engine</p>
                 </div>
             )}
         </div>
