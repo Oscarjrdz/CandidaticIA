@@ -2,8 +2,30 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Sparkles, Trash2, PauseCircle, PlayCircle, BrainCircuit, Activity, ChevronRight, AlertCircle, Loader2 } from 'lucide-react';
 import Button from './ui/Button';
 
-const AIAutomationsWidget = ({ showToast }) => {
-    // Zuckerberg Grade: Strict initialization
+// Zuckerberg Edition: Built-in safety wrapper to prevent white screens
+class RuleErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false };
+    }
+    static getDerivedStateFromError(error) { return { hasError: true }; }
+    componentDidCatch(error, errorInfo) { console.error("Rule Widget Crash:", error, errorInfo); }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="p-10 text-center bg-red-50 dark:bg-red-900/10 border border-red-200 rounded-2xl">
+                    <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-4" />
+                    <h3 className="text-red-900 dark:text-red-100 font-bold">Error en la interfaz</h3>
+                    <p className="text-sm text-red-600 dark:text-red-400 mt-2">La vista de reglas experimentó un problema técnico. Intenta recargar la página.</p>
+                    <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm">Recargar Todo</button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+const AIAutomationsWidgetContent = ({ showToast }) => {
     const [rules, setRules] = useState([]);
     const [loading, setLoading] = useState(false);
     const [isRunning, setIsRunning] = useState(false);
@@ -19,15 +41,11 @@ const AIAutomationsWidget = ({ showToast }) => {
         setLoading(true);
         try {
             const res = await fetch('/api/ai/automations');
-            if (!res.ok) throw new Error('API unreachable');
+            if (!res.ok) throw new Error('Unreachable');
             const data = await res.json();
-            if (data.success && Array.isArray(data.automations)) {
-                setRules(data.automations);
-            } else {
-                setRules([]);
-            }
+            setRules(Array.isArray(data.automations) ? data.automations : []);
         } catch (error) {
-            console.error('Core Logic Error:', error);
+            console.error('Failed to load rules:', error);
             setRules([]);
         } finally {
             setLoading(false);
@@ -35,189 +53,146 @@ const AIAutomationsWidget = ({ showToast }) => {
     };
 
     const handleCreateRule = async () => {
-        const val = newRulePrompt?.trim();
-        if (!val) return;
-
+        const p = newRulePrompt?.trim();
+        if (!p) return;
         setIsCreating(true);
         try {
-            const name = val.length > 30 ? val.substring(0, 30) + '...' : val;
+            const name = p.length > 30 ? p.substring(0, 30) + '...' : p;
             const res = await fetch('/api/ai/automations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, prompt: val, active: true })
+                body: JSON.stringify({ name, prompt: p, active: true })
             });
 
             if (res.ok) {
-                showToast?.('✨ Regla creada con éxito', 'success');
+                showToast?.('Regla creada', 'success');
                 setNewRulePrompt('');
                 loadRules();
             }
         } catch (e) {
-            showToast?.('Error de red', 'error');
+            showToast?.('Error al crear', 'error');
         } finally {
             setIsCreating(false);
         }
     };
 
     const handleRunAnalysis = async () => {
-        if (!window.confirm('¿Ejecutar análisis inteligente Zuckerberg Edition?')) return;
-
+        if (!window.confirm('¿Ejecutar análisis inteligente?')) return;
         setIsRunning(true);
-        setExecLogs(['[SYSTEM] Iniciando motor inteligente...', '[SYSTEM] Escaneando por "Intenciones" de búsqueda...']);
-
+        setExecLogs(['[SISTEMA] Iniciando análisis...']);
         try {
             const res = await fetch('/api/ai/automations/run', { method: 'POST' });
-
-            // Critical: Non-JSON Response Handling (Prevent Crashes)
-            const type = res.headers.get("content-type");
-            if (!type || !type.includes("application/json")) {
-                throw new Error('El motor devolvió una respuesta no válida (Timeout o Error 500)');
-            }
-
             const data = await res.json();
             if (res.ok) {
                 setExecLogs(data.logs || []);
-                if (data.sent > 0) showToast?.(`🚀 Éxito: ${data.sent} mensajes enviados`, 'success');
-                else showToast?.(`Análisis completo: 0 coincidencias en ${data.evaluated} candidatos.`, 'default');
+                showToast?.(data.sent > 0 ? `Rocket: ${data.sent} mensajes enviados` : 'Análisis terminado', 'success');
             } else {
-                throw new Error(data.error || 'Falla interna del motor');
+                throw new Error(data.error || 'Falla del motor');
             }
         } catch (e) {
             setExecLogs(prev => [...(prev || []), `❌ ERROR: ${e.message}`]);
-            showToast?.('El análisis falló. Revisa la consola abajo.', 'error');
+            showToast?.('Análisis fallido', 'error');
         } finally {
             setIsRunning(false);
         }
     };
 
     const handleDeleteRule = async (id) => {
-        if (!id) return;
-        if (!window.confirm('¿Eliminar esta regla permanentemente?')) return;
+        if (!id || !window.confirm('¿Eliminar esta regla?')) return;
 
-        // Indestructible Deletion Pattern
-        const backup = [...rules];
-        setRules(current => (current || []).filter(r => r.id !== id));
+        // Optimistic and Bulletproof
+        const original = [...rules];
+        setRules(curr => (curr || []).filter(r => r.id !== id));
 
         try {
             const res = await fetch(`/api/ai/automations?id=${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Delete failed');
+            if (!res.ok) throw new Error('Fail');
             showToast?.('Regla eliminada', 'default');
         } catch (e) {
-            setRules(backup);
-            showToast?.('Error al eliminar regla', 'error');
+            setRules(original);
+            showToast?.('Error al borrar', 'error');
         }
     };
 
     const toggleRule = async (rule) => {
         if (!rule?.id) return;
-        const updated = { ...rule, active: !rule.active };
-        setRules(current => (current || []).map(r => r.id === rule.id ? updated : r));
-
+        const upd = { ...rule, active: !rule.active };
+        setRules(curr => (curr || []).map(r => r.id === rule.id ? upd : r));
         try {
-            const res = await fetch('/api/ai/automations', {
+            await fetch('/api/ai/automations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updated)
+                body: JSON.stringify(upd)
             });
-            if (!res.ok) throw new Error('Update failed');
-        } catch (e) {
-            loadRules();
-        }
+        } catch (e) { loadRules(); }
     };
 
-    // Constant safety wrapper
-    const safeRules = useMemo(() => Array.isArray(rules) ? rules : [], [rules]);
+    const safeRules = Array.isArray(rules) ? rules : [];
 
     return (
         <div className="space-y-6">
-            {/* 🧙 Magic Input */}
-            <div className="p-6 rounded-2xl border border-blue-100 bg-white/40 dark:bg-gray-900/40 relative overflow-hidden">
-                <div className="flex items-center justify-between mb-4">
+            <div className="p-6 rounded-2xl border border-blue-100 bg-white dark:bg-gray-900 relative shadow-sm">
+                <div className="flex justify-between items-center mb-4">
                     <h3 className="text-lg font-bold flex items-center">
                         <Sparkles className="w-5 h-5 text-blue-500 mr-2" />
                         IA Automations
                     </h3>
-                    <span className="text-[9px] font-black bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Zuckerberg Stability Edition</span>
                 </div>
-
                 <textarea
                     value={newRulePrompt}
                     onChange={(e) => setNewRulePrompt(e.target.value)}
-                    placeholder="Ej: 'Saluda al candidato 8116038195 (dile hola)'"
-                    className="w-full h-24 p-4 rounded-xl bg-white/50 dark:bg-black/20 border border-gray-200 dark:border-gray-700 outline-none resize-none text-sm transition-all shadow-inner"
+                    placeholder="Ej: 'Saluda al 8116038195'"
+                    className="w-full h-24 p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-black/20 outline-none text-sm"
                 />
-
                 <div className="mt-4 flex justify-end">
-                    <Button
-                        onClick={handleCreateRule}
-                        disabled={isCreating || !newRulePrompt?.trim()}
-                        className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg px-6"
-                    >
+                    <Button onClick={handleCreateRule} disabled={isCreating || !newRulePrompt?.trim()} className="bg-blue-600 text-white px-6">
                         {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : '✨ Crear Regla'}
                     </Button>
                 </div>
             </div>
 
-            {/* 📋 Execution Control */}
             <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Reglas Activas ({safeRules.length})</h4>
-                    <button
-                        onClick={handleRunAnalysis}
-                        disabled={isRunning || safeRules.length === 0}
-                        className={`text-xs flex items-center space-x-2 font-bold px-4 py-2 rounded-full transition-all ${isRunning ? 'bg-gray-200 text-gray-400' : 'bg-green-500 hover:bg-green-600 text-white'
-                            }`}
-                    >
-                        {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <PlayCircle className="w-3.5 h-3.5" />}
-                        <span>{isRunning ? 'Ejecutando...' : 'Ejecutar Ahora'}</span>
+                <div className="flex justify-between items-center px-1">
+                    <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Activas ({safeRules.length})</h4>
+                    <button onClick={handleRunAnalysis} disabled={isRunning} className="text-xs bg-green-500 text-white px-4 py-2 rounded-full font-bold shadow-sm">
+                        {isRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Ejecutar Ahora'}
                     </button>
                 </div>
 
-                {safeRules.length === 0 && !loading ? (
-                    <div className="text-center py-10 bg-gray-50 dark:bg-black/20 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800">
-                        <p className="text-xs text-gray-400 font-medium">No hay reglas activas. Crea tu primera magia arriba.</p>
+                {safeRules.map(rule => (
+                    <div key={rule.id} className="p-4 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex justify-between items-center shadow-sm">
+                        <div className="flex-1 truncate pr-4">
+                            <h4 className="font-bold text-sm truncate">{rule.name}</h4>
+                            <p className="text-[10px] text-gray-400 italic">"{rule.prompt}"</p>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                            <button onClick={() => toggleRule(rule)} className={`p-2 rounded-lg ${rule.active ? 'text-blue-500' : 'text-gray-400'}`}>
+                                {rule.active ? <PauseCircle className="w-5 h-5" /> : <PlayCircle className="w-5 h-5" />}
+                            </button>
+                            <button onClick={() => handleDeleteRule(rule.id)} className="p-2 text-gray-400 hover:text-red-500">
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
-                ) : (
-                    <div className="grid grid-cols-1 gap-2.5">
-                        {safeRules.map(rule => (
-                            <div key={rule.id} className="group p-4 rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm flex justify-between items-center transition-all hover:border-blue-300">
-                                <div className="flex-1 truncate pr-4">
-                                    <h4 className="font-bold text-sm truncate">{rule.name}</h4>
-                                    <p className="text-[10px] text-gray-500 truncate opacity-60 italic">"{rule.prompt}"</p>
-                                </div>
-                                <div className="flex items-center space-x-1">
-                                    <button onClick={() => toggleRule(rule)} className={`p-2 rounded-lg ${rule.active ? 'text-blue-500 bg-blue-50' : 'text-gray-400'}`}>
-                                        {rule.active ? <PauseCircle className="w-5 h-5" /> : <PlayCircle className="w-5 h-5" />}
-                                    </button>
-                                    <button onClick={() => handleDeleteRule(rule.id)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                ))}
             </div>
 
-            {/* 📟 Real-time Monitor */}
             {execLogs && (
-                <div className="bg-gray-950 dark:bg-black rounded-2xl border border-gray-800 overflow-hidden shadow-2xl animate-in zoom-in-95">
-                    <div className="bg-gray-900 px-4 py-2 border-b border-gray-800 flex justify-between items-center">
-                        <span className="text-[9px] font-black text-blue-400 tracking-tighter uppercase">AI Terminal Monitoring</span>
-                        <button onClick={() => setExecLogs(null)} className="text-[9px] text-gray-600 hover:text-white rotate-45">+</button>
-                    </div>
-                    <div className="p-4 font-mono text-[10px] max-h-40 overflow-y-auto space-y-1">
-                        {Array.isArray(execLogs) && execLogs.map((log, i) => (
-                            <div key={i} className={`flex space-x-2 ${log.includes('✅') ? 'text-green-500' : log.includes('❌') ? 'text-red-500' : 'text-gray-500'}`}>
-                                <span className="opacity-30 shrink-0">[{i}]</span>
-                                <span className="break-words">{log}</span>
-                            </div>
-                        ))}
-                    </div>
+                <div className="bg-black rounded-2xl border border-gray-800 p-4 font-mono text-[10px] text-gray-400 max-h-40 overflow-y-auto">
+                    {execLogs.map((log, i) => (
+                        <div key={i} className="py-0.5 border-b border-gray-800/20">{log}</div>
+                    ))}
                 </div>
             )}
         </div>
     );
 };
+
+// Main Export with Error Boundary
+const AIAutomationsWidget = (props) => (
+    <RuleErrorBoundary>
+        <AIAutomationsWidgetContent {...props} />
+    </RuleErrorBoundary>
+);
 
 export default AIAutomationsWidget;
