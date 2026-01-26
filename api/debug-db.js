@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     if (!phone) return res.json({ error: 'Missing phone' });
 
     try {
-        const { getRedisClient, getCandidateIdByPhone, getCandidateById } = await import('../utils/storage.js');
+        const { getRedisClient, getCandidateIdByPhone, getCandidateById } = await import('./utils/storage.js');
         const redis = getRedisClient();
 
         const indexId = await redis.hget('candidatic:phone_index', phone);
