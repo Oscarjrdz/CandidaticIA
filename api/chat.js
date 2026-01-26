@@ -104,12 +104,14 @@ export default async function handler(req, res) {
                     const protocol = req.headers['x-forwarded-proto'] || 'http';
                     const host = req.headers.host;
                     deliveryContent = `${protocol}://${host}${mediaUrl}`;
-                    console.log(`🌐 [Chat] Converted relative URL to absolute: ${deliveryContent}`);
+                    console.log(`🌐 [Chat] ABSOLUTE URL CONVERSION: [${protocol}] [${host}] -> ${deliveryContent}`);
                 }
 
                 if (base64Data) {
-                    console.log(`📦 [Chat] Base64 data detected (Size: ${Math.round(base64Data.length / 1024)}KB)`);
+                    console.log(`📦 [Chat] BASE64 PAYLOAD: Size=${Math.round(base64Data.length / 1024)}KB | Samples=${base64Data.substring(0, 50)}...`);
                 }
+
+                console.log(`📡 [Chat] DELIVERY REQUEST: Type=${type} | FinalURL=${deliveryContent ? (deliveryContent.startsWith('http') ? deliveryContent : 'BASE64') : 'NONE'}`);
 
                 if (type === 'text') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, finalMessage, 'chat');

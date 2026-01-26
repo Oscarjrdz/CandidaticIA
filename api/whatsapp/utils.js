@@ -87,17 +87,22 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         const debugKey = `debug:ultramsg:${to}`;
 
         let response;
+        const startTime = Date.now();
         try {
             response = await axios.post(url, payload, {
                 timeout: 30000,
                 maxContentLength: Infinity,
-                maxBodyLength: Infinity
+                maxBodyLength: Infinity,
+                validateStatus: (status) => true // Capture all status codes
             });
-            console.log(`✅ [UltraMSG] RESPONSE:`, JSON.stringify(response.data));
+            const duration = Date.now() - startTime;
+            console.log(`✅ [UltraMSG] RESPONSE (${duration}ms): Status=${response.status} | Data=`, JSON.stringify(response.data));
 
             if (redis) {
                 await redis.set(debugKey, JSON.stringify({
                     timestamp: new Date().toISOString(),
+                    duration,
+                    status: response.status,
                     type, endpoint, payloadKeys: Object.keys(payload), result: response.data
                 }), 'EX', 3600);
             }
