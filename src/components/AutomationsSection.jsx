@@ -16,9 +16,12 @@ import {
     getScheduledRules,
     createScheduledRule,
     updateScheduledRule,
-    deleteScheduledRule
+    deleteScheduledRule,
+    testScheduledRule
 } from '../services/scheduledMessagesService';
 import { Clock, MessageSquare, Timer, Copy } from 'lucide-react';
+import AIAutomationsWidget from './AIAutomationsWidget'; // Import Widget
+
 const AutomationsSection = ({ showToast }) => {
     const [rules, setRules] = useState([]);
     const [schedRules, setSchedRules] = useState([]);
@@ -344,6 +347,18 @@ const AutomationsSection = ({ showToast }) => {
                     <Plus className="w-4 h-4" />
                     <span>Crear Nueva</span>
                 </Button>
+            </div>
+
+
+
+            {/* 🧠 AI Automations (Zuckerberg Style) */}
+            <div className="mb-10">
+                <AIAutomationsWidget showToast={showToast} />
+            </div>
+
+            <div className="flex items-center space-x-2 mb-4">
+                <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Reglas "Keyword" (Legacy)</h3>
             </div>
 
             {/* Info Alert */}

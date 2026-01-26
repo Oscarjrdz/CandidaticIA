@@ -61,7 +61,10 @@ const KEYS = {
 
     // Stats
     STATS_INCOMING: 'stats:msg:incoming',
-    STATS_OUTGOING: 'stats:msg:outgoing'
+    STATS_OUTGOING: 'stats:msg:outgoing',
+
+    // AI Automations
+    AI_AUTOMATIONS: 'ai:automations:list'
 };
 
 
@@ -446,6 +449,41 @@ export const deleteVacancy = async (id) => {
     const vacancies = await getVacancies();
     const newVacancies = vacancies.filter(v => v.id !== id);
     await client.set(KEYS.VACANCIES, JSON.stringify(newVacancies));
+    return true;
+};
+// --- AI Automations Helpers ---
+export const getAIAutomations = async () => {
+    const client = getClient();
+    if (!client) return [];
+    const list = await client.get(KEYS.AI_AUTOMATIONS);
+    return list ? JSON.parse(list) : [];
+};
+
+export const saveAIAutomation = async (automation) => {
+    const client = getRedisClient();
+    if (!client) return null;
+
+    let list = await getAIAutomations();
+    const existingIndex = list.findIndex(a => a.id === automation.id);
+
+    if (existingIndex >= 0) {
+        list[existingIndex] = { ...list[existingIndex], ...automation };
+    } else {
+        list.push({ ...automation, createdAt: new Date().toISOString(), active: true });
+    }
+
+    await client.set(KEYS.AI_AUTOMATIONS, JSON.stringify(list));
+    return automation;
+};
+
+export const deleteAIAutomation = async (id) => {
+    const client = getRedisClient();
+    if (!client) return false;
+
+    let list = await getAIAutomations();
+    const newList = list.filter(a => a.id !== id);
+
+    await client.set(KEYS.AI_AUTOMATIONS, JSON.stringify(newList));
     return true;
 };
 
