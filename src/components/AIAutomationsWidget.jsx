@@ -63,11 +63,8 @@ const AIAutomationsWidget = ({ showToast }) => {
         if (!window.confirm('¿Ejecutar análisis de todas las reglas activas ahora?\n\nEsto enviará mensajes reales a los candidatos que cumplan las condiciones.')) return;
         setLoading(true);
         try {
-            const res = await fetch('/api/cron/process-ai-automations', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${process.env.CRON_SECRET || ''}` // In production we need secret, locally might effectively skip if env not set strict
-                }
+            const res = await fetch('/api/ai/automations/run', {
+                method: 'POST'
             });
             const data = await res.json();
             if (res.ok) {
