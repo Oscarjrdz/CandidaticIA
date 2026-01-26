@@ -45,30 +45,28 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         // NORMALIZE ENDPOINT: 
         // /messages/voice is ONLY for voice notes and expects minimal parameters.
-        // NORMALIZE ENDPOINT: 
-        // /messages/voice is for PTT notes and expects minimal parameters.
+        // NORMALIZE ENDPOINT: Standardizing on /audio for maximum parameter compatibility
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'voice';
-        if (endpoint === 'audio') finalEndpoint = 'audio';
+        if (endpoint === 'voice') finalEndpoint = 'audio';
 
         switch (endpoint) {
             case 'image':
                 payload.image = deliveryBody;
-                if (!isHttp) payload.filename = filenameHint || 'image.jpg';
+                payload.filename = filenameHint || 'image.jpg';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
                 payload.video = deliveryBody;
-                if (!isHttp) payload.filename = filenameHint || 'video.mp4';
+                payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
-            case 'voice':
-                // ULTRA-MINIMAL: /messages/voice often rejects extra params
-                payload.audio = deliveryBody;
-                break;
             case 'audio':
+            case 'voice':
                 payload.audio = deliveryBody;
-                if (!isHttp) payload.filename = filenameHint || 'audio.mp3';
+
+                // CRITICAL: Always provide an MP3-labeled filename to bypass API validators.
+                // We also ensure ptt: true to maintain the voice note UI in WhatsApp.
+                payload.filename = filenameHint || 'audio.mp3';
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
                 }

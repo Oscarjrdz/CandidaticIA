@@ -42,8 +42,12 @@ export default async function handler(req, res) {
 
         // MIME Spoofing for scale/compatibility (WhatsApp likes ogg/mp3)
         let finalMime = meta.mime;
-        if (requestedExt === 'ogg' || (meta.mime && meta.mime.includes('audio'))) {
-            finalMime = 'audio/ogg'; // Force ogg for WhatsApp voice compatibility
+        if (requestedExt === 'ogg') {
+            finalMime = 'audio/ogg';
+        } else if (requestedExt === 'mp3') {
+            finalMime = 'audio/mpeg'; // MP3 Spoofing for API compatibility
+        } else if (meta.mime && meta.mime.includes('audio')) {
+            finalMime = 'audio/ogg'; // Default to ogg for generic audio
         } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
             finalMime = 'image/jpeg';
         }
