@@ -59,6 +59,29 @@ const AIAutomationsWidget = ({ showToast }) => {
         }
     };
 
+    const handleRunAnalysis = async () => {
+        if (!window.confirm('¿Ejecutar análisis de todas las reglas activas ahora?\n\nEsto enviará mensajes reales a los candidatos que cumplan las condiciones.')) return;
+        setLoading(true);
+        try {
+            const res = await fetch('/api/cron/process-ai-automations', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.CRON_SECRET || ''}` // In production we need secret, locally might effectively skip if env not set strict
+                }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(`✅ Análisis completo: ${data.sent} mensajes enviados de ${data.evaluated} evaluados`, 'success');
+            } else {
+                showToast('Error en ejecución: ' + (data.error || 'Unknown'), 'error');
+            }
+        } catch (e) {
+            showToast('Error de conexión', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleDeleteRule = async (id) => {
         if (!window.confirm('¿Eliminar esta regla de automatización?')) return;
         try {
@@ -123,9 +146,18 @@ const AIAutomationsWidget = ({ showToast }) => {
 
             {/* 📋 Active Rules List */}
             <div className="space-y-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 ml-1">
-                    Reglas Activas ({rules.length})
-                </h4>
+                <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 ml-1">
+                        Reglas Activas ({rules.length})
+                    </h4>
+                    <button
+                        onClick={handleRunAnalysis}
+                        className="text-xs flex items-center space-x-1 text-blue-500 hover:text-blue-600 font-medium px-2 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                    >
+                        <PlayCircle className="w-3.5 h-3.5" />
+                        <span>Ejecutar Ahora</span>
+                    </button>
+                </div>
 
                 {rules.length === 0 ? (
                     <div className="text-center py-8 text-gray-400 dark:text-gray-600 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl">
@@ -136,8 +168,8 @@ const AIAutomationsWidget = ({ showToast }) => {
                     <div className="grid grid-cols-1 gap-3">
                         {rules.map(rule => (
                             <div key={rule.id} className={`p-4 rounded-xl border transition-all duration-300 ${rule.active
-                                    ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm'
-                                    : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-800 opacity-60 grayscale'
+                                ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm'
+                                : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-800 opacity-60 grayscale'
                                 }`}>
                                 <div className="flex justify-between items-start">
                                     <div className="flex-1 pr-4">
@@ -156,8 +188,8 @@ const AIAutomationsWidget = ({ showToast }) => {
                                         <button
                                             onClick={() => toggleRule(rule)}
                                             className={`p-2 rounded-lg transition-colors ${rule.active
-                                                    ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
-                                                    : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                                ? 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20'
+                                                : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                                                 }`}
                                             title={rule.active ? "Pausar" : "Activar"}
                                         >
