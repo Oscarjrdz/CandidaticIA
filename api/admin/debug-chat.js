@@ -1,4 +1,4 @@
-import { getMessages, getCandidates } from '../utils/storage.js';
+import { getMessages, getCandidates, getRedisClient } from '../utils/storage.js';
 
 export default async function handler(req, res) {
     // Basic protection: only allows GET with a secret key if needed, 
