@@ -1,12 +1,11 @@
 /**
- * Fix Ages Endpoint 🎂
+ * Fix Ages Endpoint 🎂 (DEBUG MODE)
  * POST /api/candidates/fix-ages
  * Rapidly calculates ages for all candidates with birthdates.
  */
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
-        // Allow GET for browser testing
         if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
     }
 
@@ -21,18 +20,28 @@ export default async function handler(req, res) {
 
         console.log(`🎂 Fix Ages: Scanning ${candidates.length} candidates...`);
 
+        // DEBUG: Look specifically for Miguel Angel
+        const miguel = candidates.find(c => c.nombre && c.nombre.toLowerCase().includes('miguel angel'));
+        if (miguel) {
+            console.log(`🔍 [DEBUG TARGET] FOUND Miguel: ID=${miguel.id}, DOB="${miguel.fechaNacimiento}", Edad="${miguel.edad}"`);
+        } else {
+            console.log('🔍 [DEBUG TARGET] Miguel Angel NOT FOUND in 2000 items.');
+        }
+
         for (const candidate of candidates) {
             if (!candidate.fechaNacimiento) continue;
 
-            // Re-calculate even if age exists (to fix previous bad calcs)
-            // Or only if missing? Let's fix bad dashes too.
-            if (candidate.edad && candidate.edad.length > 0 && candidate.edad !== '-' && candidate.edad !== 'INVALID') {
-                // Skip valid formatted ages to save time? 
-                // Actually, verify calculation is cheap.
-            }
-
+            // Normalize DOB
             const dob = candidate.fechaNacimiento.toLowerCase().trim();
             let birthDate = null;
+            let debug = false;
+
+            if (candidate.nombre && candidate.nombre.toLowerCase().includes('miguel angel')) {
+                debug = true;
+                console.log(`  -> Processing DOB: "${dob}" (Length: ${dob.length})`);
+                // Check char codes for invisible spaces
+                console.log(`  -> Char codes: ${dob.split('').map(c => c.charCodeAt(0)).join(',')}`);
+            }
 
             // Regex for "19 / mayo / 1983" or "19 de mayo de 1983"
             const dateRegex = /(\d{1,2})[\s/-]+(?:de\s+)?([a-z0-9áéíóú]+)[\s/-]+(?:de\s+)?(\d{4})/;
@@ -42,6 +51,8 @@ export default async function handler(req, res) {
                 const day = parseInt(match[1]);
                 const monthStr = match[2];
                 const year = parseInt(match[3]);
+
+                if (debug) console.log(`  -> Match! D:${day} M:${monthStr} Y:${year}`);
 
                 const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
                 let monthIndex = months.findIndex(m => m.startsWith(monthStr.slice(0, 3)));
@@ -54,6 +65,7 @@ export default async function handler(req, res) {
                     birthDate = new Date(year, monthIndex, day);
                 }
             } else {
+                if (debug) console.log(`  -> No Regex Match`);
                 const parts = dob.split(/[/-]/);
                 if (parts.length === 3) {
                     const d = parseInt(parts[0]);
@@ -73,20 +85,26 @@ export default async function handler(req, res) {
                     age--;
                 }
 
+                if (debug) console.log(`  -> Calculated Age: ${age}`);
+
                 // Sanity check
                 if (age > 15 && age < 100) {
                     const strAge = age.toString();
                     if (candidate.edad !== strAge) {
                         updates.push({ id: candidate.id, edad: strAge });
                         log.push(`${candidate.nombre}: ${dob} -> ${strAge}`);
+                    } else {
+                        if (debug) console.log(`  -> NO UPDATE NEEDED. Exists: "${candidate.edad}" vs Calc: "${strAge}"`);
                     }
                 }
+            } else {
+                if (debug) console.log(`  -> Invalid Date Object created`);
             }
         }
 
         console.log(`🎂 Fix Ages: Found ${updates.length} updates needed.`);
 
-        // Batch execution (Parallel promises)
+        // Batch execution
         const BATCH_SIZE = 50;
         let processed = 0;
 
@@ -101,7 +119,7 @@ export default async function handler(req, res) {
             success: true,
             totalScanned: candidates.length,
             updated: updates.length,
-            log: log.slice(0, 50) // Return first 50 logs
+            log: log.slice(0, 50)
         });
 
     } catch (error) {
