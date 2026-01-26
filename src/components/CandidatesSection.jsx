@@ -355,7 +355,12 @@ const CandidatesSection = ({ showToast }) => {
         return `${dateStr}, ${timeStr}`;
     };
 
-    const calculateAge = (dob) => {
+    const calculateAge = (dob, storedAge) => {
+        // 1. Prefer stored age from NASCAR
+        if (storedAge && storedAge !== '-' && storedAge !== 'INVALID') {
+            return `${storedAge} años`;
+        }
+
         if (!dob) return '-';
         let birthDate = new Date(dob);
 
@@ -363,9 +368,10 @@ const CandidatesSection = ({ showToast }) => {
         if (isNaN(birthDate.getTime())) {
             const cleanDob = dob.toLowerCase().trim();
 
-            // 1. Formato "19 de 05 de 1983" o "19 de mayo de 1983"
-            const deRegex = /(\d{1,2})\s+de\s+([a-z0-9áéíóú]+)\s+de\s+(\d{4})/;
-            const match = cleanDob.match(deRegex);
+            // 1. Formato "19 de 05 de 1983" o "19/05/1983" o "19 / mayo / 1983"
+            // Allows: "/", "-", or "de" as separator
+            const dateRegex = /(\d{1,2})[\s/-]+(?:de\s+)?([a-z0-9áéíóú]+)[\s/-]+(?:de\s+)?(\d{4})/;
+            const match = cleanDob.match(dateRegex);
 
             if (match) {
                 const day = parseInt(match[1]);
@@ -388,11 +394,17 @@ const CandidatesSection = ({ showToast }) => {
                 }
             }
 
-            // 2. Fallback a DD/MM/YYYY o DD-MM-YYYY si lo anterior falló
+            // 2. Fallback a DD/MM/YYYY directo
             if (isNaN(birthDate.getTime())) {
                 const parts = dob.split(/[/-]/);
                 if (parts.length === 3) {
-                    birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                    // Try DD-MM-YYYY
+                    const d = parseInt(parts[0]);
+                    const m = parseInt(parts[1]) - 1;
+                    const y = parseInt(parts[2]);
+                    if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
+                        birthDate = new Date(y, m, d);
+                    }
                 }
             }
         }
@@ -651,7 +663,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 {field.value === 'fechaNacimiento' && (
                                                     <td className="py-0.5 px-2.5">
                                                         <div className="text-xs text-gray-900 dark:text-white font-medium">
-                                                            {calculateAge(candidate.fechaNacimiento)}
+                                                            {calculateAge(candidate.fechaNacimiento, candidate.edad)}
                                                         </div>
                                                     </td>
                                                 )}
