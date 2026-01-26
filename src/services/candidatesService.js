@@ -29,6 +29,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '') => {
             success: true,
             candidates: data.candidates || [],
             count: data.count || 0,
+            total: data.total || 0,
             pagination: data.pagination
         };
     } catch (error) {

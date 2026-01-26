@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Sparkles, Send } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Sparkles, Send, Zap } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
@@ -35,6 +35,33 @@ const CandidatesSection = ({ showToast }) => {
     const [historyModalOpen, setHistoryModalOpen] = useState(false);
     const [historyModalCandidate, setHistoryModalCandidate] = useState(null);
     const [historyModalContent, setHistoryModalContent] = useState('');
+    const [cleaning, setCleaning] = useState(false);
+
+    const handleNascarCleanup = async () => {
+        if (!window.confirm('¿Deseas iniciar la limpieza profunda con IA (Motor NASCAR)?\n\nEsto revisará a todos los candidatos con datos incompletos y los corregirá automáticamente. Puede tardar unos segundos.')) {
+            return;
+        }
+
+        setCleaning(true);
+        showToast('Iniciando Motor NASCAR... 🏎️🏁', 'info');
+
+        try {
+            const res = await fetch('/api/candidates/cleanup', { method: 'POST' });
+            const data = await res.json();
+
+            if (data.success) {
+                showToast(data.message || 'Limpieza NASCAR completada con éxito 🏆', 'success');
+                loadCandidates(currentPage);
+            } else {
+                showToast('Error en la limpieza: ' + data.error, 'error');
+            }
+        } catch (e) {
+            console.error('NASCAR Error', e);
+            showToast('Error de conexión con el motor NASCAR', 'error');
+        } finally {
+            setCleaning(false);
+        }
+    };
 
 
     useEffect(() => {
@@ -405,15 +432,27 @@ const CandidatesSection = ({ showToast }) => {
                                 </p>
                             </div>
                         </div>
-                        <Button
-                            onClick={loadCandidates}
-                            icon={RefreshCw}
-                            variant="outline"
-                            size="sm"
-                            disabled={loading}
-                        >
-                            Refrescar
-                        </Button>
+                        <div className="flex items-center space-x-2">
+                            <Button
+                                onClick={handleNascarCleanup}
+                                icon={Zap}
+                                variant="outline"
+                                size="sm"
+                                disabled={cleaning || loading}
+                                className="border-yellow-200 text-yellow-700 bg-yellow-50 hover:bg-yellow-100"
+                            >
+                                {cleaning ? 'Limpiando...' : 'Motor NASCAR'}
+                            </Button>
+                            <Button
+                                onClick={loadCandidates}
+                                icon={RefreshCw}
+                                variant="outline"
+                                size="sm"
+                                disabled={loading}
+                            >
+                                Refrescar
+                            </Button>
+                        </div>
                     </div>
 
                 </div>
