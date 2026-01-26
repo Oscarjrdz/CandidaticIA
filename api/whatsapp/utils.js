@@ -62,22 +62,17 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 break;
             case 'audio':
             case 'voice':
-                // TRIPLE-LAYER IDENTIFICATION:
-                // 1. DataURL prefix (normalized to ogg)
-                // 2. Filename parameter
-                // 3. PTT flag
+                // RAW BASE64 STRATEGY:
+                // 1. Strip the DataURL prefix (data:audio/xxx;base64,) as many APIs expect raw binary.
+                // 2. Use /audio endpoint with filename: 'audio.ogg'.
+                // 3. Set ptt: true for voice notes.
                 let audioContent = deliveryBody;
                 if (isDataUrl) {
-                    audioContent = deliveryBody.replace('audio/webm', 'audio/ogg')
-                        .replace('audio/mp4', 'audio/ogg')
-                        .replace('audio/mpeg', 'audio/ogg');
-                    if (!audioContent.includes('audio/ogg')) {
-                        audioContent = audioContent.replace('data:audio/;', 'data:audio/ogg;');
-                    }
+                    audioContent = deliveryBody.split(',')[1];
                 }
 
                 payload.audio = audioContent;
-                payload.filename = filenameHint || 'voice.ogg';
+                payload.filename = filenameHint || 'audio.ogg';
 
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
