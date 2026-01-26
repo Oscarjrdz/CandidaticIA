@@ -218,9 +218,27 @@ export const getCandidateByPhone = async (phone) => {
     const client = getRedisClient();
     if (!client || !phone) return null;
 
-    const cleanPhone = phone.replace(/\D/g, '');
+    let cleanPhone = phone.replace(/\D/g, '');
+    
+    // Try original
     try {
-        const id = await client.hget(KEYS.PHONE_INDEX, cleanPhone);
+        let id = await client.hget(KEYS.PHONE_INDEX, cleanPhone);
+        
+        // If not found, try common Mexico prefix variations
+        if (!id) {
+            if (cleanPhone.length === 10) {
+                // Try adding 521 prefix
+                id = await client.hget(KEYS.PHONE_INDEX, '521' + cleanPhone);
+                if (!id) id = await client.hget(KEYS.PHONE_INDEX, '52' + cleanPhone);
+            } else if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
+                // Try removing 521 prefix
+                id = await client.hget(KEYS.PHONE_INDEX, cleanPhone.substring(3));
+            } else if (cleanPhone.startsWith('52') && cleanPhone.length === 12) {
+                 // Try removing 52 prefix
+                id = await client.hget(KEYS.PHONE_INDEX, cleanPhone.substring(2));
+            }
+        }
+
         if (!id) return null;
         return await getCandidateById(id);
     } catch (e) {
