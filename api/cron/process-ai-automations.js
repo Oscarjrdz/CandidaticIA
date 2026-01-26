@@ -25,8 +25,8 @@ export default async function handler(req, res) {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        // Get Candidates (Latest 100 for evaluation)
-        const { candidates } = await getCandidates(100, 0); // Analyze recent batch
+        // Get Candidates (Increase to 1000 thanks to Gemini 2.0 Context Window)
+        const { candidates } = await getCandidates(1000, 0); // Analyze larger batch
         const redis = getRedisClient();
 
         let messagesSent = 0;
