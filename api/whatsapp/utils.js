@@ -46,6 +46,10 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             deliveryBody = body.split(',')[1] || body;
         }
 
+        // REDESIGN: Map voice to audio endpoint with PTT flag for better compatibility
+        let finalEndpoint = endpoint;
+        if (endpoint === 'voice') finalEndpoint = 'audio';
+
         switch (endpoint) {
             case 'image':
                 payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : deliveryBody;
@@ -59,12 +63,23 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'voice':
                 // Parameter name for both is 'audio' in UltraMSG
                 payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : deliveryBody;
+
+                // If it's a voice note, set PTT to true
                 if (endpoint === 'voice' || type === 'voice') {
                     payload.ptt = 'true';
                 }
-                // CRITICAL: Provide a filename hint for Base64 to avoid delivery failures
+
+                // CRITICAL: Provide a filename hint for Base64 to avoid extension errors
                 if (!isHttp) {
-                    payload.filename = endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3';
+                    // Try to guess extension from data URL if available, fallback to .ogg for voice
+                    let ext = 'mp3';
+                    if (isDataUrl) {
+                        const match = body.match(/data:audio\/(.*?);/);
+                        if (match) ext = match[1].replace('webm', 'ogg'); // Normalize webm to ogg for WA
+                    } else if (endpoint === 'voice') {
+                        ext = 'ogg';
+                    }
+                    payload.filename = `file.${ext}`;
                 }
                 break;
             case 'document':
@@ -75,12 +90,12 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 payload.body = body;
         }
 
-        const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
+        const url = `https://api.ultramsg.com/${instanceId}/messages/${finalEndpoint}`;
 
-        console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Endpoint: ${endpoint}, Format: ${isHttp ? 'URL' : 'BASE64'})`);
+        console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Endpoint: ${finalEndpoint}, Format: ${isHttp ? 'URL' : (isDataUrl ? 'DATAURL' : 'BASE64')})`);
 
         if (!isHttp && deliveryBody.length > 500000) {
-            console.warn(`⚠️ [UltraMSG] LARGE PAYLOAD: ${Math.round(deliveryBody.length / 1024)}KB. Consider using URL strategy.`);
+            console.warn(`⚠️ [UltraMSG] LARGE PAYLOAD: ${Math.round(deliveryBody.length / 1024)}KB.`);
         }
 
         const redis = getRedisClient();
@@ -103,7 +118,10 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                     timestamp: new Date().toISOString(),
                     duration,
                     status: response.status,
-                    type, endpoint, payloadKeys: Object.keys(payload), result: response.data
+                    type,
+                    endpoint: finalEndpoint,
+                    payloadKeys: Object.keys(payload),
+                    result: response.data
                 }), 'EX', 3600);
             }
             return response.data;
