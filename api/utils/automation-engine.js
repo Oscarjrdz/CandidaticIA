@@ -12,18 +12,31 @@ export async function runAIAutomations(bypassCooldown = false) {
     let messagesSent = 0;
 
     try {
+        console.log('🤖 AI Engine: Starting run (bypassCooldown:', bypassCooldown, ')');
+
+        if (!process.env.GEMINI_API_KEY) {
+            throw new Error('Missing GEMINI_API_KEY in environment');
+        }
+
         const automations = await getAIAutomations();
         const activeRules = automations.filter(a => a.active);
 
         if (activeRules.length === 0) {
+            console.log('🤖 AI Engine: No active rules found.');
             return { success: true, message: 'No active AI automations', evaluated, sent: 0, logs: [] };
+        }
+
+        const config = await getUltraMsgConfig();
+        if (!config || !config.instanceId || !config.token) {
+            throw new Error('Missing UltraMsg Configuration (Instance ID or Token)');
         }
 
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        // Get Candidates (Analyzing 2000 for wider reach)
-        const { candidates } = await getCandidates(2000, 0);
+        // Get Candidates
+        const { candidates, total } = await getCandidates(2000, 0);
+        console.log(`🤖 AI Engine: Found ${candidates.length} candidates (Total in DB: ${total})`);
         const redis = getRedisClient();
 
         for (const rule of activeRules) {
