@@ -177,6 +177,14 @@ export const saveCandidate = async (candidate) => {
         candidate.id = `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
     console.log(`💾 [Storage] Saving candidate ${candidate.id} (${candidate.whatsapp})...`);
+
+    // Index phone for fast lookup
+    const client = getRedisClient();
+    if (client && candidate.whatsapp) {
+        const cleanPhone = candidate.whatsapp.replace(/\D/g, '');
+        await client.set(`phone_to_id:${cleanPhone}`, candidate.id).catch(() => { });
+    }
+
     return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, candidate, candidate.id);
 };
 
@@ -191,14 +199,19 @@ export const getCandidateById = async (id) => {
     return data ? JSON.parse(data) : null;
 };
 
-// NEW: Helper to find candidate ID by phone
+// NEW: Helper to find candidate ID by phone (Optimized)
 export const getCandidateIdByPhone = async (phone) => {
-    // 1. Get all candidates (expensive but necessary for distributed pattern without secondary index)
-    // Optimization: In real prod, use a Hash or Secondary Set: phone->id
-    const { candidates } = await getCandidates(1000); // Limit 1000 active candidates for now
-
-    // Normalize input
     const target = phone.replace(/\D/g, '');
+    const client = getRedisClient();
+
+    // 1. Try fast index
+    if (client) {
+        const fastId = await client.get(`phone_to_id:${target}`);
+        if (fastId) return fastId;
+    }
+
+    // 2. Fallback to full search (Legacy upgrade)
+    const { candidates } = await getCandidates(1000);
 
     const match = candidates.find(c => {
         if (!c.whatsapp) return false;
@@ -206,7 +219,25 @@ export const getCandidateIdByPhone = async (phone) => {
         return dbPhone.endsWith(target) || target.endsWith(dbPhone);
     });
 
+    // Backfill fast index if found
+    if (match && client) {
+        await client.set(`phone_to_id:${target}`, match.id).catch(() => { });
+    }
+
     return match ? match.id : null;
+};
+
+// Deduplication helper
+export const isMessageProcessed = async (msgId) => {
+    const client = getRedisClient();
+    if (!client || !msgId) return false;
+    const key = `webhook:processed:${msgId}`;
+    const exists = await client.get(key);
+    if (exists) return true;
+
+    // Set with 24h expiry
+    await client.set(key, '1', 'EX', 86400);
+    return false;
 };
 
 export const updateCandidate = async (id, data) => {

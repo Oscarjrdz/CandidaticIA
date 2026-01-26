@@ -1,9 +1,6 @@
-import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient, updateMessageStatus } from '../utils/storage.js';
+import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient, updateMessageStatus, isMessageProcessed } from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
 import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead } from './utils.js';
-
-// Helper for timeouts
-const timeout = (ms) => new Promise(resolve => setTimeout(() => resolve('TIMEOUT'), ms));
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -18,8 +15,6 @@ export default async function handler(req, res) {
     const eventType = data.event_type;
     const messageData = data.data;
 
-    console.log(`📨 [Webhook] Event: ${eventType} | From: ${messageData?.from || 'N/A'}`);
-
     try {
         // 1. Handle Message Acknowledgments (Lifecycle Tracking)
         if (eventType === 'message_ack') {
@@ -28,7 +23,7 @@ export default async function handler(req, res) {
                 const phone = to?.replace(/\D/g, '');
                 const candidateId = await getCandidateIdByPhone(phone);
                 if (candidateId) await updateMessageStatus(candidateId, id, status);
-            } catch (ackErr) { /* Silent fail for ACKs */ }
+            } catch (ackErr) { /* Silent fail */ }
             return res.status(200).send('ok');
         }
 
@@ -37,9 +32,19 @@ export default async function handler(req, res) {
             const from = messageData.from;
             const body = messageData.body || '';
             const pushName = messageData.pushname;
+            const msgId = messageData.id;
             const phone = from.replace(/\D/g, '');
 
-            // Find or Create Candidate
+            // DEDUPLICATION: Prevent duplicate processing (Retries)
+            const alreadyDone = await isMessageProcessed(msgId);
+            if (alreadyDone) {
+                console.log(`♻️ Skipping duplicate message ${msgId} from ${phone}`);
+                return res.status(200).send('duplicate_ignored');
+            }
+
+            console.log(`📩 [Webhook] Message from ${phone} (${pushName})`);
+
+            // Find or Create Candidate (FAST)
             let candidateId = await getCandidateIdByPhone(phone);
             if (!candidateId) {
                 const newCandidate = await saveCandidate({
@@ -59,19 +64,18 @@ export default async function handler(req, res) {
                 timestamp: new Date().toISOString()
             };
             if (messageData.media) msgToSave.mediaUrl = messageData.media;
-
             await saveMessage(candidateId, msgToSave);
 
-            // Update activity
+            // Update candidate activity
             await updateCandidate(candidateId, {
                 ultimoMensaje: new Date().toISOString(),
                 unread: true
             });
 
-            // Trigger parallel background tasks
+            // Trigger AI and background tasks without blocking
             const config = await getUltraMsgConfig();
 
-            // AI Integration (Main logic)
+            // AI Session (Non-blocking)
             const aiPromise = (async () => {
                 try {
                     const redis = getRedisClient();
@@ -84,26 +88,26 @@ export default async function handler(req, res) {
                 }
             })();
 
-            // Misc Background Tasks
+            // Background Helpers (Non-blocking)
             const miscPromise = (async () => {
                 if (!config) return;
-                await Promise.allSettled([
-                    markUltraMsgAsRead(config.instanceId, config.token, from),
-                    (async () => {
-                        try {
-                            const info = await getUltraMsgContact(config.instanceId, config.token, from);
-                            const url = info?.success || info?.image;
-                            if (url?.startsWith('http')) await updateCandidate(candidateId, { profilePic: url });
-                        } catch (e) { }
-                    })()
-                ]);
+                try {
+                    await Promise.allSettled([
+                        markUltraMsgAsRead(config.instanceId, config.token, from),
+                        (async () => {
+                            try {
+                                const info = await getUltraMsgContact(config.instanceId, config.token, from);
+                                const url = info?.success || info?.image;
+                                if (url?.startsWith('http')) await updateCandidate(candidateId, { profilePic: url });
+                            } catch (e) { }
+                        })()
+                    ]);
+                } catch (e) { }
             })();
 
-            // Return quickly
-            Promise.allSettled([aiPromise, miscPromise])
-                .then(() => console.log(`🏁 [Webhook] Done for ${phone}`));
-
-            return res.status(200).send('success');
+            // QUEUE: Background tasks keep running in serverless (mostly)
+            // but we return 200 immediately to avoid UltraMSG retries
+            return res.status(200).send('success_queued');
         }
 
         return res.status(200).send('ignored');
