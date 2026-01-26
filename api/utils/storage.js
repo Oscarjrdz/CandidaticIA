@@ -402,6 +402,51 @@ export const deleteUser = async (id) => {
 
 /**
  * ==========================================
+ * VACANCIES (Blob) 💼
+ * ==========================================
+ */
+export const getVacancies = async () => {
+    const client = getClient();
+    if (!client) return [];
+    try {
+        const data = await client.get(KEYS.VACANCIES);
+        return data ? JSON.parse(data) : [];
+    } catch (e) {
+        console.error('Error fetching vacancies:', e);
+        return [];
+    }
+};
+
+export const saveVacancy = async (vacancy) => {
+    const client = getClient();
+    if (!client) return;
+    const vacancies = await getVacancies();
+
+    if (!vacancy.id) {
+        vacancy.id = `vac_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        vacancy.createdAt = new Date().toISOString();
+        vacancy.status = 'active'; // default
+    }
+
+    const index = vacancies.findIndex(v => v.id === vacancy.id);
+    if (index >= 0) vacancies[index] = { ...vacancies[index], ...vacancy };
+    else vacancies.push(vacancy);
+
+    await client.set(KEYS.VACANCIES, JSON.stringify(vacancies));
+    return vacancy;
+};
+
+export const deleteVacancy = async (id) => {
+    const client = getClient();
+    if (!client) return;
+    const vacancies = await getVacancies();
+    const newVacancies = vacancies.filter(v => v.id !== id);
+    await client.set(KEYS.VACANCIES, JSON.stringify(newVacancies));
+    return true;
+};
+
+/**
+ * ==========================================
  * EVENTS & MESSAGES
  * ==========================================
  */

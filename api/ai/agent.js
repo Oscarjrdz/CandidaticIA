@@ -142,6 +142,26 @@ export const processMessage = async (candidateId, incomingMessage) => {
             systemInstruction += `\n\n[CONTEXTO DE BASE DE DATOS DEL CANDIDATO]:\n${JSON.stringify(candidateData, null, 2)}\nUsa esta información para personalizar tu respuesta.`;
         }
 
+        // INJECT VACANCIES & CATEGORIES
+        try {
+            const { getVacancies } = await import('../utils/storage.js');
+            const allVacancies = await getVacancies();
+            const activeVacancies = allVacancies.filter(v => v.status === 'active');
+
+            if (activeVacancies.length > 0) {
+                const simplified = activeVacancies.map(v => ({
+                    titulo: v.title || v.titulo,
+                    categoria: v.category || v.categoria || 'General',
+                    ubicacion: v.location || v.ubicacion,
+                    salario: v.salary || v.salario,
+                    requisitos_clave: v.requirements || v.requisitos
+                }));
+                systemInstruction += `\n\n[VACANTES DISPONIBLES ACTUALMENTE]:\n${JSON.stringify(simplified, null, 2)}\n\nINSTRUCCIÓN SOBRE VACANTES: Si el candidato pregunta por vacantes, usa ESTA LISTA EXACTA. Agrupa las vacantes por CATEGORÍA. Si no hay nada que coincida, dilo honestamente.`;
+            }
+        } catch (vacErr) {
+            console.warn('⚠️ Failed to inject vacancies context:', vacErr);
+        }
+
         if (!apiKey) return 'ERROR: No API Key found in env or redis';
 
         // SANITIZE KEY
