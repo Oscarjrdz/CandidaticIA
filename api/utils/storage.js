@@ -57,7 +57,11 @@ const KEYS = {
     BULK_PREFIX: 'bulk:',
     EVENTS_LIST: 'webhook:events',
     PHONE_INDEX: 'candidatic:phone_index',
-    DEDUPE_PREFIX: 'webhook:processed:'
+    DEDUPE_PREFIX: 'webhook:processed:',
+
+    // Stats
+    STATS_INCOMING: 'stats:msg:incoming',
+    STATS_OUTGOING: 'stats:msg:outgoing'
 };
 
 
@@ -482,7 +486,25 @@ export const getEventStats = async () => {
     const client = getClient();
     if (!client) return { total: 0 };
     const count = await client.llen(KEYS.EVENTS_LIST);
-    return { total: count };
+    const incoming = await client.get(KEYS.STATS_INCOMING) || 0;
+    const outgoing = await client.get(KEYS.STATS_OUTGOING) || 0;
+
+    return {
+        total: count,
+        incoming: parseInt(incoming),
+        outgoing: parseInt(outgoing)
+    };
+};
+
+export const incrementMessageStats = async (type = 'incoming') => {
+    const client = getRedisClient();
+    if (!client) return;
+    const key = type === 'incoming' ? KEYS.STATS_INCOMING : KEYS.STATS_OUTGOING;
+    try {
+        await client.incr(key);
+    } catch (e) {
+        console.error('Stats increment error:', e);
+    }
 };
 
 export const getRecentMessages = async (candidateId, limit = 20) => {

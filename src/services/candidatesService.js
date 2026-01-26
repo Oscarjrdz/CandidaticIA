@@ -7,16 +7,15 @@ const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3000';
 /**
  * Obtiene lista de candidatos
  */
-export const getCandidates = async (limit = 100, offset = 0, search = '') => {
+export const getCandidates = async (limit = 100, offset = 0, search = '', includeStats = false) => {
     try {
         const params = new URLSearchParams({
             limit: limit.toString(),
             offset: offset.toString()
         });
 
-        if (search) {
-            params.append('search', search);
-        }
+        if (search) params.append('search', search);
+        if (includeStats) params.append('stats', 'true'); // Hybrid mode
 
         const response = await fetch(`${API_BASE}/api/candidates?${params}`);
         const data = await response.json();
@@ -25,12 +24,16 @@ export const getCandidates = async (limit = 100, offset = 0, search = '') => {
             throw new Error(data.error || 'Error obteniendo candidatos');
         }
 
+        // Handle strict stats response or mixed response
+        const stats = data.stats || null;
+
         return {
             success: true,
             candidates: data.candidates || [],
             count: data.count || 0,
             total: data.total || 0,
-            pagination: data.pagination
+            pagination: data.pagination,
+            stats: stats
         };
     } catch (error) {
         return {
@@ -123,7 +126,7 @@ export const deleteCandidate = async (id) => {
  * Suscripción a candidatos con polling
  */
 export class CandidatesSubscription {
-    constructor(callback, interval = 10000) {
+    constructor(callback, interval = 3000) {
         this.callback = callback;
         this.interval = interval;
         this.intervalId = null;
@@ -140,22 +143,18 @@ export class CandidatesSubscription {
     }
 
     start() {
-        // Primera llamada inmediata
         this.poll();
-
-        // Polling periódico
         this.intervalId = setInterval(() => {
             this.poll();
         }, this.interval);
     }
 
     async poll() {
-        const result = await getCandidates(this.limit, this.offset, this.search);
+        // Request stats in every poll to keep dashboard alive
+        const result = await getCandidates(this.limit, this.offset, this.search, true);
 
         if (result.success) {
-            // Always notify to detect message changes in existing candidates
-            // This allows the auto-export timer to trigger when new messages arrive
-            this.callback(result.candidates);
+            this.callback(result.candidates, result.stats);
         }
     }
 

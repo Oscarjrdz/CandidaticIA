@@ -23,10 +23,17 @@ export default async function handler(req, res) {
 
             // Estadísticas
             if (stats === 'true') {
+                const { getEventStats, getCandidatesStats } = await import('./utils/storage.js');
                 const candidatesStats = await getCandidatesStats();
+                const msgStats = await getEventStats();
+
                 return res.status(200).json({
                     success: true,
-                    stats: candidatesStats
+                    stats: {
+                        candidates: candidatesStats.total,
+                        incoming: msgStats.incoming,
+                        outgoing: msgStats.outgoing
+                    }
                 });
             }
 

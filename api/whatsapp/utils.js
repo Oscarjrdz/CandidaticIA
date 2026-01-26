@@ -89,6 +89,13 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                     result: response.data
                 }), 'EX', 3600);
             }
+
+            // COUNT STATS (OUTGOING)
+            if (response.status === 200) {
+                const { incrementMessageStats } = await import('../utils/storage.js');
+                incrementMessageStats('outgoing');
+            }
+
             return response.data;
         } catch (postErr) {
             const errData = postErr.response?.data;

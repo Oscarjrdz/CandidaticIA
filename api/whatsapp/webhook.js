@@ -15,8 +15,11 @@ export default async function handler(req, res) {
 
     // 🏎️ FERRARI DEBUG: Always save events for inspection
     try {
-        const { saveEvent } = await import('../utils/storage.js');
+        const { saveEvent, incrementMessageStats } = await import('../utils/storage.js');
         await saveEvent(data);
+        if (eventType === 'message_received' || eventType === 'message.incoming') {
+            incrementMessageStats('incoming');
+        }
     } catch (e) { }
 
     if (!eventType) {

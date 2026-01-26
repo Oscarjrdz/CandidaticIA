@@ -15,6 +15,7 @@ import { exportChatToFile, deleteOldChatFile, generateChatHistoryText } from '..
  */
 const CandidatesSection = ({ showToast }) => {
     const [candidates, setCandidates] = useState([]);
+    const [stats, setStats] = useState(null); // Live dashboard stats
     const [loading, setLoading] = useState(false);
     const [fields, setFields] = useState([]); // Dynamic fields
     const [search, setSearch] = useState('');
@@ -60,10 +61,11 @@ const CandidatesSection = ({ showToast }) => {
         loadInitialData();
 
         // Polling de candidatos
-        const subscription = new CandidatesSubscription((newCandidates) => {
+        const subscription = new CandidatesSubscription((newCandidates, newStats) => {
             // Only update if not filtering by AI (polling refreshes full list based on current page/search)
             if (!aiFilteredCandidates) {
                 setCandidates(newCandidates);
+                if (newStats) setStats(newStats); // Update live stats
                 setLastUpdate(new Date());
             }
         }, 3000);
@@ -401,31 +403,63 @@ const CandidatesSection = ({ showToast }) => {
         <div className="h-[calc(100vh-theme(spacing.24))] flex flex-col space-y-4">
             {/* Sticky Header Wrapper */}
             <div className="flex-none space-y-4">
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
-                                <Users className="w-6 h-6 text-white" />
-                            </div>
-                            <div>
-                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                    Candidatos
-                                </h2>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    {totalItems} candidato{totalItems !== 1 ? 's' : ''} registrado{totalItems !== 1 ? 's' : ''}
-                                </p>
+
+                {/* 📊 Live Dashboard - Zuckerberg Style */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                    {/* Card 1: Candidates */}
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Users className="w-16 h-16 text-blue-500 transform rotate-12" />
+                        </div>
+                        <div className="flex flex-col relative z-10">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
+                            <div className="flex items-baseline space-x-2">
+                                <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{totalItems}</h3>
+                                <span className="text-xs text-green-500 font-medium flex items-center bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded-full">
+                                    <Zap className="w-3 h-3 mr-0.5" /> Activos
+                                </span>
                             </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                            <Button
-                                onClick={loadCandidates}
-                                icon={RefreshCw}
-                                variant="outline"
-                                size="sm"
-                                disabled={loading}
-                            >
-                                Refrescar
-                            </Button>
+                    </div>
+
+                    {/* Card 2: Incoming Messages (Live) */}
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <MessageCircle className="w-16 h-16 text-emerald-500 transform -rotate-12" />
+                        </div>
+                        <div className="flex flex-col relative z-10">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
+                            <div className="flex items-baseline space-x-2">
+                                <h3 className="text-3xl font-bold text-gray-900 dark:text-white">
+                                    {stats?.incoming || 0}
+                                </h3>
+                                <div className="flex items-center space-x-1">
+                                    <span className="relative flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                    </span>
+                                    <span className="text-xs text-emerald-500 font-medium ml-1">En vivo</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Card 3: Outgoing Messages */}
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <Send className="w-16 h-16 text-purple-500 transform rotate-6" />
+                        </div>
+                        <div className="flex flex-col relative z-10">
+                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Enviados</span>
+                            <div className="flex items-baseline space-x-2">
+                                <h3 className="text-3xl font-bold text-gray-900 dark:text-white">
+                                    {stats?.outgoing || 0}
+                                </h3>
+                                <span className="text-xs text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full">
+                                    <Sparkles className="w-3 h-3 mr-0.5" /> AI & Manual
+                                </span>
+                            </div>
                         </div>
                     </div>
 
