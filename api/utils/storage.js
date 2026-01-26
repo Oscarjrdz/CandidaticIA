@@ -51,11 +51,13 @@ const KEYS = {
     AUTH_PREFIX: 'auth_pin_',
 
     // Distributed Style (ZSET + Keys)
-    CANDIDATES_LIST: 'candidates:list', // ZSET of IDs
-    CANDIDATE_PREFIX: 'candidate:',     // Prefix for indiv keys
-    BULKS_LIST: 'bulks:list',           // ZSET
-    BULK_PREFIX: 'bulk:',               // Prefix
-    EVENTS_LIST: 'webhook:events'       // List
+    CANDIDATES_LIST: 'candidates:list',
+    CANDIDATE_PREFIX: 'candidate:',
+    BULKS_LIST: 'bulks:list',
+    BULK_PREFIX: 'bulk:',
+    EVENTS_LIST: 'webhook:events',
+    PHONE_INDEX: 'candidatic:phone_index',
+    DEDUPE_PREFIX: 'webhook:processed:'
 };
 
 
@@ -178,11 +180,12 @@ export const saveCandidate = async (candidate) => {
     }
     console.log(`💾 [Storage] Saving candidate ${candidate.id} (${candidate.whatsapp})...`);
 
-    // Index phone for fast lookup
+    // Ferrari Index: O(1) Hash Map
     const client = getRedisClient();
     if (client && candidate.whatsapp) {
         const cleanPhone = candidate.whatsapp.replace(/\D/g, '');
-        await client.set(`phone_to_id:${cleanPhone}`, candidate.id).catch(() => { });
+        // Store in centralized Hash for atomic O(1) lookups across all instances
+        await client.hset(KEYS.PHONE_INDEX, cleanPhone, candidate.id).catch(() => { });
     }
 
     return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, candidate, candidate.id);
@@ -199,45 +202,44 @@ export const getCandidateById = async (id) => {
     return data ? JSON.parse(data) : null;
 };
 
-// NEW: Helper to find candidate ID by phone (Optimized)
+// Ferrari Lookup: O(1) Redis Hash (No scanning required)
 export const getCandidateIdByPhone = async (phone) => {
     const target = phone.replace(/\D/g, '');
     const client = getRedisClient();
 
-    // 1. Try fast index
     if (client) {
-        const fastId = await client.get(`phone_to_id:${target}`);
+        const fastId = await client.hget(KEYS.PHONE_INDEX, target);
         if (fastId) return fastId;
     }
 
-    // 2. Fallback to full search (Legacy upgrade)
+    // 2. Fallback to full search (Legacy upgrade/Safety)
     const { candidates } = await getCandidates(1000);
-
     const match = candidates.find(c => {
         if (!c.whatsapp) return false;
         const dbPhone = c.whatsapp.replace(/\D/g, '');
         return dbPhone.endsWith(target) || target.endsWith(dbPhone);
     });
 
-    // Backfill fast index if found
     if (match && client) {
-        await client.set(`phone_to_id:${target}`, match.id).catch(() => { });
+        await client.hset(KEYS.PHONE_INDEX, target, match.id).catch(() => { });
     }
 
     return match ? match.id : null;
 };
 
-// Deduplication helper
+// Ferrari Deduplication: Atomic SET NX (No race conditions)
 export const isMessageProcessed = async (msgId) => {
     const client = getRedisClient();
     if (!client || !msgId) return false;
-    const key = `webhook:processed:${msgId}`;
-    const exists = await client.get(key);
-    if (exists) return true;
 
-    // Set with 24h expiry
-    await client.set(key, '1', 'EX', 86400);
-    return false;
+    const key = `${KEYS.DEDUPE_PREFIX}${msgId}`;
+    /**
+     * ATOMIC LOCK: 'NX' means "Only set if NOT exists"
+     * This is an atomic operation in Redis. 
+     * If it returns 'OK', it was set (new). If null, it already existed.
+     */
+    const result = await client.set(key, '1', 'EX', 86400, 'NX');
+    return result !== 'OK';
 };
 
 export const updateCandidate = async (id, data) => {
@@ -410,14 +412,19 @@ export const getEvents = async (limit = 50, offset = 0) => {
     } catch { return []; }
 };
 
-export const getMessages = async (candidateId) => {
+export const getRecentMessages = async (candidateId, limit = 20) => {
     const client = getClient();
     if (!client) return [];
     const key = `messages:${candidateId}`;
     try {
-        const raw = await client.lrange(key, 0, -1);
+        // Fetch only the last N items (Redis lrange uses 0-based index)
+        const raw = await client.lrange(key, -limit, -1);
         return raw.map(r => JSON.parse(r));
     } catch { return []; }
+};
+
+export const getMessages = async (candidateId) => {
+    return await getRecentMessages(candidateId, 50); // Fetch last 50 for broad history
 };
 
 export const saveMessage = async (candidateId, message) => {

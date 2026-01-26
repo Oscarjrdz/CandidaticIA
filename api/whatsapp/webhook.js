@@ -31,89 +31,76 @@ export default async function handler(req, res) {
         if (eventType === 'message_received') {
             const from = messageData.from;
             const body = messageData.body || '';
-            const pushName = messageData.pushname;
             const msgId = messageData.id;
             const phone = from.replace(/\D/g, '');
 
-            // DEDUPLICATION: Prevent duplicate processing (Retries)
-            const alreadyDone = await isMessageProcessed(msgId);
-            if (alreadyDone) {
-                console.log(`♻️ Skipping duplicate message ${msgId} from ${phone}`);
+            // 🏎️ FERRARI DEDUPLICATION: Atomic Lock (SET NX)
+            // This stops retries instantly at the gate.
+            if (await isMessageProcessed(msgId)) {
+                console.log(`♻️ Ferrari Block: Duplicate message ${msgId} ignored.`);
                 return res.status(200).send('duplicate_ignored');
             }
 
-            console.log(`📩 [Webhook] Message from ${phone} (${pushName})`);
+            console.log(`📩 Ferrari Motor: Message from ${phone}`);
 
-            // Find or Create Candidate (FAST)
+            // 🏎️ FERRARI LOOKUP: O(1) Hash Table
             let candidateId = await getCandidateIdByPhone(phone);
             if (!candidateId) {
                 const newCandidate = await saveCandidate({
                     whatsapp: phone,
-                    nombre: pushName || 'Desconocido',
+                    nombre: messageData.pushname || 'Desconocido',
                     origen: 'whatsapp_v2',
                     primerContacto: new Date().toISOString()
                 });
                 candidateId = newCandidate.id;
             }
 
-            // Save Message to History
+            // Sequential ops (Context preservation)
             const msgToSave = {
-                from: 'user',
-                content: body,
-                type: messageData.type || 'text',
+                from: 'user', content: body, type: messageData.type || 'text',
                 timestamp: new Date().toISOString()
             };
             if (messageData.media) msgToSave.mediaUrl = messageData.media;
+
+            // Execute storage and AI in parallel where possible, but context needs history.
+            // We await history save to ensure the AI sees the current message.
             await saveMessage(candidateId, msgToSave);
 
-            // Update candidate activity
-            await updateCandidate(candidateId, {
-                ultimoMensaje: new Date().toISOString(),
-                unread: true
-            });
+            // Background tasks (Non-blocking context)
+            const configPromise = getUltraMsgConfig();
+            const activityPromise = updateCandidate(candidateId, { ultimoMensaje: new Date().toISOString(), unread: true });
 
-            // Trigger AI and background tasks without blocking
-            const config = await getUltraMsgConfig();
-
-            // AI Session (Non-blocking)
+            // 主 AI Session (Wait for it to survive serverless)
             const aiPromise = (async () => {
                 try {
                     const redis = getRedisClient();
                     const isActive = await redis?.get('bot_ia_active');
-                    if (isActive !== 'false') {
-                        await processMessage(candidateId, body);
-                    }
+                    if (isActive !== 'false') await processMessage(candidateId, body);
                 } catch (e) {
-                    console.error('🤖 AI Error:', e);
+                    console.error('🤖 Ferrari AI Error:', e);
                     const redis = getRedisClient();
-                    if (redis) {
-                        await redis.set(`debug:error:webhook_ai:${phone}`, JSON.stringify({
-                            timestamp: new Date().toISOString(),
-                            error: e.message
-                        }), 'EX', 3600);
-                    }
+                    if (redis) await redis.set(`debug:error:webhook_ai:${phone}`, JSON.stringify({ timestamp: new Date().toISOString(), error: e.message }), 'EX', 3600);
                 }
             })();
 
-            // Background Helpers (Non-blocking)
+            // Ferrari Background Tasks
             const miscPromise = (async () => {
-                if (!config) return;
                 try {
+                    const config = await configPromise;
+                    if (!config) return;
                     await Promise.allSettled([
                         markUltraMsgAsRead(config.instanceId, config.token, from),
                         (async () => {
-                            try {
-                                const info = await getUltraMsgContact(config.instanceId, config.token, from);
-                                const url = info?.success || info?.image;
-                                if (url?.startsWith('http')) await updateCandidate(candidateId, { profilePic: url });
-                            } catch (e) { }
+                            const info = await getUltraMsgContact(config.instanceId, config.token, from);
+                            const url = info?.success || info?.image;
+                            if (url?.startsWith('http')) await updateCandidate(candidateId, { profilePic: url });
                         })()
                     ]);
                 } catch (e) { }
             })();
 
-            // AWAIT results to prevent serverless termination
-            await Promise.allSettled([aiPromise, miscPromise]);
+            // Wait to ensure delivery in serverless environment
+            await Promise.allSettled([aiPromise, activityPromise, miscPromise]);
 
             return res.status(200).send('success');
         }
