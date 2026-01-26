@@ -219,23 +219,22 @@ export const getCandidateByPhone = async (phone) => {
     if (!client || !phone) return null;
 
     let cleanPhone = phone.replace(/\D/g, '');
-    
+
     // Try original
     try {
         let id = await client.hget(KEYS.PHONE_INDEX, cleanPhone);
-        
-        // If not found, try common Mexico prefix variations
+
+        // If not found, try common Mexico prefix variations and raw 10 digits
         if (!id) {
-            if (cleanPhone.length === 10) {
-                // Try adding 521 prefix
-                id = await client.hget(KEYS.PHONE_INDEX, '521' + cleanPhone);
-                if (!id) id = await client.hget(KEYS.PHONE_INDEX, '52' + cleanPhone);
-            } else if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
-                // Try removing 521 prefix
-                id = await client.hget(KEYS.PHONE_INDEX, cleanPhone.substring(3));
-            } else if (cleanPhone.startsWith('52') && cleanPhone.length === 12) {
-                 // Try removing 52 prefix
-                id = await client.hget(KEYS.PHONE_INDEX, cleanPhone.substring(2));
+            const last10 = cleanPhone.slice(-10);
+            if (last10.length === 10) {
+                // Sniper tries: 10 digits, 52+10, 521+10
+                const variations = [last10, '52' + last10, '521' + last10];
+                for (const v of variations) {
+                    if (v === cleanPhone) continue; // Already tried
+                    id = await client.hget(KEYS.PHONE_INDEX, v);
+                    if (id) break;
+                }
             }
         }
 
