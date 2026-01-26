@@ -15,8 +15,16 @@ export default async function handler(req, res) {
         }
 
         // Handle both ?id=img_123 and ?id=img_123.ogg (helper for some APIs)
-        const rawId = id.split('.')[0];
-        const requestedExt = id.split('.')[1] || req.query.ext;
+        const parts = id.split('.');
+        const rawId = parts[0];
+        let requestedExt = parts[1] || req.query.ext;
+
+        // Clean leading dots
+        if (requestedExt && requestedExt.startsWith('.')) {
+            requestedExt = requestedExt.substring(1);
+        }
+
+        console.log(`📡 [Image] ID: ${rawId} | Requested Ext: ${requestedExt}`);
 
         const key = `image:${rawId}`;
         const metaKey = `meta:image:${rawId}`;

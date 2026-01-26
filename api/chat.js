@@ -103,8 +103,16 @@ export default async function handler(req, res) {
                 if (mediaUrl && !mediaUrl.startsWith('http')) {
                     const protocol = req.headers['x-forwarded-proto'] || 'http';
                     const host = req.headers.host;
-                    deliveryContent = `${protocol}://${host}${mediaUrl}`;
-                    console.log(`🌐 [Chat] ABSOLUTE URL CONVERSION: [${protocol}] [${host}] -> ${deliveryContent}`);
+                    const absoluteUrl = `${protocol}://${host}${mediaUrl}`;
+
+                    // PREFERENCE: Use DataURL for voice notes (more reliable), Use URL for images/videos
+                    if (type === 'voice' && base64Data) {
+                        deliveryContent = base64Data;
+                        console.log(`📡 [Chat] Using DataURL for voice note (Robustness Priority)`);
+                    } else {
+                        deliveryContent = absoluteUrl;
+                        console.log(`🌐 [Chat] Using Absolute URL for media: ${deliveryContent}`);
+                    }
                 }
 
                 if (base64Data) {
