@@ -4,11 +4,13 @@
  */
 
 export default async function handler(req, res) {
-    const { key, limit = '10', offset = '0' } = req.query;
+    const { key, limit = '5', offset = '0' } = req.query;
     if (key !== 'oscar_debug_2026') return res.status(401).json({ error: 'Unauthorized' });
 
     const startTime = Date.now();
-    const VERCEL_TIMEOUT = 12000; // 12 seconds safety margin (Hobby is 10s, Pro is 15s-60s)
+    // Vercel Hobby is 10s. We MUST return before that. 
+    // Setting safety limit to 7s to allow for overhead and response transmission.
+    const MAX_PROCESS_TIME = 7000;
 
     try {
         const { getCandidates, updateCandidate } = await import('../utils/storage.js');
@@ -23,7 +25,7 @@ export default async function handler(req, res) {
 
         for (const candidate of candidates) {
             // Safety: Stop if we are approaching Vercel timeout
-            if (Date.now() - startTime > VERCEL_TIMEOUT) {
+            if (Date.now() - startTime > MAX_PROCESS_TIME) {
                 console.log(`⏳ [Batch Cleaning] Stopping early due to timeout risk after ${processedCount} candidates.`);
                 stoppedEarly = true;
                 break;
@@ -40,52 +42,62 @@ export default async function handler(req, res) {
             let changed = false;
 
             try {
-                // RUN AI TASKS (Sequential to avoid rate limits, but we could parallelize internal tasks per candidate)
-                // 1. Clean Name with AI
+                // RUN AI TASKS IN PARALLEL per candidate to maximize speed
+                const tasks = [];
+
+                // 1. Name
                 if (originalName && originalName !== 'Sin nombre') {
-                    const cleanedName = await cleanNameWithAI(originalName);
-                    if (cleanedName && cleanedName !== originalName) {
-                        updates.nombreReal = cleanedName;
-                        changed = true;
-                    }
+                    tasks.push(cleanNameWithAI(originalName).then(cleaned => {
+                        if (cleaned && cleaned !== originalName) {
+                            updates.nombreReal = cleaned;
+                            changed = true;
+                        }
+                    }));
                 }
 
-                // 2. Gender
-                const nameToScan = updates.nombreReal || originalName;
-                if (nameToScan && (!candidate.genero || candidate.genero === 'Desconocido')) {
-                    const gender = await detectGender(nameToScan);
-                    if (gender !== 'Desconocido') {
-                        updates.genero = gender;
-                        changed = true;
-                    }
+                // 2. Gender (can run in parallel if we use the original name, or sequential if we want cleaned. 
+                // Let's use parallel with original to save time; it's usually good enough)
+                if (!candidate.genero || candidate.genero === 'Desconocido') {
+                    tasks.push(detectGender(originalName || candidate.nombre).then(gender => {
+                        if (gender !== 'Desconocido') {
+                            updates.genero = gender;
+                            changed = true;
+                        }
+                    }));
                 }
 
                 // 3. Municipio
                 if (originalMunicipio && originalMunicipio !== 'Desconocido') {
-                    const cleanedMunicipio = await cleanMunicipioWithAI(originalMunicipio);
-                    if (cleanedMunicipio && cleanedMunicipio !== originalMunicipio) {
-                        updates.municipio = cleanedMunicipio;
-                        changed = true;
-                    }
+                    tasks.push(cleanMunicipioWithAI(originalMunicipio).then(cleaned => {
+                        if (cleaned && cleaned !== originalMunicipio) {
+                            updates.municipio = cleaned;
+                            changed = true;
+                        }
+                    }));
                 }
 
                 // 4. Employment
                 if (originalEmpleo && originalEmpleo.length > 3 && originalEmpleo !== 'Sí' && originalEmpleo !== 'No') {
-                    const cleanedEmpleo = await cleanEmploymentStatusWithAI(originalEmpleo);
-                    if (cleanedEmpleo && cleanedEmpleo !== originalEmpleo) {
-                        updates.tieneEmpleo = cleanedEmpleo;
-                        changed = true;
-                    }
+                    tasks.push(cleanEmploymentStatusWithAI(originalEmpleo).then(cleaned => {
+                        if (cleaned && cleaned !== originalEmpleo) {
+                            updates.tieneEmpleo = cleaned;
+                            changed = true;
+                        }
+                    }));
                 }
 
                 // 5. Date
                 if (originalDate && originalDate.length > 5 && !/^\d{2}\/\d{2}\/\d{4}$/.test(originalDate)) {
-                    const cleanedDate = await cleanDateWithAI(originalDate);
-                    if (cleanedDate && cleanedDate !== 'INVALID' && cleanedDate !== originalDate) {
-                        updates[candidate.fechaNacimiento ? 'fechaNacimiento' : 'fecha'] = cleanedDate;
-                        changed = true;
-                    }
+                    tasks.push(cleanDateWithAI(originalDate).then(cleaned => {
+                        if (cleaned && cleaned !== 'INVALID' && cleaned !== originalDate) {
+                            updates[candidate.fechaNacimiento ? 'fechaNacimiento' : 'fecha'] = cleaned;
+                            changed = true;
+                        }
+                    }));
                 }
+
+                // Await ALL tasks for THIS candidate
+                await Promise.allSettled(tasks);
 
                 if (changed) {
                     await updateCandidate(candidate.id, updates);
@@ -109,7 +121,7 @@ export default async function handler(req, res) {
             updated_now: updatedCount,
             stopped_early: stoppedEarly,
             next_offset: nextOffset < total ? nextOffset : null,
-            next_url: nextOffset < total ? `${req.headers.host}${req.url.split('?')[0]}?key=${key}&limit=${limit}&offset=${nextOffset}` : 'Completado',
+            next_url: nextOffset < total ? `https://${req.headers.host}${req.url.split('?')[0]}?key=${key}&limit=${limit}&offset=${nextOffset}` : 'Completado',
             details: results
         });
 
