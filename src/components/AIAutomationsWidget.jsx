@@ -7,6 +7,7 @@ const AIAutomationsWidget = ({ showToast }) => {
     const [loading, setLoading] = useState(false);
     const [newRulePrompt, setNewRulePrompt] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+    const [execLogs, setExecLogs] = useState(null); // Execution logs
 
     useEffect(() => {
         loadRules();
@@ -69,10 +70,11 @@ const AIAutomationsWidget = ({ showToast }) => {
             const data = await res.json();
             if (res.ok) {
                 if (data.sent > 0) {
-                    showToast(`🚀 Éxito: Se enviaron ${data.sent} mensajes a candidatos correspondientes.`, 'success');
+                    showToast(`🚀 Éxito: Se enviaron ${data.sent} mensajes.`, 'success');
                 } else {
-                    showToast(`Análisis finalizado: 0 coincidencias en ${data.evaluated} candidatos analizados. Revisa tu prompt.`, 'default');
+                    showToast(`Análisis finalizado: 0 coincidencias en ${data.evaluated} candidatos.`, 'default');
                 }
+                setExecLogs(data.logs || []);
             } else {
                 showToast('Error en la ejecución: ' + (data.error || 'Unknown'), 'error');
             }
@@ -211,6 +213,28 @@ const AIAutomationsWidget = ({ showToast }) => {
                     </div>
                 )}
             </div>
+
+            {/* 📝 Execution Logs */}
+            {execLogs && (
+                <div className="mt-6 p-4 rounded-xl bg-black/5 dark:bg-white/5 border border-gray-200 dark:border-gray-800 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex justify-between items-center mb-2">
+                        <h5 className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Log de Ejecución</h5>
+                        <button onClick={() => setExecLogs(null)} className="text-[10px] text-gray-400 hover:text-gray-600">Cerrar</button>
+                    </div>
+                    <div className="space-y-1 max-h-40 overflow-y-auto font-mono text-[10px] text-gray-600 dark:text-gray-400">
+                        {execLogs.length === 0 ? (
+                            <p className="opacity-50 italic">No se generaron eventos importantes...</p>
+                        ) : (
+                            execLogs.map((log, idx) => (
+                                <div key={idx} className="flex space-x-2">
+                                    <span className="opacity-30">{idx + 1}.</span>
+                                    <span>{log}</span>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
