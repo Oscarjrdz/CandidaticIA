@@ -40,10 +40,12 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         const isHttp = typeof body === 'string' && body.startsWith('http');
         const isDataUrl = typeof body === 'string' && body.startsWith('data:');
 
+        // NORMALIZE: Browsers record webm, WhatsApp needs ogg. 
+        // We spoof the header to pass API validation.
         let deliveryBody = body;
         if (isDataUrl) {
-            // Strip the "data:mime/type;base64," part as UltraMSG expects raw base64
-            deliveryBody = body.split(',')[1] || body;
+            deliveryBody = body.replace('audio/webm', 'audio/ogg')
+                .replace('audio/mp4', 'audio/ogg');
         }
 
         // REDESIGN: Map voice to audio endpoint with PTT flag for better compatibility
@@ -62,24 +64,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'audio':
             case 'voice':
                 // Parameter name for both is 'audio' in UltraMSG
+                // If it's a URL, ensure extension. If it's DataURL, use the normalized string.
                 payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : deliveryBody;
 
-                // If it's a voice note, set PTT to true
                 if (endpoint === 'voice' || type === 'voice') {
                     payload.ptt = 'true';
-                }
-
-                // CRITICAL: Provide a filename hint for Base64 to avoid extension errors
-                if (!isHttp) {
-                    // Try to guess extension from data URL if available, fallback to .ogg for voice
-                    let ext = 'mp3';
-                    if (isDataUrl) {
-                        const match = body.match(/data:audio\/(.*?);/);
-                        if (match) ext = match[1].replace('webm', 'ogg'); // Normalize webm to ogg for WA
-                    } else if (endpoint === 'voice') {
-                        ext = 'ogg';
-                    }
-                    payload.filename = `file.${ext}`;
                 }
                 break;
             case 'document':
@@ -93,6 +82,9 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         const url = `https://api.ultramsg.com/${instanceId}/messages/${finalEndpoint}`;
 
         console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Endpoint: ${finalEndpoint}, Format: ${isHttp ? 'URL' : (isDataUrl ? 'DATAURL' : 'BASE64')})`);
+        if (!isHttp) {
+            console.log(`📦 Payload Sample: ${String(deliveryBody).substring(0, 50)}...`);
+        }
 
         if (!isHttp && deliveryBody.length > 500000) {
             console.warn(`⚠️ [UltraMSG] LARGE PAYLOAD: ${Math.round(deliveryBody.length / 1024)}KB.`);
