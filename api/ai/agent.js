@@ -146,17 +146,17 @@ export const processMessage = async (candidateId, incomingMessage) => {
         try {
             const { getVacancies } = await import('../utils/storage.js');
             const allVacancies = await getVacancies();
-            const activeVacancies = allVacancies.filter(v => v.status === 'active');
+            const activeVacancies = allVacancies.filter(v => v.active === true || v.status === 'active');
 
             if (activeVacancies.length > 0) {
                 const simplified = activeVacancies.map(v => ({
-                    titulo: v.title || v.titulo,
+                    titulo: v.name || v.title || v.titulo,
+                    empresa: v.company || v.empresa,
                     categoria: v.category || v.categoria || 'General',
-                    ubicacion: v.location || v.ubicacion,
-                    salario: v.salary || v.salario,
-                    requisitos_clave: v.requirements || v.requisitos
+                    descripcion: v.description || v.descripcion,
+                    requisitos: v.requirements || v.requisitos
                 }));
-                systemInstruction += `\n\n[VACANTES DISPONIBLES ACTUALMENTE]:\n${JSON.stringify(simplified, null, 2)}\n\nINSTRUCCIÓN SOBRE VACANTES: Si el candidato pregunta por vacantes, usa ESTA LISTA EXACTA. Agrupa las vacantes por CATEGORÍA. Si no hay nada que coincida, dilo honestamente.`;
+                systemInstruction += `\n\n[BASE DE CONOCIMIENTO (VACANTES Y CATEGORÍAS)]:\n${JSON.stringify(simplified, null, 2)}`;
             }
         } catch (vacErr) {
             console.warn('⚠️ Failed to inject vacancies context:', vacErr);
