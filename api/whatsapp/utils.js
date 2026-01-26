@@ -40,15 +40,32 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         const isHttp = typeof body === 'string' && body.startsWith('http');
         const isDataUrl = typeof body === 'string' && body.startsWith('data:');
 
-        // NORMALIZE: Browsers record webm, WhatsApp needs ogg. 
-        // We spoof the header to pass API validation.
         let deliveryBody = body;
+        let filenameHint = extraParams.filename;
+
         if (isDataUrl) {
-            deliveryBody = body.replace('audio/webm', 'audio/ogg')
-                .replace('audio/mp4', 'audio/ogg');
+            // ULTRA-ROBUST: Strip prefix AND detect extension
+            const parts = body.split(',');
+            deliveryBody = parts[1] || body;
+
+            const mimeMatch = parts[0].match(/data:(.*?);/);
+            const mime = mimeMatch ? mimeMatch[1] : '';
+
+            if (!filenameHint) {
+                if (mime.includes('audio')) {
+                    // Normalize webm/mp4 audio to ogg for WhatsApp voice notes
+                    filenameHint = (type === 'voice' || endpoint === 'voice') ? 'voice.ogg' : 'audio.mp3';
+                } else if (mime.includes('image')) {
+                    filenameHint = 'image.jpg';
+                } else if (mime.includes('video')) {
+                    filenameHint = 'video.mp4';
+                } else {
+                    filenameHint = 'file.pdf';
+                }
+            }
         }
 
-        // REDESIGN: Map voice to audio endpoint with PTT flag for better compatibility
+        // REDESIGN: Map voice to audio endpoint with PTT flag
         let finalEndpoint = endpoint;
         if (endpoint === 'voice') finalEndpoint = 'audio';
 
@@ -56,24 +73,30 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'image':
                 payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : deliveryBody;
                 if (extraParams.caption) payload.caption = extraParams.caption;
+                if (!isHttp) payload.filename = filenameHint || 'image.jpg';
                 break;
             case 'video':
                 payload.video = isHttp ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : deliveryBody;
                 if (extraParams.caption) payload.caption = extraParams.caption;
+                if (!isHttp) payload.filename = filenameHint || 'video.mp4';
                 break;
             case 'audio':
             case 'voice':
                 // Parameter name for both is 'audio' in UltraMSG
-                // If it's a URL, ensure extension. If it's DataURL, use the normalized string.
                 payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : deliveryBody;
 
                 if (endpoint === 'voice' || type === 'voice') {
                     payload.ptt = 'true';
                 }
+
+                // CRITICAL: Filename is often required for base64 audio
+                if (!isHttp) {
+                    payload.filename = filenameHint || (endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3');
+                }
                 break;
             case 'document':
                 payload.document = deliveryBody;
-                payload.filename = extraParams.filename || 'document.pdf';
+                payload.filename = filenameHint || extraParams.filename || 'document.pdf';
                 break;
             default:
                 payload.body = body;
