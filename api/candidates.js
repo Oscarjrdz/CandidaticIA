@@ -21,20 +21,18 @@ export default async function handler(req, res) {
         if (req.method === 'GET') {
             const { limit = '100', offset = '0', search = '', stats, id } = req.query;
 
-            // Estadísticas
+            // Estadísticas (Optional mixed response)
+            let statsData = null;
             if (stats === 'true') {
                 const { getEventStats, getCandidatesStats } = await import('./utils/storage.js');
                 const candidatesStats = await getCandidatesStats();
                 const msgStats = await getEventStats();
 
-                return res.status(200).json({
-                    success: true,
-                    stats: {
-                        candidates: candidatesStats.total,
-                        incoming: msgStats.incoming,
-                        outgoing: msgStats.outgoing
-                    }
-                });
+                statsData = {
+                    candidates: candidatesStats.total,
+                    incoming: msgStats.incoming,
+                    outgoing: msgStats.outgoing
+                };
             }
 
             // Candidato específico por ID
@@ -67,7 +65,8 @@ export default async function handler(req, res) {
                 pagination: {
                     limit: parseInt(limit),
                     offset: parseInt(offset)
-                }
+                },
+                stats: statsData // Include stats if requested
             });
         }
 
