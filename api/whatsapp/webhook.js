@@ -110,11 +110,28 @@ export default async function handler(req, res) {
                 try {
                     const redis = getRedisClient();
                     const isActive = await redis?.get('bot_ia_active');
+
+                    if (redis) {
+                        await redis.set(`debug:webhook:${phone}`, JSON.stringify({
+                            timestamp: new Date().toISOString(),
+                            event: 'ai_triggered',
+                            body: body || '(empty)'
+                        }), 'EX', 3600);
+                    }
+
                     if (isActive !== 'false') {
-                        await processMessage(candidateId, body);
+                        const result = await processMessage(candidateId, body || '');
+                        console.log(`🤖 AI Processed for ${phone}:`, result.substring(0, 50));
                     }
                 } catch (e) {
                     console.error('🤖 AI Error:', e);
+                    const redis = getRedisClient();
+                    if (redis) {
+                        await redis.set(`debug:webhook:${phone}:error`, JSON.stringify({
+                            timestamp: new Date().toISOString(),
+                            error: e.message
+                        }), 'EX', 3600);
+                    }
                 }
             })();
 
