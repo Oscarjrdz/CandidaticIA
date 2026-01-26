@@ -66,12 +66,13 @@ const KEYS = {
  * GENERIC HELPERS 
  * ==========================================
  */
-const getDistributedItems = async (listKey, itemPrefixPrefix) => {
+const getDistributedItems = async (listKey, itemPrefixPrefix, start = 0, stop = -1) => {
     const client = getClient();
     if (!client) return [];
 
     try {
-        const ids = await client.zrevrange(listKey, 0, -1);
+        // start/stop are 0-based Redis indices. 0, -1 means ALL.
+        const ids = await client.zrevrange(listKey, start, stop);
         if (!ids || ids.length === 0) return [];
 
         const pipeline = client.pipeline();
@@ -157,20 +158,33 @@ export const deleteAuthToken = async (phone) => {
  * CANDIDATES (Distributed)
  * ==========================================
  */
+// Formula 1 Steering: Native Redis Pagination (Page size 100)
 export const getCandidates = async (limit = 100, offset = 0, search = '') => {
-    let candidates = await getDistributedItems(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX);
+    const client = getClient();
+    if (!client) return { candidates: [], total: 0 };
 
-    if (search) {
-        const lowerSearch = search.toLowerCase();
-        candidates = candidates.filter(c =>
-            (c.nombre && c.nombre.toLowerCase().includes(lowerSearch)) ||
-            (c.whatsapp && c.whatsapp.includes(search))
-        );
+    // If searching, we currently have to do a scan (unless we index names too)
+    // For now, if search is empty, we use the ultra-fast F1 Steering.
+    if (!search) {
+        const stop = offset + limit - 1;
+        const candidates = await getDistributedItems(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, offset, stop);
+        const total = await client.zcard(KEYS.CANDIDATES_LIST);
+        return { candidates, total };
     }
 
+    // SEARCH PATH (VW Mode for now, but filtered)
+    // Optimization: Only load IDs for search to save bandwidth
+    const allCandidates = await getDistributedItems(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX);
+    const lowerSearch = search.toLowerCase();
+    const filtered = allCandidates.filter(c =>
+        (c.nombre && c.nombre.toLowerCase().includes(lowerSearch)) ||
+        (c.whatsapp && c.whatsapp.includes(search)) ||
+        (c.id && c.id.includes(search))
+    );
+
     return {
-        candidates: candidates.slice(offset, offset + limit),
-        total: candidates.length
+        candidates: filtered.slice(offset, offset + limit),
+        total: filtered.length
     };
 };
 

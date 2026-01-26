@@ -136,11 +136,25 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const responseText = result.response.text();
         console.log(`🤖 [AI Agent] Generated (${successModel})`);
 
-        // 5. IMMEDIATE DELIVERY (Priority 1)
+        // 5. FERRARI SHIELDING: Delivery with Intelligent Retries
         const config = await getUltraMsgConfig();
-        const deliveryPromise = (config && candidateData?.whatsapp)
-            ? sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText)
-            : Promise.resolve();
+        const deliveryPromise = (async () => {
+            if (!config || !candidateData?.whatsapp) return;
+
+            let retries = 2;
+            while (retries >= 0) {
+                try {
+                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
+                    console.log(`✅ [Ferrari Shield] Delivered to ${candidateData.whatsapp}`);
+                    break;
+                } catch (err) {
+                    console.error(`⚠️ [Ferrari Shield] Delivery failed (Retries left: ${retries}):`, err.message);
+                    if (retries === 0) throw err;
+                    retries--;
+                    await new Promise(r => setTimeout(r, 1000)); // Wait 1s
+                }
+            }
+        })();
 
         // 6. BACKGROUND TASKS (Non-blocking)
         const backgroundPromise = (async () => {
