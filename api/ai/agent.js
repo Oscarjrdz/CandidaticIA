@@ -166,24 +166,30 @@ export const processMessage = async (candidateId, incomingMessage) => {
             systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIÓN DE MEMORIA Y CAPTURA]: Eres un humano con memoria. Si el candidato ya nos ha contactado antes, salúdalo amablemente. \n\nCRÍTICO: El "Nombre WhatsApp" es solo referencial. Si el "Nombre Real" es "No proporcionado", DEBES preguntar por el nombre real del candidato para completar su expediente. REVISA los campos de arriba (Edad, Municipio, Categoría) y si no tienen valor, pregúntalos y confírmalos siguiendo las reglas de captura.`;
         }
 
-        // INJECT VACANCIES & CATEGORIES
-        try {
-            const { getVacancies } = await import('../utils/storage.js');
-            const allVacancies = await getVacancies();
-            const activeVacancies = allVacancies.filter(v => v.active === true || v.status === 'active');
+        // INJECT VACANCIES & CATEGORIES (Conditional)
+        const hideVacancies = systemInstruction.includes('[OCULTAR_VACANTES]');
 
-            if (activeVacancies.length > 0) {
-                const simplified = activeVacancies.map(v => ({
-                    titulo: v.name || v.title || v.titulo,
-                    empresa: v.company || v.empresa,
-                    categoria: v.category || v.categoria || 'General',
-                    descripcion: v.description || v.descripcion,
-                    requisitos: v.requirements || v.requisitos
-                }));
-                systemInstruction += `\n\n[BASE DE CONOCIMIENTO (VACANTES Y CATEGORÍAS)]:\n${JSON.stringify(simplified, null, 2)}`;
+        if (!hideVacancies) {
+            try {
+                const { getVacancies } = await import('../utils/storage.js');
+                const allVacancies = await getVacancies();
+                const activeVacancies = allVacancies.filter(v => v.active === true || v.status === 'active');
+
+                if (activeVacancies.length > 0) {
+                    const simplified = activeVacancies.map(v => ({
+                        titulo: v.name || v.title || v.titulo,
+                        empresa: v.company || v.empresa,
+                        categoria: v.category || v.categoria || 'General',
+                        descripcion: v.description || v.descripcion,
+                        requisitos: v.requirements || v.requisitos
+                    }));
+                    systemInstruction += `\n\n[BASE DE CONOCIMIENTO (VACANTES Y CATEGORÍAS)]:\n${JSON.stringify(simplified, null, 2)}`;
+                }
+            } catch (vacErr) {
+                console.warn('⚠️ Failed to inject vacancies context:', vacErr);
             }
-        } catch (vacErr) {
-            console.warn('⚠️ Failed to inject vacancies context:', vacErr);
+        } else {
+            console.log('🔇 [AI Agent] Vacancies hidden by [OCULTAR_VACANTES] instruction.');
         }
 
         if (!apiKey) return 'ERROR: No API Key found in env or redis';
