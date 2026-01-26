@@ -184,7 +184,10 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // INJECT VACANCIES & CATEGORIES (Conditional)
         const hideVacancies = systemInstruction.includes('[OCULTAR_VACANTES]');
 
-        if (!hideVacancies) {
+        if (hideVacancies) {
+            systemInstruction += `\n\n[REGLA DE SUPRESIÓN CRÍTICA]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos, empresas o ubicaciones específicas. SI ves información de vacantes en el historial de chat anterior, DEBES IGNORARLA y actuar como si no tuvieras acceso a esa base de datos. Si el candidato pregunta, responde que por el momento no tienes esa información disponible o que deben esperar a ser contactados por un humano.`;
+            console.log('🔇 [AI Agent] Vacancy details strictly suppressed.');
+        } else {
             try {
                 const { getVacancies } = await import('../utils/storage.js');
                 const allVacancies = await getVacancies();
@@ -203,8 +206,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
             } catch (vacErr) {
                 console.warn('⚠️ Failed to inject vacancies context:', vacErr);
             }
-        } else {
-            console.log('🔇 [AI Agent] Vacancies hidden by [OCULTAR_VACANTES] instruction.');
         }
 
         if (!apiKey) return 'ERROR: No API Key found in env or redis';
