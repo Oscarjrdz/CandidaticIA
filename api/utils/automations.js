@@ -1,6 +1,6 @@
 
 import { getRedisClient, updateCandidate } from './storage.js';
-import { cleanNameWithAI, cleanMunicipioWithAI, cleanCategoryWithAI, detectGender } from './ai.js';
+import { cleanNameWithAI, cleanMunicipioWithAI, cleanCategoryWithAI, detectGender, cleanEmploymentStatusWithAI, cleanDateWithAI } from './ai.js';
 
 /**
  * Processes a bot message to extract and save candidate data based on automation rules.
@@ -83,6 +83,21 @@ export async function processBotResponse(candidateId, botMessage) {
                     const cleaned = await cleanEmploymentStatusWithAI(updateData.tieneEmpleo);
                     await updateCandidate(candidateId, { tieneEmpleo: cleaned });
                     console.log(`✅ [Automations] Employment status cleaned: "${cleaned}"`);
+                })());
+            }
+
+            if (updateData.fechaNacimiento || updateData.fecha) {
+                const targetField = updateData.fechaNacimiento ? 'fechaNacimiento' : 'fecha';
+                const originalValue = updateData[targetField];
+                extraTasks.push((async () => {
+                    console.log(`🤖 [Automations] Cleaning date: "${originalValue}"...`);
+                    const cleaned = await cleanDateWithAI(originalValue);
+                    if (cleaned !== 'INVALID') {
+                        await updateCandidate(candidateId, { [targetField]: cleaned });
+                        console.log(`✅ [Automations] Date cleaned: "${cleaned}"`);
+                    } else {
+                        console.warn(`⚠️ [Automations] Invalid date detected: "${originalValue}"`);
+                    }
                 })());
             }
 

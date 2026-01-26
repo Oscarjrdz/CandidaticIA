@@ -377,3 +377,65 @@ Respuesta (Sí/No):`;
         return statusPhrase;
     }
 }
+/**
+ * Cleans and formats a date (e.g., date of birth) using Gemini AI
+ * @param {string} dateStr - The crude date string from chat
+ * @returns {Promise<string>} - Formatted date (YYYY-MM-DD or DD/MM/YYYY) or "INVALID"
+ */
+export async function cleanDateWithAI(dateStr) {
+    if (!dateStr || dateStr.length < 1) return dateStr;
+
+    try {
+        const { getRedisClient } = await import('./storage.js');
+        const redis = getRedisClient();
+
+        let apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey && redis) {
+            const aiConfigJson = await redis.get('ai_config');
+            if (aiConfigJson) {
+                const aiConfig = JSON.parse(aiConfigJson);
+                apiKey = aiConfig.geminiApiKey;
+            }
+        }
+
+        if (!apiKey || apiKey === 'undefined' || apiKey === 'null') return dateStr;
+
+        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
+        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (match) apiKey = match[0];
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
+
+        const prompt = `Analiza la siguiente fecha proporcionada por un usuario: "${dateStr}".
+REGLAS:
+1. Devuelve la fecha en formato estandarizado: "DD/MM/YYYY".
+2. Si el usuario solo dice el año (ej: "de 1990"), o es ambiguo, intenta inferir el formato más probable.
+3. Si el texto NO contiene una fecha válida o es un texto basura, responde únicamente con "INVALID".
+4. Escribe únicamente la fecha formateada, sin puntos ni explicaciones.
+Respuesta:`;
+
+        let cleaned = dateStr;
+        for (const mName of modelsToTry) {
+            try {
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    generationConfig: { temperature: 0.1 }
+                });
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                cleaned = response.text().trim().replace(/[.]/g, '');
+                if (cleaned) break;
+            } catch (err) {
+                console.warn(`⚠️ [cleanDateWithAI] Model ${mName} failed:`, err.message);
+                continue;
+            }
+        }
+
+        return cleaned || dateStr;
+
+    } catch (error) {
+        console.error('❌ cleanDateWithAI error:', error.message);
+        return dateStr;
+    }
+}
