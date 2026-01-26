@@ -4,7 +4,6 @@ import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
 const SAFETY_LIMIT_PER_RUN = 10;
 const COOLDOWN_HOURS = 24;
-const BATCH_SIZE = 40; // Increased batch size for Gemini 2.0 efficiency
 
 export async function runAIAutomations(bypassCooldown = false) {
     const logs = [];
@@ -12,7 +11,7 @@ export async function runAIAutomations(bypassCooldown = false) {
     let messagesSent = 0;
 
     try {
-        console.log(`🤖 AI Engine: Starting run (DeepScan: ${bypassCooldown})`);
+        console.log(`🤖 AI Engine: Starting Two-Pass Run (Manual: ${bypassCooldown})`);
 
         if (!process.env.GEMINI_API_KEY) throw new Error('Missing GEMINI_API_KEY');
 
@@ -20,86 +19,110 @@ export async function runAIAutomations(bypassCooldown = false) {
         const activeRules = automations.filter(a => a.active);
 
         if (activeRules.length === 0) {
-            return { success: true, message: 'No active AI automations', evaluated: 0, sent: 0, logs: [] };
+            return { success: true, message: 'No active rules', evaluated: 0, sent: 0, logs: [] };
         }
-
-        const config = await getUltraMsgConfig();
-        if (!config || !config.instanceId || !config.token) throw new Error('Missing UltraMsg Config');
 
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-        // Deep Scan vs Standard Scan
-        const scanLimit = bypassCooldown ? 5000 : 2000;
-        const { candidates } = await getCandidates(scanLimit, 0);
-        const redis = getRedisClient();
-
-        console.log(`🤖 AI Engine: Scanning ${candidates.length} candidates for ${activeRules.length} rules.`);
-
         for (const rule of activeRules) {
             if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
+            logs.push(`🔍 Analizando regla: "${rule.name}"`);
 
-            logs.push(`🔍 Rule: "${rule.name}"`);
+            // --- PASS 1: Entity Extraction ---
+            // We ask Gemini what to look for in the database to narrow down candidates.
+            const extractionPrompt = `
+            Extract search terms from this automation rule: "${rule.prompt}"
+            I need specific:
+            - phone: Any phone number mentioned.
+            - name: Any specific person's name.
+            - status: Any status mentioned (e.g. "active", "missing cv").
+            
+            Respond ONLY in JSON:
+            { "phone": string|null, "name": string|null, "status": string|null }
+            `;
 
-            // Cooldown Filter
-            let eligible = candidates;
-            if (!bypassCooldown) {
-                const cooldownResults = await Promise.all(
-                    candidates.map(async c => {
-                        const hasCooldown = await redis.get(`ai:automation:last:${c.id}`);
-                        return { c, hasCooldown };
-                    })
-                );
-                eligible = cooldownResults.filter(r => !r.hasCooldown).map(r => r.c);
+            let entities = { phone: null, name: null, status: null };
+            try {
+                const extractionResult = await model.generateContent(extractionPrompt);
+                const jsonText = extractionResult.response.text().match(/\{[\s\S]*\}/)?.[0];
+                if (jsonText) entities = JSON.parse(jsonText);
+            } catch (e) {
+                console.error('Extraction Error:', e);
             }
 
-            // Batch Processing
-            for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
-                if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
+            // --- PASS 2: Search & Filter ---
+            let targetCandidates = [];
 
-                const batch = eligible.slice(i, i + BATCH_SIZE);
-                evaluatedCount += batch.length;
+            if (entities.phone) {
+                // If a phone is mentioned, it's a sniper shot.
+                const cleanPhone = entities.phone.replace(/\D/g, '');
+                logs.push(`🎯 Sniper mode: Buscando número ${cleanPhone}`);
 
-                const contextBatch = batch.map(c => ({
-                    id: c.id,
-                    name: c.nombre,
-                    whatsapp: c.whatsapp,
-                    lastIn: c.ultimoMensaje,
-                    lastOut: c.lastOutgoingMessage,
-                    status: c.status
+                // Try searching by number
+                const { candidates: searchRes } = await getCandidates(10, 0, cleanPhone);
+                targetCandidates = searchRes;
+            } else if (entities.name) {
+                logs.push(`🎯 Buscando por nombre: ${entities.name}`);
+                const { candidates: searchRes } = await getCandidates(50, 0, entities.name);
+                targetCandidates = searchRes;
+            } else {
+                // Broad rule (e.g. "inactive for 2 days"). Scan recent 500.
+                logs.push(`📡 Broad scan: Analizando últimos 500 candidatos activos`);
+                const { candidates: scanRes } = await getCandidates(500, 0);
+                targetCandidates = scanRes;
+            }
+
+            if (targetCandidates.length === 0) {
+                logs.push(`⚠️ No se encontraron candidatos que coincidan con los criterios de búsqueda inicial.`);
+                continue;
+            }
+
+            // --- PASS 3: Final Intelligence Evaluation ---
+            const redis = getRedisClient();
+
+            // Filter cooldown if needed
+            let eligible = targetCandidates;
+            if (!bypassCooldown) {
+                const results = await Promise.all(targetCandidates.map(async c => {
+                    const has = await redis.get(`ai:automation:last:${c.id}`);
+                    return has ? null : c;
                 }));
+                eligible = results.filter(c => c !== null);
+            }
 
-                const prompt = `
-                Rule: "${rule.prompt}"
-                Candidates Batch: ${JSON.stringify(contextBatch)}
-                
-                Instruction:
-                1. Identify matches for the rule. 
-                2. If rule mentions a number (e.g. 8116038195), match it regardless of country prefixes (52, 521, etc).
-                3. If match = true, write a natural WhatsApp message.
-                
-                Respond ONLY in JSON format:
-                { "matches": [ { "id": "...", "reason": "...", "message": "..." } ] }
-                `;
+            evaluatedCount += eligible.length;
 
-                try {
-                    const result = await model.generateContent(prompt);
-                    const responseText = result.response.text();
-                    const cleanJson = responseText.match(/\{[\s\S]*\}/)?.[0];
-                    if (!cleanJson) continue;
+            if (eligible.length === 0) {
+                logs.push(`🛡️ Los candidatos encontrados están en periodo de enfriamiento (cooldown).`);
+                continue;
+            }
 
-                    const { matches = [] } = JSON.parse(cleanJson);
+            const promptBatch = eligible.map(c => ({ id: c.id, name: c.nombre, phone: c.whatsapp, fields: { ...c } }));
 
-                    for (const match of matches) {
-                        if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
+            const finalPrompt = `
+            Evaluate these candidates for the rule: "${rule.prompt}"
+            Candidates: ${JSON.stringify(promptBatch)}
+            
+            Confirm match and write a natural WhatsApp message.
+            Respond ONLY in JSON:
+            { "matches": [ { "id": "...", "reason": "...", "message": "..." } ] }
+            `;
 
-                        const cand = batch.find(c => c.id === match.id);
-                        if (!cand) continue;
+            try {
+                const finalResult = await model.generateContent(finalPrompt);
+                const finalJson = finalResult.response.text().match(/\{[\s\S]*\}/)?.[0];
+                const { matches = [] } = JSON.parse(finalJson);
 
-                        console.log(`✨ AI MATCH Rule[${rule.name}] -> Candidate[${cand.nombre}]: ${match.reason}`);
+                for (const match of matches) {
+                    if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
 
+                    const cand = eligible.find(c => c.id === match.id);
+                    if (!cand) continue;
+
+                    const config = await getUltraMsgConfig();
+                    if (config) {
                         await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, match.message);
-
                         await saveMessage(cand.id, {
                             from: 'bot',
                             content: match.message,
@@ -107,20 +130,19 @@ export async function runAIAutomations(bypassCooldown = false) {
                             timestamp: new Date().toISOString(),
                             meta: { automationId: rule.id, aiReason: match.reason }
                         });
-
                         await redis.set(`ai:automation:last:${cand.id}`, new Date().toISOString(), 'EX', COOLDOWN_HOURS * 3600);
                         messagesSent++;
-                        logs.push(`✅ Sent to ${cand.nombre}: "${match.message}"`);
+                        logs.push(`✨ Match encontrado: Envío mensaje a ${cand.nombre}`);
                     }
-                } catch (e) {
-                    console.error('Batch Execution Error:', e.message);
                 }
+            } catch (e) {
+                console.error('Final Evaluation Error:', e);
             }
         }
 
         return { success: true, evaluated: evaluatedCount, sent: messagesSent, logs };
     } catch (error) {
-        console.error('AI Engine Core Error:', error);
+        console.error('Two-Pass Engine Error:', error);
         throw error;
     }
 }
