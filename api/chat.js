@@ -111,22 +111,28 @@ export default async function handler(req, res) {
                     });
                 }
 
-                if (sendResult && (sendResult.sent === 'true' || sendResult.id)) {
-                    // PERSIST TO REDIS: Important fix
-                    await updateCandidate(candidateId, {
-                        ultimoMensajeBot: timestamp,
-                        lastBotMessageAt: timestamp
-                    });
+                if (sendResult) {
+                    console.log(`📡 [Chat] UltraMSG Result for ${candidate.whatsapp}:`, JSON.stringify(sendResult));
 
-                    // Update the message in the Redis list
-                    const updatedData = {
-                        status: 'sent',
-                        ultraMsgId: sendResult.id
-                    };
-                    await updateMessageStatus(candidateId, msgToSave.id, 'sent', updatedData);
+                    if (sendResult.sent === 'true' || sendResult.id) {
+                        // PERSIST TO REDIS
+                        await updateCandidate(candidateId, {
+                            ultimoMensajeBot: timestamp,
+                            lastBotMessageAt: timestamp
+                        });
 
-                    msgToSave.status = 'sent';
-                    msgToSave.ultraMsgId = sendResult.id;
+                        // Update the message in the Redis list
+                        const updatedData = {
+                            status: 'sent',
+                            ultraMsgId: sendResult.id
+                        };
+                        await updateMessageStatus(candidateId, msgToSave.id, 'sent', updatedData);
+
+                        msgToSave.status = 'sent';
+                        msgToSave.ultraMsgId = sendResult.id;
+                    } else {
+                        throw new Error(`UltraMSG Error: ${sendResult.message || JSON.stringify(sendResult)}`);
+                    }
                 }
             } catch (sendErr) {
                 console.error('❌ Error sending via UltraMsg:', sendErr.message);

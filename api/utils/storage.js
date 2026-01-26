@@ -155,7 +155,7 @@ export const deleteAuthToken = async (phone) => {
  * CANDIDATES (Distributed)
  * ==========================================
  */
-export const getCandidates = async (limit = 50, offset = 0, search = '') => {
+export const getCandidates = async (limit = 100, offset = 0, search = '') => {
     let candidates = await getDistributedItems(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX);
 
     if (search) {

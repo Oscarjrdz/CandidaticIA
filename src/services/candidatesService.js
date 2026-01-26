@@ -7,7 +7,7 @@ const API_BASE = import.meta.env.PROD ? '' : 'http://localhost:3000';
 /**
  * Obtiene lista de candidatos
  */
-export const getCandidates = async (limit = 50, offset = 0, search = '') => {
+export const getCandidates = async (limit = 100, offset = 0, search = '') => {
     try {
         const params = new URLSearchParams({
             limit: limit.toString(),
@@ -127,6 +127,15 @@ export class CandidatesSubscription {
         this.interval = interval;
         this.intervalId = null;
         this.lastCount = 0;
+        this.limit = 100;
+        this.offset = 0;
+        this.search = '';
+    }
+
+    updateParams(limit, offset, search = '') {
+        this.limit = limit;
+        this.offset = offset;
+        this.search = search;
     }
 
     start() {
@@ -140,7 +149,7 @@ export class CandidatesSubscription {
     }
 
     async poll() {
-        const result = await getCandidates(50, 0);
+        const result = await getCandidates(this.limit, this.offset, this.search);
 
         if (result.success) {
             // Always notify to detect message changes in existing candidates

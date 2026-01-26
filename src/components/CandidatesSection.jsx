@@ -62,22 +62,18 @@ const CandidatesSection = ({ showToast }) => {
 
         // Polling de candidatos
         const subscription = new CandidatesSubscription((newCandidates) => {
-            // Only update if not searching/filtering (polling refreshes full list)
-            if (!search && !aiFilteredCandidates) {
+            // Only update if not filtering by AI (polling refreshes full list based on current page/search)
+            if (!aiFilteredCandidates) {
                 setCandidates(newCandidates);
                 setLastUpdate(new Date());
             }
-        }, 2000); // 2s interval (Near-instant)
+        }, 3000);
 
-        // subscription.start(); // Disable auto-poll for now to avoid pagination conflict? 
-        // Or better: CandidatesService poll fetches everything? 
-        // The current service fetches strictly 50 items.
-        // Let's rely on manual refresh + loadCandidates for now to ensure stability.
-
+        subscription.updateParams(LIMIT, (currentPage - 1) * LIMIT, search);
         subscription.start();
 
         return () => subscription.stop();
-    }, []);
+    }, [currentPage, search, aiFilteredCandidates]); // Restart/Update subscription when context changes
 
 
     const handleViewHistory = async (candidate) => {

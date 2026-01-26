@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {
-            const { limit = '50', offset = '0', search = '', stats, id } = req.query;
+            const { limit = '100', offset = '0', search = '', stats, id } = req.query;
 
             // Estadísticas
             if (stats === 'true') {
