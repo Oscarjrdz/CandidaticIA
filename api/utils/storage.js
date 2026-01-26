@@ -213,7 +213,17 @@ export const updateCandidate = async (id, data) => {
     const candidate = await getCandidateById(id);
     if (!candidate) return null;
     const updated = { ...candidate, ...data };
+    // NEW: Clean up some potentially large keys if they are old (optional)
     return await saveCandidate(updated);
+};
+
+export const saveLastResponse = async (id, response) => {
+    const client = getClient();
+    if (!client) return;
+    await client.set(`debug:last_response:${id}`, JSON.stringify({
+        timestamp: new Date().toISOString(),
+        response
+    }), 'EX', 3600); // 1 hour expiry
 };
 
 export const setLastActiveUser = async (phone) => {

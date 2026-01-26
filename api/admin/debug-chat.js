@@ -11,9 +11,15 @@ export default async function handler(req, res) {
 
         for (const cand of candidates) {
             const messages = await getMessages(cand.id);
+            const redis = getRedisClient();
+            const lastApi = redis ? await redis.get(`debug:api:${cand.whatsapp}`) : null;
+            const lastApiError = redis ? await redis.get(`debug:api_error:${cand.whatsapp}`) : null;
+
             report.push({
                 candidate: { nombre: cand.nombre, whatsapp: cand.whatsapp, id: cand.id },
                 messageCount: messages.length,
+                lastApi: lastApi ? JSON.parse(lastApi) : null,
+                lastApiError: lastApiError ? JSON.parse(lastApiError) : null,
                 lastMessages: messages.slice(-5).map(m => ({
                     type: m.type,
                     from: m.from,
