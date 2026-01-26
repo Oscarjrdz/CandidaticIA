@@ -7,17 +7,25 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const data = req.body;
-    if (!data || !data.event_type) {
+    const data = req.body || {};
+
+    // Support Hybrid Event Names (UltraMSG native vs Proxy/Wrapper)
+    const eventType = data.event_type || data.event || data.eventName;
+    const messageData = data.data || data;
+
+    // 🏎️ FERRARI DEBUG: Always save events for inspection
+    try {
+        const { saveEvent } = await import('../utils/storage.js');
+        await saveEvent(data);
+    } catch (e) { }
+
+    if (!eventType) {
         return res.status(200).json({ success: true, message: 'Heartbeat or invalid payload' });
     }
 
-    const eventType = data.event_type;
-    const messageData = data.data;
-
     try {
-        // 1. Handle Message Acknowledgments (Lifecycle Tracking)
-        if (eventType === 'message_ack') {
+        // 1. Handle Message Acknowledgments
+        if (eventType === 'message_ack' || eventType === 'message.ack') {
             const { id, status, to } = messageData;
             try {
                 const phone = to?.replace(/\D/g, '');
@@ -28,8 +36,8 @@ export default async function handler(req, res) {
         }
 
         // 2. Handle Incoming Messages
-        if (eventType === 'message_received') {
-            const from = messageData.from;
+        if (eventType === 'message_received' || eventType === 'message.incoming') {
+            const from = messageData.from || messageData.remoteJid;
             const body = messageData.body || '';
             const msgId = messageData.id;
             const phone = from.replace(/\D/g, '');
@@ -48,7 +56,7 @@ export default async function handler(req, res) {
             if (!candidateId) {
                 const newCandidate = await saveCandidate({
                     whatsapp: phone,
-                    nombre: messageData.pushname || 'Desconocido',
+                    nombre: messageData.pushname || messageData.pushName || messageData.name || 'Desconocido',
                     origen: 'whatsapp_v2',
                     primerContacto: new Date().toISOString()
                 });
