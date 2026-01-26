@@ -1,92 +1,100 @@
 /**
- * Batch Name Cleaning Script
- * GET /api/admin/clean-names?key=oscar_debug_2026&limit=100
+ * Batch Date Cleaning Script (Optimized)
+ * GET /api/admin/clean-names?key=oscar_debug_2026&limit=10&offset=0
  */
 
 export default async function handler(req, res) {
-    const { key, limit = '15', offset = '0' } = req.query;
+    const { key, limit = '10' } = req.query;
+    let { offset = '0' } = req.query;
     if (key !== 'oscar_debug_2026') return res.status(401).json({ error: 'Unauthorized' });
 
     const startTime = Date.now();
-    const MAX_PROCESS_TIME = 8000; // 8 seconds safety
+    const MAX_PROCESS_TIME = 8000; // 8 seconds safety for Vercel Hobby (10s limit)
+    const maxUpdates = parseInt(limit);
+    let currentOffset = parseInt(offset);
 
     try {
         const { getCandidates, updateCandidate } = await import('../utils/storage.js');
         const { cleanDateWithAI } = await import('../utils/ai.js');
 
-        const { candidates, total } = await getCandidates(parseInt(limit), parseInt(offset));
-
         const results = [];
         let updatedCount = 0;
-        let processedCount = 0;
+        let totalScanned = 0;
         let stoppedEarly = false;
+        let totalDb = 0;
 
-        for (const candidate of candidates) {
-            // Safety: Stop if we are approaching Vercel timeout
+        // "SCAN & CLEAN" LOOP
+        // We keep fetching candidates until we reach the update limit OR the timeout
+        while (updatedCount < maxUpdates) {
+            // Check overall timeout before fetching more
             if (Date.now() - startTime > MAX_PROCESS_TIME) {
-                console.log(`⏳ [Batch Cleaning] Stopping early due to timeout risk after ${processedCount} candidates.`);
                 stoppedEarly = true;
                 break;
             }
 
-            processedCount++;
-            const originalDate = candidate.fechaNacimiento || candidate.fecha;
+            const fetchLimit = 25; // Fetch in chunks
+            const { candidates, total } = await getCandidates(fetchLimit, currentOffset);
+            totalDb = total;
 
-            // Prepare Updates
-            const updates = {};
-            let changed = false;
+            if (!candidates || candidates.length === 0) break;
 
-            try {
-                // EXCLUSIVE DATE CLEANING
+            for (const candidate of candidates) {
+                // Secondary check inside the loop
+                if (Date.now() - startTime > MAX_PROCESS_TIME) {
+                    stoppedEarly = true;
+                    break;
+                }
+
+                currentOffset++; // Advance offset for the next run
+                totalScanned++;
+
+                const originalDate = candidate.fechaNacimiento || candidate.fecha;
+
+                // Check if it NEEDS cleaning (dirty format)
                 if (originalDate && originalDate.length > 5 && !/^\d{2}\/\d{2}\/\d{4}$/.test(originalDate)) {
                     console.log(`🤖 [Batch Date] Cleaning: "${originalDate}" for ${candidate.whatsapp}...`);
-                    const cleanedDate = await cleanDateWithAI(originalDate);
+                    try {
+                        const cleanedDate = await cleanDateWithAI(originalDate);
 
-                    if (cleanedDate && cleanedDate !== 'INVALID' && cleanedDate !== originalDate) {
-                        const targetField = candidate.fechaNacimiento ? 'fechaNacimiento' : 'fecha';
-                        updates[targetField] = cleanedDate;
-                        changed = true;
+                        if (cleanedDate && cleanedDate !== 'INVALID' && cleanedDate !== originalDate) {
+                            const targetField = candidate.fechaNacimiento ? 'fechaNacimiento' : 'fecha';
+                            await updateCandidate(candidate.id, { [targetField]: cleanedDate });
+                            updatedCount++;
+                            results.push({
+                                whatsapp: candidate.whatsapp,
+                                before: originalDate,
+                                after: cleanedDate
+                            });
+
+                            // Stop if we reached the requested limit of UPDATES
+                            if (updatedCount >= maxUpdates) break;
+                        }
+                    } catch (aiErr) {
+                        console.error(`AI Error for ${candidate.whatsapp}:`, aiErr.message);
                     }
                 }
-
-                if (changed) {
-                    await updateCandidate(candidate.id, updates);
-                    updatedCount++;
-                    results.push({
-                        whatsapp: candidate.whatsapp,
-                        date: { before: originalDate, after: updates.fechaNacimiento || updates.fecha }
-                    });
-                }
-            } catch (err) {
-                console.error(`Error cleaning date for ${candidate.whatsapp}:`, err.message);
             }
+
+            if (stoppedEarly || currentOffset >= totalDb || updatedCount >= maxUpdates) break;
         }
 
-        const nextOffset = parseInt(offset) + processedCount;
-
-        // Preview of what we found in this batch (first 3)
-        const preview = candidates.slice(0, 3).map(c => ({
-            whatsapp: c.whatsapp,
-            has_fecha: !!c.fecha,
-            has_fechaNac: !!c.fechaNacimiento,
-            val_fecha: c.fecha,
-            val_fechaNac: c.fechaNacimiento
-        }));
+        const nextUrl = currentOffset < totalDb
+            ? `https://${req.headers.host}${req.url.split('?')[0]}?key=${key}&limit=${limit}&offset=${currentOffset}`
+            : null;
 
         return res.status(200).json({
             success: true,
-            total_db: total,
-            processed_now: processedCount,
+            total_in_db: totalDb,
+            scanned_now: totalScanned,
             updated_now: updatedCount,
-            stopped_early: stoppedEarly,
-            next_offset: nextOffset < total ? nextOffset : null,
-            next_url: nextOffset < total ? `https://${req.headers.host}${req.url.split('?')[0]}?key=${key}&limit=${limit}&offset=${nextOffset}` : 'Completado',
-            preview,
+            stopped_because: stoppedEarly ? 'Timeout safety (8s)' : (updatedCount >= maxUpdates ? 'Limit reached' : 'End of DB'),
+            next_offset: currentOffset < totalDb ? currentOffset : 'Completado',
+            next_url: nextUrl || 'Completado',
             details: results
         });
 
     } catch (error) {
-        console.error('Batch name cleaning error:', error);
+        console.error('Batch date cleaning error:', error);
         return res.status(500).json({ error: error.message });
     }
 }
