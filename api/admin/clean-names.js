@@ -4,70 +4,84 @@
  */
 
 export default async function handler(req, res) {
-    const { key, limit = '100', offset = '0' } = req.query;
+    const { key, limit = '10', offset = '0' } = req.query;
     if (key !== 'oscar_debug_2026') return res.status(401).json({ error: 'Unauthorized' });
+
+    const startTime = Date.now();
+    const VERCEL_TIMEOUT = 12000; // 12 seconds safety margin (Hobby is 10s, Pro is 15s-60s)
 
     try {
         const { getCandidates, updateCandidate } = await import('../utils/storage.js');
         const { cleanNameWithAI, detectGender, cleanEmploymentStatusWithAI, cleanMunicipioWithAI, cleanDateWithAI } = await import('../utils/ai.js');
 
-        const { candidates } = await getCandidates(parseInt(limit), parseInt(offset));
+        const { candidates, total } = await getCandidates(parseInt(limit), parseInt(offset));
 
         const results = [];
         let updatedCount = 0;
+        let processedCount = 0;
+        let stoppedEarly = false;
 
         for (const candidate of candidates) {
+            // Safety: Stop if we are approaching Vercel timeout
+            if (Date.now() - startTime > VERCEL_TIMEOUT) {
+                console.log(`⏳ [Batch Cleaning] Stopping early due to timeout risk after ${processedCount} candidates.`);
+                stoppedEarly = true;
+                break;
+            }
+
+            processedCount++;
             const originalName = candidate.nombreReal;
             const originalMunicipio = candidate.municipio;
             const originalEmpleo = candidate.tieneEmpleo;
+            const originalDate = candidate.fechaNacimiento || candidate.fecha;
 
             // Prepare Updates
             const updates = {};
             let changed = false;
 
             try {
+                // RUN AI TASKS (Sequential to avoid rate limits, but we could parallelize internal tasks per candidate)
                 // 1. Clean Name with AI
                 if (originalName && originalName !== 'Sin nombre') {
                     const cleanedName = await cleanNameWithAI(originalName);
-                    if (cleanedName !== originalName) {
+                    if (cleanedName && cleanedName !== originalName) {
                         updates.nombreReal = cleanedName;
                         changed = true;
                     }
+                }
 
-                    // 2. Gender detection if name changed or missing
-                    if (!candidate.genero || (updates.nombreReal && updates.nombreReal !== originalName)) {
-                        const gender = await detectGender(updates.nombreReal || originalName);
-                        if (gender !== 'Desconocido' && gender !== candidate.genero) {
-                            updates.genero = gender;
-                            changed = true;
-                        }
+                // 2. Gender
+                const nameToScan = updates.nombreReal || originalName;
+                if (nameToScan && (!candidate.genero || candidate.genero === 'Desconocido')) {
+                    const gender = await detectGender(nameToScan);
+                    if (gender !== 'Desconocido') {
+                        updates.genero = gender;
+                        changed = true;
                     }
                 }
 
-                // 3. Clean Municipio with AI
+                // 3. Municipio
                 if (originalMunicipio && originalMunicipio !== 'Desconocido') {
-                    // const { cleanMunicipioWithAI } = await import('../utils/ai.js'); // Already imported at top
                     const cleanedMunicipio = await cleanMunicipioWithAI(originalMunicipio);
-                    if (cleanedMunicipio !== originalMunicipio) {
+                    if (cleanedMunicipio && cleanedMunicipio !== originalMunicipio) {
                         updates.municipio = cleanedMunicipio;
                         changed = true;
                     }
                 }
 
-                // 4. Clean Employment Status with AI
+                // 4. Employment
                 if (originalEmpleo && originalEmpleo.length > 3 && originalEmpleo !== 'Sí' && originalEmpleo !== 'No') {
                     const cleanedEmpleo = await cleanEmploymentStatusWithAI(originalEmpleo);
-                    if (cleanedEmpleo !== originalEmpleo) {
+                    if (cleanedEmpleo && cleanedEmpleo !== originalEmpleo) {
                         updates.tieneEmpleo = cleanedEmpleo;
                         changed = true;
                     }
                 }
 
-                // 5. Clean Date with AI
-                const originalDate = candidate.fechaNacimiento || candidate.fecha;
+                // 5. Date
                 if (originalDate && originalDate.length > 5 && !/^\d{2}\/\d{2}\/\d{4}$/.test(originalDate)) {
                     const cleanedDate = await cleanDateWithAI(originalDate);
-                    if (cleanedDate !== 'INVALID' && cleanedDate !== originalDate) {
+                    if (cleanedDate && cleanedDate !== 'INVALID' && cleanedDate !== originalDate) {
                         updates[candidate.fechaNacimiento ? 'fechaNacimiento' : 'fecha'] = cleanedDate;
                         changed = true;
                     }
@@ -78,11 +92,7 @@ export default async function handler(req, res) {
                     updatedCount++;
                     results.push({
                         whatsapp: candidate.whatsapp,
-                        name: { before: originalName, after: updates.nombreReal || originalName },
-                        municipio: { before: originalMunicipio, after: updates.municipio || originalMunicipio },
-                        empleo: { before: originalEmpleo, after: updates.tieneEmpleo || originalEmpleo },
-                        date: { before: originalDate, after: (updates.fechaNacimiento || updates.fecha) || originalDate },
-                        gender: updates.genero || candidate.genero
+                        changes: updates
                     });
                 }
             } catch (err) {
@@ -90,10 +100,16 @@ export default async function handler(req, res) {
             }
         }
 
+        const nextOffset = parseInt(offset) + processedCount;
+
         return res.status(200).json({
             success: true,
-            total_processed: candidates.length,
-            total_updated: updatedCount,
+            total_db: total,
+            processed_now: processedCount,
+            updated_now: updatedCount,
+            stopped_early: stoppedEarly,
+            next_offset: nextOffset < total ? nextOffset : null,
+            next_url: nextOffset < total ? `${req.headers.host}${req.url.split('?')[0]}?key=${key}&limit=${limit}&offset=${nextOffset}` : 'Completado',
             details: results
         });
 
