@@ -589,7 +589,7 @@ export const getRecentMessages = async (candidateId, limit = 20) => {
 };
 
 export const getMessages = async (candidateId) => {
-    return await getRecentMessages(candidateId, 50); // Fetch last 50 for broad history
+    return await getRecentMessages(candidateId, 100); // Fetch last 100 for deep history
 };
 
 export const saveMessage = async (candidateId, message) => {

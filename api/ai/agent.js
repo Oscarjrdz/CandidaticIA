@@ -95,8 +95,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
             return true;
         });
 
-        // Take last 50 messages for broader context (Internal Memory)
-        let rawHistory = historyMessages.slice(-50).map(m => ({
+        // Take last 100 messages for deeper context (Internal Memory)
+        let rawHistory = historyMessages.slice(-100).map(m => ({
             role: (m.from === 'user') ? 'user' : 'model',
             parts: [{ text: m.content || '((Media))' }]
         }));
@@ -138,8 +138,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // INJECT DB CONTEXT INTO PROMPT (DNA PROFILE)
         if (candidateData) {
-            // Extract a tiny bit of context from previous messages if not in profile
-            const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-3).map(m => m.content).filter(Boolean);
+            // Extract a bit more context from previous messages
+            const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-10).map(m => m.content).filter(Boolean);
             const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Inicio de conversación';
 
             const dnaProfile = `
@@ -153,7 +153,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
 - Estatus de Postulación: ${candidateData.status || 'Interesado'}
 - Última Interacción: ${candidateData.ultimoMensaje || 'Reciente'} (Primer contacto: ${candidateData.primerContacto || 'N/A'})
 - Perfil: ${candidateData.perfilGeneral || 'Sin resumen previo'}
-- Temas Recientes: ${themes}
+- Hilo Reciente (Últimos 10 prompts): ${themes}
 `.trim();
 
             systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIÓN DE MEMORIA]: Eres un humano con memoria. Si el candidato ya nos ha contactado antes (revisa la "Fecha de Primer Contacto" y "Última Interacción"), NO actúes como si fuera la primera vez. Salúdalo por su nombre real y haz referencia a que es un gusto volver a hablar con él. REVISA los campos de arriba (Edad, Municipio, Categoría) y NO vuelvas a preguntar por ellos si ya tienen valor. Procede directamente con lo que el candidato necesite basándote en su perfil.`;
