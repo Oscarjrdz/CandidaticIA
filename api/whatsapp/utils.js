@@ -31,36 +31,46 @@ export const getUltraMsgConfig = async () => {
 
 export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     try {
-        let endpoint = type === 'voice' ? 'audio' : type;
-        if (!['chat', 'image', 'video', 'audio', 'document'].includes(endpoint)) endpoint = 'chat';
+        let endpoint = type;
+        if (!['chat', 'image', 'video', 'audio', 'voice', 'document'].includes(endpoint)) endpoint = 'chat';
 
         const payload = { token, to };
 
-        // Clean Base64: Strip header for UltraMSG
-        let cleanBody = body;
-        const isDataUrl = typeof body === 'string' && body.startsWith('data:');
-        if (isDataUrl && body.includes(';base64,')) {
-            cleanBody = body.split(';base64,')[1];
-        }
-
+        // Handle Base64 vs URL
         const isHttp = typeof body === 'string' && body.startsWith('http');
+        const isDataUrl = typeof body === 'string' && body.startsWith('data:');
+
+        // Clean Base64 but keep a hint of mime type if possible, or use filename hint
+        let deliveryBody = body;
+        if (isDataUrl) {
+            // Browsers often use audio/webm, UltraMSG/WhatsApp prefer audio/ogg
+            deliveryBody = body.replace('audio/webm', 'audio/ogg');
+        }
 
         switch (endpoint) {
             case 'image':
-                payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : cleanBody;
+                payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : deliveryBody;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
-                payload.video = isHttp ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : cleanBody;
+                payload.video = isHttp ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : deliveryBody;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'audio':
-                payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`) : cleanBody;
-                if (type === 'voice') payload.ptt = 'true';
+            case 'voice':
+                // Parameter name for both is 'audio' in UltraMSG
+                payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : deliveryBody;
+                if (endpoint === 'voice' || type === 'voice') {
+                    payload.ptt = 'true';
+                }
+                // CRITICAL: Provide a filename hint for Base64 to avoid "extension not supported"
+                if (!isHttp) {
+                    payload.filename = 'voice.ogg';
+                }
                 break;
             case 'document':
                 payload.document = body;
-                if (extraParams.filename) payload.filename = extraParams.filename;
+                payload.filename = extraParams.filename || 'document.pdf';
                 break;
             default:
                 payload.body = body;
@@ -68,7 +78,7 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
 
-        console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Format: ${isHttp ? 'URL' : 'BASE64'}, Len: ${body?.length})`);
+        console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Endpoint: ${endpoint}, Format: ${isHttp ? 'URL' : 'BASE64'})`);
 
         const redis = getRedisClient();
         const debugKey = `debug:ultramsg:${to}`;
@@ -81,7 +91,7 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             if (redis) {
                 await redis.set(debugKey, JSON.stringify({
                     timestamp: new Date().toISOString(),
-                    type, endpoint, result: response.data
+                    type, endpoint, payloadKeys: Object.keys(payload), result: response.data
                 }), 'EX', 3600);
             }
             return response.data;
