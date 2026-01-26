@@ -19,15 +19,20 @@ export default async function handler(req, res) {
             });
         }
 
-        // Fetch media access logs
-        const mediaLogsRaw = await client.lrange('debug:media_access', 0, 19);
-        const mediaLogs = mediaLogsRaw.map(log => JSON.parse(log));
+        // Fetch AI logs
+        const aiKeys = await client.keys('debug:ai:*');
+        const aiLogs = [];
+        for (const key of aiKeys) {
+            const data = await client.get(key);
+            if (data) aiLogs.push({ key, data: JSON.parse(data) });
+        }
 
         return res.status(200).json({
             success: true,
             count: logs.length,
             logs: logs.slice(0, 20), // Last 20 logs
-            mediaAccess: mediaLogs
+            mediaAccess: mediaLogs,
+            aiLogs: aiLogs.slice(-10) // Last 10 AI sessions
         });
 
     } catch (error) {

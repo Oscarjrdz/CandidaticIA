@@ -22,13 +22,27 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // 1. Get Candidate Data (Database Context)
         let candidateData = null;
-        const candidateKey = `candidate:${candidateId}`;
         try {
-            const rawData = await redis.get(candidateKey);
-            if (rawData) candidateData = JSON.parse(rawData);
+            const freshKey = `candidate:${candidateId}`;
+            const rawData = await redis?.get(freshKey);
+            if (rawData) {
+                candidateData = JSON.parse(rawData);
+            } else {
+                console.log(`🔍 [AI Agent] Candidate ${candidateId} not in cache, fetching from DB...`);
+                const { getCandidateById } = await import('../utils/storage.js');
+                candidateData = await getCandidateById(candidateId);
+            }
         } catch (e) {
             console.error('Error fetching candidate for context:', e);
         }
+
+        if (!candidateData) {
+            console.error(`❌ [AI Agent] FATAL: Candidate ${candidateId} not found in storage.`);
+            return 'ERROR: Candidate not found';
+        }
+
+        // Clean message
+        const userMessage = (typeof incomingMessage === 'string' && incomingMessage.trim()) ? incomingMessage.trim() : '((Mensaje de voz o sin texto))';
 
         // 2. Get History
         const allMessages = await getMessages(candidateId);
@@ -37,7 +51,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
         const historyMessages = validMessages.filter((m, index) => {
             const isLast = index === validMessages.length - 1;
-            if (isLast && m.content === incomingMessage && m.from === 'user') return false;
+            if (isLast && m.content === userMessage && m.from === 'user') return false;
             return true;
         });
 
@@ -118,7 +132,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
                     }
                 });
 
-                result = await chat.sendMessage(incomingMessage);
+                result = await chat.sendMessage(userMessage);
                 successModel = mName;
                 // console.log(`✅ [AI Agent] Success with ${mName}`);
                 break;
@@ -130,11 +144,21 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         if (!result) {
             console.error('❌ [AI Agent] All models failed. Last error:', lastError);
-            return `ERROR: All models failed. Last: ${lastError}`;
+            return `ERROR: Gemini failure - ${lastError}`;
         }
 
         const responseText = result.response.text();
         console.log(`🤖 [AI Agent] Response generated (${successModel}): "${responseText}"`);
+
+        // Save to Redis for DEBUG view
+        if (redis) {
+            await redis.set(`debug:ai:${candidateId}`, JSON.stringify({
+                timestamp: new Date().toISOString(),
+                userMessage,
+                responseText,
+                model: successModel
+            }), 'EX', 3600);
+        }
 
         // 5. Save AI Response to Storage
         await saveMessage(candidateId, {
