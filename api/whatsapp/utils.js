@@ -34,31 +34,29 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         let endpoint = 'chat';
         const payload = { token, to };
 
-        // Sanitize body: If it's a Data URL (base64 with header), strip the header
-        let cleanBody = body;
-        const isBase64 = body && body.startsWith('data:') && body.includes(';base64,');
-        if (isBase64) {
-            cleanBody = body.split(';base64,')[1];
-        }
+        // Detect format
+        const isHttp = body && body.startsWith('http');
+        const isDataUrl = body && body.startsWith('data:');
 
         switch (type) {
             case 'image':
                 endpoint = 'image';
-                payload.image = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : cleanBody;
+                payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : body;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
                 endpoint = 'video';
-                payload.video = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : cleanBody;
+                payload.video = isHttp ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : body;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'audio':
                 endpoint = 'audio';
-                payload.audio = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`) : cleanBody;
+                payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`) : body;
                 break;
             case 'voice':
                 endpoint = 'voice';
-                payload.audio = body.startsWith('http') ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : cleanBody;
+                // For voice Base64, keep the full data:audio/xxx;base64,... header
+                payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : body;
                 break;
             case 'document':
                 endpoint = 'document';
@@ -72,9 +70,9 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
 
-        console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Base64: ${isBase64}, BodyLen: ${body?.length})`);
+        console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Format: ${isHttp ? 'URL' : 'BASE64'}, Length: ${body?.length || 0})`);
 
-        const response = await axios.post(url, payload);
+        const response = await axios.post(url, payload, { timeout: 25000 });
 
         console.log(`✅ [UltraMSG] RESPONSE:`, JSON.stringify(response.data));
 
