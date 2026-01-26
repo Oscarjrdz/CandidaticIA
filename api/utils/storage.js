@@ -96,14 +96,14 @@ const getDistributedItems = async (listKey, itemPrefixPrefix, start = 0, stop = 
     }
 };
 
-const saveDistributedItem = async (listKey, itemPrefix, item, id) => {
+const saveDistributedItem = async (listKey, itemPrefix, item, id, customScore = null) => {
     const client = getClient();
     if (!client) return item;
 
     try {
         const key = `${itemPrefix}${id}`;
         await client.set(key, JSON.stringify(item));
-        const score = Date.now();
+        const score = customScore || Date.now();
         await client.zadd(listKey, score, id);
         return item;
     } catch (e) {
@@ -202,7 +202,9 @@ export const saveCandidate = async (candidate) => {
         await client.hset(KEYS.PHONE_INDEX, cleanPhone, candidate.id).catch(() => { });
     }
 
-    return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, candidate, candidate.id);
+    // Sort by Last Message (Desc) or Creation Time
+    const score = new Date(candidate.ultimoMensaje || candidate.primerContacto || Date.now()).getTime();
+    return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, candidate, candidate.id, score);
 };
 
 export const deleteCandidate = async (id) => {

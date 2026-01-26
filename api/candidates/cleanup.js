@@ -49,6 +49,44 @@ export default async function handler(req, res) {
                     }
                 }
 
+                // 3. Calculate Age from BirthDate (NASCAR V2)
+                if (candidate.fechaNacimiento && !candidate.edad) {
+                    const dob = candidate.fechaNacimiento.toLowerCase().trim();
+                    let birthDate = null;
+
+                    // Regex for "19 / mayo / 1983" or "19 de mayo de 1983"
+                    const dateRegex = /(\d{1,2})[\s/-]+(?:de\s+)?([a-z0-9áéíóú]+)[\s/-]+(?:de\s+)?(\d{4})/;
+                    const match = dob.match(dateRegex);
+
+                    if (match) {
+                        const day = parseInt(match[1]);
+                        const monthStr = match[2];
+                        const year = parseInt(match[3]);
+
+                        const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                        const monthIndex = months.findIndex(m => m.startsWith(monthStr.slice(0, 3)));
+
+                        if (monthIndex >= 0) {
+                            birthDate = new Date(year, monthIndex, day);
+                        } else if (!isNaN(monthStr)) {
+                            birthDate = new Date(year, parseInt(monthStr) - 1, day);
+                        }
+                    }
+
+                    if (birthDate && !isNaN(birthDate.getTime())) {
+                        const today = new Date();
+                        let age = today.getFullYear() - birthDate.getFullYear();
+                        const m = today.getMonth() - birthDate.getMonth();
+                        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                            age--;
+                        }
+                        if (age > 15 && age < 100) {
+                            updates.edad = age.toString();
+                            console.log(`🎂 Calculated Age for ${candidate.id}: ${age}`);
+                        }
+                    }
+                }
+
                 if (Object.keys(updates).length > 0) {
                     await updateCandidate(candidate.id, updates);
                     results.push({ id: candidate.id, status: 'cleaned' });
