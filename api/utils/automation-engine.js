@@ -61,7 +61,10 @@ export async function runAIAutomations(bypassCooldown = false) {
 
                 // Sniper Lookup (O(1)) instead of scanning thousands
                 const candidate = await getCandidateByPhone(cleanPhone);
-                if (candidate) targetCandidates = [candidate];
+                if (candidate) {
+                    targetCandidates = [candidate];
+                    logs.push(`🎯 Candidato encontrado: ${candidate.nombre}`);
+                }
                 else logs.push(`⚠️ No se encontró ningún candidato con el número ${cleanPhone} en el índice.`);
             } else if (entities.name) {
                 logs.push(`🎯 Buscando por nombre: ${entities.name}`);
