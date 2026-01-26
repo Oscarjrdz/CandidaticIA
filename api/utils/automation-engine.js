@@ -7,7 +7,7 @@ const COOLDOWN_HOURS = 24;
 
 /**
  * runAIAutomations
- * Hybrid Sniper Engine: Fast-path for numbers, LLM for intent.
+ * Zuckerberg Trace Edition: Captures every step and error.
  */
 export async function runAIAutomations(isManual = false) {
     const logs = [];
@@ -15,67 +15,86 @@ export async function runAIAutomations(isManual = false) {
     let evaluatedCount = 0;
 
     try {
-        console.log(`🚀 [AI_ENGINE] Start (Mode: ${isManual ? 'Manual' : 'Cron'})`);
+        logs.push(`🚀 [SYSTEM] Iniciando motor (Manual: ${isManual})`);
 
-        // --- 1. CONFIG CHECKS ---
-        if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY_MISSING');
+        // --- 1. CONFIG AUDIT ---
+        const geminiKey = process.env.GEMINI_API_KEY;
+        if (!geminiKey) {
+            logs.push(`❌ CRITICAL: Falta GEMINI_API_KEY en variables de entorno.`);
+            return { success: false, error: 'GEMINI_API_KEY_MISSING', logs };
+        }
+
         const config = await getUltraMsgConfig();
-        if (!config?.instanceId || !config?.token) throw new Error('ULTRAMSG_CONFIG_MISSING');
+        if (!config?.instanceId || !config?.token) {
+            logs.push(`❌ CRITICAL: UltraMsg no está vinculado (Falta Instance ID o Token).`);
+            return { success: false, error: 'ULTRAMSG_CONFIG_MISSING', logs };
+        }
+        logs.push(`✅ Configuración verificada.`);
 
         const automations = await getAIAutomations();
         const activeRules = (automations || []).filter(a => a?.active && a?.prompt);
 
         if (activeRules.length === 0) {
-            return { success: true, logs: ['No hay reglas activas.'] };
+            logs.push(`ℹ️ No se encontraron reglas activas para procesar.`);
+            return { success: true, logs };
         }
+        logs.push(`📋 Procesando ${activeRules.length} reglas activas.`);
 
-        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const genAI = new GoogleGenerativeAI(geminiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
         for (const rule of activeRules) {
             if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
-            logs.push(`🔍 Motor: ${rule.name || 'Análisis'}`);
+            logs.push(`-----------------------------------`);
+            logs.push(`⚙️ Regla: "${rule.name || 'Sin nombre'}"`);
 
-            // --- 2. HYBRID SNIPER PATH ---
+            // --- 2. SNIPER DETECTION ---
             let targetPhone = null;
             const phoneMatch = rule.prompt.match(/(\d{10,13})/);
             if (phoneMatch) {
                 targetPhone = phoneMatch[0];
-                logs.push(`⚡ Fast-Path: Número detectado (${targetPhone})`);
+                logs.push(`🎯 Sniper detectado: ${targetPhone}`);
             }
 
             let candidates = [];
             if (targetPhone) {
                 const c = await getCandidateByPhone(targetPhone);
-                if (c) candidates = [c];
-                else logs.push(`⚠️ No se encontró al candidato con el número ${targetPhone}`);
+                if (c) {
+                    candidates = [c];
+                    logs.push(`✅ Candidato identificado: ${c.nombre}`);
+                } else {
+                    logs.push(`⚠️ El número ${targetPhone} no existe en la base de datos.`);
+                }
             } else {
-                // LLM Fallback (Slow path)
-                logs.push(`🧠 IA: Escaneando intención...`);
+                logs.push(`🧠 IA: Escaneando intención compleja...`);
                 try {
-                    const extra = await model.generateContent(`Extaer teléfono o nombre de: "${rule.prompt}". Responder JSON ÚNICAMENTE: {"p":null,"n":null}`);
+                    const extra = await model.generateContent(`Extract phone/name from: "${rule.prompt}". JSON ONLY: {"p":null,"n":null}`);
                     const json = JSON.parse(extra.response.text().match(/\{[\s\S]*\}/)?.[0] || '{}');
                     if (json.p) {
                         const c = await getCandidateByPhone(json.p);
                         if (c) candidates = [c];
                     } else {
                         const { candidates: list } = await getCandidates(isManual ? 30 : 100, 0, json.n || '');
-                        candidates = list;
+                        candidates = list || [];
                     }
                 } catch (e) {
+                    logs.push(`⚠️ IA Falló extracción: Usando escaneo reciente.`);
                     const { candidates: list } = await getCandidates(20, 0);
-                    candidates = list;
+                    candidates = list || [];
                 }
             }
 
-            if (!candidates || candidates.length === 0) continue;
+            if (!candidates || candidates.length === 0) {
+                logs.push(`⏭️ Sin candidatos para esta regla.`);
+                continue;
+            }
 
+            // --- 3. EVALUATION ---
             const redis = getRedisClient();
             for (const cand of candidates) {
                 if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
                 if (!cand?.id || !cand?.whatsapp) continue;
 
-                // Cooldown check
                 if (!isManual) {
                     const last = await redis.get(`ai:automation:last:${cand.id}`);
                     if (last) continue;
@@ -83,26 +102,41 @@ export async function runAIAutomations(isManual = false) {
 
                 evaluatedCount++;
                 try {
-                    const res = await model.generateContent(`Regla: "${rule.prompt}". Candidato: ${cand.nombre}. ¿Cumple? Si si, escribe mensaje WA. JSON: {"ok":bool,"msg":string}`);
-                    const decision = JSON.parse(res.response.text().match(/\{[\s\S]*\}/)?.[0] || '{"ok":false}');
+                    logs.push(`🤔 Evaluando a ${cand.nombre}...`);
+                    const res = await model.generateContent(`Regla: "${rule.prompt}". Candidato: ${cand.nombre}. Status: ${cand.status}. Bio: ${JSON.stringify(cand.campos || {})}. ¿Cumple? JSON: {"ok":bool,"msg":string}`);
+                    const out = res.response.text().match(/\{[\s\S]*\}/)?.[0];
+                    if (!out) continue;
+
+                    const decision = JSON.parse(out);
 
                     if (decision.ok && decision.msg) {
+                        logs.push(`✨ Match! Enviando mensaje...`);
                         await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, decision.msg);
                         await saveMessage(cand.id, {
-                            from: 'bot', content: decision.msg, type: 'text', timestamp: new Date().toISOString(),
-                            meta: { automationId: rule.id }
+                            from: 'bot',
+                            content: decision.msg,
+                            type: 'text',
+                            timestamp: new Date().toISOString(),
+                            meta: { automationId: rule.id, aiMatch: true }
                         });
                         await redis.set(`ai:automation:last:${cand.id}`, new Date().toISOString(), 'EX', COOLDOWN_HOURS * 3600);
                         messagesSent++;
-                        logs.push(`✅ Mensaje enviado a ${cand.nombre}`);
+                        logs.push(`🚀 Mensaje enviado exitosamente.`);
+                    } else {
+                        logs.push(`❌ No cumple criterios.`);
                     }
-                } catch (e) { console.error('Eval failed', e); }
+                } catch (e) {
+                    logs.push(`⚠️ Error analizando candidato ${cand.nombre}: ${e.message}`);
+                }
             }
         }
 
+        logs.push(`-----------------------------------`);
+        logs.push(`🏁 Finalizado: ${evaluatedCount} analizados, ${messagesSent} enviados.`);
         return { success: true, sent: messagesSent, evaluated: evaluatedCount, logs };
     } catch (error) {
-        console.error('ENGINE_FATAL:', error);
-        return { success: false, error: error.message, logs: [`❌ Error: ${error.message}`] };
+        console.error('ENGINE_CRASH:', error);
+        logs.push(`🛑 CRASH: ${error.message}`);
+        return { success: false, error: error.message, stack: error.stack, logs };
     }
 }
