@@ -113,10 +113,13 @@ export default async function handler(req, res) {
 
                 console.log(`📡 [Chat] DELIVERY REQUEST: Type=${type} | FinalURL=${deliveryContent ? (deliveryContent.startsWith('http') ? deliveryContent : 'BASE64') : 'NONE'}`);
 
+                const cleanTo = candidate.whatsapp.replace(/\D/g, '');
+                console.log(`📡 [Chat] Sending to cleaned number: ${cleanTo}`);
+
                 if (type === 'text') {
-                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, finalMessage, 'chat');
+                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat');
                 } else {
-                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, candidate.whatsapp, deliveryContent, type, {
+                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, deliveryContent, type, {
                         caption: finalMessage
                     });
                 }
