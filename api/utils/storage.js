@@ -426,6 +426,18 @@ export const getEvents = async (limit = 50, offset = 0) => {
     } catch { return []; }
 };
 
+export const getEventsByType = async (type, limit = 50) => {
+    const events = await getEvents(100);
+    return events.filter(e => e.event_type === type || e.event === type).slice(0, limit);
+};
+
+export const getEventStats = async () => {
+    const client = getClient();
+    if (!client) return { total: 0 };
+    const count = await client.llen(KEYS.EVENTS_LIST);
+    return { total: count };
+};
+
 export const getRecentMessages = async (candidateId, limit = 20) => {
     const client = getClient();
     if (!client) return [];
