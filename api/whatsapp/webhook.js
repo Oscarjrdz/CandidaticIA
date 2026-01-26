@@ -85,6 +85,13 @@ export default async function handler(req, res) {
                     }
                 } catch (e) {
                     console.error('🤖 AI Error:', e);
+                    const redis = getRedisClient();
+                    if (redis) {
+                        await redis.set(`debug:error:webhook_ai:${phone}`, JSON.stringify({
+                            timestamp: new Date().toISOString(),
+                            error: e.message
+                        }), 'EX', 3600);
+                    }
                 }
             })();
 
@@ -105,9 +112,10 @@ export default async function handler(req, res) {
                 } catch (e) { }
             })();
 
-            // QUEUE: Background tasks keep running in serverless (mostly)
-            // but we return 200 immediately to avoid UltraMSG retries
-            return res.status(200).send('success_queued');
+            // AWAIT results to prevent serverless termination
+            await Promise.allSettled([aiPromise, miscPromise]);
+
+            return res.status(200).send('success');
         }
 
         return res.status(200).send('ignored');

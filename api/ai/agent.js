@@ -174,6 +174,14 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
     } catch (error) {
         console.error('❌ [AI Agent] Error:', error);
+        const redis = getRedisClient();
+        if (redis) {
+            await redis.set(`debug:error:ai:${candidateId}`, JSON.stringify({
+                timestamp: new Date().toISOString(),
+                error: error.message,
+                stack: error.stack
+            }), 'EX', 3600);
+        }
         return `ERROR: Exception - ${error.message}`;
     }
 };
