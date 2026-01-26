@@ -19,13 +19,15 @@ export default async function handler(req, res) {
             });
         }
 
-        // Sort by timestamp desc
-        logs.sort((a, b) => new Date(b.data.timestamp) - new Date(a.data.timestamp));
+        // Fetch media access logs
+        const mediaLogsRaw = await client.lrange('debug:media_access', 0, 19);
+        const mediaLogs = mediaLogsRaw.map(log => JSON.parse(log));
 
         return res.status(200).json({
             success: true,
             count: logs.length,
-            logs: logs.slice(0, 20) // Last 20 logs
+            logs: logs.slice(0, 20), // Last 20 logs
+            mediaAccess: mediaLogs
         });
 
     } catch (error) {

@@ -40,11 +40,22 @@ export default async function handler(req, res) {
 
         const meta = metaRaw ? JSON.parse(metaRaw) : { mime: 'image/jpeg' };
 
-        // Buffer optimization
+        // Binary conversion
         const buffer = Buffer.from(data, 'base64');
 
-        console.log(`📡 [Media Server] Serving ${id} to: ${req.headers['user-agent'] || 'Unknown'}`);
-        console.log(`   - IP: ${req.headers['x-forwarded-for'] || req.socket.remoteAddress}`);
+        // TRACKING: Log access to Redis for reachability debugging
+        const accessLog = {
+            timestamp: new Date().toISOString(),
+            id,
+            ext: requestedExt,
+            ua: req.headers['user-agent'] || 'Unknown',
+            ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress
+        };
+        await client.lpush('debug:media_access', JSON.stringify(accessLog));
+        await client.ltrim('debug:media_access', 0, 49); // Keep last 50
+
+        console.log(`📡 [Media Server] Serving ${id} to: ${accessLog.ua}`);
+        console.log(`   - IP: ${accessLog.ip}`);
         console.log(`   - Requested Ext: ${requestedExt}`);
 
         // MIME Spoofing (WhatsApp standard is ogg)

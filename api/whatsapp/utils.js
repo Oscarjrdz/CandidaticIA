@@ -45,41 +45,46 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         // NORMALIZE ENDPOINT: 
         // /messages/voice is ONLY for voice notes and expects minimal parameters.
-        // NORMALIZE ENDPOINT
+        // NORMALIZE ENDPOINT: Standardizing on /audio for maximum flexibility
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'voice';
-
-        // Prepare Base64 (strip prefix if not a URL)
-        let finalBody = deliveryBody;
-        if (isDataUrl) {
-            finalBody = deliveryBody.split(',')[1];
-        }
+        if (endpoint === 'voice') finalEndpoint = 'audio';
 
         switch (endpoint) {
             case 'image':
-                payload.image = finalBody;
+                payload.image = isDataUrl ? deliveryBody : (isHttp ? deliveryBody : deliveryBody); // Keep prefix if DataURL
                 if (!isHttp) payload.filename = filenameHint || 'image.jpg';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
-                payload.video = finalBody;
+                payload.video = isDataUrl ? deliveryBody : (isHttp ? deliveryBody : deliveryBody);
                 if (!isHttp) payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
-            case 'voice':
-                // For /messages/voice, UltraMSG expects RAW base64 or URL
-                // We send it as 'audio' parameter
-                payload.audio = finalBody;
-                break;
             case 'audio':
-                payload.audio = finalBody;
-                if (!isHttp) payload.filename = filenameHint || 'audio.mp3';
+            case 'voice':
+                // TRIPLE-LAYER IDENTIFICATION:
+                // 1. DataURL prefix (normalized to ogg)
+                // 2. Filename parameter
+                // 3. PTT flag
+                let audioContent = deliveryBody;
+                if (isDataUrl) {
+                    audioContent = deliveryBody.replace('audio/webm', 'audio/ogg')
+                        .replace('audio/mp4', 'audio/ogg')
+                        .replace('audio/mpeg', 'audio/ogg');
+                    if (!audioContent.includes('audio/ogg')) {
+                        audioContent = audioContent.replace('data:audio/;', 'data:audio/ogg;');
+                    }
+                }
+
+                payload.audio = audioContent;
+                payload.filename = filenameHint || 'voice.ogg';
+
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
                 }
                 break;
             case 'document':
-                payload.document = finalBody;
+                payload.document = isDataUrl ? deliveryBody.split(',')[1] : deliveryBody;
                 payload.filename = filenameHint || extraParams.filename || 'document.pdf';
                 break;
             default:
