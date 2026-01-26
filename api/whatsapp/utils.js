@@ -45,35 +45,35 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         // NORMALIZE ENDPOINT: 
         // /messages/voice is ONLY for voice notes and expects minimal parameters.
-        // NORMALIZE ENDPOINT: Standardizing on /audio for maximum flexibility
+        // NORMALIZE ENDPOINT: 
+        // /messages/voice is specifically for native voice notes.
+        // /messages/audio is for generic audio files.
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'audio';
+        if (endpoint === 'voice') finalEndpoint = 'voice';
+        if (endpoint === 'audio') finalEndpoint = 'audio';
 
         switch (endpoint) {
             case 'image':
-                payload.image = isDataUrl ? deliveryBody : (isHttp ? deliveryBody : deliveryBody); // Keep prefix if DataURL
-                if (!isHttp) payload.filename = filenameHint || 'image.jpg';
+                payload.image = isDataUrl ? deliveryBody : deliveryBody; // Keep full DataURL for images (known working)
+                if (!isHttp && !isDataUrl) payload.filename = filenameHint || 'image.jpg';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
-                payload.video = isDataUrl ? deliveryBody : (isHttp ? deliveryBody : deliveryBody);
-                if (!isHttp) payload.filename = filenameHint || 'video.mp4';
+                payload.video = isDataUrl ? deliveryBody : deliveryBody;
+                if (!isHttp && !isDataUrl) payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
-            case 'audio':
             case 'voice':
-                // RAW BASE64 STRATEGY:
-                // 1. Strip the DataURL prefix (data:audio/xxx;base64,) as many APIs expect raw binary.
-                // 2. Use /audio endpoint with filename: 'audio.ogg'.
-                // 3. Set ptt: true for voice notes.
-                let audioContent = deliveryBody;
-                if (isDataUrl) {
-                    audioContent = deliveryBody.split(',')[1];
-                }
-
-                payload.audio = audioContent;
+                // PURE VOICE STRATEGY:
+                // Many WhatsApp APIs reject extra parameters on the /voice endpoint.
+                // We send RAW base64 (no prefix) and NO filename.
+                payload.audio = isDataUrl ? deliveryBody.split(',')[1] : (isHttp ? deliveryBody : deliveryBody);
+                break;
+            case 'audio':
+                // GENERIC AUDIO STRATEGY:
+                // Use /audio endpoint, Raw Base64, and filename hint.
+                payload.audio = isDataUrl ? deliveryBody.split(',')[1] : (isHttp ? deliveryBody : deliveryBody);
                 payload.filename = filenameHint || 'audio.ogg';
-
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
                 }
