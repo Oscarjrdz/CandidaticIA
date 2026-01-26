@@ -93,7 +93,7 @@ export default async function handler(req, res) {
                 // SEND MESSAGE
                 console.log(`🚀 Sending scheduled message '${rule.name}' to ${candidate.nombre} (${cleanPhone})`);
 
-                const success = await sendBuilderBotMessage(cleanPhone, rule.message);
+                const success = await sendScheduledMessage(cleanPhone, rule.message);
 
                 if (success) {
                     sentCount++;
@@ -122,7 +122,7 @@ export default async function handler(req, res) {
                     // Avoid sending multiple rules to the same person in the same minute
                     break;
                 } else {
-                    logs.push(`[Fail] ${candidate.nombre} - ${rule.name}: API error`);
+                    logs.push(`[Fail] ${candidate.nombre} - ${rule.name}: API error (UltraMsg)`);
                 }
             }
         }
@@ -142,38 +142,20 @@ export default async function handler(req, res) {
     }
 }
 
-async function sendBuilderBotMessage(cleanPhone, message) {
+async function sendScheduledMessage(phone, message) {
     try {
-        const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
-        const redis = getRedisClient();
-        const credsJson = await redis.get('builderbot_credentials');
+        const { sendUltraMsgMessage, getUltraMsgConfig } = await import('../../whatsapp/utils.js');
+        const config = await getUltraMsgConfig();
 
-        let botId = process.env.BOT_ID;
-        let apiKey = process.env.BOT_TOKEN;
-
-        if (credsJson) {
-            const creds = JSON.parse(credsJson);
-            if (!botId) botId = creds.botId;
-            if (!apiKey) apiKey = creds.apiKey;
+        if (!config || !config.instanceId || !config.token) {
+            console.error('❌ Scheduled Msg Error: No UltraMsg config found');
+            return false;
         }
 
-        if (!botId || !apiKey) return false;
-
-        const response = await fetch(`${BUILDERBOT_API_URL}/${botId}/messages`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-builderbot': apiKey,
-            },
-            body: JSON.stringify({
-                messages: { type: "text", content: message },
-                number: cleanPhone,
-                checkIfExists: false
-            }),
-        });
-
-        return response.ok;
+        const res = await sendUltraMsgMessage(config.instanceId, config.token, phone, message);
+        return !!res;
     } catch (error) {
+        console.error('❌ Scheduled Msg Failed:', error.message);
         return false;
     }
 }

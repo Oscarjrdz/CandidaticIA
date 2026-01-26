@@ -102,7 +102,7 @@ export default async function handler(req, res) {
                 messageBody = substituteVariables(messageBody, candidate);
 
                 // Enviar mensaje
-                const success = await sendBuilderBotMessage(phone, messageBody);
+                const success = await sendBulkMessage(phone, messageBody);
 
                 if (success) {
                     totalSentInRun++;
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
                         await new Promise(r => setTimeout(r, bulk.delaySeconds * 1000));
                     }
                 } else {
-                    logs.push(`Fallo al enviar a ${candidate.nombre}`);
+                    logs.push(`Fallo al enviar a ${candidate.nombre} (API Error)`);
                 }
             }
 
@@ -149,38 +149,20 @@ export default async function handler(req, res) {
     }
 }
 
-async function sendBuilderBotMessage(phone, message) {
+async function sendBulkMessage(phone, message) {
     try {
-        const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
-        const redis = getRedisClient();
-        const credsJson = await redis.get('builderbot_credentials');
+        const { sendUltraMsgMessage, getUltraMsgConfig } = await import('../../whatsapp/utils.js');
+        const config = await getUltraMsgConfig();
 
-        let botId = process.env.BOT_ID;
-        let apiKey = process.env.BOT_TOKEN;
-
-        if (credsJson) {
-            const creds = JSON.parse(credsJson);
-            if (!botId) botId = creds.botId;
-            if (!apiKey) apiKey = creds.apiKey;
+        if (!config || !config.instanceId || !config.token) {
+            console.error('❌ Bulk Msg Error: No UltraMsg config found');
+            return false;
         }
 
-        if (!botId || !apiKey) return false;
-
-        const response = await fetch(`${BUILDERBOT_API_URL}/${botId}/messages`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-builderbot': apiKey,
-            },
-            body: JSON.stringify({
-                messages: { type: "text", content: message },
-                number: phone,
-                checkIfExists: false
-            }),
-        });
-
-        return response.ok;
+        const res = await sendUltraMsgMessage(config.instanceId, config.token, phone, message);
+        return !!res;
     } catch (error) {
+        console.error('❌ Bulk Msg Failed:', error.message);
         return false;
     }
 }
