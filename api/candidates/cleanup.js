@@ -11,22 +11,24 @@ export default async function handler(req, res) {
 
     try {
         const { getCandidates, updateCandidate } = await import('../utils/storage.js');
-        const { cleanNameWithAI, detectGender, cleanMunicipioWithAI, cleanEmploymentStatusWithAI } = await import('../utils/ai.js');
+        const { cleanNameWithAI, detectGender, cleanMunicipioWithAI } = await import('../utils/ai.js');
 
-        // 🏎️ Scan the first 500 candidates (Deep clean)
-        const { candidates } = await getCandidates(500, 0);
+        // 🏎️ Scan the first 1000 candidates (Deep clean & Re-Sort)
+        const { candidates } = await getCandidates(1000, 0);
 
         const dirtyCandidates = candidates.filter(c =>
             !c.genero ||
             (c.nombreReal && c.nombreReal.includes('*')) ||
-            !c.municipio ||
-            (c.municipio && c.municipio.length < 3)
+            (!c.municipio || c.municipio.length < 3) ||
+            (c.fechaNacimiento && !c.edad) // New Check: Missing Age
         );
 
-        console.log(`🏎️ NASCAR Motor: Starting deep clean for ${dirtyCandidates.length} candidates...`);
+        console.log(`🏎️ NASCAR Motor: Analysis complete. Found ${dirtyCandidates.length} dirty candidates out of ${candidates.length}.`);
 
         const results = [];
-        // Process in small batches to avoid hitting Gemini rate limits too hard
+        const processedIds = new Set();
+
+        // 1. Process Dirty Candidates (AI Heavy)
         for (const candidate of dirtyCandidates) {
             try {
                 const updates = {};
@@ -35,10 +37,16 @@ export default async function handler(req, res) {
                 if (!candidate.genero || (candidate.nombreReal && candidate.nombreReal.includes('*'))) {
                     const targetName = candidate.nombreReal || candidate.nombre || 'Candidato';
                     const cleanedName = await cleanNameWithAI(targetName);
-                    updates.nombreReal = cleanedName;
 
-                    const gender = await detectGender(cleanedName);
-                    if (gender !== 'Desconocido') updates.genero = gender;
+                    // Handle NULL (INVALID) from cleanNameWithAI
+                    if (cleanedName === null) {
+                        updates.nombreReal = null; // Delete garbage
+                        console.log(`🗑️ Deleting invalid name for ${candidate.id}`);
+                    } else if (cleanedName !== candidate.nombreReal) {
+                        updates.nombreReal = cleanedName;
+                        const gender = await detectGender(cleanedName);
+                        if (gender !== 'Desconocido') updates.genero = gender;
+                    }
                 }
 
                 // 2. Clean Municipality
@@ -50,7 +58,8 @@ export default async function handler(req, res) {
                 }
 
                 // 3. Calculate Age from BirthDate (NASCAR V2)
-                if (candidate.fechaNacimiento && !candidate.edad) {
+                // Also update if missing edad or logic refresh desired
+                if (candidate.fechaNacimiento && (!candidate.edad || candidate.edad === '-')) {
                     const dob = candidate.fechaNacimiento.toLowerCase().trim();
                     let birthDate = null;
 
@@ -64,12 +73,22 @@ export default async function handler(req, res) {
                         const year = parseInt(match[3]);
 
                         const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-                        const monthIndex = months.findIndex(m => m.startsWith(monthStr.slice(0, 3)));
+                        let monthIndex = months.findIndex(m => m.startsWith(monthStr.slice(0, 3)));
+
+                        // Fix: if month is number in string
+                        if (monthIndex === -1 && !isNaN(monthStr)) {
+                            monthIndex = parseInt(monthStr) - 1;
+                        }
 
                         if (monthIndex >= 0) {
                             birthDate = new Date(year, monthIndex, day);
-                        } else if (!isNaN(monthStr)) {
-                            birthDate = new Date(year, parseInt(monthStr) - 1, day);
+                        }
+                    } else {
+                        // Fallback DD/MM/YYYY
+                        const parts = dob.split(/[/-]/);
+                        if (parts.length === 3) {
+                            // Assuming DD/MM/YYYY
+                            birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
                         }
                     }
 
@@ -87,20 +106,36 @@ export default async function handler(req, res) {
                     }
                 }
 
+                // Always update if dirty (this also fixes Sort Score)
                 if (Object.keys(updates).length > 0) {
                     await updateCandidate(candidate.id, updates);
                     results.push({ id: candidate.id, status: 'cleaned' });
+                    processedIds.add(candidate.id);
                 }
             } catch (err) {
                 console.error(`❌ Cleanup failed for candidate ${candidate.id}:`, err.message);
             }
         }
 
+        // 2. RE-SORT FORCE (Refresh Score for everyone else)
+        // This ensures the "Last Message Sort" is applied to existing clean candidates too.
+        let resortCount = 0;
+        for (const candidate of candidates) {
+            if (!processedIds.has(candidate.id)) {
+                // Call update with empty object to trigger saveCandidate -> refresh score
+                // Score logic inside saveCandidate uses ultimoMensaje || primerContacto || now
+                await updateCandidate(candidate.id, {});
+                resortCount++;
+            }
+        }
+        console.log(`🏎️ NASCAR Motor: Re-sorted ${resortCount} clean candidates.`);
+
         return res.status(200).json({
             success: true,
             processed: dirtyCandidates.length,
             cleaned: results.length,
-            message: `Motor NASCAR completó la limpieza de ${results.length} perfiles.`
+            resorted: resortCount,
+            message: `Motor NASCAR completó la limpieza de ${results.length} perfiles y reordenó ${resortCount} candidatos.`
         });
 
     } catch (error) {
