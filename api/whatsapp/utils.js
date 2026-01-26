@@ -38,64 +38,27 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         // Handle Base64 vs URL
         const isHttp = typeof body === 'string' && body.startsWith('http');
-        const isDataUrl = typeof body === 'string' && body.startsWith('data:');
-
-        let deliveryBody = body;
-        let filenameHint = extraParams.filename;
-
-        // NORMALIZE ENDPOINT: 
-        // /messages/voice is ONLY for voice notes and expects minimal parameters.
-        // NORMALIZE ENDPOINT: 
-        // /messages/voice is specifically for native voice notes.
-        // /messages/audio is for generic audio files.
-        let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'voice';
-        if (endpoint === 'audio') finalEndpoint = 'audio';
 
         switch (endpoint) {
             case 'image':
-                payload.image = isDataUrl ? deliveryBody : deliveryBody; // Keep full DataURL for images (known working)
-                if (!isHttp && !isDataUrl) payload.filename = filenameHint || 'image.jpg';
+                payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : body;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
-                payload.video = isDataUrl ? deliveryBody : deliveryBody;
-                if (!isHttp && !isDataUrl) payload.filename = filenameHint || 'video.mp4';
+                payload.video = isHttp ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : body;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
-            case 'voice':
-                // PURE VOICE STRATEGY:
-                // Many WhatsApp APIs reject extra parameters on the /voice endpoint.
-                // We send RAW base64 (no prefix) and NO filename.
-                payload.audio = isDataUrl ? deliveryBody.split(',')[1] : (isHttp ? deliveryBody : deliveryBody);
-                break;
-            case 'audio':
-                // GENERIC AUDIO STRATEGY:
-                // Use /audio endpoint, Raw Base64, and filename hint.
-                payload.audio = isDataUrl ? deliveryBody.split(',')[1] : (isHttp ? deliveryBody : deliveryBody);
-                payload.filename = filenameHint || 'audio.ogg';
-                if (type === 'voice' || endpoint === 'voice') {
-                    payload.ptt = 'true';
-                }
-                break;
             case 'document':
-                payload.document = isDataUrl ? deliveryBody.split(',')[1] : deliveryBody;
-                payload.filename = filenameHint || extraParams.filename || 'document.pdf';
+                payload.document = body;
+                payload.filename = extraParams.filename || 'document.pdf';
                 break;
             default:
                 payload.body = body;
         }
 
-        const url = `https://api.ultramsg.com/${instanceId}/messages/${finalEndpoint}`;
+        const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
 
-        console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Endpoint: ${finalEndpoint}, Format: ${isHttp ? 'URL' : (isDataUrl ? 'DATAURL' : 'BASE64')})`);
-        if (!isHttp) {
-            console.log(`📦 Payload Sample: ${String(deliveryBody).substring(0, 50)}...`);
-        }
-
-        if (!isHttp && deliveryBody.length > 500000) {
-            console.warn(`⚠️ [UltraMSG] LARGE PAYLOAD: ${Math.round(deliveryBody.length / 1024)}KB.`);
-        }
+        console.log(`🚀 [UltraMSG] SEND: ${endpoint} -> ${to} (${isHttp ? 'URL' : 'TEXT'})`);
 
         const redis = getRedisClient();
         const debugKey = `debug:ultramsg:${to}`;

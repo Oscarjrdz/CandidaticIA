@@ -11,17 +11,6 @@ export default async function handler(req, res) {
     }
 
     const data = req.body;
-
-    // RADAR: Log raw payload to Redis for deep debugging
-    const client = getRedisClient();
-    if (client) {
-        await client.lpush('debug:raw_webhook', JSON.stringify({
-            timestamp: new Date().toISOString(),
-            payload: data
-        }));
-        await client.ltrim('debug:raw_webhook', 0, 9); // Keep last 10
-    }
-
     if (!data || !data.event_type) {
         return res.status(200).json({ success: true, message: 'Heartbeat or invalid payload' });
     }
@@ -29,41 +18,30 @@ export default async function handler(req, res) {
     const eventType = data.event_type;
     const messageData = data.data;
 
-    console.log(`📨 [Webhook] Event: ${eventType} | From/To: ${messageData?.from || messageData?.to} | Type: ${messageData?.type || 'N/A'}`);
+    console.log(`📨 [Webhook] Event: ${eventType} | From: ${messageData?.from || 'N/A'}`);
 
     try {
         // 1. Handle Message Acknowledgments (Lifecycle Tracking)
         if (eventType === 'message_ack') {
             const { id, status, to } = messageData;
-            console.log(`📡 [Webhook] Message ACK: ${id} -> ${status} for ${to}`);
-
             try {
-                const phone = to.replace(/\D/g, '');
+                const phone = to?.replace(/\D/g, '');
                 const candidateId = await getCandidateIdByPhone(phone);
-
-                if (candidateId) {
-                    await updateMessageStatus(candidateId, id, status);
-                    console.log(`✅ [Webhook] Updated status for ${id} to ${status}`);
-                }
-            } catch (ackErr) {
-                console.error('❌ [Webhook] Error processing ACK:', ackErr.message);
-            }
+                if (candidateId) await updateMessageStatus(candidateId, id, status);
+            } catch (ackErr) { /* Silent fail for ACKs */ }
             return res.status(200).send('ok');
         }
 
         // 2. Handle Incoming Messages
         if (eventType === 'message_received') {
-            const from = messageData.from; // e.g. "5218112345678@c.us"
-            const body = messageData.body;
+            const from = messageData.from;
+            const body = messageData.body || '';
             const pushName = messageData.pushname;
             const phone = from.replace(/\D/g, '');
-
-            console.log(`📩 [Webhook] PROCESSING Message from ${phone} (${pushName})`);
 
             // Find or Create Candidate
             let candidateId = await getCandidateIdByPhone(phone);
             if (!candidateId) {
-                console.log(`✨ New candidate detected: ${phone}`);
                 const newCandidate = await saveCandidate({
                     whatsapp: phone,
                     nombre: pushName || 'Desconocido',
@@ -76,18 +54,15 @@ export default async function handler(req, res) {
             // Save Message to History
             const msgToSave = {
                 from: 'user',
-                content: body || '',
+                content: body,
                 type: messageData.type || 'text',
                 timestamp: new Date().toISOString()
             };
-
-            if (messageData.media || ['image', 'video', 'audio', 'voice', 'ptt', 'document'].includes(messageData.type)) {
-                msgToSave.mediaUrl = messageData.media;
-            }
+            if (messageData.media) msgToSave.mediaUrl = messageData.media;
 
             await saveMessage(candidateId, msgToSave);
 
-            // Update candidate last activity
+            // Update activity
             await updateCandidate(candidateId, {
                 ultimoMensaje: new Date().toISOString(),
                 unread: true
@@ -96,64 +71,41 @@ export default async function handler(req, res) {
             // Trigger parallel background tasks
             const config = await getUltraMsgConfig();
 
-            // Mark as Read (Async)
-            const readReceiptPromise = config ? (async () => {
-                await timeout(1000);
-                return markUltraMsgAsRead(config.instanceId, config.token, from);
-            })() : Promise.resolve();
-
-            // Fetch Profile Pic (Async, cache for 2s)
-            const profilePicPromise = config ? Promise.race([
-                (async () => {
-                    try {
-                        const contactInfo = await getUltraMsgContact(config.instanceId, config.token, from);
-                        const url = contactInfo?.success || contactInfo?.image;
-                        if (url && typeof url === 'string' && url.startsWith('http')) {
-                            await updateCandidate(candidateId, { profilePic: url });
-                        }
-                    } catch (e) { }
-                })(),
-                timeout(2000)
-            ]) : Promise.resolve();
-
-            // AI Integration (Async)
+            // AI Integration (Main logic)
             const aiPromise = (async () => {
                 try {
                     const redis = getRedisClient();
                     const isActive = await redis?.get('bot_ia_active');
-
-                    if (redis) {
-                        await redis.set(`debug:webhook:${phone}`, JSON.stringify({
-                            timestamp: new Date().toISOString(),
-                            event: 'ai_triggered',
-                            body: body || '(empty)'
-                        }), 'EX', 3600);
-                    }
-
                     if (isActive !== 'false') {
-                        const result = await processMessage(candidateId, body || '');
-                        console.log(`🤖 AI Processed for ${phone}:`, result.substring(0, 50));
+                        await processMessage(candidateId, body);
                     }
                 } catch (e) {
                     console.error('🤖 AI Error:', e);
-                    const redis = getRedisClient();
-                    if (redis) {
-                        await redis.set(`debug:webhook:${phone}:error`, JSON.stringify({
-                            timestamp: new Date().toISOString(),
-                            error: e.message
-                        }), 'EX', 3600);
-                    }
                 }
             })();
 
-            // Don't block the webhook response too long
-            Promise.allSettled([readReceiptPromise, profilePicPromise, aiPromise])
-                .then(() => console.log(`🏁 [Webhook] Finished background tasks for ${phone}`));
+            // Misc Background Tasks
+            const miscPromise = (async () => {
+                if (!config) return;
+                await Promise.allSettled([
+                    markUltraMsgAsRead(config.instanceId, config.token, from),
+                    (async () => {
+                        try {
+                            const info = await getUltraMsgContact(config.instanceId, config.token, from);
+                            const url = info?.success || info?.image;
+                            if (url?.startsWith('http')) await updateCandidate(candidateId, { profilePic: url });
+                        } catch (e) { }
+                    })()
+                ]);
+            })();
+
+            // Return quickly
+            Promise.allSettled([aiPromise, miscPromise])
+                .then(() => console.log(`🏁 [Webhook] Done for ${phone}`));
 
             return res.status(200).send('success');
         }
 
-        console.log(`⚠️ [Webhook] Ignored event type: ${eventType}`);
         return res.status(200).send('ignored');
 
     } catch (error) {

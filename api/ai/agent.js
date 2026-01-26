@@ -101,7 +101,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // 3. Initialize Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        // 4. Generate Content (With Fallback Strategy)
+        // 4. Generate Content
         // Verified working models for this project: 2.5-flash and flash-latest
         const modelsToTry = [
             "gemini-2.5-flash",
@@ -117,24 +117,10 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         for (const mName of modelsToTry) {
             try {
-                // console.log(`🔍 [AI Agent] Trying model: ${mName}...`);
-                const model = genAI.getGenerativeModel({
-                    model: mName,
-                    systemInstruction: systemInstruction
-                });
-
-                const chat = model.startChat({
-                    history: recentHistory,
-                    // systemInstruction moved to model init
-                    generationConfig: {
-                        maxOutputTokens: 1000,
-                        temperature: 0.7,
-                    }
-                });
-
+                const model = genAI.getGenerativeModel({ model: mName, systemInstruction });
+                const chat = model.startChat({ history: recentHistory });
                 result = await chat.sendMessage(userMessage);
                 successModel = mName;
-                // console.log(`✅ [AI Agent] Success with ${mName}`);
                 break;
             } catch (e) {
                 lastError = e.message;
@@ -148,7 +134,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         }
 
         const responseText = result.response.text();
-        console.log(`🤖 [AI Agent] Response generated (${successModel})`);
+        console.log(`🤖 [AI Agent] Generated (${successModel})`);
 
         // 5. IMMEDIATE DELIVERY (Priority 1)
         const config = await getUltraMsgConfig();
@@ -159,19 +145,18 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // 6. BACKGROUND TASKS (Non-blocking)
         const backgroundPromise = (async () => {
             try {
-                // Save to history
-                await saveMessage(candidateId, {
-                    from: 'bot',
-                    content: responseText,
-                    type: 'text',
-                    timestamp: new Date().toISOString()
-                });
-
-                // Update activity
-                await updateCandidate(candidateId, {
-                    lastBotMessageAt: new Date().toISOString(),
-                    ultimoMensaje: new Date().toISOString()
-                });
+                await Promise.allSettled([
+                    saveMessage(candidateId, {
+                        from: 'bot',
+                        content: responseText,
+                        type: 'text',
+                        timestamp: new Date().toISOString()
+                    }),
+                    updateCandidate(candidateId, {
+                        lastBotMessageAt: new Date().toISOString(),
+                        ultimoMensaje: new Date().toISOString()
+                    })
+                ]);
 
                 // Run Automations
                 const { processBotResponse } = await import('../utils/automations.js');
@@ -181,12 +166,10 @@ export const processMessage = async (candidateId, incomingMessage) => {
             }
         })();
 
-        // Await delivery but not automations if possible (though in serverless we should await everything)
+        // Await delivery to ensure message is sent
         await deliveryPromise;
 
-        // Final background cleanup (Wait for it in serverless)
-        await backgroundPromise;
-
+        // Return while background tasks finish (optional in serverless but safe)
         return responseText;
 
     } catch (error) {
