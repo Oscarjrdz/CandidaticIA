@@ -11,6 +11,17 @@ export default async function handler(req, res) {
     }
 
     const data = req.body;
+
+    // RADAR: Log raw payload to Redis for deep debugging
+    const client = getRedisClient();
+    if (client) {
+        await client.lpush('debug:raw_webhook', JSON.stringify({
+            timestamp: new Date().toISOString(),
+            payload: data
+        }));
+        await client.ltrim('debug:raw_webhook', 0, 9); // Keep last 10
+    }
+
     if (!data || !data.event_type) {
         return res.status(200).json({ success: true, message: 'Heartbeat or invalid payload' });
     }

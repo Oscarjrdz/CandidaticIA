@@ -148,60 +148,44 @@ export const processMessage = async (candidateId, incomingMessage) => {
         }
 
         const responseText = result.response.text();
-        console.log(`🤖 [AI Agent] Response generated (${successModel}): "${responseText}"`);
+        console.log(`🤖 [AI Agent] Response generated (${successModel})`);
 
-        // Save to Redis for DEBUG view
-        if (redis) {
-            await redis.set(`debug:ai:${candidateId}`, JSON.stringify({
-                timestamp: new Date().toISOString(),
-                userMessage,
-                responseText,
-                model: successModel
-            }), 'EX', 3600);
-        }
-
-        // 5. Save AI Response to Storage
-        await saveMessage(candidateId, {
-            from: 'bot',
-            content: responseText,
-            type: 'text',
-            timestamp: new Date().toISOString()
-        });
-
-        await updateCandidate(candidateId, {
-            lastBotMessageAt: new Date().toISOString(),
-            ultimoMensaje: new Date().toISOString()
-        });
-
-        // --- AUTH-DATA CAPTURE (New Feature) ---
-        // Await extraction to ensure it finishes in serverless
-        const { processBotResponse } = await import('../utils/automations.js');
-        await processBotResponse(candidateId, responseText).catch(e => console.error('Automation Error:', e));
-
-        // 6. Send via UltraMsg
-        // 6. Send via UltraMsg
+        // 5. IMMEDIATE DELIVERY (Priority 1)
         const config = await getUltraMsgConfig();
-        // Candidate Data strictly required for WhatsApp number
-        // We already fetched 'candidateData' at the top.
+        const deliveryPromise = (config && candidateData?.whatsapp)
+            ? sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText)
+            : Promise.resolve();
 
-        if (config && candidateData && candidateData.whatsapp) {
-            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
-            console.log(`✅ [AI Agent] Message sent to ${candidateData.whatsapp}`);
-        } else {
-            // Fallback if data was missing or fetch failed
-            console.warn('⚠️ [AI Agent] could not send message using cached data. Re-checking...');
-            const freshKey = `candidate:${candidateId}`;
+        // 6. BACKGROUND TASKS (Non-blocking)
+        const backgroundPromise = (async () => {
             try {
-                const freshRaw = await redis.get(freshKey);
-                if (freshRaw) {
-                    const freshData = JSON.parse(freshRaw);
-                    if (freshData && freshData.whatsapp) {
-                        await sendUltraMsgMessage(config.instanceId, config.token, freshData.whatsapp, responseText);
-                        console.log(`✅ [AI Agent] Message sent (retry) to ${freshData.whatsapp}`);
-                    }
-                }
-            } catch (e) { console.error('Retry failed', e); }
-        }
+                // Save to history
+                await saveMessage(candidateId, {
+                    from: 'bot',
+                    content: responseText,
+                    type: 'text',
+                    timestamp: new Date().toISOString()
+                });
+
+                // Update activity
+                await updateCandidate(candidateId, {
+                    lastBotMessageAt: new Date().toISOString(),
+                    ultimoMensaje: new Date().toISOString()
+                });
+
+                // Run Automations
+                const { processBotResponse } = await import('../utils/automations.js');
+                await processBotResponse(candidateId, responseText);
+            } catch (bgErr) {
+                console.error('⚠️ [AI Agent] Background Task Error:', bgErr);
+            }
+        })();
+
+        // Await delivery but not automations if possible (though in serverless we should await everything)
+        await deliveryPromise;
+
+        // Final background cleanup (Wait for it in serverless)
+        await backgroundPromise;
 
         return responseText;
 
