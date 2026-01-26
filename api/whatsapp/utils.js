@@ -40,11 +40,10 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         const isHttp = typeof body === 'string' && body.startsWith('http');
         const isDataUrl = typeof body === 'string' && body.startsWith('data:');
 
-        // Clean Base64 but keep a hint of mime type if possible, or use filename hint
         let deliveryBody = body;
         if (isDataUrl) {
-            // Browsers often use audio/webm, UltraMSG/WhatsApp prefer audio/ogg
-            deliveryBody = body.replace('audio/webm', 'audio/ogg');
+            // Strip the "data:mime/type;base64," part as UltraMSG expects raw base64
+            deliveryBody = body.split(',')[1] || body;
         }
 
         switch (endpoint) {
@@ -63,13 +62,13 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 if (endpoint === 'voice' || type === 'voice') {
                     payload.ptt = 'true';
                 }
-                // CRITICAL: Provide a filename hint for Base64 to avoid "extension not supported"
+                // CRITICAL: Provide a filename hint for Base64 to avoid delivery failures
                 if (!isHttp) {
-                    payload.filename = 'voice.ogg';
+                    payload.filename = endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3';
                 }
                 break;
             case 'document':
-                payload.document = body;
+                payload.document = deliveryBody;
                 payload.filename = extraParams.filename || 'document.pdf';
                 break;
             default:
@@ -80,12 +79,20 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Endpoint: ${endpoint}, Format: ${isHttp ? 'URL' : 'BASE64'})`);
 
+        if (!isHttp && deliveryBody.length > 500000) {
+            console.warn(`⚠️ [UltraMSG] LARGE PAYLOAD: ${Math.round(deliveryBody.length / 1024)}KB. Consider using URL strategy.`);
+        }
+
         const redis = getRedisClient();
         const debugKey = `debug:ultramsg:${to}`;
 
         let response;
         try {
-            response = await axios.post(url, payload, { timeout: 25000 });
+            response = await axios.post(url, payload, {
+                timeout: 30000,
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity
+            });
             console.log(`✅ [UltraMSG] RESPONSE:`, JSON.stringify(response.data));
 
             if (redis) {

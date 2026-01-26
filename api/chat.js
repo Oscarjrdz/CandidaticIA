@@ -97,10 +97,18 @@ export default async function handler(req, res) {
             // 2. Send via UltraMsg
             try {
                 let sendResult;
-                const deliveryContent = base64Data || mediaUrl;
+                let deliveryContent = base64Data || mediaUrl;
+
+                // Ensure absolute URL for relative paths
+                if (mediaUrl && !mediaUrl.startsWith('http')) {
+                    const protocol = req.headers['x-forwarded-proto'] || 'http';
+                    const host = req.headers.host;
+                    deliveryContent = `${protocol}://${host}${mediaUrl}`;
+                    console.log(`🌐 [Chat] Converted relative URL to absolute: ${deliveryContent}`);
+                }
 
                 if (base64Data) {
-                    console.log(`📦 [Chat] Base64 audio detected (Size: ${base64Data.length})`);
+                    console.log(`📦 [Chat] Base64 data detected (Size: ${Math.round(base64Data.length / 1024)}KB)`);
                 }
 
                 if (type === 'text') {

@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { image, type } = req.body; // Expects base64 string
+        const { image, type: requestedType } = req.body; // Expects base64 string
 
         if (!image) {
             return res.status(400).json({ error: 'No image data provided' });
@@ -17,18 +17,40 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'Database connection failed' });
         }
 
+        // Basic MIME detection from Data URL or Magic Bytes hint
+        let mime = 'image/jpeg';
+        let base64Data = image;
+
+        if (image.startsWith('data:')) {
+            const parts = image.split(',');
+            mime = parts[0].split(':')[1].split(';')[0];
+            base64Data = parts[1];
+        }
+
+        // Security Check: Max size (Vercel limit is 4.5MB total request)
+        if (base64Data.length > 5 * 1024 * 1024) {
+            return res.status(413).json({ error: 'Payload too large' });
+        }
+
         // Generate ID
-        const id = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const id = `img_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const key = `image:${id}`;
+        const metaKey = `meta:image:${id}`;
 
-        // Store in Redis (Expire in 30 days to keep DB healthy)
-        // We store the raw base64 data to keep it simple
-        await client.set(key, image, 'EX', 30 * 24 * 60 * 60);
+        // Store in Redis
+        await client.set(key, base64Data, 'EX', 30 * 24 * 60 * 60);
+        await client.set(metaKey, JSON.stringify({
+            mime,
+            size: base64Data.length,
+            createdAt: new Date().toISOString()
+        }), 'EX', 30 * 24 * 60 * 60);
 
-        // Return relative path to avoid VERCEL_URL domain mismatch issues
+        // Return relative path
         const publicUrl = `/api/image?id=${id}`;
 
-        return res.status(200).json({ success: true, url: publicUrl, id });
+        console.log(`📤 [Upload] Stored ${id} (${mime}, ${Math.round(base64Data.length / 1024)}KB)`);
+
+        return res.status(200).json({ success: true, url: publicUrl, id, mime });
 
     } catch (error) {
         console.error('Upload Error:', error);

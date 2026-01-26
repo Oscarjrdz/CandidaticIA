@@ -15,41 +15,32 @@ export default async function handler(req, res) {
         }
 
         const key = `image:${id}`;
-        const data = await client.get(key);
+        const metaKey = `meta:image:${id}`;
+
+        const [data, metaRaw] = await Promise.all([
+            client.get(key),
+            client.get(metaKey)
+        ]);
 
         if (!data) {
-            return res.status(404).send('Image not found');
+            return res.status(404).send('Not Found');
         }
 
-        let imageBuffer;
-        let mimeType = 'image/jpeg';
+        const meta = metaRaw ? JSON.parse(metaRaw) : { mime: 'image/jpeg' };
 
-        // Robust Base64 Parsing with sanitization
-        try {
-            const cleanData = data.toString().replace(/\s/g, '');
+        // Buffer optimization
+        const buffer = Buffer.from(data, 'base64');
 
-            if (cleanData.includes(',')) {
-                // "data:mime/type;base64,..."
-                const parts = cleanData.split(',');
-                const match = parts[0].match(/data:(.*?);/);
-                if (match) mimeType = match[1];
-                imageBuffer = Buffer.from(parts[1], 'base64');
-            } else {
-                // Raw base64
-                imageBuffer = Buffer.from(cleanData, 'base64');
-            }
-        } catch (e) {
-            console.error('Base64 Parse Error:', e);
-            return res.status(500).send('Media Corrupt');
-        }
+        // Headers for scale and reliability
+        res.setHeader('Content-Type', meta.mime || 'image/jpeg');
+        res.setHeader('Content-Length', buffer.length);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // 1 year cache
+        res.setHeader('Access-Control-Allow-Origin', '*');
 
-        res.setHeader('Content-Type', mimeType);
-        // Cache long-term as images are immutable by ID
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        res.status(200).send(imageBuffer);
+        return res.status(200).send(buffer);
 
     } catch (error) {
-        console.error('Image Serve Error:', error);
-        res.status(500).send('Server Error');
+        console.error('Error in /api/image:', error);
+        return res.status(500).send('Internal Error');
     }
 }

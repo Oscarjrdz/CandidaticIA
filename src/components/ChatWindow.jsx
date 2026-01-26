@@ -93,18 +93,23 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
 
     const handleSend = async (e, forceType = 'text', forceMedia = null) => {
         if (e) e.preventDefault();
-        if ((!newMessage.trim() && !audioBlob && !forceMedia) || sending) return;
+
+        const messageToProcess = newMessage.trim();
+        if ((!messageToProcess && !audioBlob && !forceMedia) || sending) return;
 
         setSending(true);
         try {
+            // Apply variable substitution locally for instant feedback if possible
+            // But real substitution happens in backend.
+
             let payload = {
                 candidateId: candidate.id,
-                message: newMessage,
+                message: messageToProcess,
                 type: forceType,
                 mediaUrl: forceMedia
             };
 
-            // Handle Audio Attachment if present
+            // Handle Audio Recording Attachment
             if (audioBlob && !forceMedia) {
                 const reader = new FileReader();
                 const base64Promise = new Promise((resolve) => {
@@ -113,20 +118,20 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                 });
                 const base64 = await base64Promise;
 
-                // 2. Upload to get temp URL (for history visualization)
+                // Upload to Redis for history persistence & scale
                 const uploadRes = await fetch('/api/upload', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: base64 })
+                    body: JSON.stringify({ image: base64 }) // Endpoint accepts 'image' field for any base64
                 });
                 const uploadData = await uploadRes.json();
 
                 if (uploadData.success) {
-                    payload.mediaUrl = `${window.location.origin}${uploadData.url}`;
+                    payload.mediaUrl = uploadData.url; // Relative URL, backend will convert to absolute
                     payload.type = 'voice';
-                    payload.base64Data = base64; // NEW: Pass direct data for reliability
+                    payload.base64Data = base64; // Stripped in backend orchestration
                 } else {
-                    throw new Error('Falló la subida del audio');
+                    throw new Error('Falló el procesamiento del audio');
                 }
             }
 
@@ -143,10 +148,8 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                 setAudioBlob(null);
                 loadMessages();
             } else {
-                const errorMsg = typeof data.details === 'object'
-                    ? JSON.stringify(data.details, null, 2)
-                    : (data.details || data.error);
-                alert('Error enviando mensaje: ' + errorMsg);
+                const errorMsg = data.details || data.error || 'Error desconocido';
+                alert('Error al enviar: ' + errorMsg);
             }
         } catch (error) {
             console.error('Error enviando:', error);
