@@ -53,6 +53,18 @@ export default async function handler(req, res) {
 
             // 🏎️ FERRARI LOOKUP: O(1) Hash Table
             let candidateId = await getCandidateIdByPhone(phone);
+            let candidate = null;
+
+            if (candidateId) {
+                const { getCandidateById } = await import('../utils/storage.js');
+                candidate = await getCandidateById(candidateId);
+
+                if (!candidate) {
+                    console.warn(`👻 Ghost Candidate detected in Index: ${candidateId} for ${phone}. Re-creating...`);
+                    candidateId = null; // Force re-creation
+                }
+            }
+
             if (!candidateId) {
                 const newCandidate = await saveCandidate({
                     whatsapp: phone,
