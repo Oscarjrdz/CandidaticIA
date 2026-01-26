@@ -127,18 +127,25 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // 3. Configuration & Context Injection
         let apiKey = process.env.GEMINI_API_KEY;
         const today = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        let systemInstruction = `${DEFAULT_SYSTEM_PROMPT}\nHOY ES: ${today}. Usa esta fecha para calcular edades o tiempos relativos.`;
 
+        let customPrompt = '';
         if (redis) {
-            const customPrompt = await redis.get('bot_ia_prompt');
-            if (customPrompt) systemInstruction = customPrompt;
-
+            customPrompt = await redis.get('bot_ia_prompt') || '';
             const aiConfig = await redis.get('ai_config');
             if (aiConfig) {
                 const parsed = JSON.parse(aiConfig);
                 if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
             }
         }
+
+        // ASSEMBLE SYSTEM INSTRUCTION WITH PRIORITY
+        let systemInstruction = `${DEFAULT_SYSTEM_PROMPT}\n`;
+
+        if (customPrompt) {
+            systemInstruction += `\n[DIRECTIVA SUPREMA DEL ADMINISTRADOR - PRIORIDAD MÁXIMA]:\n${customPrompt}\n\n`;
+        }
+
+        systemInstruction += `FECHA DE HOY: ${today}. Usa esto para cálculos de tiempo.\n`;
 
         // Optional: Reinforce basic rules if needed
         // systemInstruction += `\n\n[REGLA]: Escribe texto plano y limpio.`;
@@ -150,20 +157,28 @@ export const processMessage = async (candidateId, incomingMessage) => {
             const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Inicio de conversación';
 
             const dnaProfile = `
-[DNA DEL CANDIDATO - MEMORIA INTERNA]:
+[CONTEXTO DE MEMORIA ADN - ESTADO ACTUAL EXCLUSIVO]:
 - Nombre WhatsApp: ${candidateData.nombre || 'Desconocido'}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
-- Edad: ${candidateData.edad || 'No proporcionada'} ($dato_nacimiento: ${candidateData.fechaNacimiento || 'N/A'})
+- Edad: ${candidateData.edad || 'No proporcionada'}
 - Municipio/Ciudad: ${candidateData.municipio || 'No proporcionado'}
 - Categoría de Interés: ${candidateData.categoria || 'Consulta General'}
 - Estatus de Postulación: ${candidateData.status || 'Interesado'}
 - Última Interacción: ${candidateData.ultimoMensaje || 'Reciente'} (Primer contacto: ${candidateData.primerContacto || 'N/A'})
-- Perfil: ${candidateData.perfilGeneral || 'Sin resumen previo'}
 - Hilo Reciente (Últimos 10 prompts): ${themes}
 `.trim();
 
-            systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIÓN DE MEMORIA Y CAPTURA]: Eres un humano con memoria. Si el candidato ya nos ha contactado antes, salúdalo amablemente. \n\nCRÍTICO: El "Nombre WhatsApp" es solo referencial. Si el "Nombre Real" es "No proporcionado", DEBES preguntar por el nombre real del candidato para completar su expediente. REVISA los campos de arriba (Edad, Municipio, Categoría) y si no tienen valor, pregúntalos y confírmalos siguiendo las reglas de captura.`;
+            systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIONES DE IDENTIDAD Y CAPTURA]:
+1. Eres un humano con memoria; usa el ADN de arriba para personalizar el trato.
+2. Si el "Nombre Real" del ADN dice "No proporcionado", DEBES preguntar por él aunque el "Nombre WhatsApp" tenga valor.
+3. Para GUARDAR datos en el sistema, usa estas frases exactas si estás confirmando:
+   - "Mucho gusto, tu nombre es [Nombre]"
+   - "Entendido, vives en [Municipio]"
+   - "Te he anotado buscando empleo de [Categoría]"
+   - "Entonces [Sí/No] tienes empleo actualmente"
+4. RESPETA SIEMPRE la [DIRECTIVA SUPREMA] arriba mencionada por sobre cualquier otro dato.
+`;
         }
 
         // INJECT VACANCIES & CATEGORIES (Conditional)
