@@ -9,7 +9,7 @@ export default async function handler(req, res) {
 
     try {
         const { getCandidates, updateCandidate } = await import('../utils/storage.js');
-        const { cleanNameWithAI, detectGender, cleanEmploymentStatusWithAI, cleanMunicipioWithAI } = await import('../utils/ai.js');
+        const { cleanNameWithAI, detectGender, cleanEmploymentStatusWithAI, cleanMunicipioWithAI, cleanDateWithAI } = await import('../utils/ai.js');
 
         const { candidates } = await getCandidates(parseInt(limit), parseInt(offset));
 
@@ -63,6 +63,16 @@ export default async function handler(req, res) {
                     }
                 }
 
+                // 5. Clean Date with AI
+                const originalDate = candidate.fechaNacimiento || candidate.fecha;
+                if (originalDate && originalDate.length > 5 && !/^\d{2}\/\d{2}\/\d{4}$/.test(originalDate)) {
+                    const cleanedDate = await cleanDateWithAI(originalDate);
+                    if (cleanedDate !== 'INVALID' && cleanedDate !== originalDate) {
+                        updates[candidate.fechaNacimiento ? 'fechaNacimiento' : 'fecha'] = cleanedDate;
+                        changed = true;
+                    }
+                }
+
                 if (changed) {
                     await updateCandidate(candidate.id, updates);
                     updatedCount++;
@@ -71,6 +81,7 @@ export default async function handler(req, res) {
                         name: { before: originalName, after: updates.nombreReal || originalName },
                         municipio: { before: originalMunicipio, after: updates.municipio || originalMunicipio },
                         empleo: { before: originalEmpleo, after: updates.tieneEmpleo || originalEmpleo },
+                        date: { before: originalDate, after: (updates.fechaNacimiento || updates.fecha) || originalDate },
                         gender: updates.genero || candidate.genero
                     });
                 }
