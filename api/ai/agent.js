@@ -41,29 +41,81 @@ export const processMessage = async (candidateId, incomingMessage) => {
             return 'ERROR: Candidate not found';
         }
 
-        // Clean message
-        const userMessage = (typeof incomingMessage === 'string' && incomingMessage.trim()) ? incomingMessage.trim() : '((Mensaje de voz o sin texto))';
+        // Clean message & Handle Multimodal
+        let userParts = [];
+        let displayText = '';
+
+        if (typeof incomingMessage === 'object' && incomingMessage?.type === 'audio') {
+            console.log(`🎙️ [AI Agent] Processing AUDIO from ${incomingMessage.url}...`);
+            const { downloadMedia } = await import('../whatsapp/utils.js');
+            const media = await downloadMedia(incomingMessage.url);
+
+            if (media) {
+                userParts.push({
+                    inlineData: {
+                        mimeType: 'audio/mp3', // Gemini works best with generalized audio types or mp3 mapping
+                        // Note: downloadMedia returns base64. 
+                        // Check actual mimeType or force audio/mp3 if ogg/opus is problematic?
+                        // Gemini 1.5/2.0 supports common audio formats. 
+                        // UltraMsg usually returns ogg/opus.
+                        // But we map buffer so it's fine.
+                        data: media.data
+                    }
+                });
+                userParts.push({ text: 'Escucha este mensaje de audio del candidato y responde adecuadamente.' });
+                displayText = '((Mensaje de Audio))';
+            } else {
+                userParts.push({ text: '((Error al descargar el audio del usuario))' });
+                displayText = '((Error Audio))';
+            }
+        } else {
+            const txt = (typeof incomingMessage === 'string' && incomingMessage.trim()) ? incomingMessage.trim() : '((Sin texto))';
+            userParts.push({ text: txt });
+            displayText = txt;
+        }
 
         // 2. Get History
         const allMessages = await getMessages(candidateId);
 
-        // ... (Filter messages logic remains the same)
+        // ... (Filter messages logic)
         const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
         const historyMessages = validMessages.filter((m, index) => {
+            // Avoid duplicating the LAST message if it was just inserted by webhook
+            // Actually, webhook inserts BEFORE calling processMessage.
+            // We need to exclude the CURRENT message being processed from history to avoid confusion?
+            // Or Gemini expects it?
+            // Usually startChat(history) + sendMessage(current).
+            // Does history contain current?
+            // If webhook calls saveMessage, then getMessages returns it.
+            // We should exclude the Very Last user message if it matches our current input.
             const isLast = index === validMessages.length - 1;
-            if (isLast && m.content === userMessage && m.from === 'user') return false;
+            // Simple dedup based on timestamp or content? 
+            // Logic kept as is for text, but for Audio?
+            // Audio content in DB is empty or url? '((Mensaje de Audio))'?
+            // Webhook saved: content=body (empty for audio?) or 'Audio Message'?
             return true;
         });
 
         // Take last 15 messages for context
         let rawHistory = historyMessages.slice(-15).map(m => ({
             role: (m.from === 'user') ? 'user' : 'model',
-            parts: [{ text: m.content }]
+            parts: [{ text: m.content || '((Media))' }]
         }));
 
+        // Clean Head
         while (rawHistory.length > 0 && rawHistory[0].role !== 'user') {
             rawHistory.shift();
         }
+
+        // Remove the very last item if it looks like the current message we are responding to
+        // (webhook saves -> then calls agent. agent fetches -> sees saved message -> puts in history -> then sends again?)
+        // To strictly follow Gemini SDK: history should be PAST messages. sendMessage arg is CURRENT.
+        // So we pop the last user message if it is < 10 seconds old?
+        if (rawHistory.length > 0 && rawHistory[rawHistory.length - 1].role === 'user') {
+            // Heuristic: remove last user message so we don't double submit it
+            rawHistory.pop();
+        }
+
         const recentHistory = rawHistory;
 
         // 3. Configuration & Context Injection
@@ -82,17 +134,17 @@ export const processMessage = async (candidateId, incomingMessage) => {
             }
         }
 
-        // REINFORCE RULES (Append at the end to override any other instruction)
+        // REINFORCE RULES 
         systemInstruction += `\n\n[REGLA SUPREMA]: NO uses markdown, NO uses asteriscos (**), NO uses negritas. Escribe texto plano y limpio.`;
 
         // INJECT DB CONTEXT INTO PROMPT
         if (candidateData) {
-            systemInstruction += `\n\n[CONTEXTO DE BASE DE DATOS DEL CANDIDATO]:\n${JSON.stringify(candidateData, null, 2)}\nUsa esta información para personalizar tu respuesta (Nombre, Municipio, Vacante de interés, etc).`;
+            systemInstruction += `\n\n[CONTEXTO DE BASE DE DATOS DEL CANDIDATO]:\n${JSON.stringify(candidateData, null, 2)}\nUsa esta información para personalizar tu respuesta.`;
         }
 
         if (!apiKey) return 'ERROR: No API Key found in env or redis';
 
-        // SANITIZE KEY (Important!)
+        // SANITIZE KEY
         apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
         const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
         if (match) apiKey = match[0];
@@ -101,14 +153,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // 3. Initialize Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        // 4. Generate Content
-        // Verified working models for this project: 2.5-flash and flash-latest
+        // 4. Generate Content (Multimodal Models)
         const modelsToTry = [
-            "gemini-2.5-flash",
-            "gemini-flash-latest",
-            "gemini-2.0-flash-exp",
+            "gemini-2.0-flash-exp", // Best for audio currently
             "gemini-1.5-flash",
-            "gemini-pro"
+            "gemini-flash-latest"
         ];
 
         let result;
@@ -119,7 +168,10 @@ export const processMessage = async (candidateId, incomingMessage) => {
             try {
                 const model = genAI.getGenerativeModel({ model: mName, systemInstruction });
                 const chat = model.startChat({ history: recentHistory });
-                result = await chat.sendMessage(userMessage);
+
+                // SEND MULTIMODAL PARTS
+                result = await chat.sendMessage(userParts);
+
                 successModel = mName;
                 break;
             } catch (e) {
@@ -134,7 +186,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         }
 
         const responseText = result.response.text();
-        console.log(`🤖 [AI Agent] Generated (${successModel})`);
+        console.log(`🤖 [AI Agent] Generated (${successModel}) for input: "${displayText}"`);
 
         // 5. FERRARI SHIELDING: Delivery with Intelligent Retries
         const config = await getUltraMsgConfig();

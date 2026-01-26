@@ -153,3 +153,18 @@ export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
         return null;
     }
 };
+
+export const downloadMedia = async (url) => {
+    try {
+        console.log(`📥 [UltraMsg] Downloading media from ${url}...`);
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        const buffer = Buffer.from(response.data);
+        return {
+            data: buffer.toString('base64'),
+            mimeType: response.headers['content-type']
+        };
+    } catch (error) {
+        console.error('❌ Failed to download media:', error.message);
+        return null;
+    }
+};

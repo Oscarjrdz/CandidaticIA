@@ -76,11 +76,25 @@ export default async function handler(req, res) {
             }
 
             // Sequential ops (Context preservation)
+            let agentInput = body;
+            const messageType = messageData.type || 'text';
+
             const msgToSave = {
-                from: 'user', content: body, type: messageData.type || 'text',
+                from: 'user', content: body, type: messageType,
                 timestamp: new Date().toISOString()
             };
-            if (messageData.media) msgToSave.mediaUrl = messageData.media;
+
+            // MULTIMODAL AUDIO SUPPORT 🎙️
+            if (messageType === 'ptt' || messageType === 'audio') {
+                // UltraMsg sends media URL in 'media' or 'body' depending on version
+                const mediaUrl = messageData.media || messageData.body;
+                if (mediaUrl && mediaUrl.startsWith('http')) {
+                    msgToSave.mediaUrl = mediaUrl;
+                    agentInput = { type: 'audio', url: mediaUrl }; // Flag for Agent
+                }
+            } else if (messageData.media) {
+                msgToSave.mediaUrl = messageData.media;
+            }
 
             // Execute storage and AI in parallel where possible, but context needs history.
             // We await history save to ensure the AI sees the current message.
@@ -95,7 +109,9 @@ export default async function handler(req, res) {
                 try {
                     const redis = getRedisClient();
                     const isActive = await redis?.get('bot_ia_active');
-                    if (isActive !== 'false') await processMessage(candidateId, body);
+                    if (isActive !== 'false') {
+                        await processMessage(candidateId, agentInput);
+                    }
                 } catch (e) {
                     console.error('🤖 Ferrari AI Error:', e);
                     const redis = getRedisClient();
