@@ -43,9 +43,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         let deliveryBody = body;
         let filenameHint = extraParams.filename;
 
-        // NORMALIZE ENDPOINT: Always use /audio for best parameter support
+        // NORMALIZE ENDPOINT: 
+        // /messages/voice is ONLY for voice notes and expects minimal parameters.
+        // /messages/audio is for generic audio files.
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'audio';
+        if (endpoint === 'voice') finalEndpoint = 'voice';
 
         switch (endpoint) {
             case 'image':
@@ -58,12 +60,14 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
-            case 'audio':
             case 'voice':
+                // CRITICAL: /messages/voice often REJECTS extra parameters like filename or ptt
+                // It expects ONLY token, to, and audio.
                 payload.audio = deliveryBody;
-                payload.filename = filenameHint || (type === 'voice' || endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3');
-
-                // Voice note specific settings
+                break;
+            case 'audio':
+                payload.audio = deliveryBody;
+                payload.filename = filenameHint || 'audio.mp3';
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
                 }

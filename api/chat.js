@@ -99,17 +99,20 @@ export default async function handler(req, res) {
                 let sendResult;
                 let deliveryContent = base64Data || mediaUrl;
 
-                // Ensure absolute URL and prioritize it for UltraMSG stability
-                if (mediaUrl && mediaUrl.startsWith('/api/')) {
+                // Use the new /api/media/ rewrite for 100% path compatibility with external APIs
+                if (mediaUrl && mediaUrl.includes('id=')) {
                     const protocol = req.headers['x-forwarded-proto'] || 'http';
                     const host = req.headers.host;
 
-                    // Construct absolute URL
-                    // Append .ogg to the ID part if it's a voice message to help UltraMSG's regex detection in the URL
-                    const urlPath = type === 'voice' ? mediaUrl.replace('id=', 'id=') + '.ogg' : mediaUrl;
-                    deliveryContent = `${protocol}://${host}${urlPath}`;
+                    // Extract ID
+                    const urlObj = new URL(mediaUrl, `${protocol}://${host}`);
+                    const id = urlObj.searchParams.get('id');
 
-                    console.log(`🌐 [Chat] FORCING ABSOLUTE URL DELIVERY: ${deliveryContent}`);
+                    if (id) {
+                        const ext = type === 'voice' ? '.ogg' : '.jpg';
+                        deliveryContent = `${protocol}://${host}/api/media/${id}${ext}`;
+                        console.log(`🌐 [Chat] STATIC-LIKE URL GENERATED: ${deliveryContent}`);
+                    }
                 }
 
                 if (base64Data) {
