@@ -214,6 +214,21 @@ export const saveCandidate = async (candidate) => {
     return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, candidate, candidate.id, score);
 };
 
+export const getCandidateByPhone = async (phone) => {
+    const client = getRedisClient();
+    if (!client || !phone) return null;
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    try {
+        const id = await client.hget(KEYS.PHONE_INDEX, cleanPhone);
+        if (!id) return null;
+        return await getCandidateById(id);
+    } catch (e) {
+        console.error('❌ [Storage] getCandidateByPhone Error:', e);
+        return null;
+    }
+};
+
 export const deleteCandidate = async (id) => {
     return await deleteDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, id);
 };

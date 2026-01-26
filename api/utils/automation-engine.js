@@ -1,4 +1,4 @@
-import { getRedisClient, getAIAutomations, getCandidates, saveMessage } from './storage.js';
+import { getRedisClient, getAIAutomations, getCandidates, saveMessage, getCandidateByPhone } from './storage.js';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
@@ -59,9 +59,10 @@ export async function runAIAutomations(bypassCooldown = false) {
                 const cleanPhone = entities.phone.replace(/\D/g, '');
                 logs.push(`🎯 Sniper mode: Buscando número ${cleanPhone}`);
 
-                // Try searching by number
-                const { candidates: searchRes } = await getCandidates(10, 0, cleanPhone);
-                targetCandidates = searchRes;
+                // Sniper Lookup (O(1)) instead of scanning thousands
+                const candidate = await getCandidateByPhone(cleanPhone);
+                if (candidate) targetCandidates = [candidate];
+                else logs.push(`⚠️ No se encontró ningún candidato con el número ${cleanPhone} en el índice.`);
             } else if (entities.name) {
                 logs.push(`🎯 Buscando por nombre: ${entities.name}`);
                 const { candidates: searchRes } = await getCandidates(50, 0, entities.name);

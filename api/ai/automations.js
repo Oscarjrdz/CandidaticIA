@@ -1,5 +1,4 @@
 import { getAIAutomations, saveAIAutomation, deleteAIAutomation } from '../utils/storage.js';
-import crypto from 'crypto';
 
 export default async function handler(req, res) {
     try {
@@ -9,7 +8,13 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
-            const { id, name, prompt, schedule, active } = req.body || {};
+            // Robust body parsing handling
+            let body = req.body;
+            if (typeof body === 'string') {
+                try { body = JSON.parse(body); } catch (e) { }
+            }
+
+            const { id, name, prompt, schedule, active } = body || {};
 
             if (!prompt || !name) {
                 console.warn('⚠️ Missing fields in AI automation creation:', { name, prompt });
@@ -17,7 +22,7 @@ export default async function handler(req, res) {
             }
 
             const automation = {
-                id: id || crypto.randomUUID(),
+                id: id || `ai_rule_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 name,
                 prompt,
                 schedule: schedule || 'daily',
@@ -25,6 +30,7 @@ export default async function handler(req, res) {
                 updatedAt: new Date().toISOString()
             };
 
+            console.log('📝 Saving AI automation:', automation.id);
             const saved = await saveAIAutomation(automation);
             return res.status(200).json({ success: true, automation: saved });
         }
