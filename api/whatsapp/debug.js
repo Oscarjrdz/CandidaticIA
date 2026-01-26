@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
             status: 'ok',
-            version: '1.2.0-f1-steering',
+            version: '1.3.0-nascar-v1',
             ping,
             dbSize: keysCount,
             recentErrors: errors.slice(-10),
