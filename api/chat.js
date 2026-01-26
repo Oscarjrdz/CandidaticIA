@@ -109,11 +109,11 @@ export default async function handler(req, res) {
                     const id = urlObj.searchParams.get('id');
 
                     if (id) {
-                        // ULTRA-COMPATIBILITY: Use .mp3 extension even if it's OGG/WebM inside.
-                        // External APIs (like UltraMSG) are often more lenient with .mp3 labeling.
-                        const ext = (type === 'voice' || type === 'audio') ? '.mp3' : '.jpg';
-                        deliveryContent = `${protocol}://${host}/api/media/${id}${ext}?v=${Date.now()}`;
-                        console.log(`🌐 [Chat] MP3-SPOOFED URL GENERATED: ${deliveryContent}`);
+                        // REVERT TO OGG: WhatsApp's native PTT format.
+                        // We remove the ?v= because some validators (like UltraMSG's) 
+                        // might look at the very end of the string for the extension.
+                        deliveryContent = `${protocol}://${host}/api/media/${id}.ogg`;
+                        console.log(`🌐 [Chat] CLEAN OGG URL GENERATED: ${deliveryContent}`);
                     }
                 }
 

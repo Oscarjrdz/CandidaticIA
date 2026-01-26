@@ -40,20 +40,22 @@ export default async function handler(req, res) {
 
         const meta = metaRaw ? JSON.parse(metaRaw) : { mime: 'image/jpeg' };
 
-        // MIME Spoofing for scale/compatibility (WhatsApp likes ogg/mp3)
+        // Buffer optimization
+        const buffer = Buffer.from(data, 'base64');
+
+        console.log(`📡 [Media Server] Serving ${id} to: ${req.headers['user-agent'] || 'Unknown'}`);
+        console.log(`   - IP: ${req.headers['x-forwarded-for'] || req.socket.remoteAddress}`);
+        console.log(`   - Requested Ext: ${requestedExt}`);
+
+        // MIME Spoofing (WhatsApp standard is ogg)
         let finalMime = meta.mime;
-        if (requestedExt === 'ogg') {
+        if (requestedExt === 'ogg' || (meta.mime && meta.mime.includes('audio'))) {
             finalMime = 'audio/ogg';
         } else if (requestedExt === 'mp3') {
-            finalMime = 'audio/mpeg'; // MP3 Spoofing for API compatibility
-        } else if (meta.mime && meta.mime.includes('audio')) {
-            finalMime = 'audio/ogg'; // Default to ogg for generic audio
+            finalMime = 'audio/mpeg';
         } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
             finalMime = 'image/jpeg';
         }
-
-        // Buffer optimization
-        const buffer = Buffer.from(data, 'base64');
 
         // Headers for scale and reliability
         res.setHeader('Content-Type', finalMime);

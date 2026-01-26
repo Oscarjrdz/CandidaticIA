@@ -45,28 +45,30 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         // NORMALIZE ENDPOINT: 
         // /messages/voice is ONLY for voice notes and expects minimal parameters.
-        // NORMALIZE ENDPOINT: Standardizing on /audio for maximum parameter compatibility
+        // NORMALIZE ENDPOINT: 
+        // /messages/voice is specifically for PTT voice notes.
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'audio';
+        if (endpoint === 'voice') finalEndpoint = 'voice';
 
         switch (endpoint) {
             case 'image':
                 payload.image = deliveryBody;
-                payload.filename = filenameHint || 'image.jpg';
+                if (!isHttp) payload.filename = filenameHint || 'image.jpg';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
                 payload.video = deliveryBody;
-                payload.filename = filenameHint || 'video.mp4';
+                if (!isHttp) payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
-            case 'audio':
             case 'voice':
+                // CRITICAL: When sending a URL, avoid redundant filename params 
+                // that might conflict with the URL's own extension validation.
                 payload.audio = deliveryBody;
-
-                // CRITICAL: Always provide an MP3-labeled filename to bypass API validators.
-                // We also ensure ptt: true to maintain the voice note UI in WhatsApp.
-                payload.filename = filenameHint || 'audio.mp3';
+                break;
+            case 'audio':
+                payload.audio = deliveryBody;
+                if (!isHttp) payload.filename = filenameHint || 'audio.mp3';
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
                 }
