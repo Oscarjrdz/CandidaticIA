@@ -29,63 +29,75 @@ export const getUltraMsgConfig = async () => {
     return null;
 };
 
-export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
+try {
+    let endpoint = type === 'voice' ? 'audio' : type;
+    if (!['chat', 'image', 'video', 'audio', 'document'].includes(endpoint)) endpoint = 'chat';
+
+    const payload = { token, to };
+
+    // Clean Base64: Strip header for UltraMSG
+    let cleanBody = body;
+    const isDataUrl = typeof body === 'string' && body.startsWith('data:');
+    if (isDataUrl && body.includes(';base64,')) {
+        cleanBody = body.split(';base64,')[1];
+    }
+
+    const isHttp = typeof body === 'string' && body.startsWith('http');
+
+    switch (endpoint) {
+        case 'image':
+            payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : cleanBody;
+            if (extraParams.caption) payload.caption = extraParams.caption;
+            break;
+        case 'video':
+            payload.video = isHttp ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : cleanBody;
+            if (extraParams.caption) payload.caption = extraParams.caption;
+            break;
+        case 'audio':
+            payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`) : cleanBody;
+            if (type === 'voice') payload.ptt = 'true';
+            break;
+        case 'document':
+            payload.document = body;
+            if (extraParams.filename) payload.filename = extraParams.filename;
+            break;
+        default:
+            payload.body = body;
+    }
+
+    const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
+
+    console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Format: ${isHttp ? 'URL' : 'BASE64'}, Len: ${body?.length})`);
+
+    const redis = getRedisClient();
+    const debugKey = `debug:ultramsg:${to}`;
+
+    let response;
     try {
-        let endpoint = 'chat';
-        const payload = { token, to };
-
-        // Detect format
-        const isHttp = body && body.startsWith('http');
-        const isDataUrl = body && body.startsWith('data:');
-
-        switch (type) {
-            case 'image':
-                endpoint = 'image';
-                payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : body;
-                if (extraParams.caption) payload.caption = extraParams.caption;
-                break;
-            case 'video':
-                endpoint = 'video';
-                payload.video = isHttp ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : body;
-                if (extraParams.caption) payload.caption = extraParams.caption;
-                break;
-            case 'audio':
-                endpoint = 'audio';
-                payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.mp3` : `${body}?ext=.mp3`) : body;
-                break;
-            case 'voice':
-                endpoint = 'voice';
-                // For voice Base64, keep the full data:audio/xxx;base64,... header
-                payload.audio = isHttp ? (body.includes('?') ? `${body}&ext=.ogg` : `${body}?ext=.ogg`) : body;
-                break;
-            case 'document':
-                endpoint = 'document';
-                payload.document = body;
-                if (extraParams.filename) payload.filename = extraParams.filename;
-                break;
-            default:
-                endpoint = 'chat';
-                payload.body = body;
-        }
-
-        const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
-
-        console.log(`🚀 [UltraMSG] EXECUTE: ${type} -> ${to} (Format: ${isHttp ? 'URL' : 'BASE64'}, Length: ${body?.length || 0})`);
-
-        const response = await axios.post(url, payload, { timeout: 25000 });
-
+        response = await axios.post(url, payload, { timeout: 25000 });
         console.log(`✅ [UltraMSG] RESPONSE:`, JSON.stringify(response.data));
 
+        if (redis) {
+            await redis.set(debugKey, JSON.stringify({
+                timestamp: new Date().toISOString(),
+                type, endpoint, result: response.data
+            }), 'EX', 3600);
+        }
         return response.data;
-    } catch (error) {
-        const errorData = error.response?.data;
-        console.error(`❌ UltraMSG [${type}] Critical Error:`, {
-            status: error.response?.status,
-            message: error.message,
-            details: errorData
-        });
-        throw error;
+    } catch (postErr) {
+        const errData = postErr.response?.data;
+        console.error(`❌ UltraMSG [${type}] Connection/API Error:`, errData || postErr.message);
+        if (redis) {
+            await redis.set(`${debugKey}:error`, JSON.stringify({
+                timestamp: new Date().toISOString(),
+                type, endpoint, error: errData || postErr.message
+            }), 'EX', 3600);
+        }
+        throw postErr;
     }
+} catch (error) {
+    throw error;
+}
 };
 
 export const getUltraMsgContact = async (instanceId, token, chatId) => {
