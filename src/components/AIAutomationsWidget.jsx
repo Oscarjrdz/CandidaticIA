@@ -19,10 +19,12 @@ const AIAutomationsWidget = ({ showToast }) => {
             const res = await fetch('/api/ai/automations');
             const data = await res.json();
             if (data.success) {
-                setRules(data.automations);
+                // Defensive check: Ensure it's always an array to prevent .length crashes
+                setRules(Array.isArray(data.automations) ? data.automations : []);
             }
         } catch (error) {
             console.error('Failed to load AI rules', error);
+            showToast?.('Error al cargar reglas', 'error');
         } finally {
             setLoading(false);
         }
@@ -47,14 +49,14 @@ const AIAutomationsWidget = ({ showToast }) => {
             });
 
             if (res.ok) {
-                showToast('✨ Regla mágica creada correctamente', 'success');
+                showToast?.('✨ Regla mágica creada correctamente', 'success');
                 setNewRulePrompt('');
                 loadRules();
             } else {
-                showToast('Error al crear la regla', 'error');
+                showToast?.('Error al crear la regla', 'error');
             }
         } catch (error) {
-            showToast('Error de conexión', 'error');
+            showToast?.('Error de conexión', 'error');
         } finally {
             setIsCreating(false);
         }
@@ -70,16 +72,16 @@ const AIAutomationsWidget = ({ showToast }) => {
             const data = await res.json();
             if (res.ok) {
                 if (data.sent > 0) {
-                    showToast(`🚀 Éxito: Se enviaron ${data.sent} mensajes.`, 'success');
+                    showToast?.(`🚀 Éxito: Se enviaron ${data.sent} mensajes.`, 'success');
                 } else {
-                    showToast(`Análisis finalizado: 0 coincidencias en ${data.evaluated} candidatos.`, 'default');
+                    showToast?.(`Análisis finalizado: 0 coincidencias en ${data.evaluated} candidatos.`, 'default');
                 }
                 setExecLogs(data.logs || []);
             } else {
-                showToast('Error en la ejecución: ' + (data.error || 'Unknown'), 'error');
+                showToast?.('Error en la ejecución: ' + (data.error || 'Unknown'), 'error');
             }
         } catch (e) {
-            showToast('Error de conexión', 'error');
+            showToast?.('Error de conexión', 'error');
         } finally {
             setLoading(false);
         }
@@ -87,12 +89,22 @@ const AIAutomationsWidget = ({ showToast }) => {
 
     const handleDeleteRule = async (id) => {
         if (!window.confirm('¿Eliminar esta regla de automatización?')) return;
+
+        // Optimistic Update: Remove from UI immediately
+        const previousRules = [...rules];
+        setRules(prev => prev.filter(r => r.id !== id));
+
         try {
-            await fetch(`/api/ai/automations?id=${id}`, { method: 'DELETE' });
-            showToast('Regla eliminada', 'default');
-            loadRules();
+            const res = await fetch(`/api/ai/automations?id=${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                showToast?.('Regla eliminada', 'default');
+            } else {
+                throw new Error('Failed to delete');
+            }
         } catch (e) {
-            showToast('Error eliminando regla', 'error');
+            showToast?.('Error eliminando regla', 'error');
+            // Revert state on error
+            setRules(previousRules);
         }
     };
 
@@ -103,15 +115,19 @@ const AIAutomationsWidget = ({ showToast }) => {
             // Optimistic update
             setRules(prev => prev.map(r => r.id === rule.id ? updated : r));
 
-            await fetch('/api/ai/automations', {
+            const res = await fetch('/api/ai/automations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updated)
             });
+
+            if (!res.ok) throw new Error('Update failed');
         } catch (e) {
             loadRules(); // Revert on error
         }
     };
+
+    const activeRulesCount = Array.isArray(rules) ? rules.length : 0;
 
     return (
         <div className="space-y-6">
@@ -151,7 +167,7 @@ const AIAutomationsWidget = ({ showToast }) => {
             <div className="space-y-3">
                 <div className="flex items-center justify-between">
                     <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 ml-1">
-                        Reglas Activas ({rules.length})
+                        Reglas Activas ({activeRulesCount})
                     </h4>
                     <button
                         onClick={handleRunAnalysis}
@@ -162,14 +178,14 @@ const AIAutomationsWidget = ({ showToast }) => {
                     </button>
                 </div>
 
-                {rules.length === 0 ? (
+                {activeRulesCount === 0 ? (
                     <div className="text-center py-8 text-gray-400 dark:text-gray-600 border-2 border-dashed border-gray-100 dark:border-gray-800 rounded-xl">
                         <Activity className="w-8 h-8 mx-auto mb-2 opacity-50" />
                         <p className="text-sm">No hay automatizaciones activas</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-3">
-                        {rules.map(rule => (
+                        {Array.isArray(rules) && rules.map(rule => (
                             <div key={rule.id} className={`p-4 rounded-xl border transition-all duration-300 ${rule.active
                                 ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm'
                                 : 'bg-gray-50 dark:bg-gray-900 border-gray-100 dark:border-gray-800 opacity-60 grayscale'
@@ -222,10 +238,10 @@ const AIAutomationsWidget = ({ showToast }) => {
                         <button onClick={() => setExecLogs(null)} className="text-[10px] text-gray-400 hover:text-gray-600">Cerrar</button>
                     </div>
                     <div className="space-y-1 max-h-40 overflow-y-auto font-mono text-[10px] text-gray-600 dark:text-gray-400">
-                        {execLogs.length === 0 ? (
+                        {Array.isArray(execLogs) && execLogs.length === 0 ? (
                             <p className="opacity-50 italic">No se generaron eventos importantes...</p>
                         ) : (
-                            execLogs.map((log, idx) => (
+                            Array.isArray(execLogs) && execLogs.map((log, idx) => (
                                 <div key={idx} className="flex space-x-2">
                                     <span className="opacity-30">{idx + 1}.</span>
                                     <span>{log}</span>
