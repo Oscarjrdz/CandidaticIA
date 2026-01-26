@@ -108,13 +108,27 @@ export async function cleanNameWithAI(name) {
         const genAI = new GoogleGenerativeAI(apiKey);
         const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
 
-        const prompt = `Corrige la ortografía, ACENTUACIÓN y sintaxis del nombre de persona: "${name}".
-REGLAS CRÍTICAS:
-1. DEBES poner acentos en apellidos que los lleven de forma obligatoria (ej: "Rodriguez" -> "Rodríguez", "Sanchez" -> "Sánchez", "Gomez" -> "Gómez", "Martinez" -> "Martínez", "Hernandez" -> "Hernández").
-2. Corrige nombres comunes (ej: "Ramon" -> "Ramón", "Jose" -> "José", "Maria" -> "María").
-3. No inventes nombres nuevos, solo limpia y corrige el que te doy.
-4. Formatea el resultado estrictamente con Mayúscula Inicial en cada palabra (Title Case).
-5. Responde únicamente con el nombre corregido, sin puntos finales ni explicaciones.
+        const prompt = `Analiza si el siguiente texto es un NOMBRE DE PERSONA REAL válido: "${name}".
+
+REGLAS DE IDENTIFICACIÓN:
+1. NO debe ser un apodo obvio (ej: "Goku", "Naruto", "Tu Bebe", "La Toxica").
+2. NO debe ser un nombre genérico (ej: "Usuario", "WhatsApp", "Business", "Cuenta", "Admin").
+3. NO debe contener números ni emojis (salvo que se puedan limpiar fácilmente y quede un nombre real).
+4. NO debe ser un nombre de empresa (ej: "Taller Mecánico", "Ventas", "Autolavado").
+5. Debe parecer un nombre humano hispano/latino real (ej: "Juan Pérez", "María", "José Luis", "Brayan", "Kevin").
+
+REGLAS DE SALIDA:
+- Si ES un nombre real válido: Devuélvelo corregido con ACENTOS y formato Title Case (Mayúscula inicial en cada palabra).
+- Si NO ES un nombre real válido: Responde con la palabra "INVALID" (todo mayúsculas).
+
+Ejemplos:
+- "juan perez" -> "Juan Pérez"
+- "goku777" -> "INVALID"
+- "taller mecanico" -> "INVALID"
+- "jose" -> "José"
+- "usuario whatsapp" -> "INVALID"
+- "lic brenda" -> "Brenda" (extrae el nombre)
+
 Respuesta:`;
 
         let cleaned = name;
@@ -122,7 +136,7 @@ Respuesta:`;
             try {
                 const model = genAI.getGenerativeModel({
                     model: mName,
-                    generationConfig: { temperature: 0.1 }
+                    generationConfig: { temperature: 0.0 } // ZERO for max strictness
                 });
                 const result = await model.generateContent(prompt);
                 const response = await result.response;
@@ -134,7 +148,16 @@ Respuesta:`;
             }
         }
 
-        return cleaned || name;
+        if (cleaned === 'INVALID') return null;
+
+        // Force Title Case Programmatically for safety
+        if (cleaned && cleaned.length > 2) {
+            return cleaned.split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+        }
+
+        return cleaned;
 
     } catch (error) {
         console.error('❌ cleanNameWithAI error:', error.message);

@@ -341,7 +341,10 @@ async function processEvent(payload) {
                         const { cleanNameWithAI } = await import('./utils/ai.js');
 
                         cleanNameWithAI(updateData.nombreReal).then(async cleanedName => {
-                            if (cleanedName && cleanedName !== updateData.nombreReal) {
+                            if (cleanedName === null) {
+                                console.log(`🤖 AI detectó nombre INVÁLIDO: "${updateData.nombreReal}". Eliminando...`);
+                                await updateCandidate(candidateId, { nombreReal: null });
+                            } else if (cleanedName !== updateData.nombreReal) {
                                 console.log(`🤖 AI limpió nombre: ${updateData.nombreReal} -> ${cleanedName}`);
                                 await updateCandidate(candidateId, { nombreReal: cleanedName });
 
