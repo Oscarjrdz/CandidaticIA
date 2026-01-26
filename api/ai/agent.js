@@ -7,10 +7,9 @@ Eres el asistente virtual de Candidatic, un experto en reclutamiento amigable y 
 Tu objetivo es ayudar a los candidatos a responder sus dudas sobre vacantes, estatus de postulación o información general.
 IMPORTANTE: Siempre saluda al candidato por su nombre real si está disponible en la base de datos.
 IMPORTANTE: NO USES ASTERISCOS (*) para resaltar nombres ni texto. Escribe el nombre limpiamente (ej: "Hola Juan" y NO "Hola *Juan*").
-Revisa siempre el historial y los datos del candidato antes de responder.
+REGLA DE ORO (MEMORIA): Eres el mismo asistente que habló con el candidato en el pasado. Revisa el historial y el [DNA DEL CANDIDATO]. Si es un usuario recurrente, demuéstralo con un trato familiar pero profesional (ej: "Hola Maria, qué gusto saludarte de nuevo").
 Responde de forma concisa, empática y siempre en español latinoamericano.
 REGLA ANTI-ALUCINACIÓN: Si no conoces el nombre del candidato o su edad (porque no aparecen en el contexto), NO los inventes. Pregunta amablemente por ellos si es necesario para el proceso.
-No inventes información sobre vacantes específicas si no la tienes en el contexto.
 NUNCA CUENTES CHISTES, mantén un tono profesional.
 `;
 
@@ -139,20 +138,25 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // INJECT DB CONTEXT INTO PROMPT (DNA PROFILE)
         if (candidateData) {
+            // Extract a tiny bit of context from previous messages if not in profile
+            const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-3).map(m => m.content).filter(Boolean);
+            const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Inicio de conversación';
+
             const dnaProfile = `
-[ADN DEL CANDIDATO]:
+[DNA DEL CANDIDATO - MEMORIA INTERNA]:
 - Nombre WhatsApp: ${candidateData.nombre || 'Desconocido'}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
 - Edad: ${candidateData.edad || 'No proporcionada'} ($dato_nacimiento: ${candidateData.fechaNacimiento || 'N/A'})
-- Municipio: ${candidateData.municipio || 'No proporcionado'}
-- Categoría de interés: ${candidateData.categoria || 'Busca información general'}
-- Estatus laboral actual: ${candidateData.empleoActual || 'Desconocido'}
-- Última interacción: ${candidateData.ultimoMensaje || 'Reciente'}
-- Origen: ${candidateData.origen || 'WhatsApp'}
+- Municipio/Ciudad: ${candidateData.municipio || 'No proporcionado'}
+- Categoría de Interés: ${candidateData.categoria || 'Consulta General'}
+- Estatus de Postulación: ${candidateData.status || 'Interesado'}
+- Última Interacción: ${candidateData.ultimoMensaje || 'Reciente'} (Primer contacto: ${candidateData.primerContacto || 'N/A'})
+- Perfil: ${candidateData.perfilGeneral || 'Sin resumen previo'}
+- Temas Recientes: ${themes}
 `.trim();
 
-            systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIÓN ADN]: Antes de preguntar cualquier dato (nombre, edad, municipio, etc.), REVISA si ya aparece arriba. Si ya existe, NO lo vuelvas a preguntar. Si es un candidato que regresa, salúdalo amablemente reconociendo que ya han hablado.`;
+            systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIÓN DE MEMORIA]: Eres un humano con memoria. Si el candidato ya nos ha contactado antes (revisa la "Fecha de Primer Contacto" y "Última Interacción"), NO actúes como si fuera la primera vez. Salúdalo por su nombre real y haz referencia a que es un gusto volver a hablar con él. REVISA los campos de arriba (Edad, Municipio, Categoría) y NO vuelvas a preguntar por ellos si ya tienen valor. Procede directamente con lo que el candidato necesite basándote en su perfil.`;
         }
 
         // INJECT VACANCIES & CATEGORIES
