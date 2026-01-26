@@ -45,36 +45,41 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         // NORMALIZE ENDPOINT: 
         // /messages/voice is ONLY for voice notes and expects minimal parameters.
-        // NORMALIZE ENDPOINT: 
-        // /messages/voice is specifically for PTT voice notes.
+        // NORMALIZE ENDPOINT
         let finalEndpoint = endpoint;
         if (endpoint === 'voice') finalEndpoint = 'voice';
 
+        // Prepare Base64 (strip prefix if not a URL)
+        let finalBody = deliveryBody;
+        if (isDataUrl) {
+            finalBody = deliveryBody.split(',')[1];
+        }
+
         switch (endpoint) {
             case 'image':
-                payload.image = deliveryBody;
+                payload.image = finalBody;
                 if (!isHttp) payload.filename = filenameHint || 'image.jpg';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
-                payload.video = deliveryBody;
+                payload.video = finalBody;
                 if (!isHttp) payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'voice':
-                // CRITICAL: When sending a URL, avoid redundant filename params 
-                // that might conflict with the URL's own extension validation.
-                payload.audio = deliveryBody;
+                // For /messages/voice, UltraMSG expects RAW base64 or URL
+                // We send it as 'audio' parameter
+                payload.audio = finalBody;
                 break;
             case 'audio':
-                payload.audio = deliveryBody;
+                payload.audio = finalBody;
                 if (!isHttp) payload.filename = filenameHint || 'audio.mp3';
                 if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
                 }
                 break;
             case 'document':
-                payload.document = deliveryBody;
+                payload.document = finalBody;
                 payload.filename = filenameHint || extraParams.filename || 'document.pdf';
                 break;
             default:

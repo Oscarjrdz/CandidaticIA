@@ -99,21 +99,24 @@ export default async function handler(req, res) {
                 let sendResult;
                 let deliveryContent = base64Data || mediaUrl;
 
-                // Use the new /api/media/ rewrite for 100% path compatibility with external APIs
+                // Ensure absolute URL for relative paths (for images/video)
                 if (mediaUrl && mediaUrl.includes('id=')) {
                     const protocol = req.headers['x-forwarded-proto'] || 'http';
                     const host = req.headers.host;
 
-                    // Extract ID
-                    const urlObj = new URL(mediaUrl, `${protocol}://${host}`);
-                    const id = urlObj.searchParams.get('id');
-
-                    if (id) {
-                        // REVERT TO OGG: WhatsApp's native PTT format.
-                        // We remove the ?v= because some validators (like UltraMSG's) 
-                        // might look at the very end of the string for the extension.
-                        deliveryContent = `${protocol}://${host}/api/media/${id}.ogg`;
-                        console.log(`🌐 [Chat] CLEAN OGG URL GENERATED: ${deliveryContent}`);
+                    // For voice notes, Base64 is much more reliable than URL-fetching on Vercel
+                    if (type === 'voice' && base64Data) {
+                        deliveryContent = base64Data;
+                        console.log(`📡 [Chat] Using DIRECT BASE64 for voice note (avoiding crawl issues)`);
+                    } else {
+                        // For images and other media, use the clean static-like URL
+                        const urlObj = new URL(mediaUrl, `${protocol}://${host}`);
+                        const id = urlObj.searchParams.get('id');
+                        if (id) {
+                            const ext = type === 'video' ? '.mp4' : '.jpg';
+                            deliveryContent = `${protocol}://${host}/api/media/${id}${ext}`;
+                            console.log(`🌐 [Chat] URL delivery for ${type}: ${deliveryContent}`);
+                        }
                     }
                 }
 
