@@ -96,8 +96,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
             return true;
         });
 
-        // Take last 15 messages for context
-        let rawHistory = historyMessages.slice(-15).map(m => ({
+        // Take last 50 messages for broader context (Internal Memory)
+        let rawHistory = historyMessages.slice(-50).map(m => ({
             role: (m.from === 'user') ? 'user' : 'model',
             parts: [{ text: m.content || '((Media))' }]
         }));
@@ -137,9 +137,22 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // REINFORCE RULES 
         systemInstruction += `\n\n[REGLA SUPREMA]: NO uses markdown, NO uses asteriscos (**), NO uses negritas. Escribe texto plano y limpio.`;
 
-        // INJECT DB CONTEXT INTO PROMPT
+        // INJECT DB CONTEXT INTO PROMPT (DNA PROFILE)
         if (candidateData) {
-            systemInstruction += `\n\n[CONTEXTO DE BASE DE DATOS DEL CANDIDATO]:\n${JSON.stringify(candidateData, null, 2)}\nUsa esta información para personalizar tu respuesta.`;
+            const dnaProfile = `
+[ADN DEL CANDIDATO]:
+- Nombre WhatsApp: ${candidateData.nombre || 'Desconocido'}
+- Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
+- WhatsApp: ${candidateData.whatsapp}
+- Edad: ${candidateData.edad || 'No proporcionada'} ($dato_nacimiento: ${candidateData.fechaNacimiento || 'N/A'})
+- Municipio: ${candidateData.municipio || 'No proporcionado'}
+- Categoría de interés: ${candidateData.categoria || 'Busca información general'}
+- Estatus laboral actual: ${candidateData.empleoActual || 'Desconocido'}
+- Última interacción: ${candidateData.ultimoMensaje || 'Reciente'}
+- Origen: ${candidateData.origen || 'WhatsApp'}
+`.trim();
+
+            systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIÓN ADN]: Antes de preguntar cualquier dato (nombre, edad, municipio, etc.), REVISA si ya aparece arriba. Si ya existe, NO lo vuelvas a preguntar. Si es un candidato que regresa, salúdalo amablemente reconociendo que ya han hablado.`;
         }
 
         // INJECT VACANCIES & CATEGORIES

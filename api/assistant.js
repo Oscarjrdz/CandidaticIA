@@ -140,6 +140,26 @@ export default async function handler(req, res) {
                 return res.status(200).json(response.data);
             }
 
+            // NEW: Fetch file content
+            if (req.method === 'POST' && type === 'file-content') {
+                const { fileId } = await parseJsonBody(req);
+                if (!fileId) return res.status(400).json({ error: 'Falta fileId' });
+
+                const downloadUrl = `${BUILDERBOT_API_URL}/${botId}/answer/${answerId}/plugin/assistant/files/${fileId}`;
+
+                const response = await axios.get(downloadUrl, {
+                    headers: { 'x-api-builderbot': apiKey },
+                    responseType: 'text',
+                    validateStatus: () => true
+                });
+
+                if (response.status !== 200) {
+                    return res.status(response.status).json({ error: 'Error descargando contenido del archivo' });
+                }
+
+                return res.status(200).send(response.data);
+            }
+
             if (req.method === 'DELETE') {
                 if (!fileId) return res.status(400).json({ error: 'Falta fileId' });
 
