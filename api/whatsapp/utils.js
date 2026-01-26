@@ -57,35 +57,30 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             }
         }
 
-        // ENDPOINT MAPPING:
-        // UltraMsg uses /messages/voice for PTT voice notes.
-        // It uses 'audio' as the parameter name for the file.
+        // NORMALIZE ENDPOINT: 
+        // Use /audio for both audio and voice to allow full parameter support (like filename)
         let finalEndpoint = endpoint;
-        if (endpoint === 'voice') finalEndpoint = 'voice';
+        if (endpoint === 'voice') finalEndpoint = 'audio';
 
         switch (endpoint) {
             case 'image':
-                payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : deliveryBody;
+                payload.image = deliveryBody;
+                payload.filename = filenameHint || 'image.jpg';
                 if (extraParams.caption) payload.caption = extraParams.caption;
-                if (!isHttp) payload.filename = filenameHint || 'image.jpg';
                 break;
             case 'video':
-                payload.video = isHttp ? (body.includes('?') ? `${body}&ext=.mp4` : `${body}?ext=.mp4`) : deliveryBody;
+                payload.video = deliveryBody;
+                payload.filename = filenameHint || 'video.mp4';
                 if (extraParams.caption) payload.caption = extraParams.caption;
-                if (!isHttp) payload.filename = filenameHint || 'video.mp4';
                 break;
             case 'audio':
             case 'voice':
-                // Parameter name for both /audio and /voice is 'audio'
-                payload.audio = isHttp ? (body.includes('?') ? (body.includes('.ogg') ? body : `${body}&ext=.ogg`) : (body.includes('.ogg') ? body : `${body}?ext=.ogg`)) : deliveryBody;
+                payload.audio = deliveryBody;
+                payload.filename = filenameHint || (type === 'voice' || endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3');
 
-                // For /audio endpoint, ptt flag is needed. For /voice endpoint, it's implicit but good to have.
-                if (endpoint === 'voice' || type === 'voice') {
+                // Voice note specific settings
+                if (type === 'voice' || endpoint === 'voice') {
                     payload.ptt = 'true';
-                }
-
-                if (!isHttp) {
-                    payload.filename = filenameHint || (endpoint === 'voice' ? 'voice.ogg' : 'audio.mp3');
                 }
                 break;
             case 'document':

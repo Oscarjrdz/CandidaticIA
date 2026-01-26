@@ -104,12 +104,9 @@ export default async function handler(req, res) {
                     const protocol = req.headers['x-forwarded-proto'] || 'http';
                     const host = req.headers.host;
 
-                    // Construct absolute URL with an extension hint
-                    // We append .ogg to help UltraMSG's file detection
-                    const extHint = type === 'voice' ? '.ogg' : '';
-                    deliveryContent = `${protocol}://${host}${mediaUrl}${extHint}`;
-
-                    console.log(`🌐 [Chat] CONSTRUCTED ABSOLUTE URL: ${deliveryContent}`);
+                    // Simple absolute URL. Extension hint will be passed via filename param.
+                    deliveryContent = `${protocol}://${host}${mediaUrl}`;
+                    console.log(`🌐 [Chat] ABSOLUTE MEDIA URL: ${deliveryContent}`);
                 }
 
                 if (base64Data) {
