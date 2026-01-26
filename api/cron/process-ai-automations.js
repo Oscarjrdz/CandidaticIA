@@ -1,6 +1,6 @@
-import { getRedisClient, getAIAutomations, getCandidates, saveMessage, updateCandidate } from '../../api/utils/storage.js';
+import { getRedisClient, getAIAutomations, getCandidates, saveMessage, updateCandidate } from '../utils/storage.js';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { sendUltraMsgMessage, getUltraMsgConfig } from '../../api/whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
 // --- CONFIGURATION ---
 const SAFETY_LIMIT_PER_RUN = 5; // Max messages per cron run to prevent spam
