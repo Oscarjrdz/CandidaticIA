@@ -54,7 +54,8 @@ export async function intelligentExtract(candidateId, historyText) {
                 { id: 'vessel_fecha', field: 'fechaNacimiento', fieldLabel: 'Fecha Nacimiento', prompt: 'Determina la fecha de nacimiento (DD/MM/YYYY).' },
                 { id: 'vessel_mun', field: 'municipio', fieldLabel: 'Municipio', prompt: 'Extrae el municipio o ciudad de residencia.' },
                 { id: 'vessel_cat', field: 'categoria', fieldLabel: 'Categoría', prompt: 'Identifica el área o vacante de interés.' },
-                { id: 'vessel_emp', field: 'tieneEmpleo', fieldLabel: 'Tiene empleo', prompt: 'Determina si el candidato tiene empleo actualmente (Sí/No).' }
+                { id: 'vessel_emp', field: 'tieneEmpleo', fieldLabel: 'Tiene empleo', prompt: 'Determina si el candidato tiene empleo actualmente (Sí/No).' },
+                { id: 'vessel_esc', field: 'escolaridad', fieldLabel: 'Escolaridad', prompt: 'Identifica el nivel máximo de estudios o escolaridad.' }
             ];
         }
 

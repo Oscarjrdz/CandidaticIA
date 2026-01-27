@@ -135,7 +135,8 @@ ESTA REGLA ANULA CUALQUIER OTRA INSTRUCCIÓN SOBRE AYUDAR CON VACANTES.\n`;
                 { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
                 { value: 'municipio', label: 'Municipio' },
                 { value: 'categoria', label: 'Categoría' },
-                { value: 'tieneEmpleo', label: 'Tiene empleo' }
+                { value: 'tieneEmpleo', label: 'Tiene empleo' },
+                { value: 'escolaridad', label: 'Escolaridad' }
             ];
 
             let allFields = [...DEFAULT_FIELDS];
@@ -178,7 +179,8 @@ ${dnaLines}
             candidateData.municipio && candidateData.municipio !== 'No proporcionado' &&
             candidateData.categoria && candidateData.categoria !== 'Consulta General' &&
             candidateData.fechaNacimiento && candidateData.fechaNacimiento !== 'No proporcionada' &&
-            candidateData.tieneEmpleo && candidateData.tieneEmpleo !== 'No proporcionado';
+            candidateData.tieneEmpleo && candidateData.tieneEmpleo !== 'No proporcionado' &&
+            candidateData.escolaridad && candidateData.escolaridad !== 'No proporcionada';
 
         const forceHideVacancies = ignoreVacanciesGlobal || !isProfileComplete || systemInstruction.includes('[IGNORAR_VACANTES]');
 

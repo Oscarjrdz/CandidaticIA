@@ -53,6 +53,16 @@ const DEFAULT_RULES = [
         description: 'Determina estatus laboral actual',
         enabled: true,
         createdAt: new Date().toISOString()
+    },
+    {
+        id: 'auto_escolaridad',
+        prompt: 'Identifica el nivel máximo de estudios o escolaridad del candidato.',
+        pattern: '(?:escolaridad|estudios)\\s*[:]?\\s*([^.!?\\n]+)',
+        field: 'escolaridad',
+        fieldLabel: 'Escolaridad',
+        description: 'Extrae el nivel de estudios',
+        enabled: true,
+        createdAt: new Date().toISOString()
     }
 ];
 

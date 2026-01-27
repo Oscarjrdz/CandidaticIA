@@ -10,7 +10,8 @@ export default async function handler(req, res) {
                 { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
                 { value: 'municipio', label: 'Municipio' },
                 { value: 'categoria', label: 'Categoría' },
-                { value: 'tieneEmpleo', label: 'Tiene empleo' }
+                { value: 'tieneEmpleo', label: 'Tiene empleo' },
+                { value: 'escolaridad', label: 'Escolaridad' }
             ];
 
             const customFieldsJson = await redis.get('custom_fields');
