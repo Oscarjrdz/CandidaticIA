@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, Trash2, PauseCircle, PlayCircle, Loader2, AlertCircle, RefreshCcw, Command, Zap } from 'lucide-react';
+import { Sparkles, Trash2, PauseCircle, PlayCircle, Loader2, AlertCircle, RefreshCcw, Command, Zap, Terminal } from 'lucide-react';
 import Button from './ui/Button';
+import AIEnginePulse from './AIEnginePulse';
 
 /**
  * AIAutomationsWidget v5.0 - THE ZUCKERBERG RIGOR
@@ -13,6 +13,7 @@ const AIAutomationsWidget = ({ showToast }) => {
     const [prompt, setPrompt] = useState('');
     const [creating, setCreating] = useState(false);
     const [logs, setLogs] = useState(null);
+    const [showDebug, setShowDebug] = useState(false);
     const [deletingId, setDeletingId] = useState(null); // Inline delete confirmation
 
     const scrollRef = useRef(null);
@@ -208,8 +209,8 @@ const AIAutomationsWidget = ({ showToast }) => {
                     <div ref={scrollRef} className="p-6 font-mono text-[10px] text-gray-400 max-h-48 overflow-y-auto leading-relaxed custom-scrollbar">
                         {logs.map((l, i) => (
                             <div key={i} className={`mb-1 flex space-x-3 ${l.includes('✅') || l.includes('🚀') ? 'text-green-500' :
-                                    l.includes('❌') || l.includes('🛑') || l.includes('🛑') ? 'text-red-500 font-bold' :
-                                        l.includes('🤔') ? 'text-blue-400' : ''
+                                l.includes('❌') || l.includes('🛑') || l.includes('🛑') ? 'text-red-500 font-bold' :
+                                    l.includes('🤔') ? 'text-blue-400' : ''
                                 }`}>
                                 <span className="opacity-20 shrink-0">[{i}]</span>
                                 <span className="break-words">{l}</span>
