@@ -15,15 +15,36 @@ export default async function handler(req, res) {
         }
 
         if (batch) {
+            const redis = getRedisClient();
+            let o = parseInt(offset);
             const l = parseInt(limit);
-            const o = parseInt(offset);
-            console.log(`🚀 [Rescue] Starting Batch Extraction: Limit ${l}, Offset ${o}`);
-            const { candidates, total } = await getCandidates(l, o);
-            const results = [];
 
-            for (const cand of candidates) {
+            // 🔄 [AUTO-MODE] Retrieve persistent offset if no manual offset is provided
+            const isAuto = req.query.auto === 'true';
+            if (isAuto && redis) {
+                const savedOffset = await redis.get('rescue:current_offset');
+                if (savedOffset) o = parseInt(savedOffset);
+            }
+
+            console.log(`🚀 [Rescue] Starting Smart Batch: Offset ${o}, Limit ${l}, Auto: ${isAuto}`);
+
+            // Fetch a larger window to find 10 "incomplete" candidates efficiently
+            const windowSize = 50;
+            const { candidates, total } = await getCandidates(windowSize, o);
+            const results = [];
+            let lastInWindowIndex = 0;
+
+            for (let i = 0; i < candidates.length; i++) {
+                const cand = candidates[i];
+                lastInWindowIndex = i;
+
+                // 🕵️ SKIP LOGIC: If candidate already has core data, move to next
+                if (cand.nombreReal && cand.nombreReal !== 'No proporcionado' && cand.municipio) {
+                    continue;
+                }
+
                 const messages = await getMessages(cand.id);
-                if (messages.length === 0) continue;
+                if (messages.length < 2) continue; // Skip if basically empty chat
 
                 const historyText = messages
                     .filter(m => m.from === 'user' || m.from === 'bot' || m.from === 'me')
@@ -40,15 +61,27 @@ export default async function handler(req, res) {
                 if (extracted) {
                     results.push({ id: cand.id, phone: cand.whatsapp, data: extracted });
                 }
+
+                // Stop if we reached the limit of processed candidates in this run
+                if (results.length >= l) break;
+            }
+
+            // Update persistent offset for next refresh
+            const nextGlobalOffset = o + lastInWindowIndex + 1;
+            if (isAuto && redis) {
+                await redis.set('rescue:current_offset', nextGlobalOffset);
             }
 
             return res.status(200).json({
                 success: true,
-                processed: candidates.length,
-                extracted_count: results.length,
+                processed_in_this_window: lastInWindowIndex + 1,
+                rescued_count: results.length,
                 total_in_db: total,
-                next_offset: o + l,
-                samples: results.slice(0, 5)
+                current_offset: o,
+                next_offset: nextGlobalOffset,
+                is_finished: nextGlobalOffset >= total,
+                message: results.length === 0 ? "No se encontraron candidatos incompletos en este bloque. Refresca para seguir buscando." : "Rescate exitoso.",
+                rescued: results
             });
         }
 
