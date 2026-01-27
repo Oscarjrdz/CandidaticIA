@@ -114,12 +114,12 @@ const AIAutomationsWidget = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* 🧙 Input Station */}
-            <div className="bg-white dark:bg-gray-900 p-6 rounded-[32px] border border-blue-100 dark:border-blue-900/30 shadow-2xl relative overflow-hidden">
-                <div className="flex justify-between items-center mb-4 relative z-10">
-                    <h3 className="font-bold text-gray-900 dark:text-white flex items-center tracking-tight">
-                        <Command className="w-5 h-5 text-blue-500 mr-2" />
+            <div className="bg-white dark:bg-gray-900 p-4 rounded-[24px] border border-blue-100 dark:border-blue-900/30 shadow-xl relative overflow-hidden">
+                <div className="flex justify-between items-center mb-3 relative z-10">
+                    <h3 className="font-bold text-gray-900 dark:text-white flex items-center tracking-tight text-sm">
+                        <Command className="w-4 h-4 text-blue-500 mr-2" />
                         Candidatic AI Automations
                     </h3>
                     <div className="flex items-center space-x-1">
@@ -133,15 +133,15 @@ const AIAutomationsWidget = ({ showToast }) => {
                         value={prompt}
                         onChange={(e) => setPrompt(e.target.value)}
                         placeholder="Ej: Si no tiene CV, pídeselo amablemente al 8116038195..."
-                        className="w-full h-24 p-5 rounded-2xl bg-gray-50/50 dark:bg-black/20 border border-gray-100 dark:border-gray-800 outline-none text-sm transition-all focus:border-blue-300 placeholder:text-gray-300"
+                        className="w-full h-16 p-3 rounded-xl bg-gray-50/50 dark:bg-black/20 border border-gray-100 dark:border-gray-800 outline-none text-xs transition-all focus:border-blue-300 placeholder:text-gray-300"
                     />
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-2 flex justify-end">
                         <button
                             onClick={onCreate}
                             disabled={creating || !prompt?.trim()}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-full font-bold text-xs shadow-lg shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-30"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full font-bold text-[10px] shadow-lg shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-30"
                         >
-                            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'CONEXIÓN MAGIC'}
+                            {creating ? <Loader2 className="w-3 h-3 animate-spin" /> : 'CONEXIÓN MAGIC'}
                         </button>
                     </div>
                 </div>
@@ -173,11 +173,11 @@ const AIAutomationsWidget = ({ showToast }) => {
                     )}
 
                     {rules?.filter(Boolean).map((r) => (
-                        <div key={r?.id} className={`p-5 rounded-3xl border transition-all duration-300 flex items-center justify-between ${r?.active ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm' : 'bg-gray-50 dark:bg-black/10 border-transparent opacity-50'
+                        <div key={r?.id} className={`p-3 rounded-2xl border transition-all duration-300 flex items-center justify-between ${r?.active ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm' : 'bg-gray-50 dark:bg-black/10 border-transparent opacity-50'
                             }`}>
-                            <div className="truncate flex-1 pr-6">
-                                <h4 className="font-bold text-sm text-gray-900 dark:text-white truncate">{r?.name || 'Regla'}</h4>
-                                <p className="text-[10px] text-gray-400 truncate italic">"{r?.prompt || '...'}"</p>
+                            <div className="truncate flex-1 pr-4">
+                                <h4 className="font-bold text-xs text-gray-900 dark:text-white truncate">{r?.name || 'Regla'}</h4>
+                                <p className="text-[9px] text-gray-400 truncate italic">"{r?.prompt || '...'}"</p>
                             </div>
 
                             {deletingId === r?.id ? (
@@ -201,7 +201,7 @@ const AIAutomationsWidget = ({ showToast }) => {
             </div>
 
             {/* 📟 Premium Status & Debug Console */}
-            <div className="space-y-4">
+            <div className="space-y-3">
                 <AIEnginePulse
                     running={running}
                     logs={logs}

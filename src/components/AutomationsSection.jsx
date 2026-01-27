@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Power, PowerOff, Save, X, AlertCircle, Loader2, Send } from 'lucide-react';
+import { Plus, Trash2, Power, PowerOff, Save, X, AlertCircle, Loader2, Send, Brain } from 'lucide-react';
 import Button from './ui/Button';
 import {
     getAutomationRules,
@@ -344,14 +344,10 @@ const AutomationsSection = ({ showToast }) => {
 
 
 
-            {/* 🧠 AI Automations (Zuckerberg Style) */}
-            <div className="mb-10">
-                <AIAutomationsWidget showToast={showToast} />
-            </div>
-
+            {/* 🤖 Módulo de Extracción IA */}
             <div className="flex items-center space-x-2 mb-4">
-                <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Panel de Extracción Autónoma</h3>
+                <Brain className="w-6 h-6 text-blue-500" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Módulo de Extracción IA</h3>
             </div>
 
             {/* Info Alert */}
@@ -771,6 +767,10 @@ const AutomationsSection = ({ showToast }) => {
                     </table>
                 </div>
             </div >
+
+            <div className="mt-12 bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[24px] border border-gray-100 dark:border-gray-800">
+                <AIAutomationsWidget showToast={showToast} />
+            </div>
 
             {/* Create Modal */}
             {
