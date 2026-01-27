@@ -6,46 +6,51 @@ const REDIS_KEY = 'automation_rules';
 const DEFAULT_RULES = [
     {
         id: 'auto_nombre',
+        prompt: 'Captura el nombre real y apellidos del candidato.',
         pattern: 'tu nombre es\\s*[:]?\\s*([^.!?\\n]+)',
         field: 'nombreReal',
         fieldLabel: 'Nombre Real',
-        description: 'Captura el nombre real del candidato',
+        description: 'Extrae el nombre completo del candidato',
         enabled: true,
         createdAt: new Date().toISOString()
     },
     {
         id: 'auto_fecha',
+        prompt: 'Extrae la fecha de nacimiento en formato DD/MM/YYYY.',
         pattern: '(?:tu|la) fecha de nacimiento es\\s*[:]?\\s*([^.!?\\n]+)',
         field: 'fechaNacimiento',
         fieldLabel: 'Fecha Nacimiento',
-        description: 'Captura la fecha de nacimiento',
+        description: 'Extrae la fecha de nacimiento',
         enabled: true,
         createdAt: new Date().toISOString()
     },
     {
         id: 'auto_municipio',
+        prompt: 'Identifica el municipio o ciudad donde vive el candidato.',
         pattern: '(?:vives?|resides?)\\s+en\\s*[:]?\\s*([^.!?\\n]+)',
         field: 'municipio',
         fieldLabel: 'Municipio',
-        description: 'Captura el municipio donde vive',
+        description: 'Extrae la ciudad/municipio de residencia',
         enabled: true,
         createdAt: new Date().toISOString()
     },
     {
         id: 'auto_categoria',
+        prompt: 'Identifica el puesto o categoría de empleo que busca.',
         pattern: 'buscando\\s+empleo\\s+de\\s*[:]?\\s*([^.!?\\n]+)',
         field: 'categoria',
         fieldLabel: 'Categoría',
-        description: 'Captura la categoría de empleo buscado',
+        description: 'Extrae el área de interés laboral',
         enabled: true,
         createdAt: new Date().toISOString()
     },
     {
         id: 'auto_empleo',
+        prompt: 'Determina si el candidato tiene empleo actualmente (Responde Sí/No).',
         pattern: 'entonces\\s+(No|Sí)\\s+Tienes\\s+empleo',
         field: 'tieneEmpleo',
         fieldLabel: 'Tiene empleo',
-        description: 'Captura el estado de empleo actual',
+        description: 'Determina estatus laboral actual',
         enabled: true,
         createdAt: new Date().toISOString()
     }
@@ -114,29 +119,32 @@ export default async function handler(req, res) {
 
         // POST - Create new rule
         if (method === 'POST') {
-            const { pattern, field, fieldLabel, description } = req.body;
+            const { prompt, pattern, field, fieldLabel, description } = req.body;
 
-            if (!pattern || !field) {
+            if (!field || (!pattern && !prompt)) {
                 return res.status(400).json({
                     success: false,
-                    error: 'Pattern and field are required'
+                    error: 'Field and either Pattern or Prompt are required'
                 });
             }
 
-            // Validate regex
-            const validation = validatePattern(pattern);
-            if (!validation.valid) {
-                return res.status(400).json({
-                    success: false,
-                    error: `Invalid regex pattern: ${validation.error}`
-                });
+            // Validate regex only if provided
+            if (pattern) {
+                const validation = validatePattern(pattern);
+                if (!validation.valid) {
+                    return res.status(400).json({
+                        success: false,
+                        error: `Invalid regex pattern: ${validation.error}`
+                    });
+                }
             }
 
             const rules = await getAutomationRules();
 
             const newRule = {
                 id: `auto_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                pattern,
+                prompt: prompt || '',
+                pattern: pattern || '',
                 field,
                 fieldLabel: fieldLabel || field,
                 description: description || '',
@@ -157,7 +165,7 @@ export default async function handler(req, res) {
                 return res.status(400).json({ success: false, error: 'Rule ID required' });
             }
 
-            const { pattern, field, fieldLabel, description, enabled } = req.body;
+            const { prompt, pattern, field, fieldLabel, description, enabled } = req.body;
 
             // Validate regex if pattern is being updated
             if (pattern) {
@@ -180,7 +188,8 @@ export default async function handler(req, res) {
             // Update rule
             rules[ruleIndex] = {
                 ...rules[ruleIndex],
-                ...(pattern && { pattern }),
+                ...(prompt !== undefined && { prompt }),
+                ...(pattern !== undefined && { pattern }),
                 ...(field && { field }),
                 ...(fieldLabel && { fieldLabel }),
                 ...(description !== undefined && { description }),

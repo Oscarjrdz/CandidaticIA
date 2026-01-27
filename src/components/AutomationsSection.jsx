@@ -129,10 +129,11 @@ const AutomationsSection = ({ showToast }) => {
         // Handle different field types
         if (field === 'field') {
             setEditValue(rule.field || '');
+        } else if (field === 'prompt') {
+            setEditValue(rule.prompt || '');
         } else if (field === 'pattern') {
-            // Convert regex pattern back to phrases for editing
+            // Convert regex pattern back to phrases for editing (Legacy support)
             const phrases = patternToPhrases(rule.pattern);
-            // If parsing fails (complex custom regex), fallback to raw string in array
             setEditValue(phrases.length > 0 ? phrases : [rule.pattern]);
         } else {
             setEditValue(rule[field] || '');
@@ -183,32 +184,24 @@ const AutomationsSection = ({ showToast }) => {
             } else {
                 alert('Error guardando: ' + result.error);
             }
-        } else if (editingField === 'pattern') {
-            // Handle Pattern save (Tag Input -> Regex)
-            let newPattern;
-
-            // Helper to check if it looks like raw regex (contains special chars logic not handled by phrasesToPattern)
-            // But for simplicity, we assume user is editing phrases. 
-            // If they cleared all tags and typed nothing, we block.
-            if (!editValue || editValue.length === 0) {
-                alert("Debes agregar al menos una frase clave");
+        } else if (editingField === 'prompt') {
+            if (!editValue || editValue.trim().length < 5) {
+                alert("La instrucción es demasiado corta");
                 return;
             }
 
-            newPattern = phrasesToPattern(editValue);
-
-            const updates = { pattern: newPattern };
+            const updates = { prompt: editValue };
             const result = await updateAutomationRule(editingId, updates);
 
             if (result.success) {
                 loadRules();
                 setEditingId(null);
-                setEditingField('pattern');
+                setEditingField('prompt');
                 setEditValue('');
             } else {
                 alert('Error guardando: ' + result.error);
             }
-        } else {
+        } else if (editingField === 'pattern') {
             // Normal edit (description)
             const updates = { [editingField]: editValue };
             const result = await updateAutomationRule(editingId, updates);
@@ -226,7 +219,7 @@ const AutomationsSection = ({ showToast }) => {
 
     const cancelEdit = () => {
         setEditingId(null);
-        setEditingField('pattern');
+        setEditingField('prompt');
         setEditValue('');
     };
 
@@ -337,10 +330,10 @@ const AutomationsSection = ({ showToast }) => {
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        Automatizaciones
+                        Extracción Inteligente
                     </h2>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Gestiona las reglas de captura automática de datos desde mensajes del bot
+                        Gestiona cómo la IA extrae datos de la conversación a tus columnas de CRM
                     </p>
                 </div>
                 <Button onClick={() => setShowCreateModal(true)} className="flex items-center space-x-2">
@@ -358,15 +351,15 @@ const AutomationsSection = ({ showToast }) => {
 
             <div className="flex items-center space-x-2 mb-4">
                 <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Reglas "Keyword" (Legacy)</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Panel de Extracción Autónoma</h3>
             </div>
 
             {/* Info Alert */}
-            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-blue-900 dark:text-blue-100">
-                    <p className="font-semibold mb-1">Palabras Clave (Triggers)</p>
-                    <p>Escribe las frases que activarán la captura. Por ejemplo: "tu nombre es", "su nombre es". El sistema capturará automáticamente el valor que aparezca después de estas frases.</p>
+            <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg flex items-start space-x-3">
+                <AlertCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                <div className="text-sm text-green-900 dark:text-green-100">
+                    <p className="font-semibold mb-1">Extracción Inteligente (Sin Palabras Clave)</p>
+                    <p>Ya no necesitas palabras clave exactas. Simplemente describe qué quieres extraer para cada columna y la IA lo hará analizando el contexto de la plática.</p>
                 </div>
             </div>
 
@@ -376,7 +369,7 @@ const AutomationsSection = ({ showToast }) => {
                     <thead>
                         <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
                             <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-1/3">
-                                Frases Clave (Triggers)
+                                Instrucción de Captura (Prompt)
                             </th>
                             <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-48">
                                 Campo Destino
@@ -407,12 +400,14 @@ const AutomationsSection = ({ showToast }) => {
                                 >
                                     {/* Pattern Column - TAGS INPUT */}
                                     <td className="py-3 px-4">
-                                        {editingId === rule.id && editingField === 'pattern' ? (
+                                        {editingId === rule.id && editingField === 'prompt' ? (
                                             <div className="flex flex-col space-y-2">
-                                                <PhraseTagInput
-                                                    phrases={editValue}
-                                                    onChange={setEditValue}
-                                                    placeholder="Escribe y presiona Enter..."
+                                                <textarea
+                                                    value={editValue}
+                                                    onChange={(e) => setEditValue(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-blue-500 rounded-lg text-sm bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50"
+                                                    rows={2}
+                                                    autoFocus
                                                 />
                                                 <div className="flex items-center space-x-2">
                                                     <button
@@ -431,24 +426,13 @@ const AutomationsSection = ({ showToast }) => {
                                             </div>
                                         ) : (
                                             <div
-                                                onClick={() => startEditing(rule, 'pattern')}
-                                                className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded transition-colors min-h-[40px]"
-                                                title="Click para editar frases"
+                                                onClick={() => startEditing(rule, 'prompt')}
+                                                className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded transition-colors min-h-[40px] flex items-center"
+                                                title="Click para editar instrucción"
                                             >
-                                                {/* Display Tags */}
-                                                <div className="flex flex-wrap gap-1">
-                                                    {patternToPhrases(rule.pattern).length > 0 ? (
-                                                        patternToPhrases(rule.pattern).map((phrase, idx) => (
-                                                            <span key={idx} className="inline-block px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs border border-gray-300 dark:border-gray-600">
-                                                                {phrase}
-                                                            </span>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-xs font-mono text-gray-400 bg-gray-50 p-1 rounded border border-gray-100">
-                                                            {rule.pattern.length > 30 ? rule.pattern.substring(0, 30) + '...' : rule.pattern}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                <span className="text-xs text-gray-700 dark:text-gray-300 italic">
+                                                    "{rule.prompt || 'Sin instrucción...'}"
+                                                </span>
                                             </div>
                                         )}
                                     </td>
@@ -825,8 +809,7 @@ const AutomationsSection = ({ showToast }) => {
  * Modal for creating new automation rule
  */
 const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
-    // pattern state is now an array of phrases
-    const [phrases, setPhrases] = useState([]);
+    const [promptText, setPromptText] = useState('');
     const [field, setField] = useState('');
     const [description, setDescription] = useState('');
     const [saving, setSaving] = useState(false);
@@ -836,19 +819,16 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
         e.preventDefault();
         setError('');
 
-        if (phrases.length === 0 || !field) {
-            setError('Debes agregar al menos una frase y seleccionar un campo');
+        if (!promptText.trim() || !field) {
+            setError('Debes escribir una instrucción y seleccionar un campo');
             return;
         }
 
         setSaving(true);
 
-        // Convert tags to regex pattern
-        const pattern = phrasesToPattern(phrases);
-
         const fieldObj = fields.find(f => f.value === field);
         const result = await createAutomationRule({
-            pattern,
+            prompt: promptText.trim(),
             field,
             fieldLabel: fieldObj?.label || field,
             description
@@ -886,15 +866,18 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
 
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                            Frases Clave (Triggers) *
+                            Instrucción de Captura (Prompt) *
                         </label>
-                        <PhraseTagInput
-                            phrases={phrases}
-                            onChange={setPhrases}
-                            placeholder="Ej: tu nombre es"
+                        <textarea
+                            value={promptText}
+                            onChange={(e) => setPromptText(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
+                            placeholder="Ej: Extrae el nombre completo y apellidos del candidato"
+                            rows={3}
+                            required
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Escribe una frase y presiona Enter. Agrega tantas variantes como necesites.
+                            Describe de forma clara qué información debe buscar la IA en la conversación para esta columna.
                         </p>
                     </div>
 
