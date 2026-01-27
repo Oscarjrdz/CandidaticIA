@@ -27,7 +27,12 @@ export default async function handler(req, res) {
         if (match) apiKey = match[0];
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const modelsToTry = [
+            "gemini-1.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-exp",
+            "gemini-pro"
+        ];
 
         const prompt = `Actúa como un experto en ingeniería de prompts para sistemas de reclutamiento.
 Tu objetivo es escribir una instrucción profesional y precisa para que una IA extraiga el valor del campo "${fieldLabel}" de una conversación de WhatsApp.
@@ -45,13 +50,30 @@ Ejemplos:
 
 Instrucción optimizada:`;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const optimizedPrompt = response.text().trim().replace(/^"|"$/g, '');
+        let optimizedPrompt = '';
+        for (const mName of modelsToTry) {
+            try {
+                console.log(`📡 [Optimizer] Trying model ${mName}...`);
+                const model = genAI.getGenerativeModel({ model: mName });
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                optimizedPrompt = response.text().trim().replace(/^"|"$/g, '');
+                if (optimizedPrompt) break;
+            } catch (err) {
+                console.warn(`⚠️ [Optimizer] Model ${mName} failed:`, err.message);
+                continue;
+            }
+        }
 
+        if (!optimizedPrompt) {
+            console.error('❌ [Optimizer] All models failed.');
+            return res.status(500).json({ success: false, error: 'Todos los modelos de IA fallaron. Intenta más tarde.' });
+        }
+
+        console.log(`✨ [Optimizer] Result: ${optimizedPrompt}`);
         return res.status(200).json({ success: true, optimizedPrompt });
     } catch (error) {
-        console.error('Optimize Prompt Error:', error);
+        console.error('❌ Optimize Prompt Final Error:', error);
         return res.status(500).json({ success: false, error: error.message });
     }
 }
