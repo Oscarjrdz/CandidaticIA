@@ -91,13 +91,28 @@ const AutomationsSection = ({ showToast }) => {
         setLoading(false);
     };
 
-    const loadSchedRules = async () => {
-        setSchedLoading(true);
-        const result = await getScheduledRules();
-        if (result.success) {
-            setSchedRules(result.rules);
+    const handleOptimizePrompt = async (rule) => {
+        try {
+            showToast('Optimizando instrucción con IA...', 'info');
+            const res = await fetch('/api/ai/optimize-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fieldLabel: rule.fieldLabel || rule.field })
+            });
+            const data = await res.json();
+            if (data.success && data.optimizedPrompt) {
+                const result = await updateAutomationRule(rule.id, { prompt: data.optimizedPrompt });
+                if (result.success) {
+                    showToast('¡Instrucción optimizada!', 'success');
+                    loadRules();
+                }
+            } else {
+                showToast('Error optimizando prompt', 'error');
+            }
+        } catch (error) {
+            console.error('Optimization error:', error);
+            showToast('Error de conexión', 'error');
         }
-        setSchedLoading(false);
     };
 
     const handleToggleEnabled = async (rule) => {
@@ -327,18 +342,32 @@ const AutomationsSection = ({ showToast }) => {
     return (
         <div className="p-6">
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        Extracción Inteligente
+            {/* Header Titanium Style */}
+            <div className="flex items-center justify-between mb-8 p-6 bg-gradient-to-r from-gray-900 to-blue-900 rounded-[32px] shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-all duration-700">
+                    <Brain className="w-32 h-32 text-white transform rotate-12 scale-150" />
+                </div>
+                <div className="relative z-10">
+                    <div className="flex items-center space-x-3 mb-2">
+                        <div className="bg-blue-500 p-1.5 rounded-lg shadow-lg shadow-blue-500/50">
+                            <Zap className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Core Engine v2.0</span>
+                    </div>
+                    <h2 className="text-3xl font-black text-white tracking-tight">
+                        Módulo de Captura <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300">Titanio</span>
                     </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Gestiona cómo la IA extrae datos de la conversación a tus columnas de CRM
+                    <p className="text-sm text-blue-100/60 mt-1 max-w-md font-medium leading-relaxed">
+                        Ingeniería de extracción por IA con rigor de datos Servin-Zuckerberg.
+                        Garantiza captura perfecta para tu CRM.
                     </p>
                 </div>
-                <Button onClick={() => setShowCreateModal(true)} className="flex items-center space-x-2">
-                    <Plus className="w-4 h-4" />
-                    <span>Crear Nueva</span>
+                <Button
+                    onClick={() => setShowCreateModal(true)}
+                    className="relative z-10 bg-white hover:bg-blue-50 text-blue-900 border-none shadow-xl hover:shadow-blue-500/20 active:scale-95 transition-all text-sm font-black px-6 py-3 rounded-2xl flex items-center space-x-2"
+                >
+                    <Plus className="w-5 h-5" />
+                    <span>NUEVO CAMPO</span>
                 </Button>
             </div>
 
@@ -413,14 +442,23 @@ const AutomationsSection = ({ showToast }) => {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div
-                                                onClick={() => startEditing(rule, 'prompt')}
-                                                className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded transition-colors min-h-[40px] flex items-center"
-                                                title="Click para editar instrucción"
-                                            >
-                                                <span className="text-xs text-gray-700 dark:text-gray-300 italic">
-                                                    "{rule.prompt || 'Sin instrucción...'}"
-                                                </span>
+                                            <div className="flex items-center group/prompt">
+                                                <div
+                                                    onClick={() => startEditing(rule, 'prompt')}
+                                                    className="flex-1 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 p-2 rounded-xl transition-all min-h-[44px] flex items-center"
+                                                    title="Click para editar instrucción"
+                                                >
+                                                    <span className="text-xs text-gray-700 dark:text-gray-300 font-medium leading-relaxed">
+                                                        {rule.prompt || 'Sin instrucción...'}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleOptimizePrompt(rule)}
+                                                    className="ml-2 p-2 opacity-0 group-hover/prompt:opacity-100 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-all"
+                                                    title="Optimizar con IA"
+                                                >
+                                                    <Sparkles className="w-4 h-4" />
+                                                </button>
                                             </div>
                                         )}
                                     </td>

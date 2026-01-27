@@ -63,24 +63,28 @@ export async function intelligentExtract(candidateId, historyText) {
             extractionInstructions += `- ${rule.fieldLabel || rule.field}: ${rule.prompt || `Extrae el valor para ${rule.fieldLabel}`}\n`;
         });
 
-        const prompt = `Analiza la siguiente conversación entre un Reclutador AI y un Candidato.
-Tu objetivo es extraer información clave para el perfil del candidato basándote en las instrucciones proporcionadas.
+        const prompt = `[TITANIUM EXTRACTION PROTOCOL]
+Analiza la conversación entre el Reclutador AI y un Candidato para extraer datos estructurados con precisión quirúrgica.
 
 CONVERSACIÓN:
-\"\"\"
+"""
 ${historyText}
-\"\"\"
+"""
 
-INSTRUCCIONES DE EXTRACCIÓN:
+COLUMN DATASHEET (Extraer estos campos):
 ${extractionInstructions}
 
-REGLAS GENERALES:
-1. Extrae solo datos confirmados o mencionados claramente por el candidato.
-2. Si un dato no está presente o es incierto, pon null.
-3. Para campos de estatus (ej: tiene empleo), responde de forma que sea fácil de entender (ej: "Sí", "No").
-4. Para fechas, intenta usar formato DD/MM/YYYY.
+ESTRATEGIA DE RAZONAMIENTO (Chain-of-Thought):
+1. Identifica el último valor mencionado de forma clara para cada campo.
+2. Valida que el dato sea coherente con su descripción técnica.
+3. Si un dato no existe absolutamente en la charla, usa null.
+4. Para campos binarios (Sí/No), infiere basado en la actitud y afirmaciones del candidato.
 
-Responde ÚNICAMENTE con un objeto JSON que siga este esquema:
+REGLAS DE ORO:
+- Prohibido inventar datos (Zero Hallucination).
+- Formato de fecha estricto: DD/MM/YYYY.
+
+Responde ÚNICAMENTE con un objeto JSON siguiendo este esquema exacto:
 ${JSON.stringify(schema, null, 2)}
 `;
 
@@ -125,7 +129,7 @@ ${JSON.stringify(schema, null, 2)}
 
         // Apply updates if any
         if (Object.keys(updateData).length > 0) {
-            console.log(`💾 [Intelligent Extractor] Updating candidate ${candidateId}:`, updateData);
+            console.log(`💾[Intelligent Extractor] Updating candidate ${candidateId}: `, updateData);
             await updateCandidate(candidateId, updateData);
             return updateData;
         }
