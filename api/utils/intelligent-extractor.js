@@ -32,14 +32,16 @@ export async function intelligentExtract(candidateId, historyText) {
         if (match) apiKey = match[0];
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-            generationConfig: { responseMimeType: "application/json" }
-        });
+        const modelsToTry = [
+            "gemini-1.5-flash",
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-exp",
+            "gemini-pro"
+        ];
 
         // 1. Fetch Dynamic Rules from Redis
-        const rulesJson = await redis ? await redis.get('automation_rules') : null;
-        let rules = rulesJson ? JSON.parse(rulesJson).filter(r => r.enabled) : [];
+        const redisRules = await (redis ? redis.get('automation_rules') : null);
+        let rules = redisRules ? JSON.parse(redisRules).filter(r => r.enabled) : [];
 
         console.log(`🔍 [Viper] Rules Found: ${rules.length}${rules.length === 0 ? ' (Using Fallback)' : ''}`);
 
@@ -86,12 +88,33 @@ Responde ÚNICAMENTE con un JSON puro que siga este esquema:
 ${JSON.stringify(schema, null, 2)}
 `;
 
-        console.log(`📡 [Viper] Sending to LLM (${historyText.length} chars)...`);
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        let jsonText = response.text();
+        let jsonText = '';
+        for (const mName of modelsToTry) {
+            try {
+                console.log(`📡 [Viper] Trying model ${mName}...`);
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    generationConfig: {
+                        temperature: 0.1,
+                        // responseMimeType: "application/json" // Removed for wider compatibility
+                    }
+                });
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                jsonText = response.text();
+                if (jsonText && jsonText.includes('{')) break;
+            } catch (err) {
+                console.warn(`⚠️ [Viper] Model ${mName} failed:`, err.message);
+                continue;
+            }
+        }
 
         console.log(`📥 [Viper] Raw Response:`, jsonText);
+
+        if (!jsonText) {
+            console.error('❌ [Viper] All models failed to extract data.');
+            return null;
+        }
 
         // Sanitize JSON response
         jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
