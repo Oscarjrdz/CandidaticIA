@@ -115,10 +115,36 @@ export default async function handler(req, res) {
             const aiPromise = (async () => {
                 try {
                     const redis = getRedisClient();
+
+                    // 1. ALWAYS TRIGGER EXTRACTION (Titanium Capture)
+                    const extractionTask = (async () => {
+                        try {
+                            const { getMessages } = await import('../utils/storage.js');
+                            const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
+                            const freshMessages = await getMessages(candidateId);
+                            const historyText = freshMessages
+                                .filter(m => m.from === 'user' || m.from === 'bot' || m.from === 'me')
+                                .slice(-15)
+                                .map(m => {
+                                    const sender = (m.from === 'user') ? 'Candidato' : 'Reclutador';
+                                    let content = m.content || '';
+                                    if (m.type === 'audio' || m.type === 'ptt') content = '((Mensaje de Audio))';
+                                    return `${sender}: ${content}`;
+                                })
+                                .join('\n');
+                            await intelligentExtract(candidateId, historyText);
+                        } catch (extErr) {
+                            console.error('⚠️ [Webhook] Extraction Task Error:', extErr);
+                        }
+                    })();
+
+                    // 2. TRIGGER BOT IF ACTIVE
                     const isActive = await redis?.get('bot_ia_active');
                     if (isActive !== 'false') {
                         await processMessage(candidateId, agentInput);
                     }
+
+                    await extractionTask; // Ensure extraction finishes
                 } catch (e) {
                     console.error('🤖 Ferrari AI Error:', e);
                     const redis = getRedisClient();
