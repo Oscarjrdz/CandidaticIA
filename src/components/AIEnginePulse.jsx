@@ -8,9 +8,10 @@ import { Sparkles, Brain, Zap, CheckCircle2, AlertCircle, Loader2, Command } fro
 const AIEnginePulse = ({ running, logs = [], onShowDebug }) => {
     // Determine high-level status from logs
     const statusInfo = useMemo(() => {
-        if (!running && (!logs || logs.length === 0)) return null;
+        const logsArray = Array.isArray(logs) ? logs : [];
+        if (!running && logsArray.length === 0) return null;
 
-        const lastLog = logs[logs.length - 1] || '';
+        const lastLog = logsArray[logsArray.length - 1] || '';
         let title = "Motor Activo";
         let sub = "Analizando secuencias...";
         let state = 'processing'; // processing, success, error
@@ -45,18 +46,18 @@ const AIEnginePulse = ({ running, logs = [], onShowDebug }) => {
         <div className="relative group overflow-hidden bg-white/5 dark:bg-black/40 backdrop-blur-xl border border-white/10 dark:border-white/5 rounded-[40px] p-8 shadow-2xl transition-all duration-700 animate-in zoom-in-95">
             {/* Animated Background Glow */}
             <div className={`absolute -inset-24 blur-[100px] opacity-20 transition-colors duration-1000 ${state === 'error' ? 'bg-red-500' :
-                    state === 'success' ? 'bg-green-500' : 'bg-blue-500 shadow-[0_0_100px_rgba(59,130,246,0.5)]'
+                state === 'success' ? 'bg-green-500' : 'bg-blue-500 shadow-[0_0_100px_rgba(59,130,246,0.5)]'
                 }`} />
 
             <div className="relative z-10 flex flex-col items-center text-center">
                 {/* The Core Pulse */}
                 <div className="relative mb-8">
                     <div className={`absolute inset-0 rounded-full blur-2xl opacity-40 animate-pulse ${state === 'error' ? 'bg-red-400' :
-                            state === 'success' ? 'bg-green-400' : 'bg-blue-400'
+                        state === 'success' ? 'bg-green-400' : 'bg-blue-400'
                         }`} />
 
                     <div className={`w-24 h-24 rounded-full flex items-center justify-center relative border-4 transition-colors duration-500 ${state === 'error' ? 'border-red-500/30' :
-                            state === 'success' ? 'border-green-500/30' : 'border-blue-500/30'
+                        state === 'success' ? 'border-green-500/30' : 'border-blue-500/30'
                         }`}>
                         {running ? (
                             <div className="relative">

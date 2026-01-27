@@ -67,7 +67,7 @@ const AIAutomationsWidget = ({ showToast }) => {
             setLoading(true);
             const res = await fetch(`/api/ai/automations?id=${id}`, { method: 'DELETE' });
             if (res.ok) {
-                showToast?.('Regla eliminada del sistema', 'default');
+                showToast?.('Regla eliminada del sistema', 'success');
                 setDeletingId(null);
                 await pull();
             }
@@ -141,7 +141,7 @@ const AIAutomationsWidget = ({ showToast }) => {
                             disabled={creating || !prompt?.trim()}
                             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-full font-bold text-xs shadow-lg shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-30"
                         >
-                            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'CONECCIÓN MAGIC'}
+                            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'CONEXIÓN MAGIC'}
                         </button>
                     </div>
                 </div>
@@ -172,25 +172,25 @@ const AIAutomationsWidget = ({ showToast }) => {
                         </div>
                     )}
 
-                    {rules?.map((r) => (
+                    {rules?.filter(Boolean).map((r) => (
                         <div key={r?.id} className={`p-5 rounded-3xl border transition-all duration-300 flex items-center justify-between ${r?.active ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm' : 'bg-gray-50 dark:bg-black/10 border-transparent opacity-50'
                             }`}>
                             <div className="truncate flex-1 pr-6">
                                 <h4 className="font-bold text-sm text-gray-900 dark:text-white truncate">{r?.name || 'Regla'}</h4>
-                                <p className="text-[10px] text-gray-400 italic truncate italic">"{r?.prompt || '...'}"</p>
+                                <p className="text-[10px] text-gray-400 truncate italic">"{r?.prompt || '...'}"</p>
                             </div>
 
-                            {deletingId === r.id ? (
+                            {deletingId === r?.id ? (
                                 <div className="flex items-center space-x-1 animate-in slide-in-from-right-2">
-                                    <button onClick={() => confirmDelete(r.id)} className="px-3 py-1.5 bg-red-500 text-white text-[10px] font-bold rounded-lg">SI, BORRAR</button>
-                                    <button onClick={() => setDeletingId(null)} className="px-3 py-1.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-lg">NO</button>
+                                    <button onClick={() => confirmDelete(r?.id)} className="px-3 py-1.5 bg-red-500 text-white text-[10px] font-bold rounded-lg hover:bg-red-600">SI, BORRAR</button>
+                                    <button onClick={() => setDeletingId(null)} className="px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-[10px] font-bold rounded-lg">NO</button>
                                 </div>
                             ) : (
                                 <div className="flex items-center space-x-1">
-                                    <button onClick={() => onToggle(r)} className={`p-2 rounded-xl ${r?.active ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-400'}`}>
+                                    <button onClick={() => onToggle(r)} className={`p-2 rounded-xl transition-colors ${r?.active ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}>
                                         {r?.active ? <PauseCircle className="w-5 h-5" /> : <PlayCircle className="w-5 h-5" />}
                                     </button>
-                                    <button onClick={() => setDeletingId(r.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
+                                    <button onClick={() => setDeletingId(r?.id)} className="p-2 text-gray-300 hover:text-red-500 transition-colors">
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
@@ -218,13 +218,13 @@ const AIAutomationsWidget = ({ showToast }) => {
                             <button onClick={() => setLogs(null)} className="text-[10px] font-bold text-gray-600 hover:text-white">CLOSE [x]</button>
                         </div>
                         <div ref={scrollRef} className="p-6 font-mono text-[9px] text-gray-500 max-h-48 overflow-y-auto leading-relaxed custom-scrollbar bg-black/40">
-                            {logs.map((l, i) => (
-                                <div key={i} className={`mb-1 flex space-x-3 ${l.includes('✅') || l.includes('🚀') ? 'text-green-900/60' :
-                                    l.includes('❌') || l.includes('🛑') ? 'text-red-500 font-bold' :
-                                        l.includes('🤔') ? 'text-blue-900/60' : ''
+                            {Array.isArray(logs) && logs.map((l, i) => (
+                                <div key={i} className={`mb-1 flex space-x-3 ${String(l).includes('✅') || String(l).includes('🚀') ? 'text-green-900/60' :
+                                    String(l).includes('❌') || String(l).includes('🛑') ? 'text-red-500 font-bold' :
+                                        String(l).includes('🤔') ? 'text-blue-900/60' : ''
                                     }`}>
                                     <span className="opacity-20 shrink-0">[{i}]</span>
-                                    <span className="break-words">{l}</span>
+                                    <span className="break-words">{String(l)}</span>
                                 </div>
                             ))}
                         </div>
