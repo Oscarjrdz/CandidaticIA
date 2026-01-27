@@ -372,11 +372,6 @@ const AutomationsSection = ({ showToast }) => {
 
 
 
-            {/* 🤖 Módulo de Extracción IA */}
-            <div className="flex items-center space-x-2 mb-4">
-                <Brain className="w-6 h-6 text-blue-500" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Módulo de Extracción IA</h3>
-            </div>
 
 
             {/* Table */}
