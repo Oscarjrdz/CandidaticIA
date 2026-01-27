@@ -257,31 +257,30 @@ ${dnaLines}
             }
         })();
 
-        // Background
-        const backgroundPromise = (async () => {
-            try {
-                await Promise.allSettled([
-                    saveMessage(candidateId, {
-                        from: 'bot',
-                        content: responseText,
-                        type: 'text',
-                        timestamp: new Date().toISOString()
-                    }),
-                    updateCandidate(candidateId, {
-                        lastBotMessageAt: new Date().toISOString(),
-                        ultimoMensaje: new Date().toISOString()
-                    })
-                ]);
-                const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
-                const historyText = validMessages.slice(-15).map(m => `${m.from === 'user' ? 'Candidato' : 'Reclutador'}: ${m.content}`).join('\n');
-                await intelligentExtract(candidateId, historyText);
+        // Background (Awaited for Serverless Persistence)
+        try {
+            await Promise.allSettled([
+                saveMessage(candidateId, {
+                    from: 'bot',
+                    content: responseText,
+                    type: 'text',
+                    timestamp: new Date().toISOString()
+                }),
+                updateCandidate(candidateId, {
+                    lastBotMessageAt: new Date().toISOString(),
+                    ultimoMensaje: new Date().toISOString()
+                })
+            ]);
 
-                const { processBotResponse } = await import('../utils/automations.js');
-                await processBotResponse(candidateId, responseText);
-            } catch (bgErr) {
-                console.error('⚠️ [AI Agent] Background Task Error:', bgErr);
-            }
-        })();
+            const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
+            const historyText = validMessages.slice(-15).map(m => `${m.from === 'user' ? 'Candidato' : 'Reclutador'}: ${m.content}`).join('\n');
+            await intelligentExtract(candidateId, historyText);
+
+            const { processBotResponse } = await import('../utils/automations.js');
+            await processBotResponse(candidateId, responseText);
+        } catch (bgErr) {
+            console.error('⚠️ [AI Agent] Background Task Error:', bgErr);
+        }
 
         await deliveryPromise;
         return responseText;
