@@ -63,67 +63,80 @@ export async function intelligentExtract(candidateId, historyText) {
             extractionInstructions += `- ${rule.fieldLabel || rule.field}: ${rule.prompt || `Extrae el valor para ${rule.fieldLabel}`}\n`;
         });
 
-        const prompt = `[TITANIUM EXTRACTION PROTOCOL]
-Analiza la conversación entre el Reclutador AI y un Candidato para extraer datos estructurados con precisión quirúrgica.
+        const prompt = `[VIPER-GRIP EXTRACTION PROTOCOL]
+Analiza exhaustivamente la conversación para extraer datos del Candidato.
 
-CONVERSACIÓN:
+CONVERSACIÓN HISTÓRICA:
 """
 ${historyText}
 """
 
-COLUMN DATASHEET (Extraer estos campos):
+REQUERIMIENTOS DE CAPTURA (EXTRAER SIEMPRE):
 ${extractionInstructions}
 
-ESTRATEGIA DE RAZONAMIENTO (Chain-of-Thought):
-1. Identifica el último valor mencionado de forma clara para cada campo.
-2. Valida que el dato sea coherente con su descripción técnica.
-3. Si un dato no existe absolutamente en la charla, usa null.
-4. Para campos binarios (Sí/No), infiere basado en la actitud y afirmaciones del candidato.
+ESTRATEGIA VIPER:
+1. Sé AGRESIVO: Si el candidato menciona algo que se parece al dato buscado, extráelo.
+2. Si el dato fue mencionado antes en la charla pero el candidato no lo repitió, úsalo (Persistencia).
+3. Para campos de texto (Nombre, Municipio), límpialos de basura pero mantén la esencia.
+4. Para campos binarios (Sí/No), busca confirmaciones implícitas (ej: "trabajo en una tienda" implica Tiene Empleo: Sí).
 
-REGLAS DE ORO:
-- Prohibido inventar datos (Zero Hallucination).
-- Formato de fecha estricto: DD/MM/YYYY.
-
-Responde ÚNICAMENTE con un objeto JSON siguiendo este esquema exacto:
+Responde ÚNICAMENTE con un JSON puro que siga este esquema:
 ${JSON.stringify(schema, null, 2)}
 `;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
-        const jsonText = response.text();
-        const extracted = JSON.parse(jsonText);
+        let jsonText = response.text();
 
-        console.log(`🧠 [Intelligent Extractor] Dynamic extraction result:`, extracted);
+        // Sanitize JSON response
+        jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        let extracted = {};
+        try {
+            extracted = JSON.parse(jsonText);
+        } catch (parseErr) {
+            const match = jsonText.match(/\{[\s\S]*\}/);
+            if (match) {
+                try { extracted = JSON.parse(match[0]); } catch (e) { }
+            }
+        }
+
+        console.log(`🧠 [Viper Extractor] Result:`, extracted);
 
         // 3. Process and refine updates
         const updateData = {};
 
         for (const rule of rules) {
             const val = extracted[rule.field];
-            if (val === null || val === undefined) continue;
+            if (!val || val === 'null' || val === 'N/A') continue;
 
-            // Apply specific AI cleaning based on common field names (Optional but recommended)
-            if (rule.field === 'nombreReal') {
-                const cleaned = await cleanNameWithAI(val);
-                if (cleaned) {
-                    updateData.nombreReal = cleaned;
-                    updateData.genero = await detectGender(cleaned);
+            try {
+                if (rule.field === 'nombreReal') {
+                    const cleaned = await cleanNameWithAI(val);
+                    updateData.nombreReal = cleaned || val; // Fallback to raw if clean fails
+                    if (updateData.nombreReal) updateData.genero = await detectGender(updateData.nombreReal);
+                } else if (rule.field === 'municipio') {
+                    const cleaned = await cleanMunicipioWithAI(val);
+                    updateData.municipio = cleaned || val;
+                } else if (rule.field === 'categoria') {
+                    const cleaned = await cleanCategoryWithAI(val);
+                    updateData.categoria = cleaned || val;
+                } else if (rule.field === 'tieneEmpleo' || rule.field === 'empleo') {
+                    const fieldName = 'tieneEmpleo';
+                    if (typeof val === 'boolean') updateData[fieldName] = val ? 'Sí' : 'No';
+                    else {
+                        const cleaned = await cleanEmploymentStatusWithAI(val);
+                        updateData[fieldName] = cleaned || val;
+                    }
+                } else if (rule.field === 'fechaNacimiento' || rule.field === 'fecha') {
+                    const cleaned = await cleanDateWithAI(val);
+                    updateData.fechaNacimiento = (cleaned && cleaned !== 'INVALID') ? cleaned : val;
+                } else {
+                    updateData[rule.field] = val;
                 }
-            } else if (rule.field === 'municipio') {
-                updateData.municipio = await cleanMunicipioWithAI(val);
-            } else if (rule.field === 'categoria') {
-                updateData.categoria = await cleanCategoryWithAI(val);
-            } else if (rule.field === 'tieneEmpleo' || rule.field === 'empleo') {
-                // Handle different possible extractions for "tieneEmpleo"
-                const fieldName = 'tieneEmpleo';
-                if (typeof val === 'boolean') updateData[fieldName] = val ? 'Sí' : 'No';
-                else updateData[fieldName] = await cleanEmploymentStatusWithAI(val);
-            } else if (rule.field === 'fechaNacimiento' || rule.field === 'fecha') {
-                const cleaned = await cleanDateWithAI(val);
-                if (cleaned !== 'INVALID') updateData.fechaNacimiento = cleaned;
-            } else {
-                // For any other dynamic field, just save the extracted value
-                updateData[rule.field] = val;
+            } catch (err) {
+                console.warn(`⚠️ [Viper] Error cleaning field ${rule.field}:`, err.message);
+                updateData[rule.field] = val; // Always save raw if cleaning crashes
             }
         }
 
