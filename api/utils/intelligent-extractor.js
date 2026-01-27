@@ -151,10 +151,34 @@ ${JSON.stringify(schema, null, 2)}
         if (Object.keys(updateData).length > 0) {
             console.log(`💾 [Viper] Final Update Data for ${candidateId}:`, updateData);
             await updateCandidate(candidateId, updateData);
+
+            // DIAGNOSTIC LOG (Persistent in Redis)
+            if (redis) {
+                const logEntry = {
+                    timestamp: new Date().toISOString(),
+                    candidateId,
+                    extracted,
+                    refined: updateData,
+                    historySnippet: historyText.substring(0, 500)
+                };
+                await redis.lpush('debug:extraction_log', JSON.stringify(logEntry));
+                await redis.ltrim('debug:extraction_log', 0, 19); // Keep last 20
+            }
+
             return updateData;
         }
 
         console.log(`⏹️ [Viper] No data to update for ${candidateId}`);
+        if (redis) {
+            await redis.lpush('debug:extraction_log', JSON.stringify({
+                timestamp: new Date().toISOString(),
+                candidateId,
+                status: 'NO_DATA',
+                raw: extracted,
+                historySnippet: historyText.substring(0, 500)
+            }));
+            await redis.ltrim('debug:extraction_log', 0, 19);
+        }
         return null;
 
     } catch (error) {
