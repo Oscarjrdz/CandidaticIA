@@ -273,7 +273,11 @@ ${dnaLines}
             ]);
 
             const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
-            const historyText = validMessages.slice(-15).map(m => `${m.from === 'user' ? 'Candidato' : 'Reclutador'}: ${m.content}`).join('\n');
+
+            // Fetch fresh history to include the message that just arrived and the bot's reply
+            const freshMessages = await getMessages(candidateId);
+            const historyText = freshMessages.slice(-15).map(m => `${m.from === 'user' ? 'Candidato' : 'Reclutador'}: ${m.content}`).join('\n');
+
             await intelligentExtract(candidateId, historyText);
 
             const { processBotResponse } = await import('../utils/automations.js');
