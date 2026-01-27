@@ -118,7 +118,26 @@ export async function runAIAutomations(isManual = false) {
                 evaluatedCount++;
                 try {
                     logs.push(`🤔 Evaluando a ${cand.nombre}...`);
-                    const res = await model.generateContent(`Regla: "${rule.prompt}". Candidato: ${cand.nombre}. Status: ${cand.status}. Bio: ${JSON.stringify(cand.campos || {})}. ¿Cumple? JSON: {"ok":bool,"msg":string}`);
+
+                    const systemContext = `Eres un reclutador experto. Tu tarea es evaluar si un candidato cumple con una regla y redactar el mensaje de WhatsApp resultante.
+INSTRUCCIONES:
+- Si el candidato cumple la regla, responde "ok": true.
+- En "msg", escribe el contenido EXACTO del mensaje que enviarás por WhatsApp. 
+- Usa un tono humano, amigable y profesional.
+- NO digas "se enviará un mensaje", ESCRIBE el mensaje directamente.
+- NO uses asteriscos en exceso.`;
+
+                    const evalPrompt = `
+REGLA A APLICAR: "${rule.prompt}"
+DATOS DEL CANDIDATO:
+- Nombre: ${cand.nombre}
+- WhatsApp: ${cand.whatsapp}
+- Status actual: ${cand.status}
+- Datos adicionales: ${JSON.stringify(cand.campos || {})}
+
+Responde ÚNICAMENTE en formato JSON: {"ok": boolean, "msg": string}`;
+
+                    const res = await model.generateContent([systemContext, evalPrompt]);
                     const out = res.response.text().match(/\{[\s\S]*\}/)?.[0];
                     if (!out) continue;
 
@@ -126,10 +145,13 @@ export async function runAIAutomations(isManual = false) {
 
                     if (decision.ok && decision.msg) {
                         logs.push(`✨ Match! Enviando mensaje...`);
-                        await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, decision.msg);
+                        // Limpiar msg de posibles prefijos que la IA ponga por error
+                        let finalMsg = decision.msg.replace(/^Mensaje:\s*/i, '').replace(/^Contenido:\s*/i, '').trim();
+
+                        await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, finalMsg);
                         await saveMessage(cand.id, {
                             from: 'bot',
-                            content: decision.msg,
+                            content: finalMsg,
                             type: 'text',
                             timestamp: new Date().toISOString(),
                             meta: { automationId: rule.id, aiMatch: true }
