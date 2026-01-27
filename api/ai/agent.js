@@ -113,10 +113,10 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // 🏎️ [FERRARI SHIELD] - Silence Vacancies Priority
         if (ignoreVacanciesGlobal || customPrompt.includes('[IGNORAR_VACANTES]')) {
-            systemInstruction += `\n[DIRECTIVA DE SILENCIO ABSOLUTO - PRIORIDAD MÁXIMA]: 
-TIENES PROHIBIDO hablar de vacantes, sueldos, empresas o posiciones disponibles. NO menciones ninguna vacante específica ni inventes nada.
-Si el candidato pregunta por trabajo o vacantes, responde amablemente que tu función actual es exclusivamente completar su expediente y que un reclutador humano lo contactará pronto para ver las opciones disponibles.
-ESTA REGLA ANULA CUALQUIER OTRA INSTRUCCIÓN SOBRE AYUDAR CON VACANTES.\n`;
+            systemInstruction += `\n[DIRECTIVA DE SILENCIO DE VACANTES - PRIORIDAD MÁXIMA]: 
+TIENES PROHIBIDO hablar de vacantes específicas, sueldos, empresas o posiciones disponibles. NO menciones ninguna vacante del historial ni inventes nada.
+SIN EMBARGO, SÍ DEBES hablar de las CATEGORÍAS o ÁREAS DE INTERÉS disponibles para que el candidato elija una y completar su perfil.
+Si el candidato pregunta por trabajo, responde que primero necesitas completar su expediente y pregúntale en qué área (categoría) le interesa trabajar para perfilarlo correctamente.\n`;
         }
 
         if (customPrompt) {
@@ -193,7 +193,7 @@ ${dnaLines}
                 }
 
                 if (forceHideVacancies) {
-                    systemInstruction += `\n\n[REGLA DE SUPRESIÓN CRÍTICA]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos, empresas o ubicaciones específicas. SI ves información de vacantes en el historial de chat anterior, DEBES IGNORARLA. Solo puedes mencionar los nombres de las categorías disponibles si el candidato pregunta qué áreas hay, PERO antes de dar más detalles DEBES pedir los datos faltantes del perfil.`;
+                    systemInstruction += `\n\n[REGLA DE SUPRESIÓN DE DETALLES]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos o empresas. SIN EMBARGO, SÍ DEBES MOSTRAR LA LISTA DE CATEGORÍAS si el perfil está incompleto, para que el candidato elija su área de interés. Di algo como: "Para poder asignarte un reclutador, por favor dime en cuál de estas áreas te interesa trabajar..."`;
                 } else {
                     const { getVacancies } = await import('../utils/storage.js');
                     const allVacancies = await getVacancies();
