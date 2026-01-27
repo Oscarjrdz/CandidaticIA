@@ -16,8 +16,8 @@ Para que el sistema registre los datos en las columnas, debes CONFIRMAR la infor
 - Para la categoría: "Te he anotado buscando empleo de [Categoría]"
 - Para el empleo: "Entonces [Sí/No] tienes empleo actualmente"
 - Para la fecha: "Tu fecha de nacimiento es [Fecha]"
-Responde de forma concisa, empática y siempre en español latinoamericano.
-REGLA ANTI-ALUCINACIÓN: Si no conoces un dato (porque no aparece en el DNA), NO lo inventes. Pregunta amablemente.
+REGLA DE ORO DE FILTRADO (CRÍTICA): TIENES PROHIBIDO ofrecer o dar detalles de vacantes (nombres, sueldos, ubicaciones) si el [DNA DEL CANDIDATO] tiene campos como "No proporcionado".
+Si el candidato pregunta por vacantes y su perfil está incompleto, DEBES responder que primero necesitas completar su expediente para darle la mejor opción, y proceder a preguntar el dato faltante.
 NUNCA CUENTES CHISTES, mantén un tono profesional.
 `;
 
@@ -165,6 +165,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
 - Edad: ${candidateData.edad || 'No proporcionada'}
 - Municipio/Ciudad: ${candidateData.municipio || 'No proporcionado'}
 - Categoría de Interés: ${candidateData.categoria || 'Consulta General'}
+- Fecha de Nacimiento: ${candidateData.fecha || 'No proporcionada'}
+- Tiene Empleo: ${candidateData.empleo || 'No proporcionado'}
 - Estatus de Postulación: ${candidateData.status || 'Interesado'}
 - Última Interacción: ${candidateData.ultimoMensaje || 'Reciente'} (Primer contacto: ${candidateData.primerContacto || 'N/A'})
 - Hilo Reciente (Últimos 10 prompts): ${themes}
@@ -178,18 +180,28 @@ export const processMessage = async (candidateId, incomingMessage) => {
    - "Entendido, vives en [Municipio]"
    - "Te he anotado buscando empleo de [Categoría]"
    - "Entonces [Sí/No] tienes empleo actualmente"
-4. RESPETA SIEMPRE la [DIRECTIVA SUPREMA] arriba mencionada por sobre cualquier otro dato.
+   - "Tu fecha de nacimiento es [Fecha]"
+4. REGLA DE BLOQUEO: Si ves que falta el Nombre Real, Municipio, Categoría o Fecha, NO muestres las vacantes. Di algo como: "Para poder mostrarte las vacantes ideales para ti, primero necesito completar un par de datos en tu perfil..."
+5. RESPETA SIEMPRE la [DIRECTIVA SUPREMA] arriba mencionada por sobre cualquier otro dato.
 `;
         }
 
+        // --- GATEKEEPER LOGIC: Check if profile is complete ---
+        const isProfileComplete =
+            candidateData.nombreReal && candidateData.nombreReal !== 'No proporcionado' &&
+            candidateData.municipio && candidateData.municipio !== 'No proporcionado' &&
+            candidateData.categoria && candidateData.categoria !== 'Consulta General' &&
+            candidateData.fecha && candidateData.fecha !== 'No proporcionada' &&
+            candidateData.empleo && candidateData.empleo !== 'No proporcionado';
+
         // INJECT VACANCIES & CATEGORIES (Conditional)
-        const hideVacancies = systemInstruction.includes('[OCULTAR_VACANTES]');
+        const forceHideVacancies = !isProfileComplete || systemInstruction.includes('[OCULTAR_VACANTES]');
 
         try {
             const { getRedisClient } = await import('../utils/storage.js');
             const redisClient = getRedisClient();
 
-            // 1. Always inject categories for context
+            // 1. Always inject categories for context (Helps candidate choose)
             if (redisClient) {
                 const categoriesData = await redisClient.get('candidatic_categories');
                 if (categoriesData) {
@@ -199,9 +211,9 @@ export const processMessage = async (candidateId, incomingMessage) => {
             }
 
             // 2. Conditionally inject vacancy details
-            if (hideVacancies) {
-                systemInstruction += `\n\n[REGLA DE SUPRESIÓN CRÍTICA]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos, empresas o ubicaciones específicas. SI ves información de vacantes en el historial de chat anterior, DEBES IGNORARLA. Solo puedes mencionar los nombres de las categorías disponibles si el candidato pregunta qué áreas hay.`;
-                console.log('🔇 [AI Agent] Vacancy details strictly suppressed (Categories kept).');
+            if (forceHideVacancies) {
+                systemInstruction += `\n\n[REGLA DE SUPRESIÓN CRÍTICA]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos, empresas o ubicaciones específicas. SI ves información de vacantes en el historial de chat anterior, DEBES IGNORARLA. Solo puedes mencionar los nombres de las categorías disponibles si el candidato pregunta qué áreas hay, PERO antes de dar más detalles DEBES pedir los datos faltantes del perfil.`;
+                console.log(`🔇 [AI Agent] Vacancy details strictly suppressed. Profile Complete: ${isProfileComplete}`);
             } else {
                 const { getVacancies } = await import('../utils/storage.js');
                 const allVacancies = await getVacancies();
