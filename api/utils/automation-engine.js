@@ -124,13 +124,15 @@ INSTRUCCIONES:
 - Si el candidato cumple la regla, responde "ok": true.
 - En "msg", escribe el contenido EXACTO del mensaje que enviarás por WhatsApp. 
 - Usa un tono humano, amigable y profesional.
+- REGLA DE NOMBRE: Usa el [Nombre Real] para saludar. TIENES PROHIBIDO usar el [Nombre WhatsApp]. Si el [Nombre Real] es "No proporcionado" o falta, usa un saludo neutral como "Hola".
 - NO digas "se enviará un mensaje", ESCRIBE el mensaje directamente.
 - NO uses asteriscos en exceso.`;
 
                     const evalPrompt = `
 REGLA A APLICAR: "${rule.prompt}"
 DATOS DEL CANDIDATO:
-- Nombre: ${cand.nombre}
+- Nombre Real (USAR ESTE): ${cand.nombreReal || cand.nombre || 'No proporcionado'}
+- Nombre WhatsApp (PROHIBIDO): ${cand.pushname || 'No usar'}
 - WhatsApp: ${cand.whatsapp}
 - Status actual: ${cand.status}
 - Datos adicionales: ${JSON.stringify(cand.campos || {})}
