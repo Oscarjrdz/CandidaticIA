@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sparkles, Trash2, PauseCircle, PlayCircle, Loader2, AlertCircle, RefreshCcw, Command, Zap, Terminal } from 'lucide-react';
 import Button from './ui/Button';
 import AIEnginePulse from './AIEnginePulse';
@@ -199,26 +200,37 @@ const AIAutomationsWidget = ({ showToast }) => {
                 </div>
             </div>
 
-            {/* 📟 Trace Console */}
-            {logs && (
-                <div className="bg-gray-950 dark:bg-black rounded-3xl overflow-hidden border border-gray-800 shadow-2xl animate-in zoom-in-95">
-                    <div className="flex justify-between items-center px-5 py-3 bg-gray-900/50 border-b border-gray-800">
-                        <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">AI Trace Monitoring</span>
-                        <button onClick={() => setLogs(null)} className="text-[10px] font-bold text-gray-600 hover:text-white">CLOSE [x]</button>
+            {/* 📟 Premium Status & Debug Console */}
+            <div className="space-y-4">
+                <AIEnginePulse
+                    running={running}
+                    logs={logs}
+                    onShowDebug={() => setShowDebug(!showDebug)}
+                />
+
+                {logs && showDebug && (
+                    <div className="bg-gray-950 dark:bg-black rounded-3xl overflow-hidden border border-gray-800 shadow-2xl animate-in slide-in-from-top-4">
+                        <div className="flex justify-between items-center px-5 py-3 bg-gray-900/50 border-b border-gray-800">
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center">
+                                <Terminal className="w-3 h-3 mr-2 text-blue-500" />
+                                Debug Trace Console
+                            </span>
+                            <button onClick={() => setLogs(null)} className="text-[10px] font-bold text-gray-600 hover:text-white">CLOSE [x]</button>
+                        </div>
+                        <div ref={scrollRef} className="p-6 font-mono text-[9px] text-gray-500 max-h-48 overflow-y-auto leading-relaxed custom-scrollbar bg-black/40">
+                            {logs.map((l, i) => (
+                                <div key={i} className={`mb-1 flex space-x-3 ${l.includes('✅') || l.includes('🚀') ? 'text-green-900/60' :
+                                    l.includes('❌') || l.includes('🛑') ? 'text-red-500 font-bold' :
+                                        l.includes('🤔') ? 'text-blue-900/60' : ''
+                                    }`}>
+                                    <span className="opacity-20 shrink-0">[{i}]</span>
+                                    <span className="break-words">{l}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                    <div ref={scrollRef} className="p-6 font-mono text-[10px] text-gray-400 max-h-48 overflow-y-auto leading-relaxed custom-scrollbar">
-                        {logs.map((l, i) => (
-                            <div key={i} className={`mb-1 flex space-x-3 ${l.includes('✅') || l.includes('🚀') ? 'text-green-500' :
-                                l.includes('❌') || l.includes('🛑') || l.includes('🛑') ? 'text-red-500 font-bold' :
-                                    l.includes('🤔') ? 'text-blue-400' : ''
-                                }`}>
-                                <span className="opacity-20 shrink-0">[{i}]</span>
-                                <span className="break-words">{l}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };
