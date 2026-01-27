@@ -272,12 +272,20 @@ ${dnaLines}
                 })
             ]);
 
-            const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
-
             // Fetch fresh history to include the message that just arrived and the bot's reply
             const freshMessages = await getMessages(candidateId);
-            const historyText = freshMessages.slice(-15).map(m => `${m.from === 'user' ? 'Candidato' : 'Reclutador'}: ${m.content}`).join('\n');
+            const historyText = freshMessages
+                .filter(m => m.from === 'user' || m.from === 'bot' || m.from === 'me')
+                .slice(-15)
+                .map(m => {
+                    const sender = (m.from === 'user') ? 'Candidato' : 'Reclutador';
+                    let content = m.content || '';
+                    if (m.type === 'audio' || m.type === 'ptt') content = '((Mensaje de Audio))';
+                    return `${sender}: ${content}`;
+                })
+                .join('\n');
 
+            console.log(`📡 [AI Agent] Triggering extraction for ${candidateId} with ${freshMessages.length} messages.`);
             await intelligentExtract(candidateId, historyText);
 
             const { processBotResponse } = await import('../utils/automations.js');

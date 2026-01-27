@@ -41,6 +41,8 @@ export async function intelligentExtract(candidateId, historyText) {
         const rulesJson = await redis ? await redis.get('automation_rules') : null;
         let rules = rulesJson ? JSON.parse(rulesJson).filter(r => r.enabled) : [];
 
+        console.log(`🔍 [Viper] Rules Found: ${rules.length}${rules.length === 0 ? ' (Using Fallback)' : ''}`);
+
         // STEEL-VESSEL FALLBACK: If no rules are found, use hardcoded core rules 
         // to prevent data loss in case of empty configuration.
         if (rules.length === 0) {
@@ -84,9 +86,12 @@ Responde ÚNICAMENTE con un JSON puro que siga este esquema:
 ${JSON.stringify(schema, null, 2)}
 `;
 
+        console.log(`📡 [Viper] Sending to LLM (${historyText.length} chars)...`);
         const result = await model.generateContent(prompt);
         const response = await result.response;
         let jsonText = response.text();
+
+        console.log(`📥 [Viper] Raw Response:`, jsonText);
 
         // Sanitize JSON response
         jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -101,14 +106,16 @@ ${JSON.stringify(schema, null, 2)}
             }
         }
 
-        console.log(`🧠 [Viper Extractor] Result:`, extracted);
+        console.log(`🧠 [Viper Extractor] Parsed Data:`, JSON.stringify(extracted));
 
         // 3. Process and refine updates
         const updateData = {};
 
         for (const rule of rules) {
             const val = extracted[rule.field];
-            if (!val || val === 'null' || val === 'N/A') continue;
+            if (!val || val === 'null' || val === 'N/A' || val === 'INVALID') continue;
+
+            console.log(`✨ [Viper] Processing Field: ${rule.field} = ${val}`);
 
             try {
                 if (rule.field === 'nombreReal') {
@@ -142,11 +149,12 @@ ${JSON.stringify(schema, null, 2)}
 
         // Apply updates if any
         if (Object.keys(updateData).length > 0) {
-            console.log(`💾[Intelligent Extractor] Updating candidate ${candidateId}: `, updateData);
+            console.log(`💾 [Viper] Final Update Data for ${candidateId}:`, updateData);
             await updateCandidate(candidateId, updateData);
             return updateData;
         }
 
+        console.log(`⏹️ [Viper] No data to update for ${candidateId}`);
         return null;
 
     } catch (error) {
