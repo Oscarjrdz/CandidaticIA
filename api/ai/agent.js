@@ -97,16 +97,28 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const today = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
         let customPrompt = '';
+        let ignoreVacanciesGlobal = false;
+
         if (redis) {
             customPrompt = await redis.get('bot_ia_prompt') || '';
-            const aiConfig = await redis.get('ai_config');
-            if (aiConfig) {
-                const parsed = JSON.parse(aiConfig);
+            const aiConfigJson = await redis.get('ai_config');
+            if (aiConfigJson) {
+                const parsed = JSON.parse(aiConfigJson);
                 if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
+                if (parsed.ignoreVacancies || parsed.ignoreVendors) ignoreVacanciesGlobal = true;
             }
         }
 
         let systemInstruction = `${DEFAULT_SYSTEM_PROMPT}\n`;
+
+        // 🏎️ [FERRARI SHIELD] - Silence Vacancies Priority
+        if (ignoreVacanciesGlobal || customPrompt.includes('[IGNORAR_VACANTES]')) {
+            systemInstruction += `\n[DIRECTIVA DE SILENCIO ABSOLUTO - PRIORIDAD MÁXIMA]: 
+TIENES PROHIBIDO hablar de vacantes, sueldos, empresas o posiciones disponibles. NO menciones ninguna vacante específica ni inventes nada.
+Si el candidato pregunta por trabajo o vacantes, responde amablemente que tu función actual es exclusivamente completar su expediente y que un reclutador humano lo contactará pronto para ver las opciones disponibles.
+ESTA REGLA ANULA CUALQUIER OTRA INSTRUCCIÓN SOBRE AYUDAR CON VACANTES.\n`;
+        }
+
         if (customPrompt) {
             systemInstruction += `\n[DIRECTIVA SUPREMA DEL ADMINISTRADOR - PRIORIDAD MÁXIMA]:\n${customPrompt}\n\n`;
         }
@@ -168,7 +180,7 @@ ${dnaLines}
             candidateData.fechaNacimiento && candidateData.fechaNacimiento !== 'No proporcionada' &&
             candidateData.tieneEmpleo && candidateData.tieneEmpleo !== 'No proporcionado';
 
-        const forceHideVacancies = !isProfileComplete || systemInstruction.includes('[OCULTAR_VACANTES]');
+        const forceHideVacancies = ignoreVacanciesGlobal || !isProfileComplete || systemInstruction.includes('[IGNORAR_VACANTES]');
 
         try {
             const { getRedisClient: getFreshRedis } = await import('../utils/storage.js');
