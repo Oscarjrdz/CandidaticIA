@@ -6,7 +6,8 @@ export default async function handler(req, res) {
     if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const { candidateId, batch, limit = '1', offset = '0', token } = (req.method === 'GET') ? req.query : req.body;
+        const { candidateId, batch, limit = '1', offset = '0', token, auto } = (req.method === 'GET') ? req.query : req.body;
+        const isAuto = auto === 'true';
 
         // Simple Security (Optional but recommended)
         const MASTER_TOKEN = 'titanio_rescue_2026';
@@ -14,13 +15,12 @@ export default async function handler(req, res) {
             return res.status(403).json({ success: false, error: 'Acceso denegado. Se requiere Token de Rescate.' });
         }
 
-        if (batch) {
+        if (batch === 'true' || isAuto) {
             const redis = getRedisClient();
             let o = parseInt(offset);
             const l = parseInt(limit);
 
             // 🔄 [AUTO-MODE] Retrieve persistent offset if no manual offset is provided
-            const isAuto = req.query.auto === 'true';
             if (isAuto && redis) {
                 const savedOffset = await redis.get('rescue:current_offset');
                 if (savedOffset) o = parseInt(savedOffset);
