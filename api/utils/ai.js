@@ -267,11 +267,12 @@ export async function cleanCategoryWithAI(category) {
         const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
 
         const prompt = `Corrige la ortografía, ACENTUACIÓN y formato de la categoría de empleo: "${category}".
-REGLAS:
-1. Corrige errores ortográficos y pon acentos (ej: "operario" -> "Operario", "almacen" -> "Almacén", "logistica" -> "Logística").
-2. Formatea en Title Case (Mayúscula Inicial).
-3. Si es una frase, corrígela para que suene profesional.
-Responde únicamente con la categoría limpia, sin puntos ni explicaciones.
+REGLAS ESTRICTAS:
+1. Responde ÚNICAMENTE con el nombre de la categoría principal.
+2. Si el usuario menciona varias, elige SOLO LA PRIMERA o la más relevante.
+3. El resultado debe ser de MÁXIMO 2 o 3 palabras (Ej: "Almacén", "Chofer Repartidor", "Limpieza").
+4. JAMÁS devuelvas frases largas o explicaciones.
+Responde únicamente con la categoría limpia.
 Respuesta:`;
 
         let cleaned = category;
@@ -470,18 +471,22 @@ export async function cleanEscolaridadWithAI(escolaridad) {
         const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
 
         const prompt = `Analiza la siguiente descripción de escolaridad: "${escolaridad}".
-Tu objetivo es homogeneizar este valor a una sola palabra o término estándar profesional.
+Tu objetivo es clasificar este valor en una sola palabra o término estándar.
 
-REGLAS DE HOMOGENEIZACIÓN:
+REGLAS DE HOMOGENEIZACIÓN (ESTRICTAS):
 - "primaria", "elemental" -> "Primaria"
-- "secundaria", "secu", "middle school" -> "Secundaria"
-- "preparatoria", "bachillerato", "prepa", "high school" -> "Bachillerato"
-- "licenciatura", "ingeniería", "profesional", "universidad", "carrera" -> "Licenciatura"
+- "secundaria", "secu", "middle school", "secundaria trunca" -> "Secundaria"
+- "preparatoria", "bachillerato", "prepa", "high school", "prepa trunca", "prepa terminada" -> "Prepa"
+- "licenciatura", "ingeniería", "profesional", "universidad", "carrera", "lic trunca" -> "Licenciatura"
+- "técnica", "carrera técnica", "conalep", "tecnico" -> "Técnica"
 - "maestría", "doctorado", "especialidad" -> "Posgrado"
 - Si es ambiguo o no menciona estudios -> "N/A"
 
-Responde ÚNICAMENTE con el término homologado (una sola palabra).
-Respuesta:`;
+CRÍTICO: Responde ÚNICAMENTE con una de las palabras del catálogo anterior. NO agregues "trunca", "terminada", ni ninguna otra palabra extra. Solo el término raíz.
+Ejemplo: "Preparatoria trunca" -> "Prepa"
+Ejemplo: "Ingeniería en sistemas" -> "Licenciatura"
+
+Respuesta (UNA SOLA PALABRA):`;
 
         let cleaned = escolaridad;
         for (const mName of modelsToTry) {
