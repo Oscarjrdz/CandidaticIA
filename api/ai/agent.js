@@ -125,8 +125,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
 - Edad: ${candidateData.edad || 'No proporcionada'}
 - Municipio/Ciudad: ${candidateData.municipio || 'No proporcionado'}
 - Categoría de Interés: ${candidateData.categoria || 'Consulta General'}
-- Fecha de Nacimiento: ${candidateData.fecha || 'No proporcionada'}
-- Tiene Empleo: ${candidateData.empleo || 'No proporcionado'}
+- Fecha de Nacimiento: ${candidateData.fechaNacimiento || 'No proporcionada'}
+- Tiene Empleo: ${candidateData.tieneEmpleo || 'No proporcionado'}
 - Estatus de Postulación: ${candidateData.status || 'Interesado'}
 - Última Interacción: ${candidateData.ultimoMensaje || 'Reciente'} (Primer contacto: ${candidateData.primerContacto || 'N/A'})
 - Hilo Reciente (Últimos 10 prompts): ${themes}
@@ -145,8 +145,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
             candidateData.nombreReal && candidateData.nombreReal !== 'No proporcionado' &&
             candidateData.municipio && candidateData.municipio !== 'No proporcionado' &&
             candidateData.categoria && candidateData.categoria !== 'Consulta General' &&
-            candidateData.fecha && candidateData.fecha !== 'No proporcionada' &&
-            candidateData.empleo && candidateData.empleo !== 'No proporcionado';
+            candidateData.fechaNacimiento && candidateData.fechaNacimiento !== 'No proporcionada' &&
+            candidateData.tieneEmpleo && candidateData.tieneEmpleo !== 'No proporcionado';
 
         const forceHideVacancies = !isProfileComplete || systemInstruction.includes('[OCULTAR_VACANTES]');
 
