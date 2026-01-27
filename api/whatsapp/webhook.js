@@ -105,7 +105,11 @@ export default async function handler(req, res) {
 
             // Background tasks (Non-blocking context)
             const configPromise = getUltraMsgConfig();
-            const activityPromise = updateCandidate(candidateId, { ultimoMensaje: new Date().toISOString(), unread: true });
+            const activityPromise = updateCandidate(candidateId, {
+                ultimoMensaje: new Date().toISOString(),
+                lastUserMessageAt: new Date().toISOString(),
+                unread: true
+            });
 
             // 主 AI Session (Wait for it to survive serverless)
             const aiPromise = (async () => {

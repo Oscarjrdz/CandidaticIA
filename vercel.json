@@ -54,6 +54,10 @@
             "schedule": "* * * * *"
         },
         {
+            "path": "/api/cron/process-ai-automations",
+            "schedule": "* * * * *"
+        },
+        {
             "path": "/api/cron/process-bulks",
             "schedule": "* * * * *"
         }
