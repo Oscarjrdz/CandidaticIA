@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getRedisClient, updateCandidate, getMessages } from './storage.js';
-import { detectGender, cleanNameWithAI, cleanMunicipioWithAI, cleanCategoryWithAI, cleanEmploymentStatusWithAI, cleanDateWithAI } from './ai.js';
+import { detectGender, cleanNameWithAI, cleanMunicipioWithAI, cleanCategoryWithAI, cleanEmploymentStatusWithAI, cleanDateWithAI, cleanEscolaridadWithAI } from './ai.js';
 
 /**
  * Intelligent Extractor v1.0
@@ -180,6 +180,9 @@ ${JSON.stringify(schema, null, 2)}
                 } else if (rule.field === 'fechaNacimiento' || rule.field === 'fecha') {
                     const cleaned = await cleanDateWithAI(val);
                     updateData.fechaNacimiento = (cleaned && cleaned !== 'INVALID') ? cleaned : val;
+                } else if (rule.field === 'escolaridad') {
+                    const cleaned = await cleanEscolaridadWithAI(val);
+                    updateData.escolaridad = cleaned || val;
                 } else {
                     updateData[rule.field] = val;
                 }

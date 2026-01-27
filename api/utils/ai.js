@@ -439,3 +439,71 @@ Respuesta:`;
         return dateStr;
     }
 }
+/**
+ * Homogenizes education level (Escolaridad) using Gemini AI
+ * @param {string} escolaridad - The crude education level provided by candidate
+ * @returns {Promise<string>} - Homogenized word (Primaria, Secundaria, Bachillerato, Licenciatura, Posgrado, N/A)
+ */
+export async function cleanEscolaridadWithAI(escolaridad) {
+    if (!escolaridad || escolaridad.length < 1) return escolaridad;
+
+    try {
+        const { getRedisClient } = await import('./storage.js');
+        const redis = getRedisClient();
+
+        let apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey && redis) {
+            const aiConfigJson = await redis.get('ai_config');
+            if (aiConfigJson) {
+                const aiConfig = JSON.parse(aiConfigJson);
+                apiKey = aiConfig.geminiApiKey;
+            }
+        }
+
+        if (!apiKey || apiKey === 'undefined' || apiKey === 'null') return escolaridad;
+
+        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
+        const matchToken = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (matchToken) apiKey = matchToken[0];
+
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
+
+        const prompt = `Analiza la siguiente descripción de escolaridad: "${escolaridad}".
+Tu objetivo es homogeneizar este valor a una sola palabra o término estándar profesional.
+
+REGLAS DE HOMOGENEIZACIÓN:
+- "primaria", "elemental" -> "Primaria"
+- "secundaria", "secu", "middle school" -> "Secundaria"
+- "preparatoria", "bachillerato", "prepa", "high school" -> "Bachillerato"
+- "licenciatura", "ingeniería", "profesional", "universidad", "carrera" -> "Licenciatura"
+- "maestría", "doctorado", "especialidad" -> "Posgrado"
+- Si es ambiguo o no menciona estudios -> "N/A"
+
+Responde ÚNICAMENTE con el término homologado (una sola palabra).
+Respuesta:`;
+
+        let cleaned = escolaridad;
+        for (const mName of modelsToTry) {
+            try {
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    generationConfig: { temperature: 0.1 }
+                });
+                const apiResult = await model.generateContent(prompt);
+                const response = await apiResult.response;
+                cleaned = response.text().trim().replace(/[.]/g, '');
+                if (cleaned && cleaned.length < 20) break; // Ensure it's a short response
+            } catch (err) {
+                console.warn(`⚠️ [cleanEscolaridadWithAI] Model ${mName} failed:`, err.message);
+                continue;
+            }
+        }
+
+        return cleaned || escolaridad;
+
+    } catch (error) {
+        console.error('❌ cleanEscolaridadWithAI error:', error.message);
+        return escolaridad;
+    }
+}
