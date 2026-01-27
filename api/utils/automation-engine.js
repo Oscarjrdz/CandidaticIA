@@ -18,18 +18,33 @@ export async function runAIAutomations(isManual = false) {
         logs.push(`🚀 [SYSTEM] Iniciando motor (Manual: ${isManual})`);
 
         // --- 1. CONFIG AUDIT ---
-        const geminiKey = process.env.GEMINI_API_KEY;
-        if (!geminiKey) {
-            logs.push(`❌ CRITICAL: Falta GEMINI_API_KEY en variables de entorno.`);
+        let geminiKey = process.env.GEMINI_API_KEY;
+        const redis = getRedisClient();
+
+        if (!geminiKey && redis) {
+            const aiConfigJson = await redis.get('ai_config');
+            if (aiConfigJson) {
+                const aiConfig = JSON.parse(aiConfigJson);
+                geminiKey = aiConfig.geminiApiKey;
+            }
+        }
+
+        if (!geminiKey || geminiKey === 'undefined' || geminiKey === 'null') {
+            logs.push(`❌ CRITICAL: Falta GEMINI_API_KEY. Configure su API Key en Ajustes.`);
             return { success: false, error: 'GEMINI_API_KEY_MISSING', logs };
         }
+
+        // Sanitize API Key
+        geminiKey = String(geminiKey).trim().replace(/^["']|["']$/g, '');
+        const keyMatch = geminiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (keyMatch) geminiKey = keyMatch[0];
 
         const config = await getUltraMsgConfig();
         if (!config?.instanceId || !config?.token) {
             logs.push(`❌ CRITICAL: UltraMsg no está vinculado (Falta Instance ID o Token).`);
             return { success: false, error: 'ULTRAMSG_CONFIG_MISSING', logs };
         }
-        logs.push(`✅ Configuración verificada.`);
+        logs.push(`✅ Configuración y API Key verificadas.`);
 
         const automations = await getAIAutomations();
         const activeRules = (automations || []).filter(a => a?.active && a?.prompt);
