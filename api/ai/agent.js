@@ -184,11 +184,24 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // INJECT VACANCIES & CATEGORIES (Conditional)
         const hideVacancies = systemInstruction.includes('[OCULTAR_VACANTES]');
 
-        if (hideVacancies) {
-            systemInstruction += `\n\n[REGLA DE SUPRESIÓN CRÍTICA]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos, empresas o ubicaciones específicas. SI ves información de vacantes en el historial de chat anterior, DEBES IGNORARLA y actuar como si no tuvieras acceso a esa base de datos. Si el candidato pregunta, responde que por el momento no tienes esa información disponible o que deben esperar a ser contactados por un humano.`;
-            console.log('🔇 [AI Agent] Vacancy details strictly suppressed.');
-        } else {
-            try {
+        try {
+            const { getRedisClient } = await import('../utils/storage.js');
+            const redisClient = getRedisClient();
+
+            // 1. Always inject categories for context
+            if (redisClient) {
+                const categoriesData = await redisClient.get('candidatic_categories');
+                if (categoriesData) {
+                    const categories = JSON.parse(categoriesData).map(c => c.name);
+                    systemInstruction += `\n\n[CATEGORÍAS DISPONIBLES]: ${categories.join(', ')}`;
+                }
+            }
+
+            // 2. Conditionally inject vacancy details
+            if (hideVacancies) {
+                systemInstruction += `\n\n[REGLA DE SUPRESIÓN CRÍTICA]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos, empresas o ubicaciones específicas. SI ves información de vacantes en el historial de chat anterior, DEBES IGNORARLA. Solo puedes mencionar los nombres de las categorías disponibles si el candidato pregunta qué áreas hay.`;
+                console.log('🔇 [AI Agent] Vacancy details strictly suppressed (Categories kept).');
+            } else {
                 const { getVacancies } = await import('../utils/storage.js');
                 const allVacancies = await getVacancies();
                 const activeVacancies = allVacancies.filter(v => v.active === true || v.status === 'active');
@@ -201,11 +214,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
                         descripcion: v.description || v.descripcion,
                         requisitos: v.requirements || v.requisitos
                     }));
-                    systemInstruction += `\n\n[BASE DE CONOCIMIENTO (VACANTES Y CATEGORÍAS)]:\n${JSON.stringify(simplified, null, 2)}`;
+                    systemInstruction += `\n\n[BASE DE CONOCIMIENTO (DETALLE DE VACANTES)]:\n${JSON.stringify(simplified, null, 2)}`;
                 }
-            } catch (vacErr) {
-                console.warn('⚠️ Failed to inject vacancies context:', vacErr);
             }
+        } catch (vacErr) {
+            console.warn('⚠️ Failed to inject vacancies/categories context:', vacErr);
         }
 
         if (!apiKey) return 'ERROR: No API Key found in env or redis';
