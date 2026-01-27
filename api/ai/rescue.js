@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const { candidateId, batch, limit = '10', offset = '0', token } = (req.method === 'GET') ? req.query : req.body;
+        const { candidateId, batch, limit = '1', offset = '0', token } = (req.method === 'GET') ? req.query : req.body;
 
         // Simple Security (Optional but recommended)
         const MASTER_TOKEN = 'titanio_rescue_2026';
