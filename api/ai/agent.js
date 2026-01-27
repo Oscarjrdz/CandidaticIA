@@ -112,21 +112,41 @@ export const processMessage = async (candidateId, incomingMessage) => {
         }
         systemInstruction += `FECHA DE HOY: ${today}. Usa esto para cálculos de tiempo.\n`;
 
-        // DNA PROFILE
+        // DNA PROFILE (Dynamic based on CRM Fields)
         if (candidateData) {
             const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-10).map(m => m.content).filter(Boolean);
             const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Inicio de conversación';
 
+            // Get all fields to build dynamic DNA
+            const DEFAULT_FIELDS = [
+                { value: 'nombreReal', label: 'Nombre Real' },
+                { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
+                { value: 'municipio', label: 'Municipio' },
+                { value: 'categoria', label: 'Categoría' },
+                { value: 'tieneEmpleo', label: 'Tiene empleo' }
+            ];
+
+            let allFields = [...DEFAULT_FIELDS];
+            try {
+                const customFieldsJson = await redis?.get('custom_fields');
+                if (customFieldsJson) {
+                    const customFields = JSON.parse(customFieldsJson);
+                    allFields = [...allFields, ...customFields];
+                }
+            } catch (e) {
+                console.warn('Error fetching custom fields for DNA:', e);
+            }
+
+            // Deduplicate
+            const uniqueFields = Array.from(new Map(allFields.map(item => [item.value, item])).values());
+
+            let dnaLines = uniqueFields.map(f => `- ${f.label}: ${candidateData[f.value] || 'No proporcionado'}`).join('\n');
+
             const dnaProfile = `
 [CONTEXTO DE MEMORIA ADN - ESTADO ACTUAL EXCLUSIVO]:
 - Nombre WhatsApp: ${candidateData.nombre || 'Desconocido'}
-- Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
-- Edad: ${candidateData.edad || 'No proporcionada'}
-- Municipio/Ciudad: ${candidateData.municipio || 'No proporcionado'}
-- Categoría de Interés: ${candidateData.categoria || 'Consulta General'}
-- Fecha de Nacimiento: ${candidateData.fechaNacimiento || 'No proporcionada'}
-- Tiene Empleo: ${candidateData.tieneEmpleo || 'No proporcionado'}
+${dnaLines}
 - Estatus de Postulación: ${candidateData.status || 'Interesado'}
 - Última Interacción: ${candidateData.ultimoMensaje || 'Reciente'} (Primer contacto: ${candidateData.primerContacto || 'N/A'})
 - Hilo Reciente (Últimos 10 prompts): ${themes}
@@ -135,7 +155,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
             systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIONES DE IDENTIDAD Y CAPTURA]:
 1. Eres un humano con memoria; usa el ADN de arriba para personalizar el trato.
 2. IMPORTANTE: PROHIBIDO USAR EL "Nombre WhatsApp" para saludar. Si el "Nombre Real" dice "No proporcionado", usa "Hola" a secas y DEBES preguntarle su nombre para completar su expediente.
-3. REGLA DE BLOQUEO: Si ves que falta el Nombre Real, Municipio, Categoría o Fecha, NO muestres las vacantes. Di algo como: "Para poder mostrarte las vacantes ideales para ti, primero necesito completar un par de datos en tu perfil..."
+3. REGLA DE BLOQUEO: Si ves que falta el Nombre Real, Municipio, Categoría o Fecha Nacimiento, NO muestres las vacantes. Di algo como: "Para poder mostrarte las vacantes ideales para ti, primero necesito completar un par de datos en tu perfil..."
 4. RESPETA SIEMPRE la [DIRECTIVA SUPREMA] arriba mencionada por sobre cualquier otro dato.
 `;
         }
