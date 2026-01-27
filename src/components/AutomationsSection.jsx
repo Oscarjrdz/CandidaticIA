@@ -115,6 +115,15 @@ const AutomationsSection = ({ showToast }) => {
         }
     };
 
+    const loadSchedRules = async () => {
+        setSchedLoading(true);
+        const result = await getScheduledRules();
+        if (result.success) {
+            setSchedRules(result.rules);
+        }
+        setSchedLoading(false);
+    };
+
     const handleToggleEnabled = async (rule) => {
         const result = await updateAutomationRule(rule.id, {
             enabled: !rule.enabled
@@ -334,8 +343,8 @@ const AutomationsSection = ({ showToast }) => {
                 <div className="text-center py-10">
                     <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     <p className="mt-2 text-gray-600 dark:text-gray-400">Cargando automatizaciones...</p>
-               </div>
-           </div>
+                </div>
+            </div>
         );
     }
 
@@ -346,14 +355,14 @@ const AutomationsSection = ({ showToast }) => {
             <div className="flex items-center justify-between mb-8 p-6 bg-gradient-to-r from-gray-900 to-blue-900 rounded-[32px] shadow-2xl relative overflow-hidden group">
                 <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-all duration-700">
                     <Brain className="w-32 h-32 text-white transform rotate-12 scale-150" />
-               </div>
+                </div>
                 <div className="relative z-10">
                     <div className="flex items-center space-x-3 mb-2">
                         <div className="bg-blue-500 p-1.5 rounded-lg shadow-lg shadow-blue-500/50">
                             <Zap className="w-5 h-5 text-white" />
-                       </div>
+                        </div>
                         <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em]">Core Engine v2.0</span>
-                   </div>
+                    </div>
                     <h2 className="text-3xl font-black text-white tracking-tight">
                         Módulo de Captura <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-300">Titanio</span>
                     </h2>
@@ -361,7 +370,7 @@ const AutomationsSection = ({ showToast }) => {
                         Ingeniería de extracción por IA con rigor de datos Servin-Zuckerberg.
                         Garantiza captura perfecta para tu CRM.
                     </p>
-               </div>
+                </div>
                 <Button
                     onClick={() => setShowCreateModal(true)}
                     className="relative z-10 bg-white hover:bg-blue-50 text-blue-900 border-none shadow-xl hover:shadow-blue-500/20 active:scale-95 transition-all text-sm font-black px-6 py-3 rounded-2xl flex items-center space-x-2"
@@ -369,7 +378,7 @@ const AutomationsSection = ({ showToast }) => {
                     <Plus className="w-5 h-5" />
                     <span>NUEVO CAMPO</span>
                 </Button>
-           </div>
+            </div>
 
 
 
@@ -377,7 +386,7 @@ const AutomationsSection = ({ showToast }) => {
             <div className="flex items-center space-x-2 mb-4">
                 <Brain className="w-6 h-6 text-blue-500" />
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">Módulo de Extracción IA</h3>
-           </div>
+            </div>
 
 
             {/* Table */}
@@ -439,8 +448,8 @@ const AutomationsSection = ({ showToast }) => {
                                                     >
                                                         <X className="w-3 h-3 mr-1" /> Cancelar
                                                     </button>
-                                               </div>
-                                           </div>
+                                                </div>
+                                            </div>
                                         ) : (
                                             <div className="flex items-center group/prompt">
                                                 <div
@@ -451,7 +460,7 @@ const AutomationsSection = ({ showToast }) => {
                                                     <span className="text-xs text-gray-700 dark:text-gray-300 font-medium leading-relaxed">
                                                         {rule.prompt || 'Sin instrucción...'}
                                                     </span>
-                                               </div>
+                                                </div>
                                                 <button
                                                     onClick={() => handleOptimizePrompt(rule)}
                                                     className="ml-2 p-2 opacity-0 group-hover/prompt:opacity-100 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-all"
@@ -459,7 +468,7 @@ const AutomationsSection = ({ showToast }) => {
                                                 >
                                                     <Sparkles className="w-4 h-4" />
                                                 </button>
-                                           </div>
+                                            </div>
                                         )}
                                     </td>
 
@@ -498,7 +507,7 @@ const AutomationsSection = ({ showToast }) => {
                                                 >
                                                     <X className="w-4 h-4" />
                                                 </button>
-                                           </div>
+                                            </div>
                                         ) : (
                                             <span
                                                 onClick={() => startEditing(rule, 'field')}
@@ -533,7 +542,7 @@ const AutomationsSection = ({ showToast }) => {
                                                 >
                                                     <X className="w-4 h-4" />
                                                 </button>
-                                           </div>
+                                            </div>
                                         ) : (
                                             <div
                                                 onClick={() => startEditing(rule, 'description')}
@@ -541,7 +550,7 @@ const AutomationsSection = ({ showToast }) => {
                                                 title="Click para editar"
                                             >
                                                 {rule.description || <span className="italic text-gray-400">Sin descripción</span>}
-                                           </div>
+                                            </div>
                                         )}
                                     </td>
 
@@ -584,7 +593,7 @@ const AutomationsSection = ({ showToast }) => {
                         )}
                     </tbody>
                 </table>
-           </div>
+            </div>
 
             {/* --- SCHEDULED MESSAGES SECTION --- */}
             <div className="mt-12">
@@ -597,12 +606,12 @@ const AutomationsSection = ({ showToast }) => {
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                             Configura mensajes de seguimiento automático basados en inactividad
                         </p>
-                   </div>
+                    </div>
                     <Button onClick={() => setShowSchedModal(true)} className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700">
                         <Plus className="w-4 h-4" />
                         <span>Crear Seguimiento</span>
                     </Button>
-               </div>
+                </div>
 
                 {/* Scheduled Table */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -639,7 +648,7 @@ const AutomationsSection = ({ showToast }) => {
                                                         autoFocus
                                                     />
                                                     <button onClick={saveSchedEdit}><Save className="w-3 h-3 text-green-600" /></button>
-                                               </div>
+                                                </div>
                                             ) : (
                                                 <span
                                                     onClick={() => startSchedEditing(rule, 'name')}
@@ -662,7 +671,7 @@ const AutomationsSection = ({ showToast }) => {
                                                         autoFocus
                                                     />
                                                     <button onClick={saveSchedEdit}><Save className="w-3 h-3 text-green-600" /></button>
-                                               </div>
+                                                </div>
                                             ) : (
                                                 <span
                                                     onClick={() => startSchedEditing(rule, 'userInactivityMinutes')}
@@ -685,7 +694,7 @@ const AutomationsSection = ({ showToast }) => {
                                                         autoFocus
                                                     />
                                                     <button onClick={saveSchedEdit}><Save className="w-3 h-3 text-green-600" /></button>
-                                               </div>
+                                                </div>
                                             ) : (
                                                 <span
                                                     onClick={() => startSchedEditing(rule, 'botInactivityMinutes')}
@@ -710,15 +719,15 @@ const AutomationsSection = ({ showToast }) => {
                                                     <div className="flex space-x-2">
                                                         <button onClick={saveSchedEdit} className="text-xs text-green-600 font-bold flex items-center"><Save className="w-3 h-3 mr-1" /> Guardar</button>
                                                         <button onClick={cancelSchedEdit} className="text-xs text-red-600 flex items-center"><X className="w-3 h-3 mr-1" /> Cancelar</button>
-                                                   </div>
-                                               </div>
+                                                    </div>
+                                                </div>
                                             ) : (
                                                 <div
                                                     onClick={() => startSchedEditing(rule, 'message')}
                                                     className="text-xs text-gray-600 dark:text-gray-300 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 p-1 rounded"
                                                 >
                                                     {rule.message}
-                                               </div>
+                                                </div>
                                             )}
                                         </td>
 
@@ -795,12 +804,12 @@ const AutomationsSection = ({ showToast }) => {
                             )}
                         </tbody>
                     </table>
-               </div>
-           </div>
+                </div>
+            </div>
 
             <div className="mt-12 bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[24px] border border-gray-100 dark:border-gray-800">
                 <AIAutomationsWidget showToast={showToast} />
-           </div>
+            </div>
 
             {/* Create Modal */}
             {
@@ -831,7 +840,7 @@ const AutomationsSection = ({ showToast }) => {
                     />
                 )
             }
-       </div>
+        </div>
     );
 };
 
@@ -885,13 +894,13 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
                     >
                         <X className="w-5 h-5" />
                     </button>
-               </div>
+                </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     {error && (
                         <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-sm text-red-600 dark:text-red-400">
                             {error}
-                       </div>
+                        </div>
                     )}
 
                     <div>
@@ -909,7 +918,7 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                             Describe de forma clara qué información debe buscar la IA en la conversación para esta columna.
                         </p>
-                   </div>
+                    </div>
 
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -935,8 +944,8 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
                             >
                                 <Plus className="w-5 h-5" />
                             </button>
-                       </div>
-                   </div>
+                        </div>
+                    </div>
 
                     <div>
                         <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -949,7 +958,7 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             placeholder="Breve descripción de qué captura esta regla"
                         />
-                   </div>
+                    </div>
 
                     <div className="flex items-center justify-end space-x-3 pt-4">
                         <button
@@ -962,10 +971,10 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
                         <Button type="submit" disabled={saving}>
                             {saving ? 'Guardando...' : 'Crear Regla'}
                         </Button>
-                   </div>
+                    </div>
                 </form>
-           </div>
-       </div>
+            </div>
+        </div>
     );
 };
 
@@ -1027,7 +1036,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                         Crear Mensaje Programado
                     </h3>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"><X className="w-5 h-5" /></button>
-               </div>
+                </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
                     {error && <div className="p-3 bg-red-50 text-red-600 rounded border border-red-200 text-sm">{error}</div>}
@@ -1039,7 +1048,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             placeholder="Ej: Recordatorio 24h"
                         />
-                   </div>
+                    </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -1050,7 +1059,7 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             />
                             <p className="text-xs text-gray-500 mt-1">1440 min = 24 horas</p>
-                       </div>
+                        </div>
                         <div>
                             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Min. Inactividad Bot (Opcional)</label>
                             <input
@@ -1059,8 +1068,8 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             />
                             <p className="text-xs text-gray-500 mt-1">Tiempo min. desde último mensaje nuestro</p>
-                       </div>
-                   </div>
+                        </div>
+                    </div>
 
                     <div>
                         <div className="flex items-center justify-between mb-1">
@@ -1078,14 +1087,14 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                                         <Copy className="w-2.5 h-2.5 opacity-50" />
                                     </button>
                                 ))}
-                           </div>
-                       </div>
+                            </div>
+                        </div>
                         <textarea
                             value={message} onChange={e => setMessage(e.target.value)} required rows={3}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none"
                             placeholder="Hola, ¿sigues interesado en la vacante?"
                         />
-                   </div>
+                    </div>
 
                     <div className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-700/30 rounded-lg border border-gray-100 dark:border-gray-700">
                         <div className="flex items-center h-5">
@@ -1096,21 +1105,21 @@ const CreateScheduledRuleModal = ({ onClose, onSuccess, showToast, fields }) => 
                                 onChange={(e) => setOneTime(e.target.checked)}
                                 className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-gray-200 dark:focus:ring-gray-700/50 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
                             />
-                       </div>
+                        </div>
                         <div className="ml-2 text-sm">
                             <label htmlFor="oneTime" className="font-medium text-gray-900 dark:text-gray-100">Regla de una sola ocasión</label>
                             <p className="text-gray-500 dark:text-gray-400 text-xs">Si se activa, el mensaje se enviará solo una vez por candidato cuando se cumpla la condición.</p>
-                       </div>
-                   </div>
+                        </div>
+                    </div>
 
                     <div className="flex justify-end space-x-3 pt-4">
                         <button type="button" onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
                         <Button type="submit" disabled={saving}>
                             {saving ? 'Guardando...' : 'Crear Programación'}
                         </Button>
-                   </div>
+                    </div>
                 </form>
-           </div>
-       </div>
+            </div>
+        </div>
     );
 };
