@@ -48,15 +48,33 @@ export async function intelligentExtract(candidateId, historyText) {
         // STEEL-VESSEL FALLBACK: If no rules are found, use hardcoded core rules 
         // to prevent data loss in case of empty configuration.
         if (rules.length === 0) {
-            console.log('ℹ️ [Intelligent Extractor] Empty rules in Redis. Using Steel-Vessel Fallbacks.');
-            rules = [
-                { id: 'vessel_nombre', field: 'nombreReal', fieldLabel: 'Nombre Real', prompt: 'Captura el nombre real y apellidos del candidato.' },
-                { id: 'vessel_fecha', field: 'fechaNacimiento', fieldLabel: 'Fecha Nacimiento', prompt: 'Determina la fecha de nacimiento (DD/MM/YYYY).' },
-                { id: 'vessel_mun', field: 'municipio', fieldLabel: 'Municipio', prompt: 'Extrae el municipio o ciudad de residencia.' },
-                { id: 'vessel_cat', field: 'categoria', fieldLabel: 'Categoría', prompt: 'Identifica el área o vacante de interés.' },
-                { id: 'vessel_emp', field: 'tieneEmpleo', fieldLabel: 'Tiene empleo', prompt: 'Determina si el candidato tiene empleo actualmente (Sí/No).' },
-                { id: 'vessel_esc', field: 'escolaridad', fieldLabel: 'Escolaridad', prompt: 'Identifica el nivel máximo de estudios o escolaridad.' }
+            console.log('🛡️ [Steel-Vessel] Using Dynamic Fallback Engine...');
+            const DEFAULT_FIELDS = [
+                { value: 'nombreReal', label: 'Nombre Real' },
+                { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
+                { value: 'municipio', label: 'Municipio' },
+                { value: 'categoria', label: 'Categoría' },
+                { value: 'tieneEmpleo', label: 'Tiene empleo' },
+                { value: 'escolaridad', label: 'Escolaridad' }
             ];
+
+            let customFields = [];
+            try {
+                const customFieldsJson = await redis.get('custom_fields');
+                if (customFieldsJson) customFields = JSON.parse(customFieldsJson);
+            } catch (e) {
+                console.warn('Error fetching custom fields for fallback:', e);
+            }
+
+            const allFields = [...DEFAULT_FIELDS, ...customFields];
+            const uniqueFields = Array.from(new Map(allFields.map(item => [item.value, item])).values());
+
+            rules = uniqueFields.map(f => ({
+                id: `vessel_${f.value}`,
+                field: f.value,
+                fieldLabel: f.label,
+                prompt: `Extrae el valor para el campo "${f.label}".`
+            }));
         }
 
         // 2. Build Dynamic Schema and Instructions

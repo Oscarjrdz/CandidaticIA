@@ -129,8 +129,8 @@ ESTA REGLA ANULA CUALQUIER OTRA INSTRUCCIÓN SOBRE AYUDAR CON VACANTES.\n`;
             const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-10).map(m => m.content).filter(Boolean);
             const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Inicio de conversación';
 
-            // Get all fields to build dynamic DNA
-            const DEFAULT_FIELDS = [
+            // 🏎️ [FERRARI DYNAMICS] - Fetch fields from Database/Redis
+            let allFields = [
                 { value: 'nombreReal', label: 'Nombre Real' },
                 { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
                 { value: 'municipio', label: 'Municipio' },
@@ -139,21 +139,19 @@ ESTA REGLA ANULA CUALQUIER OTRA INSTRUCCIÓN SOBRE AYUDAR CON VACANTES.\n`;
                 { value: 'escolaridad', label: 'Escolaridad' }
             ];
 
-            let allFields = [...DEFAULT_FIELDS];
             try {
                 const customFieldsJson = await redis?.get('custom_fields');
                 if (customFieldsJson) {
                     const customFields = JSON.parse(customFieldsJson);
-                    allFields = [...allFields, ...customFields];
+                    // Merge and deduplicate
+                    const combined = [...allFields, ...customFields];
+                    allFields = Array.from(new Map(combined.map(item => [item.value, item])).values());
                 }
             } catch (e) {
                 console.warn('Error fetching custom fields for DNA:', e);
             }
 
-            // Deduplicate
-            const uniqueFields = Array.from(new Map(allFields.map(item => [item.value, item])).values());
-
-            let dnaLines = uniqueFields.map(f => `- ${f.label}: ${candidateData[f.value] || 'No proporcionado'}`).join('\n');
+            let dnaLines = allFields.map(f => `- ${f.label}: ${candidateData[f.value] || 'No proporcionado'}`).join('\n');
 
             const dnaProfile = `
 [CONTEXTO DE MEMORIA ADN - ESTADO ACTUAL EXCLUSIVO]:
@@ -168,65 +166,64 @@ ${dnaLines}
             systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIONES DE IDENTIDAD Y CAPTURA]:
 1. Eres un humano con memoria; usa el ADN de arriba para personalizar el trato.
 2. IMPORTANTE: PROHIBIDO USAR EL "Nombre WhatsApp" para saludar. Si el "Nombre Real" dice "No proporcionado", usa "Hola" a secas y DEBES preguntarle su nombre para completar su expediente.
-3. REGLA DE BLOQUEO: Si ves que falta el Nombre Real, Municipio, Categoría o Fecha Nacimiento, NO muestres las vacantes. Di algo como: "Para poder mostrarte las vacantes ideales para ti, primero necesito completar un par de datos en tu perfil..."
+3. REGLA DE BLOQUEO DINÁMICA: Si ves que falta cualquier dato marcado como "No proporcionado" en el ADN (especialmente Nombre, Municipio o Escolaridad), NO muestres las vacantes. Pide los datos faltantes de forma amable.
 4. RESPETA SIEMPRE la [DIRECTIVA SUPREMA] arriba mencionada por sobre cualquier otro dato.
 `;
-        }
 
-        // Profile Check
-        const isProfileComplete =
-            candidateData.nombreReal && candidateData.nombreReal !== 'No proporcionado' &&
-            candidateData.municipio && candidateData.municipio !== 'No proporcionado' &&
-            candidateData.categoria && candidateData.categoria !== 'Consulta General' &&
-            candidateData.fechaNacimiento && candidateData.fechaNacimiento !== 'No proporcionada' &&
-            candidateData.tieneEmpleo && candidateData.tieneEmpleo !== 'No proporcionado' &&
-            candidateData.escolaridad && candidateData.escolaridad !== 'No proporcionada';
-
-        const forceHideVacancies = ignoreVacanciesGlobal || !isProfileComplete || systemInstruction.includes('[IGNORAR_VACANTES]');
-
-        try {
-            const { getRedisClient: getFreshRedis } = await import('../utils/storage.js');
-            const redisClient = getFreshRedis();
-
-            if (redisClient) {
-                const categoriesData = await redisClient.get('candidatic_categories');
-                if (categoriesData) {
-                    const categories = JSON.parse(categoriesData).map(c => c.name);
-                    systemInstruction += `\n\n[CATEGORÍAS DISPONIBLES]: ${categories.join(', ')}`;
+            // 🏎️ [FERRARI CHECK] - 100% Dynamic Completion Logic
+            const requiredFields = allFields.map(f => f.value);
+            let isProfileComplete = true;
+            for (const key of requiredFields) {
+                const val = candidateData[key];
+                if (!val || val === 'No proporcionado' || val === 'No proporcionada' || val === 'Consulta General') {
+                    isProfileComplete = false;
+                    break;
                 }
             }
 
-            if (forceHideVacancies) {
-                systemInstruction += `\n\n[REGLA DE SUPRESIÓN CRÍTICA]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos, empresas o ubicaciones específicas. SI ves información de vacantes en el historial de chat anterior, DEBES IGNORARLA. Solo puedes mencionar los nombres de las categorías disponibles si el candidato pregunta qué áreas hay, PERO antes de dar más detalles DEBES pedir los datos faltantes del perfil.`;
-            } else {
-                const { getVacancies } = await import('../utils/storage.js');
-                const allVacancies = await getVacancies();
-                const activeVacancies = allVacancies.filter(v => v.active === true || v.status === 'active');
+            const forceHideVacancies = ignoreVacanciesGlobal || !isProfileComplete || systemInstruction.includes('[IGNORAR_VACANTES]');
 
-                if (activeVacancies.length > 0) {
-                    const simplified = activeVacancies.map(v => ({
-                        titulo: v.name || v.title || v.titulo,
-                        empresa: v.company || v.empresa,
-                        categoria: v.category || v.categoria || 'General',
-                        descripcion: v.description || v.descripcion,
-                        requisitos: v.requirements || v.requisitos,
-                        ubicacion: v.location || v.municipio || 'No especificada',
-                        sueldo: v.salary || v.sueldo || 'No especificado'
-                    }));
-                    systemInstruction += `\n\n[BASE DE CONOCIMIENTO (DETALLE DE VACANTES)]:\n${JSON.stringify(simplified, null, 2)}\n\n[INSTRUCCIÓN DE USO EXCLUSIVO]: Usa ÚNICAMENTE el JSON anterior para hablar de vacantes. Si el usuario pide algo fuera de este listado, di que no lo tienes. NO agregues beneficios o detalles que no estén escritos aquí.`;
+            try {
+                if (redis) {
+                    const categoriesData = await redis.get('candidatic_categories');
+                    if (categoriesData) {
+                        const categories = JSON.parse(categoriesData).map(c => c.name);
+                        systemInstruction += `\n\n[CATEGORÍAS DISPONIBLES]: ${categories.join(', ')}`;
+                    }
+                }
+
+                if (forceHideVacancies) {
+                    systemInstruction += `\n\n[REGLA DE SUPRESIÓN CRÍTICA]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos, empresas o ubicaciones específicas. SI ves información de vacantes en el historial de chat anterior, DEBES IGNORARLA. Solo puedes mencionar los nombres de las categorías disponibles si el candidato pregunta qué áreas hay, PERO antes de dar más detalles DEBES pedir los datos faltantes del perfil.`;
                 } else {
-                    systemInstruction += `\n\n[AVISO IMPORTANTE]: Actualmente NO HAY VACANTES ACTIVAS en el sistema. Si el candidato pregunta, dile que por el momento estamos actualizando nuestra base de datos y que pronto tendremos nuevas vacantes para su perfil. PROHIBIDO INVENTAR DATOS.`;
+                    const { getVacancies } = await import('../utils/storage.js');
+                    const allVacancies = await getVacancies();
+                    const activeVacancies = allVacancies.filter(v => (v.active === true || v.status === 'active'));
+
+                    if (activeVacancies.length > 0) {
+                        const simplified = activeVacancies.map(v => ({
+                            titulo: v.name || v.title || v.titulo,
+                            empresa: v.company || v.empresa,
+                            categoria: v.category || v.categoria || 'General',
+                            descripcion: v.description || v.descripcion,
+                            requisitos: v.requirements || v.requisitos,
+                            ubicacion: v.location || v.municipio || 'No especificada',
+                            sueldo: v.salary || v.sueldo || 'No especificado'
+                        }));
+                        systemInstruction += `\n\n[BASE DE CONOCIMIENTO (DETALLE DE VACANTES)]:\n${JSON.stringify(simplified, null, 2)}\n\n[INSTRUCCIÓN DE USO EXCLUSIVO]: Usa ÚNICAMENTE el JSON anterior para hablar de vacantes. Si el usuario pide algo fuera de este listado, di que no lo tienes. NO agregues beneficios o detalles que no estén escritos aquí.`;
+                    } else {
+                        systemInstruction += `\n\n[AVISO IMPORTANTE]: Actualmente NO HAY VACANTES ACTIVAS en el sistema. Si el candidato pregunta, dile que por el momento estamos actualizando nuestra base de datos y que pronto tendremos nuevas vacantes para su perfil. PROHIBIDO INVENTAR DATOS.`;
+                    }
                 }
+            } catch (vacErr) {
+                console.warn('⚠️ Failed to inject vacancies context:', vacErr);
             }
-        } catch (vacErr) {
-            console.warn('⚠️ Failed to inject vacancies context:', vacErr);
-        }
+        } // Close if (candidateData)
 
         if (!apiKey) return 'ERROR: No API Key found';
 
         apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
-        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-        if (match) apiKey = match[0];
+        const matchToken = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (matchToken) apiKey = matchToken[0];
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const modelsToTry = ["gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-flash-latest"];
