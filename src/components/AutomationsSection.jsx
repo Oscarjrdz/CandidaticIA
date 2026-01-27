@@ -350,14 +350,6 @@ const AutomationsSection = ({ showToast }) => {
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">Módulo de Extracción IA</h3>
             </div>
 
-            {/* Info Alert */}
-            <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-green-900 dark:text-green-100">
-                    <p className="font-semibold mb-1">Extracción Inteligente (Sin Palabras Clave)</p>
-                    <p>Ya no necesitas palabras clave exactas. Simplemente describe qué quieres extraer para cada columna y la IA lo hará analizando el contexto de la plática.</p>
-                </div>
-            </div>
 
             {/* Table */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
