@@ -101,13 +101,14 @@ ${JSON.stringify(schema, null, 2)}
                 updateData.municipio = await cleanMunicipioWithAI(val);
             } else if (rule.field === 'categoria') {
                 updateData.categoria = await cleanCategoryWithAI(val);
-            } else if (rule.field === 'tieneEmpleo') {
+            } else if (rule.field === 'tieneEmpleo' || rule.field === 'empleo') {
                 // Handle different possible extractions for "tieneEmpleo"
-                if (typeof val === 'boolean') updateData.tieneEmpleo = val ? 'Sí' : 'No';
-                else updateData.tieneEmpleo = await cleanEmploymentStatusWithAI(val);
+                const fieldName = 'tieneEmpleo';
+                if (typeof val === 'boolean') updateData[fieldName] = val ? 'Sí' : 'No';
+                else updateData[fieldName] = await cleanEmploymentStatusWithAI(val);
             } else if (rule.field === 'fechaNacimiento' || rule.field === 'fecha') {
                 const cleaned = await cleanDateWithAI(val);
-                if (cleaned !== 'INVALID') updateData[rule.field] = cleaned;
+                if (cleaned !== 'INVALID') updateData.fechaNacimiento = cleaned;
             } else {
                 // For any other dynamic field, just save the extracted value
                 updateData[rule.field] = val;
