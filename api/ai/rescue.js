@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const { candidateId, batch, token } = (req.method === 'GET') ? req.query : req.body;
+        const { candidateId, batch, limit = '10', offset = '0', token } = (req.method === 'GET') ? req.query : req.body;
 
         // Simple Security (Optional but recommended)
         const MASTER_TOKEN = 'titanio_rescue_2026';
@@ -15,8 +15,10 @@ export default async function handler(req, res) {
         }
 
         if (batch) {
-            console.log('🚀 [Rescue] Starting Batch Extraction...');
-            const { candidates } = await getCandidates(100); // Process last 100 for safety
+            const l = parseInt(limit);
+            const o = parseInt(offset);
+            console.log(`🚀 [Rescue] Starting Batch Extraction: Limit ${l}, Offset ${o}`);
+            const { candidates, total } = await getCandidates(l, o);
             const results = [];
 
             for (const cand of candidates) {
@@ -40,7 +42,14 @@ export default async function handler(req, res) {
                 }
             }
 
-            return res.status(200).json({ success: true, count: results.length, samples: results.slice(0, 5) });
+            return res.status(200).json({
+                success: true,
+                processed: candidates.length,
+                extracted_count: results.length,
+                total_in_db: total,
+                next_offset: o + l,
+                samples: results.slice(0, 5)
+            });
         }
 
         if (!candidateId) return res.status(400).json({ success: false, error: 'Candidate ID is required' });
