@@ -218,9 +218,9 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                             <span className="text-[10px] font-black tracking-[0.1em] text-gray-400 uppercase">Powered with Gemini</span>
                         </div>
                     </div>
-                </div >
-            </div >
-        </div >
+                </div>
+            </div>
+        </div>
     );
 };
 

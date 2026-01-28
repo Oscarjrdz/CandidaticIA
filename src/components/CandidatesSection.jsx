@@ -336,7 +336,7 @@ const CandidatesSection = ({ showToast }) => {
                     <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
                         <div className="px-3 border-r border-gray-100 dark:border-gray-700">
                             <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase block leading-none mb-1">Total en BD</span>
-                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{total}</span>
+                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{totalItems}</span>
                         </div>
                         <button
                             onClick={() => {
