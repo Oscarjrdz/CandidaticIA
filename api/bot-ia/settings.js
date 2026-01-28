@@ -16,11 +16,11 @@ export default async function handler(req, res) {
 
             // 1. WhatsApp Config (UltraMsg)
             if (instanceId !== undefined || token !== undefined) {
-                const existingConfig = await redis.get('ultramsg_config');
+                const existingConfig = await redis.get('ultramsg_credentials');
                 let config = existingConfig ? JSON.parse(existingConfig) : {};
                 if (instanceId !== undefined) config.instanceId = instanceId;
                 if (token !== undefined) config.token = token;
-                await redis.set('ultramsg_config', JSON.stringify(config));
+                await redis.set('ultramsg_credentials', JSON.stringify(config));
             }
 
             // 2. AI Prompt
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
             const redis = getRedisClient();
             if (!redis) return res.status(500).json({ error: 'Redis no disponible' });
 
-            const ultramsgConfig = await redis.get('ultramsg_config');
+            const ultramsgConfig = await redis.get('ultramsg_credentials') || await redis.get('ultramsg_config');
             const systemPrompt = await redis.get('bot_ia_prompt');
             const isActive = await redis.get('bot_ia_active');
 

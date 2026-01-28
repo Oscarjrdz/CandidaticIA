@@ -43,7 +43,7 @@ const CandidatesSection = ({ showToast }) => {
     useEffect(() => {
         const loadInitialData = async () => {
             // Cargar credenciales
-            const savedCreds = localStorage.getItem('builderbot_credentials');
+            const savedCreds = localStorage.getItem('ultramsg_credentials');
             if (savedCreds) setCredentials(JSON.parse(savedCreds));
 
 
@@ -221,39 +221,7 @@ const CandidatesSection = ({ showToast }) => {
         const result = await deleteCandidate(id);
 
         if (result.success) {
-            // Delete from BuilderBot cloud if credentials available
-            if (candidate && credentials) {
-                try {
-                    // List files to find the one for this candidate
-                    const listParams = new URLSearchParams({
-                        botId: credentials.botId,
-                        answerId: credentials.answerId,
-                        apiKey: credentials.apiKey,
-                        type: 'files'
-                    });
-
-                    const listRes = await fetch(`/api/assistant?${listParams}`);
-
-                    if (listRes.ok) {
-                        const files = await listRes.json();
-
-                        if (Array.isArray(files)) {
-                            const prefix = String(candidate.whatsapp).substring(0, 13);
-                            const candidateFiles = files.filter(f =>
-                                f.filename && f.filename.startsWith(prefix)
-                            );
-
-                            // Delete all matching files
-                            for (const file of candidateFiles) {
-                                await deleteOldChatFile(file.id || file.file_id, credentials);
-                                console.log(`🗑️ Deleted cloud file: ${file.filename}`);
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.warn('Error deleting cloud file:', error);
-                }
-            }
+            // Cloud file deletion removed (BuilderBot legacy)
             // Delete local file
             if (candidate) {
                 deleteLocalChatFile(candidate.whatsapp);
@@ -277,7 +245,7 @@ const CandidatesSection = ({ showToast }) => {
 
     const handleOpenChat = (candidate) => {
         if (!credentials) {
-            showToast('Configura tus credenciales de BuilderBot primero para usar el chat', 'warning');
+            showToast('Configura tus credenciales de UltraMsg primero para usar el chat', 'warning');
             return;
         }
         setSelectedCandidate(candidate);

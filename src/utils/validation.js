@@ -3,55 +3,29 @@
  */
 
 /**
- * Valida si el Bot ID tiene formato UUID válido
+ * Valida si el Instance ID de UltraMsg es válido
  */
-export const validateBotId = (id) => {
+export const validateInstanceId = (id) => {
     if (!id || typeof id !== 'string') {
-        return { valid: false, error: 'El Bot ID es requerido' };
+        return { valid: false, error: 'El Instance ID es requerido' };
     }
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-    if (!uuidRegex.test(id)) {
-        return { valid: false, error: 'El Bot ID debe tener formato UUID válido' };
+    // Suelen ser números, pero los tratamos como strings
+    if (id.length < 1) {
+        return { valid: false, error: 'El Instance ID no es válido' };
     }
-
     return { valid: true };
 };
 
 /**
- * Valida si el Answer ID tiene formato UUID válido
+ * Valida si el Token de UltraMsg tiene el formato correcto
  */
-export const validateAnswerId = (id) => {
-    if (!id || typeof id !== 'string') {
-        return { valid: false, error: 'El Answer ID es requerido' };
+export const validateToken = (token) => {
+    if (!token || typeof token !== 'string') {
+        return { valid: false, error: 'El Token es requerido' };
     }
-
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-    if (!uuidRegex.test(id)) {
-        return { valid: false, error: 'El Answer ID debe tener formato UUID válido' };
+    if (token.length < 5) {
+        return { valid: false, error: 'El Token parece ser demasiado corto' };
     }
-
-    return { valid: true };
-};
-
-/**
- * Valida si la API Key tiene el formato correcto
- */
-export const validateApiKey = (key) => {
-    if (!key || typeof key !== 'string') {
-        return { valid: false, error: 'La API Key es requerida' };
-    }
-
-    if (!key.startsWith('bb-')) {
-        return { valid: false, error: 'La API Key debe empezar con "bb-"' };
-    }
-
-    if (key.length < 10) {
-        return { valid: false, error: 'La API Key parece ser demasiado corta' };
-    }
-
     return { valid: true };
 };
 

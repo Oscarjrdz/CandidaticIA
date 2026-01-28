@@ -3,19 +3,19 @@
  */
 
 const STORAGE_KEYS = {
-    CREDENTIALS: 'builderbot_credentials',
-    WEBHOOK_CONFIG: 'builderbot_webhook_config',
-    CONNECTION_HISTORY: 'builderbot_connection_history',
-    EVENT_SETTINGS: 'builderbot_event_settings',
-    THEME: 'builderbot_theme',
+    CREDENTIALS: 'ultramsg_credentials',
+    WEBHOOK_CONFIG: 'ultramsg_webhook_config',
+    CONNECTION_HISTORY: 'ultramsg_connection_history',
+    EVENT_SETTINGS: 'ultramsg_event_settings',
+    THEME: 'ultramsg_theme',
 };
 
 /**
  * Guardar credenciales (Redis + localStorage)
  */
-export const saveCredentials = async (botId, answerId, apiKey) => {
+export const saveCredentials = async (instanceId, token) => {
     try {
-        const credentials = { botId, answerId, apiKey };
+        const credentials = { instanceId, token };
 
         // Save to Redis via API (for backend cron access)
         try {
@@ -181,7 +181,7 @@ export const importConfig = (jsonString) => {
         const config = JSON.parse(jsonString);
 
         if (config.credentials) {
-            saveCredentials(config.credentials.botId, config.credentials.answerId, config.credentials.apiKey);
+            saveCredentials(config.credentials.instanceId, config.credentials.token);
         }
         if (config.webhookConfig) {
             saveWebhookConfig(config.webhookConfig);
@@ -287,7 +287,7 @@ export const getChatFileIds = () => {
 /**
  * Save chat file ID for a candidate
  * @param {string} whatsapp - WhatsApp number
- * @param {string} fileId - File ID from Knowledge Base
+ * @param {string} fileId - File ID
  */
 export const saveChatFileId = (whatsapp, fileId) => {
     try {

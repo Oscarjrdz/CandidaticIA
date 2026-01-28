@@ -45,7 +45,7 @@ const AutomationsSection = ({ showToast }) => {
 
     // Load rules and fields on mount
     useEffect(() => {
-        const savedCreds = localStorage.getItem('builderbot_credentials');
+        const savedCreds = localStorage.getItem('ultramsg_credentials');
         if (savedCreds) setCredentials(JSON.parse(savedCreds));
         loadRules();
         loadSchedRules();
@@ -302,9 +302,7 @@ const AutomationsSection = ({ showToast }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     phone,
-                    message: rule.message,
-                    botId: credentials?.botId,
-                    apiKey: credentials?.apiKey
+                    message: rule.message
                 })
             });
             const data = await res.json();

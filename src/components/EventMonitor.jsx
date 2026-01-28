@@ -6,88 +6,51 @@ import { saveEventSettings, getEventSettings } from '../utils/storage';
 import { getEvents, EventSubscription, sendTestWebhook } from '../services/webhookService';
 
 /**
- * Eventos disponibles en BuilderBot
+ * Eventos disponibles en UltraMsg
  */
 const AVAILABLE_EVENTS = [
     {
-        name: 'status.ready',
-        description: 'Bot en línea y listo',
+        name: 'instance_status',
+        description: 'Instancia en línea y lista',
         emoji: '🟢',
         status: 'Activo',
         payload: {
-            event: 'status.ready',
-            timestamp: '2024-01-16T12:00:00Z',
-            botId: 'bc080642-8cc1-4de8-9771-73c16fe5c5da',
-            status: 'ready'
-        }
-    },
-    {
-        name: 'status.require_action',
-        description: 'QR listo para escanear',
-        emoji: '🟡',
-        status: 'Esperando',
-        payload: {
-            event: 'status.require_action',
-            timestamp: '2024-01-16T12:00:00Z',
-            botId: 'bc080642-8cc1-4de8-9771-73c16fe5c5da',
-            action: 'scan_qr',
-            qrCode: 'data:image/png;base64,...'
-        }
-    },
-    {
-        name: 'status.disconnect',
-        description: 'Bot desconectado',
-        emoji: '🔴',
-        status: 'Inactivo',
-        payload: {
-            event: 'status.disconnect',
-            timestamp: '2024-01-16T12:00:00Z',
-            botId: 'bc080642-8cc1-4de8-9771-73c16fe5c5da',
-            reason: 'logout'
-        }
-    },
-    {
-        name: 'message.incoming',
-        description: 'Mensaje recibido',
-        emoji: '📨',
-        status: 'Activo',
-        payload: {
-            event: 'message.incoming',
-            timestamp: '2024-01-16T12:00:00Z',
-            botId: 'bc080642-8cc1-4de8-9771-73c16fe5c5da',
-            from: '521234567890',
-            message: {
-                type: 'text',
-                content: 'Hola, ¿cómo estás?'
+            event_type: 'instance_status',
+            instanceId: '12345',
+            data: {
+                status: 'ready'
             }
         }
     },
     {
-        name: 'message.calling',
-        description: 'Llamada recibida',
-        emoji: '📞',
+        name: 'message_received',
+        description: 'Mensaje recibido',
+        emoji: '📨',
         status: 'Activo',
         payload: {
-            event: 'message.calling',
-            timestamp: '2024-01-16T12:00:00Z',
-            botId: 'bc080642-8cc1-4de8-9771-73c16fe5c5da',
-            from: '521234567890',
-            callType: 'voice'
+            event_type: 'message_received',
+            instanceId: '12345',
+            data: {
+                id: 'msg_123456789',
+                from: '521234567890',
+                body: 'Hola, ¿cómo estás?',
+                type: 'chat',
+                timestamp: Math.floor(Date.now() / 1000)
+            }
         }
     },
     {
-        name: 'message.outgoing',
-        description: 'Mensaje enviado',
-        emoji: '📤',
+        name: 'message_ack',
+        description: 'Confirmación de lectura',
+        emoji: '✔️',
         status: 'Activo',
         payload: {
-            event: 'message.outgoing',
-            timestamp: '2024-01-16T12:00:00Z',
-            botId: 'bc080642-8cc1-4de8-9771-73c16fe5c5da',
-            to: '521234567890',
-            message: {
-                type: 'text',
-                content: 'Mensaje de prueba'
+            event_type: 'message_ack',
+            instanceId: '12345',
+            data: {
+                id: 'msg_123456789',
+                status: 'read',
+                to: '521234567890'
             }
         }
     }
@@ -248,7 +211,7 @@ const EventMonitor = ({ showToast }) => {
                 {showRealEvents && realEvents.length === 0 && (
                     <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
                         <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                            ℹ️ No hay eventos reales aún. Configura el webhook en BuilderBot o envía un evento de prueba usando los botones de abajo.
+                            ℹ️ No hay eventos reales aún. Configura el webhook en UltraMsg o envía un evento de prueba usando los botones de abajo.
                         </p>
                     </div>
                 )}

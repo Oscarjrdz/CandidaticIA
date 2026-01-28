@@ -1,88 +1,37 @@
-import axios from 'axios';
-
-const BASE_URL = 'https://app.builderbot.cloud/api/v2';
+import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
 
 /**
- * Helper to get credentials from Env or Redis
+ * Helper to send system messages (Auth, PINs, Notifications) via UltraMsg
  */
-async function getCredentials() {
-    // 1. Try Environment Variables
-    let botId = process.env.BOT_ID;
-    let apiKey = process.env.BOT_TOKEN || process.env.API_KEY;
-
-    if (botId && apiKey) {
-        return { botId, apiKey, source: 'env' };
-    }
-
-    // 2. Try Redis (Fallback)
-    try {
-        // Dynamic import to avoid cycles or load issues
-        const { getRedisClient } = await import('./storage.js');
-        const redis = getRedisClient();
-
-        if (redis) {
-            const raw = await redis.get('builderbot_credentials');
-            if (raw) {
-                const creds = JSON.parse(raw);
-                if (creds.botId && (creds.apiKey || creds.token)) {
-                    return {
-                        botId: creds.botId,
-                        apiKey: creds.apiKey || creds.token,
-                        source: 'redis'
-                    };
-                }
-            }
-        }
-    } catch (e) {
-        console.warn('⚠️ Failed to fetch credentials from Redis:', e.message);
-    }
-
-    return { botId: null, apiKey: null, source: 'none' };
-}
-
 export const sendMessage = async (number, message) => {
     try {
-        const { botId: BOT_ID, apiKey: API_KEY, source } = await getCredentials();
+        const config = await getUltraMsgConfig();
 
-        if (!BOT_ID) {
-            console.error('❌ Missing BOT_ID (Checked Env & Redis)');
-            return { success: false, error: 'Configuration missing: BOT_ID' };
+        if (!config || !config.instanceId || !config.token) {
+            console.error('❌ Missing UltraMsg Configuration (Checked Env & Redis)');
+            return { success: false, error: 'Configuration missing: ULTRAMSG_INSTANCE_ID or TOKEN' };
         }
 
-        if (!API_KEY) {
-            console.error('❌ Missing API_KEY (Checked Env & Redis)');
-            return { success: false, error: 'Configuration missing: BOT_TOKEN' };
+        console.log(`📤 Sending System Message via UltraMsg to ${number}...`);
+
+        const result = await sendUltraMsgMessage(config.instanceId, config.token, number, message);
+
+        if (!result.success) {
+            return {
+                success: false,
+                error: result.error || 'UltraMsg Send Error'
+            };
         }
-
-        console.log(`📤 Sending WhatsApp via ${source}...`);
-
-        const url = `${BASE_URL}/${BOT_ID}/messages`;
-        const payload = {
-            messages: {
-                type: "text",
-                content: message
-            },
-            number: number,
-            checkIfExists: false
-        };
-
-        const response = await axios.post(url, payload, {
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-builderbot': API_KEY,
-            }
-        });
 
         return {
             success: true,
-            data: response.data,
+            data: result.data,
         };
     } catch (error) {
-        console.error('❌ Network/System error sending message:', error.response?.data || error.message);
+        console.error('❌ Error sending system message via UltraMsg:', error.message);
         return {
             success: false,
-            status: error.response?.status,
-            error: error.response?.data || error.message,
+            error: error.message,
         };
     }
 };

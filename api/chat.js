@@ -3,48 +3,7 @@ import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
 import { sendUltraMsgMessage, getUltraMsgConfig } from './whatsapp/utils.js';
 
-const BUILDERBOT_API_URL = 'https://app.builderbot.cloud/api/v2';
-
-const sendBuilderBotMessage = async (botId, apiKey, number, message) => {
-    console.log(`🚀 [sendBuilderBotMessage] Sending to ${number}...`);
-    // Redacted logs for debugging
-    console.log(`📍 BotId: ${botId ? 'PRESENT' : 'MISSING'}`);
-    console.log(`🔑 ApiKey: ${apiKey ? (apiKey.substring(0, 5) + '...') : 'MISSING'}`);
-
-    try {
-        const url = `${BUILDERBOT_API_URL}/${botId}/messages`;
-        const response = await axios.post(url, {
-            messages: {
-                type: "text",
-                content: message
-            },
-            number: number,
-            checkIfExists: false
-        }, {
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-builderbot': apiKey,
-            },
-            validateStatus: () => true // Handle errors manually
-        });
-
-        console.log(`📥 BuilderBot Response: ${response.status} ${response.statusText}`);
-
-        if (response.status !== 200 && response.status !== 201) {
-            console.error('❌ BuilderBot Error Data:', response.data);
-            return {
-                success: false,
-                error: typeof response.data === 'string' ? response.data : JSON.stringify(response.data),
-                status: response.status
-            };
-        }
-
-        return { success: true, data: response.data };
-    } catch (error) {
-        console.error('❌ Network Error sending to BuilderBot:', error.message);
-        return { success: false, error: error.message };
-    }
-};
+// BuilderBot legacy URLs removed as per UltraMsg migration.
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {

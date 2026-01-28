@@ -4,12 +4,12 @@ import Card from './ui/Card';
 import Input from './ui/Input';
 import Button from './ui/Button';
 import { validatePhoneNumber } from '../utils/validation';
-import { sendTestMessage } from '../services/builderbot';
+import { sendTestMessage } from '../services/whatsappService';
 
 /**
- * Sección de Prueba Rápida
+ * Sección de Prueba Rápida (UltraMsg)
  */
-const QuickTest = ({ botId, apiKey, showToast }) => {
+const QuickTest = ({ instanceId, token, showToast }) => {
     const [phoneNumber, setPhoneNumber] = useState('');
     const [message, setMessage] = useState('');
     const [errors, setErrors] = useState({});
@@ -17,8 +17,8 @@ const QuickTest = ({ botId, apiKey, showToast }) => {
     const [response, setResponse] = useState(null);
 
     const handleSend = async () => {
-        if (!botId || !apiKey) {
-            showToast('Por favor, configura tus credenciales primero', 'error');
+        if (!instanceId || !token) {
+            showToast('Por favor, configura tus credenciales de UltraMsg primero', 'error');
             return;
         }
 
@@ -43,8 +43,8 @@ const QuickTest = ({ botId, apiKey, showToast }) => {
 
         // Enviar mensaje de prueba
         const result = await sendTestMessage(
-            botId,
-            apiKey,
+            instanceId,
+            token,
             phoneValidation.cleaned,
             message.trim()
         );
@@ -53,7 +53,7 @@ const QuickTest = ({ botId, apiKey, showToast }) => {
 
         if (result.success) {
             setResponse(result);
-            showToast('Mensaje enviado correctamente', 'success');
+            showToast('Mensaje enviado correctamente vía UltraMsg', 'success');
             // Limpiar campos
             setPhoneNumber('');
             setMessage('');

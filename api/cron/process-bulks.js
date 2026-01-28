@@ -8,12 +8,12 @@ import { substituteVariables } from '../utils/shortcuts.js';
 export default async function handler(req, res) {
     // Basic security: Allow Bearer (Cron) or BuilderBot API Key (Manual/Admin)
     const authHeader = req.headers.authorization;
-    const providedApiKey = req.headers['x-api-builderbot'];
+    const providedApiKey = req.headers['x-api-token'];
 
     // Recuperar credenciales guardadas para comparar si es un disparo manual
     const redis = getRedisClient();
-    const credsJson = await redis.get('builderbot_credentials');
-    const storedApiKey = credsJson ? JSON.parse(credsJson).apiKey : process.env.BOT_TOKEN;
+    const credsJson = await redis.get('ultramsg_credentials');
+    const storedApiKey = credsJson ? JSON.parse(credsJson).token : process.env.ULTRAMSG_TOKEN;
 
     const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
     const isManual = providedApiKey && providedApiKey === storedApiKey;

@@ -136,28 +136,30 @@ export class EventSubscription {
 /**
  * Envía un evento de prueba al webhook (para testing)
  */
-export const sendTestWebhook = async (eventType = 'status.ready') => {
+export const sendTestWebhook = async (eventType = 'message_received') => {
     try {
         const testPayloads = {
-            'status.ready': {
-                event: 'status.ready',
-                timestamp: new Date().toISOString(),
-                botId: 'test-bot-id',
-                status: 'ready'
+            'instance_status': {
+                event_type: 'instance_status',
+                instanceId: '12345',
+                data: {
+                    status: 'ready'
+                }
             },
-            'message.incoming': {
-                event: 'message.incoming',
-                timestamp: new Date().toISOString(),
-                botId: 'test-bot-id',
-                from: '521234567890',
-                message: {
-                    type: 'text',
-                    content: 'Mensaje de prueba desde el frontend'
+            'message_received': {
+                event_type: 'message_received',
+                instanceId: '12345',
+                data: {
+                    id: 'msg_' + Date.now(),
+                    from: '521234567890',
+                    body: 'Mensaje de prueba desde el frontend',
+                    type: 'chat',
+                    timestamp: Math.floor(Date.now() / 1000)
                 }
             }
         };
 
-        const payload = testPayloads[eventType] || testPayloads['status.ready'];
+        const payload = testPayloads[eventType] || testPayloads['message_received'];
 
         const response = await fetch(`${API_BASE}/api/webhook`, {
             method: 'POST',

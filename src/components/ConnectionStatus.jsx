@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Activity, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
-import { verifyConnection } from '../services/builderbot';
+import { verifyConnection } from '../services/whatsappService';
 import { saveConnectionHistory, getConnectionHistory } from '../utils/storage';
 
 /**
- * Sección de Verificación de Conexión
+ * Sección de Verificación de Conexión (UltraMsg)
  */
-const ConnectionStatus = ({ botId, apiKey, showToast }) => {
+const ConnectionStatus = ({ instanceId, token, showToast }) => {
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(false);
     const [lastCheck, setLastCheck] = useState(null);
@@ -20,14 +20,14 @@ const ConnectionStatus = ({ botId, apiKey, showToast }) => {
     }, []);
 
     const handleVerify = async () => {
-        if (!botId || !apiKey) {
-            showToast('Por favor, configura tus credenciales primero', 'error');
+        if (!instanceId || !token) {
+            showToast('Por favor, configura tus credenciales de UltraMsg primero', 'error');
             return;
         }
 
         setLoading(true);
 
-        const result = await verifyConnection(botId, apiKey);
+        const result = await verifyConnection(instanceId, token);
 
         setLoading(false);
         setStatus(result);
@@ -35,7 +35,7 @@ const ConnectionStatus = ({ botId, apiKey, showToast }) => {
 
         if (result.success) {
             setWebhookData(result.data);
-            showToast('Conexión verificada correctamente', 'success');
+            showToast('Conexión con UltraMsg verificada correctamente', 'success');
 
             // Guardar en historial
             const historyEntry = {

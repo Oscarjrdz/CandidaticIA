@@ -1,5 +1,5 @@
 /**
- * Settings API - Manage BuilderBot credentials and export timer in Redis
+ * Settings API - Manage UltraMsg credentials and export timer in Redis
  * GET /api/settings?type=credentials|timer
  * POST /api/settings { type, data }
  */
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
             let value;
 
             if (type === 'credentials') {
-                value = await redis.get('builderbot_credentials');
+                value = await redis.get('ultramsg_credentials');
                 console.log(`📥 [Settings API] GET credentials. Found: ${!!value}`);
                 return res.status(200).json({
                     success: true,
@@ -77,13 +77,13 @@ export default async function handler(req, res) {
             }
 
             if (type === 'credentials') {
-                // Validate credentials structure
-                if (!data.botId || !data.answerId || !data.apiKey) {
-                    return res.status(400).json({ error: 'Invalid credentials format' });
+                // Validate UltraMsg credentials structure
+                if (!data.instanceId || !data.token) {
+                    return res.status(400).json({ error: 'Invalid credentials format (instanceId and token required)' });
                 }
 
-                await redis.set('builderbot_credentials', JSON.stringify(data));
-                console.log('✅ BuilderBot credentials saved to Redis');
+                await redis.set('ultramsg_credentials', JSON.stringify(data));
+                console.log('✅ UltraMsg credentials saved to Redis');
 
                 return res.status(200).json({
                     success: true,

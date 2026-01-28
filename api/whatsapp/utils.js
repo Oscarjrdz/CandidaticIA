@@ -17,7 +17,14 @@ export const getUltraMsgConfig = async () => {
     try {
         const redis = getRedisClient();
         if (redis) {
-            const config = await redis.get('ultramsg_config');
+            // First try 'ultramsg_credentials' (new standard)
+            let config = await redis.get('ultramsg_credentials');
+
+            // Fallback to 'ultramsg_config' (old key)
+            if (!config) {
+                config = await redis.get('ultramsg_config');
+            }
+
             if (config) {
                 return JSON.parse(config);
             }
@@ -90,26 +97,39 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 }), 'EX', 3600);
             }
 
-            // COUNT STATS (OUTGOING)
-            if (response.status === 200) {
-                const { incrementMessageStats } = await import('../utils/storage.js');
-                incrementMessageStats('outgoing');
+            if (response.status !== 200) {
+                console.error(`❌ UltraMSG [${type}] API Error (${response.status}):`, response.data);
+                return {
+                    success: false,
+                    status: response.status,
+                    error: (response.data && typeof response.data === 'object') ? JSON.stringify(response.data) : (response.data || 'Unknown API Error')
+                };
             }
 
-            return response.data;
-        } catch (postErr) {
-            const errData = postErr.response?.data;
-            console.error(`❌ UltraMSG [${type}] Connection/API Error:`, errData || postErr.message);
-            if (redis) {
-                await redis.set(`${debugKey}:error`, JSON.stringify({
-                    timestamp: new Date().toISOString(),
-                    type, endpoint: endpoint, error: errData || postErr.message
-                }), 'EX', 3600);
+            // COUNT STATS (OUTGOING)
+            if (response.status === 200) {
+                try {
+                    const { incrementMessageStats } = await import('../utils/storage.js');
+                    await incrementMessageStats('outgoing');
+                } catch (e) {
+                    console.warn('Failed to increment stats', e.message);
+                }
             }
-            throw postErr;
+
+            return {
+                success: true,
+                data: response.data
+            };
+        } catch (error) {
+            console.error(`❌ UltraMSG [${type}] Connection Error:`, error.message);
+            return {
+                success: false,
+                error: error.message || 'Connection failed'
+            };
         }
-    } catch (error) {
-        throw error;
+    } catch (outerError) {
+        console.error('❌ sendUltraMsgMessage fatal error:', outerError.message);
+        return { success: false, error: outerError.message };
     }
 };
 

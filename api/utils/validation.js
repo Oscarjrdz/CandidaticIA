@@ -24,32 +24,28 @@ export const validateWebhookSecret = (req) => {
 };
 
 /**
- * Valida la estructura básica del payload de BuilderBot
- */
-/**
- * Valida la estructura básica del payload de BuilderBot
+ * Valida la estructura básica del payload del evento
  */
 export const validateEventPayload = (payload) => {
     if (!payload || typeof payload !== 'object') {
         return { valid: false, error: 'Payload inválido' };
     }
 
-    // Soporte para estructura estándar de BuilderBot (v6+)
-    // { eventName: '...', data: { ... } }
-    if (payload.eventName) {
-        if (!payload.data) {
-            return { valid: false, error: 'Campo "data" requerido para BuilderBot' };
+    // Soporte para estructura estándar (v6+ / UltraMsg)
+    // { eventName: '...', data: { ... } } o { event: '...', data: { ... } }
+    if (payload.eventName || payload.event_type) {
+        if (!payload.data && !payload.body) {
+            return { valid: false, error: 'Campo de datos requerido en el payload' };
         }
         return { valid: true };
     }
 
-    // Estructura legacy/custom
+    // Estructura legacy/directa
     if (payload.event) {
-        // Relax timestamp check for now as some versions might not send it at root
         return { valid: true };
     }
 
-    return { valid: false, error: 'Formato desconocido (falta eventName o event)' };
+    return { valid: false, error: 'Formato de evento desconocido' };
 };
 
 /**

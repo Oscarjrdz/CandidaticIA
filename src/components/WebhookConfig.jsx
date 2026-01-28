@@ -6,9 +6,9 @@ import { getWebhookConfig } from '../services/webhookService';
 
 /**
  * Sección de Configuración de Webhooks
- * Muestra la URL del webhook que el usuario debe configurar en BuilderBot
+ * Muestra la URL del webhook que el usuario debe configurar en UltraMsg
  */
-const WebhookConfig = ({ botId, apiKey, showToast }) => {
+const WebhookConfig = ({ instanceId, token, showToast }) => {
     const [copied, setCopied] = useState(false);
     const [webhookUrl, setWebhookUrl] = useState('Cargando...');
     const [loading, setLoading] = useState(true);
@@ -20,15 +20,15 @@ const WebhookConfig = ({ botId, apiKey, showToast }) => {
             const result = await getWebhookConfig();
             if (result.success) {
                 setWebhookUrl(result.data.webhookUrl || '');
-                setEnvironment(result.data.environment || 'development'); // Keep environment update
+                setEnvironment(result.data.environment || 'development');
             } else {
-                setWebhookUrl('Error cargando URL'); // Keep error state for webhookUrl
-                showToast('Error obteniendo configuración del webhook', 'error'); // Keep toast for error
+                setWebhookUrl('Error cargando URL');
+                showToast('Error obteniendo configuración del webhook', 'error');
             }
         } catch {
             console.error('Error cargando config');
-            setWebhookUrl('Error cargando URL'); // Ensure webhookUrl shows error on catch
-            showToast('Error obteniendo configuración del webhook', 'error'); // Ensure toast on catch
+            setWebhookUrl('Error cargando URL');
+            showToast('Error obteniendo configuración del webhook', 'error');
         } finally {
             setLoading(false);
         }
@@ -61,7 +61,7 @@ const WebhookConfig = ({ botId, apiKey, showToast }) => {
                         📋 Instrucciones
                     </h4>
                     <p className="text-sm text-blue-800 dark:text-blue-400">
-                        Copia la siguiente URL y configúrala <strong>dentro de BuilderBot</strong> para recibir eventos de tu bot.
+                        Copia la siguiente URL y configúrala <strong>dentro de UltraMsg</strong> para recibir eventos de tu bot.
                     </p>
                 </div>
 
@@ -97,7 +97,7 @@ const WebhookConfig = ({ botId, apiKey, showToast }) => {
                     </div>
                     <div className="flex items-center justify-between mt-2">
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Esta es la URL que BuilderBot usará para enviar eventos a tu aplicación
+                            Esta es la URL que UltraMsg usará para enviar eventos a tu aplicación
                         </p>
                         {environment && (
                             <span className={`text-xs px-2 py-1 rounded ${environment === 'production'
@@ -110,33 +110,34 @@ const WebhookConfig = ({ botId, apiKey, showToast }) => {
                     </div>
                 </div>
 
-                {/* Pasos para configurar en BuilderBot */}
+                {/* Pasos para configurar en UltraMsg */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
                     <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                        🔧 Cómo configurar en BuilderBot
+                        🔧 Cómo configurar en UltraMsg
                     </h4>
                     <ol className="text-sm text-gray-600 dark:text-gray-400 space-y-2 list-decimal list-inside">
-                        <li>Inicia sesión en tu panel de BuilderBot</li>
-                        <li>Ve a la sección de configuración de tu bot</li>
-                        <li>Busca la opción "Webhook URL" o "URL de eventos"</li>
+                        <li>Inicia sesión en tu panel de UltraMsg</li>
+                        <li>Ve a la sección de configuración de tu instancia</li>
+                        <li>Busca la opción "Webhook URL" o "URL de eventos" (Configuración de Webhook)</li>
                         <li>Pega la URL copiada arriba</li>
-                        <li>Guarda los cambios en BuilderBot</li>
+                        <li>Activa los eventos de "Mensajes Entrantes" (Incoming Messages)</li>
+                        <li>Guarda los cambios en UltraMsg</li>
                     </ol>
                 </div>
 
                 {/* Estado de conexión */}
-                {botId && apiKey ? (
+                {instanceId && token ? (
                     <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800 flex items-center space-x-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                         <p className="text-sm text-green-800 dark:text-green-400">
-                            Credenciales configuradas. Listo para recibir eventos.
+                            Credenciales de UltraMsg configuradas. Listo para recibir eventos.
                         </p>
                     </div>
                 ) : (
                     <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800 flex items-center space-x-2">
                         <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
                         <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                            Configura tus credenciales primero para activar el webhook
+                            Configura tus credenciales de UltraMsg primero para activar el webhook
                         </p>
                     </div>
                 )}

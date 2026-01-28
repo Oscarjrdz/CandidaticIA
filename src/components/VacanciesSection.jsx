@@ -184,31 +184,7 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
-    const handlePurgeFiles = async () => {
-        if (!confirm('¿Estás seguro de que deseas limpiar los archivos duplicados en BuilderBot?')) return;
-
-        setLoading(true);
-        try {
-            const res = await fetch('/api/vacancies?purge=true', {
-                method: 'DELETE'
-            });
-            const data = await res.json();
-
-            if (res.ok) {
-                // Show detailed report in alert for debugging
-                alert(`REPORTE DE LIMPIEZA:\n\n${data.message}\n\nDetalles:\nEncontrados: ${data.debug?.found}\nCoincidencias: ${data.debug?.filesFound?.length}\nBorrados Exitosos: ${data.debug?.deleted}\nErrores: ${data.debug?.errors?.join(', ')}`);
-                showToast('Limpieza completada', 'success');
-            } else {
-                alert(`ERROR EN LIMPIEZA:\n${data.error}\nDetalles: ${data.details}`);
-                showToast('Error al limpiar archivos', 'error');
-            }
-        } catch (error) {
-            console.error(error);
-            showToast('Error de conexión', 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Sync to BuilderBot logic removed
 
     const handleAddCategory = async () => {
         if (!newCategoryName.trim()) return;
@@ -255,15 +231,6 @@ const VacanciesSection = ({ showToast }) => {
                     Gestión de Vacantes
                 </h2>
                 <div className="flex gap-2">
-                    <button
-                        onClick={handlePurgeFiles}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors disabled:opacity-50 text-sm font-medium border border-red-100"
-                        title="Eliminar archivos duplicados en BuilderBot"
-                    >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="hidden sm:inline">Limpiar</span>
-                    </button>
                     <Button
                         onClick={handleOpenCreate}
                         icon={Plus}

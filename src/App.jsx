@@ -22,9 +22,8 @@ import LandingPage from './components/LandingPage'; // NEW
 function App() {
   const [user, setUser] = useState(null); // AUTH STATE RESTORED
   const [showLogin, setShowLogin] = useState(false); // NEW: Toggle between Landing and Login
-  const [botId, setBotId] = useState('');
-  const [answerId, setAnswerId] = useState('');
-  const [apiKey, setApiKey] = useState('');
+  const [instanceId, setInstanceId] = useState('');
+  const [token, setToken] = useState('');
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
   const { toast, showToast, hideToast, ToastComponent } = useToast();
@@ -72,10 +71,9 @@ function App() {
     }, 500);
   };
 
-  const handleCredentialsChange = (newBotId, newAnswerId, newApiKey) => {
-    setBotId(newBotId);
-    setAnswerId(newAnswerId);
-    setApiKey(newApiKey);
+  const handleCredentialsChange = (newInstanceId, newToken) => {
+    setInstanceId(newInstanceId);
+    setToken(newToken);
   };
 
   // Exportar configuración
@@ -272,8 +270,8 @@ function App() {
             <ProjectsSection showToast={showToast} />
           ) : (
             <SettingsSection
-              botId={botId}
-              apiKey={apiKey}
+              instanceId={instanceId}
+              token={token}
               onCredentialsChange={handleCredentialsChange}
               showToast={showToast}
             />

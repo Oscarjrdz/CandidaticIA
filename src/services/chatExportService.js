@@ -71,130 +71,16 @@ export const generateChatHistoryText = (candidate) => {
     return header + messages;
 };
 
-/**
- * Export chat history to file and upload to Knowledge Base
- * @param {Object} candidate - Candidate object
- * @param {Object} credentials - BuilderBot credentials
- * @returns {Promise<Object>} Upload result with file ID
- */
 export const exportChatToFile = async (candidate, credentials) => {
-    if (!credentials || !credentials.botId || !credentials.answerId || !credentials.apiKey) {
-        throw new Error('Credenciales no configuradas');
-    }
-
-
-    // --- 🧹 DEDUPLICACIÓN INTELIGENTE (13 caracteres) ---
-    try {
-        // 1. Listar archivos existentes en BuilderBot
-        const listParams = new URLSearchParams({
-            botId: credentials.botId,
-            answerId: credentials.answerId,
-            apiKey: credentials.apiKey,
-            type: 'files'
-        });
-
-        const listRes = await fetch(`/api/assistant?${listParams}`);
-
-        if (listRes.ok) {
-            const files = await listRes.json();
-
-            if (Array.isArray(files)) {
-                // 2. Filtrar duplicados: Comparar primeros 13 caracteres del nombre
-                const targetPrefix = String(candidate.whatsapp).substring(0, 13);
-
-                const duplicates = files.filter(f =>
-                    f.filename && f.filename.startsWith(targetPrefix)
-                );
-
-                // 3. Eliminar archivos duplicados encontrados
-                if (duplicates.length > 0) {
-                    console.log(`🧹 Limpieza: Eliminando ${duplicates.length} archivo(s) duplicado(s) (Prefijo: ${targetPrefix})`);
-                    await Promise.all(duplicates.map(f => deleteOldChatFile(f.id || f.file_id, credentials)));
-                }
-            }
-        }
-    } catch (cleanupErr) {
-        console.warn('⚠️ Error en limpieza automática de duplicados:', cleanupErr);
-        // Continuar con la subida aunque falle la limpieza
-    }
-
-    // Generate text content
-    const textContent = generateChatHistoryText(candidate);
-
-
-    // Create blob
-    const blob = new Blob([textContent], { type: 'text/plain' });
-    const filename = `${candidate.whatsapp}.txt`;
-
-    // Create FormData
-    const formData = new FormData();
-    formData.append('file', blob, filename);
-
-    // Upload to Knowledge Base
-    const params = new URLSearchParams({
-        botId: credentials.botId,
-        answerId: credentials.answerId,
-        apiKey: credentials.apiKey,
-        type: 'files'
-    });
-
-    console.log(`🚀 Uploading file to BuilderBot:`, filename);
-    console.log(`📍 API URL: /api/assistant?type=files`);
-
-    const response = await fetch(`/api/assistant?${params}`, {
-        method: 'POST',
-        body: formData
-    });
-
-    console.log(`📡 Response status:`, response.status, response.statusText);
-
-    const data = await response.json();
-
-    console.log(`📦 Response data:`, data);
-
-    if (!response.ok) {
-        console.error(`❌ Upload failed:`, data.error || 'Unknown error');
-        throw new Error(data.error || 'Error al subir archivo');
-    }
-
-    console.log(`✅ File uploaded successfully! ID:`, data.id || data.file_id);
-
-    return {
-        success: true,
-        fileId: data.id || data.file_id,
-        filename
-    };
+    // Cloud upload disabled for now.
+    // This function can be used for local processing or future cloud features.
+    console.log('📤 Cloud export disabled');
+    return { success: false, error: 'Cloud export no disponible' };
 };
 
-/**
- * Delete chat file from Knowledge Base
- * @param {string} fileId - File ID to delete
- * @param {Object} credentials - BuilderBot credentials
- * @returns {Promise<boolean>} Success status
- */
 export const deleteOldChatFile = async (fileId, credentials) => {
-    if (!fileId || !credentials) {
-        return false;
-    }
-
-    try {
-        const params = new URLSearchParams({
-            botId: credentials.botId,
-            answerId: credentials.answerId,
-            apiKey: credentials.apiKey,
-            type: 'files',
-            fileId
-        });
-
-        const response = await fetch(`/api/assistant?${params}`, {
-            method: 'DELETE'
-        });
-
-        return response.ok;
-    } catch (error) {
-        console.error('Error deleting old chat file:', error);
-        return false;
-    }
+    // Cloud delete from BuilderBot removed.
+    return true;
 };
 
 /**

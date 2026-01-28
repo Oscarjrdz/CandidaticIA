@@ -85,8 +85,9 @@ export default async function handler(req, res) {
 
             if (!msgResult.success) {
                 console.warn('⚠️ Error enviando PIN:', msgResult);
+                const errorText = typeof msgResult.error === 'object' ? JSON.stringify(msgResult.error) : msgResult.error;
                 return res.status(500).json({
-                    error: `Error enviando WhatsApp: ${msgResult.error || 'Revisa BOT_ID'}`,
+                    error: `Error enviando WhatsApp: ${errorText || 'Revisa Configuración'}`,
                     details: msgResult
                 });
             }
