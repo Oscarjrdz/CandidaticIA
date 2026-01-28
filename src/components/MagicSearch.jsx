@@ -10,12 +10,7 @@ const STATUS_STEPS = [
     "Casi listo..."
 ];
 
-const SUGGESTIONS = [
-    { label: "Candidatos con empleo", query: "que tengan empleo actualmente" },
-    { label: "Viven en Monterrey", query: "que vivan en monterrey" },
-    { label: "Más de 30 años", query: "mayores de 30 años" },
-    { label: "Experiencia en Ventas", query: "con experiencia en ventas" }
-];
+// Sugerencias eliminadas para diseño minimalista
 
 /**
  * Buscador Inteligente - Diseño iOS / Minimalista (Totalmente Neutro)
@@ -131,7 +126,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
         <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
             <div
                 ref={modalRef}
-                className="w-full max-w-3xl bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-[0_30px_70px_rgba(0,0,0,0.5)] overflow-hidden animate-spring-in border border-white/20"
+                className="w-full max-w-3xl bg-white dark:bg-gray-950 rounded-[2.5rem] shadow-[0_30px_70px_rgba(0,0,0,0.5)] overflow-hidden animate-spring-in border-2 border-blue-500/30"
             >
                 <div className="p-10 space-y-8">
                     {/* Header */}
@@ -164,7 +159,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                     {/* Input Section */}
                     <div className="space-y-6">
                         <form onSubmit={handleSearch} className="relative group">
-                            <div className="relative flex items-center px-4 py-8 bg-gray-50 dark:bg-gray-900/50 rounded-3xl border-2 border-transparent focus-within:border-blue-500/50 focus-within:bg-white dark:focus-within:bg-gray-900 transition-all shadow-inner">
+                            <div className="relative flex items-center px-4 py-8 bg-white dark:bg-gray-900 rounded-3xl border-2 border-transparent focus-within:border-blue-500/50 transition-all shadow-sm">
                                 <div className="mr-6">
                                     {loading ? (
                                         <div className="relative w-10 h-10">
@@ -177,14 +172,16 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                                         </div>
                                     )}
                                 </div>
-                                <input
-                                    type="text"
-                                    autoFocus
-                                    placeholder={customPlaceholder || "Describe a tu candidato ideal..."}
-                                    value={query}
-                                    onChange={(e) => setQuery(e.target.value)}
-                                    className="w-full bg-transparent outline-none text-2xl font-bold text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700"
-                                />
+                                <div className="flex-1">
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        placeholder={customPlaceholder || "Describe a tu candidato ideal..."}
+                                        value={query}
+                                        onChange={(e) => setQuery(e.target.value)}
+                                        className="w-full bg-transparent outline-none text-2xl font-bold text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 border-none focus:ring-0"
+                                    />
+                                </div>
                                 {loading && (
                                     <div className="absolute right-6 top-1/2 -translate-y-1/2">
                                         <span className="text-sm font-bold text-blue-600 animate-pulse bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
@@ -195,26 +192,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                             </div>
                         </form>
 
-                        {/* Smart Suggestions */}
-                        {!loading && !query && (
-                            <div className="animate-in fade-in slide-in-from-top-2 duration-500">
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 px-2">Sugerencias inteligentes</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {SUGGESTIONS.map((s, i) => (
-                                        <button
-                                            key={i}
-                                            onClick={() => {
-                                                setQuery(s.query);
-                                                handleSearch(null, s.query);
-                                            }}
-                                            className="px-4 py-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 rounded-2xl text-sm font-bold text-gray-600 dark:text-gray-300 transition-all hover:scale-105 hover:shadow-lg shadow-sm"
-                                        >
-                                            {s.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                        {/* Smart Suggestions eliminadas */}
 
                         {/* Skeleton State */}
                         {loading && (
@@ -232,28 +210,17 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                         )}
                     </div>
 
-                    {/* Footer */}
                     <div className="flex items-center justify-between pt-6 border-t border-gray-100 dark:border-gray-800">
                         <div className="flex items-center space-x-2">
                             <div className="p-1 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg">
                                 <Sparkles className="w-3 h-3 text-white" />
                             </div>
-                            <span className="text-[10px] font-black tracking-[0.1em] text-gray-400 uppercase">Zuck Level Search • Gemini 2.0</span>
-                        </div>
-                        <div className="flex items-center space-x-4 text-[10px] font-black text-gray-400">
-                            <span className="flex items-center space-x-1 uppercase tracking-wider">
-                                <span className="px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm text-gray-600">Enter</span>
-                                <span>Buscar</span>
-                            </span>
-                            <span className="flex items-center space-x-1 uppercase tracking-wider">
-                                <span className="px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm text-gray-600">Esc</span>
-                                <span>Cerrar</span>
-                            </span>
+                            <span className="text-[10px] font-black tracking-[0.1em] text-gray-400 uppercase">Powered with Gemini</span>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
+                </div >
+            </div >
+        </div >
     );
 };
 

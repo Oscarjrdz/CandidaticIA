@@ -327,13 +327,7 @@ const CandidatesSection = ({ showToast }) => {
                         onResults={(results, ai) => {
                             setAiFilteredCandidates(results);
                             setAiExplanation(ai?.explanation || 'Búsqueda completada');
-
-                            // Trigger Follow-up Action after small delay
-                            if (results.length > 0) {
-                                setTimeout(() => {
-                                    setAiActionOpen(true);
-                                }, 1500);
-                            }
+                            // Follow-up disabled per user request
                         }}
                         showToast={showToast}
                     />
