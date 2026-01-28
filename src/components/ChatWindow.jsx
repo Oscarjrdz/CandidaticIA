@@ -248,11 +248,23 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
         }
     };
 
+    const safeFormatTime = (ts) => {
+        if (!ts) return '-';
+        try {
+            const date = new Date(ts);
+            if (isNaN(date.getTime())) return '-';
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch (e) {
+            return '-';
+        }
+    };
+
     const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
+
 
     // Drag handlers
     const handleMouseDown = (e) => {
@@ -448,7 +460,7 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
 
                                         <div className="flex items-center justify-between mt-1 space-x-2">
                                             <p className="text-[9px] text-gray-500 dark:text-gray-400 opacity-70">
-                                                {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                                {safeFormatTime(msg.timestamp)}
                                             </p>
                                             <div className="flex items-center space-x-1">
                                                 {msg.status && (
