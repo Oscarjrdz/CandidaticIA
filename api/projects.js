@@ -33,7 +33,7 @@ export default async function handler(req, res) {
             }
 
             if (!name) return res.status(400).json({ success: false, error: 'Project name is required' });
-            const project = await saveProject({ id, name, description });
+            const project = await saveProject({ id, name, description, assignedUsers });
             return res.status(200).json({ success: true, project });
         }
 
