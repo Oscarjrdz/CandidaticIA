@@ -314,19 +314,10 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
     }, [isDragging]);
 
     const onGlobalMove = (e) => {
-        // Obtenemos la nueva posición absoluta deseada
-        let newX = e.clientX - dragOffset.x;
-        let newY = e.clientY - dragOffset.y;
-
-        // Guardamos en estado. Pero espera, ¿cómo mezclamos esto con el centrado CSS?
-        // Solución: Dejamos de usar flex-center en el padre cuando se empieza a arrastrar.
-        // O más fácil: El componente tiene `top: 0, left: 0` y usamos `transform: translate(x,y)` para todo.
-        // Inicialmente centrado: `left: 50%, top: 50%, transform: translate(-50%, -50%)`.
-        // Al arrastrar, cambiamos a `left: 0, top: 0, transform: translate(mouseX, mouseY)`.
-
+        // Simple drag: just track mouse position
         setPosition({
-            x: newX,
-            y: newY,
+            x: e.clientX,
+            y: e.clientY,
             isMoved: true
         });
     };
@@ -352,13 +343,10 @@ const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
                             position: 'fixed',
                             left: position.x,
                             top: position.y,
-                            transform: 'none',
-                            margin: 0
+                            margin: 0,
+                            transform: 'translate(-50%, -10px)' // Little offset for handle grip center
                         }
-                        : {
-                            // Estado inicial centrado
-                            // Ya el flex container padre lo centra, solo necesitamos dimensiones
-                        }
+                        : {}
                 }
             >
                 {/* Header draggable */}
