@@ -8,8 +8,9 @@ import ChatHistoryModal from './ChatHistoryModal';
 import MagicSearch from './MagicSearch';
 import { getCandidates, deleteCandidate, CandidatesSubscription } from '../services/candidatesService';
 import { getFields } from '../services/automationsService';
-import { getExportSettings, saveExportSettings, getChatFileId, saveChatFileId, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
-import { exportChatToFile, deleteOldChatFile, generateChatHistoryText } from '../services/chatExportService';
+import { getExportSettings, saveExportSettings, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
+import { generateChatHistoryText } from '../services/chatExportService';
+import { formatPhone, formatRelativeDate, formatDateTime, calculateAge } from '../utils/formatters';
 
 /**
  * Sección de Candidatos con Auto-Exportación
@@ -81,8 +82,6 @@ const CandidatesSection = ({ showToast }) => {
         setHistoryModalOpen(true);
         setHistoryModalContent('Cargando historial...');
 
-        console.log("🔍 Fetching fresh history for modal...");
-
         try {
             const res = await fetch(`/api/chat?candidateId=${candidate.id}`);
             const data = await res.json();
@@ -91,16 +90,11 @@ const CandidatesSection = ({ showToast }) => {
                 const candidateWithMessages = { ...candidate, messages: data.messages };
                 const content = generateChatHistoryText(candidateWithMessages);
                 setHistoryModalContent(content);
-
-                // Optional: Update local storage with this fresh content
                 saveLocalChatFile(candidate.whatsapp, content);
             } else {
-                const content = generateChatHistoryText(candidate);
-                setHistoryModalContent(content);
+                setHistoryModalContent(generateChatHistoryText(candidate));
             }
         } catch (error) {
-            console.error("Error fetching history:", error);
-            // Backup: use local file only if API fails
             const localFile = getLocalChatFile(candidate.whatsapp);
             if (localFile && localFile.content) {
                 setHistoryModalContent(localFile.content);
@@ -120,14 +114,11 @@ const CandidatesSection = ({ showToast }) => {
                 candidateIds: displayedCandidates.map(c => c.id)
             };
 
-            console.log('🚀 [AI Action] Triggered with query:', query);
             const res = await fetch('/api/ai/action', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query, context })
             });
-
-            console.log('🚀 [AI Action] API Status:', res.status);
 
             const data = await res.json();
 
@@ -172,9 +163,7 @@ const CandidatesSection = ({ showToast }) => {
             const result = await getCandidates(LIMIT, offset, search);
 
             if (result.success) {
-                console.log('🔍 API Response:', result); // DEBUG
                 setCandidates(result.candidates);
-                // Fix: use 'total' (filtered/global count) instead of 'count' (page size)
                 setTotalItems(result.total || result.count || 0);
                 setLastUpdate(new Date());
             } else {
@@ -217,19 +206,10 @@ const CandidatesSection = ({ showToast }) => {
         const result = await deleteCandidate(id);
 
         if (result.success) {
-            // Cloud file deletion removed (BuilderBot legacy)
             // Delete local file
             if (candidate) {
                 deleteLocalChatFile(candidate.whatsapp);
                 deleteChatFileId(candidate.whatsapp);
-
-                // Update cloud status immediately
-                const prefix = String(candidate.whatsapp).substring(0, 13);
-                // setCloudFileStatus(prev => { // This state doesn't exist
-                //     const updated = { ...prev };
-                //     delete updated[prefix];
-                //     return updated;
-                // });
             }
 
             showToast('Candidato eliminado correctamente', 'success');
@@ -265,126 +245,9 @@ const CandidatesSection = ({ showToast }) => {
             } else {
                 showToast(data.error || 'Error en la magia IA', 'error');
             }
-        } catch (e) {
-            console.error('Magic Fix error:', e);
-            showToast('Error de conexión', 'error');
         } finally {
             setMagicLoading(prev => ({ ...prev, [key]: false }));
         }
-    };
-
-    const formatPhone = (phone) => {
-        // Formatear número de teléfono
-        if (phone.startsWith('52')) {
-            return `+${phone.slice(0, 2)} ${phone.slice(2, 5)} ${phone.slice(5, 8)} ${phone.slice(8)}`;
-        }
-        return phone;
-    };
-
-    const formatDate = (dateString) => {
-        if (!dateString) return '-';
-        const date = new Date(dateString);
-        const now = new Date();
-        const diff = now - date;
-        const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(diff / 3600000);
-        const days = Math.floor(diff / 86400000);
-        const months = Math.floor(days / 30);
-        const years = Math.floor(days / 365);
-
-        if (minutes < 1) return 'Ahora';
-        if (minutes < 60) return `Hace ${minutes}m`;
-        if (hours < 24) return `Hace ${hours}h`;
-        if (days < 30) return `Hace ${days}d`;
-        if (months < 12) return `Hace ${months} mes${months !== 1 ? 'es' : ''}`;
-        if (years < 100) return `Hace ${years} año${years !== 1 ? 's' : ''}`;
-
-        return 'Hace siglos';
-    };
-
-    const formatDateTime = (dateString) => {
-        if (!dateString) return '-';
-        const date = new Date(dateString);
-
-        // Formato: "17 Ene 2026, 16:30"
-        const dateStr = date.toLocaleDateString('es-MX', {
-            day: 'numeric',
-            month: 'short',
-            year: 'numeric'
-        });
-
-        const timeStr = date.toLocaleTimeString('es-MX', {
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        });
-
-        return `${dateStr}, ${timeStr}`;
-    };
-
-    const calculateAge = (dob, storedAge) => {
-        // 1. Prefer stored age from NASCAR
-        if (storedAge && storedAge !== '-' && storedAge !== 'INVALID') {
-            return `${storedAge} años`;
-        }
-
-        if (!dob) return '-';
-        let birthDate = new Date(dob);
-
-        // Intentar parsear si la fecha estándar falló
-        if (isNaN(birthDate.getTime())) {
-            const cleanDob = dob.toLowerCase().trim();
-
-            // 1. Formato "19 de 05 de 1983" o "19/05/1983" o "19 / mayo / 1983"
-            // Allows: "/", "-", or "de" as separator
-            const dateRegex = /(\d{1,2})[\s/-]+(?:de\s+)?([a-z0-9áéíóú]+)[\s/-]+(?:de\s+)?(\d{4})/;
-            const match = cleanDob.match(dateRegex);
-
-            if (match) {
-                const day = parseInt(match[1]);
-                let month = match[2];
-                const year = parseInt(match[3]);
-                let monthIndex = -1;
-
-                // Si mes es número
-                if (!isNaN(month)) {
-                    monthIndex = parseInt(month) - 1;
-                } else {
-                    // Si mes es texto
-                    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-                    // Buscar coincidencia parcial (ej. "sep" o "septiembre")
-                    monthIndex = months.findIndex(m => m.startsWith(month.slice(0, 3)));
-                }
-
-                if (monthIndex >= 0) {
-                    birthDate = new Date(year, monthIndex, day);
-                }
-            }
-
-            // 2. Fallback a DD/MM/YYYY directo
-            if (isNaN(birthDate.getTime())) {
-                const parts = dob.split(/[/-]/);
-                if (parts.length === 3) {
-                    // Try DD-MM-YYYY
-                    const d = parseInt(parts[0]);
-                    const m = parseInt(parts[1]) - 1;
-                    const y = parseInt(parts[2]);
-                    if (!isNaN(d) && !isNaN(m) && !isNaN(y)) {
-                        birthDate = new Date(y, m, d);
-                    }
-                }
-            }
-        }
-
-        if (isNaN(birthDate.getTime())) return '-';
-
-        const today = new Date();
-        let age = today.getFullYear() - birthDate.getFullYear();
-        const m = today.getMonth() - birthDate.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-            age--;
-        }
-        return isNaN(age) ? '-' : `${age} años`;
     };
 
     // Displayed candidates is just 'candidates' (current page) or AI filtered
@@ -462,7 +325,6 @@ const CandidatesSection = ({ showToast }) => {
                 <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center">
                     <MagicSearch
                         onResults={(results, ai) => {
-                            console.log('🔮 AI Results received:', results.length, 'candidates');
                             setAiFilteredCandidates(results);
                             setAiExplanation(ai?.explanation || 'Búsqueda completada');
 
@@ -626,7 +488,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 {formatPhone(candidate.whatsapp)}
                                             </div>
                                             <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
-                                                Desde {formatDate(candidate.primerContacto)}
+                                                Desde {formatRelativeDate(candidate.primerContacto)}
                                             </div>
                                         </td>
                                         <td className="py-0.5 px-2.5">
@@ -685,7 +547,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 {formatDateTime(candidate.ultimoMensaje)}
                                             </div>
                                             <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
-                                                {formatDate(candidate.ultimoMensaje)}
+                                                {formatRelativeDate(candidate.ultimoMensaje)}
                                             </div>
                                         </td>
 

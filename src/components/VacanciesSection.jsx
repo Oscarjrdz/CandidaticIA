@@ -184,7 +184,7 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
-    // Sync to BuilderBot logic removed
+    // Sync to Candidatic logic removed
 
     const handleAddCategory = async () => {
         if (!newCategoryName.trim()) return;

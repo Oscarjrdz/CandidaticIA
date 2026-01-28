@@ -22,7 +22,6 @@ export default async function handler(req, res) {
         let countMujer = 0;
         let countNull = 0;
 
-        console.log(`⚧ Clean Gender: Scanning ${candidates.length} candidates...`);
 
         for (const candidate of candidates) {
             const originalGender = candidate.genero;
@@ -72,7 +71,6 @@ export default async function handler(req, res) {
             }
         }
 
-        console.log(`⚧ Clean Gender: Found ${updates.length} updates needed.`);
 
         // Batch execution
         const BATCH_SIZE = 50;
@@ -82,7 +80,6 @@ export default async function handler(req, res) {
             const batch = updates.slice(i, i + BATCH_SIZE);
             await Promise.all(batch.map(u => updateCandidate(u.id, { genero: u.genero })));
             processed += batch.length;
-            console.log(`⚧ Processed ${processed}/${updates.length}`);
         }
 
         return res.status(200).json({

@@ -43,12 +43,10 @@ export async function intelligentExtract(candidateId, historyText) {
         const redisRules = await (redis ? redis.get('automation_rules') : null);
         let rules = redisRules ? JSON.parse(redisRules).filter(r => r.enabled) : [];
 
-        console.log(`🔍 [Viper] Rules Found: ${rules.length}${rules.length === 0 ? ' (Using Fallback)' : ''}`);
 
         // STEEL-VESSEL FALLBACK: If no rules are found, use hardcoded core rules 
         // to prevent data loss in case of empty configuration.
         if (rules.length === 0) {
-            console.log('🛡️ [Steel-Vessel] Using Dynamic Fallback Engine...');
             const DEFAULT_FIELDS = [
                 { value: 'nombreReal', label: 'Nombre Real' },
                 { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
@@ -111,7 +109,6 @@ ${JSON.stringify(schema, null, 2)}
         let jsonText = '';
         for (const mName of modelsToTry) {
             try {
-                console.log(`📡 [Viper] Trying model ${mName}...`);
                 const model = genAI.getGenerativeModel({
                     model: mName,
                     generationConfig: {
@@ -129,7 +126,6 @@ ${JSON.stringify(schema, null, 2)}
             }
         }
 
-        console.log(`📥 [Viper] Raw Response:`, jsonText);
 
         if (!jsonText) {
             console.error('❌ [Viper] All models failed to extract data.');
@@ -149,7 +145,6 @@ ${JSON.stringify(schema, null, 2)}
             }
         }
 
-        console.log(`🧠 [Viper Extractor] Parsed Data:`, JSON.stringify(extracted));
 
         // 3. Process and refine updates
         const updateData = {};
@@ -158,7 +153,6 @@ ${JSON.stringify(schema, null, 2)}
             const val = extracted[rule.field];
             if (!val || val === 'null' || val === 'N/A' || val === 'INVALID') continue;
 
-            console.log(`✨ [Viper] Processing Field: ${rule.field} = ${val}`);
 
             try {
                 if (rule.field === 'nombreReal') {
@@ -195,7 +189,6 @@ ${JSON.stringify(schema, null, 2)}
 
         // Apply updates if any
         if (Object.keys(updateData).length > 0) {
-            console.log(`💾 [Viper] Final Update Data for ${candidateId}:`, updateData);
             await updateCandidate(candidateId, updateData);
 
             // DIAGNOSTIC LOG (Persistent in Redis)
@@ -214,7 +207,6 @@ ${JSON.stringify(schema, null, 2)}
             return updateData;
         }
 
-        console.log(`⏹️ [Viper] No data to update for ${candidateId}`);
         if (redis) {
             await redis.lpush('debug:extraction_log', JSON.stringify({
                 timestamp: new Date().toISOString(),

@@ -94,7 +94,6 @@ export default async function handler(req, res) {
 
                 rules.push(newRule);
                 await redis.set('candidatic_automation_rules', JSON.stringify(rules));
-                console.log(`✨ [Ferrari Engine] Auto-generated rule for: ${label}`);
             } catch (ruleErr) {
                 console.error('⚠️ Failed to auto-generate rule:', ruleErr);
             }

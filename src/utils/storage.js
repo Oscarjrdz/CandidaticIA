@@ -31,7 +31,6 @@ export const saveCredentials = async (instanceId, token) => {
             if (!response.ok) {
                 console.warn('⚠️ Failed to save credentials to Redis, using localStorage only');
             } else {
-                console.log('✅ Credentials saved to Redis and localStorage');
             }
         } catch (error) {
             console.warn('⚠️ Failed to save credentials to Redis:', error);
@@ -224,7 +223,6 @@ export const saveExportSettings = async (minutes) => {
 
         // Also save to localStorage as backup
         localStorage.setItem('export_timer', minutes.toString());
-        console.log('✅ Export timer saved to Redis and localStorage');
 
     } catch (error) {
         console.warn('⚠️ Failed to save to Redis, using localStorage only:', error);

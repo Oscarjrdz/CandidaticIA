@@ -24,7 +24,6 @@ export default async function handler(req, res) {
             requestedExt = requestedExt.substring(1);
         }
 
-        console.log(`📡 [Image] ID: ${rawId} | Requested Ext: ${requestedExt}`);
 
         const key = `image:${rawId}`;
         const metaKey = `meta:image:${rawId}`;
@@ -54,9 +53,6 @@ export default async function handler(req, res) {
         await client.lpush('debug:media_access', JSON.stringify(accessLog));
         await client.ltrim('debug:media_access', 0, 49); // Keep last 50
 
-        console.log(`📡 [Media Server] Serving ${id} to: ${accessLog.ua}`);
-        console.log(`   - IP: ${accessLog.ip}`);
-        console.log(`   - Requested Ext: ${requestedExt}`);
 
         // MIME Spoofing (WhatsApp standard is ogg)
         let finalMime = meta.mime;

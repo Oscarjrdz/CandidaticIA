@@ -33,7 +33,6 @@ export default async function handler(req, res) {
 
             if (type === 'credentials') {
                 value = await redis.get('ultramsg_credentials');
-                console.log(`📥 [Settings API] GET credentials. Found: ${!!value}`);
                 return res.status(200).json({
                     success: true,
                     data: value ? JSON.parse(value) : null
@@ -83,7 +82,6 @@ export default async function handler(req, res) {
                 }
 
                 await redis.set('ultramsg_credentials', JSON.stringify(data));
-                console.log('✅ UltraMsg credentials saved to Redis');
 
                 return res.status(200).json({
                     success: true,
@@ -99,7 +97,6 @@ export default async function handler(req, res) {
                 }
 
                 await redis.set('export_timer', minutes.toString());
-                console.log(`✅ Export timer saved to Redis: ${minutes} minutes`);
 
                 return res.status(200).json({
                     success: true,
@@ -113,7 +110,6 @@ export default async function handler(req, res) {
                 }
 
                 await redis.set('ai_config', JSON.stringify(data));
-                console.log('✅ AI configuration saved to Redis');
 
                 return res.status(200).json({
                     success: true,
@@ -128,7 +124,6 @@ export default async function handler(req, res) {
                 }
 
                 await redis.set('bot_ia_prompt', data);
-                console.log('✅ AI System Prompt saved to Redis');
 
                 return res.status(200).json({
                     success: true,

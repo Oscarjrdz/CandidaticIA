@@ -17,7 +17,6 @@ export default async function handler(req, res) {
         }
 
         const { query } = body || {};
-        console.log(`🔍 [AI Query] Query received: "${query}"`);
 
         if (!query) {
             return res.status(400).json({ error: 'Falta el parámetro "query"' });
@@ -28,15 +27,12 @@ export default async function handler(req, res) {
         const redis = getRedisClient();
 
         let apiKey = process.env.GEMINI_API_KEY;
-        console.log(`🔍 [AI Query] Env API Key present: ${!!apiKey}`);
 
         if (!apiKey && redis) {
-            console.log(`🔍 [AI Query] Key missing in Env, checking Redis...`);
             const aiConfigJson = await redis.get('ai_config');
             if (aiConfigJson) {
                 const aiConfig = JSON.parse(aiConfigJson);
                 apiKey = aiConfig.geminiApiKey;
-                console.log(`🔍 [AI Query] Found key in Redis: ${!!apiKey}`);
             }
         }
 
@@ -84,7 +80,6 @@ export default async function handler(req, res) {
         }
 
         // 2. Configurar Gemini
-        console.log(`🔍 [AI Query] Initializing Gemini Model...`);
         const genAI = new GoogleGenerativeAI(apiKey);
 
         const systemPrompt = `
@@ -139,7 +134,6 @@ Consulta del usuario: "${query}"
 
         for (const mName of modelsToTry) {
             try {
-                console.log(`🔍 [AI Query] Sending to Gemini (${mName})...`);
                 const model = genAI.getGenerativeModel({
                     model: mName,
                     generationConfig: {
@@ -162,7 +156,6 @@ Consulta del usuario: "${query}"
 
         const response = await result.response;
         const text = response.text();
-        console.log(`🔍 [AI Query] Gemini raw response text:`, text);
 
         // Limpiar el texto si Gemini devuelve markdown ```json ... ```
         const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -171,10 +164,8 @@ Consulta del usuario: "${query}"
         }
 
         const aiResponse = JSON.parse(jsonMatch[0]);
-        console.log('🤖 AI Parsed Query:', JSON.stringify(aiResponse, null, 2));
 
         // 3. Ejecutar la búsqueda en los datos reales
-        console.log(`🔍 [AI Query] Searching records...`);
         const { candidates } = await getCandidates(2000, 0); // Traer hasta 2000 para búsqueda profunda
 
         // Función para calcular edad

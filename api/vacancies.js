@@ -8,7 +8,7 @@
 
 import { randomUUID } from 'crypto';
 
-// Sync to BuilderBot removed as per UltraMsg migration
+// Sync to Candidatic removed as per UltraMsg migration
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
             const { id, purge } = req.query;
 
             // Manual Purge Action
-            // Purge legacy BuilderBot files removed
+            // Purge legacy Candidatic files removed
 
             if (!id) return res.status(400).json({ error: 'Missing id query parameter' });
 
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
             await redis.set(KEY, JSON.stringify(newVacancies));
 
             // TRIGGER SYNC
-            // Sync to BuilderBot removed
+            // Sync to Candidatic removed
 
             return res.status(200).json({ success: true });
         }

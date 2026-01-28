@@ -52,7 +52,6 @@ export default async function handler(req, res) {
 
                 // Check if it NEEDS cleaning (dirty format)
                 if (originalDate && originalDate.length > 5 && !/^\d{2}\/\d{2}\/\d{4}$/.test(originalDate)) {
-                    console.log(`🤖 [Batch Date] Cleaning: "${originalDate}" for ${candidate.whatsapp}...`);
                     try {
                         const cleanedDate = await cleanDateWithAI(originalDate);
 

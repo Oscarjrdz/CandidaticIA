@@ -48,7 +48,6 @@ export default async function handler(req, res) {
         // Return relative path
         const publicUrl = `/api/image?id=${id}`;
 
-        console.log(`📤 [Upload] Stored ${id} (${mime}, ${Math.round(base64Data.length / 1024)}KB)`);
 
         return res.status(200).json({ success: true, url: publicUrl, id, mime });
 

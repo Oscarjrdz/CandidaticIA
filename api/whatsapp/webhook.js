@@ -48,11 +48,9 @@ export default async function handler(req, res) {
             // 🏎️ FERRARI DEDUPLICATION: Atomic Lock (SET NX)
             // This stops retries instantly at the gate.
             if (await isMessageProcessed(msgId)) {
-                console.log(`♻️ Ferrari Block: Duplicate message ${msgId} ignored.`);
                 return res.status(200).send('duplicate_ignored');
             }
 
-            console.log(`📩 Ferrari Motor: Message from ${phone}`);
 
             try {
                 // --- SYSTEM & ADMIN COMMAND FILTER ---
@@ -73,7 +71,6 @@ export default async function handler(req, res) {
                                     const user = users[userIndex];
                                     user.status = 'Active';
                                     await saveUser(user);
-                                    console.log(`✅ User ${targetPhone} activated by admin.`);
 
                                     // Notify Admin
                                     await sendMessage(adminNumber, `✅ Usuario ${user.name} (${targetPhone}) activado con éxito.`);
@@ -94,12 +91,10 @@ export default async function handler(req, res) {
                     }
                     // If it's the admin but not a command, we ALLOW it to fall through 
                     // so the admin can test the Bot.
-                    console.log('🛡️ Admin message detected (not a command) -> Passing to Bot for testing.');
                 }
 
                 // --- AUTH MESSAGE FILTER (PINs & Flows) ---
                 if (/^\d{4}$/.test(body.trim())) {
-                    console.log('🛡️ PIN-like message ignored for history/AI.');
                     return res.status(200).send('pin_ignored');
                 }
 
@@ -109,7 +104,6 @@ export default async function handler(req, res) {
                     const allUsers = await getUsers();
                     const isPending = allUsers.find(u => u.whatsapp.includes(phone) && u.status === 'Pending');
                     if (isPending) {
-                        console.log(`🛡️ Message from PENDING user ${phone} ignored for history/AI.`);
                         return res.status(200).send('pending_user_ignored');
                     }
                 } catch (e) { }

@@ -87,7 +87,6 @@ export default async function handler(req, res) {
 
             // --- AI Logic for Nombre Real ---
             if (updates.nombreReal) {
-                console.log(`🤖 AI cleaning manual name update: ${updates.nombreReal}`);
                 const cleanedName = await cleanNameWithAI(updates.nombreReal);
                 updates.nombreReal = cleanedName;
 
@@ -103,7 +102,6 @@ export default async function handler(req, res) {
 
             // --- AI Logic for Municipio ---
             if (updates.municipio) {
-                console.log(`🤖 AI cleaning manual municipio update: ${updates.municipio}`);
                 const cleanedMunicipio = await cleanMunicipioWithAI(updates.municipio);
                 updates.municipio = cleanedMunicipio;
             }

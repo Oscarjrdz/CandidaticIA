@@ -91,7 +91,6 @@ export default async function handler(req, res) {
                 }
 
                 // SEND MESSAGE
-                console.log(`🚀 Sending scheduled message '${rule.name}' to ${candidate.nombre} (${cleanPhone})`);
 
                 const success = await sendScheduledMessage(cleanPhone, rule.message);
 

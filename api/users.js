@@ -8,7 +8,6 @@ export default async function handler(req, res) {
 
             // Auto-seed if no users exist (Always runs on cold start)
             if (!users || users.length === 0) {
-                console.log('No users found. Seeding default Admin...');
                 const defaultUser = {
                     id: 'user_default_admin',
                     name: 'Oscar Rodriguez',

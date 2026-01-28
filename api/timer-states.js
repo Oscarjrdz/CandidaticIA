@@ -57,7 +57,6 @@ export default async function handler(req, res) {
                 // Set TTL on the set (refreshes on each add)
                 await redis.expire(TIMER_STATES_KEY, TTL_SECONDS);
 
-                console.log(`✅ Timer state set to green for ${whatsapp}`);
 
                 return res.status(200).json({
                     success: true,
@@ -69,7 +68,6 @@ export default async function handler(req, res) {
                 // Remove from green set
                 await redis.srem(TIMER_STATES_KEY, whatsapp);
 
-                console.log(`✅ Timer state set to red for ${whatsapp}`);
 
                 return res.status(200).json({
                     success: true,

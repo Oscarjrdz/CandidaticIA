@@ -12,7 +12,6 @@ export const sendMessage = async (number, message) => {
             return { success: false, error: 'Configuration missing: ULTRAMSG_INSTANCE_ID or TOKEN' };
         }
 
-        console.log(`📤 Sending System Message via UltraMsg to ${number}...`);
 
         const result = await sendUltraMsgMessage(config.instanceId, config.token, number, message);
 

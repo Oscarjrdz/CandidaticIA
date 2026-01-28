@@ -28,9 +28,8 @@ export const generateChatHistoryText = (candidate) => {
     const formattedDate = now.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const formattedTime = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
 
-    // Calculate age with debugging
-    const calculatedAge = calculateAge(candidate.fechaNacimiento);
-    console.log(`[ChatExport] Calculating age for ${candidate.whatsapp}. DOB: ${candidate.fechaNacimiento}, Result: ${calculatedAge}`);
+    // Age calculated via centralized utility
+    const calculatedAge = calculateAge(candidate.fechaNacimiento, candidate.edad);
 
     let header = `HISTORIAL DE CONVERSACIÓN\n`;
     header += `----------------------------------------\n`;
@@ -74,12 +73,11 @@ export const generateChatHistoryText = (candidate) => {
 export const exportChatToFile = async (candidate, credentials) => {
     // Cloud upload disabled for now.
     // This function can be used for local processing or future cloud features.
-    console.log('📤 Cloud export disabled');
     return { success: false, error: 'Cloud export no disponible' };
 };
 
 export const deleteOldChatFile = async (fileId, credentials) => {
-    // Cloud delete from BuilderBot removed.
+    // Cloud delete from Candidatic removed.
     return true;
 };
 
@@ -102,57 +100,17 @@ export const downloadChatHistory = (candidate) => {
 };
 
 /**
- * Calculate age from date of birth
- * @param {string} dob - Date of birth string
- * @returns {string} Age in years or '-'
+ * Local helper for age calculation (internal use for export)
  */
-const calculateAge = (dob) => {
+const calculateAge = (dob, storedAge) => {
+    if (storedAge && storedAge !== '-' && storedAge !== 'INVALID') return `${storedAge} años`;
     if (!dob) return '-';
-    let birthDate = new Date(dob);
-
-    // Intentar parsear si la fecha estándar falló
-    if (isNaN(birthDate.getTime())) {
-        const cleanDob = dob.toLowerCase().trim();
-
-        // 1. Formato "19 de 05 de 1983" o "19 de mayo de 1983"
-        const deRegex = /(\d{1,2})\s+de\s+([a-z0-9áéíóú]+)\s+de\s+(\d{4})/;
-        const match = cleanDob.match(deRegex);
-
-        if (match) {
-            const day = parseInt(match[1]);
-            let month = match[2];
-            const year = parseInt(match[3]);
-            let monthIndex = -1;
-
-            // Si mes es número
-            if (!isNaN(month)) {
-                monthIndex = parseInt(month) - 1;
-            } else {
-                // Si mes es texto
-                const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-                // Buscar coincidencia parcial (ej. "sep" o "septiembre")
-                monthIndex = months.findIndex(m => m.startsWith(month.slice(0, 3)));
-            }
-
-            if (monthIndex >= 0) {
-                birthDate = new Date(year, monthIndex, day);
-            }
-        } else {
-            // 2. Fallback a DD/MM/YYYY o DD-MM-YYYY
-            const parts = dob.split(/[/-]/);
-            if (parts.length === 3) {
-                birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-            }
-        }
-    }
-
+    // Simplified parsing for export context
+    const birthDate = new Date(dob);
     if (isNaN(birthDate.getTime())) return '-';
-
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-    }
-    return isNaN(age) ? '-' : `${age} años`;
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+    return `${age} años`;
 };

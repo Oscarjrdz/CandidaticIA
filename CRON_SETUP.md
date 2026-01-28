@@ -17,9 +17,9 @@ Add these environment variables in Vercel Dashboard → Settings → Environment
 
 The following settings are read from Redis (configured in the frontend Settings section):
 
-- ✅ **BuilderBot Bot ID** - Configured in Settings → Update Bot
-- ✅ **BuilderBot Answer ID** - Configured in Settings → Update Bot  
-- ✅ **BuilderBot API Key** - Configured in Settings → Update Bot
+- ✅ **Candidatic Bot ID** - Configured in Settings → Update Bot
+- ✅ **Candidatic Answer ID** - Configured in Settings → Update Bot  
+- ✅ **Candidatic API Key** - Configured in Settings → Update Bot
 - ✅ **Export Timer** - Configured in Candidatos section
 
 **No need to add these as environment variables!** The cron job reads them from the same database as the frontend.
@@ -88,6 +88,6 @@ View cron execution logs in Vercel:
 - Check Redis connection (REDIS_URL)
 
 ### Upload failures
-- Verify BuilderBot credentials (BOT_ID, ANSWER_ID, API_KEY)
-- Check BuilderBot API status
+- Verify Candidatic credentials (BOT_ID, ANSWER_ID, API_KEY)
+- Check Candidatic API status
 - Review function logs for specific errors

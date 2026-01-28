@@ -3,7 +3,6 @@
 const ADMIN_NUMBER = '5218116038195';
 
 export default async function handler(req, res) {
-    console.log('🔹 /api/auth Request received');
 
     // Config CORS manually just in case
     res.setHeader('Access-Control-Allow-Credentials', true);
@@ -25,13 +24,10 @@ export default async function handler(req, res) {
 
     try {
         // DYNAMIC IMPORTS: Load modules safely inside try-catch
-        console.log('🔹 Loading storage and messenger modules...');
         const { getUsers, saveUser, saveAuthToken, getAuthToken, deleteAuthToken } = await import('./utils/storage.js');
         const { sendMessage } = await import('./utils/messenger.js');
-        console.log('✅ Modules loaded.');
 
         const { action, phone, pin, name, role } = req.body;
-        console.log(`📩 Auth Action: ${action}`, { phone });
 
         if (!phone) {
             return res.status(400).json({ error: 'Phone is required' });
@@ -54,22 +50,18 @@ export default async function handler(req, res) {
         }
         // Caso 3: 13 dígitos (5218116038195) -> Listo.
 
-        console.log(`🔢 Phone Parsing: Input="${phone}" Clean="${cleanPhone}" Final="${whatsappNumber}"`);
 
         // Check storage
         const users = await getUsers();
         // Sensitive log: do not log full user list in prod, just count
-        console.log(`📂 Users in memory: ${users.length}`);
 
         const user = users.find(u => u.whatsapp === whatsappNumber);
 
         if (action === 'request-pin') {
             // ALWAYS Allow PIN generation for any valid number (Existing OR New)
-            console.log(`✅ Proceso de solicitud de PIN para: ${whatsappNumber}`);
 
             // ⚡️ ADMIN BYPASS: Skip SMS for Super Admin
             if (whatsappNumber === ADMIN_NUMBER) {
-                console.log('⚡️ ADMIN LOGIN DETECTADO: Saltando envío de SMS.');
                 // Simplemente guardamos un token dummy (aunque el admin usa '1234' hardcoded en verify)
                 // Esto permite que el frontend proceda sin esperar el SMS.
                 return res.status(200).json({ exists: true, adminBypass: true });
@@ -79,9 +71,7 @@ export default async function handler(req, res) {
             await saveAuthToken(whatsappNumber, generatedPin);
 
             // Send via WhatsApp
-            console.log('📤 Enviando PIN a:', whatsappNumber);
             const msgResult = await sendMessage(whatsappNumber, `🔐 Tu PIN de acceso Candidatic IA es: *${generatedPin}*`);
-            console.log('📤 Resultado envío PIN:', msgResult);
 
             if (!msgResult.success) {
                 console.warn('⚠️ Error enviando PIN:', msgResult);
@@ -140,9 +130,7 @@ export default async function handler(req, res) {
 
             // 1. Notify Admin
             const adminMsg = `🔔 SOLICITUD DE NUEVA CUENTA\n\n👤 Nombre: ${name}\n📱 WhatsApp: ${cleanPhone}\n\nPara activar, responde con:\nsimon${cleanPhone}`;
-            console.log(`📤 Sending Admin Notification to ${ADMIN_NUMBER}...`);
             const adminRes = await sendMessage(ADMIN_NUMBER, adminMsg);
-            console.log('📤 Admin Notif Result:', adminRes);
 
             // 2. Notify User (Confirmation)
             const userMsg = `👋 Hola ${name}, hemos recibido tu solicitud.\n\nTu cuenta está pendiente de aprobación por el administrador. Te avisaremos por aquí cuando quede activa. ⏳`;

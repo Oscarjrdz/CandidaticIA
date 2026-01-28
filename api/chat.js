@@ -3,7 +3,7 @@ import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
 import { sendUltraMsgMessage, getUltraMsgConfig } from './whatsapp/utils.js';
 
-// BuilderBot legacy URLs removed as per UltraMsg migration.
+// Candidatic legacy URLs removed as per UltraMsg migration.
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -66,7 +66,6 @@ export default async function handler(req, res) {
                     // For voice notes, Base64 is much more reliable than URL-fetching on Vercel
                     if (type === 'voice' && base64Data) {
                         deliveryContent = base64Data;
-                        console.log(`📡 [Chat] Using DIRECT BASE64 for voice note (avoiding crawl issues)`);
                     } else {
                         // For images and other media, use the clean static-like URL
                         const urlObj = new URL(mediaUrl, `${protocol}://${host}`);
@@ -74,19 +73,15 @@ export default async function handler(req, res) {
                         if (id) {
                             const ext = type === 'video' ? '.mp4' : '.jpg';
                             deliveryContent = `${protocol}://${host}/api/media/${id}${ext}`;
-                            console.log(`🌐 [Chat] URL delivery for ${type}: ${deliveryContent}`);
                         }
                     }
                 }
 
                 if (base64Data) {
-                    console.log(`📦 [Chat] BASE64 PAYLOAD: Size=${Math.round(base64Data.length / 1024)}KB | Samples=${base64Data.substring(0, 50)}...`);
                 }
 
-                console.log(`📡 [Chat] DELIVERY REQUEST: Type=${type} | FinalURL=${deliveryContent ? (deliveryContent.startsWith('http') ? deliveryContent : 'BASE64') : 'NONE'}`);
 
                 const cleanTo = candidate.whatsapp.replace(/\D/g, '');
-                console.log(`📡 [Chat] Sending to cleaned number: ${cleanTo}`);
 
                 if (type === 'text') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat');
@@ -97,7 +92,6 @@ export default async function handler(req, res) {
                 }
 
                 if (sendResult) {
-                    console.log(`📡 [Chat] UltraMSG Result for ${candidate.whatsapp}:`, JSON.stringify(sendResult));
 
                     if (sendResult.sent === 'true' || sendResult.id) {
                         // PERSIST TO REDIS

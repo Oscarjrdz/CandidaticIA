@@ -24,7 +24,6 @@ const seedUser = async () => {
     try {
         await redis.set(`user:${user.id}`, JSON.stringify(user));
         await redis.zadd('users:list', Date.now(), user.id);
-        console.log('✅ User Oscar rodriguez seeded successfully');
     } catch (error) {
         console.error('❌ Error seeding user:', error);
     } finally {

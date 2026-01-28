@@ -7,7 +7,6 @@
  */
 export const validateWebhookSecret = (req) => {
     // BYPASS: Validación de secreto deshabilitada temporalmente por solicitud del usuario
-    console.log('⚠️ Validación de webhook secret está DESHABILITADA');
     return true;
 
     /* 

@@ -6,7 +6,7 @@ import { substituteVariables } from '../utils/shortcuts.js';
  * Runs every minute to send pending/scheduled messages in batches.
  */
 export default async function handler(req, res) {
-    // Basic security: Allow Bearer (Cron) or BuilderBot API Key (Manual/Admin)
+    // Basic security: Allow Bearer (Cron) or Candidatic API Key (Manual/Admin)
     const authHeader = req.headers.authorization;
     const providedApiKey = req.headers['x-api-token'];
 

@@ -50,7 +50,6 @@ export default async function handler(req, res) {
                 createdAt: new Date().toISOString()
             };
 
-            console.log(`🆕 Adding new category: ${newCategory.name} (${newCategory.id})`);
             categories.unshift(newCategory);
             await redis.set(KEY, JSON.stringify(categories));
 

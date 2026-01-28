@@ -47,7 +47,6 @@ export default async function handler(req, res) {
         cleanKey = cleanKey.trim();
 
         const maskedKey = `${cleanKey.substring(0, 6)}...${cleanKey.substring(cleanKey.length - 4)}`;
-        console.log(`🔌 [AI Validation] Testing key: ${maskedKey}`);
 
         const genAI = new GoogleGenerativeAI(cleanKey);
 
@@ -66,13 +65,11 @@ export default async function handler(req, res) {
         let allErrors = [];
         for (const modelName of modelsToTry) {
             try {
-                console.log(`🔌 [AI Validation] Testing: ${modelName}`);
                 const model = genAI.getGenerativeModel({ model: modelName });
                 const result = await model.generateContent("OK");
                 const response = await result.response;
                 text = response.text();
                 successModel = modelName;
-                console.log(`✅ [AI Validation] Success with: ${modelName}`);
                 break;
             } catch (e) {
                 const errorDetail = `${modelName}: ${e.message}`;
@@ -90,7 +87,6 @@ export default async function handler(req, res) {
             throw new Error(`Detalles: ${allErrors.join(' | ')}`);
         }
 
-        console.log(`✅ [AI Validation] Success with: ${successModel}`);
 
         return res.status(200).json({
             success: true,

@@ -18,7 +18,6 @@ export default async function handler(req, res) {
         }
 
         const cleanPhone = phone.replace(/\D/g, '');
-        console.log(`🧪 Sending TEST message to ${cleanPhone}: "${message}"`);
 
         await sendUltraMsgMessage(config.instanceId, config.token, cleanPhone, message);
 

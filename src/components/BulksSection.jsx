@@ -196,7 +196,6 @@ const BulksSection = ({ showToast }) => {
         if (isManualSelection) {
             if (allCandidates.length > 0 && newCampaign.recipients.length > 0) {
                 const manualSubset = allCandidates.filter(c => newCampaign.recipients.includes(c.id));
-                console.log('Manual subset found:', manualSubset.length);
                 setFilteredCandidates(manualSubset);
             }
             return;

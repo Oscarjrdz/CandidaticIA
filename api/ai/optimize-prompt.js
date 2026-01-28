@@ -53,7 +53,6 @@ Instrucción optimizada:`;
         let optimizedPrompt = '';
         for (const mName of modelsToTry) {
             try {
-                console.log(`📡 [Optimizer] Trying model ${mName}...`);
                 const model = genAI.getGenerativeModel({ model: mName });
                 const result = await model.generateContent(prompt);
                 const response = await result.response;
@@ -70,7 +69,6 @@ Instrucción optimizada:`;
             return res.status(500).json({ success: false, error: 'Todos los modelos de IA fallaron. Intenta más tarde.' });
         }
 
-        console.log(`✨ [Optimizer] Result: ${optimizedPrompt}`);
         return res.status(200).json({ success: true, optimizedPrompt });
     } catch (error) {
         console.error('❌ Optimize Prompt Final Error:', error);

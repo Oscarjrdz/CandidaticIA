@@ -1,7 +1,7 @@
 /**
  * Storage Utility - Redis (ioredis) Implementation
- * LEGACY DATA PATTERN RESTORED: Distributed Keys (ZSET + String)
- * + AUTH ENABLED
+ * Pattern: Distributed Keys (ZSET + String)
+ * AUTH ENABLED
  */
 
 import Redis from 'ioredis';
@@ -13,7 +13,6 @@ const getClient = () => {
     if (!redis) {
         if (process.env.REDIS_URL) {
             try {
-                console.log('🔌 Connecting to Redis via REDIS_URL...');
                 const isTLS = process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss://');
                 redis = new Redis(process.env.REDIS_URL, {
                     retryStrategy: (times) => Math.min(times * 50, 2000),
@@ -169,7 +168,7 @@ export const deleteAuthToken = async (phone) => {
  * CANDIDATES (Distributed)
  * ==========================================
  */
-// Formula 1 Steering: Native Redis Pagination (Page size 100)
+// Native Redis Pagination (Page size 100)
 export const getCandidates = async (limit = 100, offset = 0, search = '') => {
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
@@ -178,7 +177,18 @@ export const getCandidates = async (limit = 100, offset = 0, search = '') => {
     // For now, if search is empty, we use the ultra-fast F1 Steering.
     if (!search) {
         const stop = offset + limit - 1;
-        const candidates = await getDistributedItems(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, offset, stop);
+        const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, offset, stop);
+        if (!ids || ids.length === 0) return { candidates: [], total: await client.zcard(KEYS.CANDIDATES_LIST) };
+
+        // Optimized Pipeline Loading
+        const pipeline = client.pipeline();
+        ids.forEach(id => pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+        const results = await pipeline.exec();
+
+        const candidates = results
+            .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
+            .filter(Boolean);
+
         const total = await client.zcard(KEYS.CANDIDATES_LIST);
         return { candidates, total };
     }
@@ -203,9 +213,8 @@ export const saveCandidate = async (candidate) => {
     if (!candidate.id) {
         candidate.id = `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
-    console.log(`💾 [Storage] Saving candidate ${candidate.id} (${candidate.whatsapp})...`);
 
-    // Ferrari Index: O(1) Hash Map
+    // Indexing for O(1) Lookups
     const client = getRedisClient();
     if (client && candidate.whatsapp) {
         const cleanPhone = candidate.whatsapp.replace(/\D/g, '');
@@ -232,7 +241,7 @@ export const getCandidateByPhone = async (phone) => {
         if (!id) {
             const last10 = cleanPhone.slice(-10);
             if (last10.length === 10) {
-                // Sniper tries: 10 digits, 52+10, 521+10
+                // Match tries: 10 digits, 52+10, 521+10
                 const variations = [last10, '52' + last10, '521' + last10];
                 for (const v of variations) {
                     if (v === cleanPhone) continue; // Already tried
@@ -261,7 +270,7 @@ export const getCandidateById = async (id) => {
     return data ? JSON.parse(data) : null;
 };
 
-// Ferrari Lookup: O(1) Redis Hash (No scanning required)
+// Optimized Lookup: O(1) Redis Hash
 export const getCandidateIdByPhone = async (phone) => {
     const target = phone.replace(/\D/g, '');
     const client = getRedisClient();
@@ -286,7 +295,7 @@ export const getCandidateIdByPhone = async (phone) => {
     return match ? match.id : null;
 };
 
-// Ferrari Deduplication: Atomic SET NX (No race conditions)
+// Deduplication: Atomic SET NX
 export const isMessageProcessed = async (msgId) => {
     const client = getRedisClient();
     if (!client || !msgId) return false;
@@ -306,7 +315,6 @@ export const unlockMessage = async (msgId) => {
     if (!client || !msgId) return;
     const key = `${KEYS.DEDUPE_PREFIX}${msgId}`;
     await client.del(key);
-    console.log(`🔓 [Storage] Message ${msgId} unlocked for retry.`);
 };
 
 export const updateCandidate = async (id, data) => {
@@ -401,7 +409,6 @@ export const getUsers = async () => {
         };
         users.push(defaultAdmin);
         await client.set(KEYS.USERS, JSON.stringify(users));
-        console.log('👤 Admin seeded automatically');
     } else {
         // Force Active status/Role if exists
         const current = users[adminIndex];
@@ -414,7 +421,6 @@ export const getUsers = async () => {
                 status: 'Active'
             };
             await client.set(KEYS.USERS, JSON.stringify(users));
-            console.log('👤 Admin status/role/pin force-updated');
         }
     }
 
@@ -628,13 +634,11 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
         const raw = await client.lrange(key, 0, -1);
         const messages = raw.map(r => JSON.parse(r));
 
-        console.log(`🔍 [Storage] updateMessageStatus: searching for ${ultraMsgId} in ${messages.length} messages...`);
 
         const index = messages.findIndex(m => m.ultraMsgId === ultraMsgId || m.id === ultraMsgId);
         if (index !== -1) {
             messages[index] = { ...messages[index], status, ...additionalData };
             await client.lset(key, index, JSON.stringify(messages[index]));
-            console.log(`✅ [Storage] updateMessageStatus: Key ${key} Index ${index} updated to ${status}`);
             return true;
         } else {
             console.warn(`⚠️ [Storage] updateMessageStatus: Message ${ultraMsgId} NOT FOUND in ${key}`);

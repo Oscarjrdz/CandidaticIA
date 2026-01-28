@@ -161,9 +161,7 @@ const PostMakerSection = () => {
 
         setIsUploading(true);
         try {
-            console.log('Compressing image...');
             const compressedBase64 = await resizeImage(file);
-            console.log('Uploading payload size:', compressedBase64.length);
 
             const res = await fetch('/api/upload', {
                 method: 'POST',

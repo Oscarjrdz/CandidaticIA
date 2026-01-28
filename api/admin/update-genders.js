@@ -12,7 +12,6 @@ export default async function handler(req, res) {
     }
 
     try {
-        console.log('🚀 Triggering Global Gender Update (v1.4)...');
         const { candidates: allCandidates } = await getCandidates(2000, 0);
 
         // Sort: process those with names first

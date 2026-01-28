@@ -16,7 +16,6 @@ export default async function handler(req, res) {
         }
 
         const { query, context } = body || {};
-        console.log(`🔍 [AI Action] Incoming Request:`, { query, contextCount: context?.candidateCount });
 
         if (!query) {
             console.error('❌ [AI Action] Missing query');
@@ -35,7 +34,6 @@ export default async function handler(req, res) {
                 if (aiConfigJson) {
                     const aiConfig = JSON.parse(aiConfigJson);
                     apiKey = aiConfig.geminiApiKey;
-                    console.log(`🔍 [AI Action] Found key in Redis`);
                 }
             } catch (e) {
                 console.warn('⚠️ [AI Action] Redis check failed:', e);
@@ -107,11 +105,9 @@ Consulta del usuario: "${query}"
 
         for (const mName of modelsToTry) {
             try {
-                console.log(`🔍 [AI Action] Sending to Gemini (${mName})...`);
                 const model = genAI.getGenerativeModel({ model: mName });
                 result = await model.generateContent(systemPrompt);
                 successModel = mName;
-                console.log(`✅ [AI Action] Success with ${mName}`);
                 break;
             } catch (e) {
                 lastError = e.message;
@@ -126,7 +122,6 @@ Consulta del usuario: "${query}"
 
         const response = await result.response;
         const text = response.text();
-        console.log('🤖 [AI Action] Raw Output:', text);
 
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
@@ -134,7 +129,6 @@ Consulta del usuario: "${query}"
         }
 
         const aiResponse = JSON.parse(jsonMatch[0]);
-        console.log('🤖 AI Action Response:', aiResponse);
 
         return res.status(200).json({
             success: true,

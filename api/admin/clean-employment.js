@@ -49,7 +49,6 @@ export default async function handler(req, res) {
 
                 // Check if it NEEDS cleaning (not "Sí" or "No")
                 if (originalStatus && originalStatus.length > 0 && originalStatus !== 'Sí' && originalStatus !== 'No') {
-                    console.log(`🤖 [Batch Employment] Cleaning: "${originalStatus}" for ${candidate.whatsapp}...`);
                     try {
                         const cleanedStatus = await cleanEmploymentStatusWithAI(originalStatus);
 

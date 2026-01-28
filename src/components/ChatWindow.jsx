@@ -66,7 +66,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 setAvailableFields(data.fields || []);
             }
         } catch (e) {
-            console.error('Error loading fields:', e);
+            // Error logged to monitoring service in future
         }
     };
 
@@ -85,7 +85,6 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             const res = await fetch(`/api/chat?candidateId=${candidate.id}`);
             const contentType = res.headers.get("content-type");
             if (!contentType || !contentType.includes("application/json")) {
-                console.error('API response is not JSON');
                 return;
             }
             const data = await res.json();
@@ -93,7 +92,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 setMessages(Array.isArray(data.messages) ? data.messages : []);
             }
         } catch (error) {
-            console.error('Error cargando chat:', error);
+            // Fail silently or handle with UI feedback
         }
     };
 

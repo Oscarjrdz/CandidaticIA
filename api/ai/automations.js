@@ -30,7 +30,6 @@ export default async function handler(req, res) {
                 updatedAt: new Date().toISOString()
             };
 
-            console.log('📝 Saving AI automation:', automation.id);
             const saved = await saveAIAutomation(automation);
             return res.status(200).json({ success: true, automation: saved });
         }

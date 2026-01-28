@@ -18,7 +18,6 @@ NUNCA CUENTES CHISTES, mantén un tono profesional.
 
 export const processMessage = async (candidateId, incomingMessage) => {
     try {
-        console.log(`🧠 [AI Agent] Processing message for candidate ${candidateId}...`);
 
         const redis = getRedisClient();
 
@@ -30,7 +29,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
             if (rawData) {
                 candidateData = JSON.parse(rawData);
             } else {
-                console.log(`🔍 [AI Agent] Candidate ${candidateId} not in cache, fetching from DB...`);
                 const { getCandidateById } = await import('../utils/storage.js');
                 candidateData = await getCandidateById(candidateId);
             }
@@ -48,7 +46,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
         let displayText = '';
 
         if (typeof incomingMessage === 'object' && incomingMessage?.type === 'audio') {
-            console.log(`🎙️ [AI Agent] Processing AUDIO from ${incomingMessage.url}...`);
             const { downloadMedia } = await import('../whatsapp/utils.js');
             const media = await downloadMedia(incomingMessage.url);
 
@@ -248,7 +245,6 @@ ${dnaLines}
         if (!result) return `ERROR: Gemini failure - ${lastError}`;
 
         const responseText = result.response.text();
-        console.log(`🤖 [AI Agent] Generated (${successModel}) for input: "${displayText}"`);
 
         // Delivery
         const config = await getUltraMsgConfig();
@@ -258,7 +254,6 @@ ${dnaLines}
             while (retries >= 0) {
                 try {
                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
-                    console.log(`✅ [Ferrari Shield] Delivered to ${candidateData.whatsapp}`);
                     break;
                 } catch (err) {
                     if (retries === 0) throw err;

@@ -65,7 +65,6 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
 
-        console.log(`🚀 [UltraMSG] SEND: ${endpoint} -> ${to} (${isHttp ? 'URL' : 'TEXT'})`);
 
         const redis = getRedisClient();
         const debugKey = `debug:ultramsg:${to}`;
@@ -80,7 +79,6 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 validateStatus: (status) => true // Capture all status codes
             });
             const duration = Date.now() - startTime;
-            console.log(`✅ [UltraMSG] RESPONSE (${duration}ms): Status=${response.status} | Data=`, JSON.stringify(response.data));
 
             if (redis) {
                 const sanitizedPayload = { ...payload };
@@ -158,7 +156,6 @@ export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
             formattedChatId = `${cleanPhone}@c.us`;
         }
 
-        console.log(`📖 [UltraMsg] Marking chat ${formattedChatId} as read...`);
         const url = `https://api.ultramsg.com/${instanceId}/chats/read`;
 
         const response = await axios.post(url, {
@@ -172,7 +169,6 @@ export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
             timeout: 5000 // 5s timeout
         });
 
-        console.log(`✅ [UltraMsg] Mark as read success for ${formattedChatId}:`, response.data);
         return response.data;
     } catch (error) {
         const errorData = error.response?.data;
@@ -183,7 +179,6 @@ export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
 
 export const downloadMedia = async (url) => {
     try {
-        console.log(`📥 [UltraMsg] Downloading media from ${url}...`);
         const response = await axios.get(url, { responseType: 'arraybuffer' });
         const buffer = Buffer.from(response.data);
         return {

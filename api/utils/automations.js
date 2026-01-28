@@ -33,7 +33,6 @@ export async function processBotResponse(candidateId, botMessage) {
                 if (match && match[1]) {
                     const extractedValue = match[1].trim().replace(/[*_]/g, '');
                     updateData[rule.field] = extractedValue;
-                    console.log(`🔍 [Automations] Extracted ${rule.field}: "${extractedValue}"`);
                 }
             } catch (err) {
                 console.warn(`⚠️ [Automations] Invalid regex in rule ${rule.id}:`, err.message);
@@ -42,47 +41,38 @@ export async function processBotResponse(candidateId, botMessage) {
 
         // 3. Apply basic updates (Raw extraction)
         if (Object.keys(updateData).length > 0) {
-            console.log(`💾 [Automations] Saving raw update for ${candidateId}:`, updateData);
             await updateCandidate(candidateId, updateData);
 
             // 4. AI Cleaning/Detection for specific fields
             if (updateData.nombreReal) {
                 extraTasks.push((async () => {
-                    console.log(`🤖 [Automations] Cleaning name: "${updateData.nombreReal}"...`);
                     const cleaned = await cleanNameWithAI(updateData.nombreReal);
                     const gender = await detectGender(cleaned);
                     await updateCandidate(candidateId, {
                         nombreReal: cleaned,
                         genero: gender !== 'Desconocido' ? gender : undefined
                     });
-                    console.log(`✅ [Automations] Name cleaned: "${cleaned}" (${gender})`);
                 })());
             }
 
             if (updateData.municipio) {
                 extraTasks.push((async () => {
-                    console.log(`🤖 [Automations] Cleaning municipio: "${updateData.municipio}"...`);
                     const cleaned = await cleanMunicipioWithAI(updateData.municipio);
                     await updateCandidate(candidateId, { municipio: cleaned });
-                    console.log(`✅ [Automations] Municipio cleaned: "${cleaned}"`);
                 })());
             }
 
             if (updateData.categoria) {
                 extraTasks.push((async () => {
-                    console.log(`🤖 [Automations] Cleaning categoria: "${updateData.categoria}"...`);
                     const cleaned = await cleanCategoryWithAI(updateData.categoria);
                     await updateCandidate(candidateId, { categoria: cleaned });
-                    console.log(`✅ [Automations] Categoria cleaned: "${cleaned}"`);
                 })());
             }
 
             if (updateData.tieneEmpleo) {
                 extraTasks.push((async () => {
-                    console.log(`🤖 [Automations] Cleaning employment status: "${updateData.tieneEmpleo}"...`);
                     const cleaned = await cleanEmploymentStatusWithAI(updateData.tieneEmpleo);
                     await updateCandidate(candidateId, { tieneEmpleo: cleaned });
-                    console.log(`✅ [Automations] Employment status cleaned: "${cleaned}"`);
                 })());
             }
 
@@ -90,11 +80,9 @@ export async function processBotResponse(candidateId, botMessage) {
                 const targetField = updateData.fechaNacimiento ? 'fechaNacimiento' : 'fecha';
                 const originalValue = updateData[targetField];
                 extraTasks.push((async () => {
-                    console.log(`🤖 [Automations] Cleaning date: "${originalValue}"...`);
                     const cleaned = await cleanDateWithAI(originalValue);
                     if (cleaned !== 'INVALID') {
                         await updateCandidate(candidateId, { [targetField]: cleaned });
-                        console.log(`✅ [Automations] Date cleaned: "${cleaned}"`);
                     } else {
                         console.warn(`⚠️ [Automations] Invalid date detected: "${originalValue}"`);
                     }
@@ -103,11 +91,9 @@ export async function processBotResponse(candidateId, botMessage) {
 
             // Wait for all AI tasks to finish to ensure consistency in serverless
             if (extraTasks.length > 0) {
-                console.log(`⏳ [Automations] Waiting for ${extraTasks.length} AI cleaning tasks...`);
                 await Promise.all(extraTasks).catch(err => console.error('❌ [Automations] AI tasks error:', err));
             }
         } else {
-            console.log('ℹ️ [Automations] No matching patterns found in bot response.');
         }
 
     } catch (error) {

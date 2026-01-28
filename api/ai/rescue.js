@@ -26,7 +26,6 @@ export default async function handler(req, res) {
                 if (savedOffset) o = parseInt(savedOffset);
             }
 
-            console.log(`🚀 [Rescue] Starting Smart Batch: Offset ${o}, Limit ${l}, Auto: ${isAuto}`);
 
             // Fetch a larger window to find 10 "incomplete" candidates efficiently
             const windowSize = 50;

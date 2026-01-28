@@ -7,8 +7,8 @@ export default async function handler(req, res) {
     if (key !== 'oscar_debug_2026') return res.status(401).json({ error: 'Unauthorized' });
 
     try {
-        const { syncCategoriesToBuilderBot } = await import('../utils/assistant-sync.js');
-        await syncCategoriesToBuilderBot();
+        const { syncCategoriesToCandidatic } = await import('../utils/assistant-sync.js');
+        await syncCategoriesToCandidatic();
 
         return res.status(200).json({
             success: true,
