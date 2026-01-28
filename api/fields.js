@@ -8,10 +8,13 @@ export default async function handler(req, res) {
             const DEFAULT_FIELDS = [
                 { value: 'nombreReal', label: 'Nombre Real' },
                 { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
+                { value: 'edad', label: 'Edad' },
+                { value: 'sexo', label: 'Género' },
                 { value: 'municipio', label: 'Municipio' },
                 { value: 'categoria', label: 'Categoría' },
                 { value: 'tieneEmpleo', label: 'Tiene empleo' },
-                { value: 'escolaridad', label: 'Escolaridad' }
+                { value: 'escolaridad', label: 'Escolaridad' },
+                { value: 'foto', label: 'Foto (URL)' }
             ];
 
             const customFieldsJson = await redis.get('custom_fields');

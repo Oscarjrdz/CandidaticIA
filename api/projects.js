@@ -1,5 +1,8 @@
-
-import { saveProject, getProjects, getProjectById, deleteProject, addCandidateToProject, removeCandidateFromProject, getProjectCandidates } from './utils/storage.js';
+import {
+    saveProject, getProjects, getProjectById, deleteProject,
+    addCandidateToProject, removeCandidateFromProject, getProjectCandidates,
+    addProjectSearch, getProjectSearches
+} from './utils/storage.js';
 
 export default async function handler(req, res) {
     const { method } = req;
@@ -12,6 +15,10 @@ export default async function handler(req, res) {
                 const candidates = await getProjectCandidates(id);
                 return res.status(200).json({ success: true, candidates });
             }
+            if (id && req.query.view === 'searches') {
+                const searches = await getProjectSearches(id);
+                return res.status(200).json({ success: true, searches });
+            }
             if (id) {
                 const project = await getProjectById(id);
                 return res.status(200).json({ success: true, project });
@@ -20,15 +27,26 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, projects });
         }
 
-        // POST: Create/Update Project OR Link Candidate
+        // POST: Create/Update Project OR Link Candidate OR Save Search
         if (method === 'POST') {
-            const { action, name, description, projectId, candidateId: bodyCandId } = req.body;
+            const {
+                action, name, description, projectId,
+                candidateId: bodyCandId, assignedUsers,
+                query, resultsCount, origin
+            } = req.body;
+
+            if (action === 'saveSearch') {
+                const pid = projectId || id;
+                if (!pid || !query) return res.status(400).json({ success: false, error: 'Project ID and Query required' });
+                await addProjectSearch(pid, { query, resultsCount });
+                return res.status(200).json({ success: true });
+            }
 
             if (action === 'link') {
                 const pid = projectId || id;
                 const cid = bodyCandId || candidateId;
                 if (!pid || !cid) return res.status(400).json({ success: false, error: 'Project ID and Candidate ID required' });
-                await addCandidateToProject(pid, cid);
+                await addCandidateToProject(pid, cid, origin ? { origin } : null);
                 return res.status(200).json({ success: true, message: 'Candidate linked to project' });
             }
 

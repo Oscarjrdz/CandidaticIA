@@ -66,13 +66,11 @@ const KEYS = {
     PROJECT_PREFIX: 'project:',
     PROJECTS_LIST: 'projects:all',
     PROJECT_CANDIDATES_PREFIX: 'project:candidates:',
+    PROJECT_SEARCHES_PREFIX: 'project:searches:',
+    PROJECT_CANDIDATE_METADATA_PREFIX: 'project:cand_meta:',
 
     // AI Automations
     AI_AUTOMATIONS: 'ai:automations:list',
-
-    // Projects
-    PROJECTS: 'candidatic_projects',
-    PROJECT_CANDIDATES_PREFIX: 'project_candidates:'
 };
 
 
@@ -787,22 +785,17 @@ export const deleteProject = async (id) => {
 };
 
 /**
- * Add Candidate to Project (Set based for uniqueness)
- */
-export const addCandidateToProject = async (projectId, candidateId) => {
-    const client = getRedisClient();
-    if (!client) return false;
-    await client.sadd(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
-    return true;
-};
-
-/**
  * Remove Candidate from Project
  */
 export const removeCandidateFromProject = async (projectId, candidateId) => {
     const client = getRedisClient();
     if (!client) return false;
-    await client.srem(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
+
+    const pipeline = client.pipeline();
+    pipeline.srem(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
+    pipeline.hdel(`${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${projectId}`, candidateId);
+
+    await pipeline.exec();
     return true;
 };
 
@@ -817,7 +810,62 @@ export const getProjectCandidates = async (projectId) => {
     if (!ids.length) return [];
 
     const keys = ids.map(id => `${KEYS.CANDIDATE_PREFIX}${id}`);
-    const data = await client.mget(...keys);
+    const metadataKey = `${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${projectId}`;
 
-    return data.map(d => d ? JSON.parse(d) : null).filter(Boolean);
+    // Multi-get candidates and their metadata
+    const pipeline = client.pipeline();
+    keys.forEach(k => pipeline.get(k));
+    pipeline.hgetall(metadataKey);
+
+    const results = await pipeline.exec();
+    const metadata = results.pop()[1] || {};
+    const candidates = results.map(([err, d]) => d ? JSON.parse(d) : null).filter(Boolean);
+
+    // Attach metadata (like origin) to each candidate
+    return candidates.map(c => ({
+        ...c,
+        projectMetadata: metadata[c.id] ? JSON.parse(metadata[c.id]) : {}
+    }));
+};
+
+/**
+ * Project Search History
+ */
+export const addProjectSearch = async (projectId, searchData) => {
+    const client = getRedisClient();
+    if (!client) return false;
+    const key = `${KEYS.PROJECT_SEARCHES_PREFIX}${projectId}`;
+    await client.lpush(key, JSON.stringify({
+        ...searchData,
+        timestamp: new Date().toISOString()
+    }));
+    await client.ltrim(key, 0, 49); // Keep last 50 searches
+    return true;
+};
+
+export const getProjectSearches = async (projectId) => {
+    const client = getRedisClient();
+    if (!client) return [];
+    const data = await client.lrange(`${KEYS.PROJECT_SEARCHES_PREFIX}${projectId}`, 0, -1);
+    return data.map(d => JSON.parse(d));
+};
+
+/**
+ * Add Candidate to Project with Metadata (Origin)
+ */
+export const addCandidateToProject = async (projectId, candidateId, metadata = null) => {
+    const client = getRedisClient();
+    if (!client) return false;
+
+    const pipeline = client.pipeline();
+    pipeline.sadd(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
+    if (metadata) {
+        pipeline.hset(
+            `${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${projectId}`,
+            candidateId,
+            JSON.stringify({ ...metadata, linkedAt: new Date().toISOString() })
+        );
+    }
+    await pipeline.exec();
+    return true;
 };

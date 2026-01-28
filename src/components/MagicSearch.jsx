@@ -92,7 +92,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
             } else {
                 const result = await aiQuery(finalQuery);
                 if (result.success) {
-                    onResults(result.candidates, result.ai);
+                    onResults(result.candidates, result.ai, finalQuery);
                     handleClose();
                     showToast(`IA encontró ${result.count} candidatos`, 'success');
                 } else {

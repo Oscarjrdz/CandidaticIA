@@ -3,17 +3,19 @@ import React, { useState, useEffect } from 'react';
 import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     Calendar, MapPin, MessageSquare, ExternalLink, FolderKanban,
-    Sparkles
+    Sparkles, History, User, Clock
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import MagicSearch from './MagicSearch';
+import ChatWindow from './ChatWindow';
 
 const ProjectsSection = ({ showToast }) => {
     const [projects, setProjects] = useState([]);
     const [activeProject, setActiveProject] = useState(null);
     const [projectCandidates, setProjectCandidates] = useState([]);
+    const [projectSearches, setProjectSearches] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
@@ -26,7 +28,12 @@ const ProjectsSection = ({ showToast }) => {
     // AI Search integration
     const [showAISearch, setShowAISearch] = useState(false);
     const [searchPreview, setSearchPreview] = useState([]);
+    const [activeQuery, setActiveQuery] = useState('');
     const [isBatchLinking, setIsBatchLinking] = useState(false);
+
+    // Chat Integration
+    const [selectedCandidate, setSelectedCandidate] = useState(null);
+    const [isChatOpen, setIsChatOpen] = useState(false);
 
     useEffect(() => {
         fetchProjects();
@@ -36,7 +43,9 @@ const ProjectsSection = ({ showToast }) => {
     useEffect(() => {
         if (activeProject) {
             fetchProjectCandidates(activeProject.id);
-            setSearchPreview([]); // Reset preview when changing project
+            fetchProjectSearches(activeProject.id);
+            setSearchPreview([]);
+            setActiveQuery('');
         }
     }, [activeProject]);
 
@@ -64,6 +73,14 @@ const ProjectsSection = ({ showToast }) => {
             if (data.success) setProjectCandidates(data.candidates);
         } catch (e) { console.error('Error fetching candidates:', e); }
         finally { setLoading(false); }
+    };
+
+    const fetchProjectSearches = async (id) => {
+        try {
+            const res = await fetch(`/api/projects?id=${id}&view=searches`);
+            const data = await res.json();
+            if (data.success) setProjectSearches(data.searches);
+        } catch (e) { console.error('Error fetching searches:', e); }
     };
 
     const handleCreateProject = async () => {
@@ -110,9 +127,27 @@ const ProjectsSection = ({ showToast }) => {
         } catch (e) { console.error('Error unlinking candidate:', e); }
     };
 
-    const handleAIResults = (candidates) => {
+    const handleAIResults = async (candidates, aiResponse, query) => {
         setSearchPreview(candidates);
+        setActiveQuery(query);
         setShowAISearch(false);
+
+        // Track this search in the backend
+        if (activeProject) {
+            try {
+                await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'saveSearch',
+                        projectId: activeProject.id,
+                        query: query,
+                        resultsCount: candidates.length
+                    })
+                });
+                fetchProjectSearches(activeProject.id);
+            } catch (e) { console.error('Error saving search history:', e); }
+        }
     };
 
     const handleBatchLink = async () => {
@@ -120,6 +155,7 @@ const ProjectsSection = ({ showToast }) => {
         setIsBatchLinking(true);
         let count = 0;
         try {
+            // Sequential to avoid race conditions in metadata HASH
             for (const cand of searchPreview) {
                 const res = await fetch('/api/projects', {
                     method: 'POST',
@@ -127,7 +163,8 @@ const ProjectsSection = ({ showToast }) => {
                     body: JSON.stringify({
                         action: 'link',
                         projectId: activeProject.id,
-                        candidateId: cand.id
+                        candidateId: cand.id,
+                        origin: activeQuery
                     })
                 });
                 const data = await res.json();
@@ -135,6 +172,7 @@ const ProjectsSection = ({ showToast }) => {
             }
             if (showToast) showToast(`${count} candidatos vinculados al proyecto`, 'success');
             setSearchPreview([]);
+            setActiveQuery('');
             fetchProjectCandidates(activeProject.id);
         } catch (e) {
             console.error('Error batch linking:', e);
@@ -152,26 +190,53 @@ const ProjectsSection = ({ showToast }) => {
         );
     };
 
+    const handleOpenChat = (candidate) => {
+        setSelectedCandidate(candidate);
+        setIsChatOpen(true);
+    };
+
+    const calculateAge = (bornDate) => {
+        if (!bornDate) return null;
+        try {
+            const birthDate = new Date(bornDate);
+            if (isNaN(birthDate.getTime())) return null;
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
+        } catch (e) { return null; }
+    };
+
     return (
         <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900/50 p-6 space-y-6">
-            {/* MagicSearch Instance */}
             <MagicSearch
                 isOpenProp={showAISearch}
                 onClose={() => setShowAISearch(false)}
                 onResults={handleAIResults}
                 showToast={showToast}
-                customTitle="Buscador Inteligente de Proyecto"
+                customTitle="Buscador Inteligente"
                 customPlaceholder="¿A quién buscamos para este búnker?"
             />
+
+            {selectedCandidate && (
+                <ChatWindow
+                    isOpen={isChatOpen}
+                    onClose={() => setIsChatOpen(false)}
+                    candidate={selectedCandidate}
+                />
+            )}
 
             {/* Header */}
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 tracking-tighter">
                         <FolderKanban className="w-8 h-8 text-blue-500" />
-                        Gestión de Proyectos
+                        Proyectos
                     </h2>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">Organiza candidatos y asigna responsables por proyecto</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">Gestiona y organiza talento en silos estratégicos</p>
                 </div>
                 <Button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20">
                     <FolderPlus className="w-5 h-5" />
@@ -192,8 +257,8 @@ const ProjectsSection = ({ showToast }) => {
                                 key={project.id}
                                 onClick={() => setActiveProject(project)}
                                 className={`group p-4 rounded-2xl cursor-pointer border transition-all duration-300 ${activeProject?.id === project.id
-                                        ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20 scale-[1.02]'
-                                        : 'bg-white border-slate-100 dark:bg-slate-800 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
+                                    ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20 scale-[1.02]'
+                                    : 'bg-white border-slate-100 dark:bg-slate-800 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
                                     }`}
                             >
                                 <div className="flex justify-between items-start">
@@ -208,14 +273,14 @@ const ProjectsSection = ({ showToast }) => {
                                     <button
                                         onClick={(e) => handleDeleteProject(project.id, e)}
                                         className={`p-1.5 rounded-lg transition-colors ${activeProject?.id === project.id
-                                                ? 'text-blue-100 hover:bg-white/20'
-                                                : 'text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100'
+                                            ? 'text-blue-100 hover:bg-white/20'
+                                            : 'text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100'
                                             }`}
                                     >
                                         <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
-                                <div className="mt-3 flex items-center gap-2">
+                                <div className="mt-3 flex items-center justify-between">
                                     <div className="flex -space-x-2">
                                         {(project.assignedUsers || []).slice(0, 3).map((uId, idx) => (
                                             <div key={idx} className="w-5 h-5 rounded-full border border-white bg-blue-400 dark:bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white shadow-sm">
@@ -237,58 +302,75 @@ const ProjectsSection = ({ showToast }) => {
                     {activeProject ? (
                         <div className="space-y-6 h-full flex flex-col">
                             {/* Project Header */}
-                            <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700 shadow-xl shadow-slate-200/10 flex justify-between items-center animate-in fade-in slide-in-from-top-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center">
-                                        <FolderKanban className="w-6 h-6 text-blue-600" />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h2 className="text-xl font-bold dark:text-white tracking-tighter">{activeProject.name}</h2>
-                                            <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Activo</span>
+                            <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700 shadow-xl shadow-slate-200/10 flex flex-col gap-4 animate-in fade-in slide-in-from-top-4">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center">
+                                            <FolderKanban className="w-6 h-6 text-blue-600" />
                                         </div>
-                                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">{activeProject.description || 'Gestión estratégica de talento'}</p>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <h2 className="text-xl font-bold dark:text-white tracking-tighter">{activeProject.name}</h2>
+                                                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Activo</span>
+                                            </div>
+                                            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">{activeProject.description || 'Gestión estratégica de talento'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        <Button
+                                            onClick={() => setShowAISearch(true)}
+                                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20"
+                                        >
+                                            <Sparkles className="w-4 h-4" />
+                                            Búsqueda IA
+                                        </Button>
                                     </div>
                                 </div>
-                                <div className="flex gap-3">
-                                    <Button
-                                        onClick={() => setShowAISearch(true)}
-                                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-lg shadow-indigo-500/20"
-                                    >
-                                        <Sparkles className="w-4 h-4" />
-                                        Búsqueda IA
-                                    </Button>
-                                    <Button className="flex items-center gap-2 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 bg-white dark:bg-slate-800">
-                                        <UserPlus className="w-4 h-4 text-blue-500" />
-                                        Vincular Manual
-                                    </Button>
-                                </div>
+
+                                {/* Historical Searches Tags */}
+                                {projectSearches.length > 0 && (
+                                    <div className="flex items-center gap-3 pt-4 border-t border-slate-50 dark:border-slate-700/50">
+                                        <History className="w-4 h-4 text-slate-400" />
+                                        <div className="flex-1 flex gap-2 overflow-x-auto pb-1 custom-scrollbar scrollbar-hide">
+                                            {projectSearches.map((s, idx) => (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => setShowAISearch(true)} // Or maybe re-run search? For now just history
+                                                    className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:border-blue-500 transition-colors flex items-center gap-2"
+                                                >
+                                                    <span className="text-blue-500">#{s.resultsCount}</span>
+                                                    {s.query}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* AI Search Review Area */}
                             {searchPreview.length > 0 && (
-                                <div className="bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-800/50 p-8 rounded-[40px] animate-in slide-in-from-right-4 duration-500 shadow-xl shadow-indigo-500/5">
+                                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-800/50 p-8 rounded-[40px] animate-in slide-in-from-right-4 duration-500 shadow-xl shadow-blue-500/5">
                                     <div className="flex justify-between items-start mb-6">
                                         <div>
-                                            <h3 className="text-xl font-black text-indigo-900 dark:text-indigo-100 tracking-tighter flex items-center gap-2 uppercase">
-                                                <Sparkles className="w-6 h-6 text-indigo-500" />
-                                                Resultados Encontrados
+                                            <h3 className="text-xl font-black text-blue-900 dark:text-blue-100 tracking-tighter flex items-center gap-2 uppercase">
+                                                <Sparkles className="w-6 h-6 text-blue-500" />
+                                                Resultados: {activeQuery}
                                             </h3>
-                                            <p className="text-sm text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-widest mt-1 opacity-70">
-                                                {searchPreview.length} candidatos potenciales detectados por la IA
+                                            <p className="text-sm text-blue-600 dark:text-blue-400 font-bold uppercase tracking-widest mt-1 opacity-70">
+                                                {searchPreview.length} candidatos potenciales detectados
                                             </p>
                                         </div>
                                         <div className="flex gap-2">
                                             <Button
-                                                onClick={() => setSearchPreview([])}
-                                                className="bg-white/80 dark:bg-slate-800/80 text-slate-500 hover:text-red-500 border-indigo-100 dark:border-indigo-900/50 backdrop-blur-sm rounded-2xl"
+                                                onClick={() => { setSearchPreview([]); setActiveQuery(''); }}
+                                                className="bg-white/80 dark:bg-slate-800/80 text-slate-500 hover:text-red-500 border-blue-100 dark:border-blue-900/50 backdrop-blur-sm rounded-2xl"
                                             >
                                                 Descartar
                                             </Button>
                                             <Button
                                                 loading={isBatchLinking}
                                                 onClick={handleBatchLink}
-                                                className="bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-xl shadow-indigo-500/40 rounded-2xl font-black"
+                                                className="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-xl shadow-blue-500/40 rounded-2xl font-black"
                                             >
                                                 Vincular Todo
                                             </Button>
@@ -296,13 +378,13 @@ const ProjectsSection = ({ showToast }) => {
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
                                         {searchPreview.map(candidate => (
-                                            <div key={candidate.id} className="bg-white dark:bg-slate-900/80 p-4 rounded-[28px] flex items-center gap-4 border border-indigo-200/50 dark:border-indigo-900/50 shadow-sm relative overflow-hidden group hover:border-indigo-400 transition-all">
-                                                <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600 font-black text-sm">
+                                            <div key={candidate.id} className="bg-white dark:bg-slate-900/80 p-4 rounded-[28px] flex items-center gap-4 border border-blue-200/50 dark:border-blue-900/50 shadow-sm relative overflow-hidden group hover:border-blue-400 transition-all">
+                                                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 font-black text-sm">
                                                     {candidate.nombreReal?.charAt(0) || 'C'}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-xs font-black text-slate-900 dark:text-white truncate uppercase tracking-tighter">{candidate.nombreReal || candidate.nombre}</p>
-                                                    <p className="text-[10px] text-indigo-500 font-black uppercase tracking-widest mt-0.5">{candidate.municipio || 'N/A'}</p>
+                                                    <p className="text-[10px] text-blue-500 font-black uppercase tracking-widest mt-0.5">{candidate.municipio || 'N/A'}</p>
                                                 </div>
                                             </div>
                                         ))}
@@ -315,7 +397,7 @@ const ProjectsSection = ({ showToast }) => {
                                 {loading ? (
                                     <div className="flex flex-col items-center justify-center p-20 space-y-4">
                                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-                                        <p className="text-slate-400 font-medium italic animate-pulse">Consultando base de datos...</p>
+                                        <p className="text-slate-400 font-medium italic animate-pulse">Consultando búnker...</p>
                                     </div>
                                 ) : projectCandidates.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center p-24 text-slate-400 bg-white/50 dark:bg-slate-800/20 rounded-[48px] border-2 border-dashed border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
@@ -329,43 +411,67 @@ const ProjectsSection = ({ showToast }) => {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
                                         {projectCandidates.map(candidate => (
-                                            <div key={candidate.id} className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-[32px] p-5 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1">
-                                                <div className="flex items-start gap-4">
-                                                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-black text-xl shadow-lg rotate-2 group-hover:rotate-0 transition-transform">
-                                                        {candidate.nombreReal?.charAt(0) || candidate.nombre?.charAt(0) || 'C'}
+                                            <div key={candidate.id} className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-[32px] p-5 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+                                                {/* Origin Badge */}
+                                                {candidate.projectMetadata?.origin && (
+                                                    <div className="absolute top-0 right-0 px-3 py-1 bg-blue-500 text-white text-[8px] font-black uppercase tracking-widest rounded-bl-xl shadow-sm z-10 flex items-center gap-1">
+                                                        <Sparkles className="w-2 h-2" />
+                                                        {candidate.projectMetadata.origin}
                                                     </div>
+                                                )}
+
+                                                <div className="flex items-start gap-4">
+                                                    {candidate.foto ? (
+                                                        <img src={candidate.foto} className="w-14 h-14 rounded-2xl object-cover shadow-lg group-hover:scale-105 transition-transform" alt="Avatar" />
+                                                    ) : (
+                                                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 font-black text-xl shadow-inner group-hover:scale-110 transition-transform">
+                                                            {candidate.nombreReal?.charAt(0) || candidate.nombre?.charAt(0) || 'C'}
+                                                        </div>
+                                                    )}
                                                     <div className="flex-1 min-w-0">
                                                         <h4 className="font-black text-slate-800 dark:text-white text-sm truncate uppercase tracking-tighter leading-tight">
                                                             {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
                                                         </h4>
-                                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 font-black uppercase tracking-widest mt-1">
-                                                            <MapPin className="w-3 h-3 text-blue-500" />
-                                                            {candidate.municipio || 'N/A'}
+                                                        <div className="flex flex-col gap-0.5 mt-1">
+                                                            <div className="flex items-center gap-1.5 text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">
+                                                                <MapPin className="w-2.5 h-2.5 text-blue-500" />
+                                                                {candidate.municipio || 'N/A'}
+                                                            </div>
+                                                            {(candidate.edad || candidate.fechaNacimiento) && (
+                                                                <div className="flex items-center gap-1.5 text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">
+                                                                    <Clock className="w-2.5 h-2.5 text-emerald-500" />
+                                                                    {candidate.edad ? `${candidate.edad} años` : (calculateAge(candidate.fechaNacimiento) ? `${calculateAge(candidate.fechaNacimiento)} años` : 'N/A')}
+                                                                    {candidate.sexo && <span className="text-pink-500 ml-1">[{candidate.sexo}]</span>}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="mt-4 flex flex-wrap gap-1.5">
-                                                    <span className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-900/50 text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase tracking-widest border border-slate-100 dark:border-slate-700">
+                                                <div className="mt-4 flex flex-wrap gap-1.5 min-h-[50px]">
+                                                    <span className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-900 text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest border border-slate-200/50 dark:border-slate-700 shadow-sm self-start">
                                                         {candidate.categoria || 'General'}
                                                     </span>
                                                     {candidate.escolaridad && (
-                                                        <span className="px-3 py-1 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest border border-blue-100/30 dark:border-blue-900/50">
+                                                        <span className="px-3 py-1 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 text-[10px] font-black text-blue-600/70 dark:text-blue-400/70 uppercase tracking-widest border border-blue-100/30 dark:border-blue-900/30 self-start">
                                                             {candidate.escolaridad}
                                                         </span>
                                                     )}
                                                 </div>
 
-                                                <div className="mt-5 pt-4 border-t border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
+                                                <div className="mt-4 pt-4 border-t border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
                                                     <div className="flex gap-2">
-                                                        <button className="p-2.5 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-600 hover:text-white rounded-2xl text-blue-600 transition-all shadow-sm">
+                                                        <button
+                                                            onClick={() => handleOpenChat(candidate)}
+                                                            className="p-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-2xl transition-all shadow-lg shadow-blue-500/20"
+                                                        >
                                                             <MessageSquare className="w-4 h-4" />
                                                         </button>
-                                                        <button className="p-2.5 bg-slate-50 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-2xl text-slate-500 transition-all">
+                                                        <button className="p-2.5 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-2xl text-slate-500 transition-all">
                                                             <ExternalLink className="w-4 h-4" />
                                                         </button>
                                                     </div>
-                                                    <button onClick={() => handleUnlinkCandidate(candidate.id)} className="p-2.5 text-slate-200 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-2xl transition-all">
+                                                    <button onClick={() => handleUnlinkCandidate(candidate.id)} className="p-2.5 text-slate-300 hover:text-red-500 transition-all opacity-40 hover:opacity-100">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </div>
@@ -391,29 +497,28 @@ const ProjectsSection = ({ showToast }) => {
             {showCreateModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
                     <Card className="max-w-md w-full p-10 space-y-8 shadow-[0_30px_70px_rgba(0,0,0,0.4)] border-none rounded-[50px] dark:bg-slate-900 overflow-hidden relative">
-                        {/* Decorative circle */}
                         <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
 
                         <div>
-                            <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">Nuevo Proyecto</h2>
-                            <p className="text-slate-500 dark:text-slate-400 font-bold mt-1 uppercase text-[10px] tracking-widest opacity-80">Define el nombre y asigna responsables</p>
+                            <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Nuevo Proyecto</h2>
+                            <p className="text-slate-500 dark:text-slate-400 font-bold mt-1 uppercase text-[10px] tracking-[0.2em] opacity-80 pl-1">Organización y Seguimiento</p>
                         </div>
 
                         <div className="space-y-6 relative">
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Nombre del Proyecto</label>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Nombre del Silo</label>
                                 <Input
-                                    placeholder="Ej: Reclutamiento Masivo Monterrey"
+                                    placeholder="EJ: ALMACÉN - NORTE"
                                     value={newProjectName}
                                     onChange={(e) => setNewProjectName(e.target.value)}
                                     className="dark:bg-slate-800 h-16 text-xl font-black rounded-3xl border-slate-200 focus:ring-blue-500 tracking-tighter uppercase"
                                 />
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Descripción (Opcional)</label>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Objetivo</label>
                                 <textarea
-                                    className="w-full p-5 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none min-h-[120px] transition-all"
-                                    placeholder="Detalla el objetivo del proyecto..."
+                                    className="w-full p-5 rounded-3xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px] transition-all uppercase placeholder:normal-case"
+                                    placeholder="Brief del proyecto..."
                                     value={newProjectDesc}
                                     onChange={(e) => setNewProjectDesc(e.target.value)}
                                 />
@@ -421,32 +526,31 @@ const ProjectsSection = ({ showToast }) => {
 
                             {/* User Assignment */}
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-3 block">Asignar Responsables</label>
-                                <div className="flex flex-wrap gap-2 max-h-[150px] overflow-y-auto p-1 custom-scrollbar">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-3 block">Asignar Equipo</label>
+                                <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto p-1 custom-scrollbar">
                                     {users.map(u => (
                                         <button
                                             key={u.id}
                                             onClick={() => toggleUserAssignment(u.id)}
-                                            className={`px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${assignedUsers.includes(u.id)
-                                                    ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20'
-                                                    : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-blue-300'
+                                            className={`px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest transition-all border ${assignedUsers.includes(u.id)
+                                                ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20'
+                                                : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-400 hover:border-blue-300'
                                                 }`}
                                         >
                                             {u.name}
                                         </button>
                                     ))}
-                                    {users.length === 0 && <p className="text-[10px] text-slate-400 italic font-bold">No hay usuarios cargados</p>}
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex gap-4 pt-4 relative">
-                            <Button className="flex-1 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:text-white font-black uppercase tracking-widest text-[10px]" onClick={() => setShowCreateModal(false)}>Cancelar</Button>
+                            <button className="flex-1 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:text-white font-black uppercase tracking-widest text-[10px]" onClick={() => setShowCreateModal(false)}>Volver</button>
                             <Button
                                 className="flex-1 h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow-xl shadow-blue-600/30 transform active:scale-95 transition-all text-sm uppercase tracking-tighter"
                                 onClick={handleCreateProject}
                             >
-                                Crear Proyecto
+                                Iniciar Proyecto
                             </Button>
                         </div>
                     </Card>
