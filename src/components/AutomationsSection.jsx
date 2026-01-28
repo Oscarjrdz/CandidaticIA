@@ -347,20 +347,22 @@ const AutomationsSection = ({ showToast }) => {
 
     return (
         <div className="p-6">
-            {/* Header */}
-            {/* Simplified Header */}
+            {/* Header Extracción Inteligente */}
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-3 shadow-lg shadow-blue-500/20">
+                            <Brain className="w-6 h-6 text-white" />
+                        </div>
                         Extracción Inteligente
                     </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 font-medium">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                         Captura datos de las conversaciones automáticamente a tus columnas de CRM.
                     </p>
                 </div>
                 <Button
                     onClick={() => setShowCreateModal(true)}
-                    className="flex items-center space-x-2"
+                    className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700"
                 >
                     <Plus className="w-4 h-4" />
                     <span>Crear Nueva</span>
@@ -577,12 +579,14 @@ const AutomationsSection = ({ showToast }) => {
                 </table>
             </div>
 
-            {/* --- SCHEDULED MESSAGES SECTION --- */}
-            <div className="mt-12">
+            {/* Header Mensajes Programados */}
+            <div className="mt-16">
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
-                            <Clock className="w-6 h-6 mr-2 text-blue-600" />
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-700 flex items-center justify-center mr-3 shadow-lg shadow-blue-500/20">
+                                <Clock className="w-6 h-6 text-white" />
+                            </div>
                             Mensajes Programados
                         </h2>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -789,7 +793,8 @@ const AutomationsSection = ({ showToast }) => {
                 </div>
             </div>
 
-            <div className="mt-12 bg-gray-50 dark:bg-gray-900/50 p-6 rounded-[24px] border border-gray-100 dark:border-gray-800">
+            {/* --- AI AUTOMATIONS SECTION (WIDGET) --- */}
+            <div className="mt-16">
                 <AIAutomationsWidget showToast={showToast} />
             </div>
 
