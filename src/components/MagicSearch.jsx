@@ -215,7 +215,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                             <div className="p-1 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg">
                                 <Sparkles className="w-3 h-3 text-white" />
                             </div>
-                            <span className="text-[10px] font-black tracking-[0.1em] text-gray-400 uppercase">Powered with Gemini</span>
+                            <span className="text-[10px] font-black tracking-[0.1em] text-gray-400 uppercase">by Gemini 2.0</span>
                         </div>
                     </div>
                 </div>

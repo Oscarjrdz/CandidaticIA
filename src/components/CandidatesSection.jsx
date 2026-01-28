@@ -332,25 +332,6 @@ const CandidatesSection = ({ showToast }) => {
                         showToast={showToast}
                     />
 
-                    {/* Caja de Herramientas Rápidas */}
-                    <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 p-1 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm">
-                        <div className="px-3 border-r border-gray-100 dark:border-gray-700">
-                            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase block leading-none mb-1">Total en BD</span>
-                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{totalItems}</span>
-                        </div>
-                        <button
-                            onClick={() => {
-                                setAiFilteredCandidates([]);
-                                setAiExplanation('');
-                                loadCandidates(0);
-                                showToast('Lista actualizada', 'success');
-                            }}
-                            className="p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors group"
-                            title="Forzar actualización"
-                        >
-                            <RefreshCw className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                        </button>
-                    </div>
 
                     {/* AI Action Modal (Follow-up) */}
                     {aiActionOpen && (
