@@ -21,7 +21,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const redis = getRedisClient();
 
         // 🏎️ [TYPING INDICATOR] - Start composing presence immediately
-        (async () => {
+        const presencePromise = (async () => {
             const { getCandidateById } = await import('../utils/storage.js');
             const cand = await getCandidateById(candidateId);
             const config = await getUltraMsgConfig();
@@ -294,7 +294,7 @@ ${dnaLines}
             console.error('⚠️ [AI Agent] Background Task Error:', bgErr);
         }
 
-        await deliveryPromise;
+        await Promise.allSettled([deliveryPromise, presencePromise]);
         return responseText;
 
     } catch (error) {

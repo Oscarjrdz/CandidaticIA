@@ -133,14 +133,20 @@ export default async function handler(req, res) {
                 }
 
                 // 🏎️ [IMMEDIATE PRESENCE] - Mark as read and start typing ASAP
-                (async () => {
+                const presenceUpdate = (async () => {
                     const config = await getUltraMsgConfig();
                     if (config) {
                         const { sendUltraMsgPresence } = await import('./utils.js');
-                        await Promise.allSettled([
+                        const results = await Promise.allSettled([
                             markUltraMsgAsRead(config.instanceId, config.token, from),
                             sendUltraMsgPresence(config.instanceId, config.token, from, 'composing')
                         ]);
+                        // Log results for debugging
+                        results.forEach((res, idx) => {
+                            if (res.status === 'rejected') {
+                                console.error(`❌ Webhook immediate action ${idx === 0 ? 'READ' : 'PRESENCE'} failed:`, res.reason);
+                            }
+                        });
                     }
                 })();
 
@@ -234,7 +240,7 @@ export default async function handler(req, res) {
                 })();
 
                 // Wait to ensure delivery in serverless environment
-                await Promise.allSettled([aiPromise, activityPromise, miscPromise]);
+                await Promise.allSettled([aiPromise, activityPromise, miscPromise, presenceUpdate]);
 
                 return res.status(200).send('success');
 

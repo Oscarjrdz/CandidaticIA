@@ -158,16 +158,20 @@ export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
 
         const url = `https://api.ultramsg.com/${instanceId}/chats/read`;
 
-        const response = await axios.post(url, {
-            token: token,
-            chatId: formattedChatId
-        }, {
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            timeout: 5000 // 5s timeout
+        const params = new URLSearchParams();
+        params.append('token', token);
+        params.append('chatId', formattedChatId);
+
+        const response = await axios.post(url, params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 5000
         });
+
+        if (response.status !== 200) {
+            console.error(`❌ [UltraMsg] Mark as read API error (${response.status}):`, response.data);
+        } else {
+            console.log(`✅ [UltraMsg] Mark as read SUCCESS for ${chatId}`);
+        }
 
         return response.data;
     } catch (error) {
@@ -194,18 +198,26 @@ export const sendUltraMsgPresence = async (instanceId, token, chatId, presence =
 
         const url = `https://api.ultramsg.com/${instanceId}/chats/presence`;
 
-        const response = await axios.post(url, {
-            token: token,
-            chatId: formattedChatId,
-            presence: presence
-        }, {
-            headers: { 'Content-Type': 'application/json' },
+        const params = new URLSearchParams();
+        params.append('token', token);
+        params.append('chatId', formattedChatId);
+        params.append('presence', presence);
+
+        const response = await axios.post(url, params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             timeout: 5000
         });
 
+        if (response.status !== 200) {
+            console.error(`❌ [UltraMsg] Presence API error (${response.status}):`, response.data);
+        } else {
+            console.log(`✅ [UltraMsg] Presence updated (${presence}) for ${chatId}`);
+        }
+
         return response.data;
     } catch (error) {
-        // Silent fail for presence indicators to avoid blocking message flow
+        const errorData = error.response?.data;
+        console.error(`❌ [UltraMsg] Presence FAILED for ${chatId}:`, errorData || error.message);
         return null;
     }
 };
