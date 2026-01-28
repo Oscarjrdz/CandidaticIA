@@ -127,7 +127,9 @@ Ejemplos:
 - "taller mecanico" -> "INVALID"
 - "jose" -> "José"
 - "usuario whatsapp" -> "INVALID"
-- "lic brenda" -> "Brenda" (extrae el nombre)
+- "lic brenda" -> "Brenda"
+- "Juan Perez -> Juan Pérez" -> "Juan Pérez"
+- "Jose Manuel (Bot) -> José Manuel" -> "José Manuel"
 
 Respuesta:`;
 
@@ -338,7 +340,8 @@ REGLAS ESTRICTAS:
 3. Si la persona dice que está desempleada, buscando, que no tiene trabajo, o es estudiante/ama de casa sin empleo -> "No".
 4. Si la frase NO ES CLARA (ej: "hola", "info"), asume "No" por defecto para limpieza, o intenta inferir.
 5. JAMÁS devuelvas la frase original. Solo "Sí" o "No".
-Respuesta (Sí/No):`;
+Respuesta (Sí/No):
+`;
 
         let result = statusPhrase;
         for (const mName of modelsToTry) {

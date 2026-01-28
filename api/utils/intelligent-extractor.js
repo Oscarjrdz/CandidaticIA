@@ -100,8 +100,9 @@ ${extractionInstructions}
 ESTRATEGIA VIPER (REVISADA):
 1. Sé PRECISO: Si el dato NO está en la charla, devuelve "null". PROHIBIDO inventar o alucinar datos.
 2. PROHIBICIÓN DE NOMBRES: Jamás uses un NOMBRE DE PERSONA para llenar campos como Municipio, Categoría o Escolaridad.
-3. PERSISTENCIA: Si el dato fue mencionado antes en la charla pero el candidato no lo repitió, úsalo.
-4. LIMPIEZA: Para campos de texto, mantén la esencia oficial (ej: "Mty" -> "Monterrey").
+3. EXTRACCIÓN DE NOMBRE: El "nombreReal" DEBE provenir exclusivamente de lo que el CANDIDATO escribió. Ignora si el Reclutador/Bot saluda con un nombre (puede estar equivocado).
+4. PERSISTENCIA: Si el dato fue mencionado antes en la charla por el candidato, úsalo.
+5. LIMPIEZA: Para campos de texto, mantén la esencia oficial (ej: "Mty" -> "Monterrey").
 
 Responde ÚNICAMENTE con un JSON puro que siga este esquema:
 ${JSON.stringify(schema, null, 2)}
