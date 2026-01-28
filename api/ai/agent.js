@@ -79,7 +79,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         }
 
         // 2. Get History
-        const allMessages = await getMessages(candidateId);
+        const allMessages = await getMessages(candidateId, 100);
         const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
 
         let rawHistory = validMessages.slice(-100).map(m => ({

@@ -1,5 +1,24 @@
-import React from 'react';
-import { Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut, MessageSquare, Layout, Smartphone, Folder, FolderKanban } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+    Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut,
+    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical
+} from 'lucide-react';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const WhatsAppIcon = () => (
     <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
@@ -7,37 +26,50 @@ const WhatsAppIcon = () => (
     </svg>
 );
 
-/**
- * Sidebar de navegación Rediseñado (Premium Blue)
- */
-const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
-    const menuItems = [
-        { id: 'candidates', label: 'Candidatos', icon: Users, position: 'top' },
-        { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
-        { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
-        { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
-        { id: 'bulks', label: 'Bulks', icon: Send, position: 'top' },
-        { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
-        { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
-        { id: 'post-maker', label: 'Post Maker', icon: Layout, position: 'top' },
+const DEFAULT_MENU_ITEMS = [
+    { id: 'candidates', label: 'Candidatos', icon: Users, position: 'top' },
+    { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
+    { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
+    { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
+    { id: 'bulks', label: 'Bulks', icon: Send, position: 'top' },
+    { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
+    { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
+    { id: 'post-maker', label: 'Post Maker', icon: Layout, position: 'top' },
+    { id: 'users', label: 'Usuarios', icon: User, position: 'top' },
+    { id: 'settings', label: 'Settings', icon: Settings, position: 'bottom' }
+];
 
-        { id: 'users', label: 'Usuarios', icon: User, position: 'top' },
-        { id: 'settings', label: 'Settings', icon: Settings, position: 'bottom' }
-    ];
+const SortableMenuItem = ({ item, activeSection, onSectionChange }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: item.id });
 
-    const topItems = menuItems.filter(item => item.position === 'top');
-    const bottomItems = menuItems.filter(item => item.position === 'bottom');
+    const style = {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : 'auto',
+        opacity: isDragging ? 0.5 : 1
+    };
 
-    const MenuItem = ({ item }) => {
-        const Icon = item.icon;
-        const isActive = activeSection === item.id;
+    const Icon = item.icon;
+    const isActive = activeSection === item.id;
 
-        return (
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className="group relative"
+        >
             <button
                 onClick={() => onSectionChange(item.id)}
                 className={`
                     w-full flex items-center space-x-3 px-4 py-3 rounded-xl
-                    transition-all duration-300 group relative
+                    transition-all duration-300 relative
                     ${isActive
                         ? 'bg-white/15 text-white shadow-lg backdrop-blur-md'
                         : 'text-blue-100/70 hover:text-white hover:bg-white/10'
@@ -48,22 +80,84 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
                 {isActive && (
                     <div className="absolute left-0 w-1 h-6 bg-blue-400 rounded-r-full" />
                 )}
-                <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'scale-110 text-white' : 'group-hover:scale-110'}`} />
-                <span className={`font-medium text-sm ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
+                <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'scale-110 text-white' : 'group-hover:scale-105'}`} />
+                <span className={`font-medium text-sm flex-1 text-left ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
+
+                {/* Drag Handle */}
+                <div
+                    {...attributes}
+                    {...listeners}
+                    className="opacity-0 group-hover:opacity-40 hover:opacity-100 cursor-grab active:cursor-grabbing p-1 -mr-2 transition-opacity"
+                >
+                    <GripVertical className="w-4 h-4" />
+                </div>
             </button>
-        );
+        </div>
+    );
+};
+
+const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate }) => {
+    const [items, setItems] = useState([]);
+
+    useEffect(() => {
+        // Initialize from user config or default
+        if (user?.sidebarConfig && Array.isArray(user.sidebarConfig)) {
+            const reordered = user.sidebarConfig.map(id => DEFAULT_MENU_ITEMS.find(i => i.id === id)).filter(Boolean);
+            // Append any missing items (in case of new features)
+            const missing = DEFAULT_MENU_ITEMS.filter(di => !user.sidebarConfig.includes(di.id));
+            setItems([...reordered, ...missing]);
+        } else {
+            setItems(DEFAULT_MENU_ITEMS);
+        }
+    }, [user]);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
+    const handleDragEnd = async (event) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            const oldIndex = items.findIndex(i => i.id === active.id);
+            const newIndex = items.findIndex(i => i.id === over.id);
+
+            const newItems = arrayMove(items, oldIndex, newIndex);
+            setItems(newItems);
+
+            // Sync with DB
+            if (user?.id) {
+                const config = newItems.map(i => i.id);
+                try {
+                    const res = await fetch('/api/users', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...user, sidebarConfig: config })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        onUserUpdate(data.user);
+                        localStorage.setItem('candidatic_user_session', JSON.stringify(data.user));
+                    }
+                } catch (e) {
+                    console.error('Failed to save sidebar config', e);
+                }
+            }
+        }
     };
 
+    const topItems = items.filter(item => item.position === 'top');
+    const bottomItem = items.find(item => item.position === 'bottom');
+
     return (
-        <aside className="w-64 bg-blue-700 flex flex-col h-screen sticky top-0 overflow-hidden shadow-2xl transition-colors duration-500">
-            {/* Background pattern/gradient */}
+        <aside className="w-64 bg-blue-700 flex flex-col h-screen sticky top-0 overflow-hidden shadow-2xl transition-colors duration-500 z-30">
             <div className="absolute inset-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-800 pointer-events-none" />
 
-            {/* Logo/Header - LOGIN STYLE */}
+            {/* Logo/Header */}
             <div className="relative p-6 mb-2">
                 <div className="flex items-center space-x-4">
                     <div className="relative flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform duration-300">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg transform rotate-3">
                             <MessageSquare className="w-6 h-6 text-white" />
                         </div>
                         <div className="absolute -bottom-1.5 -right-1.5 bg-green-500 rounded-full p-1 border-2 border-slate-950">
@@ -71,50 +165,65 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout }) => {
                         </div>
                     </div>
                     <div>
-                        <h2 className="text-lg font-extrabold text-white leading-tight tracking-tight">
-                            Candidatic IA
-                        </h2>
+                        <h2 className="text-lg font-extrabold text-white leading-tight tracking-tight">Candidatic IA</h2>
                         <div className="flex items-center mt-1">
-                            <span className="text-[10px] font-bold text-blue-200 bg-blue-500/30 px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-400/30">
-                                Business
-                            </span>
+                            <span className="text-[10px] font-bold text-blue-200 bg-blue-500/30 px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-400/30">Business</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Menu Items - Top */}
-            <nav className="relative flex-1 p-4 space-y-2 overflow-y-auto">
-                <div className="mb-4 text-[10px] font-bold text-blue-300/50 uppercase tracking-widest px-4">
-                    Principal
-                </div>
-                {topItems.map(item => (
-                    <MenuItem key={item.id} item={item} />
-                ))}
+            <nav className="relative flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
+                <div className="mb-4 text-[10px] font-bold text-blue-300/50 uppercase tracking-widest px-4">Principal</div>
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                >
+                    <SortableContext
+                        items={topItems.map(i => i.id)}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        {topItems.map(item => (
+                            <SortableMenuItem
+                                key={item.id}
+                                item={item}
+                                activeSection={activeSection}
+                                onSectionChange={onSectionChange}
+                            />
+                        ))}
+                    </SortableContext>
+                </DndContext>
             </nav>
 
             {/* Footer / Bottom Items */}
             <div className="relative p-4 mt-auto border-t border-white/5 bg-white/5 backdrop-blur-sm">
                 <div className="space-y-2">
-                    {bottomItems.map(item => (
-                        <MenuItem key={item.id} item={item} />
-                    ))}
+                    {bottomItem && (
+                        <button
+                            onClick={() => onSectionChange(bottomItem.id)}
+                            className={`
+                                w-full flex items-center space-x-3 px-4 py-3 rounded-xl
+                                transition-all duration-300 group
+                                ${activeSection === bottomItem.id
+                                    ? 'bg-white/15 text-white'
+                                    : 'text-blue-100/70 hover:text-white hover:bg-white/10'
+                                }
+                            `}
+                        >
+                            <Settings className="w-5 h-5" />
+                            <span className="font-medium text-sm">{bottomItem.label}</span>
+                        </button>
+                    )}
 
                     <button
                         onClick={onLogout}
                         className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 group text-red-300 hover:text-red-100 hover:bg-red-500/20"
-                        title="Cerrar Sesión"
                     >
                         <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
                         <span className="font-medium text-sm">Cerrar Sesión</span>
                     </button>
-                </div>
-
-                <div className="mt-4 px-4 py-3 bg-white/5 rounded-xl border border-white/5">
-                    <div className="flex items-center justify-between text-[10px] text-blue-200/40">
-                        <span>Estado del Sistema</span>
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                    </div>
                 </div>
             </div>
         </aside>

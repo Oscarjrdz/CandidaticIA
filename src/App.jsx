@@ -149,6 +149,8 @@ function App() {
         activeSection={activeSection}
         onSectionChange={setActiveSection}
         onLogout={handleLogout}
+        user={user}
+        onUserUpdate={setUser}
       />
 
       {/* Main Content */}

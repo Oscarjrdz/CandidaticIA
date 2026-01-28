@@ -99,11 +99,14 @@ export default async function handler(req, res) {
                 }
 
                 // Also ignore messages from users who are in Pending status (Recruiters signing up)
+                // EXCEPT if it's the admin number 8116038195
                 try {
                     const { getUsers } = await import('../utils/storage.js');
                     const allUsers = await getUsers();
                     const isPending = allUsers.find(u => u.whatsapp.includes(phone) && u.status === 'Pending');
-                    if (isPending) {
+                    const isAdmin = phone.includes('8116038195');
+
+                    if (isPending && !isAdmin) {
                         return res.status(200).send('pending_user_ignored');
                     }
                 } catch (e) { }
@@ -193,7 +196,7 @@ export default async function handler(req, res) {
                             try {
                                 const { getMessages } = await import('../utils/storage.js');
                                 const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
-                                const freshMessages = await getMessages(candidateId);
+                                const freshMessages = await getMessages(candidateId, 100);
                                 const historyText = freshMessages
                                     .filter(m => m.from === 'user' || m.from === 'bot' || m.from === 'me')
                                     .slice(-15)
