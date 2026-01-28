@@ -27,6 +27,7 @@ export default async function handler(req, res) {
                 prompt,
                 schedule: schedule || 'daily',
                 active: active !== undefined ? active : true,
+                sentCount: body.sentCount || 0,
                 updatedAt: new Date().toISOString()
             };
 

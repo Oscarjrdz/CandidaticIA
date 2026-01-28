@@ -59,6 +59,7 @@ export default async function handler(req, res) {
                 message,
                 oneTime: req.body.oneTime || false,
                 enabled: true,
+                sentCount: 0,
                 createdAt: new Date().toISOString()
             };
 
