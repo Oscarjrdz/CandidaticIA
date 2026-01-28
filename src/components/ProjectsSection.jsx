@@ -246,7 +246,7 @@ const ProjectsSection = ({ showToast }) => {
 
             <div className="grid grid-cols-12 gap-6 flex-1 max-h-[calc(100vh-180px)]">
                 {/* Projects List sidebar */}
-                <div className="col-span-12 lg:col-span-4 xl:col-span-3 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+                <div className="col-span-12 lg:col-span-2 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                     {projects.length === 0 ? (
                         <div className="text-center p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-800/50">
                             <p className="text-slate-400">No hay proyectos activos</p>
@@ -298,7 +298,7 @@ const ProjectsSection = ({ showToast }) => {
                 </div>
 
                 {/* Dashboard / Detail Area */}
-                <div className="col-span-12 lg:col-span-8 xl:col-span-9 h-full">
+                <div className="col-span-12 lg:col-span-10 h-full">
                     {activeProject ? (
                         <div className="space-y-6 h-full flex flex-col">
                             {/* Project Header */}
