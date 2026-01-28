@@ -169,8 +169,6 @@ export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
 
         if (response.status !== 200) {
             console.error(`❌ [UltraMsg] Mark as read API error (${response.status}):`, response.data);
-        } else {
-            console.log(`✅ [UltraMsg] Mark as read SUCCESS for ${chatId}`);
         }
 
         return response.data;
@@ -210,8 +208,6 @@ export const sendUltraMsgPresence = async (instanceId, token, chatId, presence =
 
         if (response.status !== 200) {
             console.error(`❌ [UltraMsg] Presence API error (${response.status}):`, response.data);
-        } else {
-            console.log(`✅ [UltraMsg] Presence updated (${presence}) for ${chatId}`);
         }
 
         return response.data;
