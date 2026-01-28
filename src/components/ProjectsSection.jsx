@@ -411,34 +411,26 @@ const ProjectsSection = ({ showToast }) => {
                                 ) : (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
                                         {projectCandidates.map(candidate => (
-                                            <div key={candidate.id} className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-[32px] p-5 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-                                                {/* Origin Badge */}
-                                                {candidate.projectMetadata?.origin && (
-                                                    <div className="absolute top-0 right-0 px-3 py-1 bg-blue-500 text-white text-[8px] font-black uppercase tracking-widest rounded-bl-xl shadow-sm z-10 flex items-center gap-1">
-                                                        <Sparkles className="w-2 h-2" />
-                                                        {candidate.projectMetadata.origin}
-                                                    </div>
-                                                )}
-
-                                                <div className="flex items-start gap-4">
+                                            <div key={candidate.id} className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-[24px] p-4 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+                                                <div className="flex items-start gap-3">
                                                     {candidate.foto ? (
-                                                        <img src={candidate.foto} className="w-14 h-14 rounded-2xl object-cover shadow-lg group-hover:scale-105 transition-transform" alt="Avatar" />
+                                                        <img src={candidate.foto} className="w-12 h-12 rounded-xl object-cover shadow-md group-hover:scale-105 transition-transform" alt="Avatar" />
                                                     ) : (
-                                                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 font-black text-xl shadow-inner group-hover:scale-110 transition-transform">
+                                                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 font-black text-lg shadow-inner group-hover:scale-110 transition-transform">
                                                             {candidate.nombreReal?.charAt(0) || candidate.nombre?.charAt(0) || 'C'}
                                                         </div>
                                                     )}
                                                     <div className="flex-1 min-w-0">
-                                                        <h4 className="font-black text-slate-800 dark:text-white text-sm truncate uppercase tracking-tighter leading-tight">
+                                                        <h4 className="font-black text-slate-800 dark:text-white text-xs truncate uppercase tracking-tighter leading-tight">
                                                             {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
                                                         </h4>
-                                                        <div className="flex flex-col gap-0.5 mt-1">
-                                                            <div className="flex items-center gap-1.5 text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">
+                                                        <div className="flex flex-col gap-0.5 mt-0.5">
+                                                            <div className="flex items-center gap-1.5 text-[8px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">
                                                                 <MapPin className="w-2.5 h-2.5 text-blue-500" />
                                                                 {candidate.municipio || 'N/A'}
                                                             </div>
                                                             {(candidate.edad || candidate.fechaNacimiento) && (
-                                                                <div className="flex items-center gap-1.5 text-[9px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">
+                                                                <div className="flex items-center gap-1.5 text-[8px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">
                                                                     <Clock className="w-2.5 h-2.5 text-emerald-500" />
                                                                     {candidate.edad ? `${candidate.edad} años` : (calculateAge(candidate.fechaNacimiento) ? `${calculateAge(candidate.fechaNacimiento)} años` : 'N/A')}
                                                                     {candidate.sexo && <span className="text-pink-500 ml-1">[{candidate.sexo}]</span>}
@@ -448,31 +440,35 @@ const ProjectsSection = ({ showToast }) => {
                                                     </div>
                                                 </div>
 
-                                                <div className="mt-4 flex flex-wrap gap-1.5 min-h-[50px]">
-                                                    <span className="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-900 text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest border border-slate-200/50 dark:border-slate-700 shadow-sm self-start">
+                                                <div className="mt-3 flex flex-wrap gap-1 min-h-[30px]">
+                                                    <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-900 text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest border border-slate-200/50 dark:border-slate-700 shadow-sm self-start">
                                                         {candidate.categoria || 'General'}
                                                     </span>
                                                     {candidate.escolaridad && (
-                                                        <span className="px-3 py-1 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 text-[10px] font-black text-blue-600/70 dark:text-blue-400/70 uppercase tracking-widest border border-blue-100/30 dark:border-blue-900/30 self-start">
+                                                        <span className="px-2 py-0.5 rounded-lg bg-blue-50/50 dark:bg-blue-900/20 text-[9px] font-black text-blue-600/70 dark:text-blue-400/70 uppercase tracking-widest border border-blue-100/30 dark:border-blue-900/30 self-start">
                                                             {candidate.escolaridad}
                                                         </span>
                                                     )}
                                                 </div>
 
-                                                <div className="mt-4 pt-4 border-t border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
-                                                    <div className="flex gap-2">
+                                                <div className="mt-3 pt-3 border-t border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
+                                                    <div className="flex items-center gap-3">
                                                         <button
                                                             onClick={() => handleOpenChat(candidate)}
-                                                            className="p-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-2xl transition-all shadow-lg shadow-blue-500/20"
+                                                            className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-all shadow-lg shadow-blue-500/20"
                                                         >
-                                                            <MessageSquare className="w-4 h-4" />
+                                                            <MessageSquare className="w-3.5 h-3.5" />
                                                         </button>
-                                                        <button className="p-2.5 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-2xl text-slate-500 transition-all">
-                                                            <ExternalLink className="w-4 h-4" />
-                                                        </button>
+
+                                                        {candidate.projectMetadata?.origin && (
+                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter truncate max-w-[120px] italic">
+                                                                {candidate.projectMetadata.origin}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    <button onClick={() => handleUnlinkCandidate(candidate.id)} className="p-2.5 text-slate-300 hover:text-red-500 transition-all opacity-40 hover:opacity-100">
-                                                        <Trash2 className="w-4 h-4" />
+
+                                                    <button onClick={() => handleUnlinkCandidate(candidate.id)} className="p-2 text-slate-200 hover:text-red-500 transition-all opacity-40 hover:opacity-100">
+                                                        <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
                                             </div>
