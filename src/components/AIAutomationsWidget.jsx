@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, Trash2, PauseCircle, PlayCircle, Loader2, AlertCircle, RefreshCcw, Command, Zap, Terminal } from 'lucide-react';
+import { Sparkles, Trash2, PauseCircle, PlayCircle, Loader2, AlertCircle, RefreshCcw, Command, Zap, Terminal, Brain, X } from 'lucide-react';
 import Button from './ui/Button';
 import AIEnginePulse from './AIEnginePulse';
 
@@ -99,6 +99,7 @@ const AIAutomationsWidget = ({ showToast }) => {
             await fetch('/api/ai/automations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(upd)
             });
         } catch (e) {
             pull();
