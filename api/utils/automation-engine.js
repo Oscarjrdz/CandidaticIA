@@ -115,29 +115,47 @@ export async function runAIAutomations(isManual = false) {
                     if (last) continue;
                 }
 
+                const now = new Date();
+                const lastUserMsg = cand.lastUserMessageAt ? new Date(cand.lastUserMessageAt) : null;
+                const lastBotMsg = cand.lastBotMessageAt ? new Date(cand.lastBotMessageAt) : null;
+
+                // Calculate inactivity in minutes
+                const minSinceLastUser = lastUserMsg ? Math.floor((now - lastUserMsg) / 60000) : 999;
+                const minSinceLastBot = lastBotMsg ? Math.floor((now - lastBotMsg) / 60000) : 999;
+
                 evaluatedCount++;
                 try {
-                    logs.push(`🤔 Evaluando a ${cand.nombre}...`);
+                    logs.push(`🤔 Evaluando a ${cand.nombre} (Inactividad Usuario: ${minSinceLastUser}m, Bot: ${minSinceLastBot}m)...`);
 
-                    const systemContext = `Eres un reclutador experto. Tu tarea es evaluar si un candidato cumple con una regla y redactar el mensaje de WhatsApp resultante.
-INSTRUCCIONES:
-- Si el candidato cumple la regla, responde "ok": true.
-- En "msg", escribe el contenido EXACTO del mensaje que enviarás por WhatsApp. 
-- Usa un tono humano, amigable y profesional.
-- REGLA DE NOMBRE: Usa el [Nombre Real] para saludar. TIENES PROHIBIDO usar el [Nombre WhatsApp]. Si el [Nombre Real] es "No proporcionado" o falta, usa un saludo neutral como "Hola".
-- NO digas "se enviará un mensaje", ESCRIBE el mensaje directamente.
-- NO uses asteriscos en exceso.`;
+                    const systemContext = `Eres un reclutador experto y proactivo de Candidatic IA. Tu tarea es analizar si un candidato cumple con una REGLA y actuar de inmediato.
+INSTRUCCIONES CRÍTICAS:
+- Tu objetivo es mantener viva la conversación y completar el perfil del candidato.
+- "ok": true SOLAMENTE si decides enviar un mensaje ahora.
+- "msg": El contenido del mensaje de WhatsApp.
+- REGLA DE TIEMPO: El tiempo actual es ${now.toISOString()}. 
+- REGLA DE NOMBRE: Saluda por el [Nombre Real] (${cand.nombreReal || cand.nombre || 'No proporcionado'}).
+- CONTEXTO:
+  * El candidato mandó su último mensaje hace ${minSinceLastUser} minutos.
+  * Tú (el bot/reclutador) mandaste el último mensaje hace ${minSinceLastBot} minutos.
+- TONO: Natural, como si escribieras rápido en WhatsApp. Cero formalismos excesivos.
+- NO digas que enviarás un mensaje, ESCRIBE el mensaje directamente.`;
 
                     const evalPrompt = `
 REGLA A APLICAR: "${rule.prompt}"
-DATOS DEL CANDIDATO:
-- Nombre Real (USAR ESTE): ${cand.nombreReal || cand.nombre || 'No proporcionado'}
-- Nombre WhatsApp (PROHIBIDO): ${cand.pushname || 'No usar'}
+DATOS ACTUALES DEL CANDIDATO:
+- Nombre: ${cand.nombreReal || cand.nombre || 'No proporcionado'}
 - WhatsApp: ${cand.whatsapp}
-- Status actual: ${cand.status}
-- Datos adicionales: ${JSON.stringify(cand.campos || {})}
+- Status: ${cand.status}
+- Campos capturados (CRM): ${JSON.stringify(cand.campos || {})}
+- Último mensaje de usuario: ${cand.lastUserMessageAt || 'Nunca'}
+- Último mensaje de bot: ${cand.lastBotMessageAt || 'Nunca'}
 
-Responde ÚNICAMENTE en formato JSON: {"ok": boolean, "msg": string}`;
+DECISIÓN:
+1. ¿Cumple la regla basada en el contexto temporal y datos del CRM?
+2. Si la regla menciona "no ha respondido en X tiempo", úsalo.
+3. Si la regla menciona "no tiene X dato", busca en "Campos capturados".
+
+Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
 
                     const res = await model.generateContent([systemContext, evalPrompt]);
                     const out = res.response.text().match(/\{[\s\S]*\}/)?.[0];
