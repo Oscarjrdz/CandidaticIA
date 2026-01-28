@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     Calendar, MapPin, MessageSquare, ExternalLink, FolderKanban,
-    Sparkles, History, User, Clock
+    Sparkles, History, User, Clock, Zap, MessageCircle
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -409,65 +409,63 @@ const ProjectsSection = ({ showToast }) => {
                                         <Button onClick={() => setShowAISearch(true)} className="bg-blue-600 text-white border-none rounded-2xl font-black px-8">Empezar Búsqueda IA</Button>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
                                         {projectCandidates.map(candidate => (
-                                            <div key={candidate.id} className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-[24px] p-4 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-                                                <div className="flex items-start gap-3">
-                                                    {candidate.foto ? (
-                                                        <img src={candidate.foto} className="w-12 h-12 rounded-xl object-cover shadow-md group-hover:scale-105 transition-transform" alt="Avatar" />
+                                            <div key={candidate.id} className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[20px] p-2.5 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-0.5 overflow-hidden flex flex-col justify-between min-h-[110px]">
+                                                <div className="flex items-center gap-2.5">
+                                                    {(candidate.profilePic || candidate.foto) ? (
+                                                        <img
+                                                            src={candidate.profilePic || candidate.foto}
+                                                            className="w-10 h-10 rounded-[12px] object-cover shadow-sm group-hover:scale-105 transition-transform ring-2 ring-slate-100 dark:ring-slate-700/50"
+                                                            alt="Avatar"
+                                                        />
                                                     ) : (
-                                                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 font-black text-lg shadow-inner group-hover:scale-110 transition-transform">
+                                                        <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm shadow-inner group-hover:scale-110 transition-transform border border-blue-100/50 dark:border-slate-600/50">
                                                             {candidate.nombreReal?.charAt(0) || candidate.nombre?.charAt(0) || 'C'}
                                                         </div>
                                                     )}
                                                     <div className="flex-1 min-w-0">
-                                                        <h4 className="font-black text-slate-800 dark:text-white text-xs truncate uppercase tracking-tighter leading-tight">
+                                                        <h4 className="font-black text-slate-800 dark:text-white text-[11px] truncate uppercase tracking-tighter leading-none mb-1">
                                                             {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
                                                         </h4>
-                                                        <div className="flex flex-col gap-0.5 mt-0.5">
-                                                            <div className="flex items-center gap-1.5 text-[8px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">
-                                                                <MapPin className="w-2.5 h-2.5 text-blue-500" />
+                                                        <div className="flex items-center gap-1.5 overflow-hidden">
+                                                            <div className="flex items-center gap-1 text-[8px] text-slate-500 font-bold uppercase tracking-widest opacity-70 truncate">
+                                                                <MapPin className="w-2.5 h-2.5 text-blue-500/70" />
                                                                 {candidate.municipio || 'N/A'}
                                                             </div>
                                                             {(candidate.edad || candidate.fechaNacimiento) && (
-                                                                <div className="flex items-center gap-1.5 text-[8px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">
-                                                                    <Clock className="w-2.5 h-2.5 text-emerald-500" />
+                                                                <div className="flex items-center gap-1 text-[8px] text-slate-400 font-bold uppercase tracking-widest opacity-60 flex-shrink-0">
+                                                                    <div className="w-1 h-1 rounded-full bg-slate-300"></div>
                                                                     {candidate.edad ? `${candidate.edad} años` : (calculateAge(candidate.fechaNacimiento) ? `${calculateAge(candidate.fechaNacimiento)} años` : 'N/A')}
-                                                                    {candidate.sexo && <span className="text-pink-500 ml-1">[{candidate.sexo}]</span>}
                                                                 </div>
                                                             )}
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                <div className="mt-3 flex flex-wrap gap-1 min-h-[30px]">
-                                                    <span className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-900 text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest border border-slate-200/50 dark:border-slate-700 shadow-sm self-start">
-                                                        {candidate.categoria || 'General'}
-                                                    </span>
-                                                    {candidate.escolaridad && (
-                                                        <span className="px-2 py-0.5 rounded-lg bg-blue-50/50 dark:bg-blue-900/20 text-[9px] font-black text-blue-600/70 dark:text-blue-400/70 uppercase tracking-widest border border-blue-100/30 dark:border-blue-900/30 self-start">
-                                                            {candidate.escolaridad}
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                <div className="mt-3 pt-3 border-t border-slate-50 dark:border-slate-700/50 flex justify-between items-center">
-                                                    <div className="flex items-center gap-3">
+                                                <div className="mt-auto pt-2 border-t border-slate-50 dark:border-slate-700/30 flex justify-between items-center h-9">
+                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
                                                         <button
                                                             onClick={() => handleOpenChat(candidate)}
-                                                            className="p-2 bg-blue-600 text-white hover:bg-blue-700 rounded-xl transition-all shadow-lg shadow-blue-500/20"
+                                                            className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-[10px] transition-all shadow-[0_4px_10px_rgba(37,99,235,0.2)] hover:scale-105 active:scale-95"
                                                         >
-                                                            <MessageSquare className="w-3.5 h-3.5" />
+                                                            <MessageCircle className="w-3.5 h-3.5" />
                                                         </button>
 
                                                         {candidate.projectMetadata?.origin && (
-                                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter truncate max-w-[120px] italic">
-                                                                {candidate.projectMetadata.origin}
-                                                            </span>
+                                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-700/50 flex-1 min-w-0 overflow-hidden">
+                                                                <Zap className="w-2.5 h-2.5 text-yellow-500 flex-shrink-0 animate-pulse" />
+                                                                <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-tighter truncate italic leading-none">
+                                                                    {candidate.projectMetadata.origin}
+                                                                </span>
+                                                            </div>
                                                         )}
                                                     </div>
 
-                                                    <button onClick={() => handleUnlinkCandidate(candidate.id)} className="p-2 text-slate-200 hover:text-red-500 transition-all opacity-40 hover:opacity-100">
+                                                    <button
+                                                        onClick={() => handleUnlinkCandidate(candidate.id)}
+                                                        className="ml-2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-[10px] transition-all"
+                                                    >
                                                         <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                 </div>
