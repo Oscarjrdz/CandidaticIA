@@ -639,7 +639,7 @@ const CandidatesSection = ({ showToast }) => {
 
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
-                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Acciones</th>
+                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10"></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -670,8 +670,10 @@ const CandidatesSection = ({ showToast }) => {
                                             </div>
                                         </td>
                                         <td className="py-0.5 px-2.5">
-                                            <div className="text-xs text-gray-900 dark:text-white font-medium">
-                                                {candidate.nombre}
+                                            <div className="text-xs text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
+                                                {candidate.nombre && candidate.nombre.length > 8
+                                                    ? `${candidate.nombre.substring(0, 8)}...`
+                                                    : (candidate.nombre || '-')}
                                             </div>
                                         </td>
                                         <td className="py-0.5 px-2.5">
@@ -684,7 +686,7 @@ const CandidatesSection = ({ showToast }) => {
                                         {fields.map(field => (
                                             <React.Fragment key={field.value}>
                                                 <td className="py-0.5 px-2.5">
-                                                    {['escolaridad', 'categoria', 'nombreReal'].includes(field.value) ? (
+                                                    {['escolaridad', 'categoria', 'nombreReal', 'municipio'].includes(field.value) ? (
                                                         <div
                                                             onClick={() => handleMagicFix(candidate.id, field.value, candidate[field.value])}
                                                             className={`

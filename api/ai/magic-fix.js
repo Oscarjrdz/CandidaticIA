@@ -1,6 +1,6 @@
 import { getMessages, updateCandidate, getRedisClient } from '../utils/storage.js';
 import { intelligentExtract } from '../utils/intelligent-extractor.js';
-import { cleanEscolaridadWithAI, cleanCategoryWithAI, cleanNameWithAI } from '../utils/ai.js';
+import { cleanEscolaridadWithAI, cleanCategoryWithAI, cleanNameWithAI, cleanMunicipioWithAI } from '../utils/ai.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -39,6 +39,8 @@ export default async function handler(req, res) {
             finalValue = await cleanCategoryWithAI(extracted.categoria);
         } else if (field === 'nombreReal') {
             finalValue = await cleanNameWithAI(extracted.nombreReal);
+        } else if (field === 'municipio') {
+            finalValue = await cleanMunicipioWithAI(extracted.municipio);
         }
 
         // Update database
