@@ -435,7 +435,7 @@ const CandidatesSection = ({ showToast }) => {
                                     </th>
 
                                     {/* Dynamic Headers */}
-                                    {fields.map(field => (
+                                    {fields.filter(f => f.value !== 'foto').map(field => (
                                         <React.Fragment key={field.value}>
                                             <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
                                                 <div className="flex items-center space-x-1">
@@ -455,7 +455,11 @@ const CandidatesSection = ({ showToast }) => {
                                     ))}
 
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
-                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Chat</th>
+                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
+                                        <div className="flex justify-center">
+                                            <MessageCircle className="w-4 h-4 opacity-50" />
+                                        </div>
+                                    </th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10"></th>
                                 </tr>
                             </thead>
@@ -500,7 +504,7 @@ const CandidatesSection = ({ showToast }) => {
                                         </td>
 
                                         {/* Dynamic Cells */}
-                                        {fields.map(field => (
+                                        {fields.filter(f => f.value !== 'foto').map(field => (
                                             <React.Fragment key={field.value}>
                                                 <td className="py-0.5 px-2.5">
                                                     {['escolaridad', 'categoria', 'nombreReal', 'municipio'].includes(field.value) ? (
