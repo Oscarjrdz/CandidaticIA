@@ -9,7 +9,7 @@ export default async function handler(req, res) {
                 { value: 'nombreReal', label: 'Nombre Real' },
                 { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
                 { value: 'edad', label: 'Edad' },
-                { value: 'sexo', label: 'Género' },
+                { value: 'genero', label: 'Género' },
                 { value: 'municipio', label: 'Municipio' },
                 { value: 'categoria', label: 'Categoría' },
                 { value: 'tieneEmpleo', label: 'Tiene empleo' },

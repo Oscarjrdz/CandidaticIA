@@ -427,12 +427,6 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Avatar</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">From</th>
-                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
-                                        <div className="flex items-center space-x-1">
-                                            <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                                            <span>Género</span>
-                                        </div>
-                                    </th>
 
                                     {/* Dynamic Headers */}
                                     {fields.filter(f => f.value !== 'foto').map(field => (
@@ -445,12 +439,6 @@ const CandidatesSection = ({ showToast }) => {
                                                     <span>{field.label}</span>
                                                 </div>
                                             </th>
-                                            {/* Special Case: Age column after Birth Date */}
-                                            {field.value === 'fechaNacimiento' && (
-                                                <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
-                                                    Edad
-                                                </th>
-                                            )}
                                         </React.Fragment>
                                     ))}
 
@@ -497,11 +485,6 @@ const CandidatesSection = ({ showToast }) => {
                                                     : (candidate.nombre || '-')}
                                             </div>
                                         </td>
-                                        <td className="py-0.5 px-2.5">
-                                            <div className="text-[10px] text-gray-900 dark:text-white font-medium">
-                                                {candidate.genero || <span className="text-gray-400 italic font-normal">-</span>}
-                                            </div>
-                                        </td>
 
                                         {/* Dynamic Cells */}
                                         {fields.filter(f => f.value !== 'foto').map(field => (
@@ -526,18 +509,12 @@ const CandidatesSection = ({ showToast }) => {
                                                         </div>
                                                     ) : (
                                                         <div className="text-[10px] text-gray-900 dark:text-white font-medium">
-                                                            {candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>}
+                                                            {field.value === 'edad'
+                                                                ? calculateAge(candidate.fechaNacimiento, candidate.edad)
+                                                                : (candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>)}
                                                         </div>
                                                     )}
                                                 </td>
-                                                {/* Special Case: Age calculation */}
-                                                {field.value === 'fechaNacimiento' && (
-                                                    <td className="py-0.5 px-2.5">
-                                                        <div className="text-[10px] text-gray-900 dark:text-white font-medium">
-                                                            {calculateAge(candidate.fechaNacimiento, candidate.edad)}
-                                                        </div>
-                                                    </td>
-                                                )}
                                             </React.Fragment>
                                         ))}
 
