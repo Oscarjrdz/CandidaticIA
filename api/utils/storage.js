@@ -64,7 +64,11 @@ const KEYS = {
     STATS_OUTGOING: 'stats:msg:outgoing',
 
     // AI Automations
-    AI_AUTOMATIONS: 'ai:automations:list'
+    AI_AUTOMATIONS: 'ai:automations:list',
+
+    // Projects
+    PROJECTS: 'candidatic_projects',
+    PROJECT_CANDIDATES_PREFIX: 'project_candidates:'
 };
 
 
@@ -295,6 +299,14 @@ export const isMessageProcessed = async (msgId) => {
      */
     const result = await client.set(key, '1', 'EX', 86400, 'NX');
     return result !== 'OK';
+};
+
+export const unlockMessage = async (msgId) => {
+    const client = getRedisClient();
+    if (!client || !msgId) return;
+    const key = `${KEYS.DEDUPE_PREFIX}${msgId}`;
+    await client.del(key);
+    console.log(`🔓 [Storage] Message ${msgId} unlocked for retry.`);
 };
 
 export const updateCandidate = async (id, data) => {
@@ -631,4 +643,83 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
         console.error('❌ [Storage] updateMessageStatus Error:', e);
     }
     return false;
+};
+/**
+ * ==========================================
+ * PROJECTS 📂
+ * ==========================================
+ */
+export const getProjects = async () => {
+    const client = getClient();
+    if (!client) return [];
+    try {
+        const data = await client.get(KEYS.PROJECTS);
+        return data ? JSON.parse(data) : [];
+    } catch (e) {
+        console.error('Error fetching projects:', e);
+        return [];
+    }
+};
+
+export const saveProject = async (project) => {
+    const client = getClient();
+    if (!client) return;
+    const projects = await getProjects();
+
+    if (!project.id) {
+        project.id = `pj_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        project.createdAt = new Date().toISOString();
+    }
+
+    const index = projects.findIndex(p => p.id === project.id);
+    if (index >= 0) projects[index] = { ...projects[index], ...project };
+    else projects.push(project);
+
+    await client.set(KEYS.PROJECTS, JSON.stringify(projects));
+    return project;
+};
+
+export const deleteProject = async (id) => {
+    const client = getClient();
+    if (!client) return;
+    const projects = await getProjects();
+    const newProjects = projects.filter(p => p.id !== id);
+    await client.set(KEYS.PROJECTS, JSON.stringify(newProjects));
+    // Also cleanup candidates list for this project
+    await client.del(`${KEYS.PROJECT_CANDIDATES_PREFIX}${id}`);
+    return true;
+};
+
+export const addCandidateToProject = async (projectId, candidateId) => {
+    const client = getClient();
+    if (!client) return false;
+    await client.sadd(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
+    return true;
+};
+
+export const removeCandidateFromProject = async (projectId, candidateId) => {
+    const client = getClient();
+    if (!client) return false;
+    await client.srem(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
+    return true;
+};
+
+export const getProjectCandidates = async (projectId) => {
+    const client = getClient();
+    if (!client) return [];
+    const ids = await client.smembers(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`);
+    if (!ids || ids.length === 0) return [];
+
+    const pipeline = client.pipeline();
+    ids.forEach(id => {
+        pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`);
+    });
+
+    const results = await pipeline.exec();
+    return results
+        .map(([err, res]) => {
+            if (err || !res) return null;
+            try { return JSON.parse(res); } catch { return null; }
+        })
+        .filter(i => i !== null);
 };
