@@ -24,33 +24,31 @@ const Toast = ({
     const types = {
         success: {
             icon: CheckCircle,
-            bgColor: 'bg-success',
+            bgColor: 'bg-green-600',
             textColor: 'text-white',
-            borderColor: 'border-green-600',
+            borderColor: 'border-green-700',
         },
         error: {
             icon: XCircle,
-            bgColor: 'bg-error',
+            bgColor: 'bg-red-600',
             textColor: 'text-white',
-            borderColor: 'border-red-600',
+            borderColor: 'border-red-700',
+        },
+        warning: {
+            icon: Info, // Fallback icon for warning
+            bgColor: 'bg-amber-500',
+            textColor: 'text-white',
+            borderColor: 'border-amber-600',
         },
         info: {
             icon: Info,
-            bgColor: 'bg-info',
+            bgColor: 'bg-blue-600',
             textColor: 'text-white',
-            borderColor: 'border-blue-600',
+            borderColor: 'border-blue-700',
         },
     };
 
-    const positions = {
-        'top-right': 'top-4 right-4',
-        'top-left': 'top-4 left-4',
-        'bottom-right': 'bottom-4 right-4',
-        'bottom-left': 'bottom-4 left-4',
-        'top-center': 'top-4 left-1/2 transform -translate-x-1/2',
-    };
-
-    const config = types[type];
+    const config = types[type] || types.info;
     const Icon = config.icon;
 
     return (
