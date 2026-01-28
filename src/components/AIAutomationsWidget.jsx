@@ -17,6 +17,7 @@ const AIAutomationsWidget = ({ showToast }) => {
     const [showDebug, setShowDebug] = useState(false);
     const [deletingId, setDeletingId] = useState(null);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [optimizing, setOptimizing] = useState(false);
 
     const scrollRef = useRef(null);
 
@@ -98,9 +99,36 @@ const AIAutomationsWidget = ({ showToast }) => {
             await fetch('/api/ai/automations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(upd)
             });
-        } catch (e) { pull(); }
+        } catch (e) {
+            pull();
+        }
+    };
+
+    const onOptimize = async () => {
+        if (!prompt || prompt.length < 5) {
+            showToast?.('Escribe algo primero para optimizarlo', 'default');
+            return;
+        }
+        setOptimizing(true);
+        try {
+            const res = await fetch('/api/ai/optimize-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rawPrompt: prompt })
+            });
+            const data = await res.json();
+            if (data.success && data.optimizedPrompt) {
+                setPrompt(data.optimizedPrompt);
+                showToast?.('✨ Prompt optimizado por IA', 'success');
+            } else {
+                showToast?.('No pudimos optimizar el prompt', 'error');
+            }
+        } catch (e) {
+            showToast?.('Error al conectar con el optimizador', 'error');
+        } finally {
+            setOptimizing(false);
+        }
     };
 
     const onRunNow = async () => {
@@ -229,15 +257,23 @@ const AIAutomationsWidget = ({ showToast }) => {
                         </div>
 
                         <div className="space-y-4">
-                            <div>
+                            <div className="relative group">
                                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Instrucción Maestra</label>
                                 <textarea
                                     value={prompt}
                                     onChange={(e) => setPrompt(e.target.value)}
                                     placeholder="Ej: Si no tiene escolaridad, pregúntale amablemnte su último grado de estudios..."
-                                    className="w-full h-32 p-4 rounded-3xl bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-gray-800 outline-none text-sm transition-all focus:border-purple-300 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-900/20"
+                                    className="w-full h-32 p-4 pt-4 pr-12 rounded-3xl bg-gray-50 dark:bg-black/20 border border-gray-100 dark:border-gray-800 outline-none text-sm transition-all focus:border-purple-300 focus:ring-2 focus:ring-purple-200 dark:focus:ring-purple-900/20"
                                     autoFocus
                                 />
+                                <button
+                                    onClick={onOptimize}
+                                    disabled={optimizing || !prompt?.trim()}
+                                    className="absolute top-10 right-3 p-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-purple-100 dark:border-purple-900/30 text-purple-500 hover:scale-110 active:scale-95 transition-all disabled:opacity-30 group-hover:rotate-6"
+                                    title="Optimizar con IA"
+                                >
+                                    {optimizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                                </button>
                             </div>
                             <div className="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-2xl border border-purple-100 dark:border-purple-800/30">
                                 <div className="flex items-start space-x-3">
