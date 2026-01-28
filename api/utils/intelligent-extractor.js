@@ -94,14 +94,14 @@ CONVERSACIÓN HISTÓRICA:
 ${historyText}
 """
 
-REQUERIMIENTOS DE CAPTURA (EXTRAER SIEMPRE):
+REQUERIMIENTOS DE CAPTURA (EXTRAER SIEMPRE SI EXISTEN):
 ${extractionInstructions}
 
-ESTRATEGIA VIPER:
-1. Sé AGRESIVO: Si el candidato menciona algo que se parece al dato buscado, extráelo.
-2. Si el dato fue mencionado antes en la charla pero el candidato no lo repitió, úsalo (Persistencia).
-3. Para campos de texto (Nombre, Municipio), límpialos de basura pero mantén la esencia.
-4. Para campos binarios (Sí/No), busca confirmaciones implícitas (ej: "trabajo en una tienda" implica Tiene Empleo: Sí).
+ESTRATEGIA VIPER (REVISADA):
+1. Sé PRECISO: Si el dato NO está en la charla, devuelve "null". PROHIBIDO inventar o alucinar datos.
+2. PROHIBICIÓN DE NOMBRES: Jamás uses un NOMBRE DE PERSONA para llenar campos como Municipio, Categoría o Escolaridad.
+3. PERSISTENCIA: Si el dato fue mencionado antes en la charla pero el candidato no lo repitió, úsalo.
+4. LIMPIEZA: Para campos de texto, mantén la esencia oficial (ej: "Mty" -> "Monterrey").
 
 Responde ÚNICAMENTE con un JSON puro que siga este esquema:
 ${JSON.stringify(schema, null, 2)}
