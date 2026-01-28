@@ -54,6 +54,66 @@ export default async function handler(req, res) {
 
             console.log(`📩 Ferrari Motor: Message from ${phone}`);
 
+            // --- SYSTEM & ADMIN COMMAND FILTER ---
+            const adminNumber = '5218116038195';
+            if (phone === adminNumber) {
+                const lowerBody = body.toLowerCase().trim();
+                // Command: simon[phone] -> Approve User
+                if (lowerBody.startsWith('simon')) {
+                    const targetPhone = lowerBody.replace('simon', '').replace(/\D/g, '');
+                    if (targetPhone) {
+                        try {
+                            const { getUsers, saveUser } = await import('../utils/storage.js');
+                            const { sendMessage } = await import('../utils/messenger.js');
+                            const users = await getUsers();
+                            const userIndex = users.findIndex(u => u.whatsapp.includes(targetPhone));
+
+                            if (userIndex !== -1) {
+                                const user = users[userIndex];
+                                user.status = 'Active';
+                                await saveUser(user);
+                                console.log(`✅ User ${targetPhone} activated by admin.`);
+
+                                // Notify Admin
+                                await sendMessage(adminNumber, `✅ Usuario ${user.name} (${targetPhone}) activado con éxito.`);
+
+                                // Notify User
+                                await sendMessage(user.whatsapp, `🎉 ¡Felicidades ${user.name}! Tu cuenta ha sido activada. Ya puedes iniciar sesión en Candidatic IA. 🚀`);
+
+                                return res.status(200).send('user_activated');
+                            } else {
+                                await sendMessage(adminNumber, `❌ No encontré ningún usuario pendiente con el número ${targetPhone}.`);
+                                return res.status(200).send('user_not_found');
+                            }
+                        } catch (err) {
+                            console.error('Error activating user:', err);
+                            return res.status(200).send('activation_error');
+                        }
+                    }
+                }
+                // If it's the admin but not a command, we might still want to ignore it 
+                // to avoid the admin being treated as a candidate during testing.
+                console.log('🛡️ Admin message ignored (not a command).');
+                return res.status(200).send('admin_ignored');
+            }
+
+            // --- AUTH MESSAGE FILTER (PINs & Flows) ---
+            if (/^\d{4}$/.test(body.trim())) {
+                console.log('🛡️ PIN-like message ignored for history/AI.');
+                return res.status(200).send('pin_ignored');
+            }
+
+            // Also ignore messages from users who are in Pending status (Recruiters signing up)
+            try {
+                const { getUsers } = await import('../utils/storage.js');
+                const allUsers = await getUsers();
+                const isPending = allUsers.find(u => u.whatsapp.includes(phone) && u.status === 'Pending');
+                if (isPending) {
+                    console.log(`🛡️ Message from PENDING user ${phone} ignored for history/AI.`);
+                    return res.status(200).send('pending_user_ignored');
+                }
+            } catch (e) { }
+
             // 🏎️ FERRARI LOOKUP: O(1) Hash Table
             let candidateId = await getCandidateIdByPhone(phone);
             let candidate = null;
