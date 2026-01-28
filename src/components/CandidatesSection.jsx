@@ -691,7 +691,10 @@ const CandidatesSection = ({ showToast }) => {
 
                                         <td className="py-0.5 px-2.5 text-center">
                                             <button
-                                                onClick={() => handleOpenChat(candidate)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleOpenChat(candidate);
+                                                }}
                                                 className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative"
                                                 title="Abrir chat"
                                             >

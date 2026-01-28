@@ -395,7 +395,11 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     </div>
                     <div className="flex items-center space-x-1">
                         <button
-                            onClick={onClose}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onClose();
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
                             className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full text-gray-500 hover:text-red-500 transition-colors pointer-events-auto"
                             title="Cerrar (Esc)"
                         >
