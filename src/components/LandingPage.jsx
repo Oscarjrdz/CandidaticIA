@@ -42,10 +42,11 @@ const LandingPage = ({ onLoginSuccess }) => {
 
     /* LOGIN DROPDOWN LOGIC */
     const [isLoginOpen, setIsLoginOpen] = useState(false);
-    const [loginStep, setLoginStep] = useState('phone'); // phone, pin
+    const [loginStep, setLoginStep] = useState('phone'); // phone, pin, register, pending
     const [loginLoading, setLoginLoading] = useState(false);
     const [loginError, setLoginError] = useState('');
     const [phone, setPhone] = useState('');
+    const [name, setName] = useState('');
     const [pinDigits, setPinDigits] = useState(['', '', '', '']);
     const pinRefs = useRef([]);
     const dropdownRef = useRef(null);
@@ -123,7 +124,7 @@ const LandingPage = ({ onLoginSuccess }) => {
             const data = await res.json();
             if (res.ok && data.success) {
                 if (data.newUser) {
-                    setLoginError('Registro requerido. Contacta admin.'); // Simple flow for dropdown
+                    setLoginStep('register');
                 } else {
                     onLoginSuccess(data.user);
                 }
@@ -131,6 +132,34 @@ const LandingPage = ({ onLoginSuccess }) => {
                 setLoginError('Código incorrecto.');
                 setPinDigits(['', '', '', '']);
                 pinRefs.current[0]?.focus();
+            }
+        } catch (err) {
+            setLoginError('Error de conexión.');
+        } finally {
+            setLoginLoading(false);
+        }
+    };
+
+    const handleRegisterSubmit = async (e) => {
+        e.preventDefault();
+        cleanLogin();
+        if (!name.trim()) {
+            setLoginError('Nombre requerido.');
+            return;
+        }
+
+        setLoginLoading(true);
+        try {
+            const res = await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'register', phone, name, role: 'Recruiter' })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setLoginStep('pending');
+            } else {
+                setLoginError(data.error || 'Error al registrar.');
             }
         } catch (err) {
             setLoginError('Error de conexión.');
@@ -212,7 +241,6 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                             onChange={(e) => {
                                                                 const val = e.target.value.replace(/\D/g, '');
                                                                 if (!val && !e.target.value) {
-                                                                    // Handle clear
                                                                     const newPhone = phone.split('');
                                                                     newPhone[i] = '';
                                                                     setPhone(newPhone.join(''));
@@ -232,41 +260,20 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                             }}
                                                             onFocus={(e) => e.target.select()}
                                                             className={`w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm
-                                                            ${phone[i]
-                                                                    ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105'
-                                                                    : 'border-gray-200 text-gray-400 bg-white/50 focus:border-blue-400 focus:bg-white'
-                                                                }
+                                                            ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-blue-400 focus:bg-white'}
                                                         `}
                                                         />
                                                     ))}
                                                 </div>
                                             </div>
 
-                                            <button
-                                                type="submit"
-                                                onClick={(e) => {
-                                                    if (loginLoading || phone.length < 10) {
-                                                        e.preventDefault();
-                                                        return;
-                                                    }
-                                                }}
-                                                style={{
-                                                    background: phone.length === 10
-                                                        ? undefined
-                                                        : 'linear-gradient(to right, #2563eb, #9333ea)', // Blue-600 to Purple-600
-                                                    opacity: phone.length === 10 ? 1 : 0.7
-                                                }}
-                                                className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] inline-flex items-center justify-center text-white
-                                                ${phone.length === 10
-                                                        ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 cursor-pointer'
-                                                        : 'cursor-not-allowed'
-                                                    }
-                                            `}
-                                            >
+                                            <button type="submit" className={`w-full h-12 text-base font-bold shadow-lg rounded-xl transition-all transform hover:scale-[1.02] active:scale-[0.98] inline-flex items-center justify-center text-white
+                                                ${phone.length === 10 ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-green-500/25 cursor-pointer' : 'bg-gray-400 cursor-not-allowed'}
+                                            `} disabled={loginLoading || phone.length < 10}>
                                                 {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Enviar Código'}
                                             </button>
                                         </form>
-                                    ) : (
+                                    ) : loginStep === 'pin' ? (
                                         <div className="space-y-6">
                                             <div className="text-center">
                                                 <p className="text-sm text-gray-500 font-medium bg-gray-50 inline-block px-3 py-1 rounded-full border border-gray-100">
@@ -285,27 +292,53 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                         onChange={(e) => handlePinChange(i, e.target.value)}
                                                         onKeyDown={(e) => handleKeyDown(i, e)}
                                                         className={`w-12 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all duration-300 shadow-sm
-                                                            ${d
-                                                                ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105'
-                                                                : 'border-gray-100 text-gray-400 bg-white/50 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:bg-white'
-                                                            }
+                                                            ${d ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-100 text-gray-400 bg-white/50 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 focus:bg-white'}
                                                         `}
                                                         autoFocus={i === 0}
                                                     />
                                                 ))}
                                             </div>
 
-                                            {loginLoading && (
-                                                <div className="flex justify-center">
-                                                    <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                                                </div>
-                                            )}
-
-                                            <button
-                                                onClick={() => setLoginStep('phone')}
-                                                className="block w-full text-xs text-blue-600 hover:text-blue-700 font-semibold hover:underline text-center transition-colors"
-                                            >
+                                            <button onClick={() => setLoginStep('phone')} className="block w-full text-xs text-blue-600 hover:text-blue-700 font-semibold hover:underline text-center">
                                                 ¿Número incorrecto? Volver
+                                            </button>
+                                        </div>
+                                    ) : loginStep === 'register' ? (
+                                        <form onSubmit={handleRegisterSubmit} className="space-y-6">
+                                            <div className="text-center">
+                                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                    <Users className="w-8 h-8 text-green-600" />
+                                                </div>
+                                                <h4 className="text-xl font-bold">Crea tu Perfil</h4>
+                                                <p className="text-sm text-gray-500">Solo necesitamos tu nombre completo.</p>
+                                            </div>
+
+                                            <Input
+                                                placeholder="Ej. Ana García"
+                                                value={name}
+                                                onChange={(e) => setName(e.target.value)}
+                                                className="h-12 text-lg text-center"
+                                                required
+                                                autoFocus
+                                            />
+
+                                            <button type="submit" className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all transform hover:scale-[1.02]" disabled={loginLoading}>
+                                                {loginLoading ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Solicitar Acceso'}
+                                            </button>
+                                        </form>
+                                    ) : (
+                                        <div className="text-center space-y-6 animate-in zoom-in duration-500">
+                                            <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                                                <Zap className="w-10 h-10 text-yellow-600" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-2xl font-bold">Solicitud Enviada</h4>
+                                                <p className="text-sm text-gray-600 mt-2">
+                                                    Tu cuenta está en revisión. Te avisaremos por WhatsApp ({phone}) cuando esté activa.
+                                                </p>
+                                            </div>
+                                            <button onClick={() => setIsLoginOpen(false)} className="w-full h-12 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl active:scale-95 transition-all">
+                                                Cerrar
                                             </button>
                                         </div>
                                     )}
