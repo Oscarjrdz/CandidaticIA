@@ -92,10 +92,9 @@ export default async function handler(req, res) {
                             }
                         }
                     }
-                    // If it's the admin but not a command, we might still want to ignore it 
-                    // to avoid the admin being treated as a candidate during testing.
-                    console.log('🛡️ Admin message ignored (not a command).');
-                    return res.status(200).send('admin_ignored');
+                    // If it's the admin but not a command, we ALLOW it to fall through 
+                    // so the admin can test the Bot.
+                    console.log('🛡️ Admin message detected (not a command) -> Passing to Bot for testing.');
                 }
 
                 // --- AUTH MESSAGE FILTER (PINs & Flows) ---
