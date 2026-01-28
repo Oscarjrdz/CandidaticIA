@@ -269,10 +269,10 @@ const CandidatesSection = ({ showToast }) => {
                             <Users className="w-16 h-16 text-blue-500 transform rotate-12" />
                         </div>
                         <div className="flex flex-col relative z-10">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
                             <div className="flex items-baseline space-x-2">
-                                <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{totalItems}</h3>
-                                <span className="text-xs text-green-500 font-medium flex items-center bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded-full">
+                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{totalItems}</h3>
+                                <span className="text-[10px] text-green-500 font-medium flex items-center bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded-full">
                                     <Zap className="w-3 h-3 mr-0.5" /> Activos
                                 </span>
                             </div>
@@ -285,9 +285,9 @@ const CandidatesSection = ({ showToast }) => {
                             <MessageCircle className="w-16 h-16 text-emerald-500 transform -rotate-12" />
                         </div>
                         <div className="flex flex-col relative z-10">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
                             <div className="flex items-baseline space-x-2">
-                                <h3 className="text-3xl font-bold text-gray-900 dark:text-white">
+                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
                                     {stats?.incoming || 0}
                                 </h3>
                                 <div className="flex items-center space-x-1">
@@ -295,7 +295,7 @@ const CandidatesSection = ({ showToast }) => {
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                                     </span>
-                                    <span className="text-xs text-emerald-500 font-medium ml-1">En vivo</span>
+                                    <span className="text-[10px] text-emerald-500 font-medium ml-1">En vivo</span>
                                 </div>
                             </div>
                         </div>
@@ -307,12 +307,12 @@ const CandidatesSection = ({ showToast }) => {
                             <Send className="w-16 h-16 text-purple-500 transform rotate-6" />
                         </div>
                         <div className="flex flex-col relative z-10">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Enviados</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Enviados</span>
                             <div className="flex items-baseline space-x-2">
-                                <h3 className="text-3xl font-bold text-gray-900 dark:text-white">
+                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
                                     {stats?.outgoing || 0}
                                 </h3>
-                                <span className="text-xs text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full">
+                                <span className="text-[10px] text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full">
                                     <Sparkles className="w-3 h-3 mr-0.5" /> AI & Manual
                                 </span>
                             </div>
@@ -351,7 +351,7 @@ const CandidatesSection = ({ showToast }) => {
                         <input
                             type="text"
                             placeholder="Buscar candidato..."
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500 outline-none transition-all dark:text-gray-200"
+                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500 outline-none transition-all dark:text-gray-200 text-[12px]"
                             value={search}
                             onChange={(e) => {
                                 setSearch(e.target.value);
@@ -382,10 +382,10 @@ const CandidatesSection = ({ showToast }) => {
                                     <Sparkles className="w-4 h-4 text-white" />
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                                    <h3 className="text-[12px] font-bold text-gray-900 dark:text-white">
                                         {displayedCandidates.length} Resultados IA
                                     </h3>
-                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium truncate max-w-[200px]">
+                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 font-medium truncate max-w-[200px]">
                                         {aiExplanation}
                                     </p>
                                 </div>
@@ -397,7 +397,7 @@ const CandidatesSection = ({ showToast }) => {
                                     setCurrentPage(1);
                                     loadCandidates(1);
                                 }}
-                                className="text-xs font-bold text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1.5 rounded-full transition-colors"
+                                className="text-[10px] font-bold text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1.5 rounded-full transition-colors"
                             >
                                 Limpiar
                             </button>
@@ -413,17 +413,17 @@ const CandidatesSection = ({ showToast }) => {
                     {displayedCandidates.length === 0 ? (
                         <div className="text-center py-12">
                             <User className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                            <p className="text-gray-500 dark:text-gray-400">
+                            <p className="text-gray-500 dark:text-gray-400 text-[12px]">
                                 {search || aiFilteredCandidates ? 'No se encontraron candidatos con los filtros aplicados' : 'No hay candidatos registrados aún'}
                             </p>
-                            <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
+                            <p className="text-[12px] text-gray-400 dark:text-gray-500 mt-2">
                                 Los candidatos se agregarán automáticamente cuando recibas mensajes de WhatsApp
                             </p>
                         </div>
                     ) : (
                         <table className="w-full relative">
                             <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
-                                <tr className="border-b border-gray-200 dark:border-gray-700 text-xs uppercase tracking-wider text-gray-500">
+                                <tr className="border-b border-gray-200 dark:border-gray-700 text-[10px] uppercase tracking-wider text-gray-500">
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Avatar</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">From</th>
@@ -483,22 +483,22 @@ const CandidatesSection = ({ showToast }) => {
                                             </div>
                                         </td>
                                         <td className="py-0.5 px-2.5">
-                                            <div className="text-xs text-gray-900 dark:text-white font-mono font-medium">
+                                            <div className="text-[10px] text-gray-900 dark:text-white font-mono font-medium">
                                                 {formatPhone(candidate.whatsapp)}
                                             </div>
-                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
+                                            <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
                                                 Desde {formatRelativeDate(candidate.primerContacto)}
                                             </div>
                                         </td>
                                         <td className="py-0.5 px-2.5">
-                                            <div className="text-xs text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
+                                            <div className="text-[10px] text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
                                                 {candidate.nombre && candidate.nombre.length > 8
                                                     ? `${candidate.nombre.substring(0, 8)}...`
                                                     : (candidate.nombre || '-')}
                                             </div>
                                         </td>
                                         <td className="py-0.5 px-2.5">
-                                            <div className="text-xs text-gray-900 dark:text-white font-medium">
+                                            <div className="text-[10px] text-gray-900 dark:text-white font-medium">
                                                 {candidate.genero || <span className="text-gray-400 italic font-normal">-</span>}
                                             </div>
                                         </td>
@@ -511,7 +511,7 @@ const CandidatesSection = ({ showToast }) => {
                                                         <div
                                                             onClick={() => handleMagicFix(candidate.id, field.value, candidate[field.value])}
                                                             className={`
-                                                                inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-xs font-medium
+                                                                inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium
                                                                 ${magicLoading[`${candidate.id}-${field.value}`]
                                                                     ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse'
                                                                     : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}
@@ -525,7 +525,7 @@ const CandidatesSection = ({ showToast }) => {
                                                             <Sparkles className={`w-2.5 h-2.5 ml-1.5 opacity-0 group-hover:opacity-100 ${magicLoading[`${candidate.id}-${field.value}`] ? 'hidden' : ''} text-blue-400`} />
                                                         </div>
                                                     ) : (
-                                                        <div className="text-xs text-gray-900 dark:text-white font-medium">
+                                                        <div className="text-[10px] text-gray-900 dark:text-white font-medium">
                                                             {candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>}
                                                         </div>
                                                     )}
@@ -533,7 +533,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 {/* Special Case: Age calculation */}
                                                 {field.value === 'fechaNacimiento' && (
                                                     <td className="py-0.5 px-2.5">
-                                                        <div className="text-xs text-gray-900 dark:text-white font-medium">
+                                                        <div className="text-[10px] text-gray-900 dark:text-white font-medium">
                                                             {calculateAge(candidate.fechaNacimiento, candidate.edad)}
                                                         </div>
                                                     </td>
@@ -542,10 +542,10 @@ const CandidatesSection = ({ showToast }) => {
                                         ))}
 
                                         <td className="py-0.5 px-2.5">
-                                            <div className="text-xs text-gray-700 dark:text-gray-300 font-medium">
+                                            <div className="text-[10px] text-gray-700 dark:text-gray-300 font-medium">
                                                 {formatDateTime(candidate.ultimoMensaje)}
                                             </div>
-                                            <div className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
+                                            <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
                                                 {formatRelativeDate(candidate.ultimoMensaje)}
                                             </div>
                                         </td>
@@ -581,7 +581,7 @@ const CandidatesSection = ({ showToast }) => {
 
                 {/* Pagination Footer */}
                 {totalItems > 0 && !aiFilteredCandidates && (
-                    <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center text-sm sticky bottom-0 z-20">
+                    <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center text-[12px] sticky bottom-0 z-20">
                         <div className="text-gray-500 dark:text-gray-400">
                             Mostrando <span className="font-medium text-gray-900 dark:text-white">{((currentPage - 1) * LIMIT) + 1}</span> - <span className="font-medium text-gray-900 dark:text-white">{Math.min(currentPage * LIMIT, totalItems)}</span> de <span className="font-medium text-gray-900 dark:text-white">{totalItems}</span>
                         </div>
@@ -589,17 +589,17 @@ const CandidatesSection = ({ showToast }) => {
                             <button
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1 || loading}
-                                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[12px]"
                             >
                                 Anterior
                             </button>
-                            <div className="px-2 py-1.5 text-gray-600 dark:text-gray-400 font-medium">
+                            <div className="px-2 py-1.5 text-gray-600 dark:text-gray-400 font-medium text-[12px]">
                                 Página {currentPage}
                             </div>
                             <button
                                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                 disabled={currentPage >= totalPages || loading}
-                                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[12px]"
                             >
                                 Siguiente
                             </button>
