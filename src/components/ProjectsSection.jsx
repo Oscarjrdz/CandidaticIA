@@ -447,7 +447,7 @@ const ProjectsSection = ({ showToast }) => {
                                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                                         <button
                                                             onClick={() => handleOpenChat(candidate)}
-                                                            className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-[10px] transition-all shadow-[0_4px_10px_rgba(37,99,235,0.2)] hover:scale-105 active:scale-95"
+                                                            className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-[#25D366] hover:bg-[#128C7E] text-white rounded-[10px] transition-all shadow-[0_4px_10px_rgba(37,211,102,0.2)] hover:scale-105 active:scale-95"
                                                         >
                                                             <MessageCircle className="w-3.5 h-3.5" />
                                                         </button>
