@@ -159,7 +159,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                     {/* Input Section */}
                     <div className="space-y-6">
                         <form onSubmit={handleSearch} className="relative group">
-                            <div className="relative flex items-center px-4 py-8 bg-white dark:bg-gray-900 rounded-3xl border-2 border-transparent focus-within:border-blue-500/50 transition-all shadow-sm">
+                            <div className="relative flex items-center px-4 py-8 bg-white dark:bg-gray-900 rounded-3xl transition-all">
                                 <div className="mr-6">
                                     {loading ? (
                                         <div className="relative w-10 h-10">
