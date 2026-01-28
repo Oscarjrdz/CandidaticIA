@@ -270,15 +270,12 @@ export async function cleanCategoryWithAI(category) {
 
         const prompt = `Analiza y homogeniza la categoría de empleo: "${category}".
 
-REGLAS DE ORO (ESTRICTAS):
-1. REGLA MONTACARGAS: Si aparece "Almacén" + "Montacargas" (en cualquier orden), la categoría ES: "Montacarguista".
-2. REGLA ALMACENISTA: Si aparece "Almacén", "Bodega", "Auxiliar de Almacén", "Almacen" o variantes similares (SIN montacargas), la categoría ES: "Almacenista".
-   - Ejemplo: "Auxiliar de Almacenista" -> "Almacenista"
-   - Ejemplo: "Bodeguero" -> "Almacenista"
-   - Ejemplo: "Ayudante de Almacen" -> "Almacenista"
-3. Responde ÚNICAMENTE con el término limpio (1 o 2 palabras máximo).
-4. Usa SIEMPRE acentos correctos.
-5. Si menciona áreas distintas, elige la de mayor jerarquía técnica.
+REGLAS DE HOMOGENEIZACIÓN (MÉTODO GOOGLE):
+1. PRECISIÓN: Si el usuario específicamente se identifica como "Ayudante" (General, de Almacén, de Ventas), respeta el término "Ayudante".
+2. REGLA MONTACARGAS: Si el rol principal es operar maquinaria ("Montacargas"), la categoría ES: "Montacarguista".
+3. REGLA ALMACENISTA: Usa "Almacenista" solo si el rol se centra exclusivamente en gestión de inventarios y bodega sin mención de ser "Ayudante".
+4. Responde ÚNICAMENTE con el término limpio (máximo 2 palabras).
+5. Usa SIEMPRE acentos correctos.
 
 Respuesta (Únicamente el término):`;
 

@@ -75,7 +75,17 @@ export async function intelligentExtract(candidateId, historyText) {
             }));
         }
 
-        // 2. Build Dynamic Schema and Instructions
+        // 2. Fetch Valid Categories for better mapping
+        let categoriesList = "";
+        try {
+            const categoriesData = await redis?.get('candidatic_categories');
+            if (categoriesData) {
+                const cats = JSON.parse(categoriesData).map(c => c.name);
+                categoriesList = `\n[CATEGORÍAS VÁLIDAS EN EL SISTEMA]: ${cats.join(', ')}`;
+            }
+        } catch (e) { console.warn('Error fetching categories for extractor:', e); }
+
+        // 3. Build Dynamic Schema and Instructions
         const schema = {
             thought_process: "Paragraph explaining the reasoning behind the extraction",
             data: {}
@@ -90,19 +100,22 @@ export async function intelligentExtract(candidateId, historyText) {
             extractionInstructions += `- ${rule.fieldLabel || rule.field}: ${rule.prompt || `Extrae el valor para ${rule.fieldLabel}`}\n`;
         });
 
-        const prompt = `[VIPER-GRIP REASONING PROTOCOL v2.0]
+        const prompt = `[VIPER-GRIP REASONING PROTOCOL v2.1]
 Analiza exhaustivamente la conversación para extraer datos del Candidato usando Razonamiento Lógico (Chain of Thought).
 
 CONVERSACIÓN HISTÓRICA:
 """
 ${historyText}
 """
+${categoriesList}
 
 REQUERIMIENTOS:
 ${extractionInstructions}
 
 ESTRATEGIA DE RAZONAMIENTO (MÉTODO GOOGLE/ANTIGRAVITY):
-1. PENSAMIENTO (thought_process): Antes de extraer, escribe un análisis breve. Compara términos similares (ej: ¿Es Ayudante o Almacenista?). Busca contradicciones.
+1. PENSAMIENTO (thought_process): Antes de extraer, escribe un análisis breve. 
+   - REGLA CRÍTICA DE CATEGORÍA: Si el usuario menciona "Ayudante" (aunque sea en un almacén), la categoría DEBE ser "Ayudante". Solo usa "Almacenista" si el usuario se describe puramente como tal sin mencionar "Ayudante".
+   - MAPPING: Intenta que la categoría coincida con las [CATEGORÍAS VÁLIDAS] si están listadas arriba.
 2. CITACIÓN: Para cada dato extraído, DEBES incluir el fragmento de texto exacto donde el candidato lo mencionó. Si no hay evidencia clara, el valor debe ser null.
 3. PRECISIÓN: Si el dato NO está en la charla, devuelve null. PROHIBIDO alucinar.
 4. EXTRACCIÓN DE NOMBRE: El "nombreReal" debe venir de lo que el CANDIDATO escribió.
