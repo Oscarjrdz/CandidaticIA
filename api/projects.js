@@ -1,93 +1,60 @@
 
-export default async function handler(req, res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+import { saveProject, getProjects, getProjectById, deleteProject, addCandidateToProject, removeCandidateFromProject, getProjectCandidates } from './utils/storage.js';
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+export default async function handler(req, res) {
+    const { method } = req;
+    const { id, candidateId } = req.query;
 
     try {
-        const {
-            getProjects,
-            saveProject,
-            deleteProject,
-            addCandidateToProject,
-            removeCandidateFromProject,
-            getProjectCandidates
-        } = await import('./utils/storage.js');
-
-        const { id } = req.query;
-
-        // GET: List or Detail
-        if (req.method === 'GET') {
-            if (id) {
-                const projects = await getProjects();
-                const project = projects.find(p => p.id === id);
-                if (!project) return res.status(404).json({ error: 'Proyecto no encontrado' });
-
+        // GET: Fetch projects or candidates of a project
+        if (method === 'GET') {
+            if (id && req.query.view === 'candidates') {
                 const candidates = await getProjectCandidates(id);
-                return res.status(200).json({ success: true, project, candidates });
-            } else {
-                const projects = await getProjects();
-                return res.status(200).json({ success: true, projects });
+                return res.status(200).json({ success: true, candidates });
             }
+            if (id) {
+                const project = await getProjectById(id);
+                return res.status(200).json({ success: true, project });
+            }
+            const projects = await getProjects();
+            return res.status(200).json({ success: true, projects });
         }
 
-        // POST: Create or Add Candidate
-        if (req.method === 'POST') {
-            const { action, name, projectId, candidateId } = req.body;
+        // POST: Create/Update Project OR Link Candidate
+        if (method === 'POST') {
+            const { action, name, description, projectId, candidateId: bodyCandId } = req.body;
 
-            if (action === 'create') {
-                if (!name) return res.status(400).json({ error: 'Nombre requerido' });
-                const newProject = await saveProject({ name });
-                return res.status(200).json({ success: true, project: newProject });
+            if (action === 'link') {
+                const pid = projectId || id;
+                const cid = bodyCandId || candidateId;
+                if (!pid || !cid) return res.status(400).json({ success: false, error: 'Project ID and Candidate ID required' });
+                await addCandidateToProject(pid, cid);
+                return res.status(200).json({ success: true, message: 'Candidate linked to project' });
             }
 
-            if (action === 'add-candidate') {
-                if (!projectId || !candidateId) return res.status(400).json({ error: 'Faltan datos' });
-                await addCandidateToProject(projectId, candidateId);
-                return res.status(200).json({ success: true });
-            }
-
-            if (action === 'add-multiple') {
-                const { candidateIds } = req.body;
-                if (!projectId || !candidateIds || !Array.isArray(candidateIds)) {
-                    return res.status(400).json({ error: 'Faltan datos' });
-                }
-                for (const candId of candidateIds) {
-                    await addCandidateToProject(projectId, candId);
-                }
-                return res.status(200).json({ success: true });
-            }
-
-            return res.status(400).json({ error: 'Acción inválida' });
+            if (!name) return res.status(400).json({ success: false, error: 'Project name is required' });
+            const project = await saveProject({ id, name, description });
+            return res.status(200).json({ success: true, project });
         }
 
-        // DELETE: Remove Project or Candidate
-        if (req.method === 'DELETE') {
-            const { action, projectId, candidateId } = req.body;
-
-            // If id is in query, we assume project deletion
-            if (id && !action) {
+        // DELETE: Delete project or unlink candidate
+        if (method === 'DELETE') {
+            if (id && candidateId) {
+                await removeCandidateFromProject(id, candidateId);
+                return res.status(200).json({ success: true, message: 'Candidate unlinked' });
+            }
+            if (id) {
                 await deleteProject(id);
-                return res.status(200).json({ success: true });
+                return res.status(200).json({ success: true, message: 'Project deleted' });
             }
-
-            if (action === 'remove-candidate') {
-                if (!projectId || !candidateId) return res.status(400).json({ error: 'Faltan datos' });
-                await removeCandidateFromProject(projectId, candidateId);
-                return res.status(200).json({ success: true });
-            }
-
-            return res.status(400).json({ error: 'Acción inválida' });
+            return res.status(400).json({ success: false, error: 'ID required' });
         }
 
-        return res.status(405).json({ error: 'Método no permitido' });
+        res.setHeader('Allow', ['GET', 'POST', 'DELETE']);
+        return res.status(405).end(`Method ${method} Not Allowed`);
 
     } catch (error) {
-        console.error('❌ Project API Error:', error);
-        return res.status(500).json({ error: error.message });
+        console.error('Projects API Error:', error);
+        return res.status(500).json({ success: false, error: error.message });
     }
 }

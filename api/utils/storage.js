@@ -62,6 +62,11 @@ const KEYS = {
     STATS_INCOMING: 'stats:msg:incoming',
     STATS_OUTGOING: 'stats:msg:outgoing',
 
+    // Projects (New)
+    PROJECT_PREFIX: 'project:',
+    PROJECTS_LIST: 'projects:all',
+    PROJECT_CANDIDATES_PREFIX: 'project:candidates:',
+
     // AI Automations
     AI_AUTOMATIONS: 'ai:automations:list',
 
@@ -715,82 +720,104 @@ export const saveWebhookTransaction = async ({
         throw e;
     }
 };
-/**
- * ==========================================
- * PROJECTS 📂
- * ==========================================
- */
-export const getProjects = async () => {
-    const client = getClient();
-    if (!client) return [];
-    try {
-        const data = await client.get(KEYS.PROJECTS);
-        return data ? JSON.parse(data) : [];
-    } catch (e) {
-        console.error('Error fetching projects:', e);
-        return [];
-    }
-};
 
+// --- PROJECTS ---
+
+/**
+ * Save or Update a Project
+ */
 export const saveProject = async (project) => {
-    const client = getClient();
-    if (!client) return;
-    const projects = await getProjects();
+    const client = getRedisClient();
+    if (!client) return null;
 
     if (!project.id) {
-        project.id = `pj_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        project.id = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         project.createdAt = new Date().toISOString();
     }
+    project.updatedAt = new Date().toISOString();
 
-    const index = projects.findIndex(p => p.id === project.id);
-    if (index >= 0) projects[index] = { ...projects[index], ...project };
-    else projects.push(project);
+    const pipeline = client.pipeline();
+    pipeline.set(`${KEYS.PROJECT_PREFIX}${project.id}`, JSON.stringify(project));
+    pipeline.zadd(KEYS.PROJECTS_LIST, Date.now(), project.id);
 
-    await client.set(KEYS.PROJECTS, JSON.stringify(projects));
+    await pipeline.exec();
     return project;
 };
 
+/**
+ * Get all Projects
+ */
+export const getProjects = async () => {
+    const client = getRedisClient();
+    if (!client) return [];
+
+    const ids = await client.zrevrange(KEYS.PROJECTS_LIST, 0, -1);
+    if (!ids.length) return [];
+
+    const keys = ids.map(id => `${KEYS.PROJECT_PREFIX}${id}`);
+    const data = await client.mget(...keys);
+
+    return data.map(d => d ? JSON.parse(d) : null).filter(Boolean);
+};
+
+/**
+ * Get Project by ID
+ */
+export const getProjectById = async (id) => {
+    const client = getRedisClient();
+    if (!client || !id) return null;
+    const data = await client.get(`${KEYS.PROJECT_PREFIX}${id}`);
+    return data ? JSON.parse(data) : null;
+};
+
+/**
+ * Delete Project
+ */
 export const deleteProject = async (id) => {
-    const client = getClient();
-    if (!client) return;
-    const projects = await getProjects();
-    const newProjects = projects.filter(p => p.id !== id);
-    await client.set(KEYS.PROJECTS, JSON.stringify(newProjects));
-    // Also cleanup candidates list for this project
-    await client.del(`${KEYS.PROJECT_CANDIDATES_PREFIX}${id}`);
+    const client = getRedisClient();
+    if (!client || !id) return false;
+
+    const pipeline = client.pipeline();
+    pipeline.del(`${KEYS.PROJECT_PREFIX}${id}`);
+    pipeline.zrem(KEYS.PROJECTS_LIST, id);
+    pipeline.del(`${KEYS.PROJECT_CANDIDATES_PREFIX}${id}`);
+
+    await pipeline.exec();
     return true;
 };
 
+/**
+ * Add Candidate to Project (Set based for uniqueness)
+ */
 export const addCandidateToProject = async (projectId, candidateId) => {
-    const client = getClient();
+    const client = getRedisClient();
     if (!client) return false;
     await client.sadd(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
     return true;
 };
 
+/**
+ * Remove Candidate from Project
+ */
 export const removeCandidateFromProject = async (projectId, candidateId) => {
-    const client = getClient();
+    const client = getRedisClient();
     if (!client) return false;
     await client.srem(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
     return true;
 };
 
+/**
+ * Get Project Candidates (Hydrated with full candidate data)
+ */
 export const getProjectCandidates = async (projectId) => {
-    const client = getClient();
+    const client = getRedisClient();
     if (!client) return [];
+
     const ids = await client.smembers(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`);
-    if (!ids || ids.length === 0) return [];
+    if (!ids.length) return [];
 
-    const pipeline = client.pipeline();
-    ids.forEach(id => {
-        pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`);
-    });
+    const keys = ids.map(id => `${KEYS.CANDIDATE_PREFIX}${id}`);
+    const data = await client.mget(...keys);
 
-    const results = await pipeline.exec();
-    return results
-        .map(([err, res]) => {
-            if (err || !res) return null;
-            try { return JSON.parse(res); } catch { return null; }
-        })
-        .filter(i => i !== null);
+    return data.map(d => d ? JSON.parse(d) : null).filter(Boolean);
 };
