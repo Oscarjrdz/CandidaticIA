@@ -271,13 +271,14 @@ export async function cleanCategoryWithAI(category) {
         const prompt = `Analiza y homogeniza la categoría de empleo: "${category}".
 
 REGLAS DE ORO (ESTRICTAS):
-1. REGLA MONTACARGAS: Si en el texto aparece "Almacén" (o variantes como Almacenista, Bodega) pegado a "Montacargas" (o variantes como Montacarguista), antes, después, con o sin comas, la categoría resultante DEBE SER SIEMPRE: "Montacarguista".
-   - Ejemplo: "Almacenista, Montacargas" -> "Montacarguista"
-   - Ejemplo: "Montacargas Almacenista" -> "Montacarguista"
-   - Ejemplo: "Auxiliar Almacen Montacarguista" -> "Montacarguista"
-2. Responde ÚNICAMENTE con el término limpio (1 o 2 palabras máximo).
-3. Usa ACENTOS correctos (Ej: "Almacen" -> "Almacenista").
-4. Si menciona varias áreas distintas y NO es el caso de montacargas, elige la de mayor jerarquía técnica.
+1. REGLA MONTACARGAS: Si aparece "Almacén" + "Montacargas" (en cualquier orden), la categoría ES: "Montacarguista".
+2. REGLA ALMACENISTA: Si aparece "Almacén", "Bodega", "Auxiliar de Almacén", "Almacen" o variantes similares (SIN montacargas), la categoría ES: "Almacenista".
+   - Ejemplo: "Auxiliar de Almacenista" -> "Almacenista"
+   - Ejemplo: "Bodeguero" -> "Almacenista"
+   - Ejemplo: "Ayudante de Almacen" -> "Almacenista"
+3. Responde ÚNICAMENTE con el término limpio (1 o 2 palabras máximo).
+4. Usa SIEMPRE acentos correctos.
+5. Si menciona áreas distintas, elige la de mayor jerarquía técnica.
 
 Respuesta (Únicamente el término):`;
 
