@@ -684,7 +684,7 @@ const CandidatesSection = ({ showToast }) => {
                                         {fields.map(field => (
                                             <React.Fragment key={field.value}>
                                                 <td className="py-0.5 px-2.5">
-                                                    {['escolaridad', 'categoria'].includes(field.value) ? (
+                                                    {['escolaridad', 'categoria', 'nombreReal'].includes(field.value) ? (
                                                         <div
                                                             onClick={() => handleMagicFix(candidate.id, field.value, candidate[field.value])}
                                                             className={`
