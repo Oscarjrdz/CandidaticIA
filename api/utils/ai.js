@@ -268,14 +268,18 @@ export async function cleanCategoryWithAI(category) {
         const genAI = new GoogleGenerativeAI(apiKey);
         const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
 
-        const prompt = `Corrige la ortografía, ACENTUACIÓN y formato de la categoría de empleo: "${category}".
-REGLAS ESTRICTAS:
-1. Responde ÚNICAMENTE con el nombre de la categoría principal.
-2. Si el usuario menciona varias, elige SOLO LA PRIMERA o la más relevante (Ej: "Almacenista Montacarguista" -> "Montacarguista").
-3. El resultado debe ser de MÁXIMO 2 o 3 palabras (Ej: "Almacén", "Chofer Repartidor", "Limpieza").
-4. JAMÁS devuelvas frases largas o explicaciones.
-Responde únicamente con la categoría limpia.
-Respuesta:`;
+        const prompt = `Analiza y homogeniza la categoría de empleo: "${category}".
+
+REGLAS DE ORO (ESTRICTAS):
+1. REGLA MONTACARGAS: Si en el texto aparece "Almacén" (o variantes como Almacenista, Bodega) pegado a "Montacargas" (o variantes como Montacarguista), antes, después, con o sin comas, la categoría resultante DEBE SER SIEMPRE: "Montacarguista".
+   - Ejemplo: "Almacenista, Montacargas" -> "Montacarguista"
+   - Ejemplo: "Montacargas Almacenista" -> "Montacarguista"
+   - Ejemplo: "Auxiliar Almacen Montacarguista" -> "Montacarguista"
+2. Responde ÚNICAMENTE con el término limpio (1 o 2 palabras máximo).
+3. Usa ACENTOS correctos (Ej: "Almacen" -> "Almacenista").
+4. Si menciona varias áreas distintas y NO es el caso de montacargas, elige la de mayor jerarquía técnica.
+
+Respuesta (Únicamente el término):`;
 
         let cleaned = category;
         for (const mName of modelsToTry) {
