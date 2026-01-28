@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Power, PowerOff, Save, X, AlertCircle, Loader2, Send, Brain, Sparkles, Zap } from 'lucide-react';
+import { Plus, Trash2, Power, PowerOff, Save, X, AlertCircle, Loader2, Send, Brain, Sparkles, Zap, MessageCircle } from 'lucide-react';
 import Button from './ui/Button';
 import {
     getAutomationRules,
