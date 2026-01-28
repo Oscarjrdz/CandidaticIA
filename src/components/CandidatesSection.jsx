@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Sparkles, Send, Zap } from 'lucide-react';
 import Card from './ui/Card';
+import ErrorBoundary from './ui/ErrorBoundary';
 import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
 import ChatHistoryModal from './ChatHistoryModal';
@@ -753,13 +754,15 @@ const CandidatesSection = ({ showToast }) => {
             </div>
 
 
-            {/* Ventana Flotante de Chat */}
-            <ChatWindow
-                isOpen={!!selectedCandidate}
-                onClose={() => setSelectedCandidate(null)}
-                candidate={selectedCandidate}
-                credentials={credentials}
-            />
+            {/* Ventana Flotante de Chat con Protección de Errores */}
+            <ErrorBoundary>
+                <ChatWindow
+                    isOpen={!!selectedCandidate}
+                    onClose={() => setSelectedCandidate(null)}
+                    candidate={selectedCandidate}
+                    credentials={credentials}
+                />
+            </ErrorBoundary>
         </div >
     );
 };

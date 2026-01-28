@@ -16,8 +16,7 @@ import {
     getScheduledRules,
     createScheduledRule,
     updateScheduledRule,
-    deleteScheduledRule,
-    testScheduledRule
+    deleteScheduledRule
 } from '../services/scheduledMessagesService';
 import { Clock, MessageSquare, Timer, Copy } from 'lucide-react';
 import AIAutomationsWidget from './AIAutomationsWidget'; // Import Widget
