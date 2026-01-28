@@ -426,7 +426,7 @@ const CandidatesSection = ({ showToast }) => {
                                 <tr className="border-b border-gray-200 dark:border-gray-700 text-xs uppercase tracking-wider text-gray-500">
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Avatar</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
-                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Whatsapp</th>
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">From</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
                                         <div className="flex items-center space-x-1">
                                             <Sparkles className="w-3.5 h-3.5 text-blue-500" />
