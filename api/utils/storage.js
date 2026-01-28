@@ -648,6 +648,73 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
     }
     return false;
 };
+
+/**
+ * ATOMIC WEBHOOK TRANSACTION (F1 Mode)
+ * Consolidates: saveEvent, saveMessage, updateCandidate, incrementMessageStats
+ * into a single network round-trip using Redis Pipelining.
+ */
+export const saveWebhookTransaction = async ({
+    candidateId,
+    message,
+    candidateUpdates,
+    eventData,
+    statsType
+}) => {
+    const client = getClient();
+    if (!client) return null;
+
+    const pipeline = client.pipeline();
+
+    // 1. Save Event (LPUSH + LTRIM)
+    if (eventData) {
+        const eventWithId = { ...eventData, id: Date.now() };
+        pipeline.lpush(KEYS.EVENTS_LIST, JSON.stringify(eventWithId));
+        pipeline.ltrim(KEYS.EVENTS_LIST, 0, 99);
+    }
+
+    // 2. Save Message (RPUSH)
+    if (candidateId && message) {
+        pipeline.rpush(`messages:${candidateId}`, JSON.stringify(message));
+    }
+
+    // 3. Update Candidate (SET)
+    // Note: Since updateCandidate usually requires a GET first, we pass the final object here
+    // or we just set specific fields if we migrate to HASHes later. 
+    // For now, we expect candidateUpdates to be the FULL updated object if provided.
+    if (candidateId && candidateUpdates) {
+        pipeline.set(`${KEYS.CANDIDATE_PREFIX}${candidateId}`, JSON.stringify(candidateUpdates));
+
+        // Update Index if it's a new candidate or phone changed (safety)
+        if (candidateUpdates.whatsapp) {
+            const cleanPhone = candidateUpdates.whatsapp.replace(/\D/g, '');
+            pipeline.hset(KEYS.PHONE_INDEX, cleanPhone, candidateId);
+        }
+
+        // Update Sorting Score in List
+        const score = new Date(candidateUpdates.ultimoMensaje || candidateUpdates.primerContacto || Date.now()).getTime();
+        pipeline.zadd(KEYS.CANDIDATES_LIST, score, candidateId);
+    }
+
+    // 4. Increment Stats (INCR)
+    if (statsType) {
+        const statsKey = statsType === 'incoming' ? KEYS.STATS_INCOMING : KEYS.STATS_OUTGOING;
+        pipeline.incr(statsKey);
+    }
+
+    try {
+        const results = await pipeline.exec();
+        // Check for any failures in the pipeline
+        const errors = results.filter(([err]) => err);
+        if (errors.length > 0) {
+            console.error('❌ [Storage] Pipeline Transaction had partial failures:', errors);
+        }
+        return results;
+    } catch (e) {
+        console.error('❌ [Storage] Pipeline Transaction FATAL Error:', e);
+        throw e;
+    }
+};
 /**
  * ==========================================
  * PROJECTS 📂

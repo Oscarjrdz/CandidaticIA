@@ -13,14 +13,8 @@ export default async function handler(req, res) {
     const eventType = data.event_type || data.event || data.eventName;
     const messageData = data.data || data;
 
-    // 🏎️ FERRARI DEBUG: Always save events for inspection
-    try {
-        const { saveEvent, incrementMessageStats } = await import('../utils/storage.js');
-        await saveEvent(data);
-        if (eventType === 'message_received' || eventType === 'message.incoming') {
-            incrementMessageStats('incoming');
-        }
-    } catch (e) { }
+    // 🏎️ FERRARI WEBHOOK OPTIMIZATION: Atomic Pipelining
+    // We delay saving event/stats until we have the candidate context to做 it in 1 round-trip.
 
     if (!eventType) {
         return res.status(200).json({ success: true, message: 'Heartbeat or invalid payload' });
@@ -46,18 +40,16 @@ export default async function handler(req, res) {
             const phone = from.replace(/\D/g, '');
 
             // 🏎️ FERRARI DEDUPLICATION: Atomic Lock (SET NX)
-            // This stops retries instantly at the gate.
             if (await isMessageProcessed(msgId)) {
                 return res.status(200).send('duplicate_ignored');
             }
 
-
             try {
-                // --- SYSTEM & ADMIN COMMAND FILTER ---
+                // --- ADMIN COMMANDS & FILTERS ---
+                // [Omitted for brevity in this replacement chunk, but keeping original logic flow]
                 const adminNumber = '5218116038195';
                 if (phone === adminNumber) {
                     const lowerBody = body.toLowerCase().trim();
-                    // Command: simon[phone] -> Approve User
                     if (lowerBody.startsWith('simon')) {
                         const targetPhone = lowerBody.replace('simon', '').replace(/\D/g, '');
                         if (targetPhone) {
@@ -66,18 +58,12 @@ export default async function handler(req, res) {
                                 const { sendMessage } = await import('../utils/messenger.js');
                                 const users = await getUsers();
                                 const userIndex = users.findIndex(u => u.whatsapp.includes(targetPhone));
-
                                 if (userIndex !== -1) {
                                     const user = users[userIndex];
                                     user.status = 'Active';
                                     await saveUser(user);
-
-                                    // Notify Admin
                                     await sendMessage(adminNumber, `✅ Usuario ${user.name} (${targetPhone}) activado con éxito.`);
-
-                                    // Notify User
                                     await sendMessage(user.whatsapp, `🎉 ¡Felicidades ${user.name}! Tu cuenta ha sido activada. Ya puedes iniciar sesión en Candidatic IA. 🚀`);
-
                                     return res.status(200).send('user_activated');
                                 } else {
                                     await sendMessage(adminNumber, `❌ No encontré ningún usuario pendiente con el número ${targetPhone}.`);
@@ -89,43 +75,30 @@ export default async function handler(req, res) {
                             }
                         }
                     }
-                    // If it's the admin but not a command, we ALLOW it to fall through 
-                    // so the admin can test the Bot.
                 }
 
-                // --- AUTH MESSAGE FILTER (PINs & Flows) ---
-                if (/^\d{4}$/.test(body.trim())) {
-                    return res.status(200).send('pin_ignored');
-                }
+                if (/^\d{4}$/.test(body.trim())) return res.status(200).send('pin_ignored');
 
-                // Also ignore messages from users who are in Pending status (Recruiters signing up)
-                // EXCEPT if it's the admin number 8116038195
                 try {
                     const { getUsers } = await import('../utils/storage.js');
                     const allUsers = await getUsers();
                     const isPending = allUsers.find(u => u.whatsapp.includes(phone) && u.status === 'Pending');
                     const isAdmin = phone.includes('8116038195');
-
-                    if (isPending && !isAdmin) {
-                        return res.status(200).send('pending_user_ignored');
-                    }
+                    if (isPending && !isAdmin) return res.status(200).send('pending_user_ignored');
                 } catch (e) { }
 
-                // 🏎️ FERRARI LOOKUP: O(1) Hash Table
+                // 🏎️ FERRARI LOOKUP
                 let candidateId = await getCandidateIdByPhone(phone);
                 let candidate = null;
 
                 if (candidateId) {
                     const { getCandidateById } = await import('../utils/storage.js');
                     candidate = await getCandidateById(candidateId);
-
-                    if (!candidate) {
-                        console.warn(`👻 Ghost Candidate detected in Index: ${candidateId} for ${phone}. Re-creating...`);
-                        candidateId = null; // Force re-creation
-                    }
+                    if (!candidate) candidateId = null; // Re-create if ghost
                 }
 
                 if (!candidateId) {
+                    const { saveCandidate } = await import('../utils/storage.js');
                     const newCandidate = await saveCandidate({
                         whatsapp: phone,
                         nombre: messageData.pushname || messageData.pushName || messageData.name || 'Desconocido',
@@ -133,65 +106,64 @@ export default async function handler(req, res) {
                         primerContacto: new Date().toISOString()
                     });
                     candidateId = newCandidate.id;
+                    candidate = newCandidate;
                 }
 
-                // 🏎️ [IMMEDIATE PRESENCE] - Mark as read and start typing ASAP
-                const presenceUpdate = (async () => {
-                    const config = await getUltraMsgConfig();
-                    if (config) {
-                        const { sendUltraMsgPresence } = await import('./utils.js');
-                        const results = await Promise.allSettled([
-                            markUltraMsgAsRead(config.instanceId, config.token, from),
-                            sendUltraMsgPresence(config.instanceId, config.token, from, 'composing')
-                        ]);
-                        // Log results for debugging
-                        results.forEach((res, idx) => {
-                            if (res.status === 'rejected') {
-                                console.error(`❌ Webhook immediate action ${idx === 0 ? 'READ' : 'PRESENCE'} failed:`, res.reason);
-                            }
-                        });
-                    }
-                })();
-
-                // Sequential ops (Context preservation)
+                // Prepare Message Object
                 let agentInput = body;
                 const messageType = messageData.type || 'text';
-
                 const msgToSave = {
                     from: 'user', content: body, type: messageType,
                     timestamp: new Date().toISOString()
                 };
 
-                // MULTIMODAL AUDIO SUPPORT 🎙️
                 if (messageType === 'ptt' || messageType === 'audio') {
-                    // UltraMsg sends media URL in 'media' or 'body' depending on version
                     const mediaUrl = messageData.media || messageData.body;
                     if (mediaUrl && mediaUrl.startsWith('http')) {
                         msgToSave.mediaUrl = mediaUrl;
-                        agentInput = { type: 'audio', url: mediaUrl }; // Flag for Agent
+                        agentInput = { type: 'audio', url: mediaUrl };
                     }
                 } else if (messageData.media) {
                     msgToSave.mediaUrl = messageData.media;
                 }
 
-                // Execute storage and AI in parallel where possible, but context needs history.
-                // We await history save to ensure the AI sees the current message.
-                await saveMessage(candidateId, msgToSave);
-
-                // Background tasks (Non-blocking context)
-                const configPromise = getUltraMsgConfig();
-                const activityPromise = updateCandidate(candidateId, {
+                // 🏎️ ATOMIC COMMIT (Pipelining)
+                // We combine Event saving, Message saving, and Candidate state updates.
+                const { saveWebhookTransaction } = await import('../utils/storage.js');
+                const updatedCandidate = {
+                    ...candidate,
                     ultimoMensaje: new Date().toISOString(),
                     lastUserMessageAt: new Date().toISOString(),
                     unread: true
+                };
+
+                // Move some non-critical background tasks here
+                const configPromise = getUltraMsgConfig();
+
+                await saveWebhookTransaction({
+                    candidateId,
+                    message: msgToSave,
+                    candidateUpdates: updatedCandidate,
+                    eventData: data,
+                    statsType: 'incoming'
                 });
 
-                // 主 AI Session (Wait for it to survive serverless)
+                // 🏎️ [IMMEDIATE PRESENCE] - Mark as read and start typing ASAP (After transaction)
+                const presenceUpdate = (async () => {
+                    const config = await configPromise;
+                    if (config) {
+                        const { sendUltraMsgPresence } = await import('./utils.js');
+                        await Promise.allSettled([
+                            markUltraMsgAsRead(config.instanceId, config.token, from),
+                            sendUltraMsgPresence(config.instanceId, config.token, from, 'composing')
+                        ]);
+                    }
+                })();
+
+                // AI Processing in background
                 const aiPromise = (async () => {
                     try {
                         const redis = getRedisClient();
-
-                        // 1. ALWAYS TRIGGER EXTRACTION (Titanium Capture)
                         const extractionTask = (async () => {
                             try {
                                 const { getMessages } = await import('../utils/storage.js');
@@ -208,43 +180,29 @@ export default async function handler(req, res) {
                                     })
                                     .join('\n');
                                 await intelligentExtract(candidateId, historyText);
-                            } catch (extErr) {
-                                console.error('⚠️ [Webhook] Extraction Task Error:', extErr);
-                            }
+                            } catch (extErr) { console.error('⚠️ [Webhook] Extraction Task Error:', extErr); }
                         })();
 
-                        // 2. TRIGGER BOT IF ACTIVE
                         const isActive = await redis?.get('bot_ia_active');
-                        if (isActive !== 'false') {
-                            await processMessage(candidateId, agentInput);
-                        }
-
-                        await extractionTask; // Ensure extraction finishes
-                    } catch (e) {
-                        console.error('🤖 Ferrari AI Error:', e);
-                        const redis = getRedisClient();
-                        if (redis) await redis.set(`debug:error:webhook_ai:${phone}`, JSON.stringify({ timestamp: new Date().toISOString(), error: e.message }), 'EX', 3600);
-                    }
+                        if (isActive !== 'false') await processMessage(candidateId, agentInput);
+                        await extractionTask;
+                    } catch (e) { console.error('🤖 Ferrari AI Error:', e); }
                 })();
 
-                // Ferrari Background Tasks
                 const miscPromise = (async () => {
                     try {
                         const config = await configPromise;
                         if (!config) return;
-                        await Promise.allSettled([
-                            (async () => {
-                                const info = await getUltraMsgContact(config.instanceId, config.token, from);
-                                const url = info?.success || info?.image;
-                                if (url?.startsWith('http')) await updateCandidate(candidateId, { profilePic: url });
-                            })()
-                        ]);
+                        const info = await getUltraMsgContact(config.instanceId, config.token, from);
+                        const url = info?.success || info?.image;
+                        if (url?.startsWith('http')) {
+                            const { updateCandidate } = await import('../utils/storage.js');
+                            await updateCandidate(candidateId, { profilePic: url });
+                        }
                     } catch (e) { }
                 })();
 
-                // Wait to ensure delivery in serverless environment
-                await Promise.allSettled([aiPromise, activityPromise, miscPromise, presenceUpdate]);
-
+                await Promise.allSettled([aiPromise, miscPromise, presenceUpdate]);
                 return res.status(200).send('success');
 
             } catch (err) {
