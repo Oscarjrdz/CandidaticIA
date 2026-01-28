@@ -1,4 +1,4 @@
-import { getRedisClient, getAIAutomations, getCandidates, saveMessage, getCandidateByPhone } from './storage.js';
+import { getRedisClient, getAIAutomations, getCandidates, saveMessage, getCandidateByPhone, incrementAIAutomationSentCount } from './storage.js';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
@@ -177,6 +177,7 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
                             meta: { automationId: rule.id, aiMatch: true }
                         });
                         await redis.set(`ai:automation:last:${cand.id}`, new Date().toISOString(), 'EX', COOLDOWN_HOURS * 3600);
+                        await incrementAIAutomationSentCount(rule.id);
                         messagesSent++;
                         logs.push(`🚀 Mensaje enviado exitosamente.`);
                     } else {

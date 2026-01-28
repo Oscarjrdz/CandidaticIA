@@ -71,6 +71,7 @@ const KEYS = {
 
     // AI Automations
     AI_AUTOMATIONS: 'ai:automations:list',
+    SCHEDULED_RULES: 'scheduled_message_rules',
 };
 
 
@@ -538,6 +539,38 @@ export const deleteAIAutomation = async (id) => {
 
     await client.set(KEYS.AI_AUTOMATIONS, JSON.stringify(newList));
     return true;
+};
+
+export const incrementAIAutomationSentCount = async (id) => {
+    const client = getRedisClient();
+    if (!client) return false;
+
+    let list = await getAIAutomations();
+    const index = list.findIndex(a => a.id === id);
+
+    if (index >= 0) {
+        list[index].sentCount = (list[index].sentCount || 0) + 1;
+        await client.set(KEYS.AI_AUTOMATIONS, JSON.stringify(list));
+        return true;
+    }
+    return false;
+};
+
+export const incrementScheduledRuleSentCount = async (id) => {
+    const client = getRedisClient();
+    if (!client) return false;
+
+    const data = await client.get(KEYS.SCHEDULED_RULES);
+    let list = data ? JSON.parse(data) : [];
+
+    const index = list.findIndex(r => r.id === id);
+
+    if (index >= 0) {
+        list[index].sentCount = (list[index].sentCount || 0) + 1;
+        await client.set(KEYS.SCHEDULED_RULES, JSON.stringify(list));
+        return true;
+    }
+    return false;
 };
 
 /**

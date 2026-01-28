@@ -1,4 +1,4 @@
-import { getRedisClient, getCandidates, saveMessage, updateCandidate } from '../../api/utils/storage.js';
+import { getRedisClient, getCandidates, saveMessage, updateCandidate, incrementScheduledRuleSentCount } from '../../api/utils/storage.js';
 
 /**
  * CRON JOB: Check Scheduled Messages
@@ -101,6 +101,7 @@ export default async function handler(req, res) {
 
                     // Mark as sent in Redis using cleaned phone
                     await redis.set(trackKey, now.toString());
+                    await incrementScheduledRuleSentCount(rule.id);
 
                     // Save to history proactively
                     await saveMessage(candidate.id, {

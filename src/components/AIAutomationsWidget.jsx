@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Sparkles, Trash2, PauseCircle, PlayCircle, Loader2, AlertCircle, RefreshCcw, Command, Zap, Terminal, Brain, X } from 'lucide-react';
+import { Sparkles, Trash2, PauseCircle, PlayCircle, Loader2, AlertCircle, RefreshCcw, Command, Zap, Terminal, Brain, X, MessageSquare } from 'lucide-react';
 import Button from './ui/Button';
 import AIEnginePulse from './AIEnginePulse';
 
@@ -203,9 +203,13 @@ const AIAutomationsWidget = ({ showToast }) => {
                                     <Sparkles className={`w-5 h-5 ${r?.active ? 'text-purple-500' : 'text-gray-400'}`} />
                                 </div>
                                 <div className="truncate pr-8">
-                                    <h4 className="font-black text-sm text-gray-900 dark:text-white uppercase tracking-tighter flex items-center">
+                                    <h4 className="font-black text-sm text-gray-900 dark:text-white uppercase tracking-tighter flex items-center gap-3">
                                         {r?.name || 'Regla'}
-                                        {r?.active && <span className="ml-2 w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></span>}
+                                        {r?.active && <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.5)]"></span>}
+                                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 text-[9px] font-black border border-purple-100/50 dark:border-purple-800/30">
+                                            <MessageSquare className="w-2.5 h-2.5" />
+                                            {r?.sentCount || 0}
+                                        </div>
                                     </h4>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 italic font-medium">"{r?.prompt}"</p>
                                 </div>

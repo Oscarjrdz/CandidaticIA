@@ -609,6 +609,7 @@ const AutomationsSection = ({ showToast }) => {
                                 <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm text-center">Inactividad<br /><span className="text-xs font-normal text-gray-500">(Bot min)</span></th>
                                 <th className="text-left py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-1/3">Mensaje</th>
                                 <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-20">Tipo</th>
+                                <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-20">Enviados</th>
                                 <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-24">Estado</th>
                                 <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-32 bg-blue-50/50 dark:bg-blue-900/10">Número Prueba</th>
                                 <th className="text-center py-3 px-4 font-semibold text-gray-700 dark:text-gray-300 text-sm w-24 bg-blue-50/50 dark:bg-blue-900/10">Probar</th>
@@ -725,10 +726,18 @@ const AutomationsSection = ({ showToast }) => {
                                                     ? 'bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-200'
                                                     : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'
                                                     }`}
-                                                title="Clic para cambiar tipo (1 Vez / Ciclo)"
+                                                title="1 Vez / Ciclo"
                                             >
                                                 {rule.oneTime ? '1 Vez' : 'Ciclo'}
                                             </button>
+                                        </td>
+
+                                        {/* Sent Count */}
+                                        <td className="py-3 px-4 text-center">
+                                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-[10px] font-black">
+                                                <MessageCircle className="w-3 h-3 text-blue-500" />
+                                                {rule.sentCount || 0}
+                                            </div>
                                         </td>
 
                                         {/* Status */}
