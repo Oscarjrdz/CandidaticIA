@@ -43,11 +43,6 @@ const CandidatesSection = ({ showToast }) => {
 
     useEffect(() => {
         const loadInitialData = async () => {
-            // Cargar credenciales
-            const savedCreds = localStorage.getItem('ultramsg_credentials');
-            if (savedCreds) setCredentials(JSON.parse(savedCreds));
-
-
             // Cargar candidatos
             loadCandidates();
 
@@ -245,10 +240,6 @@ const CandidatesSection = ({ showToast }) => {
     };
 
     const handleOpenChat = (candidate) => {
-        if (!credentials) {
-            showToast('Configura tus credenciales de UltraMsg primero para usar el chat', 'warning');
-            return;
-        }
         setSelectedCandidate(candidate);
     };
 
@@ -760,7 +751,6 @@ const CandidatesSection = ({ showToast }) => {
                     isOpen={!!selectedCandidate}
                     onClose={() => setSelectedCandidate(null)}
                     candidate={selectedCandidate}
-                    credentials={credentials}
                 />
             </ErrorBoundary>
         </div >

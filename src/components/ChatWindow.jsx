@@ -5,7 +5,7 @@ import Button from './ui/Button';
 /**
  * Ventana de chat flotante y arrastrable
  */
-const ChatWindow = ({ isOpen, onClose, candidate, credentials }) => {
+const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [sending, setSending] = useState(false);
