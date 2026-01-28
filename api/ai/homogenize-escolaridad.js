@@ -18,7 +18,7 @@ export default async function handler(req, res) {
 
         if (reset === 'true' && redis) {
             await redis.set('homogenize:escolaridad:offset', '0');
-            return res.status(200).json({ success: true, message: "Contador reiniciado a 0" });
+            // Continue execution to process the first one immediately
         }
 
         let currentOffset = 0;
