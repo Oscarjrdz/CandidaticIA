@@ -37,6 +37,9 @@ const CandidatesSection = ({ showToast }) => {
     const [historyModalCandidate, setHistoryModalCandidate] = useState(null);
     const [historyModalContent, setHistoryModalContent] = useState('');
 
+    // --- 🪄 MAGIC AI FIX STATE ---
+    const [magicLoading, setMagicLoading] = useState({});
+
     useEffect(() => {
         const loadInitialData = async () => {
             // Cargar credenciales
@@ -278,6 +281,36 @@ const CandidatesSection = ({ showToast }) => {
             return;
         }
         setSelectedCandidate(candidate);
+    };
+
+    // --- 🪄 MAGIC AI FIX HANDLER ---
+    const handleMagicFix = async (candidateId, field, currentValue) => {
+        const key = `${candidateId}-${field}`;
+        setMagicLoading(prev => ({ ...prev, [key]: true }));
+
+        try {
+            const res = await fetch('/api/ai/magic-fix', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ candidateId, field })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                // Update local state immediately
+                setCandidates(prev => prev.map(c =>
+                    c.id === candidateId ? { ...c, [field]: data.newValue } : c
+                ));
+                showToast(`🪄 ${field.toUpperCase()} Homologado: ${data.newValue}`, 'success');
+            } else {
+                showToast(data.error || 'Error en la magia IA', 'error');
+            }
+        } catch (e) {
+            console.error('Magic Fix error:', e);
+            showToast('Error de conexión', 'error');
+        } finally {
+            setMagicLoading(prev => ({ ...prev, [key]: false }));
+        }
     };
 
     const formatPhone = (phone) => {
@@ -651,9 +684,28 @@ const CandidatesSection = ({ showToast }) => {
                                         {fields.map(field => (
                                             <React.Fragment key={field.value}>
                                                 <td className="py-0.5 px-2.5">
-                                                    <div className="text-xs text-gray-900 dark:text-white font-medium">
-                                                        {candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>}
-                                                    </div>
+                                                    {['escolaridad', 'categoria'].includes(field.value) ? (
+                                                        <div
+                                                            onClick={() => handleMagicFix(candidate.id, field.value, candidate[field.value])}
+                                                            className={`
+                                                                inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-xs font-medium
+                                                                ${magicLoading[`${candidate.id}-${field.value}`]
+                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse'
+                                                                    : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}
+                                                            `}
+                                                            title="Clic para Magia IA ✨"
+                                                        >
+                                                            {magicLoading[`${candidate.id}-${field.value}`] && (
+                                                                <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
+                                                            )}
+                                                            {candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>}
+                                                            <Sparkles className={`w-2.5 h-2.5 ml-1.5 opacity-0 group-hover:opacity-100 ${magicLoading[`${candidate.id}-${field.value}`] ? 'hidden' : ''} text-blue-400`} />
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-xs text-gray-900 dark:text-white font-medium">
+                                                            {candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 {/* Special Case: Age calculation */}
                                                 {field.value === 'fechaNacimiento' && (
