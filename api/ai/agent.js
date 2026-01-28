@@ -18,8 +18,18 @@ NUNCA CUENTES CHISTES, mantén un tono profesional.
 
 export const processMessage = async (candidateId, incomingMessage) => {
     try {
-
         const redis = getRedisClient();
+
+        // 🏎️ [TYPING INDICATOR] - Start composing presence immediately
+        (async () => {
+            const { getCandidateById } = await import('../utils/storage.js');
+            const cand = await getCandidateById(candidateId);
+            const config = await getUltraMsgConfig();
+            if (config && cand?.whatsapp) {
+                const { sendUltraMsgPresence } = await import('../whatsapp/utils.js');
+                await sendUltraMsgPresence(config.instanceId, config.token, cand.whatsapp, 'composing');
+            }
+        })();
 
         // 1. Get Candidate Data (Database Context)
         let candidateData = null;

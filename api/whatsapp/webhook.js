@@ -132,6 +132,18 @@ export default async function handler(req, res) {
                     candidateId = newCandidate.id;
                 }
 
+                // 🏎️ [IMMEDIATE PRESENCE] - Mark as read and start typing ASAP
+                (async () => {
+                    const config = await getUltraMsgConfig();
+                    if (config) {
+                        const { sendUltraMsgPresence } = await import('./utils.js');
+                        await Promise.allSettled([
+                            markUltraMsgAsRead(config.instanceId, config.token, from),
+                            sendUltraMsgPresence(config.instanceId, config.token, from, 'composing')
+                        ]);
+                    }
+                })();
+
                 // Sequential ops (Context preservation)
                 let agentInput = body;
                 const messageType = messageData.type || 'text';
@@ -212,7 +224,6 @@ export default async function handler(req, res) {
                         const config = await configPromise;
                         if (!config) return;
                         await Promise.allSettled([
-                            markUltraMsgAsRead(config.instanceId, config.token, from),
                             (async () => {
                                 const info = await getUltraMsgContact(config.instanceId, config.token, from);
                                 const url = info?.success || info?.image;

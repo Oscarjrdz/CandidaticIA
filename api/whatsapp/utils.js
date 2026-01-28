@@ -177,6 +177,39 @@ export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
     }
 };
 
+/**
+ * Send presence (typing/recording) status
+ * @param {string} instanceId 
+ * @param {string} token 
+ * @param {string} chatId 
+ * @param {string} presence - 'composing' (typing) or 'recording'
+ */
+export const sendUltraMsgPresence = async (instanceId, token, chatId, presence = 'composing') => {
+    try {
+        let formattedChatId = String(chatId).trim();
+        if (!formattedChatId.includes('@')) {
+            const cleanPhone = formattedChatId.replace(/\D/g, '');
+            formattedChatId = `${cleanPhone}@c.us`;
+        }
+
+        const url = `https://api.ultramsg.com/${instanceId}/chats/presence`;
+
+        const response = await axios.post(url, {
+            token: token,
+            chatId: formattedChatId,
+            presence: presence
+        }, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 5000
+        });
+
+        return response.data;
+    } catch (error) {
+        // Silent fail for presence indicators to avoid blocking message flow
+        return null;
+    }
+};
+
 export const downloadMedia = async (url) => {
     try {
         const response = await axios.get(url, { responseType: 'arraybuffer' });
