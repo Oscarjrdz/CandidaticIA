@@ -88,15 +88,34 @@ export default async function handler(req, res) {
 
             const extracted = await intelligentExtract(cand.id, historyText);
 
-            if (extracted && extracted.escolaridad) {
-                const finalValue = await cleanEscolaridadWithAI(extracted.escolaridad);
-                await updateCandidate(cand.id, { escolaridad: finalValue });
+            if (extracted) {
+                const updates = {};
 
-                updateResult.status = "✅ HOMOLOGADO";
-                updateResult.antes = extracted.escolaridad;
-                updateResult.ahora = finalValue;
+                // 1. Homogenize Escolaridad
+                if (extracted.escolaridad) {
+                    const cleanEsc = await cleanEscolaridadWithAI(extracted.escolaridad);
+                    updates.escolaridad = cleanEsc;
+                    updateResult.escolaridad = { antes: extracted.escolaridad, ahora: cleanEsc };
+                }
+
+                // 2. Homogenize Categoría
+                if (extracted.categoria) {
+                    const { cleanCategoryWithAI } = await import('../utils/ai.js');
+                    const cleanCat = await cleanCategoryWithAI(extracted.categoria);
+                    updates.categoria = cleanCat;
+                    updateResult.categoria = { antes: extracted.categoria, ahora: cleanCat };
+                }
+
+                if (Object.keys(updates).length > 0) {
+                    await updateCandidate(cand.id, updates);
+                    updateResult.status = "✅ HOMOLOGADO (Dual)";
+                } else {
+                    updateResult.status = "⏭️ SIN CAMBIOS EN ESTE CHAT";
+                    // Only mark N/A if there's really nothing to avoid stuck loops
+                    if (!cand.escolaridad) await updateCandidate(cand.id, { escolaridad: 'N/A' });
+                }
             } else {
-                updateResult.status = "⏭️ SIN DATOS (No se detectó estudios en chat)";
+                updateResult.status = "⏭️ NO SE DETECTARON DATOS";
                 await updateCandidate(cand.id, { escolaridad: 'N/A' });
             }
         } else {
