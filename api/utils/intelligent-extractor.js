@@ -76,31 +76,36 @@ export async function intelligentExtract(candidateId, historyText) {
         }
 
         // 2. Build Dynamic Schema and Instructions
-        const schema = {};
+        const schema = {
+            thought_process: "Paragraph explaining the reasoning behind the extraction",
+            data: {}
+        };
         let extractionInstructions = "";
 
         rules.forEach(rule => {
-            schema[rule.field] = "string | null"; // Default to string or null
+            schema.data[rule.field] = {
+                value: "string | null",
+                citation: "Short snippet of text from the chat as evidence"
+            };
             extractionInstructions += `- ${rule.fieldLabel || rule.field}: ${rule.prompt || `Extrae el valor para ${rule.fieldLabel}`}\n`;
         });
 
-        const prompt = `[VIPER-GRIP EXTRACTION PROTOCOL]
-Analiza exhaustivamente la conversación para extraer datos del Candidato.
+        const prompt = `[VIPER-GRIP REASONING PROTOCOL v2.0]
+Analiza exhaustivamente la conversación para extraer datos del Candidato usando Razonamiento Lógico (Chain of Thought).
 
 CONVERSACIÓN HISTÓRICA:
 """
 ${historyText}
 """
 
-REQUERIMIENTOS DE CAPTURA (EXTRAER SIEMPRE SI EXISTEN):
+REQUERIMIENTOS:
 ${extractionInstructions}
 
-ESTRATEGIA VIPER (REVISADA):
-1. Sé PRECISO: Si el dato NO está en la charla, devuelve "null". PROHIBIDO inventar o alucinar datos.
-2. PROHIBICIÓN DE NOMBRES: Jamás uses un NOMBRE DE PERSONA para llenar campos como Municipio, Categoría o Escolaridad.
-3. EXTRACCIÓN DE NOMBRE: El "nombreReal" DEBE provenir exclusivamente de lo que el CANDIDATO escribió. Ignora si el Reclutador/Bot saluda con un nombre (puede estar equivocado).
-4. PERSISTENCIA: Si el dato fue mencionado antes en la charla por el candidato, úsalo.
-5. LIMPIEZA: Para campos de texto, mantén la esencia oficial (ej: "Mty" -> "Monterrey").
+ESTRATEGIA DE RAZONAMIENTO (MÉTODO GOOGLE/ANTIGRAVITY):
+1. PENSAMIENTO (thought_process): Antes de extraer, escribe un análisis breve. Compara términos similares (ej: ¿Es Ayudante o Almacenista?). Busca contradicciones.
+2. CITACIÓN: Para cada dato extraído, DEBES incluir el fragmento de texto exacto donde el candidato lo mencionó. Si no hay evidencia clara, el valor debe ser null.
+3. PRECISIÓN: Si el dato NO está en la charla, devuelve null. PROHIBIDO alucinar.
+4. EXTRACCIÓN DE NOMBRE: El "nombreReal" debe venir de lo que el CANDIDATO escribió.
 
 Responde ÚNICAMENTE con un JSON puro que siga este esquema:
 ${JSON.stringify(schema, null, 2)}
@@ -113,7 +118,6 @@ ${JSON.stringify(schema, null, 2)}
                     model: mName,
                     generationConfig: {
                         temperature: 0.1,
-                        // responseMimeType: "application/json" // Removed for wider compatibility
                     }
                 });
                 const result = await model.generateContent(prompt);
@@ -126,7 +130,6 @@ ${JSON.stringify(schema, null, 2)}
             }
         }
 
-
         if (!jsonText) {
             console.error('❌ [Viper] All models failed to extract data.');
             return null;
@@ -135,22 +138,26 @@ ${JSON.stringify(schema, null, 2)}
         // Sanitize JSON response
         jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        let extracted = {};
+        let extractedEnvelope = {};
         try {
-            extracted = JSON.parse(jsonText);
+            extractedEnvelope = JSON.parse(jsonText);
         } catch (parseErr) {
             const match = jsonText.match(/\{[\s\S]*\}/);
             if (match) {
-                try { extracted = JSON.parse(match[0]); } catch (e) { }
+                try { extractedEnvelope = JSON.parse(match[0]); } catch (e) { }
             }
         }
 
+        const extracted = extractedEnvelope.data || {};
+        const thoughtProcess = extractedEnvelope.thought_process || "No reasoning provided";
 
         // 3. Process and refine updates
         const updateData = {};
 
         for (const rule of rules) {
-            const val = extracted[rule.field];
+            const fieldResult = extracted[rule.field];
+            const val = typeof fieldResult === 'object' ? fieldResult.value : fieldResult;
+
             if (!val || val === 'null' || val === 'N/A' || val === 'INVALID') continue;
 
 
@@ -196,6 +203,7 @@ ${JSON.stringify(schema, null, 2)}
                 const logEntry = {
                     timestamp: new Date().toISOString(),
                     candidateId,
+                    thoughtProcess,
                     extracted,
                     refined: updateData,
                     historySnippet: historyText.substring(0, 500)
