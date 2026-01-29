@@ -201,23 +201,23 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
 
             <div className="flex-1 min-w-0 pr-14" {...listeners}>
                 <div className="flex items-center gap-2 mb-0.5">
-                    <h4 className="font-black text-slate-800 dark:text-white text-[10px] truncate uppercase tracking-tighter">
+                    <h4 className="font-extrabold text-slate-900 dark:text-white text-[11px] truncate uppercase tracking-tight">
                         {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
                     </h4>
                     {candidate.edad && (
-                        <span className="text-[7px] text-blue-500 font-bold bg-blue-50 dark:bg-blue-900/30 px-1 rounded uppercase">
+                        <span className="text-[8px] text-white font-black bg-blue-600 px-1.5 py-0.5 rounded-full uppercase shadow-sm">
                             {candidate.edad} años
                         </span>
                     )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0 text-[7px] text-slate-500 font-bold uppercase tracking-widest opacity-80">
                     <div className="flex items-center gap-0.5 whitespace-nowrap">
-                        <MapPin className="w-1.5 h-1.5 text-blue-500/70" />
+                        <MapPin className="w-1.5 h-1.5 text-blue-500" />
                         {candidate.municipio || 'N/A'}
                     </div>
                     {candidate.escolaridad && (
                         <div className="flex items-center gap-0.5 whitespace-nowrap">
-                            <GraduationCap className="w-1.5 h-1.5 text-blue-500/70" />
+                            <GraduationCap className="w-1.5 h-1.5 text-blue-500" />
                             {candidate.escolaridad}
                         </div>
                     )}
@@ -506,19 +506,31 @@ const ProjectsSection = ({ showToast }) => {
             s.id === stepId ? { ...s, name: newName } : s
         );
 
+        // Update UI state immediately
         const updatedProject = { ...activeProject, steps: updatedSteps };
-        setActiveProject(updatedProject);
         setProjects(prev => prev.map(p => p.id === activeProject.id ? updatedProject : p));
+        setActiveProject(updatedProject);
 
-        await fetch('/api/projects', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'updateSteps',
-                projectId: activeProject.id,
-                steps: updatedSteps
-            })
-        });
+        try {
+            const res = await fetch('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'updateSteps',
+                    projectId: activeProject.id,
+                    steps: updatedSteps
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                if (showToast) showToast('Paso actualizado', 'success');
+            } else {
+                throw new Error(data.error);
+            }
+        } catch (e) {
+            console.error('Error updating steps:', e);
+            if (showToast) showToast('Error al guardar cambio', 'error');
+        }
     };
 
     const handleDeleteProject = async (id, e) => {

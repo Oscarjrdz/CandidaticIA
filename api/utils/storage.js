@@ -68,6 +68,7 @@ const KEYS = {
     PROJECT_CANDIDATES_PREFIX: 'project:candidates:',
     PROJECT_SEARCHES_PREFIX: 'project:searches:',
     PROJECT_CANDIDATE_METADATA_PREFIX: 'project:cand_meta:',
+    CANDIDATE_PROJECT_LINK: 'index:cand_project', // Reverse index: candidateId -> projectId
 
     // AI Automations
     AI_AUTOMATIONS: 'ai:automations:list',
@@ -877,10 +878,18 @@ export const deleteProject = async (id) => {
     const client = getRedisClient();
     if (!client || !id) return false;
 
-    const pipeline = client.pipeline();
+    const project = await getProjectById(id);
+    if (project) {
+        const candidateIds = await client.smembers(`${KEYS.PROJECT_CANDIDATES_PREFIX}${id}`);
+        if (candidateIds.length > 0) {
+            candidateIds.forEach(cid => pipeline.hdel(KEYS.CANDIDATE_PROJECT_LINK, cid));
+        }
+    }
+
     pipeline.del(`${KEYS.PROJECT_PREFIX}${id}`);
     pipeline.zrem(KEYS.PROJECTS_LIST, id);
     pipeline.del(`${KEYS.PROJECT_CANDIDATES_PREFIX}${id}`);
+    pipeline.del(`${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${id}`);
 
     await pipeline.exec();
     return true;
@@ -896,6 +905,7 @@ export const removeCandidateFromProject = async (projectId, candidateId) => {
     const pipeline = client.pipeline();
     pipeline.srem(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
     pipeline.hdel(`${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${projectId}`, candidateId);
+    pipeline.hdel(KEYS.CANDIDATE_PROJECT_LINK, candidateId);
 
     await pipeline.exec();
     return true;
@@ -960,7 +970,16 @@ export const addCandidateToProject = async (projectId, candidateId, metadata = n
     if (!client) return false;
 
     const pipeline = client.pipeline();
+    // Exclusivity: Check if candidate is already in another project
+    const currentProjectId = await client.hget(KEYS.CANDIDATE_PROJECT_LINK, candidateId);
+    if (currentProjectId && currentProjectId !== projectId) {
+        // Atomic removal from current project
+        pipeline.srem(`${KEYS.PROJECT_CANDIDATES_PREFIX}${currentProjectId}`, candidateId);
+        pipeline.hdel(`${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${currentProjectId}`, candidateId);
+    }
+
     pipeline.sadd(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
+    pipeline.hset(KEYS.CANDIDATE_PROJECT_LINK, candidateId, projectId);
 
     // Always ensure we have metadata with at least the default step
     const finalMetadata = {
