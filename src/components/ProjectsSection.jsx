@@ -520,6 +520,36 @@ const ProjectsSection = ({ showToast }) => {
         setIsBatchLinking(true);
         let count = 0;
         try {
+            let targetStepId = 'step_new';
+            const iaSearchStep = (activeProject.steps || []).find(s => s.name.toLowerCase() === 'búsqueda ia');
+
+            if (!iaSearchStep) {
+                // Create it automatically
+                const newStep = { id: `step_ia_${Date.now()}`, name: 'Búsqueda IA' };
+                const updatedSteps = [...(activeProject.steps || []), newStep];
+
+                const res = await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'updateSteps',
+                        projectId: activeProject.id,
+                        steps: updatedSteps
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    targetStepId = newStep.id;
+                    // Update local state to avoid re-fetching the whole project if possible, 
+                    // but since activeProject is used below, let's update it.
+                    const updatedProj = { ...activeProject, steps: updatedSteps };
+                    setActiveProject(updatedProj);
+                    setProjects(projects.map(p => p.id === activeProject.id ? updatedProj : p));
+                }
+            } else {
+                targetStepId = iaSearchStep.id;
+            }
+
             // Sequential to avoid race conditions in metadata HASH
             for (const cand of searchPreview) {
                 const res = await fetch('/api/projects', {
@@ -529,13 +559,14 @@ const ProjectsSection = ({ showToast }) => {
                         action: 'link',
                         projectId: activeProject.id,
                         candidateId: cand.id,
-                        origin: activeQuery
+                        origin: activeQuery,
+                        stepId: targetStepId
                     })
                 });
                 const data = await res.json();
                 if (data.success) count++;
             }
-            if (showToast) showToast(`${count} candidatos vinculados al proyecto`, 'success');
+            if (showToast) showToast(`${count} candidatos vinculados a Búsqueda IA`, 'success');
             setSearchPreview([]);
             setActiveQuery('');
             fetchProjectCandidates(activeProject.id);
