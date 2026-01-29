@@ -166,7 +166,7 @@ Consulta del usuario: "${query}"
         const aiResponse = JSON.parse(jsonMatch[0]);
 
         // 3. Ejecutar la búsqueda en los datos reales
-        const { candidates } = await getCandidates(2000, 0); // Traer hasta 2000 para búsqueda profunda
+        const { candidates } = await getCandidates(2000, 0, '', true); // Exclude linked candidates for AI search
 
         // Función para calcular edad
         // Función para normalizar strings (quitar acentos, minúsculas)

@@ -181,13 +181,20 @@ export const deleteAuthToken = async (phone) => {
  * ==========================================
  */
 // Native Redis Pagination (Page size 100)
-export const getCandidates = async (limit = 100, offset = 0, search = '') => {
+export const getCandidates = async (limit = 100, offset = 0, search = '', excludeLinked = false) => {
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
 
+    // Get linked candidates set if exclusion is requested
+    let linkedIds = new Set();
+    if (excludeLinked) {
+        const idsArray = await client.hkeys(KEYS.CANDIDATE_PROJECT_LINK);
+        linkedIds = new Set(idsArray);
+    }
+
     // If searching, we currently have to do a scan (unless we index names too)
     // For now, if search is empty, we use the ultra-fast F1 Steering.
-    if (!search) {
+    if (!search && !excludeLinked) {
         const stop = offset + limit - 1;
         const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, offset, stop);
         if (!ids || ids.length === 0) return { candidates: [], total: await client.zcard(KEYS.CANDIDATES_LIST) };
@@ -205,15 +212,27 @@ export const getCandidates = async (limit = 100, offset = 0, search = '') => {
         return { candidates, total };
     }
 
-    // SEARCH PATH (VW Mode for now, but filtered)
-    // Optimization: Only load IDs for search to save bandwidth
+    // SEARCH PATH or EXCLUSION PATH
+    // Optimization: For simplicity when filtering, we load all and filter in memory
+    // TODO: Improve this with Redis-side sets intersection if performance drops
     const allCandidates = await getDistributedItems(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX);
     const lowerSearch = search.toLowerCase();
-    const filtered = allCandidates.filter(c =>
-        (c.nombre && c.nombre.toLowerCase().includes(lowerSearch)) ||
-        (c.whatsapp && c.whatsapp.includes(search)) ||
-        (c.id && c.id.includes(search))
-    );
+
+    let filtered = allCandidates;
+
+    // Filter by Search
+    if (search) {
+        filtered = filtered.filter(c =>
+            (c.nombre && c.nombre.toLowerCase().includes(lowerSearch)) ||
+            (c.whatsapp && c.whatsapp.includes(search)) ||
+            (c.id && c.id.includes(search))
+        );
+    }
+
+    // Filter out Linked Candidates
+    if (excludeLinked && linkedIds.size > 0) {
+        filtered = filtered.filter(c => !linkedIds.has(c.id));
+    }
 
     return {
         candidates: filtered.slice(offset, offset + limit),
