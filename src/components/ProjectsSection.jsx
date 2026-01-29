@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     Calendar, MapPin, MessageSquare, ExternalLink, FolderKanban,
-    Sparkles, History, User, Clock, Zap, MessageCircle
+    Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -24,6 +24,9 @@ const ProjectsSection = ({ showToast }) => {
     // User Assignment
     const [users, setUsers] = useState([]);
     const [assignedUsers, setAssignedUsers] = useState([]);
+    const [vacancies, setVacancies] = useState([]);
+    const [editingProject, setEditingProject] = useState(null);
+    const [selectedVacancyId, setSelectedVacancyId] = useState('');
 
     // AI Search integration
     const [showAISearch, setShowAISearch] = useState(false);
@@ -38,6 +41,7 @@ const ProjectsSection = ({ showToast }) => {
     useEffect(() => {
         fetchProjects();
         fetchUsers();
+        fetchVacancies();
     }, []);
 
     useEffect(() => {
@@ -65,6 +69,14 @@ const ProjectsSection = ({ showToast }) => {
         } catch (e) { console.error('Error fetching users:', e); }
     };
 
+    const fetchVacancies = async () => {
+        try {
+            const res = await fetch('/api/vacancies');
+            const data = await res.json();
+            if (data.success) setVacancies(data.data);
+        } catch (e) { console.error('Error fetching vacancies:', e); }
+    };
+
     const fetchProjectCandidates = async (id) => {
         setLoading(true);
         try {
@@ -86,25 +98,51 @@ const ProjectsSection = ({ showToast }) => {
     const handleCreateProject = async () => {
         if (!newProjectName.trim()) return;
         try {
-            const res = await fetch('/api/projects', {
+            const res = await fetch('/api/projects' + (editingProject ? `?id=${editingProject.id}` : ''), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: newProjectName,
                     description: newProjectDesc,
-                    assignedUsers
+                    assignedUsers,
+                    vacancyId: selectedVacancyId || null
                 })
             });
             const data = await res.json();
             if (data.success) {
-                setProjects([data.project, ...projects]);
+                if (editingProject) {
+                    setProjects(projects.map(p => p.id === data.project.id ? data.project : p));
+                    if (activeProject?.id === data.project.id) setActiveProject(data.project);
+                    showToast('Proyecto actualizado', 'success');
+                } else {
+                    setProjects([data.project, ...projects]);
+                    showToast('Proyecto creado', 'success');
+                }
                 setShowCreateModal(false);
-                setNewProjectName('');
-                setNewProjectDesc('');
-                setAssignedUsers([]);
-                if (showToast) showToast('Proyecto creado con éxito', 'success');
+                resetForm();
             }
-        } catch (e) { console.error('Error creating project:', e); }
+        } catch (e) {
+            console.error('Error saving project:', e);
+            showToast('Error al guardar proyecto', 'error');
+        }
+    };
+
+    const resetForm = () => {
+        setNewProjectName('');
+        setNewProjectDesc('');
+        setAssignedUsers([]);
+        setSelectedVacancyId('');
+        setEditingProject(null);
+    };
+
+    const handleEditClick = (project, e) => {
+        e.stopPropagation();
+        setEditingProject(project);
+        setNewProjectName(project.name || '');
+        setNewProjectDesc(project.description || '');
+        setAssignedUsers(project.assignedUsers || []);
+        setSelectedVacancyId(project.vacancyId || '');
+        setShowCreateModal(true);
     };
 
     const handleDeleteProject = async (id, e) => {
@@ -238,7 +276,7 @@ const ProjectsSection = ({ showToast }) => {
                     </h2>
                     <p className="text-slate-500 dark:text-slate-400 text-sm">Gestiona y organiza talento en silos estratégicos</p>
                 </div>
-                <Button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20">
+                <Button onClick={() => { resetForm(); setShowCreateModal(true); }} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20">
                     <FolderPlus className="w-5 h-5" />
                     Nuevo Proyecto
                 </Button>
@@ -270,15 +308,28 @@ const ProjectsSection = ({ showToast }) => {
                                             {project.description || 'Sin descripción'}
                                         </p>
                                     </div>
-                                    <button
-                                        onClick={(e) => handleDeleteProject(project.id, e)}
-                                        className={`p-1.5 rounded-lg transition-colors ${activeProject?.id === project.id
-                                            ? 'text-blue-100 hover:bg-white/20'
-                                            : 'text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100'
-                                            }`}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    <div className="flex gap-1">
+                                        <button
+                                            onClick={(e) => handleEditClick(project, e)}
+                                            className={`p-1.5 rounded-lg transition-colors ${activeProject?.id === project.id
+                                                ? 'text-blue-100 hover:bg-white/20'
+                                                : 'text-slate-400 hover:text-blue-500 hover:bg-blue-50 opacity-0 group-hover:opacity-100'
+                                                }`}
+                                            title="Editar proyecto"
+                                        >
+                                            <Pencil className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={(e) => handleDeleteProject(project.id, e)}
+                                            className={`p-1.5 rounded-lg transition-colors ${activeProject?.id === project.id
+                                                ? 'text-blue-100 hover:bg-white/20'
+                                                : 'text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100'
+                                                }`}
+                                            title="Eliminar proyecto"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="mt-3 flex items-center justify-between">
                                     <div className="flex -space-x-2">
@@ -288,6 +339,12 @@ const ProjectsSection = ({ showToast }) => {
                                             </div>
                                         ))}
                                     </div>
+                                    {project.vacancyId && (
+                                        <div className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${activeProject?.id === project.id ? 'bg-white/20 text-white' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600'}`}>
+                                            <Briefcase className="w-2.5 h-2.5" />
+                                            {vacancies.find(v => v.id === project.vacancyId)?.name || 'Vacante'}
+                                        </div>
+                                    )}
                                     <span className={`text-[10px] font-medium ${activeProject?.id === project.id ? 'text-blue-100' : 'text-slate-400'}`}>
                                         {new Date(project.createdAt).toLocaleDateString()}
                                     </span>
@@ -494,7 +551,7 @@ const ProjectsSection = ({ showToast }) => {
                         <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
 
                         <div>
-                            <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Nuevo Proyecto</h2>
+                            <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{editingProject ? 'Editar Proyecto' : 'Nuevo Proyecto'}</h2>
                             <p className="text-slate-500 dark:text-slate-400 font-bold mt-1 uppercase text-[10px] tracking-[0.2em] opacity-80 pl-1">Organización y Seguimiento</p>
                         </div>
 
@@ -516,6 +573,27 @@ const ProjectsSection = ({ showToast }) => {
                                     value={newProjectDesc}
                                     onChange={(e) => setNewProjectDesc(e.target.value)}
                                 />
+                            </div>
+
+                            {/* Vacancy Linking */}
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Vincular Vacante (Opcional)</label>
+                                <div className="relative">
+                                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                                    <select
+                                        className="w-full pl-12 pr-4 h-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold rounded-3xl focus:ring-2 focus:ring-blue-500 outline-none appearance-none uppercase text-slate-700 dark:text-white"
+                                        value={selectedVacancyId}
+                                        onChange={(e) => setSelectedVacancyId(e.target.value)}
+                                    >
+                                        <option value="">-- Sin Vincular --</option>
+                                        {vacancies.map(v => (
+                                            <option key={v.id} value={v.id}>{v.name} ({v.company})</option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                        <ChevronRight className="w-5 h-5 rotate-90" />
+                                    </div>
+                                </div>
                             </div>
 
                             {/* User Assignment */}
@@ -544,7 +622,7 @@ const ProjectsSection = ({ showToast }) => {
                                 className="flex-1 h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow-xl shadow-blue-600/30 transform active:scale-95 transition-all text-sm uppercase tracking-tighter"
                                 onClick={handleCreateProject}
                             >
-                                Iniciar Proyecto
+                                {editingProject ? 'Guardar Cambios' : 'Iniciar Proyecto'}
                             </Button>
                         </div>
                     </Card>

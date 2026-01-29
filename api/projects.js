@@ -32,7 +32,7 @@ export default async function handler(req, res) {
             const {
                 action, name, description, projectId,
                 candidateId: bodyCandId, assignedUsers,
-                query, resultsCount, origin
+                query, resultsCount, origin, vacancyId
             } = req.body;
 
             if (action === 'saveSearch') {
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
             }
 
             if (!name) return res.status(400).json({ success: false, error: 'Project name is required' });
-            const project = await saveProject({ id, name, description, assignedUsers });
+            const project = await saveProject({ id, name, description, assignedUsers, vacancyId });
             return res.status(200).json({ success: true, project });
         }
 
