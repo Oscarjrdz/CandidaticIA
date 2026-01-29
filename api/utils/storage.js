@@ -886,7 +886,7 @@ export const getProjectById = async (id) => {
     const data = await client.get(`${KEYS.PROJECT_PREFIX}${id}`);
     if (!data) return null;
     const project = JSON.parse(data);
-    if (!project.steps || project.steps.length === 0) project.steps = DEFAULT_PROJECT_STEPS;
+    if (project.steps === undefined || project.steps === null) project.steps = DEFAULT_PROJECT_STEPS;
     return project;
 };
 

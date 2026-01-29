@@ -7,9 +7,14 @@ import {
 
 export default async function handler(req, res) {
     const { method } = req;
-    const { id, candidateId } = req.query;
-
     try {
+        // Robust body parsing for Vercel
+        let body = req.body || {};
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (e) { }
+        }
+
+        const { id, candidateId } = req.query;
         // GET: Fetch projects or candidates of a project
         if (method === 'GET') {
             if (id && req.query.view === 'candidates') {
@@ -31,21 +36,21 @@ export default async function handler(req, res) {
         // POST: Create/Update Project OR Link Candidate OR Save Search
         if (method === 'POST') {
             const {
-                action, name, description, projectId,
+                action, name, description, projectId: bodyProjectId,
                 candidateId: bodyCandId, assignedUsers,
                 query, resultsCount, origin, vacancyId,
                 stepId, steps, projectIds
-            } = req.body;
+            } = body;
 
             if (action === 'saveSearch') {
-                const pid = projectId || id;
+                const pid = bodyProjectId || id;
                 if (!pid || !query) return res.status(400).json({ success: false, error: 'Project ID and Query required' });
                 await addProjectSearch(pid, { query, resultsCount });
                 return res.status(200).json({ success: true });
             }
 
             if (action === 'link') {
-                const pid = projectId || id;
+                const pid = bodyProjectId || id;
                 const cid = bodyCandId || candidateId;
                 const { stepId } = req.body;
                 if (!pid || !cid) return res.status(400).json({ success: false, error: 'Project ID and Candidate ID required' });
@@ -54,7 +59,7 @@ export default async function handler(req, res) {
             }
 
             if (action === 'moveCandidate') {
-                const pid = projectId || id;
+                const pid = bodyProjectId || id;
                 const cid = bodyCandId || candidateId;
                 if (!pid || !cid || !stepId) return res.status(400).json({ success: false, error: 'PID, CID and StepID required' });
                 await moveCandidateStep(pid, cid, stepId);
@@ -62,10 +67,14 @@ export default async function handler(req, res) {
             }
 
             if (action === 'updateSteps') {
-                const pid = projectId || id;
-                if (!pid || !steps) return res.status(400).json({ success: false, error: 'PID and Steps required' });
-                await updateProjectSteps(pid, steps);
-                return res.status(200).json({ success: true });
+                const pid = bodyProjectId || id;
+                console.log(`[API] Updating steps for project ${pid}:`, steps?.length);
+                if (!pid || !steps) {
+                    console.error('[API] Missing PID or Steps:', { pid, stepsCount: steps?.length });
+                    return res.status(400).json({ success: false, error: 'PID and Steps required' });
+                }
+                const success = await updateProjectSteps(pid, steps);
+                return res.status(200).json({ success, message: success ? 'Steps updated' : 'Project not found' });
             }
 
             if (action === 'reorderProjects') {

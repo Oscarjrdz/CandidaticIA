@@ -298,7 +298,10 @@ const ProjectsSection = ({ showToast }) => {
         try {
             const res = await fetch('/api/projects');
             const data = await res.json();
-            if (data.success) setProjects(data.projects);
+            if (data.success) {
+                console.log('[Projects] Loaded projects:', data.projects.length);
+                setProjects(data.projects);
+            }
         } catch (e) { console.error('Error fetching projects:', e); }
     };
 
