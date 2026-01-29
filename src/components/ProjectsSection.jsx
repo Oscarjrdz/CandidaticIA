@@ -204,17 +204,18 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
                     <h4 className="font-extrabold text-slate-900 dark:text-white text-[11px] truncate uppercase tracking-tight">
                         {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
                     </h4>
-                    {candidate.edad && (
-                        <span className="text-[8px] text-white font-black bg-blue-600 px-1.5 py-0.5 rounded-full uppercase shadow-sm">
-                            {candidate.edad} años
-                        </span>
-                    )}
                 </div>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0 text-[7px] text-slate-500 font-bold uppercase tracking-widest opacity-80">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[7px] text-slate-500 font-bold uppercase tracking-widest opacity-80">
                     <div className="flex items-center gap-0.5 whitespace-nowrap">
                         <MapPin className="w-1.5 h-1.5 text-blue-500" />
                         {candidate.municipio || 'N/A'}
                     </div>
+                    {candidate.edad && (
+                        <div className="flex items-center gap-0.5 whitespace-nowrap">
+                            <Calendar className="w-1.5 h-1.5 text-blue-500" />
+                            {candidate.edad} años
+                        </div>
+                    )}
                     {candidate.escolaridad && (
                         <div className="flex items-center gap-0.5 whitespace-nowrap">
                             <GraduationCap className="w-1.5 h-1.5 text-blue-500" />
