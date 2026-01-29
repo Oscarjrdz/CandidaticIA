@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
-    Calendar, MapPin, MessageSquare, ExternalLink, FolderKanban,
+    GraduationCap, MapPin, MessageSquare, ExternalLink, FolderKanban,
     Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase, Plus
 } from 'lucide-react';
 import Card from './ui/Card';
@@ -146,7 +146,10 @@ const KanbanColumn = ({ id, step, children, count }) => {
                         {count}
                     </span>
                 </div>
-                <button className="p-1.5 text-slate-300 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                <button
+                    onClick={(e) => { e.stopPropagation(); onEdit(step.id); }}
+                    className="p-1.5 text-slate-300 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                >
                     <Pencil className="w-3.5 h-3.5" />
                 </button>
             </div>
@@ -180,43 +183,61 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
             ref={setNodeRef}
             style={style}
             {...attributes}
-            className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[24px] p-3 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300"
+            className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-xl p-2 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 flex items-center gap-2.5"
         >
-            <div className="flex items-center gap-3" {...listeners}>
+            <div className="relative flex-shrink-0" {...listeners}>
                 {(candidate.profilePic || candidate.foto) ? (
                     <img
                         src={candidate.profilePic || candidate.foto}
-                        className="w-10 h-10 rounded-xl object-cover shadow-sm ring-2 ring-slate-100 dark:ring-slate-700/50"
+                        className="w-8 h-8 rounded-lg object-cover shadow-sm ring-1 ring-slate-100 dark:ring-slate-700/30"
                         alt="Avatar"
                     />
                 ) : (
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm border border-blue-100/50 dark:border-slate-600/50">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-[10px] border border-blue-100/30">
                         {candidate.nombreReal?.charAt(0) || candidate.nombre?.charAt(0) || 'C'}
                     </div>
                 )}
-                <div className="flex-1 min-w-0">
-                    <h4 className="font-black text-slate-800 dark:text-white text-[11px] truncate uppercase tracking-tighter mb-0.5">
+            </div>
+
+            <div className="flex-1 min-w-0 pr-14" {...listeners}>
+                <div className="flex items-center gap-2 mb-0.5">
+                    <h4 className="font-black text-slate-800 dark:text-white text-[10px] truncate uppercase tracking-tighter">
                         {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
                     </h4>
-                    <div className="flex items-center gap-1 text-[8px] text-slate-500 font-bold uppercase tracking-widest opacity-70">
-                        <MapPin className="w-2.5 h-2.5 text-blue-500/70" />
+                    {candidate.edad && (
+                        <span className="text-[7px] text-blue-500 font-bold bg-blue-50 dark:bg-blue-900/30 px-1 rounded uppercase">
+                            {candidate.edad} años
+                        </span>
+                    )}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0 text-[7px] text-slate-500 font-bold uppercase tracking-widest opacity-80">
+                    <div className="flex items-center gap-0.5 whitespace-nowrap">
+                        <MapPin className="w-1.5 h-1.5 text-blue-500/70" />
                         {candidate.municipio || 'N/A'}
                     </div>
+                    {candidate.escolaridad && (
+                        <div className="flex items-center gap-0.5 whitespace-nowrap">
+                            <GraduationCap className="w-1.5 h-1.5 text-blue-500/70" />
+                            {candidate.escolaridad}
+                        </div>
+                    )}
                 </div>
             </div>
 
-            <div className="mt-3 pt-2 border-t border-slate-50 dark:border-slate-700/30 flex justify-between items-center">
+            <div className="absolute right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                     onClick={(e) => { e.stopPropagation(); onChat(candidate); }}
-                    className="w-7 h-7 flex items-center justify-center bg-[#25D366] text-white rounded-lg shadow-sm hover:bg-[#128C7E] transition-all"
+                    className="w-5 h-5 flex items-center justify-center bg-[#25D366] text-white rounded-md shadow-sm hover:scale-110 transition-all"
+                    title="WhatsApp"
                 >
-                    <MessageCircle className="w-3 h-3" />
+                    <MessageCircle className="w-2.5 h-2.5" />
                 </button>
                 <button
                     onClick={(e) => { e.stopPropagation(); onUnlink(candidate.id); }}
-                    className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    className="w-5 h-5 flex items-center justify-center bg-slate-50 dark:bg-slate-700 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
+                    title="Remover"
                 >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-2.5 h-2.5" />
                 </button>
             </div>
         </div>
@@ -432,14 +453,16 @@ const ProjectsSection = ({ showToast }) => {
             // If dropped over a column
             if (over.data.current?.type === 'column') {
                 const targetStepId = over.id;
-                if (candidate.projectMetadata?.stepId !== targetStepId) {
+                const currentStepId = candidate.projectMetadata?.stepId || 'step_new';
+                if (currentStepId !== targetStepId) {
                     await moveCandidateToStep(candidate.id, targetStepId);
                 }
             }
             // If dropped over another candidate in same or different column
             else if (over.data.current?.type === 'candidate') {
-                const targetStepId = over.data.current.candidate.projectMetadata?.stepId;
-                if (candidate.projectMetadata?.stepId !== targetStepId) {
+                const targetStepId = over.data.current.candidate.projectMetadata?.stepId || 'step_new';
+                const currentStepId = candidate.projectMetadata?.stepId || 'step_new';
+                if (currentStepId !== targetStepId) {
                     await moveCandidateToStep(candidate.id, targetStepId);
                 }
             }
@@ -470,6 +493,32 @@ const ProjectsSection = ({ showToast }) => {
             showToast('Error de conexión', 'error');
             // Revert on error if needed
         }
+    };
+
+    const handleUpdateStepName = async (stepId) => {
+        const step = activeProject.steps.find(s => s.id === stepId);
+        if (!step) return;
+
+        const newName = prompt('Nuevo nombre del paso:', step.name);
+        if (!newName || newName === step.name) return;
+
+        const updatedSteps = activeProject.steps.map(s =>
+            s.id === stepId ? { ...s, name: newName } : s
+        );
+
+        const updatedProject = { ...activeProject, steps: updatedSteps };
+        setActiveProject(updatedProject);
+        setProjects(prev => prev.map(p => p.id === activeProject.id ? updatedProject : p));
+
+        await fetch('/api/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'updateSteps',
+                projectId: activeProject.id,
+                steps: updatedSteps
+            })
+        });
     };
 
     const handleDeleteProject = async (id, e) => {
@@ -727,6 +776,7 @@ const ProjectsSection = ({ showToast }) => {
                                                     id={step.id}
                                                     step={step}
                                                     count={stepCands.length}
+                                                    onEdit={handleUpdateStepName}
                                                 >
                                                     <SortableContext
                                                         items={stepCands.map(c => c.id)}
