@@ -11,6 +11,218 @@ import Input from './ui/Input';
 import MagicSearch from './MagicSearch';
 import ChatWindow from './ChatWindow';
 
+// Drag & Drop Imports
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    DragOverlay
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    horizontalListSortingStrategy,
+    useSortable,
+    rectSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// --- Sortable Components ---
+
+const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit, users }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: id, data: { type: 'project', project } });
+
+    const style = {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.3 : 1,
+        zIndex: isDragging ? 50 : 1
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            onClick={onClick}
+            className={`group p-4 rounded-2xl cursor-pointer border transition-all duration-300 ${isActive
+                ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20 scale-[1.02]'
+                : 'bg-white border-slate-100 dark:bg-slate-800 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
+                }`}
+        >
+            <div className="flex justify-between items-start">
+                <div className="flex-1 min-w-0" {...listeners}>
+                    <h3 className={`font-bold truncate ${isActive ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
+                        {project.name}
+                    </h3>
+                    <p className={`text-xs mt-1 line-clamp-1 ${isActive ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                        {project.description || 'Sin descripción'}
+                    </p>
+                </div>
+                <div className="flex gap-1">
+                    <button
+                        onClick={onEdit}
+                        className={`p-1.5 rounded-lg transition-colors ${isActive
+                            ? 'text-blue-100 hover:bg-white/20'
+                            : 'text-slate-400 hover:text-blue-500 hover:bg-blue-50 opacity-0 group-hover:opacity-100'
+                            }`}
+                        title="Editar proyecto"
+                    >
+                        <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={onDelete}
+                        className={`p-1.5 rounded-lg transition-colors ${isActive
+                            ? 'text-blue-100 hover:bg-white/20'
+                            : 'text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100'
+                            }`}
+                        title="Eliminar proyecto"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between" {...listeners}>
+                <div className="flex -space-x-2">
+                    {(project.assignedUsers || []).slice(0, 3).map((uId, idx) => (
+                        <div key={idx} className="w-5 h-5 rounded-full border border-white bg-blue-400 dark:bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white shadow-sm">
+                            {users.find(u => u.id === uId)?.name?.charAt(0) || 'U'}
+                        </div>
+                    ))}
+                </div>
+                <span className={`text-[10px] font-medium ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
+                    {new Date(project.createdAt).toLocaleDateString()}
+                </span>
+            </div>
+        </div>
+    );
+};
+
+const KanbanColumn = ({ id, step, children, count }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: id, data: { type: 'column', step } });
+
+    const style = {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            className="flex-shrink-0 w-80 flex flex-col h-full bg-slate-50/50 dark:bg-slate-900/30 rounded-[40px] border border-slate-200/50 dark:border-slate-800/50 overflow-hidden"
+        >
+            <div
+                className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/50 bg-white/40 dark:bg-slate-800/20 backdrop-blur-sm"
+                {...attributes}
+                {...listeners}
+            >
+                <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                    <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter text-sm">
+                        {step.name}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                        {count}
+                    </span>
+                </div>
+                <button className="p-1.5 text-slate-300 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                    <Pencil className="w-3.5 h-3.5" />
+                </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                {children}
+            </div>
+        </div>
+    );
+};
+
+const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: id, data: { type: 'candidate', candidate } });
+
+    const style = {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isDragging ? 0.3 : 1,
+        zIndex: isDragging ? 100 : 1
+    };
+
+    return (
+        <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[24px] p-3 shadow-sm hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300"
+        >
+            <div className="flex items-center gap-3" {...listeners}>
+                {(candidate.profilePic || candidate.foto) ? (
+                    <img
+                        src={candidate.profilePic || candidate.foto}
+                        className="w-10 h-10 rounded-xl object-cover shadow-sm ring-2 ring-slate-100 dark:ring-slate-700/50"
+                        alt="Avatar"
+                    />
+                ) : (
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm border border-blue-100/50 dark:border-slate-600/50">
+                        {candidate.nombreReal?.charAt(0) || candidate.nombre?.charAt(0) || 'C'}
+                    </div>
+                )}
+                <div className="flex-1 min-w-0">
+                    <h4 className="font-black text-slate-800 dark:text-white text-[11px] truncate uppercase tracking-tighter mb-0.5">
+                        {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
+                    </h4>
+                    <div className="flex items-center gap-1 text-[8px] text-slate-500 font-bold uppercase tracking-widest opacity-70">
+                        <MapPin className="w-2.5 h-2.5 text-blue-500/70" />
+                        {candidate.municipio || 'N/A'}
+                    </div>
+                </div>
+            </div>
+
+            <div className="mt-3 pt-2 border-t border-slate-50 dark:border-slate-700/30 flex justify-between items-center">
+                <button
+                    onClick={(e) => { e.stopPropagation(); onChat(candidate); }}
+                    className="w-7 h-7 flex items-center justify-center bg-[#25D366] text-white rounded-lg shadow-sm hover:bg-[#128C7E] transition-all"
+                >
+                    <MessageCircle className="w-3 h-3" />
+                </button>
+                <button
+                    onClick={(e) => { e.stopPropagation(); onUnlink(candidate.id); }}
+                    className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                >
+                    <Trash2 className="w-3 h-3" />
+                </button>
+            </div>
+        </div>
+    );
+};
+
 const ProjectsSection = ({ showToast }) => {
     const [projects, setProjects] = useState([]);
     const [activeProject, setActiveProject] = useState(null);
@@ -34,9 +246,16 @@ const ProjectsSection = ({ showToast }) => {
     const [activeQuery, setActiveQuery] = useState('');
     const [isBatchLinking, setIsBatchLinking] = useState(false);
 
-    // Chat Integration
     const [selectedCandidate, setSelectedCandidate] = useState(null);
     const [isChatOpen, setIsChatOpen] = useState(false);
+
+    // DnD Sensors & State
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+    const [activeId, setActiveId] = useState(null);
+    const [activeItem, setActiveItem] = useState(null);
 
     useEffect(() => {
         fetchProjects();
@@ -145,6 +364,114 @@ const ProjectsSection = ({ showToast }) => {
         setShowCreateModal(true);
     };
 
+    // --- Drag & Drop Handlers ---
+
+    const handleDragStart = (event) => {
+        const { active } = event;
+        setActiveId(active.id);
+        setActiveItem(active.data.current);
+    };
+
+    const handleDragEnd = async (event) => {
+        const { active, over } = event;
+        setActiveId(null);
+        setActiveItem(null);
+
+        if (!over) return;
+
+        // 1. Reorder Projects in Sidebar
+        if (active.data.current.type === 'project' && over.data.current?.type === 'project') {
+            if (active.id !== over.id) {
+                const oldIndex = projects.findIndex(p => p.id === active.id);
+                const newIndex = projects.findIndex(p => p.id === over.id);
+                const newOrder = arrayMove(projects, oldIndex, newIndex);
+                setProjects(newOrder);
+
+                // Persist order
+                await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'reorderProjects',
+                        projectIds: newOrder.map(p => p.id)
+                    })
+                });
+            }
+            return;
+        }
+
+        // 2. Reorder Steps (Columns)
+        if (active.data.current.type === 'column' && over.data.current?.type === 'column') {
+            if (active.id !== over.id) {
+                const oldIndex = activeProject.steps.findIndex(s => s.id === active.id);
+                const newIndex = activeProject.steps.findIndex(s => s.id === over.id);
+                const newSteps = arrayMove(activeProject.steps, oldIndex, newIndex);
+
+                const updatedProject = { ...activeProject, steps: newSteps };
+                setActiveProject(updatedProject);
+                setProjects(prev => prev.map(p => p.id === activeProject.id ? updatedProject : p));
+
+                await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'updateSteps',
+                        projectId: activeProject.id,
+                        steps: newSteps
+                    })
+                });
+            }
+            return;
+        }
+
+        // 2. Move Candidate between Steps
+        if (active.data.current.type === 'candidate') {
+            const candidate = active.data.current.candidate;
+            const project = activeProject;
+
+            // If dropped over a column
+            if (over.data.current?.type === 'column') {
+                const targetStepId = over.id;
+                if (candidate.projectMetadata?.stepId !== targetStepId) {
+                    await moveCandidateToStep(candidate.id, targetStepId);
+                }
+            }
+            // If dropped over another candidate in same or different column
+            else if (over.data.current?.type === 'candidate') {
+                const targetStepId = over.data.current.candidate.projectMetadata?.stepId;
+                if (candidate.projectMetadata?.stepId !== targetStepId) {
+                    await moveCandidateToStep(candidate.id, targetStepId);
+                }
+            }
+        }
+    };
+
+    const moveCandidateToStep = async (candidateId, stepId) => {
+        // Optimistic update
+        setProjectCandidates(prev => prev.map(c =>
+            c.id === candidateId
+                ? { ...c, projectMetadata: { ...c.projectMetadata, stepId } }
+                : c
+        ));
+
+        try {
+            const res = await fetch('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'moveCandidate',
+                    projectId: activeProject.id,
+                    candidateId,
+                    stepId
+                })
+            });
+            if (!res.ok) showToast('Error al mover candidato', 'error');
+        } catch (e) {
+            showToast('Error de conexión', 'error');
+            // Revert on error if needed
+        }
+    };
+
     const handleDeleteProject = async (id, e) => {
         e.stopPropagation();
         if (!confirm('¿Seguro que quieres eliminar este proyecto?')) return;
@@ -249,300 +576,183 @@ const ProjectsSection = ({ showToast }) => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900/50 p-6 space-y-6">
-            <MagicSearch
-                isOpenProp={showAISearch}
-                onClose={() => setShowAISearch(false)}
-                onResults={handleAIResults}
-                showToast={showToast}
-                customTitle="Buscador Inteligente"
-                customPlaceholder="¿A quién buscamos para este búnker?"
-            />
-
-            {selectedCandidate && (
-                <ChatWindow
-                    isOpen={isChatOpen}
-                    onClose={() => setIsChatOpen(false)}
-                    candidate={selectedCandidate}
+        <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+        >
+            <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900/50 p-6 space-y-6">
+                <MagicSearch
+                    isOpenProp={showAISearch}
+                    onClose={() => setShowAISearch(false)}
+                    onResults={handleAIResults}
+                    showToast={showToast}
+                    customTitle="Buscador Inteligente"
+                    customPlaceholder="¿A quién buscamos para este búnker?"
                 />
-            )}
 
-            {/* Header */}
-            <div className="flex justify-between items-center">
-                <div>
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 tracking-tighter">
-                        <FolderKanban className="w-8 h-8 text-blue-500" />
-                        Proyectos
-                    </h2>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">Gestiona y organiza talento en silos estratégicos</p>
+                {selectedCandidate && (
+                    <ChatWindow
+                        isOpen={isChatOpen}
+                        onClose={() => setIsChatOpen(false)}
+                        candidate={selectedCandidate}
+                    />
+                )}
+
+                {/* Header */}
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 tracking-tighter">
+                            <FolderKanban className="w-8 h-8 text-blue-500" />
+                            Silo de Proyectos
+                        </h2>
+                        <p className="text-slate-500 dark:text-slate-400 text-sm">Gestiona y organiza talento en etapas estratégicas</p>
+                    </div>
+                    <Button onClick={() => { resetForm(); setShowCreateModal(true); }} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20">
+                        <FolderPlus className="w-5 h-5" />
+                        Nuevo Proyecto
+                    </Button>
                 </div>
-                <Button onClick={() => { resetForm(); setShowCreateModal(true); }} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20">
-                    <FolderPlus className="w-5 h-5" />
-                    Nuevo Proyecto
-                </Button>
-            </div>
 
-            <div className="grid grid-cols-12 gap-6 flex-1 max-h-[calc(100vh-180px)]">
-                {/* Projects List sidebar */}
-                <div className="col-span-12 lg:col-span-2 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
-                    {projects.length === 0 ? (
-                        <div className="text-center p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-800/50">
-                            <p className="text-slate-400">No hay proyectos activos</p>
-                        </div>
-                    ) : (
-                        projects.map(project => (
-                            <div
-                                key={project.id}
-                                onClick={() => setActiveProject(project)}
-                                className={`group p-4 rounded-2xl cursor-pointer border transition-all duration-300 ${activeProject?.id === project.id
-                                    ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20 scale-[1.02]'
-                                    : 'bg-white border-slate-100 dark:bg-slate-800 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
-                                    }`}
-                            >
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className={`font-bold truncate ${activeProject?.id === project.id ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
-                                            {project.name}
-                                        </h3>
-                                        <p className={`text-xs mt-1 line-clamp-1 ${activeProject?.id === project.id ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                                            {project.description || 'Sin descripción'}
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <button
-                                            onClick={(e) => handleEditClick(project, e)}
-                                            className={`p-1.5 rounded-lg transition-colors ${activeProject?.id === project.id
-                                                ? 'text-blue-100 hover:bg-white/20'
-                                                : 'text-slate-400 hover:text-blue-500 hover:bg-blue-50 opacity-0 group-hover:opacity-100'
-                                                }`}
-                                            title="Editar proyecto"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={(e) => handleDeleteProject(project.id, e)}
-                                            className={`p-1.5 rounded-lg transition-colors ${activeProject?.id === project.id
-                                                ? 'text-blue-100 hover:bg-white/20'
-                                                : 'text-slate-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100'
-                                                }`}
-                                            title="Eliminar proyecto"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="mt-3 flex items-center justify-between">
-                                    <div className="flex -space-x-2">
-                                        {(project.assignedUsers || []).slice(0, 3).map((uId, idx) => (
-                                            <div key={idx} className="w-5 h-5 rounded-full border border-white bg-blue-400 dark:bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white shadow-sm">
-                                                {users.find(u => u.id === uId)?.name?.charAt(0) || 'U'}
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {project.vacancyId && (
-                                        <div className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest flex items-center gap-1 ${activeProject?.id === project.id ? 'bg-white/20 text-white' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600'}`}>
-                                            <Briefcase className="w-2.5 h-2.5" />
-                                            {vacancies.find(v => v.id === project.vacancyId)?.name || 'Vacante'}
-                                        </div>
-                                    )}
-                                    <span className={`text-[10px] font-medium ${activeProject?.id === project.id ? 'text-blue-100' : 'text-slate-400'}`}>
-                                        {new Date(project.createdAt).toLocaleDateString()}
-                                    </span>
-                                </div>
+                <div className="grid grid-cols-12 gap-6 flex-1 max-h-[calc(100vh-180px)]">
+                    {/* Projects List sidebar */}
+                    <div className="col-span-12 lg:col-span-2 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+                        {projects.length === 0 ? (
+                            <div className="text-center p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-800/50">
+                                <p className="text-slate-400">No hay proyectos activos</p>
                             </div>
-                        ))
-                    )}
-                </div>
+                        ) : (
+                            <SortableContext items={projects.map(p => p.id)} strategy={verticalListSortingStrategy}>
+                                {projects.map(project => (
+                                    <SortableProjectItem
+                                        key={project.id}
+                                        id={project.id}
+                                        project={project}
+                                        isActive={activeProject?.id === project.id}
+                                        onClick={() => setActiveProject(project)}
+                                        onDelete={(e) => handleDeleteProject(project.id, e)}
+                                        onEdit={(e) => handleEditClick(project, e)}
+                                        users={users}
+                                    />
+                                ))}
+                            </SortableContext>
+                        )}
+                    </div>
 
-                {/* Dashboard / Detail Area */}
-                <div className="col-span-12 lg:col-span-10 h-full">
-                    {activeProject ? (
-                        <div className="space-y-6 h-full flex flex-col">
-                            {/* Project Header */}
-                            <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 border border-slate-100 dark:border-slate-700 shadow-xl shadow-slate-200/10 flex flex-col gap-4 animate-in fade-in slide-in-from-top-4">
-                                <div className="flex justify-between items-center">
+                    {/* Main Area (Kanban tablero) */}
+                    <div className="col-span-12 lg:col-span-10 flex flex-col min-h-0 bg-white/40 dark:bg-slate-800/20 rounded-[64px] border border-slate-200 dark:border-slate-800 overflow-hidden shadow-2xl shadow-blue-500/5">
+                        {activeProject ? (
+                            <div className="flex-1 flex flex-col min-h-0 p-8 space-y-6">
+                                {/* Project bar */}
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/50 dark:bg-slate-900/40 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 shadow-sm">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center">
-                                            <FolderKanban className="w-6 h-6 text-blue-600" />
+                                        <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-500/20">
+                                            <FolderKanban className="w-6 h-6 text-white" />
                                         </div>
                                         <div>
-                                            <div className="flex items-center gap-2">
-                                                <h2 className="text-xl font-bold dark:text-white tracking-tighter">{activeProject.name}</h2>
-                                                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">Activo</span>
+                                            <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tighter">{activeProject.name}</h3>
+                                            <div className="flex items-center gap-3 mt-1">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                    <Users className="w-3 h-3" />
+                                                    {projectCandidates.length} Candidatos
+                                                </span>
+                                                {activeProject.vacancyId && (
+                                                    <span className="px-2 py-0.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                                                        <Briefcase className="w-2.5 h-2.5" />
+                                                        {vacancies.find(v => v.id === activeProject.vacancyId)?.name || 'Vacante'}
+                                                    </span>
+                                                )}
                                             </div>
-                                            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">{activeProject.description || 'Gestión estratégica de talento'}</p>
                                         </div>
                                     </div>
-                                    <div className="flex gap-3">
+                                    <div className="flex gap-2">
                                         <Button
+                                            icon={Sparkles}
                                             onClick={() => setShowAISearch(true)}
-                                            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20"
+                                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest px-6 shadow-xl shadow-blue-600/20"
                                         >
-                                            <Sparkles className="w-4 h-4" />
-                                            Búsqueda IA
+                                            IA Search
                                         </Button>
                                     </div>
                                 </div>
 
-                                {/* Historical Searches Tags */}
-                                {projectSearches.length > 0 && (
-                                    <div className="flex items-center gap-3 pt-4 border-t border-slate-50 dark:border-slate-700/50">
-                                        <History className="w-4 h-4 text-slate-400" />
-                                        <div className="flex-1 flex gap-2 overflow-x-auto pb-1 custom-scrollbar scrollbar-hide">
-                                            {projectSearches.map((s, idx) => (
-                                                <button
-                                                    key={idx}
-                                                    onClick={() => setShowAISearch(true)} // Or maybe re-run search? For now just history
-                                                    className="whitespace-nowrap px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[10px] font-bold text-slate-500 dark:text-slate-400 hover:border-blue-500 transition-colors flex items-center gap-2"
+                                {/* Kanban Board */}
+                                <div className="flex-1 flex gap-6 overflow-x-auto pb-6 custom-scrollbar scrollbar-hide">
+                                    <SortableContext items={(activeProject.steps || []).map(s => s.id)} strategy={horizontalListSortingStrategy}>
+                                        {(activeProject.steps || []).map(step => (
+                                            <KanbanColumn
+                                                key={step.id}
+                                                id={step.id}
+                                                step={step}
+                                                count={projectCandidates.filter(c => (c.projectMetadata?.stepId || 'step_new') === step.id).length}
+                                            >
+                                                <SortableContext
+                                                    items={projectCandidates
+                                                        .filter(c => (c.projectMetadata?.stepId || 'step_new') === step.id)
+                                                        .map(c => c.id)}
+                                                    strategy={verticalListSortingStrategy}
                                                 >
-                                                    <span className="text-blue-500">#{s.resultsCount}</span>
-                                                    {s.query}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* AI Search Review Area */}
-                            {searchPreview.length > 0 && (
-                                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-800/50 p-8 rounded-[40px] animate-in slide-in-from-right-4 duration-500 shadow-xl shadow-blue-500/5">
-                                    <div className="flex justify-between items-start mb-6">
-                                        <div>
-                                            <h3 className="text-xl font-black text-blue-900 dark:text-blue-100 tracking-tighter flex items-center gap-2 uppercase">
-                                                <Sparkles className="w-6 h-6 text-blue-500" />
-                                                Resultados: {activeQuery}
-                                            </h3>
-                                            <p className="text-sm text-blue-600 dark:text-blue-400 font-bold uppercase tracking-widest mt-1 opacity-70">
-                                                {searchPreview.length} candidatos potenciales detectados
-                                            </p>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <Button
-                                                onClick={() => { setSearchPreview([]); setActiveQuery(''); }}
-                                                className="bg-white/80 dark:bg-slate-800/80 text-slate-500 hover:text-red-500 border-blue-100 dark:border-blue-900/50 backdrop-blur-sm rounded-2xl"
-                                            >
-                                                Descartar
-                                            </Button>
-                                            <Button
-                                                loading={isBatchLinking}
-                                                onClick={handleBatchLink}
-                                                className="bg-blue-600 hover:bg-blue-700 text-white border-none shadow-xl shadow-blue-500/40 rounded-2xl font-black"
-                                            >
-                                                Vincular Todo
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
-                                        {searchPreview.map(candidate => (
-                                            <div key={candidate.id} className="bg-white dark:bg-slate-900/80 p-4 rounded-[28px] flex items-center gap-4 border border-blue-200/50 dark:border-blue-900/50 shadow-sm relative overflow-hidden group hover:border-blue-400 transition-all">
-                                                <div className="w-10 h-10 rounded-2xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 font-black text-sm">
-                                                    {candidate.nombreReal?.charAt(0) || 'C'}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-black text-slate-900 dark:text-white truncate uppercase tracking-tighter">{candidate.nombreReal || candidate.nombre}</p>
-                                                    <p className="text-[10px] text-blue-500 font-black uppercase tracking-widest mt-0.5">{candidate.municipio || 'N/A'}</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Talent Grid (High Density cards) */}
-                            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-10">
-                                {loading ? (
-                                    <div className="flex flex-col items-center justify-center p-20 space-y-4">
-                                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
-                                        <p className="text-slate-400 font-medium italic animate-pulse">Consultando búnker...</p>
-                                    </div>
-                                ) : projectCandidates.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center p-24 text-slate-400 bg-white/50 dark:bg-slate-800/20 rounded-[48px] border-2 border-dashed border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
-                                        <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-6">
-                                            <Search className="w-10 h-10 opacity-20" />
-                                        </div>
-                                        <h3 className="text-lg font-black text-slate-400 dark:text-slate-600 uppercase tracking-tighter">Búnker sin Candidatos</h3>
-                                        <p className="text-sm max-w-[280px] text-center mb-8 font-medium opacity-60">Inicia una Búsqueda Inteligente para traer el mejor talento a este proyecto.</p>
-                                        <Button onClick={() => setShowAISearch(true)} className="bg-blue-600 text-white border-none rounded-2xl font-black px-8">Empezar Búsqueda IA</Button>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
-                                        {projectCandidates.map(candidate => (
-                                            <div key={candidate.id} className="group relative bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/50 rounded-[20px] p-2.5 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-0.5 overflow-hidden flex flex-col justify-between min-h-[110px]">
-                                                <div className="flex items-center gap-2.5">
-                                                    {(candidate.profilePic || candidate.foto) ? (
-                                                        <img
-                                                            src={candidate.profilePic || candidate.foto}
-                                                            className="w-10 h-10 rounded-[12px] object-cover shadow-sm group-hover:scale-105 transition-transform ring-2 ring-slate-100 dark:ring-slate-700/50"
-                                                            alt="Avatar"
-                                                        />
+                                                    {projectCandidates.filter(c => (c.projectMetadata?.stepId || 'step_new') === step.id).length === 0 ? (
+                                                        <div className="flex flex-col items-center justify-center p-10 text-slate-300 border-2 border-dashed border-slate-100 dark:border-slate-800/50 rounded-3xl">
+                                                            <UserPlus className="w-8 h-8 opacity-20 mb-2" />
+                                                            <p className="text-[10px] uppercase font-bold tracking-widest opacity-40">Vacío</p>
+                                                        </div>
                                                     ) : (
-                                                        <div className="w-10 h-10 rounded-[12px] bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm shadow-inner group-hover:scale-110 transition-transform border border-blue-100/50 dark:border-slate-600/50">
-                                                            {candidate.nombreReal?.charAt(0) || candidate.nombre?.charAt(0) || 'C'}
-                                                        </div>
+                                                        projectCandidates
+                                                            .filter(c => (c.projectMetadata?.stepId || 'step_new') === step.id)
+                                                            .map(candidate => (
+                                                                <SortableCandidateCard
+                                                                    key={candidate.id}
+                                                                    id={candidate.id}
+                                                                    candidate={candidate}
+                                                                    onChat={handleOpenChat}
+                                                                    onUnlink={handleUnlinkCandidate}
+                                                                />
+                                                            ))
                                                     )}
-                                                    <div className="flex-1 min-w-0">
-                                                        <h4 className="font-black text-slate-800 dark:text-white text-[11px] truncate uppercase tracking-tighter leading-none mb-1">
-                                                            {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
-                                                        </h4>
-                                                        <div className="flex items-center gap-1.5 overflow-hidden">
-                                                            <div className="flex items-center gap-1 text-[8px] text-slate-500 font-bold uppercase tracking-widest opacity-70 truncate">
-                                                                <MapPin className="w-2.5 h-2.5 text-blue-500/70" />
-                                                                {candidate.municipio || 'N/A'}
-                                                            </div>
-                                                            {(candidate.edad || candidate.fechaNacimiento) && (
-                                                                <div className="flex items-center gap-1 text-[8px] text-slate-400 font-bold uppercase tracking-widest opacity-60 flex-shrink-0">
-                                                                    <div className="w-1 h-1 rounded-full bg-slate-300"></div>
-                                                                    {candidate.edad ? `${candidate.edad} años` : (calculateAge(candidate.fechaNacimiento) ? `${calculateAge(candidate.fechaNacimiento)} años` : 'N/A')}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="mt-auto pt-2 border-t border-slate-50 dark:border-slate-700/30 flex justify-between items-center h-9">
-                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                                                        <button
-                                                            onClick={() => handleOpenChat(candidate)}
-                                                            className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-[#25D366] hover:bg-[#128C7E] text-white rounded-[10px] transition-all shadow-[0_4px_10px_rgba(37,211,102,0.2)] hover:scale-105 active:scale-95"
-                                                        >
-                                                            <MessageCircle className="w-3.5 h-3.5" />
-                                                        </button>
-
-                                                        {candidate.projectMetadata?.origin && (
-                                                            <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-700/50 flex-1 min-w-0 overflow-hidden">
-                                                                <Zap className="w-2.5 h-2.5 text-yellow-500 flex-shrink-0 animate-pulse" />
-                                                                <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-tighter truncate italic leading-none">
-                                                                    {candidate.projectMetadata.origin}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <button
-                                                        onClick={() => handleUnlinkCandidate(candidate.id)}
-                                                        className="ml-2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-[10px] transition-all"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </div>
+                                                </SortableContext>
+                                            </KanbanColumn>
                                         ))}
-                                    </div>
-                                )}
+                                    </SortableContext>
+
+                                    {/* Add Step Button */}
+                                    <button className="flex-shrink-0 w-80 h-full rounded-[40px] border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-slate-400 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all group">
+                                        <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                            <Plus className="w-8 h-8" />
+                                        </div>
+                                        <span className="font-black uppercase tracking-tighter text-sm">Nuevo Paso</span>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-400 bg-white/40 dark:bg-slate-800/20 rounded-[64px] border-2 border-dashed border-slate-200 dark:border-slate-800 animate-pulse">
-                            <div className="w-24 h-24 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-8">
-                                <FolderKanban className="w-12 h-12 text-blue-400 opacity-40" />
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-400 animate-pulse">
+                                <div className="w-24 h-24 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-8">
+                                    <FolderKanban className="w-12 h-12 text-blue-400 opacity-40" />
+                                </div>
+                                <h2 className="text-2xl font-black text-slate-400 dark:text-slate-600 tracking-tighter uppercase">Asistente de Silos</h2>
+                                <p className="max-w-xs text-center mt-3 text-sm font-bold opacity-40 uppercase tracking-widest">Selecciona o crea un proyecto estratégico para ver el búnker de talento.</p>
                             </div>
-                            <h2 className="text-2xl font-black text-slate-400 dark:text-slate-600 tracking-tighter uppercase">Silo de Proyectos</h2>
-                            <p className="max-w-xs text-center mt-3 text-sm font-bold opacity-40 uppercase tracking-widest">Selecciona o crea un proyecto estratégico.</p>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
+
+            <DragOverlay>
+                {activeId && activeItem ? (
+                    activeItem.type === 'project' ? (
+                        <div className="p-4 rounded-2xl bg-blue-600 border border-blue-500 text-white shadow-2xl opacity-90 scale-105 min-w-[200px]">
+                            <h3 className="font-bold truncate">{activeItem.project.name}</h3>
+                        </div>
+                    ) : activeItem.type === 'candidate' ? (
+                        <div className="p-3 rounded-[24px] bg-white dark:bg-slate-800 border border-blue-400 shadow-2xl opacity-90 scale-105 min-w-[200px]">
+                            <h4 className="font-black text-slate-800 dark:text-white text-[11px] truncate uppercase tracking-tighter">
+                                {activeItem.candidate?.nombreReal || activeItem.candidate?.nombre}
+                            </h4>
+                        </div>
+                    ) : null
+                ) : null}
+            </DragOverlay>
 
             {/* Create Modal */}
             {showCreateModal && (
@@ -628,7 +838,7 @@ const ProjectsSection = ({ showToast }) => {
                     </Card>
                 </div>
             )}
-        </div>
+        </DndContext>
     );
 };
 

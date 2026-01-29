@@ -764,15 +764,74 @@ export const saveProject = async (project) => {
     if (!project.id) {
         project.id = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         project.createdAt = new Date().toISOString();
+        // Default Kanban Steps
+        if (!project.steps) {
+            project.steps = [
+                { id: 'step_new', name: 'Nuevos' },
+                { id: 'step_contact', name: 'Contacto' },
+                { id: 'step_interview', name: 'Entrevista' },
+                { id: 'step_hired', name: 'Contratado' }
+            ];
+        }
     }
     project.updatedAt = new Date().toISOString();
 
     const pipeline = client.pipeline();
     pipeline.set(`${KEYS.PROJECT_PREFIX}${project.id}`, JSON.stringify(project));
-    pipeline.zadd(KEYS.PROJECTS_LIST, Date.now(), project.id);
+
+    // Use ZADD with current timestamp for ordering if not already in list
+    // NX: Only add new elements. Don't update scores of existing elements so we don't break custom order
+    pipeline.zadd(KEYS.PROJECTS_LIST, 'NX', Date.now(), project.id);
 
     await pipeline.exec();
     return project;
+};
+
+/**
+ * Update Project Steps
+ */
+export const updateProjectSteps = async (projectId, steps) => {
+    const project = await getProjectById(projectId);
+    if (!project) return false;
+    project.steps = steps;
+    project.updatedAt = new Date().toISOString();
+    return saveProject(project);
+};
+
+/**
+ * Move Candidate to a specific Step
+ */
+export const moveCandidateStep = async (projectId, candidateId, stepId) => {
+    const client = getRedisClient();
+    if (!client) return false;
+
+    const metadataKey = `${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${projectId}`;
+    const rawMetadata = await client.hget(metadataKey, candidateId);
+    const metadata = rawMetadata ? JSON.parse(rawMetadata) : {};
+
+    metadata.stepId = stepId;
+    metadata.updatedAt = new Date().toISOString();
+
+    await client.hset(metadataKey, candidateId, JSON.stringify(metadata));
+    return true;
+};
+
+/**
+ * Reorder Projects in the list
+ */
+export const reorderProjects = async (projectIds) => {
+    const client = getRedisClient();
+    if (!client) return false;
+
+    const pipeline = client.pipeline();
+    // Use the index as the score to preserve the order (lower score = higher priority/top)
+    // Actually Redis ZSET default is ascending order by score.
+    projectIds.forEach((id, index) => {
+        pipeline.zadd(KEYS.PROJECTS_LIST, index, id);
+    });
+
+    await pipeline.exec();
+    return true;
 };
 
 /**
@@ -892,13 +951,20 @@ export const addCandidateToProject = async (projectId, candidateId, metadata = n
 
     const pipeline = client.pipeline();
     pipeline.sadd(`${KEYS.PROJECT_CANDIDATES_PREFIX}${projectId}`, candidateId);
-    if (metadata) {
-        pipeline.hset(
-            `${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${projectId}`,
-            candidateId,
-            JSON.stringify({ ...metadata, linkedAt: new Date().toISOString() })
-        );
-    }
+
+    // Always ensure we have metadata with at least the default step
+    const finalMetadata = {
+        ...(metadata || {}),
+        linkedAt: new Date().toISOString(),
+        stepId: metadata?.stepId || 'step_new' // Default to first step
+    };
+
+    pipeline.hset(
+        `${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${projectId}`,
+        candidateId,
+        JSON.stringify(finalMetadata)
+    );
+
     await pipeline.exec();
     return true;
 };

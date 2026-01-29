@@ -1,7 +1,8 @@
 import {
     saveProject, getProjects, getProjectById, deleteProject,
     addCandidateToProject, removeCandidateFromProject, getProjectCandidates,
-    addProjectSearch, getProjectSearches
+    addProjectSearch, getProjectSearches,
+    updateProjectSteps, moveCandidateStep, reorderProjects
 } from './utils/storage.js';
 
 export default async function handler(req, res) {
@@ -32,7 +33,8 @@ export default async function handler(req, res) {
             const {
                 action, name, description, projectId,
                 candidateId: bodyCandId, assignedUsers,
-                query, resultsCount, origin, vacancyId
+                query, resultsCount, origin, vacancyId,
+                stepId, steps, projectIds
             } = req.body;
 
             if (action === 'saveSearch') {
@@ -48,6 +50,27 @@ export default async function handler(req, res) {
                 if (!pid || !cid) return res.status(400).json({ success: false, error: 'Project ID and Candidate ID required' });
                 await addCandidateToProject(pid, cid, origin ? { origin } : null);
                 return res.status(200).json({ success: true, message: 'Candidate linked to project' });
+            }
+
+            if (action === 'moveCandidate') {
+                const pid = projectId || id;
+                const cid = bodyCandId || candidateId;
+                if (!pid || !cid || !stepId) return res.status(400).json({ success: false, error: 'PID, CID and StepID required' });
+                await moveCandidateStep(pid, cid, stepId);
+                return res.status(200).json({ success: true });
+            }
+
+            if (action === 'updateSteps') {
+                const pid = projectId || id;
+                if (!pid || !steps) return res.status(400).json({ success: false, error: 'PID and Steps required' });
+                await updateProjectSteps(pid, steps);
+                return res.status(200).json({ success: true });
+            }
+
+            if (action === 'reorderProjects') {
+                if (!projectIds || !Array.isArray(projectIds)) return res.status(400).json({ success: false, error: 'Project IDs array required' });
+                await reorderProjects(projectIds);
+                return res.status(200).json({ success: true });
             }
 
             if (!name) return res.status(400).json({ success: false, error: 'Project name is required' });
