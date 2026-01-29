@@ -74,6 +74,13 @@ const KEYS = {
     SCHEDULED_RULES: 'scheduled_message_rules',
 };
 
+export const DEFAULT_PROJECT_STEPS = [
+    { id: 'step_new', name: 'Nuevos' },
+    { id: 'step_contact', name: 'Contacto' },
+    { id: 'step_interview', name: 'Entrevista' },
+    { id: 'step_hired', name: 'Contratado' }
+];
+
 
 /**
  * ==========================================
@@ -766,12 +773,7 @@ export const saveProject = async (project) => {
         project.createdAt = new Date().toISOString();
         // Default Kanban Steps
         if (!project.steps) {
-            project.steps = [
-                { id: 'step_new', name: 'Nuevos' },
-                { id: 'step_contact', name: 'Contacto' },
-                { id: 'step_interview', name: 'Entrevista' },
-                { id: 'step_hired', name: 'Contratado' }
-            ];
+            project.steps = DEFAULT_PROJECT_STEPS;
         }
     }
     project.updatedAt = new Date().toISOString();
@@ -847,7 +849,12 @@ export const getProjects = async () => {
     const keys = ids.map(id => `${KEYS.PROJECT_PREFIX}${id}`);
     const data = await client.mget(...keys);
 
-    return data.map(d => d ? JSON.parse(d) : null).filter(Boolean);
+    return data.map(d => {
+        if (!d) return null;
+        const p = JSON.parse(d);
+        if (!p.steps || p.steps.length === 0) p.steps = DEFAULT_PROJECT_STEPS;
+        return p;
+    }).filter(Boolean);
 };
 
 /**
@@ -857,7 +864,10 @@ export const getProjectById = async (id) => {
     const client = getRedisClient();
     if (!client || !id) return null;
     const data = await client.get(`${KEYS.PROJECT_PREFIX}${id}`);
-    return data ? JSON.parse(data) : null;
+    if (!data) return null;
+    const project = JSON.parse(data);
+    if (!project.steps || project.steps.length === 0) project.steps = DEFAULT_PROJECT_STEPS;
+    return project;
 };
 
 /**

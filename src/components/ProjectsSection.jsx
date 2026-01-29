@@ -711,28 +711,34 @@ const ProjectsSection = ({ showToast }) => {
                                 {/* Kanban Board */}
                                 <div className="flex-1 flex gap-6 overflow-x-auto pb-6 custom-scrollbar scrollbar-hide">
                                     <SortableContext items={(activeProject.steps || []).map(s => s.id)} strategy={horizontalListSortingStrategy}>
-                                        {(activeProject.steps || []).map(step => (
-                                            <KanbanColumn
-                                                key={step.id}
-                                                id={step.id}
-                                                step={step}
-                                                count={projectCandidates.filter(c => (c.projectMetadata?.stepId || 'step_new') === step.id).length}
-                                            >
-                                                <SortableContext
-                                                    items={projectCandidates
-                                                        .filter(c => (c.projectMetadata?.stepId || 'step_new') === step.id)
-                                                        .map(c => c.id)}
-                                                    strategy={verticalListSortingStrategy}
+                                        {(activeProject.steps || []).map((step, index) => {
+                                            const stepCands = projectCandidates.filter(c => {
+                                                const cStepId = c.projectMetadata?.stepId || 'step_new';
+                                                // First column catches its own candidates OR anyone with an invalid stepId
+                                                if (index === 0) {
+                                                    return cStepId === step.id || !activeProject.steps.some(s => s.id === cStepId);
+                                                }
+                                                return cStepId === step.id;
+                                            });
+
+                                            return (
+                                                <KanbanColumn
+                                                    key={step.id}
+                                                    id={step.id}
+                                                    step={step}
+                                                    count={stepCands.length}
                                                 >
-                                                    {projectCandidates.filter(c => (c.projectMetadata?.stepId || 'step_new') === step.id).length === 0 ? (
-                                                        <div className="flex flex-col items-center justify-center p-10 text-slate-300 border-2 border-dashed border-slate-100 dark:border-slate-800/50 rounded-3xl">
-                                                            <UserPlus className="w-8 h-8 opacity-20 mb-2" />
-                                                            <p className="text-[10px] uppercase font-bold tracking-widest opacity-40">Vacío</p>
-                                                        </div>
-                                                    ) : (
-                                                        projectCandidates
-                                                            .filter(c => (c.projectMetadata?.stepId || 'step_new') === step.id)
-                                                            .map(candidate => (
+                                                    <SortableContext
+                                                        items={stepCands.map(c => c.id)}
+                                                        strategy={verticalListSortingStrategy}
+                                                    >
+                                                        {stepCands.length === 0 ? (
+                                                            <div className="flex flex-col items-center justify-center p-10 text-slate-300 border-2 border-dashed border-slate-100 dark:border-slate-800/50 rounded-3xl">
+                                                                <UserPlus className="w-8 h-8 opacity-20 mb-2" />
+                                                                <p className="text-[10px] uppercase font-bold tracking-widest opacity-40">Vacío</p>
+                                                            </div>
+                                                        ) : (
+                                                            stepCands.map(candidate => (
                                                                 <SortableCandidateCard
                                                                     key={candidate.id}
                                                                     id={candidate.id}
@@ -741,10 +747,11 @@ const ProjectsSection = ({ showToast }) => {
                                                                     onUnlink={handleUnlinkCandidate}
                                                                 />
                                                             ))
-                                                    )}
-                                                </SortableContext>
-                                            </KanbanColumn>
-                                        ))}
+                                                        )}
+                                                    </SortableContext>
+                                                </KanbanColumn>
+                                            );
+                                        })}
                                     </SortableContext>
 
                                     {/* Add Step Button */}
