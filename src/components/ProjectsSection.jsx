@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     GraduationCap, MapPin, MessageSquare, ExternalLink, FolderKanban,
-    Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase, Plus
+    Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase, Plus, Calendar
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
