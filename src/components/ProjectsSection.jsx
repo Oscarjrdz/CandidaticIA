@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     Calendar, MapPin, MessageSquare, ExternalLink, FolderKanban,
-    Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase
+    Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase, Plus
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -103,7 +103,7 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
                     ))}
                 </div>
                 <span className={`text-[10px] font-medium ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
-                    {new Date(project.createdAt).toLocaleDateString()}
+                    {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Sin fecha'}
                 </span>
             </div>
         </div>
