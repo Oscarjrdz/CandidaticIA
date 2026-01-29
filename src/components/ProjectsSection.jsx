@@ -110,7 +110,7 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
     );
 };
 
-const KanbanColumn = ({ id, step, children, count }) => {
+const KanbanColumn = ({ id, step, children, count, onEdit }) => {
     const {
         attributes,
         listeners,
