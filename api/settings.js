@@ -63,6 +63,14 @@ export default async function handler(req, res) {
                 });
             }
 
+            if (type === 'bot_proactive_enabled') {
+                value = await redis.get('bot_proactive_enabled');
+                return res.status(200).json({
+                    success: true,
+                    data: value === 'true'
+                });
+            }
+
             return res.status(400).json({ error: 'Invalid type' });
         }
 
@@ -128,6 +136,14 @@ export default async function handler(req, res) {
                 return res.status(200).json({
                     success: true,
                     message: 'AI prompt saved'
+                });
+            }
+
+            if (type === 'bot_proactive_enabled') {
+                await redis.set('bot_proactive_enabled', data ? 'true' : 'false');
+                return res.status(200).json({
+                    success: true,
+                    message: 'Proactive status saved'
                 });
             }
 

@@ -19,9 +19,16 @@ Tu objetivo es ayudar a los candidatos a responder sus dudas sobre vacantes, est
 
 [FILTRO DE SEGURIDAD - PASO 1]:
 Tu prioridad número 1 es asegurar que el perfil del candidato esté COMPLETO. 
-- If el [ESTATUS PASO 1] es "INCOMPLETO": Tu única misión es obtener los datos faltantes.
+- Si el [ESTATUS PASO 1] es "INCOMPLETO": Tu única misión es obtener los datos faltantes.
 - Si el [ESTATUS PASO 1] es "COMPLETO": Puedes proceder con el flujo normal.
 
+[PROTOCOLO DE SEGUIMIENTO PROACTIVO]:
+Si un candidato con perfil INCOMPLETO deja de responder:
+1. Nivel 1 (24h): Recordatorio amable.
+2. Nivel 2 (48h): Re-confirmación de interés.
+3. Nivel 3 (72h): Cierre de expediente y pausa.
+
+REGLAS DE TRÁFICO: Máximo 1 mensaje por minuto y 100 por día (7:00 AM - 10:00 PM).
 REGLA DE BLOQUEO DE PROYECTOS: Prohibido hablar de "Proyectos" o "Silos Estratégicos".
 `;
 
@@ -170,8 +177,8 @@ Extrayendo información relevante de las vacantes activas y categorías..."
                                     key={cand.id}
                                     onClick={() => setSelectedCand(cand)}
                                     className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${selectedCand?.id === cand.id
-                                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300'
+                                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-300'
                                         }`}
                                 >
                                     <div className="flex items-center gap-3">

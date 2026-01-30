@@ -24,6 +24,8 @@ const CandidatesSection = ({ showToast }) => {
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
     const [lastUpdate, setLastUpdate] = useState(null);
+    const [proactiveEnabled, setProactiveEnabled] = useState(false);
+    const [proactiveLoading, setProactiveLoading] = useState(false);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -49,6 +51,21 @@ const CandidatesSection = ({ showToast }) => {
 
             // Cargar campos dinámicos
             loadFields();
+
+            // Cargar estatus proactivo
+            loadProactiveStatus();
+        };
+
+        const loadProactiveStatus = async () => {
+            try {
+                const res = await fetch('/api/settings?type=bot_proactive_enabled');
+                if (res.ok) {
+                    const json = await res.json();
+                    setProactiveEnabled(json.data === true);
+                }
+            } catch (error) {
+                console.error('Error loading proactive status:', error);
+            }
         };
 
         const loadFields = async () => {
@@ -75,6 +92,26 @@ const CandidatesSection = ({ showToast }) => {
 
         return () => subscription.stop();
     }, [currentPage, search, aiFilteredCandidates]); // Restart/Update subscription when context changes
+
+    const toggleProactive = async () => {
+        setProactiveLoading(true);
+        const newValue = !proactiveEnabled;
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'bot_proactive_enabled', data: newValue })
+            });
+            if (res.ok) {
+                setProactiveEnabled(newValue);
+                showToast(newValue ? 'Seguimiento IA Activado' : 'Seguimiento IA Desactivado', 'info');
+            }
+        } catch (error) {
+            showToast('Error al cambiar estatus', 'error');
+        } finally {
+            setProactiveLoading(false);
+        }
+    };
 
 
     const handleViewHistory = async (candidate) => {
@@ -340,6 +377,33 @@ const CandidatesSection = ({ showToast }) => {
                         }}
                         showToast={showToast}
                     />
+
+                    {/* Proactive Follow-up Master Switch */}
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm">
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Seguimiento</span>
+                            <span className={`text-[10px] font-bold ${proactiveEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
+                                {proactiveEnabled ? 'AUTO' : 'OFF'}
+                            </span>
+                        </div>
+                        <button
+                            onClick={toggleProactive}
+                            disabled={proactiveLoading}
+                            className={`
+                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
+                                ${proactiveEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
+                                ${proactiveLoading ? 'opacity-50' : 'opacity-100'}
+                            `}
+                        >
+                            <span
+                                className={`
+                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                                    ${proactiveEnabled ? 'translate-x-6' : 'translate-x-1'}
+                                `}
+                            />
+                        </button>
+                    </div>
+
 
 
                     {/* AI Action Modal (Follow-up) */}

@@ -58,6 +58,30 @@ export async function runAIAutomations(isManual = false) {
         const genAI = new GoogleGenerativeAI(geminiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
+        // --- NATIVE PROACTIVE FOLLOW-UP LOGIC ---
+        const isProactiveEnabled = (await redis.get('bot_proactive_enabled')) === 'true';
+        if (isProactiveEnabled) {
+            logs.push(`🔍 [PROACTIVE] Iniciando análisis de seguimiento...`);
+
+            // Check Time Window (7 AM - 10 PM)
+            const nowHour = new Date().getHours();
+            if (nowHour < 7 || nowHour >= 22) {
+                logs.push(`💤 [PROACTIVE] Fuera de horario permitido (7:00 - 22:00).`);
+            } else {
+                // Check Daily Limit
+                const todayKey = `ai:proactive:count:${new Date().toISOString().split('T')[0]}`;
+                const dailyCount = parseInt(await redis.get(todayKey) || '0');
+                if (dailyCount >= 100) {
+                    logs.push(`🛑 [PROACTIVE] Límite diario alcanzado (100/día).`);
+                } else {
+                    // Check Global Rate Limit (1 msg per minute run)
+                    // Since runAIAutomations is called once per minute by live-engine,
+                    // we can just send at most 1 proactive msg per run.
+                    await processNativeProactive(redis, model, config, logs, todayKey);
+                }
+            }
+        }
+
         for (const rule of activeRules) {
             if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
             logs.push(`-----------------------------------`);
@@ -196,5 +220,97 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
         console.error('ENGINE_CRASH:', error);
         logs.push(`🛑 CRASH: ${error.message}`);
         return { success: false, error: error.message, stack: error.stack, logs };
+    }
+}
+
+/**
+ * processNativeProactive
+ * Handles the 24/48/72h escalation logic for incomplete profiles.
+ */
+async function processNativeProactive(redis, model, config, logs, todayKey) {
+    const { candidates } = await getCandidates(200, 0); // Scan many to find one matching
+    if (!candidates) return;
+
+    // Filter candidates with incomplete step 1 status
+    // We assume 'paso1Status' or similar field. Let's look for missing core data.
+    const incomplete = candidates.filter(c => {
+        const isComp = c.nombreReal && c.municipio; // Logic from ADNSection.jsx
+        return !isComp;
+    });
+
+    if (incomplete.length === 0) return;
+
+    // Sort by last interaction (oldest first)
+    incomplete.sort((a, b) => {
+        const tA = new Date(a.lastUserMessageAt || 0).getTime();
+        const tB = new Date(b.lastUserMessageAt || 0).getTime();
+        return tA - tB;
+    });
+
+    const now = new Date();
+
+    for (const cand of incomplete) {
+        const lastMsgAt = new Date(cand.lastUserMessageAt || cand.lastBotMessageAt || 0);
+        const hoursInactive = (now - lastMsgAt) / (1000 * 60 * 60);
+
+        let level = 0;
+        if (hoursInactive >= 72) level = 72;
+        else if (hoursInactive >= 48) level = 48;
+        else if (hoursInactive >= 24) level = 24;
+
+        if (level === 0) continue;
+
+        // Check if we already sent this level for this session of inactivity
+        // We use a flag linked to the lastUserMessageAt timestamp to know it's a "new" silence
+        const sessionKey = `proactive:${cand.id}:${level}:${cand.lastUserMessageAt}`;
+        const alreadySent = await redis.get(sessionKey);
+        if (alreadySent) continue;
+
+        logs.push(`🎯 [PROACTIVE] Candidato ${cand.nombre} califica para nivel ${level}h (${Math.floor(hoursInactive)}h inactivo).`);
+
+        const prompt = `
+Eres el asistente de Candidatic IA. El candidato ${cand.nombreReal || cand.nombre} tiene su perfil INCOMPLETO.
+Le falta: ${!cand.nombreReal ? 'Nombre Real' : ''} ${!cand.municipio ? 'Municipio' : ''}.
+Han pasado ${level} horas desde su último mensaje.
+TU MISIÓN: Escribir un mensaje de WhatsApp para el Nivel ${level}h de seguimiento.
+
+NIVELES:
+- 24h: Recordatorio amable y servicial.
+- 48h: Recordatorio más directo, preguntando si sigue interesado.
+- 72h: Mensaje de cierre, indicando que el expediente se pondrá en pausa.
+
+REGLAS:
+- No uses formalismos aburridos.
+- Sé natural, breve y humano.
+- Usa su nombre: ${cand.nombreReal || cand.nombre}.
+- NO pongas prefijos tipo "Mensaje:". Escribe solo el texto del mensaje.
+`;
+
+        try {
+            const res = await model.generateContent(prompt);
+            const text = res.response.text().trim();
+
+            if (text) {
+                logs.push(`✨ [PROACTIVE] Enviando nivel ${level}h a ${cand.nombre}...`);
+                await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, text);
+                await saveMessage(cand.id, {
+                    from: 'bot',
+                    content: text,
+                    type: 'text',
+                    timestamp: new Date().toISOString(),
+                    meta: { proactiveLevel: level }
+                });
+
+                // Mark as sent for this level and this interaction session
+                await redis.set(sessionKey, 'sent', 'EX', 7 * 24 * 3600); // 1 week expiration
+                await redis.incr(todayKey);
+                await redis.expire(todayKey, 48 * 3600);
+
+                logs.push(`✅ [PROACTIVE] Seguimiento enviado con éxito.`);
+                return; // SEND ONLY ONE PER RUN (Rate Limit 1/min)
+            }
+        } catch (e) {
+            logs.push(`⚠️ [PROACTIVE] Error enviando seguimiento: ${e.message}`);
+        }
     }
 }
