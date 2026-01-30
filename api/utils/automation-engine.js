@@ -63,10 +63,14 @@ export async function runAIAutomations(isManual = false) {
         if (isProactiveEnabled) {
             logs.push(`🔍 [PROACTIVE] Iniciando análisis de seguimiento...`);
 
-            // Check Time Window (7 AM - 11 PM)
-            const nowHour = new Date().getHours();
+            // Check Time Window (7 AM - 11 PM) - Force UTC-6 (Mexico)
+            const now = new Date();
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const mxTime = new Date(utc + (3600000 * -6));
+            const nowHour = mxTime.getHours();
+
             if (nowHour < 7 || nowHour >= 23) {
-                logs.push(`💤 [PROACTIVE] Fuera de horario permitido (7:00 - 23:00).`);
+                logs.push(`💤 [PROACTIVE] Fuera de horario permitido (7:00 - 23:00). Hora MX actual: ${nowHour}:00`);
             } else {
                 // Check Daily Limit
                 const todayKey = `ai:proactive:count:${new Date().toISOString().split('T')[0]}`;
@@ -74,9 +78,6 @@ export async function runAIAutomations(isManual = false) {
                 if (dailyCount >= 100) {
                     logs.push(`🛑 [PROACTIVE] Límite diario alcanzado (100/día).`);
                 } else {
-                    // Check Global Rate Limit (1 msg per minute run)
-                    // Since runAIAutomations is called once per minute by live-engine,
-                    // we can just send at most 1 proactive msg per run.
                     await processNativeProactive(redis, model, config, logs, todayKey);
                 }
             }
@@ -228,7 +229,7 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
  * Handles the 24/48/72h escalation logic for incomplete profiles.
  */
 async function processNativeProactive(redis, model, config, logs, todayKey) {
-    const { candidates } = await getCandidates(200, 0); // Scan many to find one matching
+    const { candidates } = await getCandidates(500, 0); // Increase scan depth to 500
     if (!candidates) return;
 
     // Filter candidates with incomplete step 1 status
