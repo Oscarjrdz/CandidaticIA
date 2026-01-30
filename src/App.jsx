@@ -143,7 +143,7 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
+    <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex overflow-hidden">
       {/* Sidebar */}
       <Sidebar
         activeSection={activeSection}
@@ -154,9 +154,9 @@ function App() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Header */}
-        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90">
+        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90 shrink-0">
           <div className="px-8 py-4">
             <div className="flex items-center justify-between">
               <div>
@@ -250,7 +250,7 @@ function App() {
         </header>
 
         {/* Content Area */}
-        <main className="flex-1 px-8 py-8 overflow-y-auto">
+        <main className="flex-1 px-8 py-8 overflow-y-auto overflow-x-hidden flex flex-col min-h-0">
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
 
@@ -281,7 +281,7 @@ function App() {
         </main>
 
         {/* Footer */}
-        <footer className="py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+        <footer className="py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0">
           <div className="px-8">
             <p className="text-center text-sm text-gray-500 dark:text-gray-400">
               Candidatic IA v1.0 • Desarrollado con ❤️ para Candidatic
