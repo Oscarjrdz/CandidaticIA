@@ -220,13 +220,26 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
 
     let filtered = allCandidates;
 
-    // Filter by Search
+    // Filter by Search (Universal Deep Search)
     if (search) {
-        filtered = filtered.filter(c =>
-            (c.nombre && c.nombre.toLowerCase().includes(lowerSearch)) ||
-            (c.whatsapp && c.whatsapp.includes(search)) ||
-            (c.id && c.id.includes(search))
-        );
+        const cleanSearch = search.replace(/\D/g, '');
+        filtered = filtered.filter(c => {
+            // 1. Check all text/number values in the object
+            const foundInFields = Object.values(c).some(val =>
+                val !== null &&
+                val !== undefined &&
+                val.toString().toLowerCase().includes(lowerSearch)
+            );
+            if (foundInFields) return true;
+
+            // 2. Special check for phone numbers (ignoring symbols)
+            if (cleanSearch && c.whatsapp) {
+                const cleanWhatsApp = c.whatsapp.replace(/\D/g, '');
+                if (cleanWhatsApp.includes(cleanSearch)) return true;
+            }
+
+            return false;
+        });
     }
 
     // Filter out Linked Candidates
