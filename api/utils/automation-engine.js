@@ -248,7 +248,7 @@ async function processNativeProactive(redis, model, config, logs, todayKey) {
         return tA - tB;
     });
 
-    const now = new Date();
+    const customPrompt = (await redis.get('bot_ia_prompt')) || '';
 
     for (const cand of incomplete) {
         const lastMsgAt = new Date(cand.lastUserMessageAt || cand.lastBotMessageAt || 0);
@@ -270,21 +270,27 @@ async function processNativeProactive(redis, model, config, logs, todayKey) {
         logs.push(`🎯 [PROACTIVE] Candidato ${cand.nombre} califica para nivel ${level}h (${Math.floor(hoursInactive)}h inactivo).`);
 
         const prompt = `
-Eres el asistente de Candidatic IA. El candidato ${cand.nombreReal || cand.nombre} tiene su perfil INCOMPLETO.
+PERSONALIDAD Y REGLAS MAESTRAS (ÚSALAS COMO BASE):
+"${customPrompt}"
+
+SITUACIÓN ACTUAL:
+Eres la Lic. Brenda Rodríguez de Candidatic IA. El candidato ${cand.nombreReal || cand.nombre} tiene su perfil INCOMPLETO.
 Le falta: ${!cand.nombreReal ? 'Nombre Real' : ''} ${!cand.municipio ? 'Municipio' : ''}.
 Han pasado ${level} horas desde su último mensaje.
+
 TU MISIÓN: Escribir un mensaje de WhatsApp para el Nivel ${level}h de seguimiento.
 
-NIVELES:
-- 24h: Recordatorio amable y servicial.
-- 48h: Recordatorio más directo, preguntando si sigue interesado.
-- 72h: Mensaje de cierre, indicando que el expediente se pondrá en pausa.
+NIVELES DE TONO:
+- 24h: Recordatorio amable, servicial y humano.
+- 48h: Re-confirmación de interés, preguntando si el candidato sigue interesado en las vacantes.
+- 72h: Mensaje de "Oportunidad": Hazle saber que nos interesa mucho encontrarle una vacante pero que necesitamos sus datos para proceder. No cierres el expediente, invítalo a completar su perfil para no perder oportunidades.
 
-REGLAS:
-- No uses formalismos aburridos.
-- Sé natural, breve y humano.
+REGLAS CRÍTICAS:
+- Identifícate como la Lic. Brenda Rodríguez (o Lic. Brenda).
+- Mantén la coherencia con tu personalidad definida anteriormente.
+- Sé natural, breve (máximo 2-3 líneas) y usa emojis discretos.
 - Usa su nombre: ${cand.nombreReal || cand.nombre}.
-- NO pongas prefijos tipo "Mensaje:". Escribe solo el texto del mensaje.
+- Escribe SOLO el texto del mensaje, sin prefijos.
 `;
 
         try {
