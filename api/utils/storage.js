@@ -377,56 +377,11 @@ export const getLastActiveUser = async () => {
     return await client.get('meta:last_active_user');
 };
 
-export const getCandidatesHealthStats = async () => {
+export const getCandidatesStats = async () => {
     const client = getClient();
-    if (!client) return { total: 0, green: 0, red: 0, percentage: 0 };
-
-    const { candidates } = await getCandidates(5000); // Load batch for calculation
-
-    // Fetch all defined fields from Redis
-    const DEFAULT_FIELDS = ['nombreReal', 'fechaNacimiento', 'edad', 'genero', 'municipio', 'categoria', 'tieneEmpleo', 'escolaridad'];
-    const customFieldsJson = await client.get('custom_fields');
-    let customFields = [];
-    if (customFieldsJson) {
-        try { customFields = JSON.parse(customFieldsJson).map(f => f.value); } catch (e) { }
-    }
-
-    const allMandatoryFields = [...new Set([...DEFAULT_FIELDS, ...customFields])].filter(f => f !== 'foto');
-
-    let green = 0;
-
-    candidates.forEach(c => {
-        let missing = false;
-
-        for (const f of allMandatoryFields) {
-            // Special handling for Age/Birthday pair
-            if (f === 'edad' || f === 'fechaNacimiento') {
-                const hasAge = c.edad && c.edad !== 'No proporcionado' && c.edad !== 'No proporcionada';
-                const hasBirthday = c.fechaNacimiento && c.fechaNacimiento !== 'No proporcionado' && c.fechaNacimiento !== 'No proporcionada';
-                if (!hasAge && !hasBirthday) {
-                    missing = true;
-                    break;
-                }
-                continue; // Either one is enough
-            }
-
-            const val = c[f];
-            if (!val || val === 'No proporcionado' || val === 'No proporcionada' || val === 'Consulta General' || val === 'N/A') {
-                missing = true;
-                break;
-            }
-        }
-
-        if (!missing) green++;
-    });
-
-    const total = candidates.length;
-    return {
-        total,
-        green,
-        red: total - green,
-        percentage: total > 0 ? Math.round((green / total) * 100) : 0
-    };
+    if (!client) return { total: 0 };
+    const count = await client.zcard(KEYS.CANDIDATES_LIST);
+    return { total: count };
 };
 
 /**
@@ -850,11 +805,7 @@ export const saveProject = async (project) => {
     // NX: Only add new elements. Don't update scores of existing elements so we don't break custom order
     pipeline.zadd(KEYS.PROJECTS_LIST, 'NX', Date.now(), project.id);
 
-    try {
-        await pipeline.exec();
-    } catch (e) {
-        console.error('Error saving project to Redis:', e);
-    }
+    await pipeline.exec();
     return project;
 };
 
@@ -912,23 +863,18 @@ export const getProjects = async () => {
     const client = getRedisClient();
     if (!client) return [];
 
-    try {
-        const ids = await client.zrevrange(KEYS.PROJECTS_LIST, 0, -1);
-        if (!ids || !ids.length) return [];
+    const ids = await client.zrevrange(KEYS.PROJECTS_LIST, 0, -1);
+    if (!ids.length) return [];
 
-        const keys = ids.map(id => `${KEYS.PROJECT_PREFIX}${id}`);
-        const data = await client.mget(...keys);
+    const keys = ids.map(id => `${KEYS.PROJECT_PREFIX}${id}`);
+    const data = await client.mget(...keys);
 
-        return data.map(d => {
-            if (!d) return null;
-            const p = JSON.parse(d);
-            if (!p.steps || p.steps.length === 0) p.steps = DEFAULT_PROJECT_STEPS;
-            return p;
-        }).filter(Boolean);
-    } catch (e) {
-        console.error('Error fetching projects:', e);
-        return [];
-    }
+    return data.map(d => {
+        if (!d) return null;
+        const p = JSON.parse(d);
+        if (!p.steps || p.steps.length === 0) p.steps = DEFAULT_PROJECT_STEPS;
+        return p;
+    }).filter(Boolean);
 };
 
 /**
@@ -951,7 +897,6 @@ export const deleteProject = async (id) => {
     const client = getRedisClient();
     if (!client || !id) return false;
 
-    const pipeline = client.pipeline();
     const project = await getProjectById(id);
     if (project) {
         const candidateIds = await client.smembers(`${KEYS.PROJECT_CANDIDATES_PREFIX}${id}`);

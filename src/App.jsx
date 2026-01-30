@@ -26,7 +26,6 @@ function App() {
   const [token, setToken] = useState('');
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
-  const [isProjectActive, setIsProjectActive] = useState(false);
   const { toast, showToast, hideToast, ToastComponent } = useToast();
 
   // Check LocalStorage for session
@@ -144,7 +143,7 @@ function App() {
   }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       {/* Sidebar */}
       <Sidebar
         activeSection={activeSection}
@@ -155,9 +154,9 @@ function App() {
       />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Header - Always visible for consistency */}
-        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90 shrink-0">
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90">
           <div className="px-8 py-4">
             <div className="flex items-center justify-between">
               <div>
@@ -251,7 +250,7 @@ function App() {
         </header>
 
         {/* Content Area */}
-        <main className="flex-1 px-8 py-8 overflow-y-auto overflow-x-hidden flex flex-col min-h-0">
+        <main className="flex-1 px-8 py-8 overflow-y-auto">
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
 
@@ -270,12 +269,7 @@ function App() {
           ) : activeSection === 'media-library' ? (
             <MediaLibrarySection showToast={showToast} />
           ) : activeSection === 'projects' ? (
-            <ProjectsSection
-              showToast={showToast}
-              onActiveChange={(isActive) => {
-                if (activeSection === 'projects') setIsProjectActive(isActive);
-              }}
-            />
+            <ProjectsSection showToast={showToast} />
           ) : (
             <SettingsSection
               instanceId={instanceId}
@@ -286,8 +280,8 @@ function App() {
           )}
         </main>
 
-        {/* Footer - Always visible */}
-        <footer className="py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0">
+        {/* Footer */}
+        <footer className="py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
           <div className="px-8">
             <p className="text-center text-sm text-gray-500 dark:text-gray-400">
               Candidatic IA v1.0 • Desarrollado con ❤️ para Candidatic
