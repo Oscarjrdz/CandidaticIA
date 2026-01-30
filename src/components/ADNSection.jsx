@@ -28,7 +28,7 @@ Si un candidato con perfil INCOMPLETO deja de responder:
 2. Nivel 2 (48h): Re-confirmación de interés.
 3. Nivel 3 (72h): Cierre de expediente y pausa.
 
-REGLAS DE TRÁFICO: Máximo 1 mensaje por minuto y 100 por día (7:00 AM - 10:00 PM).
+REGLAS DE TRÁFICO: Máximo 1 mensaje por minuto y 100 por día (7:00 AM - 11:00 PM).
 REGLA DE BLOQUEO DE PROYECTOS: Prohibido hablar de "Proyectos" o "Silos Estratégicos".
 `;
 

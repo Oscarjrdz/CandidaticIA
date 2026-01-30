@@ -63,10 +63,10 @@ export async function runAIAutomations(isManual = false) {
         if (isProactiveEnabled) {
             logs.push(`🔍 [PROACTIVE] Iniciando análisis de seguimiento...`);
 
-            // Check Time Window (7 AM - 10 PM)
+            // Check Time Window (7 AM - 11 PM)
             const nowHour = new Date().getHours();
-            if (nowHour < 7 || nowHour >= 22) {
-                logs.push(`💤 [PROACTIVE] Fuera de horario permitido (7:00 - 22:00).`);
+            if (nowHour < 7 || nowHour >= 23) {
+                logs.push(`💤 [PROACTIVE] Fuera de horario permitido (7:00 - 23:00).`);
             } else {
                 // Check Daily Limit
                 const todayKey = `ai:proactive:count:${new Date().toISOString().split('T')[0]}`;
