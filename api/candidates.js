@@ -24,14 +24,16 @@ export default async function handler(req, res) {
             // Estadísticas (Optional mixed response)
             let statsData = null;
             if (stats === 'true') {
-                const { getEventStats, getCandidatesStats } = await import('./utils/storage.js');
+                const { getEventStats, getCandidatesStats, getCandidatesHealthStats } = await import('./utils/storage.js');
                 const candidatesStats = await getCandidatesStats();
+                const healthStats = await getCandidatesHealthStats();
                 const msgStats = await getEventStats();
 
                 statsData = {
                     candidates: candidatesStats.total,
                     incoming: msgStats.incoming,
-                    outgoing: msgStats.outgoing
+                    outgoing: msgStats.outgoing,
+                    health: healthStats // { total, green, red, percentage }
                 };
             }
 

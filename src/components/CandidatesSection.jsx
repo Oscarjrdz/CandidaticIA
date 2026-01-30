@@ -17,7 +17,7 @@ import { formatPhone, formatRelativeDate, formatDateTime, calculateAge } from '.
  */
 const CandidatesSection = ({ showToast }) => {
     const [candidates, setCandidates] = useState([]);
-    const [stats, setStats] = useState(null); // Live dashboard stats
+    const [stats, setStats] = useState({ total: 0, health: null }); // Live dashboard stats
     const [loading, setLoading] = useState(false);
     const [fields, setFields] = useState([]); // Dynamic fields
     const [search, setSearch] = useState('');
@@ -165,6 +165,10 @@ const CandidatesSection = ({ showToast }) => {
             if (result.success) {
                 setCandidates(result.candidates);
                 setTotalItems(result.total || result.count || 0);
+                setStats({
+                    total: result.stats.total,
+                    health: result.stats.health // { total, green, red, percentage }
+                });
                 setLastUpdate(new Date());
             } else {
                 showToast('Error cargando candidatos', 'error');
@@ -255,157 +259,243 @@ const CandidatesSection = ({ showToast }) => {
 
     const totalPages = Math.ceil(totalItems / LIMIT);
 
+    // --- 🚩 PASO 1 LOGIC ---
+    const isProfileComplete = (c) => {
+        if (!fields || fields.length === 0) return false;
+
+        // All fields from fields state except 'foto'
+        const mandatoryFields = fields.filter(f => f.value !== 'foto');
+
+        for (const f of mandatoryFields) {
+            // Special handling for Age/Birthday pair
+            if (f.value === 'edad' || f.value === 'fechaNacimiento') {
+                const hasAge = c.edad && c.edad !== 'No proporcionado' && c.edad !== 'No proporcionada';
+                const hasBirthday = c.fechaNacimiento && c.fechaNacimiento !== 'No proporcionado' && c.fechaNacimiento !== 'No proporcionada';
+                if (!hasAge && !hasBirthday) return false;
+                continue; // Either one is enough
+            }
+
+            const val = c[f.value];
+            if (!val || val === 'No proporcionado' || val === 'No proporcionada' || val === 'Consulta General' || val === 'N/A') {
+                return false;
+            }
+        }
+        return true;
+    };
+
     return (
-        <div className="h-[calc(100vh-theme(spacing.24))] flex flex-col space-y-4">
-            {/* Sticky Header Wrapper */}
-            <div className="flex-none space-y-4">
+        <div className="flex-1 flex flex-col min-h-0 space-y-4">
 
-                {/* 📊 Live Dashboard - Zuckerberg Style */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-                    {/* Card 1: Candidates */}
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Users className="w-16 h-16 text-blue-500 transform rotate-12" />
+            {/* 📊 Live Dashboard Stats */}
+            {/* 📊 Live Dashboard Stats */}
+            {/* Header Design Request: Total Candidates Card */}
+            <div className="flex-none mb-4">
+                <Card className="p-6 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden">
+                    <div className="flex flex-col md:flex-row justify-between items-center relative z-10 gap-6">
+                        {/* Left: Total Stats */}
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">TOTAL CANDIDATOS</p>
+                            <div className="flex items-center gap-4">
+                                <h2 className="text-5xl font-black text-gray-900 dark:text-white tracking-tight">
+                                    {stats.total || 0}
+                                </h2>
+                                <span className="px-3 py-1 rounded-full bg-green-50 dark:bg-green-900/20 text-green-500 dark:text-green-400 text-xs font-bold flex items-center gap-1.5 border border-green-100 dark:border-green-800">
+                                    <Zap size={12} className="fill-current" /> Activos
+                                </span>
+                            </div>
                         </div>
-                        <div className="flex flex-col relative z-10">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
-                            <div className="flex items-baseline space-x-2">
-                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{totalItems}</h3>
-                                <span className="text-[10px] text-green-500 font-medium flex items-center bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded-full">
-                                    <Zap className="w-3 h-3 mr-0.5" /> Activos
+
+                        {/* Middle-Right: Breakdown */}
+                        <div className="flex flex-col gap-3 min-w-[200px]">
+                            <div className="flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-full bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.3)]"></span>
+                                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                                    {stats.health?.green || 0} <span className="font-medium text-gray-500 text-xs">perfiles completos</span>
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="w-8 h-8 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]"></span>
+                                <span className="text-sm font-bold text-gray-800 dark:text-gray-200">
+                                    {stats.health?.red || 0} <span className="font-medium text-gray-500 text-xs">perfiles incompletos</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Decoration Icon */}
+                        <div className="hidden md:block absolute right-[-20px] top-1/2 transform -translate-y-1/2 opacity-5 pointer-events-none">
+                            <Users size={160} />
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            {/* 📊 Live Dashboard Stats */}
+            <div className="flex-none grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                {/* Card 1: Health Monitor */}
+                <Card className="p-4 border-l-4 border-indigo-500 bg-white dark:bg-gray-800 shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
+                    <div className="flex justify-between items-start mb-2">
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Base de Talento</p>
+                            <h3 className="text-2xl font-black text-gray-900 dark:text-white mt-1 group-hover:scale-105 transition-transform origin-left">
+                                {stats.health ? `${stats.health.percentage}%` : '-'}
+                            </h3>
+                            <p className="text-[10px] text-gray-500 font-medium">Salud de la Base</p>
+                        </div>
+                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg group-hover:bg-indigo-100 dark:group-hover:bg-indigo-800/40 transition-colors">
+                            <Users size={20} className="text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                    </div>
+
+                    {/* Health Bar */}
+                    <div className="mt-3">
+                        <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-gradient-to-r from-green-400 to-emerald-500 shadow-[0_0_10px_rgba(34,197,94,0.4)] transition-all duration-1000 ease-out"
+                                style={{ width: `${stats.health ? stats.health.percentage : 0}%` }}
+                            ></div>
+                        </div>
+                        <div className="flex justify-between items-center mt-1.5 px-0.5">
+                            <div className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400">
+                                    {stats.health ? stats.health.green : 0} <span className="font-normal text-gray-400">Listos</span>
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400">
+                                    {stats.health ? stats.health.red : 0} <span className="font-normal text-gray-400">Inc.</span>
                                 </span>
                             </div>
                         </div>
                     </div>
+                </Card>
 
-                    {/* Card 2: Incoming Messages (Live) */}
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <MessageCircle className="w-16 h-16 text-emerald-500 transform -rotate-12" />
-                        </div>
-                        <div className="flex flex-col relative z-10">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
-                            <div className="flex items-baseline space-x-2">
-                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {stats?.incoming || 0}
-                                </h3>
-                                <div className="flex items-center space-x-1">
-                                    <span className="relative flex h-2.5 w-2.5">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                                    </span>
-                                    <span className="text-[10px] text-emerald-500 font-medium ml-1">En vivo</span>
-                                </div>
-                            </div>
-                        </div>
+                {/* Card 2: Incoming Messages */}
+                <Card className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <MessageCircle className="w-16 h-16 text-emerald-500 transform -rotate-12" />
                     </div>
-
-                    {/* Card 3: Outgoing Messages */}
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Send className="w-16 h-16 text-purple-500 transform rotate-6" />
-                        </div>
-                        <div className="flex flex-col relative z-10">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Enviados</span>
-                            <div className="flex items-baseline space-x-2">
-                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {stats?.outgoing || 0}
-                                </h3>
-                                <span className="text-[10px] text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full">
-                                    <Sparkles className="w-3 h-3 mr-0.5" /> AI & Manual
+                    <div className="flex flex-col relative z-10">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
+                        <div className="flex items-baseline space-x-2">
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                {stats?.incoming || 0}
+                            </h3>
+                            <div className="flex items-center space-x-1">
+                                <span className="relative flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                                 </span>
+                                <span className="text-[10px] text-emerald-500 font-medium ml-1">En vivo</span>
                             </div>
                         </div>
                     </div>
+                </Card>
 
-                </div>
+                {/* Card 3: Outgoing Messages */}
+                <Card className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <Send className="w-16 h-16 text-purple-500 transform rotate-6" />
+                    </div>
+                    <div className="flex flex-col relative z-10">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Enviados</span>
+                        <div className="flex items-baseline space-x-2">
+                            <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                {stats?.outgoing || 0}
+                            </h3>
+                            <span className="text-[10px] text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full">
+                                <Sparkles className="w-3 h-3 mr-0.5" /> AI & Manual
+                            </span>
+                        </div>
+                    </div>
+                </Card>
+            </div>
 
-                {/* Búsqueda */}
-                <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center">
+            {/* Búsqueda y Filtros */}
+            <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center">
+                <MagicSearch
+                    onResults={(results, ai) => {
+                        setAiFilteredCandidates(results);
+                        setAiExplanation(ai?.explanation || 'Búsqueda completada');
+                    }}
+                    showToast={showToast}
+                />
+
+                {/* AI Action Modal (Follow-up) */}
+                {aiActionOpen && (
                     <MagicSearch
-                        onResults={(results, ai) => {
-                            setAiFilteredCandidates(results);
-                            setAiExplanation(ai?.explanation || 'Búsqueda completada');
-                            // Follow-up disabled per user request
-                        }}
+                        initialMode="action"
+                        customTitle={`¿Qué hacemos con estos ${displayedCandidates.length} candidatos?`}
+                        customPlaceholder="Ej: 'Filtrar solo los que sepan Inglés' o 'Enviarles un saludo'..."
+                        onAction={handleAiAction}
+                        isOpenProp={true}
+                        onClose={() => setAiActionOpen(false)}
                         showToast={showToast}
                     />
-
-
-                    {/* AI Action Modal (Follow-up) */}
-                    {aiActionOpen && (
-                        <MagicSearch
-                            initialMode="action"
-                            customTitle={`¿Qué hacemos con estos ${displayedCandidates.length} candidatos?`}
-                            customPlaceholder="Ej: 'Filtrar solo los que sepan Inglés' o 'Enviarles un saludo'..."
-                            onAction={handleAiAction}
-                            isOpenProp={true}
-                            onClose={() => setAiActionOpen(false)}
-                            showToast={showToast}
-                        />
-                    )}
-
-                    <div className="relative w-full sm:w-64 group">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-600 transition-colors" />
-                        <input
-                            type="text"
-                            placeholder="Buscar candidato..."
-                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500 outline-none transition-all dark:text-gray-200 text-[12px]"
-                            value={search}
-                            onChange={(e) => {
-                                setSearch(e.target.value);
-                                if (aiFilteredCandidates) setAiFilteredCandidates(null);
-                            }}
-                        />
-                    </div>
-
-                    <button
-                        onClick={() => {
-                            setSearch('');
-                            setAiFilteredCandidates(null);
-                            loadCandidates();
-                        }}
-                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
-                        title="Recargar"
-                    >
-                        <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                    </button>
-                </div>
-
-                {/* Alerta de filtrado por IA: iOS Style */}
-                {aiFilteredCandidates && (
-                    <div className="mb-2 animate-spring-in">
-                        <div className="ios-glass p-3 rounded-[16px] flex items-center justify-between shadow-ios border-gray-200 dark:border-gray-700/50">
-                            <div className="flex items-center space-x-3">
-                                <div className="w-8 h-8 bg-blue-600 dark:bg-blue-500 rounded-[10px] flex items-center justify-center shadow-sm">
-                                    <Sparkles className="w-4 h-4 text-white" />
-                                </div>
-                                <div>
-                                    <h3 className="text-[12px] font-bold text-gray-900 dark:text-white">
-                                        {displayedCandidates.length} Resultados IA
-                                    </h3>
-                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 font-medium truncate max-w-[200px]">
-                                        {aiExplanation}
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    setAiFilteredCandidates(null);
-                                    setAiExplanation('');
-                                    setCurrentPage(1);
-                                    loadCandidates(1);
-                                }}
-                                className="text-[10px] font-bold text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1.5 rounded-full transition-colors"
-                            >
-                                Limpiar
-                            </button>
-                        </div>
-                    </div>
                 )}
 
+                <div className="relative w-full sm:w-64 group">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-600 transition-colors" />
+                    <input
+                        type="text"
+                        placeholder="Buscar candidato..."
+                        className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500 outline-none transition-all dark:text-gray-200 text-[12px]"
+                        value={search}
+                        onChange={(e) => {
+                            setSearch(e.target.value);
+                            if (aiFilteredCandidates) setAiFilteredCandidates(null);
+                        }}
+                    />
+                </div>
+
+                <button
+                    onClick={() => {
+                        setSearch('');
+                        setAiFilteredCandidates(null);
+                        loadCandidates();
+                    }}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all"
+                    title="Recargar"
+                >
+                    <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                </button>
             </div>
+
+            {/* Alerta de filtrado por IA */}
+            {aiFilteredCandidates && (
+                <div className="mb-2 animate-spring-in">
+                    <div className="ios-glass p-3 rounded-[16px] flex items-center justify-between shadow-ios border-gray-200 dark:border-gray-700/50">
+                        <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-blue-600 dark:bg-blue-500 rounded-[10px] flex items-center justify-center shadow-sm">
+                                <Sparkles className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-[12px] font-bold text-gray-900 dark:text-white">
+                                    {displayedCandidates.length} Resultados IA
+                                </h3>
+                                <p className="text-[8px] text-gray-500 dark:text-gray-400 font-medium truncate max-w-[200px]">
+                                    {aiExplanation}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                setAiFilteredCandidates(null);
+                                setAiExplanation('');
+                                setCurrentPage(1);
+                                loadCandidates(1);
+                            }}
+                            className="text-[10px] font-bold text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1.5 rounded-full transition-colors"
+                        >
+                            Limpiar
+                        </button>
+                    </div>
+                </div>
+            )}
+
+
 
             {/* Tabla con Sticky Header */}
             <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col min-h-0">
@@ -424,6 +514,7 @@ const CandidatesSection = ({ showToast }) => {
                         <table className="w-full relative">
                             <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
                                 <tr className="border-b border-gray-200 dark:border-gray-700 text-[10px] uppercase tracking-wider text-gray-500">
+                                    <th className="py-1 px-1 w-8"></th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Avatar</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">From</th>
@@ -457,6 +548,15 @@ const CandidatesSection = ({ showToast }) => {
                                         key={candidate.id}
                                         className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
                                     >
+                                        <td className="py-0.5 px-1 text-center">
+                                            <div className="flex items-center justify-center">
+                                                {isProfileComplete(candidate) ? (
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
+                                                ) : (
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="py-0.5 px-2.5">
                                             <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
                                                 <img
@@ -494,11 +594,11 @@ const CandidatesSection = ({ showToast }) => {
                                                         <div
                                                             onClick={() => handleMagicFix(candidate.id, field.value, candidate[field.value])}
                                                             className={`
-                                                                inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium
-                                                                ${magicLoading[`${candidate.id}-${field.value}`]
+                                                                        inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium
+                                                                        ${magicLoading[`${candidate.id}-${field.value}`]
                                                                     ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse'
                                                                     : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}
-                                                            `}
+                                                                    `}
                                                             title="Clic para Magia IA ✨"
                                                         >
                                                             {magicLoading[`${candidate.id}-${field.value}`] && (
@@ -557,32 +657,34 @@ const CandidatesSection = ({ showToast }) => {
                 </div>
 
                 {/* Pagination Footer */}
-                {totalItems > 0 && !aiFilteredCandidates && (
-                    <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center text-[12px] sticky bottom-0 z-20">
-                        <div className="text-gray-500 dark:text-gray-400">
-                            Mostrando <span className="font-medium text-gray-900 dark:text-white">{((currentPage - 1) * LIMIT) + 1}</span> - <span className="font-medium text-gray-900 dark:text-white">{Math.min(currentPage * LIMIT, totalItems)}</span> de <span className="font-medium text-gray-900 dark:text-white">{totalItems}</span>
-                        </div>
-                        <div className="flex space-x-2">
-                            <button
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage === 1 || loading}
-                                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[12px]"
-                            >
-                                Anterior
-                            </button>
-                            <div className="px-2 py-1.5 text-gray-600 dark:text-gray-400 font-medium text-[12px]">
-                                Página {currentPage}
+                {
+                    totalItems > 0 && !aiFilteredCandidates && (
+                        <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-800/50 flex justify-between items-center text-[12px] sticky bottom-0 z-20">
+                            <div className="text-gray-500 dark:text-gray-400">
+                                Mostrando <span className="font-medium text-gray-900 dark:text-white">{((currentPage - 1) * LIMIT) + 1}</span> - <span className="font-medium text-gray-900 dark:text-white">{Math.min(currentPage * LIMIT, totalItems)}</span> de <span className="font-medium text-gray-900 dark:text-white">{totalItems}</span>
                             </div>
-                            <button
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage >= totalPages || loading}
-                                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[12px]"
-                            >
-                                Siguiente
-                            </button>
+                            <div className="flex space-x-2">
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage === 1 || loading}
+                                    className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[12px]"
+                                >
+                                    Anterior
+                                </button>
+                                <div className="px-2 py-1.5 text-gray-600 dark:text-gray-400 font-medium text-[12px]">
+                                    Página {currentPage}
+                                </div>
+                                <button
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage >= totalPages || loading}
+                                    className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[12px]"
+                                >
+                                    Siguiente
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
             </div>
 
 

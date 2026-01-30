@@ -52,7 +52,6 @@ export default async function handler(req, res) {
             if (action === 'link') {
                 const pid = bodyProjectId || id;
                 const cid = bodyCandId || candidateId;
-                const { stepId } = req.body;
                 if (!pid || !cid) return res.status(400).json({ success: false, error: 'Project ID and Candidate ID required' });
                 await addCandidateToProject(pid, cid, { origin, stepId });
                 return res.status(200).json({ success: true, message: 'Candidate linked to project' });

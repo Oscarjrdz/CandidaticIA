@@ -5,15 +5,21 @@ import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 const DEFAULT_SYSTEM_PROMPT = `
 Eres el asistente virtual de Candidatic, un experto en reclutamiento amigable y profesional.
 Tu objetivo es ayudar a los candidatos a responder sus dudas sobre vacantes, estatus de postulación o información general.
+
+[FILTRO DE SEGURIDAD - PASO 1]:
+Tu prioridad número 1 es asegurar que el perfil del candidato esté COMPLETO. 
+- If el [ESTATUS PASO 1] es "INCOMPLETO": Tu única misión es obtener los datos faltantes de forma amable. BLOQUEADO hablar de vacantes o proyectos.
+- Si el [ESTATUS PASO 1] es "COMPLETO": ¡Excelente! Tienes luz verde para proceder con el flujo normal de la conversación. Sigue fielmente las instrucciones de tu [DIRECTIVA SUPREMA DEL ADMINISTRADOR] y atiende al candidato con tu personalidad habitual. 
+
+REGLA DE BLOQUEO DE PROYECTOS (VIGENTE SIEMPRE): Tienes prohibido mencionar, asignar o hablar de la sección de "Proyectos" o "Silos Estratégicos", incluso si el estatus es COMPLETO. Esa área está en mantenimiento.
+
 IMPORTANTE: Siempre saluda al candidato por su nombre real si está disponible en la base de datos.
 IMPORTANTE: TIENES PROHIBIDO USAR EL "Nombre WhatsApp" para saludar. Ese dato suele ser informal o incorrecto.
 IMPORTANTE: NO USES ASTERISCOS (*) ni markdown en exceso. Escribe texto limpio.
 REGLA DE ORO (MEMORIA): Eres el mismo asistente que habló con el candidato en el pasado. Revisa el historial y el [DNA DEL CANDIDATO].
 REGLA DE CAPTURA (IMPORTANTE): Si el "Nombre Real" dice "No proporcionado", DEBES preguntarle su nombre al candidato usando un saludo genérico como "Hola".
-REGLA DE ORO DE FILTRADO (CRÍTICA): TIENES PROHIBIDO ofrecer o dar detalles de vacantes (nombres, sueldos, ubicaciones) si el [DNA DEL CANDIDATO] tiene campos como "No proporcionado".
-REGLA ANTI-ALUCINACIÓN (ESTRICTA): NO INVENTES VACANTES. Si el candidato pregunta por un puesto que NO aparece en la [BASE DE CONOCIMIENTO (DETALLE DE VACANTES)], responde que por el momento no contamos con esa posición disponible. PROHIBIDO inventar empresas, sueldos, ubicaciones o beneficios.
-Si el candidato pregunta por vacantes y su perfil está incompleto, DEBES responder que primero necesitas completar su expediente para darle la mejor opción, y proceder a preguntar el dato faltante de forma amable y natural. 
-NUNCA CUENTES CHISTES, mantén un tono profesional.
+REGLA DE ORO DE FILTRADO (CRÍTICA): TIENES PROHIBIDO ofrecer o dar detalles de vacantes (nombres, sueldos, ubicaciones) si el [ESTATUS PASO 1] es "INCOMPLETO".
+REGLA ANTI-ALUCINACIÓN (ESTRICTA): NO INVENTES VACANTES. Si el candidato pregunta por un puesto que NO aparece en la [BASE DE CONOCIMIENTO (DETALLE DE VACANTES)], responde que por el momento no contamos con esa posición disponible.
 `;
 
 export const processMessage = async (candidateId, incomingMessage) => {
@@ -160,8 +166,25 @@ Si el candidato pregunta por trabajo, responde que primero necesitas completar s
 
             let dnaLines = allFields.map(f => `- ${f.label}: ${candidateData[f.value] || 'No proporcionado'}`).join('\n');
 
+            // --- 🚩 PASO 1 CALCULATION ---
+            const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria'];
+            let missingData = false;
+            for (const field of coreFields) {
+                const val = candidateData[field];
+                if (!val || val === 'No proporcionado' || val === 'No proporcionada' || val === 'Consulta General') {
+                    missingData = true;
+                }
+            }
+            // Check age/birthday too
+            if (!candidateData.edad && (!candidateData.fechaNacimiento || candidateData.fechaNacimiento === 'No proporcionada')) {
+                missingData = true;
+            }
+
+            const paso1Status = missingData ? "INCOMPLETO" : "COMPLETO";
+
             const dnaProfile = `
 [CONTEXTO DE MEMORIA ADN - ESTADO ACTUAL EXCLUSIVO]:
+- [ESTATUS PASO 1]: ${paso1Status}
 - Nombre WhatsApp: ${candidateData.nombre || 'Desconocido'}
 - WhatsApp: ${candidateData.whatsapp}
 ${dnaLines}
