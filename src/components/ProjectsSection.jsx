@@ -708,33 +708,12 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                     />
                 )}
 
-                {/* Header - Always visible for consistency */}
-                <div className="flex items-start justify-between bg-white/50 dark:bg-slate-800/30 p-4 rounded-[24px] border border-slate-200/50 dark:border-slate-800/50 mb-2 shadow-sm shrink-0">
-                    <div className="flex flex-col gap-1">
-                        <h2 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tighter flex items-center gap-2">
-                            <FolderKanban className="w-5 h-5 text-blue-500" />
-                            Silos Estratégicos
-                        </h2>
-                        <p className="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest opacity-60">Gestión de talento por proyectos</p>
-                    </div>
-                    <Button
-                        onClick={() => { resetForm(); setShowCreateModal(true); }}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-lg shadow-blue-500/20 py-2.5 px-5 h-auto text-[11px] font-black uppercase tracking-widest rounded-xl"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Nuevo Proyecto
-                    </Button>
-                </div>
-
+                {/* Content area */}
                 <div className="grid grid-cols-12 gap-6 flex-1 min-h-0">
                     {/* Projects List sidebar */}
                     <div className="col-span-12 lg:col-span-2 flex flex-col min-h-0 space-y-2 overflow-hidden">
                         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
-                            {projects.length === 0 ? (
-                                <div className="text-center p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-800/50">
-                                    <p className="text-slate-400">No hay proyectos activos</p>
-                                </div>
-                            ) : (
+                            {projects.length === 0 ? null : (
                                 <SortableContext items={projects.map(p => p.id)} strategy={verticalListSortingStrategy}>
                                     {projects.map(project => (
                                         <SortableProjectItem
@@ -854,12 +833,12 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                            <div className="h-full flex flex-col items-center justify-center">
                                 <Button
                                     onClick={() => { resetForm(); setShowCreateModal(true); }}
-                                    className="flex items-center gap-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 border-none py-3 px-8 h-auto text-[12px] font-black uppercase tracking-widest rounded-2xl"
+                                    className="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-xl shadow-blue-500/20 py-4 px-10 h-auto text-[14px] font-black uppercase tracking-widest rounded-2xl transform hover:scale-105 transition-all"
                                 >
-                                    <Plus className="w-4 h-4" />
+                                    <Plus className="w-6 h-6" />
                                     Crear nuevo proyecto
                                 </Button>
                             </div>
