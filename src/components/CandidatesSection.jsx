@@ -255,6 +255,15 @@ const CandidatesSection = ({ showToast }) => {
 
     const totalPages = Math.ceil(totalItems / LIMIT);
 
+    // --- 🚩 PASO 1 LOGIC ---
+    const isProfileComplete = (c) => {
+        // Red dot if ANY field is missing, Green dot if ALL fields are present
+        const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero', 'tieneEmpleo'];
+        const hasCoreData = coreFields.every(f => !!c[f] && c[f] !== 'No proporcionado' && c[f] !== 'No proporcionada' && c[f] !== 'Consulta General');
+        const hasAgeData = !!(c.edad || c.fechaNacimiento);
+        return hasCoreData && hasAgeData;
+    };
+
     return (
         <div className="h-[calc(100vh-theme(spacing.24))] flex flex-col space-y-4">
             {/* Sticky Header Wrapper */}
@@ -424,7 +433,8 @@ const CandidatesSection = ({ showToast }) => {
                         <table className="w-full relative">
                             <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
                                 <tr className="border-b border-gray-200 dark:border-gray-700 text-[10px] uppercase tracking-wider text-gray-500">
-                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Avatar</th>
+                                    <th className="py-1 px-1 w-8"></th>
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300"></th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">From</th>
 
@@ -457,6 +467,15 @@ const CandidatesSection = ({ showToast }) => {
                                         key={candidate.id}
                                         className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
                                     >
+                                        <td className="py-0.5 px-1 text-center">
+                                            <div className="flex items-center justify-center">
+                                                {isProfileComplete(candidate) ? (
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
+                                                ) : (
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
+                                                )}
+                                            </div>
+                                        </td>
                                         <td className="py-0.5 px-2.5">
                                             <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
                                                 <img
