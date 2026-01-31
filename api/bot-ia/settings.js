@@ -51,6 +51,12 @@ export default async function handler(req, res) {
             const systemPrompt = await redis.get('bot_ia_prompt');
             const isActive = await redis.get('bot_ia_active');
 
+            // Proactive Stats
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todayCount = await redis.get(`ai:proactive:count:${todayStr}`) || '0';
+            const totalSent = await redis.get('ai:proactive:total_sent') || '0';
+            const totalRecovered = await redis.get('ai:proactive:total_recovered') || '0';
+
             let instanceId = '';
             let token = '';
 
@@ -64,7 +70,12 @@ export default async function handler(req, res) {
                 instanceId,
                 token,
                 systemPrompt: systemPrompt || '',
-                isActive: isActive === 'true'
+                isActive: isActive === 'true',
+                stats: {
+                    today: parseInt(todayCount),
+                    totalSent: parseInt(totalSent),
+                    totalRecovered: parseInt(totalRecovered)
+                }
             });
 
         } catch (error) {

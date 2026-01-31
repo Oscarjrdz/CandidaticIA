@@ -12,6 +12,7 @@ const BotIASection = ({ showToast }) => {
     // AI Settings
     const [systemPrompt, setSystemPrompt] = useState('');
     const [aiModel, setAiModel] = useState('gemini-2.5-flash');
+    const [stats, setStats] = useState({ today: 0, totalSent: 0, totalRecovered: 0 });
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -21,6 +22,7 @@ const BotIASection = ({ showToast }) => {
                     const data = await res.json();
                     setSystemPrompt(data.systemPrompt || '');
                     setIsActive(data.isActive);
+                    if (data.stats) setStats(data.stats);
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
@@ -145,57 +147,70 @@ const BotIASection = ({ showToast }) => {
                 </Card>
 
                 {/* Follow-up Rules Reference */}
-                <Card title="Directrices de Seguimiento" icon={Clock}>
+                <Card title="Impacto y Directrices Brenda" icon={Clock}>
                     <div className="space-y-6">
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800/30">
-                            <h4 className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <Shield className="w-4 h-4" /> Protocolo de Inactividad
-                            </h4>
-                            <div className="space-y-4">
-                                <div className="flex gap-3">
-                                    <div className="flex flex-col items-center">
-                                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">1</div>
-                                        <div className="w-0.5 h-full bg-blue-100 dark:bg-blue-800/50 mt-1"></div>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Nivel 24 Horas</p>
-                                        <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed mt-0.5">
-                                            Recordatorio amable. La Lic. Brenda se presenta y ofrece ayuda para completar el perfil.
-                                        </p>
-                                    </div>
+                        {/* Mini Dashboard Impacto */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-gradient-to-br from-purple-500/10 to-indigo-500/5 dark:from-purple-500/20 dark:to-indigo-500/10 p-4 rounded-2xl border border-purple-100/50 dark:border-purple-800/30">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-1">Total Enviados</p>
+                                <div className="flex items-baseline gap-2">
+                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.totalSent}</h4>
+                                    <span className="text-[10px] text-purple-400 font-medium">Hoy: {stats.today}</span>
                                 </div>
-
-                                <div className="flex gap-3">
-                                    <div className="flex flex-col items-center">
-                                        <div className="w-6 h-6 rounded-full bg-blue-400 text-white text-[10px] font-bold flex items-center justify-center">2</div>
-                                        <div className="w-0.5 h-full bg-blue-100 dark:bg-blue-800/50 mt-1"></div>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Nivel 48 Horas</p>
-                                        <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed mt-0.5">
-                                            Re-confirmación de interés. Pregunta si el candidato aún busca vacantes disponibles.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-3">
-                                    <div className="flex flex-col items-center">
-                                        <div className="w-6 h-6 rounded-full bg-blue-300 text-white text-[10px] font-bold flex items-center justify-center">3</div>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Nivel 72 Horas</p>
-                                        <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed mt-0.5">
-                                            Última oportunidad. Explica que sin datos (Nombre/Municipio) no se le pueden asignar vacantes.
-                                        </p>
-                                    </div>
+                            </div>
+                            <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 dark:from-green-500/20 dark:to-emerald-500/10 p-4 rounded-2xl border border-green-100/50 dark:border-green-800/30">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-green-600 dark:text-green-400 mb-1">Datos Recuperados</p>
+                                <div className="flex items-baseline gap-2">
+                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.totalRecovered || 0}</h4>
+                                    <span className="text-[10px] text-green-400 font-medium leading-none">ROI Éxito</span>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
-                            <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 leading-relaxed italic">
-                                * Estas reglas se aplican automáticamente solo si el perfil está incompleto y el switch de "Seguimiento AUTO" está encendido en la sección de Candidatos.
-                            </p>
+                        {/* Operative Rules */}
+                        <div className="bg-gray-50 dark:bg-gray-900/40 p-4 rounded-2xl border border-gray-100 dark:border-gray-800/50">
+                            <h4 className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Shield className="w-4 h-4 text-blue-500" /> Configuración Operativa
+                            </h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter italic">Ventana Horaria</p>
+                                    <p className="text-xs font-black text-gray-700 dark:text-gray-300">07:00 - 23:00</p>
+                                    <p className="text-[9px] text-gray-500">Hora CDMX</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter italic">Seguridad Anti-Spam</p>
+                                    <p className="text-xs font-black text-gray-700 dark:text-gray-300 text-red-500/80">Máx 100 / Día</p>
+                                    <p className="text-[9px] text-gray-500">Límite por cuenta</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Protocol Timeline */}
+                        <div className="space-y-4">
+                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Ciclo de Inactividad</h4>
+                            <div className="relative pl-6 space-y-5">
+                                {/* Vertical Line */}
+                                <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-gray-100 dark:bg-gray-800"></div>
+
+                                <div className="relative">
+                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-blue-600 border-4 border-white dark:border-gray-800 shadow-sm"></div>
+                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 1: 24 Horas</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Recordatorio humano y servicial (Lic. Brenda).</p>
+                                </div>
+
+                                <div className="relative">
+                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white dark:border-gray-800 shadow-sm"></div>
+                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 2: 48 Horas</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Re-confirmación de interés y vacantes.</p>
+                                </div>
+
+                                <div className="relative">
+                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-blue-400 border-4 border-white dark:border-gray-800 shadow-sm"></div>
+                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 3: 72 Horas</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Aviso de perfil incompleto (Última llamada).</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </Card>

@@ -211,6 +211,22 @@ ${JSON.stringify(schema, null, 2)}
         if (Object.keys(updateData).length > 0) {
             await updateCandidate(candidateId, updateData);
 
+            // IMPACT TRACKING: Did Brenda help recover this data?
+            if (redis && (updateData.nombreReal || updateData.municipio)) {
+                try {
+                    const messages = await getMessages(candidateId);
+                    const hadProactive = (messages || []).some(m => m.meta?.proactiveLevel);
+                    if (hadProactive) {
+                        // Check if we already gave credit for this candidate to avoid double counting
+                        const alreadyCounted = await redis.get(`ai:proactive:recovered:${candidateId}`);
+                        if (!alreadyCounted) {
+                            await redis.incr('ai:proactive:total_recovered');
+                            await redis.set(`ai:proactive:recovered:${candidateId}`, '1', 'EX', 30 * 24 * 3600); // 30 days
+                        }
+                    }
+                } catch (e) { console.warn('Error tracking proactive impact:', e); }
+            }
+
             // DIAGNOSTIC LOG (Persistent in Redis)
             if (redis) {
                 const logEntry = {
