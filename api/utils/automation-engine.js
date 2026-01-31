@@ -47,7 +47,7 @@ export async function runAIAutomations(isManual = false) {
         logs.push(`✅ Configuración y API Key verificadas.`);
 
         const genAI = new GoogleGenerativeAI(geminiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // More stable fallback
+        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }); // Reverting to 2.0 which usually exists in v1beta
 
         // --- NATIVE PROACTIVE FOLLOW-UP LOGIC (INDEPENDENT) ---
         const isProactiveEnabled = (await redis.get('bot_proactive_enabled')) === 'true';
@@ -334,10 +334,18 @@ ${level === 72 ? '- 72h: Última oportunidad. Explica de forma concisa que sin s
 
                 logs.push(`✅ [PROACTIVE] Seguimiento enviado con éxito.`);
                 sentCount++;
-                if (sentCount >= maxToSend) return; // Respect throughput limit
+                if (sentCount >= maxToSend) {
+                    logs.push(`🏁 [PROACTIVE] Se alcanzó el máximo de envíos por este ciclo (${maxToSend}).`);
+                    return;
+                }
             }
         } catch (e) {
-            logs.push(`⚠️ [PROACTIVE] Error enviando seguimiento: ${e.message}`);
+            logs.push(`⚠️ [PROACTIVE] Error enviando seguimiento a ${cand.nombre}: ${e.message}`);
+            // If it's an API error, maybe don't keep trying 162 candidates to avoid spamming logs
+            if (e.message.includes('API') || e.message.includes('model')) {
+                logs.push(`🛑 [PROACTIVE] Deteniendo ciclo por error crítico de API.`);
+                return;
+            }
         }
     }
 }
