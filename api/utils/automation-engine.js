@@ -232,16 +232,23 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
 async function processNativeProactive(redis, model, config, logs, todayKey, now, maxToSend = 1) {
     let sentCount = 0;
     const { candidates } = await getCandidates(500, 0); // Increase scan depth to 500
-    if (!candidates) return;
+    if (!candidates) {
+        logs.push(`⚠️ [PROACTIVE] No se obtuvieron candidatos de la DB.`);
+        return;
+    }
 
     // Filter candidates with incomplete step 1 status
-    // We assume 'paso1Status' or similar field. Let's look for missing core data.
     const incomplete = candidates.filter(c => {
-        const isComp = c.nombreReal && c.municipio; // Logic from ADNSection.jsx
+        const isComp = c.nombreReal && c.municipio;
         return !isComp;
     });
 
-    if (incomplete.length === 0) return;
+    logs.push(`🔍 [PROACTIVE] Evaluando ${candidates.length} candidatos totales. ${incomplete.length} tienen perfil incompleto.`);
+
+    if (incomplete.length === 0) {
+        logs.push(`💤 [PROACTIVE] No hay candidatos con perfil incompleto para procesar.`);
+        return;
+    }
 
     // Sort by last interaction (oldest first)
     incomplete.sort((a, b) => {
@@ -261,15 +268,20 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
         else if (hoursInactive >= 48) level = 48;
         else if (hoursInactive >= 24) level = 24;
 
-        if (level === 0) continue;
-
-        // Check if we already sent this level for this session of inactivity
-        // We use a flag linked to the lastUserMessageAt timestamp to know it's a "new" silence
         const sessionKey = `proactive:${cand.id}:${level}:${cand.lastUserMessageAt}`;
         const alreadySent = await redis.get(sessionKey);
-        if (alreadySent) continue;
 
-        logs.push(`🎯 [PROACTIVE] Candidato ${cand.nombre} califica para nivel ${level}h (${Math.floor(hoursInactive)}h inactivo).`);
+        if (alreadySent) {
+            // Log skipping only for higher levels or occasionally to avoid Bloat
+            continue;
+        }
+
+        if (level === 0) {
+            // Optional: logs.push(`- ${cand.nombre}: Solo ${(hoursInactive).toFixed(1)}h inactivo. No califica.`);
+            continue;
+        }
+
+        logs.push(`🎯 [PROACTIVE] Candidato ${cand.nombre} CALIFICA. Nivel ${level}h (${Math.floor(hoursInactive)}h inactivo).`);
 
         const prompt = `
 [REGLAS DE PERSONALIDAD Y CONTEXTO]:
