@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, Save, Power, Settings as SettingsIcon, MessageSquare, Smartphone } from 'lucide-react';
+import { Bot, Save, Power, Settings as SettingsIcon, MessageSquare, Smartphone, Clock, Shield } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -105,7 +105,7 @@ const BotIASection = ({ showToast }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* AI Configuration */}
                 <Card title="Cerebro del Asistente" icon={SettingsIcon}>
                     <div className="space-y-4">
@@ -140,6 +140,62 @@ const BotIASection = ({ showToast }) => {
                                     * La API Key se gestiona globalmente en la sección de Settings.
                                 </p>
                             </div>
+                        </div>
+                    </div>
+                </Card>
+
+                {/* Follow-up Rules Reference */}
+                <Card title="Directrices de Seguimiento" icon={Clock}>
+                    <div className="space-y-6">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-2xl border border-blue-100 dark:border-blue-800/30">
+                            <h4 className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Shield className="w-4 h-4" /> Protocolo de Inactividad
+                            </h4>
+                            <div className="space-y-4">
+                                <div className="flex gap-3">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-6 h-6 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">1</div>
+                                        <div className="w-0.5 h-full bg-blue-100 dark:bg-blue-800/50 mt-1"></div>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Nivel 24 Horas</p>
+                                        <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed mt-0.5">
+                                            Recordatorio amable. La Lic. Brenda se presenta y ofrece ayuda para completar el perfil.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-6 h-6 rounded-full bg-blue-400 text-white text-[10px] font-bold flex items-center justify-center">2</div>
+                                        <div className="w-0.5 h-full bg-blue-100 dark:bg-blue-800/50 mt-1"></div>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Nivel 48 Horas</p>
+                                        <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed mt-0.5">
+                                            Re-confirmación de interés. Pregunta si el candidato aún busca vacantes disponibles.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-3">
+                                    <div className="flex flex-col items-center">
+                                        <div className="w-6 h-6 rounded-full bg-blue-300 text-white text-[10px] font-bold flex items-center justify-center">3</div>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Nivel 72 Horas</p>
+                                        <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed mt-0.5">
+                                            Última oportunidad. Explica que sin datos (Nombre/Municipio) no se le pueden asignar vacantes.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800">
+                            <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 leading-relaxed italic">
+                                * Estas reglas se aplican automáticamente solo si el perfil está incompleto y el switch de "Seguimiento AUTO" está encendido en la sección de Candidatos.
+                            </p>
                         </div>
                     </div>
                 </Card>
