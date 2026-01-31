@@ -1,4 +1,4 @@
-import { getRedisClient } from '../utils/storage.js';
+import { getRedisClient, getCandidates } from '../utils/storage.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -57,6 +57,10 @@ export default async function handler(req, res) {
             let totalSent = await redis.get('ai:proactive:total_sent') || '0';
             const totalRecovered = await redis.get('ai:proactive:total_recovered') || '0';
 
+            // Calculate Pending (Incomplete Profiles)
+            const { candidates } = await getCandidates(1000, 0); // Scan up to 1000
+            const pendingCount = (candidates || []).filter(c => !c.nombreReal || !c.municipio).length;
+
             // Sync: If total is 0 but we already have sends today, homologate
             if (totalSent === '0' && parseInt(todayCount) > 0) {
                 totalSent = todayCount;
@@ -80,7 +84,8 @@ export default async function handler(req, res) {
                 stats: {
                     today: parseInt(todayCount),
                     totalSent: parseInt(totalSent),
-                    totalRecovered: parseInt(totalRecovered)
+                    totalRecovered: parseInt(totalRecovered),
+                    pending: pendingCount
                 }
             });
 

@@ -150,7 +150,7 @@ const BotIASection = ({ showToast }) => {
                 <Card title="Impacto y Directrices Brenda" icon={Clock}>
                     <div className="space-y-6">
                         {/* Mini Dashboard Impacto */}
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                             <div className="bg-gradient-to-br from-purple-500/10 to-indigo-500/5 dark:from-purple-500/20 dark:to-indigo-500/10 p-4 rounded-2xl border border-purple-100/50 dark:border-purple-800/30">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-1">Total Enviados</p>
                                 <div className="flex items-baseline gap-2">
@@ -163,6 +163,13 @@ const BotIASection = ({ showToast }) => {
                                 <div className="flex items-baseline gap-2">
                                     <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.totalRecovered || 0}</h4>
                                     <span className="text-[10px] text-green-400 font-medium leading-none">ROI Éxito</span>
+                                </div>
+                            </div>
+                            <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/5 dark:from-orange-500/20 dark:to-amber-500/10 p-4 rounded-2xl border border-orange-100/50 dark:border-orange-800/30 col-span-2 lg:col-span-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 mb-1">Candidatos Pendientes</p>
+                                <div className="flex items-baseline gap-2">
+                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.pending || 0}</h4>
+                                    <span className="text-[10px] text-orange-400 font-medium leading-none">Por Procesar</span>
                                 </div>
                             </div>
                         </div>

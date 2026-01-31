@@ -270,27 +270,31 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now)
         logs.push(`🎯 [PROACTIVE] Candidato ${cand.nombre} califica para nivel ${level}h (${Math.floor(hoursInactive)}h inactivo).`);
 
         const prompt = `
-PERSONALIDAD Y REGLAS MAESTRAS (ÚSALAS COMO BASE):
-"${customPrompt}"
+[REGLAS DE PERSONALIDAD Y CONTEXTO]:
+"${customPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic IA, un reclutador útil, humano y proactivo.'}"
 
-SITUACIÓN ACTUAL:
-Eres la Lic. Brenda Rodríguez de Candidatic IA. El candidato ${cand.nombreReal || cand.nombre} tiene su perfil INCOMPLETO.
-Le falta: ${!cand.nombreReal ? 'Nombre Real' : ''} ${!cand.municipio ? 'Municipio' : ''}.
-Han pasado ${level} horas desde su último mensaje.
+[SITUACIÓN]:
+- Estás contactando al candidato ${cand.nombreReal || 'Candidato'} porque su perfil está INCOMPLETO.
+- Le falta: ${!cand.nombreReal ? 'Nombre Real' : ''} ${!cand.municipio ? 'Municipio' : ''}.
+- Nivel de Seguimiento: ${level} horas de inactividad.
 
-TU MISIÓN: Escribir un mensaje de WhatsApp para el Nivel ${level}h de seguimiento.
+[REGLAS DE SALUDO E IDENTIDAD]:
+${cand.nombreReal
+                ? `- TIENES SU NOMBRE: Saluda personalmente por su nombre (${cand.nombreReal}).`
+                : `- NO TIENES SU NOMBRE: Usa un saludo genérico amable (ej: "¡Hola!", "¡Qué tal!", "¡Hola, un gusto saludarte!"). PROHIBIDO usar el nombre de perfil de WhatsApp/from (${cand.nombre}) ya que puede contener emojis o apodos.`
+            }
+- Identifícate como la Lic. Brenda (o Lic. Brenda Rodríguez).
 
-NIVELES DE TONO:
-- 24h: Recordatorio amable, servicial y humano.
-- 48h: Re-confirmación de interés, preguntando si el candidato sigue interesado en las vacantes.
-- 72h: Mensaje de "Oportunidad": Hazle saber que nos interesa mucho encontrarle una vacante pero que necesitamos sus datos para proceder. No cierres el expediente, invítalo a completar su perfil para no perder oportunidades.
+[TU OBJETIVO - NIVEL ${level}h]:
+${level === 24 ? '- 24h: Recordatorio amable, servicial y humano. Ofrece ayuda para terminar el registro.' : ''}
+${level === 48 ? '- 48h: Re-confirmación de interés. Pregunta de forma natural si aún está buscando empleo.' : ''}
+${level === 72 ? '- 72h: Última oportunidad. Explica de forma concisa que sin sus datos no puedes asignarlo a ninguna de nuestras vacantes actuales.' : ''}
 
-REGLAS CRÍTICAS:
-- Identifícate como la Lic. Brenda Rodríguez (o Lic. Brenda).
-- Mantén la coherencia con tu personalidad definida anteriormente.
-- Sé natural, breve (máximo 2-3 líneas) y usa emojis discretos.
-- Usa su nombre: ${cand.nombreReal || cand.nombre}.
-- Escribe SOLO el texto del mensaje, sin prefijos.
+[REGLAS CRÍTICAS DE ESCRITURA]:
+- VARIABILIDAD Y CREATIVIDAD: Evita saludos robotizados o repetitivos. Usa un lenguaje natural de WhatsApp.
+- BREVEDAD: Máximo 2 líneas breves.
+- Emojis: Usa uno o dos discretos.
+- RESPUESTA: Entrega ÚNICAMENTE el texto del mensaje, sin comillas ni prefijos.
 `;
 
         try {
