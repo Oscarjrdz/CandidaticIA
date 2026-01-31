@@ -1,56 +1,45 @@
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
-import { getRedisClient, getCandidates } from './api/utils/storage.js';
+import { getCandidates, getRedisClient } from './api/utils/storage.js';
 
-async function checkSystem() {
+async function debug() {
     const redis = getRedisClient();
     if (!redis) {
-        console.log('❌ REDIS NOT CONFIGURED');
-        process.exit(1);
+        console.log('❌ Redis no disponible');
+        return;
     }
 
-    const isEnabled = await redis.get('bot_proactive_enabled');
-    const today = new Date().toISOString().split('T')[0];
-    const todayKey = `ai:proactive:count:${today}`;
-    const dailyCount = await redis.get(todayKey);
+    const enabled = await redis.get('bot_proactive_enabled');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayCount = await redis.get('ai:proactive:count:' + todayStr);
+    const totalSent = await redis.get('ai:proactive:total_sent');
 
-    console.log('--- SYSTEM STATUS ---');
-    console.log(`- Switch Global: ${isEnabled === 'true' ? '✅ ON' : '❌ OFF'}`);
-    console.log(`- Daily Count (${today}): ${dailyCount || 0}/100`);
+    console.log('--- ESTADO GLOBAL ---');
+    console.log('Proactivo Activado:', enabled);
+    console.log('Enviados Hoy (Count Key):', todayCount);
+    console.log('Total Histórico:', totalSent);
+    console.log('Hora actual (UTC):', new Date().toISOString());
 
-    // Timezone check
-    const now = new Date();
-    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-    const mxTime = new Date(utc + (3600000 * -6));
-    const nowHour = mxTime.getHours();
-    console.log(`- Server Time (UTC): ${now.toISOString()}`);
-    console.log(`- MX Time (Calc): ${mxTime.toISOString()} (Hour: ${nowHour})`);
-    console.log(`- Window (7-23): ${nowHour >= 7 && nowHour < 23 ? '✅ OPEN' : '❌ CLOSED'}`);
-
-    console.log('\n--- CANDIDATE ANALYSIS ---');
+    console.log('\n--- CANDIDATOS PENDIENTES (TOP 10) ---');
     const { candidates } = await getCandidates(500, 0);
-    console.log(`- Scanning ${candidates.length} candidates...`);
+    const now = new Date();
 
-    const incomplete = candidates.filter(c => !(c.nombreReal && c.municipio));
-    console.log(`- Incomplete profiles found: ${incomplete.length}`);
+    const incomplete = candidates.filter(c => !c.nombreReal || !c.municipio);
+    console.log('Total Incompletos Encontrados:', incomplete.length);
 
-    if (incomplete.length > 0) {
-        const top5 = incomplete.slice(0, 5);
-        for (const cand of top5) {
-            const lastMsgAt = new Date(cand.lastUserMessageAt || cand.lastBotMessageAt || 0);
-            const hoursInactive = (now - lastMsgAt) / (1000 * 60 * 60);
-            console.log(`  > ${cand.nombre || cand.whatsapp}: Inactivo ${hoursInactive.toFixed(1)}h. Estatus: ${cand.nombreReal ? 'OK' : 'NoName'} ${cand.municipio ? 'OK' : 'NoMun'}`);
+    const report = incomplete.map(c => {
+        const lastMsgAt = new Date(c.lastUserMessageAt || c.lastBotMessageAt || 0);
+        const hoursInactive = (now - lastMsgAt) / (1000 * 60 * 60);
+        return {
+            nombre: c.nombre,
+            whats: c.whatsapp,
+            hoursInactive: parseFloat(hoursInactive.toFixed(1)),
+            lastMsg: c.lastUserMessageAt || c.lastBotMessageAt
+        };
+    }).sort((a, b) => b.hoursInactive - a.hoursInactive);
 
-            if (hoursInactive >= 24) {
-                let level = hoursInactive >= 72 ? 72 : (hoursInactive >= 48 ? 48 : 24);
-                const sessionKey = `proactive:${cand.id}:${level}:${cand.lastUserMessageAt}`;
-                const alreadySent = await redis.get(sessionKey);
-                console.log(`    MATCH ${level}h - Sent previously: ${alreadySent ? 'YES' : 'NO'}`);
-            }
-        }
-    }
-
-    process.exit(0);
+    console.table(report.slice(0, 10));
 }
 
-checkSystem().catch(console.error);
+debug().then(() => process.exit(0)).catch(e => {
+    console.error(e);
+    process.exit(1);
+});

@@ -46,19 +46,10 @@ export async function runAIAutomations(isManual = false) {
         }
         logs.push(`✅ Configuración y API Key verificadas.`);
 
-        const automations = await getAIAutomations();
-        const activeRules = (automations || []).filter(a => a?.active && a?.prompt);
-
-        if (activeRules.length === 0) {
-            logs.push(`ℹ️ No se encontraron reglas activas para procesar.`);
-            return { success: true, logs };
-        }
-        logs.push(`📋 Procesando ${activeRules.length} reglas activas.`);
-
         const genAI = new GoogleGenerativeAI(geminiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // More stable fallback
 
-        // --- NATIVE PROACTIVE FOLLOW-UP LOGIC ---
+        // --- NATIVE PROACTIVE FOLLOW-UP LOGIC (INDEPENDENT) ---
         const isProactiveEnabled = (await redis.get('bot_proactive_enabled')) === 'true';
         if (isProactiveEnabled) {
             logs.push(`🔍 [PROACTIVE] Iniciando análisis de seguimiento...`);
@@ -78,10 +69,20 @@ export async function runAIAutomations(isManual = false) {
                 if (dailyCount >= 100) {
                     logs.push(`🛑 [PROACTIVE] Límite diario alcanzado (100/día).`);
                 } else {
-                    await processNativeProactive(redis, model, config, logs, todayKey, now);
+                    // Strictly follow the 1 message per minute rate limit
+                    await processNativeProactive(redis, model, config, logs, todayKey, now, 1);
                 }
             }
         }
+
+        const automations = await getAIAutomations();
+        const activeRules = (automations || []).filter(a => a?.active && a?.prompt);
+
+        if (activeRules.length === 0) {
+            logs.push(`ℹ️ No se encontraron reglas activas para procesar.`);
+            return { success: true, logs };
+        }
+        logs.push(`📋 Procesando ${activeRules.length} reglas activas.`);
 
         for (const rule of activeRules) {
             if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
@@ -228,7 +229,8 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
  * processNativeProactive
  * Handles the 24/48/72h escalation logic for incomplete profiles.
  */
-async function processNativeProactive(redis, model, config, logs, todayKey, now) {
+async function processNativeProactive(redis, model, config, logs, todayKey, now, maxToSend = 1) {
+    let sentCount = 0;
     const { candidates } = await getCandidates(500, 0); // Increase scan depth to 500
     if (!candidates) return;
 
@@ -319,7 +321,8 @@ ${level === 72 ? '- 72h: Última oportunidad. Explica de forma concisa que sin s
                 await redis.expire(todayKey, 48 * 3600);
 
                 logs.push(`✅ [PROACTIVE] Seguimiento enviado con éxito.`);
-                return; // SEND ONLY ONE PER RUN (Rate Limit 1/min)
+                sentCount++;
+                if (sentCount >= maxToSend) return; // Respect throughput limit
             }
         } catch (e) {
             logs.push(`⚠️ [PROACTIVE] Error enviando seguimiento: ${e.message}`);
