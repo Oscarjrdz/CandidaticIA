@@ -54,8 +54,14 @@ export default async function handler(req, res) {
             // Proactive Stats
             const todayStr = new Date().toISOString().split('T')[0];
             const todayCount = await redis.get(`ai:proactive:count:${todayStr}`) || '0';
-            const totalSent = await redis.get('ai:proactive:total_sent') || '0';
+            let totalSent = await redis.get('ai:proactive:total_sent') || '0';
             const totalRecovered = await redis.get('ai:proactive:total_recovered') || '0';
+
+            // Sync: If total is 0 but we already have sends today, homologate
+            if (totalSent === '0' && parseInt(todayCount) > 0) {
+                totalSent = todayCount;
+                await redis.set('ai:proactive:total_sent', todayCount);
+            }
 
             let instanceId = '';
             let token = '';
