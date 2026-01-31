@@ -274,7 +274,7 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now)
 "${customPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic IA, un reclutador útil, humano y proactivo.'}"
 
 [SITUACIÓN]:
-- Estás contactando al candidato ${cand.nombreReal || 'Candidato'} porque su perfil está INCOMPLETO.
+- Estás contactando a un candidato porque su perfil está INCOMPLETO.
 - Le falta: ${!cand.nombreReal ? 'Nombre Real' : ''} ${!cand.municipio ? 'Municipio' : ''}.
 - Nivel de Seguimiento: ${level} horas de inactividad.
 
