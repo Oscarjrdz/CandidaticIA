@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, Save, Power, Settings as SettingsIcon, MessageSquare, Smartphone, Clock, Shield } from 'lucide-react';
+import { Bot, Save, Power, Settings as SettingsIcon, MessageSquare, Smartphone, Clock, Shield, Sparkles } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -147,7 +147,10 @@ const BotIASection = ({ showToast }) => {
                 </Card>
 
                 {/* Follow-up Rules Reference */}
-                <Card title="Impacto y Directrices Brenda" icon={Clock}>
+                <Card
+                    title={<span className="flex items-center gap-2">Impacto y Directrices Brenda <Sparkles className="w-4 h-4 text-purple-500" /></span>}
+                    icon={Clock}
+                >
                     <div className="space-y-6">
                         {/* Mini Dashboard Impacto */}
                         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
