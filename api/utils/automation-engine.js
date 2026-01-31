@@ -78,7 +78,7 @@ export async function runAIAutomations(isManual = false) {
                 if (dailyCount >= 100) {
                     logs.push(`🛑 [PROACTIVE] Límite diario alcanzado (100/día).`);
                 } else {
-                    await processNativeProactive(redis, model, config, logs, todayKey);
+                    await processNativeProactive(redis, model, config, logs, todayKey, now);
                 }
             }
         }
@@ -228,7 +228,7 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
  * processNativeProactive
  * Handles the 24/48/72h escalation logic for incomplete profiles.
  */
-async function processNativeProactive(redis, model, config, logs, todayKey) {
+async function processNativeProactive(redis, model, config, logs, todayKey, now) {
     const { candidates } = await getCandidates(500, 0); // Increase scan depth to 500
     if (!candidates) return;
 
