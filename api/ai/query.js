@@ -247,6 +247,32 @@ Consulta del usuario: "${query}"
                     // Manejo especial de EDAD
                     if (key === 'edad') {
                         candidateVal = calculateAge(candidate.fechaNacimiento);
+                        if (candidateVal === null) return false; // Strict: if filtering by age and no age, exclude.
+                    }
+
+                    // APLICAR FILTRO NORMALIZADO
+                    // Prioridad 1: Logica Matemática (Si criteria es objeto con op)
+                    if (typeof criteria === 'object' && criteria.op) {
+                        const { op, val } = criteria;
+                        const numVal = parseFloat(val);
+                        const numCand = parseFloat(candidateVal);
+
+                        if (isNaN(numCand)) return false; // If value is not a number, strict fail
+
+                        switch (op) {
+                            case '>': return numCand > numVal;
+                            case '<': return numCand < numVal;
+                            case '>=': return numCand >= numVal;
+                            case '<=': return numCand <= numVal;
+                            case '==': return numCand == numVal;
+                            // Add range support if needed in future
+                            default: return false;
+                        }
+                    }
+
+                    // Prioridad 2: Coincidencia de Texto (Fuzzy pero específico a la columna)
+                    if (key === 'edad') {
+                        candidateVal = calculateAge(candidate.fechaNacimiento);
                     }
 
                     // Manejo especial de NOMBRES (Robustez: buscar en Real y WhatsApp)
@@ -272,19 +298,8 @@ Consulta del usuario: "${query}"
 
                     if (matchesAnyField) return true;
 
-                    // Si criteria es un objeto con operador { op: ">", val: 40 }
-                    if (typeof criteria === 'object' && criteria.op) {
-                        const { op, val } = criteria;
-                        const numVal = parseFloat(val);
-                        const numCand = parseFloat(candidateVal);
-
-                        switch (op) {
-                            case '>': return numCand > numVal;
-                            case '<': return numCand < numVal;
-                            case '>=': return numCand >= numVal;
-                            case '<=': return numCand <= numVal;
-                        }
-                    }
+                    // Fallback to Operator Logic moved up
+                    return false;
 
                     return false;
                 });
