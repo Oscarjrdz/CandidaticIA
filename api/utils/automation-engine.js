@@ -437,7 +437,7 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
                 const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}:processed`;
                 const isProcessed = await redis.get(metaKey);
 
-                if (isProcessed) {
+                if (isProcessed && !manualConfig) {
                     logs.push(`⏭️ [DEBUG] ${cand.nombre} ya fue procesado en este paso anteriormente (Key: ${metaKey}).`);
                     continue;
                 }

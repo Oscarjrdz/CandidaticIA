@@ -166,8 +166,15 @@ Si el candidato pregunta por trabajo, responde que primero necesitas completar s
                                 p = p.replace(/{{Candidato}}/g, candidateData.nombreReal || candidateData.nombre || 'Candidato')
                                     .replace(/{{Vacante}}/g, vacancyData?.name || 'la vacante');
 
-                                kanbanDirective = `\n[DIRECTIVA DE PASO KANBAN ("${currentStep.name}")]:\n${p}
-\n[REGLA DE TRANSICIÓN]: Si detectas que el candidato ha cumplido satisfactoriamente el objetivo de este paso (ej: aceptó la vacante, dio los datos requeridos, etc.), DEBES incluir el tag [MOVE] en cualquier parte de tu respuesta. Esto lo moverá automáticamente al siguiente paso: "${nextStep?.name || 'Siguiente'}".\n`;
+                                kanbanDirective = `\n[DIRECTIVA DE PASO KANBAN ("${currentStep.name}")]:
+"${p}"
+
+[REGLA DE DISCIPLINA]: 
+1. Limítate ESTRICTAMENTE a lo que pide la directiva arriba mencionada.
+2. NO des información de la vacante (sueldo, empresa, etc.) si la directiva no lo pide.
+3. Si el candidato te da la información solicitada o acepta la invitación, DEBES incluir el tag [MOVE] en tu respuesta para que el sistema lo avance.
+4. Este tag [MOVE] será invisible para el candidato, úsalo como un comando interno.
+\n[REGLA DE TRANSICIÓN]: Si el objetivo se cumple, incluye [MOVE]. Próximo paso: "${nextStep?.name || 'Siguiente'}".\n`;
                             } else {
                                 // Tapón Inteligente (Wait Message) logic
                                 waitMessage = currentStep.aiConfig?.waitMessage || '';
@@ -353,9 +360,10 @@ ${dnaLines}
             } catch (moveErr) {
                 console.error('Error in auto-transition:', moveErr);
             }
-            // Clean the tag
-            responseText = responseText.replace(/\[MOVE\]/g, '').trim();
         }
+
+        // Final Clean up: Remove any remaining [MOVE] or other internal tags from candidate visibility
+        responseText = responseText.replace(/\[MOVE\]/gi, '').trim();
 
         // Delivery
         const config = await getUltraMsgConfig();
