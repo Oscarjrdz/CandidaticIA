@@ -1,4 +1,4 @@
-import { getRedisClient, getAIAutomations, getCandidates, saveMessage, getCandidateByPhone, incrementAIAutomationSentCount, getAutomations } from './storage.js';
+import { getRedisClient, getAIAutomations, getCandidates, saveMessage, getCandidateByPhone, incrementAIAutomationSentCount } from './storage.js';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
