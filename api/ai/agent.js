@@ -163,7 +163,8 @@ Si el candidato pregunta por trabajo, responde que primero necesitas completar s
                                 p = p.replace(/{{Candidato}}/g, candidateData.nombreReal || candidateData.nombre || 'Candidato')
                                     .replace(/{{Vacante}}/g, vacancyData?.name || 'la vacante');
 
-                                kanbanDirective = `\n[DIRECTIVA DE PASO KANBAN ("${currentStep.name}")]:\n${p}\n`;
+                                kanbanDirective = `\n[DIRECTIVA DE PASO KANBAN ("${currentStep.name}")]:\n${p}
+\n[REGLA DE TRANSICIÓN]: Si detectas que el candidato ha cumplido satisfactoriamente el objetivo de este paso (ej: aceptó la vacante, dio los datos requeridos, etc.), DEBES incluir el tag [MOVE] en cualquier parte de tu respuesta. Esto lo moverá automáticamente al siguiente paso: "${nextStep?.name || 'Siguiente'}".\n`;
                             } else {
                                 // Tapón Inteligente (Wait Message) logic
                                 waitMessage = currentStep.aiConfig?.waitMessage || '';
@@ -320,7 +321,38 @@ ${dnaLines}
 
         if (!result) return `ERROR: Gemini failure - ${lastError}`;
 
-        const responseText = result.response.text();
+        const responseTextRaw = result.response.text();
+        let responseText = responseTextRaw;
+
+        // --- 🏎️ [DECISION ENGINE: AUTO-TRANSITION] ---
+        if (candidateData.projectMetadata?.projectId && responseText.includes('[MOVE]')) {
+            try {
+                const { getProjectById, moveCandidateStep } = await import('../utils/storage.js');
+                const project = await getProjectById(candidateData.projectMetadata.projectId);
+                if (project && project.steps) {
+                    const stepId = candidateData.projectMetadata.stepId || 'step_new';
+                    const currentIndex = project.steps.findIndex(s => s.id === stepId);
+                    const nextStep = project.steps[currentIndex + 1];
+
+                    if (nextStep) {
+                        console.log(`🚀 [AI DECISION] Moving ${candidateData.nombre} to ${nextStep.name}`);
+                        await moveCandidateStep(project.id, candidateId, nextStep.id);
+
+                        // Internal Log
+                        await saveMessage(candidateId, {
+                            from: 'system',
+                            content: `IA movió al candidato al paso: ${nextStep.name}`,
+                            type: 'system',
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                }
+            } catch (moveErr) {
+                console.error('Error in auto-transition:', moveErr);
+            }
+            // Clean the tag
+            responseText = responseText.replace(/\[MOVE\]/g, '').trim();
+        }
 
         // Delivery
         const config = await getUltraMsgConfig();
