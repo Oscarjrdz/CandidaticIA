@@ -673,7 +673,11 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     };
 
     const handleAIResults = async (candidates, aiResponse, query) => {
-        setSearchPreview(candidates);
+        // Defensive: Ensure candidates is an array AND filter null/undefined items
+        const safeCandidates = (Array.isArray(candidates) ? candidates : []).filter(c => c && c.id);
+        console.log('[Projects] AI Results:', safeCandidates.length);
+
+        setSearchPreview(safeCandidates);
         setActiveQuery(query);
         setShowAISearch(false);
 
@@ -687,7 +691,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                         action: 'saveSearch',
                         projectId: activeProject.id,
                         query: query,
-                        resultsCount: candidates.length
+                        resultsCount: safeCandidates.length
                     })
                 });
                 fetchProjectSearches(activeProject.id);
