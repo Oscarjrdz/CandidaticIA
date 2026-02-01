@@ -518,6 +518,11 @@ export const getVacancies = async () => {
     }
 };
 
+export const getVacancyById = async (id) => {
+    const list = await getVacancies();
+    return list.find(v => v.id === id);
+};
+
 export const saveVacancy = async (vacancy) => {
     const client = getClient();
     if (!client) return;
@@ -972,6 +977,17 @@ export const getProjectCandidates = async (projectId) => {
         ...c,
         projectMetadata: metadata[c.id] ? JSON.parse(metadata[c.id]) : {}
     }));
+};
+
+/**
+ * Get Specific Candidate Metadata for a Project
+ */
+export const getProjectCandidateMetadata = async (projectId, candidateId) => {
+    const client = getRedisClient();
+    if (!client) return {};
+    const metadataKey = `${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${projectId}`;
+    const raw = await client.hget(metadataKey, candidateId);
+    return raw ? JSON.parse(raw) : {};
 };
 
 /**
