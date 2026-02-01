@@ -886,10 +886,12 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             if (data.success && data.optimizedPrompt) {
                 setStepPrompt(data.optimizedPrompt);
                 showToast('Prompt optimizado con magia ✨', 'success');
+            } else {
+                showToast(data.error || data.message || 'La IA no pudo optimizar este texto', 'error');
             }
         } catch (e) {
             console.error('Error optimizing:', e);
-            showToast('Error al optimizar', 'error');
+            showToast('Error de conexión con el servicio de IA', 'error');
         } finally {
             setIsOptimizing(false);
         }

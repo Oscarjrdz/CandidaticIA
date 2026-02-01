@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export default async function handler(req, res) {
+    if (req.method === 'OPTIONS') return res.status(200).end();
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
@@ -36,26 +37,43 @@ export default async function handler(req, res) {
         if (matchToken) apiKey = matchToken[0];
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const modelsToTry = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
 
-        const instruction = `
-            Eres un experto en Reclutamiento y Psicología Organizacional. 
-            Tu tarea es convertir una instrucción simple de un reclutador en un "System Prompt" optimizado para Brenda, una reclutadora IA que contactará candidatos por WhatsApp.
+        let result;
+        let lastError = '';
 
-            REGLAS:
-            1. El prompt resultante debe ser en SEGUNDA PERSONA (Como Brenda).
-            2. Debe ser amable, profesional pero adaptable.
-            3. Debe incluir el uso estratégico de variables: {{Candidato}} y {{Vacante}}.
-            4. El tono debe ser humano, no robótico. No uses saludos excesivamente formales si la instrucción es casual.
-            5. Mantén la brevedad (máximo 400 caracteres) porque es para WhatsApp.
+        for (const mName of modelsToTry) {
+            try {
+                const model = genAI.getGenerativeModel({ model: mName });
+                const instruction = `
+                    Eres un experto en Reclutamiento y Psicología Organizacional. 
+                    Tu tarea es convertir una instrucción simple de un reclutador en un "System Prompt" optimizado para Brenda, una reclutadora IA que contactará candidatos por WhatsApp.
 
-            INSTRUCCIÓN DEL RECLUTADOR:
-            "${prompt}"
+                    REGLAS:
+                    1. El prompt resultante debe ser en SEGUNDA PERSONA (Como Brenda).
+                    2. Debe ser amable, profesional pero adaptable.
+                    3. Debe incluir el uso estratégico de variables: {{Candidato}} y {{Vacante}}.
+                    4. El tono debe ser humano, no robótico. No uses saludos excesivamente formales si la instrucción es casual.
+                    5. Mantén la brevedad (máximo 400 caracteres) porque es para WhatsApp.
 
-            RESPONDE SOLO CON EL PROMPT OPTIMIZADO:
-        `;
+                    INSTRUCCIÓN DEL RECLUTADOR:
+                    "${prompt}"
 
-        const result = await model.generateContent(instruction);
+                    RESPONDE SOLO CON EL PROMPT OPTIMIZADO:
+                `;
+
+                result = await model.generateContent(instruction);
+                if (result) break;
+            } catch (err) {
+                console.warn(`Fallback: ${mName} failed:`, err.message);
+                lastError = err.message;
+            }
+        }
+
+        if (!result) {
+            return res.status(500).json({ success: false, error: `Error de IA: ${lastError}` });
+        }
+
         const optimizedPrompt = result.response.text().trim();
 
         return res.status(200).json({
