@@ -1,14 +1,41 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const { prompt } = req.body;
+        // Robust body parsing
+        let body = req.body;
+        if (typeof body === 'string') {
+            try { body = JSON.parse(body); } catch (e) { }
+        }
+
+        const { prompt } = body || {};
         if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
+        // Logic to get API Key (Env or Redis)
+        const { getRedisClient } = await import('../utils/storage.js');
+        const redis = getRedisClient();
+        let apiKey = process.env.GEMINI_API_KEY;
+
+        if (!apiKey && redis) {
+            const aiConfigJson = await redis.get('ai_config');
+            if (aiConfigJson) {
+                const aiConfig = JSON.parse(aiConfigJson);
+                apiKey = aiConfig.geminiApiKey;
+            }
+        }
+
+        if (!apiKey || apiKey === 'undefined' || apiKey === 'null') {
+            return res.status(500).json({ success: false, error: 'GEMINI_API_KEY_MISSING' });
+        }
+
+        // Sanitization
+        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
+        const matchToken = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
+        if (matchToken) apiKey = matchToken[0];
+
+        const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
         const instruction = `
