@@ -4,7 +4,7 @@ import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     GraduationCap, MapPin, MessageSquare, ExternalLink, FolderKanban,
     Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase, Plus, Calendar,
-    Bot, Settings, Power // Added icons
+    Bot, Settings, Power, X, Loader2 // Added icons
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
