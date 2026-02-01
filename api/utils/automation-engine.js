@@ -86,7 +86,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
 
         // --- OLD RULES ENGINE (LEGACY) ---
         // (Existing Logic)
-        const rules = await getAutomations(redis);
+        const rules = await getAIAutomations(redis);
         const activeRules = (rules || []).filter(a => a?.active && a?.prompt);
 
         if (activeRules.length === 0) {
