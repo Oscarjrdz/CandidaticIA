@@ -56,8 +56,8 @@ export default async function handler(req, res) {
                         REGLAS:
                         1. Sé sumamente amable y profesional.
                         2. Agradece la paciencia.
-                        3. Explica que el equipo está revisando el perfil.
-                        4. Mantén la brevedad (máximo 250 caracteres).
+                        3. NO ESCRIBAS EL MENSAJE FINAL. Escribe una ESTRATEGIA de despedida o excusa profesional para Brenda.
+                        4. Mantén la brevedad (máximo 300 caracteres).
                         5. Usa un tono humano y cercano.
 
                         TEXTO ORIGINAL:

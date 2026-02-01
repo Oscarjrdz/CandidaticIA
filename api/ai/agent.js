@@ -157,6 +157,9 @@ Si el candidato pregunta por trabajo, responde que primero necesitas completar s
                         }
 
                         if (currentStep) {
+                            const currentIndex = project.steps.findIndex(s => s.id === stepId);
+                            const nextStep = project.steps[currentIndex + 1];
+
                             if (currentStep.aiConfig?.enabled && currentStep.aiConfig?.prompt) {
                                 let p = currentStep.aiConfig.prompt;
                                 // Basic injection
@@ -169,7 +172,7 @@ Si el candidato pregunta por trabajo, responde que primero necesitas completar s
                                 // Tapón Inteligente (Wait Message) logic
                                 waitMessage = currentStep.aiConfig?.waitMessage || '';
                                 if (waitMessage) {
-                                    kanbanDirective = `\n[INSTRUCCIÓN DE ESPERA]: El reclutador humano aún no ha habilitado la siguiente etapa para este candidato. Por favor, usa una variación de este mensaje para despedirte o pedir paciencia: "${waitMessage}"\n`;
+                                    kanbanDirective = `\n[INSTRUCCIÓN DE ESPERA ESTRATÉGICA]: El proceso está en pausa temporal. Sigue esta instrucción para despedirte o pedir paciencia al candidato: "${waitMessage}". Mantén tu personalidad y adapta la "excusa" de forma natural al flujo de la charla.\n`;
                                 }
                             }
                         }
