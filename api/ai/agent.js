@@ -139,6 +139,49 @@ Si el candidato pregunta por trabajo, responde que primero necesitas completar s
 
         // DNA PROFILE (Dynamic based on CRM Fields)
         if (candidateData) {
+            // --- 🏎️ [KANBAN PIZARRA LOGIC] ---
+            let kanbanDirective = '';
+            let waitMessage = '';
+            let vacancyData = null;
+
+            if (candidateData.projectMetadata?.projectId) {
+                try {
+                    const { getProjectById, getVacancyById } = await import('../utils/storage.js');
+                    const project = await getProjectById(candidateData.projectMetadata.projectId);
+                    if (project) {
+                        const stepId = candidateData.projectMetadata.stepId || 'step_new';
+                        const currentStep = project.steps?.find(s => s.id === stepId) || project.steps?.[0];
+
+                        if (project.vacancyId) {
+                            vacancyData = await getVacancyById(project.vacancyId);
+                        }
+
+                        if (currentStep) {
+                            if (currentStep.aiConfig?.enabled && currentStep.aiConfig?.prompt) {
+                                let p = currentStep.aiConfig.prompt;
+                                // Basic injection
+                                p = p.replace(/{{Candidato}}/g, candidateData.nombreReal || candidateData.nombre || 'Candidato')
+                                    .replace(/{{Vacante}}/g, vacancyData?.name || 'la vacante');
+
+                                kanbanDirective = `\n[DIRECTIVA DE PASO KANBAN ("${currentStep.name}")]:\n${p}\n`;
+                            } else {
+                                // Tapón Inteligente (Wait Message) logic
+                                waitMessage = currentStep.aiConfig?.waitMessage || '';
+                                if (waitMessage) {
+                                    kanbanDirective = `\n[INSTRUCCIÓN DE ESPERA]: El reclutador humano aún no ha habilitado la siguiente etapa para este candidato. Por favor, usa una variación de este mensaje para despedirte o pedir paciencia: "${waitMessage}"\n`;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error fetching Kanban context:', e);
+                }
+            }
+
+            if (kanbanDirective) {
+                systemInstruction += kanbanDirective;
+            }
+
             const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-10).map(m => m.content).filter(Boolean);
             const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Inicio de conversación';
 
