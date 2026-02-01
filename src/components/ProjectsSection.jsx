@@ -665,6 +665,21 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         saveStepsUpdate(updatedSteps, 'Paso eliminado');
     };
 
+    const handleAddStep = async () => {
+        if (!activeProject) return;
+        const name = prompt('Nombre del nuevo paso:', 'Nuevo Paso');
+        if (!name || !name.trim()) return;
+
+        const newStep = {
+            id: `step_${Date.now()}`,
+            name: name.trim(),
+            aiConfig: { enabled: false, prompt: '', waitMessage: '' }
+        };
+
+        const updatedSteps = [...(activeProject.steps || []), newStep];
+        saveStepsUpdate(updatedSteps, 'Paso creado');
+    };
+
     const updateStepAI = async (stepId, aiConfig) => {
         const updatedSteps = activeProject.steps.map(s =>
             s.id === stepId ? { ...s, aiConfig } : s
@@ -844,8 +859,8 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                     setShowAISearch(false);
                 }
 
-                // Refresh Project
-                fetchProject(activeProject.id);
+                // Refresh Project Candidates
+                fetchProjectCandidates(activeProject.id);
             } else {
                 showToast(data.error || 'Error al importar', 'error');
             }
@@ -1275,7 +1290,10 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     </SortableContext>
 
                                     {/* Add Step Button */}
-                                    <button className="flex-shrink-0 w-80 h-full rounded-[40px] border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-slate-400 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all group">
+                                    <button
+                                        onClick={handleAddStep}
+                                        className="flex-shrink-0 w-80 h-full rounded-[40px] border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-4 text-slate-400 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-all group"
+                                    >
                                         <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:scale-110 transition-transform">
                                             <Plus className="w-8 h-8" />
                                         </div>

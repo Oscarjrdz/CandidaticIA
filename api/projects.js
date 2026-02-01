@@ -65,6 +65,19 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true });
             }
 
+            if (action === 'batchLink') {
+                const pid = bodyProjectId || id;
+                const { candidateIds, stepId: targetStepId } = body;
+                if (!pid || !candidateIds || !Array.isArray(candidateIds)) {
+                    return res.status(400).json({ success: false, error: 'PID and candidateIds array required' });
+                }
+                const origin = body.origin || 'ai_search';
+                for (const cid of candidateIds) {
+                    await addCandidateToProject(pid, cid, { origin, stepId: targetStepId });
+                }
+                return res.status(200).json({ success: true, count: candidateIds.length });
+            }
+
             if (action === 'updateSteps') {
                 const pid = bodyProjectId || id;
                 console.log(`[API] Updating steps for project ${pid}:`, steps?.length);
