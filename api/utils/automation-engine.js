@@ -227,8 +227,8 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
         }
 
         logs.push(`-----------------------------------`);
-        logs.push(`🏁 Finalizado: ${evaluatedCount} analizados, ${messagesSent} enviados.`);
-        return { success: true, sent: messagesSent, evaluated: evaluatedCount, logs };
+        logs.push(`🏁 Finalizado: ${evaluatedCount} analizados, ${messagesSent} enviados (Legacy), ${processedCount} enviados (Pipeline).`);
+        return { success: true, sent: messagesSent, processedCount, evaluated: evaluatedCount, logs };
     } catch (error) {
         console.error('ENGINE_CRASH:', error);
         logs.push(`🛑 CRASH: ${error.message}`);
@@ -417,12 +417,17 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
             // "Contact candidates in this step who haven't been processed."
 
             const candidates = await getProjectCandidates(proj.id);
+            logs.push(`🔍 [DEBUG] Paso: "${step.name}", Index: ${stepIndex}, ID: ${step.id}`);
+            logs.push(`🔍 [DEBUG] Candidatos totales en proyecto: ${candidates.length}`);
+
             const candidatesInStep = candidates.filter(c => {
                 const cStepId = c.projectMetadata?.stepId || 'step_new';
-                // If step is first step, it catches 'step_new' too if configured to
-                if (stepIndex === 0 && cStepId === 'step_new') return true;
-                return cStepId === step.id;
+                const isFirstStepMatch = (stepIndex === 0 && cStepId === 'step_new');
+                const isExactMatch = (cStepId === step.id);
+                return isFirstStepMatch || isExactMatch;
             });
+
+            logs.push(`🔍 [DEBUG] Candidatos en este paso: ${candidatesInStep.length}`);
 
             if (candidatesInStep.length === 0) continue;
 
@@ -431,7 +436,15 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
                 const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}:processed`;
                 const isProcessed = await redis.get(metaKey);
 
-                if (isProcessed) continue;
+                if (isProcessed) {
+                    logs.push(`⏭️ [DEBUG] ${cand.nombre} ya fue procesado en este paso anteriormente.`);
+                    continue;
+                }
+
+                if (!cand.whatsapp) {
+                    logs.push(`⏭️ [DEBUG] ${cand.nombre} no tiene WhatsApp registrado.`);
+                    continue;
+                }
 
                 // Rate Limit Safety (Global 1 min rule still applies via queue or we break here)
                 // For now, let's process 1 per run to be safe alongside Proactive
