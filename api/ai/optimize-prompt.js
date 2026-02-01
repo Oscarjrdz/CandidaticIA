@@ -68,19 +68,24 @@ export default async function handler(req, res) {
                 } else {
                     instruction = `
                         Eres un experto en Reclutamiento y Psicología Organizacional. 
-                        Tu tarea es convertir una instrucción simple de un reclutador en un "System Prompt" optimizado para Brenda, una reclutadora IA.
+                        Tu tarea es convertir una instrucción simple de un reclutador en una "DIRECTIVA SUPREMA" optimizada para Brenda, una reclutadora IA.
 
-                        REGLAS:
-                        1. El prompt resultante debe ser en SEGUNDA PERSONA (Como Brenda).
-                        2. Debe ser amable, profesional pero adaptable.
-                        3. Debe incluir el uso estratégico de variables: {{Candidato}} y {{Vacante}}.
-                        4. El tono debe ser humano.
-                        5. Máximo 400 caracteres.
+                        REGLAS CRÍTICAS:
+                        1. NO ESCRIBAS EL MENSAJE FINAL DE WHATSAPP. Escribe la ESTRATEGIA que Brenda debe seguir.
+                        2. Brenda debe actuar según tu instrucción. Usa verbos de acción (Pregunta, Explica, Evalúa).
+                        3. Si el reclutador menciona "avanzar", "siguiente paso" o "mover", INCLUYE la instrucción de usar el tag [MOVE] si el candidato responde positivamente.
+                        4. Usa las variables {{Candidato}} y {{Vacante}} de forma estratégica.
+                        5. El tono de la instrucción debe ser profesional y directivo.
+                        6. Mantén la brevedad (máximo 450 caracteres).
+
+                        EJEMPLO:
+                        In: "pregunta si quiere trabajar y si si muevelo"
+                        Out: "Saluda a {{Candidato}} y consulta su interés actual en la posición de {{Vacante}}. Si su respuesta es afirmativa y muestra disponibilidad, utiliza el tag [MOVE] para transferirlo a la siguiente etapa de evaluación."
 
                         INSTRUCCIÓN DEL RECLUTADOR:
                         "${rawPrompt}"
 
-                        RESPONDE SOLO CON EL PROMPT OPTIMIZADO:
+                        RESPONDE SOLO CON LA DIRECTIVA OPTIMIZADA (SIN MENSAJES DE RELLENO):
                     `;
                 }
 
