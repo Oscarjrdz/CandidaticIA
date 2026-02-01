@@ -161,22 +161,20 @@ const KanbanColumn = ({ id, step, children, count, onEdit }) => {
                         <Bot className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Quick Toggle (Only shows if configured previously, else hidden to force config first) */}
-                    {step.aiConfig?.prompt && (
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault(); e.stopPropagation();
-                                onEdit(step.id, 'toggle');
-                            }}
-                            className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.aiConfig?.enabled
-                                ? 'text-green-500 bg-green-50 dark:bg-green-900/20'
-                                : 'text-slate-300 hover:text-green-500'}`}
-                            title={step.aiConfig?.enabled ? 'Desactivar Auto' : 'Activar Auto'}
-                        >
-                            <Power className="w-3.5 h-3.5" />
-                        </button>
-                    )}
-
+                    {/* Quick Toggle */}
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            onEdit(step.id, 'toggle');
+                        }}
+                        className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.aiConfig?.enabled
+                            ? 'text-green-500 bg-green-50 dark:bg-green-900/20'
+                            : 'text-slate-300 hover:text-green-500'}`}
+                        title={step.aiConfig?.enabled ? 'Desactivar Auto' : 'Activar Auto'}
+                    >
+                        <Power className="w-3.5 h-3.5" />
+                    </button>
+                    {/* End Quick Toggle */}
                     <button
                         onClick={(e) => {
                             e.preventDefault(); e.stopPropagation();
