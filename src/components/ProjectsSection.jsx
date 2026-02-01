@@ -873,25 +873,25 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         }
     };
 
-    const handleOptimizePrompt = async () => {
-        if (!stepPrompt.trim()) return;
+    const handleOptimizePrompt = async (text, setter, type = 'instruction') => {
+        if (!text.trim()) return;
         setIsOptimizing(true);
         try {
             const res = await fetch('/api/ai/optimize-prompt', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: stepPrompt })
+                body: JSON.stringify({ prompt: text, type })
             });
             const data = await res.json();
             if (data.success && data.optimizedPrompt) {
-                setStepPrompt(data.optimizedPrompt);
-                showToast('Prompt optimizado con magia ✨', 'success');
+                setter(data.optimizedPrompt);
+                showToast('Optimizado con éxito ✨', 'success');
             } else {
-                showToast(data.error || data.message || 'La IA no pudo optimizar este texto', 'error');
+                showToast(data.error || 'Error al optimizar', 'error');
             }
         } catch (e) {
             console.error('Error optimizing:', e);
-            showToast('Error de conexión con el servicio de IA', 'error');
+            showToast('Error de conexión', 'error');
         } finally {
             setIsOptimizing(false);
         }
@@ -1096,7 +1096,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                             <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
                                                 Prompt / Instrucción
                                                 <button
-                                                    onClick={handleOptimizePrompt}
+                                                    onClick={() => handleOptimizePrompt(stepPrompt, setStepPrompt, 'instruction')}
                                                     disabled={isOptimizing || !stepPrompt.trim()}
                                                     className={`p-1 rounded-md transition-all ${isOptimizing ? 'animate-spin text-purple-500' : 'text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:scale-110'}`}
                                                     title="Mejorar con IA Mágica"
@@ -1118,8 +1118,16 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     </div>
 
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest">
+                                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
                                             Mensaje de Espera (Tapón Inteligente)
+                                            <button
+                                                onClick={() => handleOptimizePrompt(stepWaitMsg, setStepWaitMsg, 'wait')}
+                                                disabled={isOptimizing || !stepWaitMsg.trim()}
+                                                className={`p-1 rounded-md transition-all ${isOptimizing ? 'animate-spin text-yellow-500' : 'text-yellow-500 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 hover:scale-110'}`}
+                                                title="Mejorar mensaje de espera"
+                                            >
+                                                <Sparkles className="w-3.5 h-3.5" />
+                                            </button>
                                         </label>
                                         <p className="text-[10px] text-slate-500 italic mb-1">
                                             Si el siguiente paso está APAGADO, Brenda dirá esto para ganar tiempo.
