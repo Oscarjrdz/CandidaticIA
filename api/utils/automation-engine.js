@@ -432,12 +432,13 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
             if (candidatesInStep.length === 0) continue;
 
             for (const cand of candidatesInStep) {
+                logs.push(`👤 [DEBUG] Evaluando: "${cand.nombre}" (ID: ${cand.id})...`);
                 // Check if already processed for this specific step
                 const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}:processed`;
                 const isProcessed = await redis.get(metaKey);
 
                 if (isProcessed) {
-                    logs.push(`⏭️ [DEBUG] ${cand.nombre} ya fue procesado en este paso anteriormente.`);
+                    logs.push(`⏭️ [DEBUG] ${cand.nombre} ya fue procesado en este paso anteriormente (Key: ${metaKey}).`);
                     continue;
                 }
 

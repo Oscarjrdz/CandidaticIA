@@ -88,7 +88,8 @@ export default async function handler(req, res) {
                 return res.status(200).json({
                     success: result.success,
                     processed: result.processedCount || 0,
-                    error: result.error
+                    error: result.error,
+                    logs: result.logs
                 });
             }
 
