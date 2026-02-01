@@ -696,6 +696,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 })
             });
             const data = await res.json();
+            if (data.logs) console.log('[BRENDA ENGINE LOGS]', data.logs);
             if (data.success) {
                 showToast(`¡Brenda lanzada! ${data.processed || 0} candidatos procesados.`, 'success');
             } else {
