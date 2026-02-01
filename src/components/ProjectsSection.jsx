@@ -307,6 +307,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     // AI Search integration
     const [showAISearch, setShowAISearch] = useState(false);
     const [searchPreview, setSearchPreview] = useState([]);
+    const [selectedSearchIds, setSelectedSearchIds] = useState([]); // Multi-select state
     const [activeQuery, setActiveQuery] = useState('');
     const [isBatchLinking, setIsBatchLinking] = useState(false);
 
@@ -333,6 +334,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             fetchProjectSearches(activeProject.id);
             setSearchPreview([]);
             setActiveQuery('');
+            setSelectedSearchIds([]); // Clear selected IDs when project changes
         }
         if (onActiveChange) {
             onActiveChange(!!activeProject);
@@ -678,6 +680,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         console.log('[Projects] AI Results:', safeCandidates.length);
 
         setSearchPreview(safeCandidates);
+        setSelectedSearchIds(safeCandidates.map(c => c.id)); // Select all by default
         setActiveQuery(query);
         setShowAISearch(false);
 
@@ -699,64 +702,69 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         }
     };
 
-    const handleBatchLink = async () => {
-        if (!activeProject || searchPreview.length === 0) return;
+    const handleBatchLink = async (subset = null) => {
+        if (!activeProject || (!subset && selectedSearchIds.length === 0)) return;
         setIsBatchLinking(true);
-        let count = 0;
+
         try {
-            let targetStepId = 'step_new';
-            const iaSearchStep = (activeProject.steps || []).find(s => s.name.toLowerCase() === 'búsqueda ia');
-
-            if (!iaSearchStep) {
-                // Create it automatically
-                const newStep = { id: `step_ia_${Date.now()}`, name: 'Búsqueda IA' };
-                const updatedSteps = [...(activeProject.steps || []), newStep];
-
-                const res = await fetch('/api/projects', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'updateSteps',
-                        projectId: activeProject.id,
-                        steps: updatedSteps
-                    })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    targetStepId = newStep.id;
-                    // Update local state to avoid re-fetching the whole project if possible, 
-                    // but since activeProject is used below, let's update it.
-                    const updatedProj = { ...activeProject, steps: updatedSteps };
-                    setActiveProject(updatedProj);
-                    setProjects(projects.map(p => p.id === activeProject.id ? updatedProj : p));
-                }
+            // Determine candidates to link: either the specific subset (single add) or the multi-selection
+            let candidatesToLink = [];
+            if (subset && Array.isArray(subset)) {
+                candidatesToLink = subset;
             } else {
-                targetStepId = iaSearchStep.id;
+                candidatesToLink = searchPreview.filter(c => selectedSearchIds.includes(c.id));
             }
 
-            // Sequential to avoid race conditions in metadata HASH
-            for (const cand of searchPreview) {
-                const res = await fetch('/api/projects', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'link',
-                        projectId: activeProject.id,
-                        candidateId: cand.id,
-                        origin: activeQuery,
-                        stepId: targetStepId
-                    })
-                });
-                const data = await res.json();
-                if (data.success) count++;
+            if (candidatesToLink.length === 0) {
+                setIsBatchLinking(false);
+                return;
             }
-            if (showToast) showToast(`${count} candidatos vinculados a Búsqueda IA`, 'success');
-            setSearchPreview([]);
-            setActiveQuery('');
-            fetchProjectCandidates(activeProject.id);
-        } catch (e) {
-            console.error('Error batch linking:', e);
-            if (showToast) showToast('Error al vincular candidatos', 'error');
+
+            // CRITICAL: Always use the FIRST step (Leftmost)
+            const targetStepId = activeProject.steps && activeProject.steps.length > 0
+                ? activeProject.steps[0].id
+                : null;
+
+            if (!targetStepId) {
+                showToast('El proyecto no tiene pasos para recibir candidatos', 'error');
+                setIsBatchLinking(false);
+                return;
+            }
+
+            const payload = {
+                action: 'batchLink',
+                projectId: activeProject.id,
+                stepId: targetStepId, // FORCE LEFTMOST STEP
+                candidateIds: candidatesToLink.map(c => c.id)
+            };
+
+            const res = await fetch('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                showToast(`${candidatesToLink.length} candidatos importados`, 'success');
+                // Remove imported candidates from preview
+                const linkedIds = candidatesToLink.map(c => c.id);
+                setSearchPreview(prev => prev.filter(c => !linkedIds.includes(c.id)));
+                setSelectedSearchIds(prev => prev.filter(id => !linkedIds.includes(id)));
+
+                // If modal empty, close it
+                if (searchPreview.length - candidatesToLink.length <= 0) {
+                    setShowAISearch(false);
+                }
+
+                // Refresh Project
+                fetchProject(activeProject.id);
+            } else {
+                showToast(data.error || 'Error al importar', 'error');
+            }
+        } catch (error) {
+            console.error('Error importing candidates:', error);
+            showToast('Error al importar candidatos', 'error');
         } finally {
             setIsBatchLinking(false);
         }
@@ -840,7 +848,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 {/* AI Search Results Preview Modal */}
                 {Array.isArray(searchPreview) && searchPreview.length > 0 && (
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[80vh]">
+                        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-4xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85vh]">
                             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white/50 dark:bg-slate-800/50 backdrop-blur-md">
                                 <div>
                                     <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
@@ -848,15 +856,26 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                         Resultados de IA
                                     </h3>
                                     <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                                        Encontramos {searchPreview.length} candidatos para: "{activeQuery}"
+                                        Selecciona los candidatos para importar al paso: <span className="text-blue-500 font-bold">{(activeProject.steps && activeProject.steps[0]?.name) || 'Paso 1'}</span>
                                     </p>
                                 </div>
-                                <button
-                                    onClick={() => { setSearchPreview([]); setActiveQuery(''); }}
-                                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                                >
-                                    <X className="w-5 h-5 text-slate-400" />
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => {
+                                            if (selectedSearchIds.length === searchPreview.length) setSelectedSearchIds([]);
+                                            else setSelectedSearchIds(searchPreview.map(c => c.id));
+                                        }}
+                                        className="text-xs font-bold text-blue-500 hover:text-blue-700 uppercase tracking-widest px-3"
+                                    >
+                                        {selectedSearchIds.length === searchPreview.length ? 'Deseleccionar' : 'Seleccionar Todos'}
+                                    </button>
+                                    <button
+                                        onClick={() => { setSearchPreview([]); setActiveQuery(''); setSelectedSearchIds([]); }}
+                                        className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                    >
+                                        <X className="w-5 h-5 text-slate-400" />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
@@ -865,6 +884,8 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     const displayName = String(cand?.nombreReal || cand?.nombre || 'Desconocido');
                                     const initials = displayName.substring(0, 2).toUpperCase();
                                     const location = String(cand?.municipio || 'Sin ubicación');
+                                    const phone = String(cand?.whatsapp || cand?.telefono || 'Sin contacto');
+                                    const category = String(cand?.categoria || 'General');
 
                                     let ageDisplay = 'Edad N/A';
                                     if (cand?.edad !== undefined && cand?.edad !== null) {
@@ -872,48 +893,93 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                         if (!isNaN(age)) ageDisplay = `${age} años`;
                                     }
 
+                                    const isSelected = selectedSearchIds.includes(cand.id);
+
                                     return (
-                                        <div key={cand?.id || Math.random()} className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-xs uppercase">
+                                        <div key={cand?.id || Math.random()}
+                                            onClick={() => {
+                                                if (isSelected) setSelectedSearchIds(prev => prev.filter(id => id !== cand.id));
+                                                else setSelectedSearchIds(prev => [...prev, cand.id]);
+                                            }}
+                                            className={`flex items-center justify-between p-3 rounded-2xl border transition-all cursor-pointer group ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-500' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700/50 hover:border-slate-300'}`}>
+
+                                            <div className="flex items-center gap-4 flex-1">
+                                                {/* Checkbox UI */}
+                                                <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300 dark:border-slate-600 group-hover:border-blue-400'}`}>
+                                                    {isSelected && <div className="w-2 h-2 bg-white rounded-sm" />}
+                                                </div>
+
+                                                <div className="w-12 h-12 flex-shrink-0 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm uppercase">
                                                     {initials}
                                                 </div>
-                                                <div>
-                                                    <p className="font-bold text-slate-700 dark:text-slate-200 text-sm truncate max-w-[200px]">
-                                                        {displayName}
-                                                    </p>
-                                                    <div className="flex gap-2 text-[10px] text-slate-400 uppercase tracking-wider">
-                                                        <span className="truncate max-w-[100px]">{location}</span>
-                                                        <span>•</span>
-                                                        <span>{ageDisplay}</span>
+
+                                                <div className="flex-1 grid grid-cols-2 gap-4">
+                                                    <div className="space-y-1">
+                                                        <p className="font-black text-slate-800 dark:text-white text-base truncate">
+                                                            {displayName}
+                                                        </p>
+                                                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                                            <Briefcase className="w-3 h-3" />
+                                                            <span className="uppercase tracking-tight truncate max-w-[150px]">{category}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1 flex flex-col justify-center border-l border-slate-200 dark:border-slate-700 pl-4">
+                                                        <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                                                            <MapPin className="w-3 h-3 opacity-50" />
+                                                            <span>{location}</span>
+                                                            <span className="text-slate-300">•</span>
+                                                            <span>{ageDisplay}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                                                            <div className="w-3 h-3 rounded-full bg-green-500/20 flex items-center justify-center">
+                                                                <div className="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+                                                            </div>
+                                                            <span className="font-mono opacity-70">{phone}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <span className="px-2 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-[10px] font-bold uppercase">
+
+                                            <div className="flex items-center gap-4 pl-4 border-l border-slate-200 dark:border-slate-700 ml-4">
+                                                <span className="px-3 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-black uppercase">
                                                     85% Match
                                                 </span>
+                                                <Button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleBatchLink([cand]);
+                                                    }}
+                                                    className="p-2 h-auto text-[10px] bg-slate-200 hover:bg-blue-500 hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-blue-600 transition-colors rounded-xl"
+                                                    title="Importar solo a él"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                </Button>
                                             </div>
                                         </div>
                                     );
                                 })}
                             </div>
 
-                            <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-end gap-3">
-                                <button
-                                    onClick={() => { setSearchPreview([]); setActiveQuery(''); }}
-                                    className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors uppercase text-xs tracking-widest"
-                                >
-                                    Descartar
-                                </button>
-                                <Button
-                                    onClick={handleBatchLink}
-                                    disabled={isBatchLinking}
-                                    className="bg-purple-600 hover:bg-purple-700 text-white shadow-xl shadow-purple-600/30 px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs flex items-center gap-2"
-                                >
-                                    {isBatchLinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                                    Importar {searchPreview.length} Candidatos
-                                </Button>
+                            <div className="p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                    {selectedSearchIds.length} seleccionados
+                                </span>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => { setSearchPreview([]); setActiveQuery(''); setSelectedSearchIds([]); }}
+                                        className="px-6 py-3 rounded-xl font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors uppercase text-xs tracking-widest"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <Button
+                                        onClick={() => handleBatchLink()}
+                                        disabled={isBatchLinking || selectedSearchIds.length === 0}
+                                        className="bg-purple-600 hover:bg-purple-700 text-white shadow-xl shadow-purple-600/30 px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs flex items-center gap-2"
+                                    >
+                                        {isBatchLinking ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                                        Importar Seleccionados
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </div>
