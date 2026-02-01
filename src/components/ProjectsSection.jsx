@@ -295,6 +295,8 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [vacancies, setVacancies] = useState([]);
     const [editingProject, setEditingProject] = useState(null);
     const [selectedVacancyId, setSelectedVacancyId] = useState('');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
     // AI Step Config
     const [openStepConfig, setOpenStepConfig] = useState(null); // { stepId: '...', projectId: '...' }
@@ -392,7 +394,9 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                     name: newProjectName,
                     description: newProjectDesc,
                     assignedUsers,
-                    vacancyId: selectedVacancyId || null
+                    vacancyId: selectedVacancyId || null,
+                    startDate: startDate || new Date().toISOString().split('T')[0],
+                    endDate: endDate || null
                 })
             });
             const data = await res.json();
@@ -830,7 +834,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 )}
 
                 {/* AI Search Results Preview Modal */}
-                {searchPreview.length > 0 && (
+                {Array.isArray(searchPreview) && searchPreview.length > 0 && (
                     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                         <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[80vh]">
                             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-white/50 dark:bg-slate-800/50 backdrop-blur-md">
@@ -1189,6 +1193,28 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
                                         <ChevronRight className="w-5 h-5 rotate-90" />
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Fechas de Vigencia */}
+                            <div className="flex gap-4">
+                                <div className="flex-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Fecha Inicio</label>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className="w-full h-14 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none uppercase text-slate-700 dark:text-white"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Fecha Fin (Vigencia)</label>
+                                    <input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        className="w-full h-14 px-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none uppercase text-slate-700 dark:text-white"
+                                    />
                                 </div>
                             </div>
 
