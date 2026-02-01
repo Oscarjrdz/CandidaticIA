@@ -465,47 +465,61 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
 
                 const systemInstruction = `
 [ROL]: Eres Brenda, reclutadora experta de Candidatic.
-[OBJETIVO]: Ejecutar la siguiente instrucción paso a paso con el candidato.
+[OBJETIVO]: Ejecutar la siguiente instrucción paso a paso con el candidato de forma natural pero DISCIPLINADA.
 [CONTEXTO DEL PROYECTO]: ${proj.description || ''}
 [DATOS VACANTE]: ${JSON.stringify(vacancyContext)}
 [INSTRUCCIÓN MAESTRA]: "${promptText}"
 
-Si la instrucción es contactarlo, escríbele un mensaje corto, amable y persuasivo por WhatsApp.
-No inventes datos. Usa emojis moderados.
+REGLAS DE ORO:
+1. Sigue ESTRICTAMENTE la [INSTRUCCIÓN MAESTRA]. 
+2. NO menciones sueldos, horarios, ubicación ni detalles de la empresa A MENOS que la [INSTRUCCIÓN MAESTRA] lo pida explícitamente.
+3. Si la instrucción es solo preguntar algo, LIMITATE A PREGUNTAR eso. No intentes "vender" la vacante si no es el momento.
+4. Tu respuesta debe ser corta (máximo 2 párrafos) y sonar humana.
+5. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso, incluye el tag [MOVE] en tu respuesta (esto es para el sistema, NO lo verá el candidato).
 `;
                 try {
                     const chat = model.startChat({
                         history: [
-                            { role: "user", parts: [{ text: "Genera el mensaje para el candidato ahora." }] }
+                            { role: "user", parts: [{ text: "Genera el mensaje para el candidato ahora. No des información de la vacante que no haya solicitado el paso." }] }
                         ]
                     });
 
                     const result = await chat.sendMessage(systemInstruction);
-                    const response = result.response.text();
+                    let response = result.response.text();
 
-                    // Send
+                    // TRATAMIENTO DE LA RESPUESTA (FILTROS)
+                    let shouldMove = false;
+                    if (response.includes('[MOVE]')) {
+                        shouldMove = true;
+                        response = response.replace(/\[MOVE\]/gi, '').trim();
+                    }
+
+                    // Send WhatsApp (Clean)
                     await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, response);
 
-                    // Mark as processed
-                    await redis.set(metaKey, 'true');
-                    // optional: expire in 30 days so we don't re-contact forever but keep memory
+                    // Mark as processed (Outbound)
+                    await redis.set(metaKey, 'true', 'EX', 3600 * 24 * 30); // 30 days expiry
 
-                    // Log action
-                    const { saveMessage } = await import('./storage.js'); // dynamic import to avoid circular dep issues top level
+                    // If Brenda said [MOVE], trigger transition
+                    if (shouldMove && nextStep) {
+                        const { moveCandidateStep } = await import('./storage.js');
+                        await moveCandidateStep(proj.id, cand.id, nextStep.id);
+                        logs.push(`✅ [PIPELINE] Mensaje enviado y candidato movido a "${nextStep.name}".`);
+                    } else {
+                        logs.push(`✅ [PIPELINE] Mensaje enviado a ${cand.nombre}.`);
+                    }
+
+                    // Log action in history
+                    const { saveMessage } = await import('./storage.js');
                     await saveMessage(cand.id, {
                         from: 'bot',
                         content: response,
                         type: 'text',
                         timestamp: new Date().toISOString(),
-                        meta: { pipelineStep: step.id, projectId: proj.id }
+                        meta: { pipelineStep: step.id, projectId: proj.id, autoMoved: shouldMove }
                     });
 
-                    logs.push(`✅ [PIPELINE] Mensaje enviado a ${cand.nombre}.`);
                     totalSent++;
-
-                    // If manual, we might want to process more than 1? 
-                    // Let's allow up to 5 for manual launch to avoid long waits, 
-                    // and 1 for background cron to be safe.
                     const limit = manualConfig ? 5 : 1;
                     if (totalSent >= limit) return { sent: totalSent };
 
