@@ -75,8 +75,18 @@ export async function runAIAutomations(isManual = false) {
             }
         }
 
-        const automations = await getAIAutomations();
-        const activeRules = (automations || []).filter(a => a?.active && a?.prompt);
+        // --- PIPELINE DE RECLUTAMIENTO (NUEVO) ---
+        // Se ejecuta después del Proactive para dar prioridad a lo urgente
+        try {
+            await processProjectPipelines(redis, model, config, logs);
+        } catch (e) {
+            logs.push(`⚠️ [PIPELINE] Error procesando embudos: ${e.message}`);
+        }
+
+        // --- OLD RULES ENGINE (LEGACY) ---
+        // (Existing Logic)
+        const rules = await getAutomations(redis);
+        const activeRules = (rules || []).filter(a => a?.active && a?.prompt);
 
         if (activeRules.length === 0) {
             logs.push(`ℹ️ No se encontraron reglas activas para procesar.`);
@@ -345,6 +355,128 @@ ${level === 72 ? '- 72h: Última oportunidad. Explica de forma concisa que sin s
             if (e.message.includes('API') || e.message.includes('model')) {
                 logs.push(`🛑 [PROACTIVE] Deteniendo ciclo por error crítico de API.`);
                 return;
+            }
+        }
+    }
+}
+
+/**
+ * --- PARTE 3: PIPELINE DE RECLUTAMIENTO ---
+ * Procesa los candidatos que están "estacionados" en un paso activo.
+ */
+async function processProjectPipelines(redis, model, config, logs) {
+    const { getProjects, getProjectById, getProjectCandidates, getProjectCandidateMetadata, getVacancyById } = await import('./storage.js');
+
+    const projects = await getProjects();
+    logs.push(`🏭 [PIPELINE] Escaneando embudos de reclutamiento (${projects.length} proyectos)...`);
+
+    for (const proj of projects) {
+        if (!proj.steps || proj.steps.length === 0) continue;
+
+        // Find Active Steps
+        const activeSteps = proj.steps.filter(s => s.aiConfig?.enabled);
+        if (activeSteps.length === 0) continue;
+
+        // Load project context (Vacancy)
+        let vacancyContext = { name: 'Vacante General', salary: 'Competitivo', schedule: 'Flexible' };
+        if (proj.vacancyId) {
+            const v = await getVacancyById(proj.vacancyId);
+            if (v) vacancyContext = { name: v.name, salary: v.salary_range, description: v.description, schedule: v.schedule };
+        }
+
+        // iterate active steps
+        for (const step of activeSteps) {
+            const stepIndex = proj.steps.findIndex(s => s.id === step.id);
+            const nextStep = proj.steps[stepIndex + 1];
+            const isNextStepActive = nextStep?.aiConfig?.enabled; // Not strictly needed for wait msg logic, but good context
+
+            // For wait logic: We actually need to know if *current* step has a goal to move to next. 
+            // The "Wait Message" logic requested by user is: "If un paso esta apagado... el bot de disculparse en que paso se quedo".
+            // This implies we are at Step X (Done) -> Trying to go to Step Y (Off).
+            // But usually this logic happens when receiving a message.
+            // For PROACTIVE (outbound), the logic is: "I am in Step X. I haven't been contacted yet for Step X."
+
+            // Let's implement the outbound first:
+            // "Contact candidates in this step who haven't been processed."
+
+            const candidates = await getProjectCandidates(proj.id);
+            const candidatesInStep = candidates.filter(c => {
+                const cStepId = c.projectMetadata?.stepId || 'step_new';
+                // If step is first step, it catches 'step_new' too if configured to
+                if (stepIndex === 0 && cStepId === 'step_new') return true;
+                return cStepId === step.id;
+            });
+
+            if (candidatesInStep.length === 0) continue;
+
+            for (const cand of candidatesInStep) {
+                // Check if already processed for this specific step
+                const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}:processed`;
+                const isProcessed = await redis.get(metaKey);
+
+                if (isProcessed) continue;
+
+                // Rate Limit Safety (Global 1 min rule still applies via queue or we break here)
+                // For now, let's process 1 per run to be safe alongside Proactive
+                // simple semaphore or just rely on the cron frequency
+
+                logs.push(`🎯 [PIPELINE] Candidato ${cand.nombre} en paso "${step.name}" (${proj.name}). Iniciando contacto.`);
+
+                // Prepare Prompt
+                let promptText = step.aiConfig.prompt || '';
+
+                // Context Injection
+                promptText = promptText
+                    .replace(/{{Candidato}}/g, cand.nombreReal || cand.nombre || 'Candidato')
+                    .replace(/{{Vacante}}/g, vacancyContext.name)
+                    .replace(/{{Vacante.Sueldo}}/g, vacancyContext.salary || 'N/A')
+                    .replace(/{{Vacante.Horario}}/g, vacancyContext.schedule || 'N/A');
+
+                const systemInstruction = `
+[ROL]: Eres Brenda, reclutadora experta de Candidatic.
+[OBJETIVO]: Ejecutar la siguiente instrucción paso a paso con el candidato.
+[CONTEXTO DEL PROYECTO]: ${proj.description || ''}
+[DATOS VACANTE]: ${JSON.stringify(vacancyContext)}
+[INSTRUCCIÓN MAESTRA]: "${promptText}"
+
+Si la instrucción es contactarlo, escríbele un mensaje corto, amable y persuasivo por WhatsApp.
+No inventes datos. Usa emojis moderados.
+`;
+                try {
+                    const chat = model.startChat({
+                        history: [
+                            { role: "user", parts: [{ text: "Genera el mensaje para el candidato ahora." }] }
+                        ]
+                    });
+
+                    const result = await chat.sendMessage(systemInstruction);
+                    const response = result.response.text();
+
+                    // Send
+                    await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, response);
+
+                    // Mark as processed
+                    await redis.set(metaKey, 'true');
+                    // optional: expire in 30 days so we don't re-contact forever but keep memory
+
+                    // Log action
+                    const { saveMessage } = await import('./storage.js'); // dynamic import to avoid circular dep issues top level
+                    await saveMessage(cand.id, {
+                        from: 'bot',
+                        content: response,
+                        type: 'text',
+                        timestamp: new Date().toISOString(),
+                        meta: { pipelineStep: step.id, projectId: proj.id }
+                    });
+
+                    logs.push(`✅ [PIPELINE] Mensaje enviado a ${cand.nombre}.`);
+
+                    // Return to avoid flooding (Process 1 pipeline action per run max for safety)
+                    return;
+
+                } catch (e) {
+                    logs.push(`⚠️ [PIPELINE] Error con candidato ${cand.nombre}: ${e.message}`);
+                }
             }
         }
     }
