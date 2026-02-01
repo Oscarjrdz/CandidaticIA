@@ -138,13 +138,14 @@ const KanbanColumn = ({ id, step, children, count, onEdit }) => {
             >
                 <div className="flex items-center gap-3" {...attributes} {...listeners}>
                     <div className={`w-2 h-2 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)] ${step.aiConfig?.enabled ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`}></div>
-                    <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter text-sm truncate max-w-[180px]">
+                    <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter text-sm truncate max-w-[150px] cursor-grab active:cursor-grabbing">
                         {step.name}
                     </h3>
                     <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400">
                         {count}
                     </span>
                 </div>
+
 
                 <div className="flex items-center gap-1">
                     {/* AI Config Trigger */}
@@ -185,13 +186,23 @@ const KanbanColumn = ({ id, step, children, count, onEdit }) => {
                     >
                         <Pencil className="w-3.5 h-3.5" />
                     </button>
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            onEdit(step.id, 'delete');
+                        }}
+                        className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors relative z-10"
+                        title="Eliminar paso"
+                    >
+                        <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                 </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
                 {children}
             </div>
-        </div>
+        </div >
     );
 };
 
@@ -568,6 +579,12 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             return;
         }
 
+
+        if (mode === 'delete') {
+            await handleDeleteStep(stepId);
+            return;
+        }
+
         // Mode Name
         const newName = prompt('Nuevo nombre del paso:', step.name);
         if (!newName || newName === step.name) return;
@@ -576,6 +593,76 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             s.id === stepId ? { ...s, name: newName } : s
         );
         saveStepsUpdate(updatedSteps, 'Paso renombrado');
+    };
+
+    const handleDeleteStep = async (stepId) => {
+        const stepIndex = activeProject.steps.findIndex(s => s.id === stepId);
+        if (stepIndex === -1) return;
+
+        // Find candidates in this step
+        const candidatesInStep = projectCandidates.filter(c =>
+            (c.projectMetadata?.stepId === stepId) ||
+            (stepIndex === 0 && (!c.projectMetadata?.stepId || c.projectMetadata?.stepId === 'step_new'))
+        );
+
+        if (candidatesInStep.length > 0) {
+            if (activeProject.steps.length <= 1) {
+                showToast('No puedes eliminar el único paso con candidatos', 'error');
+                return;
+            }
+
+            if (stepIndex === 0) {
+                showToast('No puedes eliminar el primer paso si tiene candidatos activos. Muévelos manualmente.', 'error');
+                return;
+            }
+
+            const confirmMsg = `ADVERTENCIA: Hay ${candidatesInStep.length} candidatos en este paso.\n\nSe moverán al paso anterior: "${activeProject.steps[stepIndex - 1].name}".\n\n¿Deseas continuar?`;
+
+            if (!window.confirm(confirmMsg)) return;
+
+            // Migrate candidates to previous step
+            const previousStep = activeProject.steps[stepIndex - 1];
+            setIsBatchLinking(true);
+            try {
+                // We'll use batchLink action but with stepId update on candidates
+                // Or simply loop over them (slower but safer) or add a migration endpoint
+                // Let's use batchLink which already exists and handles changing steps
+
+                const payload = {
+                    action: 'batchLink',
+                    projectId: activeProject.id,
+                    stepId: previousStep.id,
+                    candidateIds: candidatesInStep.map(c => c.id)
+                };
+
+                await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                // Update local candidates
+                setProjectCandidates(prev => prev.map(c =>
+                    candidatesInStep.some(cis => cis.id === c.id)
+                        ? { ...c, projectMetadata: { ...c.projectMetadata, stepId: previousStep.id } }
+                        : c
+                ));
+
+            } catch (e) {
+                console.error('Error migrating candidates:', e);
+                showToast('Error al migrar candidatos. Cancelando eliminación.', 'error');
+                setIsBatchLinking(false);
+                return;
+            } finally {
+                setIsBatchLinking(false);
+            }
+        } else {
+            if (!window.confirm('¿Eliminar este paso?')) return;
+        }
+
+        // Proceed to delete step
+        const updatedSteps = activeProject.steps.filter(s => s.id !== stepId);
+        saveStepsUpdate(updatedSteps, 'Paso eliminado');
     };
 
     const updateStepAI = async (stepId, aiConfig) => {

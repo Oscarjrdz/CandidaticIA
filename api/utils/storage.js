@@ -806,7 +806,7 @@ export const saveProject = async (project) => {
         project.createdAt = new Date().toISOString();
         // Default Kanban Steps
         if (!project.steps) {
-            project.steps = DEFAULT_PROJECT_STEPS;
+            project.steps = []; // Start with empty steps
         }
     }
     project.updatedAt = new Date().toISOString();
@@ -885,7 +885,7 @@ export const getProjects = async () => {
     return data.map(d => {
         if (!d) return null;
         const p = JSON.parse(d);
-        if (!p.steps || p.steps.length === 0) p.steps = DEFAULT_PROJECT_STEPS;
+        if (!p.steps) p.steps = []; // Ensure array exists but don't force defaults
         return p;
     }).filter(Boolean);
 };
