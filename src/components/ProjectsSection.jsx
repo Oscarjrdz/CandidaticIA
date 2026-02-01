@@ -302,6 +302,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [openStepConfig, setOpenStepConfig] = useState(null); // { stepId: '...', projectId: '...' }
     const [stepPrompt, setStepPrompt] = useState('');
     const [stepWaitMsg, setStepWaitMsg] = useState('');
+    const [isOptimizing, setIsOptimizing] = useState(false);
 
     // AI Search integration
     const [showAISearch, setShowAISearch] = useState(false);
@@ -755,6 +756,28 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         }
     };
 
+    const handleOptimizePrompt = async () => {
+        if (!stepPrompt.trim()) return;
+        setIsOptimizing(true);
+        try {
+            const res = await fetch('/api/ai/optimize-prompt', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: stepPrompt })
+            });
+            const data = await res.json();
+            if (data.success && data.optimizedPrompt) {
+                setStepPrompt(data.optimizedPrompt);
+                showToast('Prompt optimizado con magia ✨', 'success');
+            }
+        } catch (e) {
+            console.error('Error optimizing:', e);
+            showToast('Error al optimizar', 'error');
+        } finally {
+            setIsOptimizing(false);
+        }
+    };
+
     const toggleUserAssignment = (userId) => {
         setAssignedUsers(prev =>
             prev.includes(userId)
@@ -828,8 +851,16 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                 <div className="space-y-4">
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center">
-                                            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest">
+                                            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
                                                 Prompt / Instrucción
+                                                <button
+                                                    onClick={handleOptimizePrompt}
+                                                    disabled={isOptimizing || !stepPrompt.trim()}
+                                                    className={`p-1 rounded-md transition-all ${isOptimizing ? 'animate-spin text-purple-500' : 'text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:scale-110'}`}
+                                                    title="Mejorar con IA Mágica"
+                                                >
+                                                    <Sparkles className="w-3.5 h-3.5" />
+                                                </button>
                                             </label>
                                             <div className="flex gap-2">
                                                 <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500">{"{{Candidato}}"}</span>
