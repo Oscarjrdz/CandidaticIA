@@ -336,7 +336,10 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            candidates: filtered,
+            candidates: filtered.map(c => ({
+                ...c,
+                edad: calculateAge(c.fechaNacimiento)
+            })),
             ai: aiResponse
         });
 

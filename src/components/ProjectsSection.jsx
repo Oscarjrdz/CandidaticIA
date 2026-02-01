@@ -11,6 +11,7 @@ import Button from './ui/Button';
 import Input from './ui/Input';
 import MagicSearch from './MagicSearch';
 import ChatWindow from './ChatWindow';
+import { calculateAge } from '../utils/formatters';
 
 // Drag & Drop Imports
 import {
@@ -907,20 +908,6 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         setIsChatOpen(true);
     };
 
-    const calculateAge = (bornDate) => {
-        if (!bornDate) return null;
-        try {
-            const birthDate = new Date(bornDate);
-            if (isNaN(birthDate.getTime())) return null;
-            const today = new Date();
-            let age = today.getFullYear() - birthDate.getFullYear();
-            const m = today.getMonth() - birthDate.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-                age--;
-            }
-            return age;
-        } catch (e) { return null; }
-    };
 
     return (
         <DndContext
@@ -989,11 +976,8 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     const phone = String(cand?.whatsapp || cand?.telefono || 'Sin contacto');
                                     const category = String(cand?.categoria || 'General');
 
-                                    let ageDisplay = 'Edad N/A';
-                                    if (cand?.edad !== undefined && cand?.edad !== null) {
-                                        const age = parseInt(cand.edad);
-                                        if (!isNaN(age)) ageDisplay = `${age} años`;
-                                    }
+                                    const age = cand?.edad || calculateAge(cand?.fechaNacimiento);
+                                    const ageDisplay = age ? `${age} años` : 'Edad N/A';
 
                                     const isSelected = selectedSearchIds.includes(cand.id);
 
