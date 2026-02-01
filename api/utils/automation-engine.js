@@ -9,10 +9,11 @@ const COOLDOWN_HOURS = 24;
  * runAIAutomations
  * Zuckerberg Trace Edition: Captures every step and error.
  */
-export async function runAIAutomations(isManual = false) {
+export async function runAIAutomations(isManual = false, manualConfig = null) {
     const logs = [];
     let messagesSent = 0;
     let evaluatedCount = 0;
+    let processedCount = 0;
 
     try {
         logs.push(`🚀 [SYSTEM] Iniciando motor (Manual: ${isManual})`);
@@ -75,10 +76,10 @@ export async function runAIAutomations(isManual = false) {
             }
         }
 
-        // --- PIPELINE DE RECLUTAMIENTO (NUEVO) ---
-        // Se ejecuta después del Proactive para dar prioridad a lo urgente
+        // --- PIPELINE DE RECLUTAMIENTO ---
         try {
-            await processProjectPipelines(redis, model, config, logs);
+            const pipeResult = await processProjectPipelines(redis, model, config, logs, manualConfig);
+            processedCount = pipeResult?.sent || 0;
         } catch (e) {
             logs.push(`⚠️ [PIPELINE] Error procesando embudos: ${e.message}`);
         }
@@ -90,7 +91,7 @@ export async function runAIAutomations(isManual = false) {
 
         if (activeRules.length === 0) {
             logs.push(`ℹ️ No se encontraron reglas activas para procesar.`);
-            return { success: true, logs };
+            return { success: true, logs, processedCount };
         }
         logs.push(`📋 Procesando ${activeRules.length} reglas activas.`);
 
@@ -364,17 +365,33 @@ ${level === 72 ? '- 72h: Última oportunidad. Explica de forma concisa que sin s
  * --- PARTE 3: PIPELINE DE RECLUTAMIENTO ---
  * Procesa los candidatos que están "estacionados" en un paso activo.
  */
-async function processProjectPipelines(redis, model, config, logs) {
+async function processProjectPipelines(redis, model, config, logs, manualConfig = null) {
     const { getProjects, getProjectById, getProjectCandidates, getProjectCandidateMetadata, getVacancyById } = await import('./storage.js');
 
-    const projects = await getProjects();
-    logs.push(`🏭 [PIPELINE] Escaneando embudos de reclutamiento (${projects.length} proyectos)...`);
+    let projects = [];
+    if (manualConfig?.projectId) {
+        const p = await getProjectById(manualConfig.projectId);
+        if (p) projects = [p];
+    } else {
+        projects = await getProjects();
+    }
+
+    let totalSent = 0;
+    logs.push(`🏭 [PIPELINE] Escaneando embudos (${projects.length} proyectos)...`);
 
     for (const proj of projects) {
         if (!proj.steps || proj.steps.length === 0) continue;
 
         // Find Active Steps
-        const activeSteps = proj.steps.filter(s => s.aiConfig?.enabled);
+        let activeSteps = proj.steps.filter(s => s.aiConfig?.enabled);
+
+        // If manual, we bypass the "enabled" check for that specific step if needed, 
+        // but user usually won't launch a disabled step. 
+        // Let's filter by stepId if provided in manualConfig
+        if (manualConfig?.stepId) {
+            activeSteps = proj.steps.filter(s => s.id === manualConfig.stepId);
+        }
+
         if (activeSteps.length === 0) continue;
 
         // Load project context (Vacancy)
@@ -470,9 +487,13 @@ No inventes datos. Usa emojis moderados.
                     });
 
                     logs.push(`✅ [PIPELINE] Mensaje enviado a ${cand.nombre}.`);
+                    totalSent++;
 
-                    // Return to avoid flooding (Process 1 pipeline action per run max for safety)
-                    return;
+                    // If manual, we might want to process more than 1? 
+                    // Let's allow up to 5 for manual launch to avoid long waits, 
+                    // and 1 for background cron to be safe.
+                    const limit = manualConfig ? 5 : 1;
+                    if (totalSent >= limit) return { sent: totalSent };
 
                 } catch (e) {
                     logs.push(`⚠️ [PIPELINE] Error con candidato ${cand.nombre}: ${e.message}`);
@@ -480,4 +501,5 @@ No inventes datos. Usa emojis moderados.
             }
         }
     }
+    return { sent: totalSent };
 }

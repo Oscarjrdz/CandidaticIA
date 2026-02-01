@@ -4,7 +4,7 @@ import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     GraduationCap, MapPin, MessageSquare, ExternalLink, FolderKanban,
     Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase, Plus, Calendar,
-    Bot, Settings, Power, X, Loader2 // Added icons
+    Bot, Settings, Power, X, Loader2, Rocket // Added Rocket icon
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -112,7 +112,7 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
     );
 };
 
-const KanbanColumn = ({ id, step, children, count, onEdit }) => {
+const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch }) => {
     const {
         attributes,
         listeners,
@@ -176,6 +176,19 @@ const KanbanColumn = ({ id, step, children, count, onEdit }) => {
                     >
                         <Power className="w-3.5 h-3.5" />
                     </button>
+
+                    {/* Launch Step (Manual) */}
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            onLaunch(step.id);
+                        }}
+                        className="p-1.5 rounded-lg transition-all text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 active:scale-90 relative z-10"
+                        title="Lanzar Brenda en este paso"
+                    >
+                        <Rocket className="w-3.5 h-3.5" />
+                    </button>
+
                     {/* End Quick Toggle */}
                     <button
                         onClick={(e) => {
@@ -664,6 +677,34 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         // Proceed to delete step
         const updatedSteps = activeProject.steps.filter(s => s.id !== stepId);
         saveStepsUpdate(updatedSteps, 'Paso eliminado');
+    };
+
+    const handleLaunchStep = async (stepId) => {
+        if (!activeProject) return;
+        const step = activeProject.steps.find(s => s.id === stepId);
+
+        showToast(`Lanzando Brenda en ${step?.name || 'este paso'}...`, 'info');
+
+        try {
+            const res = await fetch('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'launchStep',
+                    projectId: activeProject.id,
+                    stepId
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`¡Brenda lanzada! ${data.processed || 0} candidatos procesados.`, 'success');
+            } else {
+                showToast(data.error || 'Error al lanzar Brenda', 'error');
+            }
+        } catch (e) {
+            console.error('Launch error:', e);
+            showToast('Error de conexión al lanzar', 'error');
+        }
     };
 
     const handleAddStep = async () => {
@@ -1256,6 +1297,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                                     step={step}
                                                     count={stepCands.length}
                                                     onEdit={(id, mode) => handleUpdateStepName(id, mode)}
+                                                    onLaunch={(id) => handleLaunchStep(id)}
                                                 >
                                                     <SortableContext
                                                         items={stepCands.map(c => c.id)}

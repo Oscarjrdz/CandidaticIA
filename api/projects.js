@@ -78,6 +78,20 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true, count: candidateIds.length });
             }
 
+            if (action === 'launchStep') {
+                const pid = bodyProjectId || id;
+                if (!pid || !stepId) return res.status(400).json({ success: false, error: 'Project ID and Step ID required' });
+
+                const { runAIAutomations } = await import('./utils/automation-engine.js');
+                const result = await runAIAutomations(true, { projectId: pid, stepId });
+
+                return res.status(200).json({
+                    success: result.success,
+                    processed: result.processedCount || 0,
+                    error: result.error
+                });
+            }
+
             if (action === 'updateSteps') {
                 const pid = bodyProjectId || id;
                 console.log(`[API] Updating steps for project ${pid}:`, steps?.length);
