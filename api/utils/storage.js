@@ -911,10 +911,12 @@ export const deleteProject = async (id) => {
     if (!client || !id) return false;
 
     const project = await getProjectById(id);
+    const pipeline = client.pipeline();
+
     if (project) {
         const candidateIds = await client.smembers(`${KEYS.PROJECT_CANDIDATES_PREFIX}${id}`);
         if (candidateIds.length > 0) {
-            candidateIds.forEach(cid => pipeline.hdel(KEYS.CANDIDATE_PROJECT_LINK, cid));
+            candidateIds.forEach(cid => pipeline.hdel(KEYS.CANDIDATE_PROJECT_LINK, cid)); // This might need check
         }
     }
 
