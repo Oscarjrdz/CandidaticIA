@@ -138,7 +138,7 @@ const KanbanColumn = ({ id, step, children, count, onEdit }) => {
             >
                 <div className="flex items-center gap-3" {...attributes} {...listeners}>
                     <div className={`w-2 h-2 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)] ${step.aiConfig?.enabled ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`}></div>
-                    <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter text-sm truncate max-w-[100px]">
+                    <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter text-sm truncate max-w-[180px]">
                         {step.name}
                     </h3>
                     <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400">
