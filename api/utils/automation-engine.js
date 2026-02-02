@@ -329,6 +329,14 @@ ${level === 72 ? '- 72h: Última oportunidad. Explica de forma concisa que sin s
             if (text) {
                 logs.push(`✨ [PROACTIVE] Enviando nivel ${level}h a ${cand.nombre}...`);
                 await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, text);
+
+                // CRITICAL: Update candidate timestamps to avoid double follow-ups
+                const { updateCandidate } = await import('./storage.js');
+                await updateCandidate(cand.id, {
+                    lastBotMessageAt: new Date().toISOString(),
+                    ultimoMensaje: new Date().toISOString()
+                });
+
                 await saveMessage(cand.id, {
                     from: 'bot',
                     content: text,
@@ -490,6 +498,13 @@ REGLAS DE ORO:
                     // TRATAMIENTO DE LA RESPUESTA (FILTROS)
                     // Send WhatsApp (Clean)
                     await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, response);
+
+                    // CRITICAL: Update candidate timestamps
+                    const { updateCandidate } = await import('./storage.js');
+                    await updateCandidate(cand.id, {
+                        lastBotMessageAt: new Date().toISOString(),
+                        ultimoMensaje: new Date().toISOString()
+                    });
 
                     // Mark as processed (Outbound)
                     await redis.set(metaKey, 'true', 'EX', 3600 * 24 * 30); // 30 days expiry
