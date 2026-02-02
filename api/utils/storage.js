@@ -180,6 +180,21 @@ export const deleteAuthToken = async (phone) => {
  * CANDIDATES (Distributed)
  * ==========================================
  */
+// --- 🛡️ Quality Shield: Completion Check ---
+const isProfileComplete = (c) => {
+    if (!c) return false;
+    // Required fields for a "Complete" profile
+    const nameStr = String(c.nombreReal || '').toLowerCase();
+    const hasName = c.nombreReal && !nameStr.includes('proporcionado') && !nameStr.includes('desconocido');
+
+    const munStr = String(c.municipio || '').toLowerCase();
+    const hasLocation = c.municipio && !munStr.includes('proporcionado') && !munStr.includes('general');
+
+    const hasBirth = c.fechaNacimiento && c.fechaNacimiento !== 'No proporcionada';
+
+    return hasName && hasLocation && hasBirth;
+};
+
 // Native Redis Pagination (Page size 100)
 export const getCandidates = async (limit = 100, offset = 0, search = '', excludeLinked = false) => {
     const client = getClient();
@@ -243,8 +258,12 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     }
 
     // Filter out Linked Candidates
-    if (excludeLinked && linkedIds.size > 0) {
-        filtered = filtered.filter(c => !linkedIds.has(c.id));
+    if (excludeLinked) {
+        // [QUALITY SHIELD] Only show complete profiles when adding to projects
+        filtered = filtered.filter(c => {
+            const isNotLinked = linkedIds.size > 0 ? !linkedIds.has(c.id) : true;
+            return isNotLinked && isProfileComplete(c);
+        });
     }
 
     return {
