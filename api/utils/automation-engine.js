@@ -254,6 +254,9 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
     const customFieldsJson = await redis.get('custom_fields');
     const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
 
+    const categoriesData = await redis.get('candidatic_categories');
+    const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
+
     // Filter candidates with incomplete profile based on IRON-CLAD logic
     const incomplete = candidates.filter(c => !isProfileComplete(c, customFields));
 
@@ -335,6 +338,9 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
 - Tu misión en este mensaje de ${level}h es ser amable pero conseguir los datos que faltan.
 - DATOS QUE FALTAN: ${missingFields.join(', ')}.
 
+[CATEGORÍAS OFICIALES DISPONIBLES]:
+${categories.join(', ')}
+
 [SALUDO]:
 ${cand.nombreReal
                 ? `- Saludalo por su nombre (${cand.nombreReal}).`
@@ -345,7 +351,8 @@ ${cand.nombreReal
 1. Menciona de forma muy natural que quieres seguir con su proceso.
 2. Pide específicamente la información que falta. NO la pidas toda de golpe si son más de 3 cosas, enfócate en lo más importante pero hazle saber qué le falta.
 3. El tono debe ser de una persona real en WhatsApp, breve (máximo 2 párrafos).
-4. Si ya pasaron 72h, puedes ser un poco más directa preguntando si sigue interesado para cerrar su ficha.
+4. Si falta la "Categoría/Puesto de interés", ofrece de forma amable las [CATEGORÍAS OFICIALES DISPONIBLES]. PROHIBIDO inventar puestos.
+5. Si ya pasaron 72h, puedes ser un poco más directa preguntando si sigue interesado para cerrar su ficha.
 
 Responde ÚNICAMENTE con el mensaje para el usuario:`;
 
