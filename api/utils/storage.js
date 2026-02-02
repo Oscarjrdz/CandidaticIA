@@ -180,19 +180,39 @@ export const deleteAuthToken = async (phone) => {
  * CANDIDATES (Distributed)
  * ==========================================
  */
-// --- 🛡️ Quality Shield: Completion Check ---
-const isProfileComplete = (c) => {
+// --- 🛡️ Quality Shield: Iron-Clad Completion Check ---
+export const isProfileComplete = (c, customFields = []) => {
     if (!c) return false;
-    // Required fields for a "Complete" profile
-    const nameStr = String(c.nombreReal || '').toLowerCase();
-    const hasName = c.nombreReal && !nameStr.includes('proporcionado') && !nameStr.includes('desconocido');
 
-    const munStr = String(c.municipio || '').toLowerCase();
-    const hasLocation = c.municipio && !munStr.includes('proporcionado') && !munStr.includes('general');
+    // 1. Standard Fields Check
+    const standards = [
+        { key: 'nombreReal', invalidValue: 'proporcionado' },
+        { key: 'municipio', invalidValue: 'proporcionado' },
+        { key: 'fechaNacimiento', invalidValue: 'proporcionada' },
+        { key: 'genero', invalidValue: 'proporcionado' },
+        { key: 'categoria', invalidValue: 'proporcionado' },
+        { key: 'tieneEmpleo', invalidValue: 'proporcionado' },
+        { key: 'escolaridad', invalidValue: 'proporcionado' }
+    ];
 
-    const hasBirth = c.fechaNacimiento && c.fechaNacimiento !== 'No proporcionada';
+    for (const field of standards) {
+        const val = String(c[field.key] || '').toLowerCase();
+        if (!c[field.key] || val.includes(field.invalidValue) || val.includes('desconocido') || val.includes('general')) {
+            return false;
+        }
+    }
 
-    return hasName && hasLocation && hasBirth;
+    // 2. Custom Fields Check (if any)
+    if (customFields && customFields.length > 0) {
+        for (const cf of customFields) {
+            const val = String(c[cf.value] || '').toLowerCase();
+            if (!c[cf.value] || val.includes('proporcionado')) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 };
 
 // Native Redis Pagination (Page size 100)
@@ -259,10 +279,13 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
 
     // Filter out Linked Candidates
     if (excludeLinked) {
-        // [QUALITY SHIELD] Only show complete profiles when adding to projects
+        // [IRON-CLAD QUALITY SHIELD] Only show 100% complete profiles when adding to projects
+        const customFieldsJson = await client.get('custom_fields');
+        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+
         filtered = filtered.filter(c => {
             const isNotLinked = linkedIds.size > 0 ? !linkedIds.has(c.id) : true;
-            return isNotLinked && isProfileComplete(c);
+            return isNotLinked && isProfileComplete(c, customFields);
         });
     }
 

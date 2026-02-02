@@ -242,17 +242,20 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
  */
 async function processNativeProactive(redis, model, config, logs, todayKey, now, maxToSend = 1) {
     let sentCount = 0;
+    // DYNAMIC IMPORTS
+    const { getCandidates, isProfileComplete, saveMessage } = await import('./storage.js');
+
     const { candidates } = await getCandidates(500, 0); // Increase scan depth to 500
     if (!candidates) {
         logs.push(`⚠️ [PROACTIVE] No se obtuvieron candidatos de la DB.`);
         return;
     }
 
-    // Filter candidates with incomplete step 1 status
-    const incomplete = candidates.filter(c => {
-        const isComp = c.nombreReal && c.municipio;
-        return !isComp;
-    });
+    const customFieldsJson = await redis.get('custom_fields');
+    const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+
+    // Filter candidates with incomplete profile based on IRON-CLAD logic
+    const incomplete = candidates.filter(c => !isProfileComplete(c, customFields));
 
     logs.push(`🔍 [PROACTIVE] Evaluando ${candidates.length} candidatos totales. ${incomplete.length} tienen perfil incompleto.`);
 
@@ -285,44 +288,61 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
         const alreadySent = await redis.get(sessionKey);
 
         if (alreadySent) {
-            // Log skipping only for higher levels or occasionally to avoid Bloat
             continue;
         }
 
         if (level === 0) {
-            // Optional: logs.push(`- ${cand.nombre}: Solo ${(hoursInactive).toFixed(1)}h inactivo. No califica.`);
             continue;
         }
 
         logs.push(`🎯 [PROACTIVE] Candidato ${cand.nombre} CALIFICA. Nivel ${level}h (${Math.floor(hoursInactive)}h inactivo).`);
 
+        // Identify missing fields for Brenda's focus
+        const missingFields = [];
+        const standards = [
+            { key: 'nombreReal', label: 'Nombre Completo' },
+            { key: 'municipio', label: 'Municipio/Ubicación' },
+            { key: 'fechaNacimiento', label: 'Fecha de Nacimiento' },
+            { key: 'genero', label: 'Género' },
+            { key: 'categoria', label: 'Categoría/Puesto de interés' },
+            { key: 'tieneEmpleo', label: 'Si tiene empleo actual' },
+            { key: 'escolaridad', label: 'Nivel de Escolaridad' }
+        ];
+        for (const f of standards) {
+            const val = String(cand[f.key] || '').toLowerCase();
+            if (!cand[f.key] || val.includes('proporcionado') || val.includes('desconocido') || val.includes('general')) {
+                missingFields.push(f.label);
+            }
+        }
+        for (const cf of customFields) {
+            const val = String(cand[cf.value] || '').toLowerCase();
+            if (!cand[cf.value] || val.includes('proporcionado')) {
+                missingFields.push(cf.label);
+            }
+        }
+
         const prompt = `
 [REGLAS DE PERSONALIDAD Y CONTEXTO]:
 "${customPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic IA, un reclutador útil, humano y proactivo.'}"
 
-[SITUACIÓN]:
-- Estás contactando a un candidato porque su perfil está INCOMPLETO.
-- Le falta: ${!cand.nombreReal ? 'Nombre Real' : ''} ${!cand.municipio ? 'Municipio' : ''}.
-- Nivel de Seguimiento: ${level} horas de inactividad.
+[CONTEXTO CRÍTICO]:
+- El candidato está INCOMPLETO. Ha pasado tiempo sin que termine su perfil.
+- Tu misión en este mensaje de ${level}h es ser amable pero conseguir los datos que faltan.
+- DATOS QUE FALTAN: ${missingFields.join(', ')}.
 
-[REGLAS DE SALUDO E IDENTIDAD]:
+[SALUDO]:
 ${cand.nombreReal
-                ? `- TIENES SU NOMBRE: Saluda personalmente por su nombre (${cand.nombreReal}).`
-                : `- NO TIENES SU NOMBRE: Usa un saludo genérico amable (ej: "¡Hola!", "¡Qué tal!", "¡Hola, un gusto saludarte!"). PROHIBIDO usar el nombre de perfil de WhatsApp/from (${cand.nombre}) ya que puede contener emojis o apodos.`
+                ? `- Saludalo por su nombre (${cand.nombreReal}).`
+                : `- Saludo genérico amable (ej: "¡Hola!", "¡Qué tal!").`
             }
-- Identifícate como la Lic. Brenda (o Lic. Brenda Rodríguez).
 
-[TU OBJETIVO - NIVEL ${level}h]:
-${level === 24 ? '- 24h: Recordatorio amable, servicial y humano. Ofrece ayuda para terminar el registro.' : ''}
-${level === 48 ? '- 48h: Re-confirmación de interés. Pregunta de forma natural si aún está buscando empleo.' : ''}
-${level === 72 ? '- 72h: Última oportunidad. Explica de forma concisa que sin sus datos no puedes asignarlo a ninguna de nuestras vacantes actuales.' : ''}
+[INSTRUCCIONES]:
+1. Menciona de forma muy natural que quieres seguir con su proceso.
+2. Pide específicamente la información que falta. NO la pidas toda de golpe si son más de 3 cosas, enfócate en lo más importante pero hazle saber qué le falta.
+3. El tono debe ser de una persona real en WhatsApp, breve (máximo 2 párrafos).
+4. Si ya pasaron 72h, puedes ser un poco más directa preguntando si sigue interesado para cerrar su ficha.
 
-[REGLAS CRÍTICAS DE ESCRITURA]:
-- VARIABILIDAD Y CREATIVIDAD: Evita saludos robotizados o repetitivos. Usa un lenguaje natural de WhatsApp.
-- BREVEDAD: Máximo 2 líneas breves.
-- Emojis: Usa uno o dos discretos.
-- RESPUESTA: Entrega ÚNICAMENTE el texto del mensaje, sin comillas ni prefijos.
-`;
+Responde ÚNICAMENTE con el mensaje para el usuario:`;
 
         try {
             const res = await model.generateContent(prompt);
