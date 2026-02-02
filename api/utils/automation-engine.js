@@ -271,7 +271,9 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
     const customPrompt = (await redis.get('bot_ia_prompt')) || '';
 
     for (const cand of incomplete) {
-        const lastMsgAt = new Date(cand.lastUserMessageAt || cand.lastBotMessageAt || 0);
+        const tUser = new Date(cand.lastUserMessageAt || 0).getTime();
+        const tBot = new Date(cand.lastBotMessageAt || 0).getTime();
+        const lastMsgAt = new Date(Math.max(tUser, tBot));
         const hoursInactive = (now - lastMsgAt) / (1000 * 60 * 60);
 
         let level = 0;
