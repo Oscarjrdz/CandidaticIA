@@ -196,8 +196,14 @@ export const isProfileComplete = (c, customFields = []) => {
     ];
 
     for (const field of standards) {
-        const val = String(c[field.key] || '').toLowerCase();
-        if (!c[field.key] || val.includes(field.invalidValue) || val.includes('desconocido') || val.includes('general')) {
+        const val = String(c[field.key] || '').toLowerCase().trim();
+        // Strict check for placeholders
+        const isPlaceholder = val.includes(field.invalidValue) ||
+            val === 'desconocido' ||
+            val === 'consulta general' ||
+            val === 'general';
+
+        if (!c[field.key] || isPlaceholder) {
             return false;
         }
     }

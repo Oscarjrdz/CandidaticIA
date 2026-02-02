@@ -309,8 +309,13 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
             { key: 'escolaridad', label: 'Nivel de Escolaridad' }
         ];
         for (const f of standards) {
-            const val = String(cand[f.key] || '').toLowerCase();
-            if (!cand[f.key] || val.includes('proporcionado') || val.includes('desconocido') || val.includes('general')) {
+            const val = String(cand[f.key] || '').toLowerCase().trim();
+            const isPlaceholder = val.includes('proporcionado') ||
+                val === 'desconocido' ||
+                val === 'consulta general' ||
+                val === 'general';
+
+            if (!cand[f.key] || isPlaceholder) {
                 missingFields.push(f.label);
             }
         }
