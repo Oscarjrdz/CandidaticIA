@@ -338,7 +338,7 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
 - DATOS QUE FALTAN: ${missingFields.join(', ')}.
 
 [CATEGORÍAS OFICIALES DISPONIBLES]:
-${categories.join(', ')}
+${categories.map(cat => `✅ ${cat}`).join('\n')}
 
 [SALUDO]:
 ${cand.nombreReal
@@ -346,12 +346,11 @@ ${cand.nombreReal
                 : `- Saludo genérico amable (ej: "¡Hola!", "¡Qué tal!").`
             }
 
-[INSTRUCCIONES DE ESTILO]:
-1. BREVEDAD EXTREMA: El mensaje debe tener máximo 2 o 3 líneas. 
-2. LISTAS VISUALES: Si mencionas categorías, usa el check verde: ✅ [Categoría].
-3. NO ASTERISCOS: Prohibido usar asteriscos para listas o viñetas.
-4. TONO: Ágil, humano, natural de WhatsApp.
-5. Si falta la categoría, ofrece las [CATEGORÍAS OFICIALES DISPONIBLES] con el formato de checks verdes. PROHIBIDO inventar categorías.
+[INSTRUCCIONES DE ESTILO INVIOLABLES]:
+1. BREVEDAD EXTREMA: Máximo 2 o 3 líneas. 
+2. LISTA CON CHECKS: Si mencionas las categorías, DEBEN ir tal cual están escritas arriba (una por línea con su ✅).
+3. PROHIBICIÓN DE ASTERISCOS: NUNCA uses asteriscos (*) o guiones (-) para hacer listas.
+4. FORMATO WHATSAPP: El mensaje debe verse limpio, visual y moderno.
 
 Responde ÚNICAMENTE con el mensaje para el usuario:`;
 
