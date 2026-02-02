@@ -200,7 +200,11 @@ export const isProfileComplete = (c, customFields = []) => {
         const isPlaceholder = val.includes(field.invalidValue) ||
             val === 'desconocido' ||
             val === 'consulta general' ||
-            val === 'general';
+            val === 'general' ||
+            val === 'n/a' ||
+            val === 'na' ||
+            val === 'ninguno' ||
+            val === 'none';
 
         if (!c[field.key] || isPlaceholder) {
             return false;

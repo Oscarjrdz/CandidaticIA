@@ -315,7 +315,11 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
             const isPlaceholder = val.includes('proporcionado') ||
                 val === 'desconocido' ||
                 val === 'consulta general' ||
-                val === 'general';
+                val === 'general' ||
+                val === 'n/a' ||
+                val === 'na' ||
+                val === 'ninguno' ||
+                val === 'none';
 
             if (!cand[f.key] || isPlaceholder) {
                 missingFields.push(f.label);

@@ -245,8 +245,15 @@ Si el candidato pregunta por trabajo, responde que primero necesitas completar s
             const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria'];
             let missingData = false;
             for (const field of coreFields) {
-                const val = candidateData[field];
-                if (!val || val === 'No proporcionado' || val === 'No proporcionada' || val === 'Consulta General') {
+                const val = (candidateData[field] || '').toLowerCase().trim();
+                const isInvalid = !val ||
+                    val.includes('proporcionado') ||
+                    val === 'consulta general' ||
+                    val === 'n/a' ||
+                    val === 'na' ||
+                    val === 'ninguno' ||
+                    val === 'none';
+                if (isInvalid) {
                     missingData = true;
                 }
             }
@@ -279,8 +286,16 @@ ${dnaLines}
             const requiredFields = allFields.map(f => f.value);
             let isProfileComplete = true;
             for (const key of requiredFields) {
-                const val = candidateData[key];
-                if (!val || val === 'No proporcionado' || val === 'No proporcionada' || val === 'Consulta General') {
+                const val = (candidateData[key] || '').toLowerCase().trim();
+                const isInvalid = !val ||
+                    val.includes('proporcionado') ||
+                    val === 'consulta general' ||
+                    val === 'general' ||
+                    val === 'n/a' ||
+                    val === 'na' ||
+                    val === 'ninguno' ||
+                    val === 'none';
+                if (isInvalid) {
                     isProfileComplete = false;
                     break;
                 }
