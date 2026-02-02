@@ -42,6 +42,7 @@ REGLA DE ORO (MEMORIA): Eres el mismo asistente que habló con el candidato en e
 REGLA DE CAPTURA (IMPORTANTE): Si el "Nombre Real" dice "No proporcionado", DEBES preguntarle su nombre al candidato usando un saludo genérico como "Hola".
 REGLA DE ORO DE FILTRADO (CRÍTICA): TIENES PROHIBIDO ofrecer o dar detalles de vacantes (nombres, sueldos, ubicaciones) si el [ESTATUS PASO 1] es "INCOMPLETO".
 REGLA ANTI-EDAD: El sistema calcula la edad automáticamente. Tienes PROHIBIDO preguntar la edad. Si falta ese dato, pide la "Fecha de Nacimiento".
+REGLA ANTI-GENERO: El sistema deduce el género automáticamente por el nombre. Tienes PROHIBIDO preguntar el género o sexo.
 REGLA DE ORO (ESTILO): NUNCA uses asteriscos (*). Si necesitas resaltar, usa Emojis.
 REGLA ANTI-ALUCINACIÓN (ESTRICTA): NO INVENTES VACANTES. Si el candidato pregunta por un puesto que NO aparece en la [BASE DE CONOCIMIENTO (DETALLE DE VACANTES)], responde que por el momento no contamos con esa posición disponible.
 `;
@@ -350,7 +351,7 @@ ${dnaLines}
         // --- 🛡️ FINAL STYLING AUDIT (HIGHEST PRIORITY) ---
         systemInstruction += `\n\n[REGLAS DE ORO DE ÚLTIMO MOMENTO]:
 1. PROHIBIDO EL USO DE ASTERISCOS (*). No los uses para resaltar nada. Usa Emojis.
-2. PROHIBIDO PREGUNTAR LA EDAD. Si falta la fecha, pide "Fecha de Nacimiento".
+2. PROHIBIDO PREGUNTAR LA EDAD O EL GÉNERO. El sistema los resuelve automáticamente.
 3. BREVEDAD WHATSAPP: Mensajes de máximo 3 líneas. Pide los datos de uno en uno.\n`;
 
         if (!apiKey) return 'ERROR: No API Key found';

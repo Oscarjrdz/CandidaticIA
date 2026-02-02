@@ -345,7 +345,7 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
 
 [REQUISITOS DE ESTILO INVIOLABLES]:
 1. BREVEDAD EXTREMA: El mensaje DEBE tener máximo 2 líneas de texto. Prohibido escribir párrafos.
-2. ENFOQUE: Pregunta ÚNICAMENTE por estos 2 datos: ${prioritizedMissing.join(' y ')}. NO pidas la edad (pide fecha de nacimiento si es necesario).
+2. ENFOQUE: Pregunta ÚNICAMENTE por estos 2 datos: ${prioritizedMissing.join(' y ')}. NO pidas la edad ni el género (el sistema los deduce).
 3. PROHIBICIÓN TOTAL DE ASTERISCOS: No uses asteriscos (*) ni guiones (-) en ninguna parte del mensaje.
 4. LISTA CON CHECKS: Si mencionas opciones (como categorías), usa SOLO el check verde: ✅
    ${categories.length > 0 ? `[CATEGORÍAS]:\n${categories.slice(0, 5).map(c => `✅ ${c}`).join('\n')}` : ''}
