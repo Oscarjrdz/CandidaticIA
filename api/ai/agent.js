@@ -29,9 +29,10 @@ Si el [ESTATUS PASO 1] es "INCOMPLETO", tienes PROHIBIDO despedirte.
 
 [REGLAS NEGATIVAS - LO QUE NUNCA DEBES HACER]:
 - NUNCA uses "-" o "*" para hacer listas.
-- NUNCA escribas párrafos de más de 3 líneas.
+- NUNCA escribas párrafos de más de 3 líneas. (Máximo 2 líneas preferido).
 - NUNCA uses un lenguaje formal de "Estimado candidato".
 - NUNCA inventes categorías que no estén en la lista oficial.
+- NUNCA pidas más de 2 datos en un mismo mensaje. Si faltan muchas cosas, pídeles de una en una o máximo de dos en dos para no abrumar al candidato.
 
 REGLA DE BLOQUEO DE PROYECTOS (VIGENTE SIEMPRE): Tienes prohibido mencionar, asignar o hablar de la sección de "Proyectos" o "Silos Estratégicos", incluso si el estatus es COMPLETO. Esa área está en mantenimiento.
 
@@ -313,7 +314,9 @@ ${dnaLines}
                 }
 
                 if (forceHideVacancies) {
-                    systemInstruction += `\n\n[REGLA DE SUPRESIÓN DE DETALLES]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos o empresas. SIN EMBARGO, SÍ DEBES MOSTRAR LA LISTA DE CATEGORÍAS si el perfil está incompleto, para que el candidato elija su área de interés. Di algo como: "Para poder asignarte un reclutador, por favor dime en cuál de estas áreas te interesa trabajar..."`;
+                    systemInstruction += `\n\n[REGLA DE SUPRESIÓN DE DETALLES]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos o empresas. SIN EMBARGO, SÍ DEBES MOSTRAR LA LISTA DE CATEGORÍAS si el perfil está incompleto. 
+                    - IMPORTANTE: No abrumes al candidato. Si faltan varios datos, pideselos de uno en uno o máximo de dos en dos. 
+                    - Ejemplo: "Para poder asignarte un reclutador, por favor dime en cuál de estas áreas te interesa trabajar y cuál es tu municipio actual..."`;
                 } else {
                     const { getVacancies } = await import('../utils/storage.js');
                     const allVacancies = await getVacancies();

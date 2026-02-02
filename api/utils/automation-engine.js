@@ -300,7 +300,7 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
 
         logs.push(`🎯 [PROACTIVE] Candidato ${cand.nombre} CALIFICA. Nivel ${level}h (${Math.floor(hoursInactive)}h inactivo).`);
 
-        // Identify missing fields for Brenda's focus
+        // Identify missing fields for Brenda's focus (Limit to Top 2 for brevity)
         const missingFields = [];
         const standards = [
             { key: 'nombreReal', label: 'Nombre Completo' },
@@ -332,31 +332,30 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
             }
         }
 
+        // Limit to top 2 missing fields to avoid overwhelming the candidate
+        const prioritizedMissing = missingFields.slice(0, 2);
+
         const prompt = `
-[REGLAS DE PERSONALIDAD Y CONTEXTO]:
+[DNA DEL CANDIDATO]:
+- Nombre: ${cand.nombreReal || cand.nombre}
+- Datos que le faltan (PRIORIDAD): ${prioritizedMissing.join(', ')}
+
+[REGLAS DE PERSONALIDAD]:
 "${customPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic IA, un reclutador útil, humano y proactivo.'}"
 
-[CONTEXTO CRÍTICO]:
-- El candidato tiene el perfil INCOMPLETO.
-- Tu misión en este mensaje de ${level}h es conseguir los datos que faltan de forma muy breve.
-- DATOS QUE FALTAN: ${missingFields.join(', ')}.
+[REQUISITOS DE ESTILO INVIOLABLES]:
+1. BREVEDAD EXTREMA: El mensaje DEBE tener máximo 2 líneas de texto. Prohibido escribir párrafos.
+2. ENFOQUE: Pregunta ÚNICAMENTE por estos 2 datos: ${prioritizedMissing.join(' y ')}. NO preguntes por nada más.
+3. PROHIBICIÓN TOTAL DE ASTERISCOS: No uses asteriscos (*) ni guiones (-) para listas o énfasis.
+4. LISTA CON CHECKS: Si mencionas opciones (como categorías), usa SOLO el check verde: ✅
+   ${categories.length > 0 ? `[CATEGORÍAS]:\n${categories.slice(0, 5).map(c => `✅ ${c}`).join('\n')}` : ''}
 
-[CATEGORÍAS OFICIALES DISPONIBLES]:
-${categories.map(cat => `✅ ${cat}`).join('\n')}
+[ESTRUCTURA DEL MENSAJE]:
+- Saludo corto con su nombre.
+- Pregunta directa por los 2 datos faltantes.
+- Despedida amigable de 1 palabra.
 
-[SALUDO]:
-${cand.nombreReal
-                ? `- Saludalo por su nombre (${cand.nombreReal}).`
-                : `- Saludo genérico amable (ej: "¡Hola!", "¡Qué tal!").`
-            }
-
-[INSTRUCCIONES DE ESTILO INVIOLABLES]:
-1. BREVEDAD EXTREMA: Máximo 2 o 3 líneas. 
-2. LISTA CON CHECKS: Si mencionas las categorías, DEBEN ir tal cual están escritas arriba (una por línea con su ✅).
-3. PROHIBICIÓN DE ASTERISCOS: NUNCA uses asteriscos (*) o guiones (-) para hacer listas.
-4. FORMATO WHATSAPP: El mensaje debe verse limpio, visual y moderno.
-
-Responde ÚNICAMENTE con el mensaje para el usuario:`;
+Responde ÚNICAMENTE con el mensaje de texto para WhatsApp (máximo 150 caracteres):`;
 
         try {
             const res = await model.generateContent(prompt);
