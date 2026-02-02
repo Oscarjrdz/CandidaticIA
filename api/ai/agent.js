@@ -41,6 +41,8 @@ IMPORTANTE: TIENES PROHIBIDO USAR EL "Nombre WhatsApp" para saludar. Ese dato su
 REGLA DE ORO (MEMORIA): Eres el mismo asistente que habló con el candidato en el pasado. Revisa el historial y el [DNA DEL CANDIDATO].
 REGLA DE CAPTURA (IMPORTANTE): Si el "Nombre Real" dice "No proporcionado", DEBES preguntarle su nombre al candidato usando un saludo genérico como "Hola".
 REGLA DE ORO DE FILTRADO (CRÍTICA): TIENES PROHIBIDO ofrecer o dar detalles de vacantes (nombres, sueldos, ubicaciones) si el [ESTATUS PASO 1] es "INCOMPLETO".
+REGLA ANTI-EDAD: El sistema calcula la edad automáticamente. Tienes PROHIBIDO preguntar la edad. Si falta ese dato, pide la "Fecha de Nacimiento".
+REGLA DE ORO (ESTILO): NUNCA uses asteriscos (*). Si necesitas resaltar, usa Emojis.
 REGLA ANTI-ALUCINACIÓN (ESTRICTA): NO INVENTES VACANTES. Si el candidato pregunta por un puesto que NO aparece en la [BASE DE CONOCIMIENTO (DETALLE DE VACANTES)], responde que por el momento no contamos con esa posición disponible.
 `;
 
@@ -224,7 +226,7 @@ ${nextStep ? `PRÓXIMO PASO ("${nextStep.name}"): "${nextStep.aiConfig?.prompt |
             // 🏎️ [FERRARI DYNAMICS] - Fetch fields from Database/Redis
             let allFields = [
                 { value: 'nombreReal', label: 'Nombre Real' },
-                { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
+                { value: 'fechaNacimiento', label: 'Fecha de Nacimiento (REQUERIDO. No pidas la edad)' },
                 { value: 'municipio', label: 'Municipio' },
                 { value: 'categoria', label: 'Categoría' },
                 { value: 'tieneEmpleo', label: 'Tiene empleo' },
@@ -245,8 +247,8 @@ ${nextStep ? `PRÓXIMO PASO ("${nextStep.name}"): "${nextStep.aiConfig?.prompt |
 
             let dnaLines = allFields.map(f => `- ${f.label}: ${candidateData[f.value] || 'No proporcionado'}`).join('\n');
 
-            // --- 🚩 PASO 1 CALCULATION ---
-            const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria'];
+            // --- 🚩 PASO 1 CALCULATION (Synchronized with Iron-Clad Shield) ---
+            const coreFields = ['nombreReal', 'municipio', 'fechaNacimiento', 'categoria', 'tieneEmpleo', 'escolaridad'];
             let missingData = false;
             for (const field of coreFields) {
                 const val = (candidateData[field] || '').toLowerCase().trim();
@@ -344,6 +346,12 @@ ${dnaLines}
                 console.warn('⚠️ Failed to inject vacancies context:', vacErr);
             }
         } // Close if (candidateData)
+
+        // --- 🛡️ FINAL STYLING AUDIT (HIGHEST PRIORITY) ---
+        systemInstruction += `\n\n[REGLAS DE ORO DE ÚLTIMO MOMENTO]:
+1. PROHIBIDO EL USO DE ASTERISCOS (*). No los uses para resaltar nada. Usa Emojis.
+2. PROHIBIDO PREGUNTAR LA EDAD. Si falta la fecha, pide "Fecha de Nacimiento".
+3. BREVEDAD WHATSAPP: Mensajes de máximo 3 líneas. Pide los datos de uno en uno.\n`;
 
         if (!apiKey) return 'ERROR: No API Key found';
 
