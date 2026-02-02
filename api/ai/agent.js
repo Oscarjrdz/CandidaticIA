@@ -194,9 +194,12 @@ Si el candidato pregunta por trabajo, responde que primero necesitas completar s
 [REGLA DE DISCIPLINA]: 
 1. Limítate ESTRICTAMENTE a lo que pide la directiva arriba mencionada.
 2. NO des información de la vacante (sueldo, empresa, etc.) si la directiva no lo pide.
-3. Si el candidato te da la información solicitada o acepta la invitación, DEBES incluir el tag [MOVE] en tu respuesta para que el sistema lo avance.
-4. Este tag [MOVE] será invisible para el candidato, úsalo como un comando interno.
-\n[REGLA DE TRANSICIÓN]: Si el objetivo se cumple, incluye [MOVE]. Próximo paso: "${nextStep?.name || 'Siguiente'}".\n`;
+3. Si el objetivo de este paso se cumple, DEBES incluir el tag {move} en tu respuesta.
+4. TRANSICIÓN SUAVE: Si incluyes {move}, tu respuesta debe empezar con un emoji confirmando el éxito (ej: 👍, ✅, ¡Excelente!) y continuar INMEDIATAMENTE con el siguiente tema.
+
+[COMANDO DE MOVIMIENTO]: Si el objetivo se cumple, incluye {move} o [move].
+${nextStep ? `PRÓXIMO PASO ("${nextStep.name}"): "${nextStep.aiConfig?.prompt || 'Continúa la charla de forma natural'}"` : 'No hay más pasos.'}
+`;
                             } else {
                                 // Tapón Inteligente (Wait Message) logic
                                 waitMessage = currentStep.aiConfig?.waitMessage || '';
@@ -374,7 +377,8 @@ ${dnaLines}
         let responseText = responseTextRaw;
 
         // --- 🏎️ [DECISION ENGINE: AUTO-TRANSITION] ---
-        if (candidateData.projectMetadata?.projectId && responseText.includes('[MOVE]')) {
+        const moveTagFound = responseTextRaw.match(/\[MOVE\]|\{MOVE\}/gi);
+        if (candidateData.projectMetadata?.projectId && moveTagFound) {
             try {
                 const { getProjectById, moveCandidateStep } = await import('../utils/storage.js');
                 const project = await getProjectById(candidateData.projectMetadata.projectId);
@@ -401,8 +405,8 @@ ${dnaLines}
             }
         }
 
-        // Final Clean up: Remove any remaining [MOVE] or other internal tags from candidate visibility
-        responseText = responseText.replace(/\[MOVE\]/gi, '').trim();
+        // Final Clean up: Remove any remaining [MOVE] or {move} or other internal tags from candidate visibility
+        responseText = responseText.replace(/\[MOVE\]|\{MOVE\}/gi, '').trim();
 
         // Delivery
         const config = await getUltraMsgConfig();

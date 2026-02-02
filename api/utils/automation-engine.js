@@ -531,8 +531,22 @@ REGLAS DE ORO:
                     let response = result.response.text();
 
                     // TRATAMIENTO DE LA RESPUESTA (FILTROS)
+                    const moveTagFound = response.match(/\[MOVE\]|\{MOVE\}/gi);
+                    const cleanResponse = response.replace(/\[MOVE\]|\{MOVE\}/gi, '').trim();
+
                     // Send WhatsApp (Clean)
-                    await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, response);
+                    await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, cleanResponse);
+
+                    // AUTO-MOVE LOGIC (Outbound)
+                    if (moveTagFound) {
+                        const { moveCandidateStep } = await import('./storage.js');
+                        const currentIndex = proj.steps.findIndex(s => s.id === step.id);
+                        const nextStep = proj.steps[currentIndex + 1];
+                        if (nextStep) {
+                            logs.push(`🚀 [PIPELINE] Autómata movió a ${cand.nombre} al siguiente paso: ${nextStep.name}`);
+                            await moveCandidateStep(proj.id, cand.id, nextStep.id);
+                        }
+                    }
 
                     // CRITICAL: Update candidate timestamps
                     const { updateCandidate } = await import('./storage.js');
