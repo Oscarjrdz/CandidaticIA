@@ -44,6 +44,11 @@ export default async function handler(req, res) {
                 return res.status(200).send('duplicate_ignored');
             }
 
+            // IGNORE OUTGOING MESSAGES (Avoid loops/self-replies)
+            if (messageData.fromMe || messageData.from_me) {
+                return res.status(200).send('from_me_ignored');
+            }
+
             try {
                 // --- ADMIN COMMANDS & FILTERS ---
                 // [Omitted for brevity in this replacement chunk, but keeping original logic flow]

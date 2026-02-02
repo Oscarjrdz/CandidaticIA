@@ -488,26 +488,13 @@ REGLAS DE ORO:
                     let response = result.response.text();
 
                     // TRATAMIENTO DE LA RESPUESTA (FILTROS)
-                    let shouldMove = false;
-                    if (response.includes('[MOVE]')) {
-                        shouldMove = true;
-                        response = response.replace(/\[MOVE\]/gi, '').trim();
-                    }
-
                     // Send WhatsApp (Clean)
                     await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, response);
 
                     // Mark as processed (Outbound)
                     await redis.set(metaKey, 'true', 'EX', 3600 * 24 * 30); // 30 days expiry
 
-                    // If Brenda said [MOVE], trigger transition
-                    if (shouldMove && nextStep) {
-                        const { moveCandidateStep } = await import('./storage.js');
-                        await moveCandidateStep(proj.id, cand.id, nextStep.id);
-                        logs.push(`✅ [PIPELINE] Mensaje enviado y candidato movido a "${nextStep.name}".`);
-                    } else {
-                        logs.push(`✅ [PIPELINE] Mensaje enviado a ${cand.nombre}.`);
-                    }
+                    logs.push(`✅ [PIPELINE] Mensaje enviado a ${cand.nombre}.`);
 
                     // Log action in history
                     const { saveMessage } = await import('./storage.js');
@@ -516,7 +503,7 @@ REGLAS DE ORO:
                         content: response,
                         type: 'text',
                         timestamp: new Date().toISOString(),
-                        meta: { pipelineStep: step.id, projectId: proj.id, autoMoved: shouldMove }
+                        meta: { pipelineStep: step.id, projectId: proj.id }
                     });
 
                     totalSent++;
