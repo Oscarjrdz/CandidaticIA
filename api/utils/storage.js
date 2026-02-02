@@ -184,12 +184,11 @@ export const deleteAuthToken = async (phone) => {
 export const isProfileComplete = (c, customFields = []) => {
     if (!c) return false;
 
-    // 1. Standard Fields Check
+    // 1. Standard Fields Check (High Priority)
     const standards = [
         { key: 'nombreReal', invalidValue: 'proporcionado' },
         { key: 'municipio', invalidValue: 'proporcionado' },
         { key: 'fechaNacimiento', invalidValue: 'proporcionada' },
-        { key: 'genero', invalidValue: 'proporcionado' },
         { key: 'categoria', invalidValue: 'proporcionado' },
         { key: 'tieneEmpleo', invalidValue: 'proporcionado' },
         { key: 'escolaridad', invalidValue: 'proporcionado' }

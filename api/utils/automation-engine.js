@@ -306,7 +306,6 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
             { key: 'nombreReal', label: 'Nombre Completo' },
             { key: 'municipio', label: 'Municipio/Ubicación' },
             { key: 'fechaNacimiento', label: 'Fecha de Nacimiento' },
-            { key: 'genero', label: 'Género' },
             { key: 'categoria', label: 'Categoría/Puesto de interés' },
             { key: 'tieneEmpleo', label: 'Si tiene empleo actual' },
             { key: 'escolaridad', label: 'Nivel de Escolaridad' }

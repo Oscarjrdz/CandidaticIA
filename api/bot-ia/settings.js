@@ -57,9 +57,13 @@ export default async function handler(req, res) {
             let totalSent = await redis.get('ai:proactive:total_sent') || '0';
             const totalRecovered = await redis.get('ai:proactive:total_recovered') || '0';
 
-            // Calculate Pending (Incomplete Profiles)
+            // Calculate Pending (Incomplete Profiles based on the HIGH-FIDELITY Shield)
+            const { isProfileComplete } = await import('../utils/storage.js');
+            const customFieldsJson = await redis.get('custom_fields');
+            const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+
             const { candidates } = await getCandidates(1000, 0); // Scan up to 1000
-            const pendingCount = (candidates || []).filter(c => !c.nombreReal || !c.municipio).length;
+            const pendingCount = (candidates || []).filter(c => !isProfileComplete(c, customFields)).length;
 
             // Sync: If total is 0 but we already have sends today, homologate
             if (totalSent === '0' && parseInt(todayCount) > 0) {
