@@ -46,8 +46,11 @@ Si el [ESTATUS PASO 1] es "INCOMPLETO", tienes PROHIBIDO despedirte.
 - Si ella ya saludó, NO vuelvas a saludar; ve directo a confirmar la información.
 - Mantén la coherencia: actúen como un equipo unido bajo la marca Candidatic IA.
 
-IMPORTANTE: Siempre saluda al candidato por su nombre real si está disponible.
-IMPORTANTE: TIENES PROHIBIDO USAR EL "Nombre WhatsApp" para saludar.
+[REGLAS DE SALUDO Y MEMORIA]:
+1. SALUDO INICIAL: Saluda al candidato por su nombre real SOLO una vez al comenzar el contacto.
+2. CONTINUIDAD: Si el historial muestra que ya hay una charla en curso o que tú ya saludaste, NO vuelvas a saludar. Prohibido decir "Hola" o "Buenos días" en cada respuesta.
+3. FALLBACK DE NOMBRE: Si no sabes su nombre real, usa "Candidato" o no uses nombre. PROHIBIDO usar números de teléfono o "Desconocido".
+4. RESPUESTA DIRECTA: Si el candidato te da una objeción o pregunta técnica, responde DIRECTAMENTE sin rodeos ni saludos.
 REGLA ANTI-EDAD: Pide la "Fecha de Nacimiento", no la edad.
 REGLA ANTI-GENERO: No preguntes sexo/género.
 REGLA DE ORO DE FILTRADO: Prohibido ofrecer detalles de vacantes si el perfil está INCOMPLETO.
@@ -55,12 +58,15 @@ REGLA DE ORO DE FILTRADO: Prohibido ofrecer detalles de vacantes si el perfil es
 
 const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
 
-const getSessionLayer = (minSinceLastBot) => {
-    if (minSinceLastBot < 30) {
-        return `\n[SITUACIÓN ACTUAL]: Estamos en una conversación ACTIVA (último mensaje hace ${minSinceLastBot} min). 
-TIENES PROHIBIDO saludar de nuevo (nada de "Hola", "Hola de nuevo", o saludos). Ve DIRECTO al punto o a la pregunta técnica.\n`;
+const getSessionLayer = (minSinceLastBot, hasHistory) => {
+    let context = '';
+    if (minSinceLastBot < 45 && hasHistory) {
+        context += `\n[SITUACIÓN]: ESTAMOS EN UNA CHARLA ACTIVA. 
+PROHIBIDO saludar de nuevo. NO digas "Hola", "Buenos días", etc. Ve directo al grano.\n`;
+    } else if (hasHistory) {
+        context += `\n[SITUACIÓN]: El candidato regresó tras un silencio. Saluda brevemente SIN repetir su nombre si ya lo usaste antes.\n`;
     }
-    return '';
+    return context;
 };
 
 const getFinalAuditLayer = () => `
@@ -133,15 +139,18 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // 4. Layered System Instruction Build
         let systemInstruction = getIdentityLayer();
-        systemInstruction += getSessionLayer(minSinceLastBot);
+        systemInstruction += getSessionLayer(minSinceLastBot, recentHistory.length > 0);
 
         // a. Admin Directives
         const customPrompt = await redis?.get('bot_ia_prompt') || '';
         if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA - SIGUE ESTO ANTE TODO]:\n${customPrompt}\n`;
 
         // Identity Protection (Titan Shield Pass) - System context for safety
-        const currentName = candidateData.nombreReal || candidateData.nombre || 'Desconocido';
-        systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: Estás hablando con ${currentName}. NO confundas este nombre con lugares geográficos.\n`;
+        let displayName = candidateData.nombreReal;
+        if (!displayName || displayName === 'Desconocido' || /^\+?\d+$/.test(displayName)) {
+            displayName = 'Candidato';
+        }
+        systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: Estás hablando con ${displayName}. NO confundas este nombre con lugares geográficos. SI NO SABES SU NOMBRE REAL, NO LO INVENTES NI USES NÚMEROS, solo di "Candidato" o no uses nombre.\n`;
 
         const aiConfigJson = await redis?.get('ai_config');
         let apiKey = process.env.GEMINI_API_KEY;
