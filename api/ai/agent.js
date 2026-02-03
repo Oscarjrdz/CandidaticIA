@@ -8,6 +8,7 @@ import {
     auditProfile,
     getProjectById,
     getVacancyById,
+    getVacancies,
     recordAITelemetry
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
@@ -34,9 +35,10 @@ Para sonar natural y no robótico, varía siempre el inicio de tus mensajes con 
 - REGLA: Nunca uses el mismo conector en dos mensajes seguidos.
 
 [4. POLÍTICA DE PRIVACIDAD Y VACANTES]:
-- Si preguntan por vacantes en el Paso 1, evade con calidez.
+- Si el [ESTATUS PASO 1] es INCOMPLETO: Evade preguntas sobre vacantes con calidez.
 - FRASEO VARIADO (EVASIÓN): "Me encantaría platicarte, pero primero...", "Ayúdame con este dato rápido y te suelto toda la info", "Para darte la vacante ideal, primero necesito...", "Fíjate que para ver qué opciones te quedan mejor, primero ocupo...".
-- PROHIBIDO mencionar sueldos, empresas o nombres de puestos específicos en el Paso 1.
+- PROHIBIDO mencionar sueldos, empresas o nombres de puestos específicos si el estatus es INCOMPLETO.
+- Si el [ESTATUS PASO 1] es COMPLETO: Puedes dar detalles de las vacantes reales listadas en el contexto.
 `;
 
 const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
@@ -206,9 +208,17 @@ TIENES PROHIBIDO dar detalles de sueldos o empresas.NO listes vacantes aquí.
 [INSTRUCCIÓN OBLIGATORIA]: Presenta el listado de categorías EXACTAMENTE como se muestra abajo.NUNCA inventes o sugieras una categoría que no esté en esta lista.${catList}
 REGLA: Si el candidato menciona algo que no está aquí, dile amablemente que esas son nuestras áreas actuales.\n`;
         } else {
-            // SILOING: Even if profile is complete, we prefer the Project/Kanban prompt to handle vacancy details 
-            // unless the bot explicitly needs to answer a question about them.
-            systemInstruction += `\n[POLÍTICA DE INFORMACIÓN]: No bombardees con vacantes.Solo menciona nombres de puestos si es necesario para el flujo del proyecto.\n`;
+            // SILOING LIFTED: Profile is complete, we can show vacancies
+            const allVacancies = await getVacancies();
+            const activeVacancies = allVacancies.filter(v => v.status === 'active');
+
+            if (activeVacancies.length > 0) {
+                const vacList = activeVacancies.map(v => `- ${v.name}: ${v.description || 'Consulta detalles con nosotros.'}`).join('\n');
+                systemInstruction += `\n[LISTADO DE VACANTES DISPONIBLES]:\n${vacList}\n
+[INSTRUCCIÓN]: El candidato ya completó su perfil. Ahora SÍ puedes hablar de estas vacantes y responder sus dudas sobre ellas. Usa un tono de "vendedor" amigable para animarlo a postularse.\n`;
+            } else {
+                systemInstruction += `\n[POLÍTICA DE INFORMACIÓN]: El perfil está completo, pero no hay vacantes activas en este momento. Dile amablemente que pronto tendremos opciones para él.\n`;
+            }
         }
 
         systemInstruction += getFinalAuditLayer(audit.paso1Status === 'INCOMPLETO');
