@@ -70,6 +70,7 @@ const getFinalAuditLayer = () => `
 3. BREVEDAD WHATSAPP: Mensajes extremadamente cortos. Sin despedidas largas.\n`;
 
 export const processMessage = async (candidateId, incomingMessage) => {
+    const startTime = Date.now();
     try {
         const redis = getRedisClient();
 
@@ -114,7 +115,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 // Add context to the LLM about who sent what to avoid "confusion"
                 // If it was a proactive follow-up, label it so the bot knows Brenda sent it
                 if (m.meta?.proactiveLevel) {
-                    content = `[Lic. Brenda - Seguimiento Reclutamiento]: ${content}`;
+                    content = `[Mensaje de Lic. Brenda - Seguimiento Automático]: ${content}`;
                 }
 
                 return {
@@ -122,14 +123,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
                     parts: [{ text: content }]
                 };
             });
-
-        // Add a "Mental Note" for the LLM to reinforce identity and prevent "getting lost"
-        const currentName = candidateData.nombreReal || candidateData.nombre || 'Desconocido';
-        const mentalNote = `(Contexto Interno: El candidato se llama "${currentName}" y estás en una charla profesional de Candidatic IA. No lo confundas con ubicaciones.)`;
-
-        if (recentHistory.length > 0) {
-            recentHistory[recentHistory.length - 1].parts[0].text += `\n${mentalNote}`;
-        }
 
         const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-5).map(m => m.content);
         const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Nuevo contacto';
@@ -144,7 +137,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // a. Admin Directives
         const customPrompt = await redis?.get('bot_ia_prompt') || '';
-        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA]:\n${customPrompt}\n`;
+        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA - SIGUE ESTO ANTE TODO]:\n${customPrompt}\n`;
+
+        // Identity Protection (Titan Shield Pass) - System context for safety
+        const currentName = candidateData.nombreReal || candidateData.nombre || 'Desconocido';
+        systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: Estás hablando con ${currentName}. NO confundas este nombre con lugares geográficos.\n`;
 
         const aiConfigJson = await redis?.get('ai_config');
         let apiKey = process.env.GEMINI_API_KEY;
@@ -191,7 +188,11 @@ TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextS
 
         // d. Vacancy Silence/Detail Layer
         if (ignoreVacanciesGate || audit.paso1Status === 'INCOMPLETO') {
-            systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto. TIENES PROHIBIDO dar detalles de sueldos o empresas. Pide el SIGUIENTE dato faltante (SOLO UNO): ${audit.missingLabels[0]}.\n`;
+            const categoriesData = await redis?.get('candidatic_categories');
+            const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
+            const catList = categories.length > 0 ? `\n[CATEGORÍAS DISPONIBLES]:\n${categories.slice(0, 10).map(c => `✅ ${c}`).join('\n')}` : '';
+
+            systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto. TIENES PROHIBIDO dar detalles de sueldos o empresas. Pide el SIGUIENTE dato faltante (SOLO UNO): ${audit.missingLabels[0]}.${catList}\n`;
         } else {
             const activeVacancies = (await getVacancies()).filter(v => v.active || v.status === 'active');
             if (activeVacancies.length > 0) {
@@ -212,7 +213,6 @@ TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextS
                 const model = genAI.getGenerativeModel({ model: mName, systemInstruction });
                 const chat = model.startChat({ history: recentHistory });
 
-                // Add a timeout to the inference call (25s)
                 const inferencePromise = chat.sendMessage(userParts);
                 const timeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error('TIMEOUT')), 25000)
@@ -220,7 +220,6 @@ TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextS
 
                 result = await Promise.race([inferencePromise, timeoutPromise]);
                 if (result) {
-                    // Record Telemetry
                     const duration = Date.now() - startTime;
                     const tokens = result.response?.usageMetadata?.totalTokenCount || 0;
                     recordAITelemetry({
@@ -253,30 +252,8 @@ TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextS
         responseText = responseText.replace(/\*/g, '');
 
         // --- 🔎 AGENTIC REFLECTION (TITAN PASS 2) ---
-        // Ultra-fast "Audit" pass to ensure strict adherence to Golden Rules
-        try {
-            const auditModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-            const auditPrompt = `
-Eres el Auditor de Calidad de Candidatic IA. Tu tarea es pulir el mensaje de tu compañero para que sea PERFECTO.
-
-REGLAS DE ORO:
-1. PROHIBIDO ASTERISCOS: Si hay, quítalos.
-2. SOLO UN DATO: Si el mensaje pregunta dos cosas, quédate solo con la más importante.
-3. CONCISIÓN: Si el mensaje tiene más de 3 líneas, redúcelo a 2.
-4. TONO: Humano y amigable.
-
-MENSAJE A AUDITAR: "${responseText}"
-
-Responde ÚNICAMENTE con el mensaje pulido:`;
-
-            const auditResult = await auditModel.generateContent(auditPrompt);
-            const polishedText = auditResult.response.text().replace(/\*/g, '').trim();
-            if (polishedText && polishedText.length > 5) {
-                responseText = polishedText;
-            }
-        } catch (auditErr) {
-            console.warn('⚠️ Reflection pass failed, using original response.');
-        }
+        // DEPRECATED: Restoring personality over restrictiveness
+        /* Agentic reflection removed to favor admin prompt personality */
 
         const moveTagFound = responseText.match(/\[MOVE\]|\{MOVE\}/gi);
         if (moveTagFound && candidateData.projectMetadata?.projectId) {
