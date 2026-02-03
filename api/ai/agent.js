@@ -172,7 +172,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
 ${audit.dnaLines}
-- Categorías: ${themes || 'General'}
+- Temas recientes: ${themes || 'Nuevo contacto'}
 `;
 
         // c. Project/Kanban Layer
@@ -200,14 +200,19 @@ TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nex
         if (ignoreVacanciesGate || audit.paso1Status === 'INCOMPLETO') {
             const categoriesData = await redis?.get('candidatic_categories');
             const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
-            const catList = categories.length > 0
-                ? `\n[LISTADO DE CATEGORÍAS REALES - NO INVENTAR]: \n${categories.map(c => `✅ ${c}`).join('\n')} \n`
-                : '';
 
-            systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto o falta confirmación. 
-TIENES PROHIBIDO dar detalles de sueldos o empresas.NO listes vacantes aquí.
-[INSTRUCCIÓN OBLIGATORIA]: Presenta el listado de categorías EXACTAMENTE como se muestra abajo.NUNCA inventes o sugieras una categoría que no esté en esta lista.${catList}
-REGLA: Si el candidato menciona algo que no está aquí, dile amablemente que esas son nuestras áreas actuales.\n`;
+            let catInstruction = '';
+            if (categories.length > 0) {
+                catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES - NO INVENTES OTRAS]:\n${categories.map(c => `✅ ${c}`).join('\n')}
+REGLA: Usa ÚNICAMENTE las categorías de esta lista. Si el usuario pregunta por otra cosa, dile que hoy solo tenemos estas áreas disponibles.`;
+            } else {
+                catInstruction = `\n[AVISO]: No hay categorías cargadas en el sistema aún. 
+REGLA: NO INVENTES CATEGORÍAS. Dile al usuario que estamos actualizando nuestras vacantes y pregúntale en qué área le gustaría trabajar para anotarlo.`;
+            }
+
+            systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto. 
+TIENES PROHIBIDO dar detalles de sueldos o empresas. 
+${catInstruction}\n`;
         } else {
             // PROFILE COMPLETE: Handoff Mode
             systemInstruction += `\n[OBJETIVO CUMPLIDO - PERFIL COMPLETO]:
