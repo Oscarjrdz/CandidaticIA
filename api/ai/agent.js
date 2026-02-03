@@ -150,8 +150,9 @@ export const processMessage = async (candidateId, incomingMessage) => {
         if (!displayName || displayName === 'Desconocido' || /^\+?\d+$/.test(displayName)) {
             displayName = null;
         }
-        const identityContext = displayName ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún, no lo uses.';
-        systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos.SI NO SABES EL NOMBRE, NO LO INVENTES.\n`;
+        const isNameBoilerplate = !displayName || /proporcionado|desconocido|luego|después|privado|\+/i.test(String(displayName));
+        const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. DEBES OBTENERLO ANTES DE TERMINAR.';
+        systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
         const aiConfigJson = await redis?.get('ai_config');
         let apiKey = process.env.GEMINI_API_KEY;
@@ -213,12 +214,16 @@ REGLA: NO INVENTES CATEGORÍAS. Dile al usuario que estamos actualizando nuestra
             systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto. 
 TIENES PROHIBIDO dar detalles de sueldos o empresas. 
 ${catInstruction}\n`;
-        } else {
+        } else if (!isNameBoilerplate) {
             // PROFILE COMPLETE: Handoff Mode
             systemInstruction += `\n[OBJETIVO CUMPLIDO - PERFIL COMPLETO]:
 1. Informa al candidato que ya tenemos su información completa.
 2. Dile que revisaremos nuestro sistema para ver qué opciones encajan con su perfil y que nos pondremos en contacto con él muy pronto.
 3. **PROHIBIDO MENCIONAR VACANTES ESPECÍFICAS, SUELDOS O EMPRESAS**. Mantén el misterio profesional hasta el contacto humano.\n`;
+        } else {
+            // PROFILE SAYS COMPLETE BUT NAME IS JUNK
+            systemInstruction += `\n[ALERTA]: El sistema dice que el perfil está completo, pero el NOMBRE parece basura o está ausente.
+REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
         }
 
         systemInstruction += getFinalAuditLayer(audit.paso1Status === 'INCOMPLETO', audit.missingLabels);

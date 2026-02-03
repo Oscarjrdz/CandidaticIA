@@ -224,7 +224,16 @@ export const auditProfile = (c, customFields = []) => {
             val === 'n/a' ||
             val === 'na' ||
             val === 'ninguno' ||
-            val === 'none';
+            val === 'none' ||
+            val.length < 2 ||
+            val.includes('luego') ||
+            val.includes('después') ||
+            val.includes('no lo se') ||
+            val.includes('no se') ||
+            val.includes('para que') ||
+            val.includes('porque quieres') ||
+            val.includes('no te') ||
+            val.includes('privado');
 
         if (isInvalid) {
             missingLabels.push(field.label);
