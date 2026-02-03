@@ -88,6 +88,7 @@ export async function intelligentExtract(candidateId, historyText) {
         // 3. Build Dynamic Schema and Instructions
         const schema = {
             thought_process: "Paragraph explaining the reasoning behind the extraction",
+            conceptual_summary: "A brief, 1-sentence density summary of the candidate's skills, attitude, and tools mentioned (e.g., 'Experienced welder using TIG, mentions high availability but lacks formal cert.')",
             data: {}
         };
         let extractionInstructions = "";
@@ -163,6 +164,7 @@ ${JSON.stringify(schema, null, 2)}
 
         const extracted = extractedEnvelope.data || {};
         const thoughtProcess = extractedEnvelope.thought_process || "No reasoning provided";
+        const conceptualSummary = extractedEnvelope.conceptual_summary || "";
 
         // 3. Process and refine updates
         const updateData = {};
@@ -205,6 +207,11 @@ ${JSON.stringify(schema, null, 2)}
                 console.warn(`⚠️ [Viper] Error cleaning field ${rule.field}:`, err.message);
                 updateData[rule.field] = val; // Always save raw if cleaning crashes
             }
+        }
+
+        // Add Conceptual Summary to metadata for high-performance search
+        if (conceptualSummary) {
+            updateData.chat_summary = conceptualSummary;
         }
 
         // Apply updates if any

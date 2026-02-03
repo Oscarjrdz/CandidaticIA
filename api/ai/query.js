@@ -82,38 +82,29 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `
-Eres un experto en extracción de datos para un CRM de reclutamiento (Candidatic). 
-Tu tarea es convertir una consulta en lenguaje natural en un objeto JSON de filtros lógicos.
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v2]
+Eres el Motor de Relevancia de Candidatic IA (Nivel Google/CTO). 
+Tu tarea es convertir una consulta en lenguaje natural en un JSON de búsqueda semántica.
 
-Campos disponibles en la base de datos:
+[REGLAS DE RELEVANCIA]:
+1. INTENCIÓN SEMÁNTICA: Si el usuario busca un puesto, expande mentalmente a sinónimos. Ejemplo: "ventas" -> incluye keywords como "comercial", "ventas", "prospección", "atención al cliente".
+2. PRIORIDAD DE CAMPOS: 
+   - Nombres de personas -> 'nombreReal'.
+   - Ciudades -> 'municipio'.
+   - Puestos -> 'categoria'.
+3. DESAMBIGUACIÓN (CRÍTICO): Oscar es el reclutador. Si la búsqueda es "oscar", busca candidatos con ese nombre, NUNCA devuelvas al reclutador.
+4. KEYWORDS DE PERFIL: Usa 'keywords' para habilidades técnicas (Python, Excel), herramientas (Soldadura TIG) o rasgos psicológicos (responsable, puntual).
+
+[BASE DE DATOS]:
 ${allFields.map(f => `- ${f.value} (${f.label})`).join('\n')}
 
-IMPORTANTE: El campo 'edad' NO existe directamente, pero puedes pedirlo en 'filters' y lo calcularemos desde 'fechaNacimiento'.
-
-Reglas:
-1. Devuelve SIEMPRE un JSON válido. No incluyas explicaciones fuera del JSON.
-2. Filtros: Usa el campo 'filters' para criterios técnicos.
-3. Operadores: Si el usuario pide "mayor a", "menor que", "más de", usa un objeto con { "op": ">", "val": valor }. 
-   Operadores permitidos: ">", "<", ">=", "<=", "==", "contains".
-4. Edad: Si piden "más de 40 años", usa { "filters": { "edad": { "op": ">", "val": 40 } } }.
-5. Keywords: Usa 'keywords' para conceptos abstractos o habilidades (ej: "React", "buena actitud", "responsable") que buscaremos en el chat.
-6. Si menciona una ciudad, usa "municipio". 
-7. Si menciona un puesto (ej: "Ingeniero", "Ventas"), usa "categoria".
-8. Si pregunta si "tiene empleo", "trabaja actualmente" o "desempleado":
-   - Usa el campo 'tieneEmpleo'.
-   - Los valores típicos son "Sí" (para tiene empleo) o "No" (para desempleado).
-   - Ejemplo: "que tenga empleo" -> { "filters": { "tieneEmpleo": "Sí" } }
-   - Ejemplo: "sin trabajo" -> { "filters": { "tieneEmpleo": "No" } }
-
-Estructura del JSON:
 {
   "filters": { 
     "municipio": "Monterrey", 
     "edad": { "op": ">", "val": 30 } 
   },
-  "keywords": ["React", "liderazgo"],
-  "explanation": "Busco candidatos de Monterrey mayores de 30 que mencionen React o liderazgo."
+  "keywords": ["React", "liderazgo", "frontend"],
+  "explanation": "Busco expertos de Monterrey con experiencia en liderazgo y desarrollo frontend."
 }
 
 Consulta del usuario: "${query}"
@@ -146,12 +137,12 @@ Consulta del usuario: "${query}"
                 break;
             } catch (e) {
                 lastError = e.message;
-                console.warn(`⚠️ [AI Query] ${mName} failed:`, e.message);
+                console.warn(`⚠️[AI Query] ${mName} failed: `, e.message);
             }
         }
 
         if (!successModel) {
-            throw new Error(`Ningún modelo respondió (probados: ${modelsToTry.join(', ')}). Último error: ${lastError}`);
+            throw new Error(`Ningún modelo respondió(probados: ${modelsToTry.join(', ')}).Último error: ${lastError} `);
         }
 
         const response = await result.response;
@@ -160,7 +151,7 @@ Consulta del usuario: "${query}"
         // Limpiar el texto si Gemini devuelve markdown ```json ... ```
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-            throw new Error(`La IA no devolvió un JSON válido. Respuesta: ${text}`);
+            throw new Error(`La IA no devolvió un JSON válido.Respuesta: ${text} `);
         }
 
         const aiResponse = JSON.parse(jsonMatch[0]);
@@ -218,7 +209,7 @@ Consulta del usuario: "${query}"
                     if (parts.length === 3) {
                         // Asumimos DD-MM-YYYY si el año está al final
                         if (parts[2].length === 4) {
-                            birthDate = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                            birthDate = new Date(`${parts[2]} -${parts[1]} -${parts[0]} `);
                         }
                     }
                 }
@@ -288,17 +279,11 @@ Consulta del usuario: "${query}"
                     // 1. Coincidencia directa en el campo asignado
                     if (normalizedCandidateVal.includes(searchStr)) return true;
 
-                    // 2. FALLBACK GLOBAL: Si no coincide en su campo, buscar en CUALQUIER otra columna
-                    // Esto evita errores si la IA asignó mal la columna (ej: Municipio vs Notas)
-                    const matchesAnyField = Object.entries(candidate).some(([cKey, cVal]) => {
-                        // Evitar recursión infinita o campos no-string irrelevantes
-                        if (cKey === 'id' || cKey === 'whatsapp') return false;
-                        return normalizeString(cVal).includes(searchStr);
-                    });
+                    // 2. FALLBACK GLOBAL: Only if the IA specifically didn't target a field (less common now)
+                    // or as a very last resort if we want fuzzy matching.
+                    // For now, let's keep it strict if a key was assigned.
+                    if (candidateVal && normalizedCandidateVal.includes(searchStr)) return true;
 
-                    if (matchesAnyField) return true;
-
-                    // Fallback to Operator Logic moved up
                     return false;
 
                     return false;
@@ -306,13 +291,16 @@ Consulta del usuario: "${query}"
             });
         }
 
-        // B. Búsqueda Profunda (Keywords en Chat + Metadatos)
+        // B. Búsqueda Profunda (Titan Search Phase 1: Indexed Keywords)
         if (aiResponse.keywords && aiResponse.keywords.length > 0) {
             const finalResults = [];
+            const keywordsLower = aiResponse.keywords.map(kw => kw.toLowerCase());
+
             for (const candidate of filtered) {
-                // 1. Buscar en metadatos (todos los campos)
-                const metadataMatch = Object.values(candidate).some(val =>
-                    aiResponse.keywords.some(kw => String(val).toLowerCase().includes(kw.toLowerCase()))
+                // 🛠️ Optimization 1: Check Metadata (Fastest)
+                const metadataValues = Object.values(candidate).map(v => String(v).toLowerCase());
+                const metadataMatch = keywordsLower.some(kw =>
+                    metadataValues.some(val => val.includes(kw))
                 );
 
                 if (metadataMatch) {
@@ -320,11 +308,27 @@ Consulta del usuario: "${query}"
                     continue;
                 }
 
-                // 2. Buscar en el chat
-                const messages = await getMessages(candidate.id);
-                const chatText = messages.map(m => m.content).join(' ').toLowerCase();
+                // 🛠️ Optimization 2: Check Chat Summary (Titan Index - Medium)
+                if (candidate.chat_summary) {
+                    const summaryMatch = keywordsLower.some(kw =>
+                        candidate.chat_summary.toLowerCase().includes(kw)
+                    );
+                    if (summaryMatch) {
+                        finalResults.push(candidate);
+                        continue;
+                    }
+                }
 
-                const chatMatch = aiResponse.keywords.some(kw => chatText.includes(kw.toLowerCase()));
+                // 🛠️ Optimization 3: Deep Message Scan (Safety Fallback - Slowest)
+                // Only do this if we haven't found a match yet and the candidate has messages
+                const messages = await getMessages(candidate.id, 50);
+                const userChatText = messages
+                    .filter(m => m.from === 'user')
+                    .map(m => m.content)
+                    .join(' ')
+                    .toLowerCase();
+
+                const chatMatch = keywordsLower.some(kw => userChatText.includes(kw));
 
                 if (chatMatch) {
                     finalResults.push(candidate);
@@ -336,6 +340,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
+            version: "Titan 2.1",
             candidates: filtered.map(c => ({
                 ...c,
                 edad: calculateAge(c.fechaNacimiento)
@@ -347,7 +352,7 @@ Consulta del usuario: "${query}"
         console.error('❌ AI Query ERROR:', error);
         return res.status(500).json({
             success: false,
-            error: `API ERROR: ${error.message}`,
+            error: `API ERROR: ${error.message} `,
             details: error.stack
         });
     }
