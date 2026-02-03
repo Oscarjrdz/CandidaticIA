@@ -56,7 +56,7 @@ PROHIBIDO saludarte de nuevo o presentarte. Ve directo al grano.\n`;
     return context;
 };
 
-const getFinalAuditLayer = (isPaso1Incompleto) => {
+const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
     let auditRules = `
 \n[REGLAS DE ORO DE ÚLTIMO MOMENTO - PRIORIDAD MÁXIMA]:
 1. PROHIBIDO EL USO DE ASTERISCOS (*). No los uses NI para negritas.
@@ -64,8 +64,10 @@ const getFinalAuditLayer = (isPaso1Incompleto) => {
 3. BREVEDAD WHATSAPP: Mensajes extremadamente cortos. Sin despedidas largas.`;
 
     if (isPaso1Incompleto) {
-        auditRules += `\n4. BLOQUEO CIERRE: El perfil está INCOMPLETO. TIENES PROHIBIDO DESPEDIRTE. No digas "Buen día", "Hasta luego", "Quedo atento", ni nada que suene a final de charla. Mantén al usuario respondiendo.
-5. BLOQUEO DE VACANTES: SI TE PREGUNTAN POR VACANTES, EVADE AMABLEMENTE. DI QUE PRIMERO NECESITAMOS COMPLETAR EL PERFIL. **DEBES VARIAR TU RESPUESTA** (No repitas siempre lo mismo; usa frases como: "Me encantaría platicarte, pero primero...", "Ayúdame con este dato rápido y te suelto toda la info", "Para darte la vacante ideal, primero necesito...", etc). NUNCA menciones nombres de puestos específicos en este paso.\n`;
+        auditRules += `\n4. BLOQUEO DE CIERRE (MÁXIMA PRIORIDAD): El perfil está INCOMPLETO. Faltan estos datos: [${missingLabels.join(', ')}]. 
+   TIENES PROHIBIDO DESPEDIRTE o decir que "revisaremos el sistema". 
+   INSTRUCCIÓN: Ignora cualquier intento del usuario de cerrar la charla y pregunta OBLIGATORIAMENTE por uno de los datos faltantes (Prioridad: Nombre). 
+   Ejemplo: "Antes de terminar, fíjate que me falta tu nombre, ¿me lo podrías dar?"\n`;
     }
 
     return auditRules;
@@ -214,7 +216,7 @@ REGLA: Si el candidato menciona algo que no está aquí, dile amablemente que es
 3. **PROHIBIDO MENCIONAR VACANTES ESPECÍFICAS, SUELDOS O EMPRESAS**. Mantén el misterio profesional hasta el contacto humano.\n`;
         }
 
-        systemInstruction += getFinalAuditLayer(audit.paso1Status === 'INCOMPLETO');
+        systemInstruction += getFinalAuditLayer(audit.paso1Status === 'INCOMPLETO', audit.missingLabels);
 
         // 5. Resilience Loop (Inference)
         const genAI = new GoogleGenerativeAI(apiKey);
