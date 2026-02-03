@@ -8,7 +8,6 @@ import {
     auditProfile,
     getProjectById,
     getVacancyById,
-    getVacancies,
     recordAITelemetry
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
@@ -81,11 +80,19 @@ PROHIBIDO saludarte de nuevo o presentarte. Ve directo al grano.\n`;
     return context;
 };
 
-const getFinalAuditLayer = () => `
+const getFinalAuditLayer = (isPaso1Incompleto) => {
+    let auditRules = `
 \n[REGLAS DE ORO DE ÚLTIMO MOMENTO - PRIORIDAD MÁXIMA]:
 1. PROHIBIDO EL USO DE ASTERISCOS (*). No los uses NI para negritas.
 2. PREGUNTA ÚNICAMENTE UN (1) DATO. Si pides dos cosas, fallarás la misión. Ejemplo: "Dime tu municipio" (Correcto), "Dime tu municipio y edad" (INCORRECTO).
-3. BREVEDAD WHATSAPP: Mensajes extremadamente cortos. Sin despedidas largas.\n`;
+3. BREVEDAD WHATSAPP: Mensajes extremadamente cortos. Sin despedidas largas.`;
+
+    if (isPaso1Incompleto) {
+        auditRules += `\n4. BLOQUEO DE VACANTES: AUNQUE TENGAS INFORMACIÓN SOBRE VACANTES EN LAS DIRECTIVAS, TIENES PROHIBIDO MENCIONARLAS. Di que primero debemos completar el perfil antes de ver opciones. NUNCA menciones nombres de puestos, sueldos o empresas en este mensaje.\n`;
+    }
+
+    return auditRules;
+};
 
 export const processMessage = async (candidateId, incomingMessage) => {
     const startTime = Date.now();
@@ -228,7 +235,7 @@ REGLA: Si el candidato menciona algo que no está aquí, dile amablemente que es
             systemInstruction += `\n[POLÍTICA DE INFORMACIÓN]: No bombardees con vacantes. Solo menciona nombres de puestos si es necesario para el flujo del proyecto.\n`;
         }
 
-        systemInstruction += getFinalAuditLayer();
+        systemInstruction += getFinalAuditLayer(audit.paso1Status === 'INCOMPLETO');
 
         // 5. Resilience Loop (Inference)
         const genAI = new GoogleGenerativeAI(apiKey);
