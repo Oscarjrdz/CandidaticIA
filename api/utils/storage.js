@@ -181,23 +181,39 @@ export const deleteAuthToken = async (phone) => {
  * ==========================================
  */
 // --- 🛡️ Quality Shield: Iron-Clad Completion Check ---
-export const isProfileComplete = (c, customFields = []) => {
-    if (!c) return false;
 
-    // 1. Standard Fields Check (High Priority)
-    const standards = [
-        { key: 'nombreReal', invalidValue: 'proporcionado' },
-        { key: 'municipio', invalidValue: 'proporcionado' },
-        { key: 'fechaNacimiento', invalidValue: 'proporcionada' },
-        { key: 'categoria', invalidValue: 'proporcionado' },
-        { key: 'tieneEmpleo', invalidValue: 'proporcionado' },
-        { key: 'escolaridad', invalidValue: 'proporcionado' }
-    ];
+/**
+ * Standard Fields that define a "Complete" profile.
+ * Synchronized across the entire platform.
+ */
+export const CORE_REQUIRED_FIELDS = [
+    { value: 'nombreReal', label: 'Nombre Real', invalidValue: 'proporcionado' },
+    { value: 'municipio', label: 'Municipio', invalidValue: 'proporcionado' },
+    { value: 'fechaNacimiento', label: 'Fecha de Nacimiento', invalidValue: 'proporcionada' },
+    { value: 'categoria', label: 'Categoría', invalidValue: 'proporcionas' }, // Matches "No proporcionado" and "No proporcionada"
+    { value: 'tieneEmpleo', label: 'Tiene empleo', invalidValue: 'proporcionado' },
+    { value: 'escolaridad', label: 'Escolaridad', invalidValue: 'proporcionado' }
+];
 
-    for (const field of standards) {
-        const val = String(c[field.key] || '').toLowerCase().trim();
-        // Strict check for placeholders
-        const isPlaceholder = val.includes(field.invalidValue) ||
+/**
+ * Unified Auditor: The single source of truth for profile completion.
+ * @returns {Object} { isComplete, missingLabels, missingValues, dnaLines, paso1Status }
+ */
+export const auditProfile = (c, customFields = []) => {
+    if (!c) return { isComplete: false, missingLabels: [], missingValues: [], dnaLines: '', paso1Status: 'INCOMPLETO' };
+
+    const missingLabels = [];
+    const missingValues = [];
+    const dnaLinesArray = [];
+
+    // 1. Audit Core Fields
+    for (const field of CORE_REQUIRED_FIELDS) {
+        const rawVal = c[field.value];
+        const val = String(rawVal || '').toLowerCase().trim();
+
+        const isInvalid = !rawVal ||
+            val.includes(field.invalidValue) ||
+            val.includes('proporcionado') ||
             val === 'desconocido' ||
             val === 'consulta general' ||
             val === 'general' ||
@@ -206,22 +222,43 @@ export const isProfileComplete = (c, customFields = []) => {
             val === 'ninguno' ||
             val === 'none';
 
-        if (!c[field.key] || isPlaceholder) {
-            return false;
+        if (isInvalid) {
+            missingLabels.push(field.label);
+            missingValues.push(field.value);
         }
+
+        dnaLinesArray.push(`- ${field.label}: ${rawVal || 'No proporcionado'}`);
     }
 
-    // 2. Custom Fields Check (if any)
+    // 2. Audit Custom Fields
     if (customFields && customFields.length > 0) {
         for (const cf of customFields) {
-            const val = String(c[cf.value] || '').toLowerCase();
-            if (!c[cf.value] || val.includes('proporcionado')) {
-                return false;
+            const rawVal = c[cf.value];
+            const val = String(rawVal || '').toLowerCase().trim();
+            const isInvalid = !rawVal || val.includes('proporcionado');
+
+            if (isInvalid) {
+                missingLabels.push(cf.label || cf.value);
+                missingValues.push(cf.value);
             }
+            dnaLinesArray.push(`- ${cf.label || cf.value}: ${rawVal || 'No proporcionado'}`);
         }
     }
 
-    return true;
+    const isComplete = missingValues.length === 0;
+
+    return {
+        isComplete,
+        missingLabels,
+        missingValues,
+        dnaLines: dnaLinesArray.join('\n'),
+        paso1Status: isComplete ? 'COMPLETO' : 'INCOMPLETO'
+    };
+};
+
+export const isProfileComplete = (c, customFields = []) => {
+    const { isComplete } = auditProfile(c, customFields);
+    return isComplete;
 };
 
 // Native Redis Pagination (Page size 100)

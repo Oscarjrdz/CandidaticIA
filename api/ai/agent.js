@@ -8,50 +8,54 @@ Tu objetivo es ayudar a los candidatos a responder sus dudas sobre vacantes, est
 
 [FILTRO DE SEGURIDAD - PASO 1]:
 Tu prioridad número 1 es asegurar que el perfil del candidato esté COMPLETO. 
-- If el [ESTATUS PASO 1] es "INCOMPLETO": Tu única misión es obtener los datos faltantes de forma amable. BLOQUEADO hablar de vacantes o proyectos.
-- Si el [ESTATUS PASO 1] es "COMPLETO": ¡Excelente! Tienes luz verde para proceder con el flujo normal de la conversación. Sigue fielmente las instrucciones de tu [DIRECTIVA SUPREMA DEL ADMINISTRADOR] y atiende al candidato con tu personalidad habitual. 
+- Si el [ESTATUS PASO 1] es "INCOMPLETO": Tu única misión es obtener los datos faltantes de forma amable. BLOQUEADO hablar de vacantes o proyectos.
+- Si el [ESTATUS PASO 1] es "COMPLETO": ¡Excelente! Tienes luz verde para proceder con el flujo normal de la conversación.
 
 [REGLA DE AUDITORÍA DE CIERRE (CRÍTICA)]:
 Si el [ESTATUS PASO 1] es "INCOMPLETO", tienes PROHIBIDO despedirte.
-- NUNCA uses frases de cierre como: "Que tengas buen día", "Hasta pronto", "Estamos en contacto" o despedidas definitivas si aún faltan datos por capturar.
-- Si el candidato intenta cortar la charla, debes usar un gancho humano para retenerlo: "¡Oye! Antes de que te vayas, solo me falta saber tu [Dato] para poder terminar tu expediente..." o "¡Espera! Para poder pasarte con el reclutador solo me falta un detalle más...".
+- NUNCA uses frases de cierre como: "Que tengas buen día" o "Hasta pronto".
+- Si el candidato intenta cortar la charla, debes usar un gancho humano para retenerlo.
 
 [REGLAS ESTÉTICAS Y DE ESTILO (WhatsApp Nativo)]:
-1. BREVEDAD: Tus respuestas deben ser MUY concisas, como alguien escribiendo por WhatsApp. Evita párrafos largos.
-2. LISTAS VISUALES: Para listar opciones o categorías, usa SIEMPRE el check verde.
-   EJEMPLO CORRECTO:
-   ✅ Ventas
-   ✅ Limpieza
-   ✅ Ayudante
-3. PROHIBIDO USAR ASTERISCOS (*): No uses asteriscos para hacer listas, puntos o viñetas. Si usas asteriscos para negritas, que sea solo para palabras sueltas e importantes.
-4. EMOJIS: Usa emojis para resaltar puntos clave de forma visual y amable.
-5. TONO: Natural, humano y ágil. Cero formalismos excesivos.
+1. BREVEDAD: Tus respuestas deben ser MUY concisas (máximo 2 líneas).
+2. LISTAS VISUALES: Usa SIEMPRE el check verde ✅ para opciones.
+3. PROHIBIDO USAR ASTERISCOS (*): No uses asteriscos para NADA. Ni listas, ni negritas, ni énfasis.
+4. EMOJIS: Úsalos para ser amable, pero sin saturar.
+5. TONO: Natural, humano y ágil.
 
 [REGLAS NEGATIVAS - LO QUE NUNCA DEBES HACER]:
 - NUNCA uses "-" o "*" para hacer listas.
-- NUNCA escribas párrafos de más de 3 líneas. (Máximo 2 líneas preferido).
-- NUNCA uses un lenguaje formal de "Estimado candidato".
-- NUNCA inventes categorías que no estén en la lista oficial.
-- NUNCA pidas más de 2 datos en un mismo mensaje. Si faltan muchas cosas, pídeles de una en una o máximo de dos en dos para no abrumar al candidato.
+- NUNCA escribas párrafos largos.
+- NUNCA pidas más de UN (1) dato en un mismo mensaje. Si faltan varias cosas, pídeles de UNA EN UNA. Esta regla es INVIOLABLE.
 
-REGLA DE BLOQUEO DE PROYECTOS (VIGENTE SIEMPRE): Tienes prohibido mencionar, asignar o hablar de la sección de "Proyectos" o "Silos Estratégicos", incluso si el estatus es COMPLETO. Esa área está en mantenimiento.
-
-IMPORTANTE: Siempre saluda al candidato por su nombre real si está disponible en la base de datos.
-IMPORTANTE: TIENES PROHIBIDO USAR EL "Nombre WhatsApp" para saludar. Ese dato suele ser informal o incorrecto.
-REGLA DE ORO (MEMORIA): Eres el mismo asistente que habló con el candidato en el pasado. Revisa el historial y el [DNA DEL CANDIDATO].
-REGLA DE CAPTURA (IMPORTANTE): Si el "Nombre Real" dice "No proporcionado", DEBES preguntarle su nombre al candidato usando un saludo genérico como "Hola".
-REGLA DE ORO DE FILTRADO (CRÍTICA): TIENES PROHIBIDO ofrecer o dar detalles de vacantes (nombres, sueldos, ubicaciones) si el [ESTATUS PASO 1] es "INCOMPLETO".
-REGLA ANTI-EDAD: El sistema calcula la edad automáticamente. Tienes PROHIBIDO preguntar la edad. Si falta ese dato, pide la "Fecha de Nacimiento".
-REGLA ANTI-GENERO: El sistema deduce el género automáticamente por el nombre. Tienes PROHIBIDO preguntar el género o sexo.
-REGLA DE ORO (ESTILO): NUNCA uses asteriscos (*). Si necesitas resaltar, usa Emojis.
-REGLA ANTI-ALUCINACIÓN (ESTRICTA): NO INVENTES VACANTES. Si el candidato pregunta por un puesto que NO aparece en la [BASE DE CONOCIMIENTO (DETALLE DE VACANTES)], responde que por el momento no contamos con esa posición disponible.
+IMPORTANTE: Siempre saluda al candidato por su nombre real si está disponible.
+IMPORTANTE: TIENES PROHIBIDO USAR EL "Nombre WhatsApp" para saludar.
+REGLA ANTI-EDAD: Pide la "Fecha de Nacimiento", no la edad.
+REGLA ANTI-GENERO: No preguntes sexo/género.
+REGLA DE ORO DE FILTRADO: Prohibido ofrecer detalles de vacantes si el perfil está INCOMPLETO.
 `;
+
+const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
+
+const getSessionLayer = (minSinceLastBot) => {
+    if (minSinceLastBot < 30) {
+        return `\n[SITUACIÓN ACTUAL]: Estamos en una conversación ACTIVA (último mensaje hace ${minSinceLastBot} min). 
+TIENES PROHIBIDO saludar de nuevo (nada de "Hola", "Hola de nuevo", o saludos). Ve DIRECTO al punto o a la pregunta técnica.\n`;
+    }
+    return '';
+};
+
+const getFinalAuditLayer = () => `
+\n[REGLAS DE ORO DE ÚLTIMO MOMENTO - PRIORIDAD MÁXIMA]:
+1. PROHIBIDO EL USO DE ASTERISCOS (*). No los uses NI para negritas.
+2. PREGUNTA ÚNICAMENTE UN (1) DATO. Si pides dos cosas, fallarás la misión. Ejemplo: "Dime tu municipio" (Correcto), "Dime tu municipio y edad" (INCORRECTO).
+3. BREVEDAD WHATSAPP: Mensajes extremadamente cortos. Sin despedidas largas.\n`;
 
 export const processMessage = async (candidateId, incomingMessage) => {
     try {
         const redis = getRedisClient();
 
-        // 🏎️ [TYPING INDICATOR] - Start composing presence immediately
+        // 🏎️ [TYPING INDICATOR]
         const presencePromise = (async () => {
             const { getCandidateById } = await import('../utils/storage.js');
             const cand = await getCandidateById(candidateId);
@@ -62,404 +66,177 @@ export const processMessage = async (candidateId, incomingMessage) => {
             }
         })();
 
-        // 1. Get Candidate Data (Database Context)
-        let candidateData = null;
-        try {
-            const freshKey = `candidate:${candidateId}`;
-            const rawData = await redis?.get(freshKey);
-            if (rawData) {
-                candidateData = JSON.parse(rawData);
-            } else {
-                const { getCandidateById } = await import('../utils/storage.js');
-                candidateData = await getCandidateById(candidateId);
-            }
-        } catch (e) {
-            console.error('Error fetching candidate for context:', e);
-        }
+        // 1. Context Acquisition
+        const { getCandidateById, auditProfile, getMessages, getProjectById, getVacancyById, getVacancies } = await import('../utils/storage.js');
+        const candidateData = await getCandidateById(candidateId);
+        if (!candidateData) return 'ERROR: Candidate not found';
 
-        if (!candidateData) {
-            console.error(`❌ [AI Agent] FATAL: Candidate ${candidateId} not found in storage.`);
-            return 'ERROR: Candidate not found';
-        }
-
-        // Clean message & Handle Multimodal
+        // 2. Multimodal / Text Extraction
         let userParts = [];
-        let displayText = '';
-
         if (typeof incomingMessage === 'object' && incomingMessage?.type === 'audio') {
             const { downloadMedia } = await import('../whatsapp/utils.js');
             const media = await downloadMedia(incomingMessage.url);
-
             if (media) {
-                userParts.push({
-                    inlineData: {
-                        mimeType: 'audio/mp3',
-                        data: media.data
-                    }
-                });
-                userParts.push({ text: 'Escucha este mensaje de audio del candidato y responde adecuadamente.' });
-                displayText = '((Mensaje de Audio))';
+                userParts.push({ inlineData: { mimeType: 'audio/mp3', data: media.data } });
+                userParts.push({ text: 'Escucha este audio del candidato y responde amablemente.' });
             } else {
-                userParts.push({ text: '((Error al descargar el audio del usuario))' });
-                displayText = '((Error Audio))';
+                userParts.push({ text: '((Audio no disponible))' });
             }
         } else {
-            const txt = (typeof incomingMessage === 'string' && incomingMessage.trim()) ? incomingMessage.trim() : '((Sin texto))';
-            userParts.push({ text: txt });
-            displayText = txt;
+            userParts.push({ text: String(incomingMessage || '').trim() || 'Hola' });
         }
 
-        // 2. Get History
-        const allMessages = await getMessages(candidateId, 100);
+        // 3. History Retrieval
+        const allMessages = await getMessages(candidateId, 20);
         const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
 
-        let rawHistory = validMessages.slice(-100).map(m => ({
-            role: (m.from === 'user') ? 'user' : 'model',
-            parts: [{ text: m.content || '((Media))' }]
-        }));
+        const recentHistory = validMessages
+            .slice(0, -1) // Exclude the current message (which was just saved to DB)
+            .map(m => ({
+                role: (m.from === 'user') ? 'user' : 'model',
+                parts: [{ text: m.content }]
+            }));
 
-        // Clean Head
-        while (rawHistory.length > 0 && rawHistory[0].role !== 'user') {
-            rawHistory.shift();
-        }
+        const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-5).map(m => m.content);
+        const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Nuevo contacto';
 
-        // Remove redundant last user message
-        if (rawHistory.length > 0 && rawHistory[rawHistory.length - 1].role === 'user') {
-            rawHistory.pop();
-        }
+        // Continuity & Session Logic
+        const lastBotMsgAt = candidateData.lastBotMessageAt ? new Date(candidateData.lastBotMessageAt) : new Date(0);
+        const minSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 60000);
 
-        const recentHistory = rawHistory;
+        // 4. Layered System Instruction Build
+        let systemInstruction = getIdentityLayer();
+        systemInstruction += getSessionLayer(minSinceLastBot);
 
-        // 3. Configuration & Context Injection
+        // a. Admin Directives
+        const customPrompt = await redis?.get('bot_ia_prompt') || '';
+        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA]:\n${customPrompt}\n`;
+
+        const aiConfigJson = await redis?.get('ai_config');
         let apiKey = process.env.GEMINI_API_KEY;
-        const today = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-        let customPrompt = '';
-        let ignoreVacanciesGlobal = false;
-
-        if (redis) {
-            customPrompt = await redis.get('bot_ia_prompt') || '';
-            const aiConfigJson = await redis.get('ai_config');
-            if (aiConfigJson) {
-                const parsed = JSON.parse(aiConfigJson);
-                if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
-                if (parsed.ignoreVacancies || parsed.ignoreVendors) ignoreVacanciesGlobal = true;
-            }
+        let ignoreVacanciesGate = false;
+        if (aiConfigJson) {
+            const parsed = JSON.parse(aiConfigJson);
+            if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
+            if (parsed.ignoreVacancies) ignoreVacanciesGate = true;
         }
 
-        let systemInstruction = `${DEFAULT_SYSTEM_PROMPT}\n`;
+        // b. Data Audit Layer (Iron-Clad)
+        const customFieldsJson = await redis?.get('custom_fields');
+        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+        const audit = auditProfile(candidateData, customFields);
 
-        // 🏎️ [FERRARI SHIELD] - Silence Vacancies Priority
-        if (ignoreVacanciesGlobal || customPrompt.includes('[IGNORAR_VACANTES]')) {
-            systemInstruction += `\n[DIRECTIVA DE SILENCIO DE VACANTES - PRIORIDAD MÁXIMA]: 
-TIENES PROHIBIDO hablar de vacantes específicas, sueldos, empresas o posiciones disponibles. NO menciones ninguna vacante del historial ni inventes nada.
-SIN EMBARGO, SÍ DEBES hablar de las CATEGORÍAS o ÁREAS DE INTERÉS disponibles para que el candidato elija una y completar su perfil.
-Si el candidato pregunta por trabajo, responde que primero necesitas completar su expediente y pregúntale en qué área (categoría) le interesa trabajar para perfilarlo correctamente.\n`;
-        }
-
-        if (customPrompt) {
-            systemInstruction += `\n[DIRECTIVA SUPREMA DEL ADMINISTRADOR - PRIORIDAD MÁXIMA]:\n${customPrompt}\n\n`;
-        }
-        systemInstruction += `FECHA DE HOY: ${today}. Usa esto para cálculos de tiempo.\n`;
-
-        // DNA PROFILE (Dynamic based on CRM Fields)
-        if (candidateData) {
-            // --- 🏎️ [KANBAN PIZARRA LOGIC] ---
-            let kanbanDirective = '';
-            let waitMessage = '';
-            let vacancyData = null;
-
-            if (candidateData.projectMetadata?.projectId) {
-                try {
-                    const { getProjectById, getVacancyById } = await import('../utils/storage.js');
-                    const project = await getProjectById(candidateData.projectMetadata.projectId);
-                    if (project) {
-                        const stepId = candidateData.projectMetadata.stepId || 'step_new';
-                        const currentStep = project.steps?.find(s => s.id === stepId) || project.steps?.[0];
-
-                        if (project.vacancyId) {
-                            vacancyData = await getVacancyById(project.vacancyId);
-                        }
-
-                        if (currentStep) {
-                            const currentIndex = project.steps.findIndex(s => s.id === stepId);
-                            const nextStep = project.steps[currentIndex + 1];
-
-                            if (currentStep.aiConfig?.enabled && currentStep.aiConfig?.prompt) {
-                                let p = currentStep.aiConfig.prompt;
-                                // Basic injection
-                                p = p.replace(/{{Candidato}}/g, candidateData.nombreReal || candidateData.nombre || 'Candidato')
-                                    .replace(/{{Vacante}}/g, vacancyData?.name || 'la vacante');
-
-                                kanbanDirective = `\n[DIRECTIVA DE PASO KANBAN ("${currentStep.name}")]:
-"${p}"
-
-[REGLA DE DISCIPLINA]: 
-1. Limítate ESTRICTAMENTE a lo que pide la directiva arriba mencionada.
-2. NO des información de la vacante (sueldo, empresa, etc.) si la directiva no lo pide.
-3. Si el objetivo de este paso se cumple, DEBES incluir el tag {move} en tu respuesta.
-4. TRANSICIÓN SUAVE: Si incluyes {move}, tu respuesta debe empezar con un emoji confirmando el éxito (ej: 👍, ✅, ¡Excelente!) y continuar INMEDIATAMENTE con el siguiente tema.
-
-[COMANDO DE MOVIMIENTO]: Si el objetivo se cumple, incluye {move} o [move].
-${nextStep ? `PRÓXIMO PASO ("${nextStep.name}"): "${nextStep.aiConfig?.prompt || 'Continúa la charla de forma natural'}"` : 'No hay más pasos.'}
-`;
-                            } else {
-                                // Tapón Inteligente (Wait Message) logic
-                                waitMessage = currentStep.aiConfig?.waitMessage || '';
-                                if (waitMessage) {
-                                    kanbanDirective = `\n[INSTRUCCIÓN DE ESPERA ESTRATÉGICA]: El proceso está en pausa temporal. Sigue esta instrucción para despedirte o pedir paciencia al candidato: "${waitMessage}". Mantén tu personalidad y adapta la "excusa" de forma natural al flujo de la charla.\n`;
-                                }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Error fetching Kanban context:', e);
-                }
-            }
-
-            if (kanbanDirective) {
-                systemInstruction += kanbanDirective;
-            }
-
-            const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-10).map(m => m.content).filter(Boolean);
-            const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Inicio de conversación';
-
-            // 🏎️ [FERRARI DYNAMICS] - Fetch fields from Database/Redis
-            let allFields = [
-                { value: 'nombreReal', label: 'Nombre Real' },
-                { value: 'fechaNacimiento', label: 'Fecha de Nacimiento (REQUERIDO. No pidas la edad)' },
-                { value: 'municipio', label: 'Municipio' },
-                { value: 'categoria', label: 'Categoría' },
-                { value: 'tieneEmpleo', label: 'Tiene empleo' },
-                { value: 'escolaridad', label: 'Escolaridad' }
-            ];
-
-            try {
-                const customFieldsJson = await redis?.get('custom_fields');
-                if (customFieldsJson) {
-                    const customFields = JSON.parse(customFieldsJson);
-                    // Merge and deduplicate
-                    const combined = [...allFields, ...customFields];
-                    allFields = Array.from(new Map(combined.map(item => [item.value, item])).values());
-                }
-            } catch (e) {
-                console.warn('Error fetching custom fields for DNA:', e);
-            }
-
-            let dnaLines = allFields.map(f => `- ${f.label}: ${candidateData[f.value] || 'No proporcionado'}`).join('\n');
-
-            // --- 🚩 PASO 1 CALCULATION (Synchronized with Iron-Clad Shield) ---
-            const coreFields = ['nombreReal', 'municipio', 'fechaNacimiento', 'categoria', 'tieneEmpleo', 'escolaridad'];
-            let missingData = false;
-            for (const field of coreFields) {
-                const val = (candidateData[field] || '').toLowerCase().trim();
-                const isInvalid = !val ||
-                    val.includes('proporcionado') ||
-                    val === 'consulta general' ||
-                    val === 'n/a' ||
-                    val === 'na' ||
-                    val === 'ninguno' ||
-                    val === 'none';
-                if (isInvalid) {
-                    missingData = true;
-                }
-            }
-            // Check age/birthday too
-            if (!candidateData.edad && (!candidateData.fechaNacimiento || candidateData.fechaNacimiento === 'No proporcionada')) {
-                missingData = true;
-            }
-
-            const paso1Status = missingData ? "INCOMPLETO" : "COMPLETO";
-
-            const dnaProfile = `
-[CONTEXTO DE MEMORIA ADN - ESTADO ACTUAL EXCLUSIVO]:
-- [ESTATUS PASO 1]: ${paso1Status}
-- Nombre WhatsApp: ${candidateData.nombre || 'Desconocido'}
+        systemInstruction += `\n[ESTADO DEL CANDIDATO (ADN)]:
+- Paso 1: ${audit.paso1Status}
+- Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
-${dnaLines}
-- Estatus de Postulación: ${candidateData.status || 'Interesado'}
-- Última Interacción: ${candidateData.ultimoMensaje || 'Reciente'} (Primer contacto: ${candidateData.primerContacto || 'N/A'})
-- Hilo Reciente (Últimos 10 prompts): ${themes}
-`.trim();
-
-            systemInstruction += `\n\n${dnaProfile}\n\n[INSTRUCCIONES DE IDENTIDAD Y CAPTURA]:
-1. Eres un humano con memoria; usa el ADN de arriba para personalizar el trato.
-2. IMPORTANTE: PROHIBIDO USAR EL "Nombre WhatsApp" para saludar. Si el "Nombre Real" dice "No proporcionado", usa "Hola" a secas y DEBES preguntarle su nombre para completar su expediente.
-3. REGLA DE BLOQUEO DINÁMICA: Si ves que falta cualquier dato marcado como "No proporcionado" en el ADN (especialmente Nombre, Municipio o Escolaridad), NO muestres las vacantes. Pide los datos faltantes de forma amable.
-4. RESPETA SIEMPRE la [DIRECTIVA SUPREMA] arriba mencionada por sobre cualquier otro dato.
+${audit.dnaLines}
+- Categorías: ${themes || 'General'}
 `;
 
-            // 🏎️ [FERRARI CHECK] - 100% Dynamic Completion Logic
-            const requiredFields = allFields.map(f => f.value);
-            let isProfileComplete = true;
-            for (const key of requiredFields) {
-                const val = (candidateData[key] || '').toLowerCase().trim();
-                const isInvalid = !val ||
-                    val.includes('proporcionado') ||
-                    val === 'consulta general' ||
-                    val === 'general' ||
-                    val === 'n/a' ||
-                    val === 'na' ||
-                    val === 'ninguno' ||
-                    val === 'none';
-                if (isInvalid) {
-                    isProfileComplete = false;
-                    break;
+        // c. Project/Kanban Layer
+        if (candidateData.projectMetadata?.projectId) {
+            const project = await getProjectById(candidateData.projectMetadata.projectId);
+            if (project) {
+                const stepId = candidateData.projectMetadata.stepId || 'step_new';
+                const currentStep = project.steps?.find(s => s.id === stepId) || project.steps?.[0];
+                if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
+                    const vacancy = project.vacancyId ? await getVacancyById(project.vacancyId) : null;
+                    const nextStep = project.steps[project.steps.indexOf(currentStep) + 1];
+                    let stepPrompt = currentStep.aiConfig.prompt
+                        .replace(/{{Candidato}}/g, candidateData.nombreReal || 'Candidato')
+                        .replace(/{{Vacante}}/g, vacancy?.name || 'la posición');
+
+                    systemInstruction += `\n[CONTEXTO KANBAN - PASO: ${currentStep.name}]:
+${stepPrompt}
+REGLA: Si se cumple el objetivo, incluye {move}. 
+TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextStep?.aiConfig?.prompt || 'Continúa'}"\n`;
                 }
             }
+        }
 
-            const forceHideVacancies = ignoreVacanciesGlobal || !isProfileComplete || systemInstruction.includes('[IGNORAR_VACANTES]');
-
-            try {
-                if (redis) {
-                    const categoriesData = await redis.get('candidatic_categories');
-                    if (categoriesData) {
-                        const categories = JSON.parse(categoriesData).map(c => c.name);
-                        systemInstruction += `\n\n[CATEGORÍAS DISPONIBLES]: ${categories.join(', ')}`;
-                    }
-                }
-
-                if (forceHideVacancies) {
-                    systemInstruction += `\n\n[REGLA DE SUPRESIÓN DE DETALLES]: TIENES PROHIBIDO mencionar detalles de vacantes, sueldos o empresas. SIN EMBARGO, SÍ DEBES MOSTRAR LA LISTA DE CATEGORÍAS si el perfil está incompleto. 
-                    - IMPORTANTE: No abrumes al candidato. Si faltan varios datos, pideselos de uno en uno o máximo de dos en dos. 
-                    - Ejemplo: "Para poder asignarte un reclutador, por favor dime en cuál de estas áreas te interesa trabajar y cuál es tu municipio actual..."`;
-                } else {
-                    const { getVacancies } = await import('../utils/storage.js');
-                    const allVacancies = await getVacancies();
-                    const activeVacancies = allVacancies.filter(v => (v.active === true || v.status === 'active'));
-
-                    if (activeVacancies.length > 0) {
-                        const simplified = activeVacancies.map(v => ({
-                            titulo: v.name || v.title || v.titulo,
-                            empresa: v.company || v.empresa,
-                            categoria: v.category || v.categoria || 'General',
-                            descripcion: v.description || v.descripcion,
-                            requisitos: v.requirements || v.requisitos,
-                            ubicacion: v.location || v.municipio || 'No especificada',
-                            sueldo: v.salary || v.sueldo || 'No especificado'
-                        }));
-                        systemInstruction += `\n\n[BASE DE CONOCIMIENTO (DETALLE DE VACANTES)]:\n${JSON.stringify(simplified, null, 2)}\n\n[INSTRUCCIÓN DE USO EXCLUSIVO]: Usa ÚNICAMENTE el JSON anterior para hablar de vacantes. Si el usuario pide algo fuera de este listado, di que no lo tienes. NO agregues beneficios o detalles que no estén escritos aquí.`;
-                    } else {
-                        systemInstruction += `\n\n[AVISO IMPORTANTE]: Actualmente NO HAY VACANTES ACTIVAS en el sistema. Si el candidato pregunta, dile que por el momento estamos actualizando nuestra base de datos y que pronto tendremos nuevas vacantes para su perfil. PROHIBIDO INVENTAR DATOS.`;
-                    }
-                }
-            } catch (vacErr) {
-                console.warn('⚠️ Failed to inject vacancies context:', vacErr);
+        // d. Vacancy Silence/Detail Layer
+        if (ignoreVacanciesGate || audit.paso1Status === 'INCOMPLETO') {
+            systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto. TIENES PROHIBIDO dar detalles de sueldos o empresas. Pide el SIGUIENTE dato faltante (SOLO UNO): ${audit.missingLabels[0]}.\n`;
+        } else {
+            const activeVacancies = (await getVacancies()).filter(v => v.active || v.status === 'active');
+            if (activeVacancies.length > 0) {
+                systemInstruction += `\n[VACANTES DISPONIBLES]:\n${JSON.stringify(activeVacancies.map(v => ({ titulo: v.name, categoria: v.category, sueldo: v.salary })), null, 2)}\n`;
             }
-        } // Close if (candidateData)
+        }
 
-        // --- 🛡️ FINAL STYLING AUDIT (HIGHEST PRIORITY) ---
-        systemInstruction += `\n\n[REGLAS DE ORO DE ÚLTIMO MOMENTO]:
-1. PROHIBIDO EL USO DE ASTERISCOS (*). No los uses para resaltar nada. Usa Emojis.
-2. PROHIBIDO PREGUNTAR LA EDAD O EL GÉNERO. El sistema los resuelve automáticamente.
-3. BREVEDAD WHATSAPP: Mensajes de máximo 3 líneas. Pide los datos de uno en uno.\n`;
+        systemInstruction += getFinalAuditLayer();
 
-        if (!apiKey) return 'ERROR: No API Key found';
-
-        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
-        const matchToken = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-        if (matchToken) apiKey = matchToken[0];
-
+        // 5. Resilience Loop (Inference)
         const genAI = new GoogleGenerativeAI(apiKey);
-        const modelsToTry = ["gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-flash-latest"];
-
+        const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
         let result;
-        let successModel = '';
         let lastError = '';
 
-        for (const mName of modelsToTry) {
+        for (const mName of models) {
             try {
                 const model = genAI.getGenerativeModel({ model: mName, systemInstruction });
                 const chat = model.startChat({ history: recentHistory });
-                result = await chat.sendMessage(userParts);
-                successModel = mName;
-                break;
+
+                // Add a timeout to the inference call (25s)
+                const inferencePromise = chat.sendMessage(userParts);
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('TIMEOUT')), 25000)
+                );
+
+                result = await Promise.race([inferencePromise, timeoutPromise]);
+                if (result) break;
             } catch (e) {
                 lastError = e.message;
-                console.warn(`⚠️ [AI Agent] ${mName} failed:`, e.message);
+                console.error(`🤖 fallback model trigger: ${mName} failed. Error:`, lastError);
             }
         }
 
-        if (!result) return `ERROR: Gemini failure - ${lastError}`;
+        // --- 🛡️ SAFETY NET (Amazon Style) ---
+        if (!result) {
+            console.error('❌ AI Pipeline Exhausted:', lastError);
+            const fallback = "¡Hola! Disculpa la demora, tuve un pequeño parpadeo técnico. 😅 ¿Podrías repetirme lo último o confirmarme tu nombre para seguir?";
+            await sendFallback(candidateData, fallback);
+            return fallback;
+        }
 
         const responseTextRaw = result.response.text();
         let responseText = responseTextRaw;
 
-        // --- 🏎️ [DECISION ENGINE: AUTO-TRANSITION] ---
-        const moveTagFound = responseTextRaw.match(/\[MOVE\]|\{MOVE\}/gi);
-        if (candidateData.projectMetadata?.projectId && moveTagFound) {
-            try {
-                const { getProjectById, moveCandidateStep } = await import('../utils/storage.js');
-                const project = await getProjectById(candidateData.projectMetadata.projectId);
-                if (project && project.steps) {
-                    const stepId = candidateData.projectMetadata.stepId || 'step_new';
-                    const currentIndex = project.steps.findIndex(s => s.id === stepId);
-                    const nextStep = project.steps[currentIndex + 1];
-
-                    if (nextStep) {
-                        console.log(`🚀 [AI DECISION] Moving ${candidateData.nombre} to ${nextStep.name}`);
-                        await moveCandidateStep(project.id, candidateId, nextStep.id);
-
-                        // Internal Log
-                        await saveMessage(candidateId, {
-                            from: 'system',
-                            content: `IA movió al candidato al paso: ${nextStep.name}`,
-                            type: 'system',
-                            timestamp: new Date().toISOString()
-                        });
-                    }
-                }
-            } catch (moveErr) {
-                console.error('Error in auto-transition:', moveErr);
-            }
+        // --- 🧪 FINAL ANTI-ASTERISK FILTER (HARDCODE) ---
+        responseText = responseText.replace(/\*/g, '');
+        const moveTagFound = responseText.match(/\[MOVE\]|\{MOVE\}/gi);
+        if (moveTagFound && candidateData.projectMetadata?.projectId) {
+            const { moveCandidateStep } = await import('../utils/storage.js');
+            const project = await getProjectById(candidateData.projectMetadata.projectId);
+            const nextStep = project?.steps[project.steps.findIndex(s => s.id === (candidateData.projectMetadata.stepId || 'step_new')) + 1];
+            if (nextStep) await moveCandidateStep(project.id, candidateId, nextStep.id);
         }
 
-        // Final Clean up: Remove any remaining [MOVE] or {move} or other internal tags from candidate visibility
         responseText = responseText.replace(/\[MOVE\]|\{MOVE\}/gi, '').trim();
 
-        // Delivery
+        // Background Cleanup & Persistence
         const config = await getUltraMsgConfig();
-        const deliveryPromise = (async () => {
-            if (!config || !candidateData?.whatsapp) return;
-            let retries = 2;
-            while (retries >= 0) {
-                try {
-                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
-                    break;
-                } catch (err) {
-                    if (retries === 0) throw err;
-                    retries--;
-                    await new Promise(r => setTimeout(r, 1000));
-                }
-            }
-        })();
+        const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
-        // Background (Awaited for Serverless Persistence)
-        try {
-            await Promise.allSettled([
-                saveMessage(candidateId, {
-                    from: 'bot',
-                    content: responseText,
-                    type: 'text',
-                    timestamp: new Date().toISOString()
-                }),
-                updateCandidate(candidateId, {
-                    lastBotMessageAt: new Date().toISOString(),
-                    ultimoMensaje: new Date().toISOString()
-                })
-            ]);
+        await Promise.allSettled([
+            deliveryPromise,
+            saveMessage(candidateId, { from: 'bot', content: responseText, type: 'text', timestamp: new Date().toISOString() }),
+            updateCandidate(candidateId, { lastBotMessageAt: new Date().toISOString(), ultimoMensaje: new Date().toISOString() }),
+            presencePromise
+        ]);
 
-            const { processBotResponse } = await import('../utils/automations.js');
-            await processBotResponse(candidateId, responseText);
-        } catch (bgErr) {
-            console.error('⚠️ [AI Agent] Background Task Error:', bgErr);
-        }
-
-        await Promise.allSettled([deliveryPromise, presencePromise]);
         return responseText;
 
     } catch (error) {
-        console.error('❌ [AI Agent] Error:', error);
-        return `ERROR: Exception - ${error.message}`;
+        console.error('❌ [AI Agent] Fatal Error:', error);
+        return 'ERROR: Infrastructure failure';
     }
 };
+
+async function sendFallback(cand, text) {
+    const config = await getUltraMsgConfig();
+    if (config && cand.whatsapp) {
+        await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, text);
+    }
+}

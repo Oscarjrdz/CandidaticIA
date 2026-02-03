@@ -1,4 +1,15 @@
-import { getRedisClient, getAIAutomations, getCandidates, saveMessage, getCandidateByPhone, incrementAIAutomationSentCount } from './storage.js';
+import {
+    getRedisClient,
+    getMessages,
+    getAIAutomations,
+    getCandidates,
+    saveMessage,
+    getCandidateByPhone,
+    incrementAIAutomationSentCount,
+    updateCandidate,
+    auditProfile,
+    isProfileComplete
+} from './storage.js';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
@@ -16,7 +27,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
     let processedCount = 0;
 
     try {
-        logs.push(`🚀 [SYSTEM] Iniciando motor (Manual: ${isManual})`);
+        logs.push(`🚀[SYSTEM] Iniciando motor(Manual: ${isManual})`);
 
         // --- 1. CONFIG AUDIT ---
         let geminiKey = process.env.GEMINI_API_KEY;
@@ -31,7 +42,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
         }
 
         if (!geminiKey || geminiKey === 'undefined' || geminiKey === 'null') {
-            logs.push(`❌ CRITICAL: Falta GEMINI_API_KEY. Configure su API Key en Ajustes.`);
+            logs.push(`❌ CRITICAL: Falta GEMINI_API_KEY.Configure su API Key en Ajustes.`);
             return { success: false, error: 'GEMINI_API_KEY_MISSING', logs };
         }
 
@@ -42,7 +53,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
 
         const config = await getUltraMsgConfig();
         if (!config?.instanceId || !config?.token) {
-            logs.push(`❌ CRITICAL: UltraMsg no está vinculado (Falta Instance ID o Token).`);
+            logs.push(`❌ CRITICAL: UltraMsg no está vinculado(Falta Instance ID o Token).`);
             return { success: false, error: 'ULTRAMSG_CONFIG_MISSING', logs };
         }
         logs.push(`✅ Configuración y API Key verificadas.`);
@@ -53,7 +64,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
         // --- NATIVE PROACTIVE FOLLOW-UP LOGIC (INDEPENDENT) ---
         const isProactiveEnabled = (await redis.get('bot_proactive_enabled')) === 'true';
         if (isProactiveEnabled) {
-            logs.push(`🔍 [PROACTIVE] Iniciando análisis de seguimiento...`);
+            logs.push(`🔍[PROACTIVE] Iniciando análisis de seguimiento...`);
 
             // Check Time Window (7 AM - 11 PM) - Force UTC-6 (Mexico)
             const now = new Date();
@@ -62,13 +73,13 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
             const nowHour = mxTime.getHours();
 
             if (nowHour < 7 || nowHour >= 23) {
-                logs.push(`💤 [PROACTIVE] Fuera de horario permitido (7:00 - 23:00). Hora MX actual: ${nowHour}:00`);
+                logs.push(`💤[PROACTIVE] Fuera de horario permitido(7:00 - 23:00).Hora MX actual: ${nowHour}:00`);
             } else {
                 // Check Daily Limit
-                const todayKey = `ai:proactive:count:${new Date().toISOString().split('T')[0]}`;
+                const todayKey = `ai: proactive: count:${new Date().toISOString().split('T')[0]} `;
                 const dailyCount = parseInt(await redis.get(todayKey) || '0');
                 if (dailyCount >= 200) {
-                    logs.push(`🛑 [PROACTIVE] Límite diario alcanzado (200/día).`);
+                    logs.push(`🛑[PROACTIVE] Límite diario alcanzado(200 / día).`);
                 } else {
                     // Strictly follow the 1 message per minute rate limit
                     await processNativeProactive(redis, model, config, logs, todayKey, now, 1);
@@ -81,7 +92,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
             const pipeResult = await processProjectPipelines(redis, model, config, logs, manualConfig);
             processedCount = pipeResult?.sent || 0;
         } catch (e) {
-            logs.push(`⚠️ [PIPELINE] Error procesando embudos: ${e.message}`);
+            logs.push(`⚠️[PIPELINE] Error procesando embudos: ${e.message} `);
         }
 
         // --- OLD RULES ENGINE (LEGACY) ---
@@ -97,7 +108,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
 
         for (const rule of activeRules) {
             if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
-            logs.push(`-----------------------------------`);
+            logs.push(`----------------------------------- `);
             logs.push(`⚙️ Regla: "${rule.name || 'Sin nombre'}"`);
 
             // --- 2. SNIPER DETECTION ---
@@ -105,7 +116,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
             const phoneMatch = rule.prompt.match(/(\d{10,13})/);
             if (phoneMatch) {
                 targetPhone = phoneMatch[0];
-                logs.push(`🎯 Sniper detectado: ${targetPhone}`);
+                logs.push(`🎯 Sniper detectado: ${targetPhone} `);
             }
 
             let candidates = [];
@@ -113,14 +124,14 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
                 const c = await getCandidateByPhone(targetPhone);
                 if (c) {
                     candidates = [c];
-                    logs.push(`✅ Candidato identificado: ${c.nombre}`);
+                    logs.push(`✅ Candidato identificado: ${c.nombre} `);
                 } else {
                     logs.push(`⚠️ El número ${targetPhone} no existe en la base de datos.`);
                 }
             } else {
                 logs.push(`🧠 IA: Escaneando intención compleja...`);
                 try {
-                    const extra = await model.generateContent(`Extract phone/name from: "${rule.prompt}". JSON ONLY: {"p":null,"n":null}`);
+                    const extra = await model.generateContent(`Extract phone / name from: "${rule.prompt}".JSON ONLY: { "p": null, "n": null } `);
                     const json = JSON.parse(extra.response.text().match(/\{[\s\S]*\}/)?.[0] || '{}');
                     if (json.p) {
                         const c = await getCandidateByPhone(json.p);
@@ -148,7 +159,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
                 if (!cand?.id || !cand?.whatsapp) continue;
 
                 if (!isManual) {
-                    const last = await redis.get(`ai:automation:last:${cand.id}`);
+                    const last = await redis.get(`ai: automation: last:${cand.id} `);
                     if (last) continue;
                 }
 
@@ -162,37 +173,38 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
 
                 evaluatedCount++;
                 try {
-                    logs.push(`🤔 Evaluando a ${cand.nombre} (Inactividad Usuario: ${minSinceLastUser}m, Bot: ${minSinceLastBot}m)...`);
+                    logs.push(`🤔 Evaluando a ${cand.nombre} (Inactividad Usuario: ${minSinceLastUser} m, Bot: ${minSinceLastBot}m)...`);
 
-                    const systemContext = `Eres un reclutador experto y proactivo de Candidatic IA. Tu tarea es analizar si un candidato cumple con una REGLA y actuar de inmediato.
+                    const { dnaLines } = auditProfile(cand, []); // Custom fields not needed for DNA in rules engine
+
+                    const systemContext = `Eres un reclutador experto y proactivo de Candidatic IA.Tu tarea es analizar si un candidato cumple con una REGLA y actuar de inmediato.
 INSTRUCCIONES CRÍTICAS:
 - Tu objetivo es mantener viva la conversación y completar el perfil del candidato.
 - "ok": true SOLAMENTE si decides enviar un mensaje ahora.
 - "msg": El contenido del mensaje de WhatsApp.
-- REGLA DE TIEMPO: El tiempo actual es ${now.toISOString()}. 
-- REGLA DE NOMBRE: Saluda por el [Nombre Real] (${cand.nombreReal || cand.nombre || 'No proporcionado'}).
+- REGLA DE TIEMPO: El tiempo actual es ${now.toISOString()}.
+- REGLA DE NOMBRE: Saluda por el[Nombre Real](${cand.nombreReal || cand.nombre || 'No proporcionado'}).
 - CONTEXTO:
   * El candidato mandó su último mensaje hace ${minSinceLastUser} minutos.
-  * Tú (el bot/reclutador) mandaste el último mensaje hace ${minSinceLastBot} minutos.
+  * Tú(el bot / reclutador) mandaste el último mensaje hace ${minSinceLastBot} minutos.
 - TONO: Natural, como si escribieras rápido en WhatsApp. Cero formalismos excesivos.
+- PROHIBIDO EL USO DE ASTERISCOS (*): No los uses para negritas ni para nada. Usa Emojis.
+- BREVEDAD: Máximo 2 líneas de texto.
 - NO digas que enviarás un mensaje, ESCRIBE el mensaje directamente.`;
 
                     const evalPrompt = `
 REGLA A APLICAR: "${rule.prompt}"
-DATOS ACTUALES DEL CANDIDATO:
-- Nombre: ${cand.nombreReal || cand.nombre || 'No proporcionado'}
-- WhatsApp: ${cand.whatsapp}
-- Status: ${cand.status}
-- Campos capturados (CRM): ${JSON.stringify(cand.campos || {})}
+DATOS ACTUALES[DNA DEL CANDIDATO]:
+${dnaLines}
 - Último mensaje de usuario: ${cand.lastUserMessageAt || 'Nunca'}
 - Último mensaje de bot: ${cand.lastBotMessageAt || 'Nunca'}
 
 DECISIÓN:
-1. ¿Cumple la regla basada en el contexto temporal y datos del CRM?
-2. Si la regla menciona "no ha respondido en X tiempo", úsalo.
+1. ¿Cumple la regla basada en el contexto temporal y datos del CRM ?
+    2. Si la regla menciona "no ha respondido en X tiempo", úsalo.
 3. Si la regla menciona "no tiene X dato", busca en "Campos capturados".
 
-Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
+Responde ÚNICAMENTE en JSON: { "ok": boolean, "msg": string, "reason": string } `;
 
                     const res = await model.generateContent([systemContext, evalPrompt]);
                     const out = res.response.text().match(/\{[\s\S]*\}/)?.[0];
@@ -202,8 +214,9 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
 
                     if (decision.ok && decision.msg) {
                         logs.push(`✨ Match! Enviando mensaje...`);
-                        // Limpiar msg de posibles prefijos que la IA ponga por error
+                        // Limpiar msg de posibles prefijos y remover asteriscos (HARDCODE)
                         let finalMsg = decision.msg.replace(/^Mensaje:\s*/i, '').replace(/^Contenido:\s*/i, '').trim();
+                        finalMsg = finalMsg.replace(/\*/g, '');
 
                         await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, finalMsg);
                         await saveMessage(cand.id, {
@@ -213,7 +226,7 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
                             timestamp: new Date().toISOString(),
                             meta: { automationId: rule.id, aiMatch: true }
                         });
-                        await redis.set(`ai:automation:last:${cand.id}`, new Date().toISOString(), 'EX', COOLDOWN_HOURS * 3600);
+                        await redis.set(`ai: automation: last:${cand.id} `, new Date().toISOString(), 'EX', COOLDOWN_HOURS * 3600);
                         await incrementAIAutomationSentCount(rule.id);
                         messagesSent++;
                         logs.push(`🚀 Mensaje enviado exitosamente.`);
@@ -221,17 +234,17 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
                         logs.push(`❌ No cumple criterios.`);
                     }
                 } catch (e) {
-                    logs.push(`⚠️ Error analizando candidato ${cand.nombre}: ${e.message}`);
+                    logs.push(`⚠️ Error analizando candidato ${cand.nombre}: ${e.message} `);
                 }
             }
         }
 
-        logs.push(`-----------------------------------`);
-        logs.push(`🏁 Finalizado: ${evaluatedCount} analizados, ${messagesSent} enviados (Legacy), ${processedCount} enviados (Pipeline).`);
+        logs.push(`----------------------------------- `);
+        logs.push(`🏁 Finalizado: ${evaluatedCount} analizados, ${messagesSent} enviados(Legacy), ${processedCount} enviados(Pipeline).`);
         return { success: true, sent: messagesSent, processedCount, evaluated: evaluatedCount, logs };
     } catch (error) {
         console.error('ENGINE_CRASH:', error);
-        logs.push(`🛑 CRASH: ${error.message}`);
+        logs.push(`🛑 CRASH: ${error.message} `);
         return { success: false, error: error.message, stack: error.stack, logs };
     }
 }
@@ -243,11 +256,11 @@ Responde ÚNICAMENTE en JSON: {"ok": boolean, "msg": string, "reason": string}`;
 async function processNativeProactive(redis, model, config, logs, todayKey, now, maxToSend = 1) {
     let sentCount = 0;
     // DYNAMIC IMPORTS
-    const { getCandidates, isProfileComplete, saveMessage } = await import('./storage.js');
+    // const { getCandidates, isProfileComplete, saveMessage } = await import('./storage.js'); // These are now imported at the top
 
     const { candidates } = await getCandidates(500, 0); // Increase scan depth to 500
     if (!candidates) {
-        logs.push(`⚠️ [PROACTIVE] No se obtuvieron candidatos de la DB.`);
+        logs.push(`⚠️[PROACTIVE] No se obtuvieron candidatos de la DB.`);
         return;
     }
 
@@ -260,10 +273,10 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
     // Filter candidates with incomplete profile based on IRON-CLAD logic
     const incomplete = candidates.filter(c => !isProfileComplete(c, customFields));
 
-    logs.push(`🔍 [PROACTIVE] Evaluando ${candidates.length} candidatos totales. ${incomplete.length} tienen perfil incompleto.`);
+    logs.push(`🔍[PROACTIVE] Evaluando ${candidates.length} candidatos totales.${incomplete.length} tienen perfil incompleto.`);
 
     if (incomplete.length === 0) {
-        logs.push(`💤 [PROACTIVE] No hay candidatos con perfil incompleto para procesar.`);
+        logs.push(`💤[PROACTIVE] No hay candidatos con perfil incompleto para procesar.`);
         return;
     }
 
@@ -287,7 +300,7 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
         else if (hoursInactive >= 48) level = 48;
         else if (hoursInactive >= 24) level = 24;
 
-        const sessionKey = `proactive:${cand.id}:${level}:${cand.lastUserMessageAt}`;
+        const sessionKey = `proactive:${cand.id}:${level}:${cand.lastUserMessageAt} `;
         const alreadySent = await redis.get(sessionKey);
 
         if (alreadySent) {
@@ -298,71 +311,42 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
             continue;
         }
 
-        logs.push(`🎯 [PROACTIVE] Candidato ${cand.nombre} CALIFICA. Nivel ${level}h (${Math.floor(hoursInactive)}h inactivo).`);
+        logs.push(`🎯[PROACTIVE] Candidato ${cand.nombre} CALIFICA.Nivel ${level} h(${Math.floor(hoursInactive)}h inactivo).`);
 
-        // Identify missing fields for Brenda's focus (Limit to Top 2 for brevity)
-        const missingFields = [];
-        const standards = [
-            { key: 'nombreReal', label: 'Nombre Completo' },
-            { key: 'municipio', label: 'Municipio/Ubicación' },
-            { key: 'fechaNacimiento', label: 'Fecha de Nacimiento' },
-            { key: 'categoria', label: 'Categoría/Puesto de interés' },
-            { key: 'tieneEmpleo', label: 'Si tiene empleo actual' },
-            { key: 'escolaridad', label: 'Nivel de Escolaridad' }
-        ];
-        for (const f of standards) {
-            const val = String(cand[f.key] || '').toLowerCase().trim();
-            const isPlaceholder = val.includes('proporcionado') ||
-                val === 'desconocido' ||
-                val === 'consulta general' ||
-                val === 'general' ||
-                val === 'n/a' ||
-                val === 'na' ||
-                val === 'ninguno' ||
-                val === 'none';
-
-            if (!cand[f.key] || isPlaceholder) {
-                missingFields.push(f.label);
-            }
-        }
-        for (const cf of customFields) {
-            const val = String(cand[cf.value] || '').toLowerCase();
-            if (!cand[cf.value] || val.includes('proporcionado')) {
-                missingFields.push(cf.label);
-            }
-        }
-
-        // Limit to top 2 missing fields to avoid overwhelming the candidate
-        const prioritizedMissing = missingFields.slice(0, 2);
+        // Centralized Gold Audit
+        const { missingLabels, dnaLines } = auditProfile(cand, customFields);
+        const prioritizedMissing = missingLabels.slice(0, 1);
 
         const prompt = `
 [DNA DEL CANDIDATO]:
-- Nombre: ${cand.nombreReal || cand.nombre}
-- Datos que le faltan (PRIORIDAD): ${prioritizedMissing.join(', ')}
+${dnaLines}
 
 [REGLAS DE PERSONALIDAD]:
 "${customPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic IA, un reclutador útil, humano y proactivo.'}"
 
 [REQUISITOS DE ESTILO INVIOLABLES]:
 1. BREVEDAD EXTREMA: El mensaje DEBE tener máximo 2 líneas de texto. Prohibido escribir párrafos.
-2. ENFOQUE: Pregunta ÚNICAMENTE por estos 2 datos: ${prioritizedMissing.join(' y ')}. NO pidas la edad ni el género (el sistema los deduce).
-3. PROHIBICIÓN TOTAL DE ASTERISCOS: No uses asteriscos (*) ni guiones (-) en ninguna parte del mensaje.
-4. LISTA CON CHECKS: Si mencionas opciones (como categorías), usa SOLO el check verde: ✅
+2. ENFOQUE: Pregunta ÚNICAMENTE por este dato: ${prioritizedMissing[0]}. PROHIBIDO pedir más de un dato. 
+3. PROHIBICIÓN TOTAL DE ASTERISCOS: No uses asteriscos(*) ni guiones(-) en ninguna parte del mensaje.
+4. LISTA CON CHECKS: Si mencionas opciones(como categorías), usa SOLO el check verde: ✅
    ${categories.length > 0 ? `[CATEGORÍAS]:\n${categories.slice(0, 5).map(c => `✅ ${c}`).join('\n')}` : ''}
 
 [ESTRUCTURA DEL MENSAJE]:
 - Saludo corto con su nombre.
-- Pregunta directa por los 2 datos faltantes.
+- Pregunta directa por el dato faltante.
 - Despedida amigable de 1 palabra.
 
-Responde ÚNICAMENTE con el mensaje de texto para WhatsApp (máximo 150 caracteres):`;
+Responde ÚNICAMENTE con el mensaje de texto para WhatsApp(máximo 150 caracteres): `;
 
         try {
             const res = await model.generateContent(prompt);
-            const text = res.response.text().trim();
+            let text = res.response.text().trim();
+
+            // --- 🧪 FINAL ANTI-ASTERISK FILTER ---
+            text = text.replace(/\*/g, '');
 
             if (text) {
-                logs.push(`✨ [PROACTIVE] Enviando nivel ${level}h a ${cand.nombre}...`);
+                logs.push(`✨[PROACTIVE] Enviando nivel ${level}h a ${cand.nombre}...`);
                 await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, text);
 
                 // CRITICAL: Update candidate timestamps to avoid double follow-ups
@@ -386,18 +370,18 @@ Responde ÚNICAMENTE con el mensaje de texto para WhatsApp (máximo 150 caracter
                 await redis.incr('ai:proactive:total_sent'); // Track total impact
                 await redis.expire(todayKey, 48 * 3600);
 
-                logs.push(`✅ [PROACTIVE] Seguimiento enviado con éxito.`);
+                logs.push(`✅[PROACTIVE] Seguimiento enviado con éxito.`);
                 sentCount++;
                 if (sentCount >= maxToSend) {
-                    logs.push(`🏁 [PROACTIVE] Se alcanzó el máximo de envíos por este ciclo (${maxToSend}).`);
+                    logs.push(`🏁[PROACTIVE] Se alcanzó el máximo de envíos por este ciclo(${maxToSend}).`);
                     return;
                 }
             }
         } catch (e) {
-            logs.push(`⚠️ [PROACTIVE] Error enviando seguimiento a ${cand.nombre}: ${e.message}`);
+            logs.push(`⚠️[PROACTIVE] Error enviando seguimiento a ${cand.nombre}: ${e.message} `);
             // If it's an API error, maybe don't keep trying 162 candidates to avoid spamming logs
             if (e.message.includes('API') || e.message.includes('model')) {
-                logs.push(`🛑 [PROACTIVE] Deteniendo ciclo por error crítico de API.`);
+                logs.push(`🛑[PROACTIVE] Deteniendo ciclo por error crítico de API.`);
                 return;
             }
         }
@@ -420,7 +404,7 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
     }
 
     let totalSent = 0;
-    logs.push(`🏭 [PIPELINE] Escaneando embudos (${projects.length} proyectos)...`);
+    logs.push(`🏭[PIPELINE] Escaneando embudos(${projects.length} proyectos)...`);
 
     for (const proj of projects) {
         if (!proj.steps || proj.steps.length === 0) continue;
@@ -460,8 +444,8 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
             // "Contact candidates in this step who haven't been processed."
 
             const candidates = await getProjectCandidates(proj.id);
-            logs.push(`🔍 [DEBUG] Paso: "${step.name}", Index: ${stepIndex}, ID: ${step.id}`);
-            logs.push(`🔍 [DEBUG] Candidatos totales en proyecto: ${candidates.length}`);
+            logs.push(`🔍[DEBUG] Paso: "${step.name}", Index: ${stepIndex}, ID: ${step.id} `);
+            logs.push(`🔍[DEBUG] Candidatos totales en proyecto: ${candidates.length} `);
 
             const candidatesInStep = candidates.filter(c => {
                 const cStepId = c.projectMetadata?.stepId || 'step_new';
@@ -470,23 +454,23 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
                 return isFirstStepMatch || isExactMatch;
             });
 
-            logs.push(`🔍 [DEBUG] Candidatos en este paso: ${candidatesInStep.length}`);
+            logs.push(`🔍[DEBUG] Candidatos en este paso: ${candidatesInStep.length} `);
 
             if (candidatesInStep.length === 0) continue;
 
             for (const cand of candidatesInStep) {
-                logs.push(`👤 [DEBUG] Evaluando: "${cand.nombre}" (ID: ${cand.id})...`);
+                logs.push(`👤[DEBUG] Evaluando: "${cand.nombre}"(ID: ${cand.id})...`);
                 // Check if already processed for this specific step
-                const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}:processed`;
+                const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}: processed`;
                 const isProcessed = await redis.get(metaKey);
 
                 if (isProcessed && !manualConfig) {
-                    logs.push(`⏭️ [DEBUG] ${cand.nombre} ya fue procesado en este paso anteriormente (Key: ${metaKey}).`);
+                    logs.push(`⏭️[DEBUG] ${cand.nombre} ya fue procesado en este paso anteriormente(Key: ${metaKey}).`);
                     continue;
                 }
 
                 if (!cand.whatsapp) {
-                    logs.push(`⏭️ [DEBUG] ${cand.nombre} no tiene WhatsApp registrado.`);
+                    logs.push(`⏭️[DEBUG] ${cand.nombre} no tiene WhatsApp registrado.`);
                     continue;
                 }
 
@@ -494,7 +478,7 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
                 // For now, let's process 1 per run to be safe alongside Proactive
                 // simple semaphore or just rely on the cron frequency
 
-                logs.push(`🎯 [PIPELINE] Candidato ${cand.nombre} en paso "${step.name}" (${proj.name}). Iniciando contacto.`);
+                logs.push(`🎯[PIPELINE] Candidato ${cand.nombre} en paso "${step.name}"(${proj.name}).Iniciando contacto.`);
 
                 // Prepare Prompt
                 let promptText = step.aiConfig.prompt || '';
@@ -514,11 +498,11 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
 [INSTRUCCIÓN MAESTRA]: "${promptText}"
 
 REGLAS DE ORO:
-1. Sigue ESTRICTAMENTE la [INSTRUCCIÓN MAESTRA]. 
-2. NO menciones sueldos, horarios, ubicación ni detalles de la empresa A MENOS que la [INSTRUCCIÓN MAESTRA] lo pida explícitamente.
-3. Si la instrucción es solo preguntar algo, LIMITATE A PREGUNTAR eso. No intentes "vender" la vacante si no es el momento.
-4. Tu respuesta debe ser corta (máximo 2 párrafos) y sonar humana.
-5. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso, incluye el tag [MOVE] en tu respuesta (esto es para el sistema, NO lo verá el candidato).
+1. Sigue ESTRICTAMENTE la[INSTRUCCIÓN MAESTRA].
+2. NO menciones sueldos, horarios, ubicación ni detalles de la empresa A MENOS que la[INSTRUCCIÓN MAESTRA] lo pida explícitamente.
+3. Si la instrucción es solo preguntar algo, LIMITATE A PREGUNTAR eso.No intentes "vender" la vacante si no es el momento.
+4. Tu respuesta debe ser corta(máximo 2 párrafos) y sonar humana.
+5. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso, incluye el tag[MOVE] en tu respuesta(esto es para el sistema, NO lo verá el candidato).
 `;
                 try {
                     const chat = model.startChat({
@@ -543,7 +527,7 @@ REGLAS DE ORO:
                         const currentIndex = proj.steps.findIndex(s => s.id === step.id);
                         const nextStep = proj.steps[currentIndex + 1];
                         if (nextStep) {
-                            logs.push(`🚀 [PIPELINE] Autómata movió a ${cand.nombre} al siguiente paso: ${nextStep.name}`);
+                            logs.push(`🚀[PIPELINE] Autómata movió a ${cand.nombre} al siguiente paso: ${nextStep.name} `);
                             await moveCandidateStep(proj.id, cand.id, nextStep.id);
                         }
                     }
@@ -558,7 +542,7 @@ REGLAS DE ORO:
                     // Mark as processed (Outbound)
                     await redis.set(metaKey, 'true', 'EX', 3600 * 24 * 30); // 30 days expiry
 
-                    logs.push(`✅ [PIPELINE] Mensaje enviado a ${cand.nombre}.`);
+                    logs.push(`✅[PIPELINE] Mensaje enviado a ${cand.nombre}.`);
 
                     // Log action in history
                     const { saveMessage } = await import('./storage.js');
@@ -575,7 +559,7 @@ REGLAS DE ORO:
                     if (totalSent >= limit) return { sent: totalSent };
 
                 } catch (e) {
-                    logs.push(`⚠️ [PIPELINE] Error con candidato ${cand.nombre}: ${e.message}`);
+                    logs.push(`⚠️[PIPELINE] Error con candidato ${cand.nombre}: ${e.message} `);
                 }
             }
         }
