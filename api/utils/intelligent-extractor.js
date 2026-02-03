@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getRedisClient, updateCandidate, getMessages } from './storage.js';
+import { getRedisClient, updateCandidate, getMessages, recordAITelemetry } from './storage.js';
 import { detectGender, cleanNameWithAI, cleanMunicipioWithAI, cleanCategoryWithAI, cleanEmploymentStatusWithAI, cleanDateWithAI, cleanEscolaridadWithAI } from './ai.js';
 
 /**
@@ -128,6 +128,7 @@ ${JSON.stringify(schema, null, 2)}
         let jsonText = '';
         for (const mName of modelsToTry) {
             try {
+                const startTime = Date.now();
                 const model = genAI.getGenerativeModel({
                     model: mName,
                     generationConfig: {
@@ -137,6 +138,16 @@ ${JSON.stringify(schema, null, 2)}
                 const result = await model.generateContent(prompt);
                 const response = await result.response;
                 jsonText = response.text();
+
+                // Telemetry
+                recordAITelemetry({
+                    model: mName,
+                    latency: Date.now() - startTime,
+                    tokens: response.usageMetadata?.totalTokenCount || 0,
+                    candidateId: candidateId,
+                    action: 'extraction'
+                });
+
                 if (jsonText && jsonText.includes('{')) break;
             } catch (err) {
                 console.warn(`⚠️ [Viper] Model ${mName} failed:`, err.message);

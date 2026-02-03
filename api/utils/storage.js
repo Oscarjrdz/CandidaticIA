@@ -73,6 +73,10 @@ const KEYS = {
     // AI Automations
     AI_AUTOMATIONS: 'ai:automations:list',
     SCHEDULED_RULES: 'scheduled_message_rules',
+
+    // Telemetry & Observability (Titan Standard)
+    TELEMETRY_AI_LOGS: 'telemetry:ai:events', // List of recent AI events
+    TELEMETRY_AI_STATS: 'telemetry:ai:stats', // Hash of lifetime stats
 };
 
 export const DEFAULT_PROJECT_STEPS = [
@@ -1134,4 +1138,72 @@ export const addCandidateToProject = async (projectId, candidateId, metadata = n
 
     await pipeline.exec();
     return true;
+};
+
+// ==========================================
+// TELEMETRY & OBSERVABILITY (TITAN STANDARD)
+// ==========================================
+/**
+ * recordAITelemetry
+ * Professional tracking of AI performance, latency and token usage.
+ */
+export const recordAITelemetry = async (data = {}) => {
+    const client = getClient();
+    if (!client) return;
+
+    try {
+        const timestamp = new Date().toISOString();
+        const event = {
+            id: Math.random().toString(36).substring(7),
+            timestamp,
+            model: data.model || 'unknown',
+            latency: data.latency || 0,
+            tokens: data.tokens || 0,
+            success: data.success !== false,
+            action: data.action || 'inference',
+            error: data.error || null,
+            candidateId: data.candidateId || null
+        };
+
+        const pipeline = client.pipeline();
+
+        // 1. Store the individual event log (Keep last 100 for deep diagnostics)
+        pipeline.lpush(KEYS.TELEMETRY_AI_LOGS, JSON.stringify(event));
+        pipeline.ltrim(KEYS.TELEMETRY_AI_LOGS, 0, 99);
+
+        // 2. Global Aggregates (Atomic Increments)
+        pipeline.hincrby(KEYS.TELEMETRY_AI_STATS, 'total_calls', 1);
+        if (event.success) {
+            pipeline.hincrby(KEYS.TELEMETRY_AI_STATS, 'successful_calls', 1);
+        } else {
+            pipeline.hincrby(KEYS.TELEMETRY_AI_STATS, 'failed_calls', 1);
+        }
+        pipeline.hincrby(KEYS.TELEMETRY_AI_STATS, 'total_latency_ms', Math.round(event.latency));
+        pipeline.hincrby(KEYS.TELEMETRY_AI_STATS, 'total_tokens', event.tokens || 0);
+
+        await pipeline.exec();
+    } catch (e) {
+        console.warn('⚠️ Telemetry Recording Failed:', e.message);
+    }
+};
+
+/**
+ * getAITelemetry
+ * Retrieves aggregated AI performance metrics.
+ */
+export const getAITelemetry = async () => {
+    const client = getClient();
+    if (!client) return {};
+
+    try {
+        const stats = await client.hgetall(KEYS.TELEMETRY_AI_STATS);
+        const recentLogs = await client.lrange(KEYS.TELEMETRY_AI_LOGS, 0, 9);
+
+        return {
+            stats,
+            recent: recentLogs.map(l => JSON.parse(l))
+        };
+    } catch (e) {
+        return {};
+    }
 };

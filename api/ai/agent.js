@@ -1,6 +1,17 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getRedisClient, getMessages, saveMessage, updateCandidate } from '../utils/storage.js';
-import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
+import {
+    getRedisClient,
+    getMessages,
+    saveMessage,
+    updateCandidate,
+    getCandidateById,
+    auditProfile,
+    getProjectById,
+    getVacancyById,
+    getVacancies,
+    recordAITelemetry
+} from '../utils/storage.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
 
 const DEFAULT_SYSTEM_PROMPT = `
 Eres el asistente virtual de Candidatic, un experto en reclutamiento amigable y profesional.
@@ -57,17 +68,14 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // 🏎️ [TYPING INDICATOR]
         const presencePromise = (async () => {
-            const { getCandidateById } = await import('../utils/storage.js');
             const cand = await getCandidateById(candidateId);
             const config = await getUltraMsgConfig();
             if (config && cand?.whatsapp) {
-                const { sendUltraMsgPresence } = await import('../whatsapp/utils.js');
                 await sendUltraMsgPresence(config.instanceId, config.token, cand.whatsapp, 'composing');
             }
         })();
 
         // 1. Context Acquisition
-        const { getCandidateById, auditProfile, getMessages, getProjectById, getVacancyById, getVacancies } = await import('../utils/storage.js');
         const candidateData = await getCandidateById(candidateId);
         if (!candidateData) return 'ERROR: Candidate not found';
 
@@ -185,7 +193,19 @@ TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextS
                 );
 
                 result = await Promise.race([inferencePromise, timeoutPromise]);
-                if (result) break;
+                if (result) {
+                    // Record Telemetry
+                    const duration = Date.now() - startTime;
+                    const tokens = result.response?.usageMetadata?.totalTokenCount || 0;
+                    recordAITelemetry({
+                        model: mName,
+                        latency: duration,
+                        tokens: tokens,
+                        candidateId: candidateId,
+                        action: 'chat_inference'
+                    });
+                    break;
+                }
             } catch (e) {
                 lastError = e.message;
                 console.error(`🤖 fallback model trigger: ${mName} failed. Error:`, lastError);
@@ -205,6 +225,33 @@ TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextS
 
         // --- 🧪 FINAL ANTI-ASTERISK FILTER (HARDCODE) ---
         responseText = responseText.replace(/\*/g, '');
+
+        // --- 🔎 AGENTIC REFLECTION (TITAN PASS 2) ---
+        // Ultra-fast "Audit" pass to ensure strict adherence to Golden Rules
+        try {
+            const auditModel = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            const auditPrompt = `
+Eres el Auditor de Calidad de Candidatic IA. Tu tarea es pulir el mensaje de tu compañero para que sea PERFECTO.
+
+REGLAS DE ORO:
+1. PROHIBIDO ASTERISCOS: Si hay, quítalos.
+2. SOLO UN DATO: Si el mensaje pregunta dos cosas, quédate solo con la más importante.
+3. CONCISIÓN: Si el mensaje tiene más de 3 líneas, redúcelo a 2.
+4. TONO: Humano y amigable.
+
+MENSAJE A AUDITAR: "${responseText}"
+
+Responde ÚNICAMENTE con el mensaje pulido:`;
+
+            const auditResult = await auditModel.generateContent(auditPrompt);
+            const polishedText = auditResult.response.text().replace(/\*/g, '').trim();
+            if (polishedText && polishedText.length > 5) {
+                responseText = polishedText;
+            }
+        } catch (auditErr) {
+            console.warn('⚠️ Reflection pass failed, using original response.');
+        }
+
         const moveTagFound = responseText.match(/\[MOVE\]|\{MOVE\}/gi);
         if (moveTagFound && candidateData.projectMetadata?.projectId) {
             const { moveCandidateStep } = await import('../utils/storage.js');

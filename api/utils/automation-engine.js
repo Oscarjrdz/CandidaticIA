@@ -8,7 +8,8 @@ import {
     incrementAIAutomationSentCount,
     updateCandidate,
     auditProfile,
-    isProfileComplete
+    isProfileComplete,
+    recordAITelemetry
 } from './storage.js';
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
@@ -339,8 +340,18 @@ ${dnaLines}
 Responde ÚNICAMENTE con el mensaje de texto para WhatsApp(máximo 150 caracteres): `;
 
         try {
+            const startInference = Date.now();
             const res = await model.generateContent(prompt);
             let text = res.response.text().trim();
+
+            // Record Telemetry
+            recordAITelemetry({
+                model: 'gemini-2.0-flash',
+                latency: Date.now() - startInference,
+                tokens: res.response?.usageMetadata?.totalTokenCount || 0,
+                candidateId: cand.id,
+                action: 'proactive_inference'
+            });
 
             // --- 🧪 FINAL ANTI-ASTERISK FILTER ---
             text = text.replace(/\*/g, '');
