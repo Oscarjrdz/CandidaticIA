@@ -99,11 +99,30 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
 
         const recentHistory = validMessages
-            .slice(0, -1) // Exclude the current message (which was just saved to DB)
-            .map(m => ({
-                role: (m.from === 'user') ? 'user' : 'model',
-                parts: [{ text: m.content }]
-            }));
+            .slice(0, -1)
+            .map(m => {
+                let role = (m.from === 'user') ? 'user' : 'model';
+                let content = m.content;
+
+                // Add context to the LLM about who sent what to avoid "confusion"
+                // If it was a proactive follow-up, label it so the bot knows Brenda sent it
+                if (m.meta?.proactiveLevel) {
+                    content = `[Lic. Brenda - Seguimiento Reclutamiento]: ${content}`;
+                }
+
+                return {
+                    role,
+                    parts: [{ text: content }]
+                };
+            });
+
+        // Add a "Mental Note" for the LLM to reinforce identity and prevent "getting lost"
+        const currentName = candidateData.nombreReal || candidateData.nombre || 'Desconocido';
+        const mentalNote = `(Contexto Interno: El candidato se llama "${currentName}" y estás en una charla profesional de Candidatic IA. No lo confundas con ubicaciones.)`;
+
+        if (recentHistory.length > 0) {
+            recentHistory[recentHistory.length - 1].parts[0].text += `\n${mentalNote}`;
+        }
 
         const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-5).map(m => m.content);
         const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Nuevo contacto';
