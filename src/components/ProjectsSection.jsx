@@ -11,7 +11,7 @@ import Button from './ui/Button';
 import Input from './ui/Input';
 import MagicSearch from './MagicSearch';
 import ChatWindow from './ChatWindow';
-import { calculateAge } from '../utils/formatters';
+import { formatPhone, formatRelativeDate, calculateAge, formatValue } from '../utils/formatters';
 
 // Drag & Drop Imports
 import {
@@ -1014,14 +1014,14 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                             <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
                                 {searchPreview.map(cand => {
                                     // Extreme defense against bad data
-                                    const displayName = String(cand?.nombreReal || cand?.nombre || 'Desconocido');
-                                    const initials = displayName.substring(0, 2).toUpperCase();
-                                    const location = String(cand?.municipio || 'Sin ubicación');
-                                    const phone = String(cand?.whatsapp || cand?.telefono || 'Sin contacto');
-                                    const category = String(cand?.categoria || 'General');
+                                    const displayName = formatValue(cand?.nombreReal || cand?.nombre);
+                                    const initials = displayName !== '-' ? displayName.substring(0, 2).toUpperCase() : '?';
+                                    const location = formatValue(cand?.municipio);
+                                    const phone = formatValue(cand?.whatsapp || cand?.telefono);
+                                    const category = formatValue(cand?.categoria);
 
                                     const age = cand?.edad || calculateAge(cand?.fechaNacimiento);
-                                    const ageDisplay = age ? `${age} años` : 'Edad N/A';
+                                    const ageDisplay = (age && formatValue(age) !== '-') ? `${age} años` : '-';
 
                                     const isSelected = selectedSearchIds.includes(cand.id);
 

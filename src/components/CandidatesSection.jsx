@@ -10,7 +10,7 @@ import { getCandidates, deleteCandidate, CandidatesSubscription } from '../servi
 import { getFields } from '../services/automationsService';
 import { getExportSettings, saveExportSettings, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
 import { generateChatHistoryText } from '../services/chatExportService';
-import { formatPhone, formatRelativeDate, formatDateTime, calculateAge } from '../utils/formatters';
+import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
 
 /**
  * Sección de Candidatos con Auto-Exportación
@@ -296,8 +296,11 @@ const CandidatesSection = ({ showToast }) => {
     const isProfileComplete = (c) => {
         // Red dot if ANY field is missing, Green dot if ALL fields are present
         const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero', 'tieneEmpleo'];
-        const hasCoreData = coreFields.every(f => !!c[f] && c[f] !== 'No proporcionado' && c[f] !== 'No proporcionada' && c[f] !== 'Consulta General');
-        const hasAgeData = !!(c.edad || c.fechaNacimiento);
+        const hasCoreData = coreFields.every(f => {
+            const val = formatValue(c[f]);
+            return val !== '-';
+        });
+        const hasAgeData = !!(c.edad || c.fechaNacimiento) && formatValue(c.edad || c.fechaNacimiento) !== '-';
         return hasCoreData && hasAgeData;
     };
 
@@ -587,14 +590,14 @@ const CandidatesSection = ({ showToast }) => {
                                                             {magicLoading[`${candidate.id}-${field.value}`] && (
                                                                 <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
                                                             )}
-                                                            {candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>}
+                                                            {formatValue(candidate[field.value])}
                                                             <Sparkles className={`w-2.5 h-2.5 ml-1.5 opacity-0 group-hover:opacity-100 ${magicLoading[`${candidate.id}-${field.value}`] ? 'hidden' : ''} text-blue-400`} />
                                                         </div>
                                                     ) : (
                                                         <div className="text-[10px] text-gray-900 dark:text-white font-medium">
                                                             {field.value === 'edad'
                                                                 ? calculateAge(candidate.fechaNacimiento, candidate.edad)
-                                                                : (candidate[field.value] || <span className="text-gray-400 italic font-normal">-</span>)}
+                                                                : formatValue(candidate[field.value])}
                                                         </div>
                                                     )}
                                                 </td>

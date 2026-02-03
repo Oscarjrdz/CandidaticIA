@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
+import { formatValue } from '../utils/formatters';
 
 const ADNSection = ({ showToast }) => {
     const [loading, setLoading] = useState(false);
@@ -141,9 +142,9 @@ REGLA DE BLOQUEO DE PROYECTOS: Prohibido hablar de "Proyectos" o "Silos Estraté
                         content={selectedCand ? `
 - Nombre: ${selectedCand.nombreReal || selectedCand.nombre}
 - WhatsApp: ${selectedCand.whatsapp}
-- Municipio: ${selectedCand.municipio || 'No proporcionado'}
-- Escolaridad: ${selectedCand.escolaridad || 'No proporcionado'}
-- Estatus Paso 1: ${selectedCand.nombreReal && selectedCand.municipio ? 'COMPLETO' : 'INCOMPLETO'}
+- Municipio: ${formatValue(selectedCand.municipio)}
+- Escolaridad: ${formatValue(selectedCand.escolaridad)}
+- Estatus Paso 1: ${selectedCand.nombreReal && formatValue(selectedCand.municipio) !== '-' ? 'COMPLETO' : 'INCOMPLETO'}
                         `.trim() : 'Selecciona un candidato para ver su ADN'}
                     />
 

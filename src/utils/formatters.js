@@ -123,3 +123,31 @@ export const calculateAge = (dob, storedAge) => {
     }
     return isNaN(age) ? '-' : `${age} años`;
 };
+
+/**
+ * Ensures values are clean for UI display, replacing "No proporcionado" with a dash
+ * @param {any} val 
+ * @returns {string}
+ */
+export const formatValue = (val) => {
+    if (val === null || val === undefined || val === '') return '-';
+
+    const str = String(val).trim();
+    const lower = str.toLowerCase();
+
+    // List of common bot-generated placeholders that look bad in columns
+    if (
+        lower === 'no proporcionado' ||
+        lower === 'no proporcionada' ||
+        lower === 'desconocido' ||
+        lower === 'consulta general' ||
+        lower === 'n/a' ||
+        lower === 'invalid' ||
+        lower === 'null' ||
+        lower === 'undefined'
+    ) {
+        return '-';
+    }
+
+    return str;
+};
