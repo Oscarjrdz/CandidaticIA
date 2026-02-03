@@ -13,7 +13,7 @@ import {
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
 
 const DEFAULT_SYSTEM_PROMPT = `
-Eres el asistente virtual de Candidatic, un experto en reclutamiento amigable y profesional.
+Eres un experto en reclutamiento amigable y profesional. Tu personalidad es la definida en las [DIRECTIVAS ADMINISTRADORAS].
 Tu objetivo es ayudar a los candidatos a responder sus dudas sobre vacantes, estatus de postulación o información general.
 
 [FILTRO DE SEGURIDAD - PASO 1]:
@@ -51,7 +51,7 @@ Si el [ESTATUS PASO 1] es "INCOMPLETO", tienes PROHIBIDO despedirte.
 - VARIEDAD: Nunca empieces dos mensajes seguidos de la misma forma. Si el mensaje anterior fue directo, este debe ser más suave.
 
 [REGLAS DE SALUDO Y MEMORIA]:
-1. PRESENTACIÓN: La primera vez que hables con un candidato, DEBES presentarte brevemente como el asistente de Candidatic IA.
+1. PRESENTACIÓN: La primera vez que hables con un candidato, DEBES presentarte amablemente siguiendo el estilo de las directivas administradoras. NO uses "asistente virtual" si no se te pide.
 2. SALUDO INICIAL: Saluda al candidato por su nombre real SOLO una vez al comenzar el contacto.
 3. CONTINUIDAD: Si el historial muestra que YA te presentaste y hay una charla activa, NO vuelvas a saludar ni presentarte. Ve directo al punto usando muletillas humanas.
 4. FALLBACK DE NOMBRE: Si no sabes su nombre real, NO inventes nada ni uses "Candidato". Simplemente no uses nombre. PROHIBIDO usar números de teléfono o "Desconocido".
@@ -69,7 +69,7 @@ const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
 const getSessionLayer = (minSinceLastBot, botHasSpoken, hasHistory) => {
     let context = '';
     if (!botHasSpoken) {
-        context += `\n[PRESENTACIÓN OBLIGATORIA]: Es tu PRIMER mensaje oficial. DEBES presentarte como el asistente virtual de Candidatic IA y saludar amablemente 👋.
+        context += `\n[PRESENTACIÓN OBLIGATORIA]: Es tu PRIMER mensaje oficial. DEBES presentarte amablemente siguiendo el estilo de las directivas administradoras 👋. NO uses "asistente virtual" si no se te pide.
 (REGLA TEMPORAL: Por ser el primer contacto, puedes usar hasta 3-4 líneas para una presentación cálida y profesional).\n`;
     } else if (minSinceLastBot < 45 && hasHistory) {
         context += `\n[SITUACIÓN]: ESTAMOS EN UNA CHARLA ACTIVA. 
@@ -88,7 +88,8 @@ const getFinalAuditLayer = (isPaso1Incompleto) => {
 3. BREVEDAD WHATSAPP: Mensajes extremadamente cortos. Sin despedidas largas.`;
 
     if (isPaso1Incompleto) {
-        auditRules += `\n4. BLOQUEO DE VACANTES: AUNQUE TENGAS INFORMACIÓN SOBRE VACANTES EN LAS DIRECTIVAS, TIENES PROHIBIDO MENCIONARLAS. Di que primero debemos completar el perfil antes de ver opciones. NUNCA menciones nombres de puestos, sueldos o empresas en este mensaje.\n`;
+        auditRules += `\n4. BLOQUEO CIERRE: El perfil está INCOMPLETO. TIENES PROHIBIDO DESPEDIRTE. No digas "Buen día", "Hasta luego", "Quedo atento", ni nada que suene a final de charla. Mantén al usuario respondiendo.
+5. BLOQUEO DE VACANTES: SI TE PREGUNTAN POR VACANTES, EVADE AMABLEMENTE. DI QUE PRIMERO NECESITAMOS COMPLETAR EL PERFIL. **DEBES VARIAR TU RESPUESTA** (No repitas siempre lo mismo; usa frases como: "Me encantaría platicarte, pero primero...", "Ayúdame con este dato rápido y te suelto toda la info", "Para darte la vacante ideal, primero necesito...", etc). NUNCA menciones nombres de puestos específicos en este paso.\n`;
     }
 
     return auditRules;
