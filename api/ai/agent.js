@@ -8,7 +8,6 @@ import {
     auditProfile,
     getProjectById,
     getVacancyById,
-    getVacancies,
     recordAITelemetry
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
@@ -208,17 +207,11 @@ TIENES PROHIBIDO dar detalles de sueldos o empresas.NO listes vacantes aquí.
 [INSTRUCCIÓN OBLIGATORIA]: Presenta el listado de categorías EXACTAMENTE como se muestra abajo.NUNCA inventes o sugieras una categoría que no esté en esta lista.${catList}
 REGLA: Si el candidato menciona algo que no está aquí, dile amablemente que esas son nuestras áreas actuales.\n`;
         } else {
-            // SILOING LIFTED: Profile is complete, we can show vacancies
-            const allVacancies = await getVacancies();
-            const activeVacancies = allVacancies.filter(v => v.status === 'active');
-
-            if (activeVacancies.length > 0) {
-                const vacList = activeVacancies.map(v => `- ${v.name}: ${v.description || 'Consulta detalles con nosotros.'}`).join('\n');
-                systemInstruction += `\n[LISTADO DE VACANTES DISPONIBLES]:\n${vacList}\n
-[INSTRUCCIÓN]: El candidato ya completó su perfil. Ahora SÍ puedes hablar de estas vacantes y responder sus dudas sobre ellas. Usa un tono de "vendedor" amigable para animarlo a postularse.\n`;
-            } else {
-                systemInstruction += `\n[POLÍTICA DE INFORMACIÓN]: El perfil está completo, pero no hay vacantes activas en este momento. Dile amablemente que pronto tendremos opciones para él.\n`;
-            }
+            // PROFILE COMPLETE: Handoff Mode
+            systemInstruction += `\n[OBJETIVO CUMPLIDO - PERFIL COMPLETO]:
+1. Informa al candidato que ya tenemos su información completa.
+2. Dile que revisaremos nuestro sistema para ver qué opciones encajan con su perfil y que nos pondremos en contacto con él muy pronto.
+3. **PROHIBIDO MENCIONAR VACANTES ESPECÍFICAS, SUELDOS O EMPRESAS**. Mantén el misterio profesional hasta el contacto humano.\n`;
         }
 
         systemInstruction += getFinalAuditLayer(audit.paso1Status === 'INCOMPLETO');
