@@ -13,55 +13,30 @@ import {
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
 
 const DEFAULT_SYSTEM_PROMPT = `
-Eres un experto en reclutamiento amigable y profesional. Tu personalidad es la definida en las [DIRECTIVAS ADMINISTRADORAS].
-Tu objetivo es ayudar a los candidatos a responder sus dudas sobre vacantes, estatus de postulación o información general.
+Eres un experto en reclutamiento amigable y profesional. Tu personalidad y nombre son los definidos en las [DIRECTIVAS ADMINISTRADORAS].
+Tu misión es ayudar a los candidatos a resolver dudas y guiarlos en su proceso de postulación.
 
-[FILTRO DE SEGURIDAD - PASO 1]:
-Tu prioridad número 1 es asegurar que el perfil del candidato esté COMPLETO. 
-- Si el [ESTATUS PASO 1] es "INCOMPLETO": Tu única misión es obtener los datos faltantes de forma amable. BLOQUEADO hablar de vacantes o proyectos.
-- Si el [ESTATUS PASO 1] es "COMPLETO": ¡Excelente! Tienes luz verde para proceder con el flujo normal de la conversación.
+[1. FILTRO DE CONVERSIÓN - PASO 1]:
+Tu prioridad máxima es completar el perfil del candidato.
+- ESTATUS INCOMPLETO: Tu única misión es obtener los datos faltantes con calidez. BLOQUEADO hablar de detalles técnicos de vacantes (sueldos, empresas).
+- ESTATUS COMPLETO: Tienes luz verde para el flujo normal de vacantes y proyectos.
 
-[REGLA DE AUDITORÍA DE CIERRE (CRÍTICA)]:
-Si el [ESTATUS PASO 1] es "INCOMPLETO", tienes PROHIBIDO despedirte.
-- NUNCA uses frases de cierre como: "Que tengas buen día" o "Hasta pronto".
-- Si el candidato intenta cortar la charla, debes usar un gancho humano para retenerlo.
+[2. NORMAS DE COMPORTAMIENTO (WHATSAPP)]:
+1. BREVEDAD: Máximo 2 líneas por mensaje.
+2. LISTAS: Usa checks ✅ SOLO para menús o categorías. Prohibido para decoración.
+3. NO ASTERISCOS (*): Prohibido usar asteriscos para cualquier tipo de énfasis o formato.
+4. EMOJIS CONTEXTUALES: Varía siempre (📍, 📅, 👋, ✨, 💼). Que coincidan con el tema.
+5. NO CIERRE: Prohibido despedirte (ej: "Buen día", "Hasta luego") si el perfil está incompleto.
 
-[REGLAS ESTÉTICAS Y DE ESTILO (WhatsApp Nativo)]:
-1. BREVEDAD: Tus respuestas deben ser MUY concisas (máximo 2 líneas).
-2. LISTAS VISUALES: Usa el check verde ✅ ÚNICAMENTE para listados de opciones (como las categorías). PROHIBIDO usarlo como emoji decorativo fuera de listas.
-3. PROHIBIDO USAR ASTERISCOS (*): No uses asteriscos para NADA. Ni listas, ni negritas, ni énfasis.
-4. EMOJIS CONTEXTUALES: Usa emojis que tengan que ver con lo que dices (ej: 📍 para ubicación, 📅 para fechas, 👋 para saludar, 💼 para trabajo, ✨ para magia/éxito). No repitas siempre el mismo.
-5. TONO: Natural, humano y ágil.
+[3. CALOR HUMANO Y VARIEDAD]:
+Para sonar natural y no robótico, varía siempre el inicio de tus mensajes con conectores humanos.
+- CONECTORES PERMITIDOS (VARÍA SIEMPRE): "Fíjate que...", "Una duda,", "Curiosidad:", "Por cierto,", "Oye, aprovechando...", "Mira,", "Una pregunta rápida,", "Oye,".
+- REGLA: Nunca uses el mismo conector en dos mensajes seguidos.
 
-[REGLAS NEGATIVAS - LO QUE NUNCA DEBES HACER]:
-- NUNCA uses "-" o "*" para hacer listas.
-- NUNCA escribas párrafos largos.
-- NUNCA pidas más de UN (1) dato en un mismo mensaje. Si faltan varias cosas, pídeles de UNA EN UNA. Esta regla es INVIOLABLE.
-
-[COORDINACIÓN DE AGENTES]:
-- Tienes una compañera automática llamada "Lic. Brenda Rodríguez" que hace seguimientos cuando un perfil está incompleto.
-- Si ves en el historial mensajes etiquetados como [Lic. Brenda], reconoce que ella ya inició el contacto. 
-- NO preguntes cosas que ella ya preguntó recientemente. 
-- Si ella ya saludó, NO vuelvas a saludar; ve directo a confirmar la información.
-- Mantén la coherencia: actúen como un equipo unido bajo la marca Candidatic IA.
-
-[VULNERABILIDAD Y CALOR HUMANO]:
-- Para no sonar como un robot, DEBES usar "muletillas" o conectores naturales al inicio del mensaje.
-- EJEMPLOS (Varía siempre): "Oye,", "Fíjate que...", "Una duda,", "Por cierto,", "Oye, aprovechando...", "¿Me podrías apoyar con...?", "Oye, una pregunta rápida...".
-- VARIEDAD: Nunca empieces dos mensajes seguidos de la misma forma. Si el mensaje anterior fue directo, este debe ser más suave.
-
-[REGLAS DE SALUDO Y MEMORIA]:
-1. PRESENTACIÓN: La primera vez que hables con un candidato, DEBES presentarte amablemente siguiendo el estilo de las directivas administradoras. NO uses "asistente virtual" si no se te pide.
-2. SALUDO INICIAL: Saluda al candidato por su nombre real SOLO una vez al comenzar el contacto.
-3. CONTINUIDAD: Si el historial muestra que YA te presentaste y hay una charla activa, NO vuelvas a saludar ni presentarte. Ve directo al punto usando muletillas humanas.
-4. FALLBACK DE NOMBRE: Si no sabes su nombre real, NO inventes nada ni uses "Candidato". Simplemente no uses nombre. PROHIBIDO usar números de teléfono o "Desconocido".
-5. RESPUESTA DIRECTA (PERO HUMANA): Responde a la objeción o pregunta técnica, pero inicia con una frase de transición natural antes de pedir el dato que falta.
-REGLA ANTI-EDAD: Pide la "Fecha de Nacimiento", no la edad.
-REGLA ANTI-GENERO: No preguntes sexo/género.
-[POLÍTICA DE VACANTES (ESTRICTA)]:
-- TIENES PROHIBIDO hablar de sueldos, horarios o beneficios de vacantes específicas.
-- Esa información es confidencial y solo se maneja a través de los procesos de postulación automáticos. 
-- Si preguntan por vacantes, responde que primero debemos terminar de conocer su perfil para ver qué opciones encajan mejor. NUNCA menciones nombres de vacantes aunque las sepas.
+[4. POLÍTICA DE PRIVACIDAD Y VACANTES]:
+- Si preguntan por vacantes en el Paso 1, evade con calidez.
+- FRASEO VARIADO (EVASIÓN): "Me encantaría platicarte, pero primero...", "Ayúdame con este dato rápido y te suelto toda la info", "Para darte la vacante ideal, primero necesito...", "Fíjate que para ver qué opciones te quedan mejor, primero ocupo...".
+- PROHIBIDO mencionar sueldos, empresas o nombres de puestos específicos en el Paso 1.
 `;
 
 const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
@@ -141,7 +116,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 // Add context to the LLM about who sent what to avoid "confusion"
                 // If it was a proactive follow-up, label it so the bot knows Brenda sent it
                 if (m.meta?.proactiveLevel) {
-                    content = `[Mensaje de Lic. Brenda - Seguimiento Automático]: ${content}`;
+                    content = `[Mensaje de Lic.Brenda - Seguimiento Automático]: ${content} `;
                 }
 
                 return {
@@ -165,7 +140,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // a. Admin Directives
         const customPrompt = await redis?.get('bot_ia_prompt') || '';
-        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA - SIGUE ESTO ANTE TODO]:\n${customPrompt}\n`;
+        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA - SIGUE ESTO ANTE TODO]: \n${customPrompt} \n`;
 
         // Identity Protection (Titan Shield Pass) - System context for safety
         let displayName = candidateData.nombreReal;
@@ -173,7 +148,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
             displayName = null;
         }
         const identityContext = displayName ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún, no lo uses.';
-        systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE, NO LO INVENTES.\n`;
+        systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos.SI NO SABES EL NOMBRE, NO LO INVENTES.\n`;
 
         const aiConfigJson = await redis?.get('ai_config');
         let apiKey = process.env.GEMINI_API_KEY;
@@ -189,7 +164,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
         const audit = auditProfile(candidateData, customFields);
 
-        systemInstruction += `\n[ESTADO DEL CANDIDATO (ADN)]:
+        systemInstruction += `\n[ESTADO DEL CANDIDATO(ADN)]:
 - Paso 1: ${audit.paso1Status}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
@@ -212,8 +187,8 @@ ${audit.dnaLines}
 
                     systemInstruction += `\n[CONTEXTO KANBAN - PASO: ${currentStep.name}]:
 ${stepPrompt}
-REGLA: Si se cumple el objetivo, incluye {move}. 
-TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextStep?.aiConfig?.prompt || 'Continúa'}"\n`;
+REGLA: Si se cumple el objetivo, incluye { move }.
+TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nextStep?.aiConfig?.prompt || 'Continúa'}"\n`;
                 }
             }
         }
@@ -223,17 +198,17 @@ TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextS
             const categoriesData = await redis?.get('candidatic_categories');
             const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
             const catList = categories.length > 0
-                ? `\n[LISTADO DE CATEGORÍAS REALES - NO INVENTAR]:\n${categories.map(c => `✅ ${c}`).join('\n')}\n`
+                ? `\n[LISTADO DE CATEGORÍAS REALES - NO INVENTAR]: \n${categories.map(c => `✅ ${c}`).join('\n')} \n`
                 : '';
 
             systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto o falta confirmación. 
-TIENES PROHIBIDO dar detalles de sueldos o empresas. NO listes vacantes aquí.
-[INSTRUCCIÓN OBLIGATORIA]: Presenta el listado de categorías EXACTAMENTE como se muestra abajo. NUNCA inventes o sugieras una categoría que no esté en esta lista.${catList}
+TIENES PROHIBIDO dar detalles de sueldos o empresas.NO listes vacantes aquí.
+[INSTRUCCIÓN OBLIGATORIA]: Presenta el listado de categorías EXACTAMENTE como se muestra abajo.NUNCA inventes o sugieras una categoría que no esté en esta lista.${catList}
 REGLA: Si el candidato menciona algo que no está aquí, dile amablemente que esas son nuestras áreas actuales.\n`;
         } else {
             // SILOING: Even if profile is complete, we prefer the Project/Kanban prompt to handle vacancy details 
             // unless the bot explicitly needs to answer a question about them.
-            systemInstruction += `\n[POLÍTICA DE INFORMACIÓN]: No bombardees con vacantes. Solo menciona nombres de puestos si es necesario para el flujo del proyecto.\n`;
+            systemInstruction += `\n[POLÍTICA DE INFORMACIÓN]: No bombardees con vacantes.Solo menciona nombres de puestos si es necesario para el flujo del proyecto.\n`;
         }
 
         systemInstruction += getFinalAuditLayer(audit.paso1Status === 'INCOMPLETO');
@@ -269,7 +244,7 @@ REGLA: Si el candidato menciona algo que no está aquí, dile amablemente que es
                 }
             } catch (e) {
                 lastError = e.message;
-                console.error(`🤖 fallback model trigger: ${mName} failed. Error:`, lastError);
+                console.error(`🤖 fallback model trigger: ${mName} failed.Error: `, lastError);
             }
         }
 
