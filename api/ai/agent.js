@@ -59,18 +59,24 @@ Si el [ESTATUS PASO 1] es "INCOMPLETO", tienes PROHIBIDO despedirte.
 5. RESPUESTA DIRECTA (PERO HUMANA): Responde a la objeción o pregunta técnica, pero inicia con una frase de transición natural antes de pedir el dato que falta.
 REGLA ANTI-EDAD: Pide la "Fecha de Nacimiento", no la edad.
 REGLA ANTI-GENERO: No preguntes sexo/género.
-REGLA DE ORO DE FILTRADO: Prohibido ofrecer detalles de vacantes si el perfil está INCOMPLETO.
+[POLÍTICA DE VACANTES (ESTRICTA)]:
+- TIENES PROHIBIDO hablar de sueldos, horarios o beneficios de vacantes específicas.
+- Esa información es confidencial y solo se maneja a través de los procesos de postulación automáticos. 
+- Si preguntan por vacantes, responde que primero debemos terminar de conocer su perfil para ver qué opciones encajan mejor. NUNCA menciones nombres de vacantes aunque las sepas.
 `;
 
 const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
 
-const getSessionLayer = (minSinceLastBot, hasHistory) => {
+const getSessionLayer = (minSinceLastBot, botHasSpoken, hasHistory) => {
     let context = '';
-    if (minSinceLastBot < 45 && hasHistory) {
+    if (!botHasSpoken) {
+        context += `\n[PRESENTACIÓN OBLIGATORIA]: Es tu PRIMER mensaje oficial. DEBES presentarte como el asistente virtual de Candidatic IA y saludar amablemente 👋.
+(REGLA TEMPORAL: Por ser el primer contacto, puedes usar hasta 3-4 líneas para una presentación cálida y profesional).\n`;
+    } else if (minSinceLastBot < 45 && hasHistory) {
         context += `\n[SITUACIÓN]: ESTAMOS EN UNA CHARLA ACTIVA. 
-PROHIBIDO saludar de nuevo. NO digas "Hola", "Buenos días", etc. Ve directo al grano.\n`;
+PROHIBIDO saludarte de nuevo o presentarte. Ve directo al grano.\n`;
     } else if (hasHistory) {
-        context += `\n[SITUACIÓN]: El candidato regresó tras un silencio. Saluda brevemente SIN repetir su nombre si ya lo usaste antes.\n`;
+        context += `\n[SITUACIÓN]: El candidato regresó tras un silencio. Saluda brevemente SIN presentarte de nuevo.\n`;
     }
     return context;
 };
@@ -212,14 +218,14 @@ TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextS
                 ? `\n[LISTADO DE CATEGORÍAS REALES - NO INVENTAR]:\n${categories.map(c => `✅ ${c}`).join('\n')}\n`
                 : '';
 
-            systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto. TIENES PROHIBIDO dar detalles de sueldos o empresas.
+            systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto o falta confirmación. 
+TIENES PROHIBIDO dar detalles de sueldos o empresas. NO listes vacantes aquí.
 [INSTRUCCIÓN OBLIGATORIA]: Presenta el listado de categorías EXACTAMENTE como se muestra abajo. NUNCA inventes o sugieras una categoría que no esté en esta lista.${catList}
 REGLA: Si el candidato menciona algo que no está aquí, dile amablemente que esas son nuestras áreas actuales.\n`;
         } else {
-            const activeVacancies = (await getVacancies()).filter(v => v.active || v.status === 'active');
-            if (activeVacancies.length > 0) {
-                systemInstruction += `\n[VACANTES DISPONIBLES]:\n${JSON.stringify(activeVacancies.map(v => ({ titulo: v.name, categoria: v.category, sueldo: v.salary })), null, 2)}\n`;
-            }
+            // SILOING: Even if profile is complete, we prefer the Project/Kanban prompt to handle vacancy details 
+            // unless the bot explicitly needs to answer a question about them.
+            systemInstruction += `\n[POLÍTICA DE INFORMACIÓN]: No bombardees con vacantes. Solo menciona nombres de puestos si es necesario para el flujo del proyecto.\n`;
         }
 
         systemInstruction += getFinalAuditLayer();
