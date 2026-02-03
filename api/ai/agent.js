@@ -206,12 +206,12 @@ TRANSICIÓN: Si incluyes {move}, di un emoji y salta al siguiente tema: "${nextS
             const categoriesData = await redis?.get('candidatic_categories');
             const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
             const catList = categories.length > 0
-                ? `\n[LISTADO DE CATEGORÍAS DISPONIBLES]:\n${categories.slice(0, 15).map(c => `✅ ${c}`).join('\n')}\n`
+                ? `\n[LISTADO DE CATEGORÍAS REALES - NO INVENTAR]:\n${categories.map(c => `✅ ${c}`).join('\n')}\n`
                 : '';
 
             systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto. TIENES PROHIBIDO dar detalles de sueldos o empresas.
-[INSTRUCCIÓN OBLIGATORIA]: Presenta el listado de categorías con sus checks verdes y pide el SIGUIENTE dato faltante (SOLO UNO): ${audit.missingLabels[0]}.${catList}
-REGLA: El listado de categorías es para que el candidato sepa qué opciones hay, inclúyelo SIEMPRE en este paso.\n`;
+[INSTRUCCIÓN OBLIGATORIA]: Presenta el listado de categorías EXACTAMENTE como se muestra abajo. NUNCA inventes o sugieras una categoría que no esté en esta lista.${catList}
+REGLA: Si el candidato menciona algo que no está aquí, dile amablemente que esas son nuestras áreas actuales.\n`;
         } else {
             const activeVacancies = (await getVacancies()).filter(v => v.active || v.status === 'active');
             if (activeVacancies.length > 0) {
