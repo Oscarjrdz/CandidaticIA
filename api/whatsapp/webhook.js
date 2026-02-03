@@ -171,20 +171,27 @@ export default async function handler(req, res) {
                         const redis = getRedisClient();
                         const extractionTask = (async () => {
                             try {
-                                const { getMessages } = await import('../utils/storage.js');
+                                const { getMessages, getCandidateById } = await import('../utils/storage.js');
                                 const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
                                 const freshMessages = await getMessages(candidateId, 100);
+                                const candidate = await getCandidateById(candidateId);
                                 const historyText = freshMessages
                                     .filter(m => m.from === 'user' || m.from === 'bot' || m.from === 'me')
-                                    .slice(-15)
+                                    .slice(-20)
                                     .map(m => {
-                                        const sender = (m.from === 'user') ? 'Candidato' : 'Reclutador';
+                                        let sender = 'Reclutador';
+                                        if (m.from === 'user') sender = 'Candidato';
+                                        else if (m.meta?.proactiveLevel) sender = 'Lic. Brenda (Seguimiento)';
+
                                         let content = m.content || '';
                                         if (m.type === 'audio' || m.type === 'ptt') content = '((Mensaje de Audio))';
                                         return `${sender}: ${content}`;
                                     })
                                     .join('\n');
-                                await intelligentExtract(candidateId, historyText);
+
+                                // Add a system context header for Viper-Grip
+                                const contextHeader = `[CONTEXTO]: Candidato actual en DB: ${candidate?.nombreReal || candidate?.nombre || 'Desconocido'}\n---\n`;
+                                await intelligentExtract(candidateId, contextHeader + historyText);
                             } catch (extErr) { console.error('⚠️ [Webhook] Extraction Task Error:', extErr); }
                         })();
 

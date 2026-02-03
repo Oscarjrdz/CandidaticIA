@@ -114,17 +114,18 @@ ${categoriesList}
 REQUERIMIENTOS:
 ${extractionInstructions}
 
-ESTRATEGIA DE RAZONAMIENTO (MÉTODO GOOGLE/ANTIGRAVITY):
-1. PENSAMIENTO (thought_process): Antes de extraer, escribe un análisis breve. 
-   - REGLA CRÍTICA DE CATEGORÍA: Si el usuario menciona "Ayudante" (aunque sea en un almacén), la categoría DEBE ser "Ayudante". Solo usa "Almacenista" si el usuario se describe puramente como tal sin mencionar "Ayudante".
-   - MAPPING: Intenta que la categoría coincida con las [CATEGORÍAS VÁLIDAS] si están listadas arriba.
-2. CITACIÓN: Para cada dato extraído, DEBES incluir el fragmento de texto exacto donde el candidato lo mencionó. Si no hay evidencia clara, el valor debe ser null.
-3. CONFIDENCIA: Asigna un puntaje de 0.0 a 1.0. 
-   - 1.0: El usuario lo dijo explícitamente ("Me llamo Juan").
-   - 0.5: Se infiere con dudas ("Trabajo cerca de Guadalupe").
-   - 0.0: No se menciona.
-4. PRECISIÓN: Si el dato NO está en la charla, devuelve null. PROHIBIDO alucinar.
-4. EXTRACCIÓN DE NOMBRE: El "nombreReal" debe venir de lo que el CANDIDATO escribió.
+ESTRATEGIA DE RAZONAMIENTO (PROTOCOLO VIPER 3.1):
+1. PENSAMIENTO (thought_process): Analiza quién es el Reclutador (Oscar) y quién es el Candidato. 
+   - REGLA CRÍTICA DE NOMBRE: El "nombreReal" NUNCA debe ser un municipio, ciudad o estado (ej. "Escobedo", "Monterrey", "Apodaca"). Si el usuario dice "Soy de Monterrey", Monterrey es el MUNICIPIO, no su nombre.
+   - REGLA CRÍTICA DE GÉNERO: Solo extrae datos si el Candidato los dice sobre SÍ MISMO.
+   - REGLA DE CATEGORÍA: Si menciona "Ayudante", esa es la categoría principal.
+2. CITACIÓN: Incluye el fragmento exacto. Si no hay evidencia, usa null.
+3. CONFIDENCIA: Puntaje 0.0 a 1.0.
+   - 1.0: "Mi nombre es Juan".
+   - 0.5: Inferencia vaga.
+   - 0.1: Basura o mensaje del sistema.
+4. VALIDACIÓN CRUZADA: No permitas que un municipio se filtre al campo de nombre.
+5. EXTRACCIÓN DE NOMBRE: El "nombreReal" debe ser el nombre humano del candidato.
 
 Responde ÚNICAMENTE con un JSON puro que siga este esquema:
 ${JSON.stringify(schema, null, 2)}
@@ -209,7 +210,26 @@ ${JSON.stringify(schema, null, 2)}
             // ATOMIC DECISION: Should we update?
             // Rule 1: Always update if existing value is a placeholder and confidence > 0.4
             // Rule 2: Only update STABLE data if confidence is very high (> 0.85)
-            const shouldUpdate = isPlaceholder ? (confidence > 0.4) : (confidence > 0.85);
+            let shouldUpdate = isPlaceholder ? (confidence > 0.4) : (confidence > 0.85);
+
+            // --- 🛡️ TITAN SHIELD: CROSS-FIELD EXCLUSION ---
+            // If the field is 'nombreReal', perform additional sanity checks
+            if (canonicalField === 'nombreReal' && val) {
+                const lowerVal = val.toLowerCase().trim();
+                const otherExtractedMunicipio = extracted.municipio ? (typeof extracted.municipio === 'object' ? String(extracted.municipio.value).toLowerCase() : String(extracted.municipio).toLowerCase()) : '';
+
+                // 1. If the value is the SAME as the extracted municipality, it's likely a mis-mapping
+                if (lowerVal === otherExtractedMunicipio && confidence < 0.95) {
+                    console.warn(`[ViperShield] Blocked Name-Municipio collision: "${val}"`);
+                    shouldUpdate = false;
+                }
+
+                // 2. If we already have a high-confidence name, don't change it for something that looks like 1 word (could be a location)
+                if (!isPlaceholder && val.split(' ').length === 1 && confidence < 0.9) {
+                    shouldUpdate = false;
+                }
+            }
+            // ---------------------------------------------
 
             if (shouldUpdate) {
                 try {
