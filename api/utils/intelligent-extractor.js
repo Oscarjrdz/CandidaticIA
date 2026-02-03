@@ -212,24 +212,29 @@ ${JSON.stringify(schema, null, 2)}
             // Rule 2: Only update STABLE data if confidence is very high (> 0.85)
             let shouldUpdate = isPlaceholder ? (confidence > 0.4) : (confidence > 0.85);
 
-            // --- 🛡️ TITAN SHIELD: CROSS-FIELD EXCLUSION ---
-            // If the field is 'nombreReal', perform additional sanity checks
+            // --- 🛡️ TITAN SHIELD: CROSS-FIELD EXCLUSION (HARDENED) ---
             if (canonicalField === 'nombreReal' && val) {
                 const lowerVal = val.toLowerCase().trim();
-                const otherExtractedMunicipio = extracted.municipio ? (typeof extracted.municipio === 'object' ? String(extracted.municipio.value).toLowerCase() : String(extracted.municipio).toLowerCase()) : '';
 
-                // 1. If the value is the SAME as the extracted municipality, it's likely a mis-mapping
-                if (lowerVal === otherExtractedMunicipio && confidence < 0.95) {
-                    console.warn(`[ViperShield] Blocked Name-Municipio collision: "${val}"`);
+                // 1. Check against CURRENT extraction's municipality
+                const currentExtMuni = extracted.municipio ?
+                    (typeof extracted.municipio === 'object' ? String(extracted.municipio.value).toLowerCase() : String(extracted.municipio).toLowerCase()) : '';
+
+                // 2. Check against EXISTING municipality in DB
+                const existingMuni = String(currentCandidate.municipio || '').toLowerCase().trim();
+
+                // 3. Block if matches either (high probability of mis-mapping during follow-up)
+                if ((lowerVal === currentExtMuni || lowerVal === existingMuni) && confidence < 0.98) {
+                    console.warn(`[ViperShield] Blocked Name-Municipio collision for "${val}". Matches existing or new location.`);
                     shouldUpdate = false;
                 }
 
-                // 2. If we already have a high-confidence name, don't change it for something that looks like 1 word (could be a location)
-                if (!isPlaceholder && val.split(' ').length === 1 && confidence < 0.9) {
+                // 4. Block single-word names that look like locations if we already have a stable name
+                if (!isPlaceholder && val.split(' ').length === 1 && confidence < 0.95) {
                     shouldUpdate = false;
                 }
             }
-            // ---------------------------------------------
+            // --------------------------------------------------------
 
             if (shouldUpdate) {
                 try {

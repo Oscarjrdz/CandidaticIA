@@ -17,7 +17,10 @@ export const DATA_SCHEMA = {
         cleaner: cleanNameWithAI,
         priority: 1,
         onSuccess: async (val, updateObj) => {
-            if (val) updateObj.genero = await detectGender(val);
+            if (val) {
+                const gender = await detectGender(val);
+                if (gender && gender !== 'Desconocido') updateObj.genero = gender;
+            }
         }
     },
     municipio: {
