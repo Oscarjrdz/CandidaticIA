@@ -242,7 +242,17 @@ export const auditProfile = (c, customFields = []) => {
             val === 'qué tal' ||
             val === 'que tal' ||
             val === 'lista' ||
-            val === 'listo';
+            val === 'listo' ||
+            // --- JUNK DATA BLOCK (Adjectives/Vague praise) ---
+            val === 'bien' || val === 'super' || val === 'súper' || val === 'super bien' || val === 'superbien' ||
+            val === 'ok' || val === 'claro' || val === 'porsupuesto' || val === 'por supuesto' ||
+            val === 'perfecto' || val === 'excelente' || val === 'genial' || val === 'todo bien';
+
+        // --- DATE PRECISION (Requires 4-digit year) ---
+        if (field.value === 'fechaNacimiento' && !isInvalid) {
+            const hasYear = /\b(19|20)\d{2}\b/.test(val);
+            if (!hasYear) isInvalid = true;
+        }
 
         if (isInvalid) {
             missingLabels.push(field.label);
