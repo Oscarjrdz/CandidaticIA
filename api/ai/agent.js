@@ -38,10 +38,11 @@ Para sonar natural y NO como una grabadora, sigue estas reglas:
 - PIVOTE OBLIGATORIO: Si el usuario dice "gracias", "hola", evade o te echa un cumplido, reconoce el mensaje amablemente y LANZA de nuevo una pregunta de datos con beneficio.
 - CALIDAD DEL DATO: Prohibido conformarte con respuestas vagas. 
    * FECHA: DEBES obtener el año (4 dígitos). Si el usuario solo da día y mes, insiste con el año para "confirmar su elegibilidad".
-   * PUESTO: Si el usuario responde con adjetivos ("bien", "ok"), insiste en que elija una vacante real de la lista.
+   * PUESTO: Si el usuario responde con adjetivos ("bien", "ok"), insiste en que elija una vacante de la lista.
    * ESTUDIOS: Requiere al menos Primaria o Secundaria. Reincide si dicen "Kinder" o "Ninguno".
+- RESILIENCIA: Si el candidato se queja ("Ya te dije", "No me lees"), pide una disculpa humana con un toque divertido (ej. "¡Ay, perdona! Es que me llegó mucha gente a la oficina y me distraje un segundo 😅") y asegúrate de reconocer que ya anotaste lo que te dijo.
 - MARCA DE MOMENTUM: Si falta poco, usa: "¡Ya casi terminamos! Solo me falta un dato para que pueda checar tus carpetas y mandarte a entrevista. 💖"
-- REGLA DE VERACIDAD (ADN): Los datos en [ESTADO DEL CANDIDATO(ADN)] son la verdad absoluta. Si un campo como "Fecha de Nacimiento" ya tiene un año, TIENES PROHIBIDO pedirlo de nuevo, aunque sientas que el usuario no lo dijo claro. Confía en mis anotaciones previas.
+- REGLA DE VERACIDAD (ADN): Los datos en [ESTADO DEL CANDIDATO(ADN)] son la verdad absoluta. Si un campo como "Fecha de Nacimiento" ya tiene un año, TIENES PROHIBIDO pedirlo de nuevo. Confía en mis anotaciones.
 `;
 
 const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
@@ -108,6 +109,12 @@ const getVibeLayer = (history = []) => {
         vibeContext += '- INTERROGATORIO ATORADO: El usuario aceptó o preguntó pero NO dio el dato que pediste. NO cambies de tema. Insiste en el MISMO dato anterior con una frase como: "Excelente, ¡entonces dime tu [Dato] para avanzar!".\n';
     }
 
+    // 5. Detect Frustration (Repeat Complaint)
+    const complaints = ['ya te lo dije', 'ya lo dije', 'ya te dije', 'ya te lo mande', 'ya te lo mandé', 'ya te mandé', 'porque me preguntas tanto', 'lee arriba', 'no lees', 'no me lees'];
+    if (complaints.some(c => lastUserMsg.includes(c))) {
+        vibeContext += '- DETECTADA FRUSTRACIÓN: El usuario siente que se está repitiendo. Pide disculpas humanas (me distraje, se me fue el avión) y reconoce el dato de forma entusiasta.\n';
+    }
+
     return vibeContext;
 };
 
@@ -120,10 +127,14 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
 4. MODO ATENTO (ANTI-VISTO): Si el perfil ya está COMPLETO y el usuario saluda ("Hola", "Qué onda"), responde con cercanía humana: "¿Dime [Nombre]? ¿Qué pasó?" o "¿Qué onda [Nombre]! Sigo aquí checando tus papeles para ver qué vacante te acomoda mejor ✨".`;
 
     if (isPaso1Incompleto) {
-        auditRules += `\n4. BLOQUEO DE CIERRE (MÁXIMA PRIORIDAD): El perfil está INCOMPLETO. Faltan estos datos en orden: [${missingLabels.join(', ')}]. 
-   REGLA DE HIERRO: TIENES PROHIBIDO DESPEDIRTE o usar frases como "revisaré tu perfil", "validaré con mis carpetas" o "en breve me comunico". 
-   BLOQUEO DE SECUENCIA: Solo puedes preguntar por el PRIMER dato de la lista anterior (${missingLabels[0]}). NO avances al siguiente si el primero no está lleno.
-   INSTRUCCIÓN: Si el usuario intenta cerrar o si tú sientes que "ya terminaste", REVISA esta lista. Si falta algo (como el AÑO de nacimiento o la VACANTE real), DEBES decir: "¡Espera! Antes de que pueda cerrar tu expediente, fíjate que me falta tu [Dato]..." y lanzar el pivote.\n`;
+        const nextTarget = missingLabels[0];
+        const backupTarget = missingLabels[1] || null;
+
+        auditRules += `\n4. BLOQUEO DE SECUENCIA INTELIGENTE: El perfil está INCOMPLETO. Faltan: [${missingLabels.join(', ')}]. 
+   REGLA DE AVANCE DINÁMICO: Tu misión actual es obtener "${nextTarget}". 
+   - SI EXTRAES "${nextTarget}" EN ESTE TURNO: ¡Excelente! En tu response_text reconócelo ("¡Anotado ${nextTarget}!") y PASA AL SIGUIENTE DATO FALTANTE (${backupTarget ? `"${backupTarget}"` : 'ninguno'}) en la misma respuesta. NO preguntes de nuevo por "${nextTarget}".
+   - SI EL USUARIO NO DIO "${nextTarget}": Insiste únicamente en ese dato con el "PARA QUÉ" (beneficio).
+   BLOQUEO DE CIERRE: TIENES PROHIBIDO DESPEDIRTE.\n`;
     }
 
     return auditRules;
@@ -405,7 +416,7 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
         if (aiResult.extracted_data) {
             const updates = {};
             for (const [key, val] of Object.entries(aiResult.extracted_data)) {
-                if (val && val !== 'null' && val !== 'null' && candidateData[key] !== val) {
+                if (val && val !== 'null' && val !== 'indefinido' && candidateData[key] !== val) {
                     updates[key] = val;
                 }
             }
