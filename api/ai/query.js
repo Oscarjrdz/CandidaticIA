@@ -108,6 +108,11 @@ ${allFields.map(f => `- ${f.value} (${f.label})`).join('\n')}
 }
 
 Consulta del usuario: "${query}"
+
+[ESCALA DE RELEVANCIA]:
+- 100 pts: Coincidencia exacta en nombre o municipio.
+- 50 pts: Coincidencia en 'categoria' o 'keywords'.
+- 20 pts: Coincidencia en chat_summary o historial.
 `;
 
         // Intentar varios modelos hasta que uno funcione (Prioridad Flash 2.0 por velocidad)
@@ -156,8 +161,8 @@ Consulta del usuario: "${query}"
 
         const aiResponse = JSON.parse(jsonMatch[0]);
 
-        // 3. Ejecutar la búsqueda en los datos reales
-        const { candidates } = await getCandidates(2000, 0, '', true); // Exclude linked candidates for AI search
+        // 3. Ejecutar la búsqueda en los datos reales (TODOS, incluyendo incompletos)
+        const { candidates } = await getCandidates(2000, 0, '', false); // false = INCLUDE incomplete/unlinked
 
         // Función para calcular edad
         // Función para normalizar strings (quitar acentos, minúsculas)
@@ -226,125 +231,68 @@ Consulta del usuario: "${query}"
 
         let filtered = candidates;
 
-        // A. Aplicar Filtros Inteligentes (Metadatos)
-        if (aiResponse.filters && Object.keys(aiResponse.filters).length > 0) {
-            filtered = filtered.filter(candidate => {
-                return Object.entries(aiResponse.filters).every(([key, criteria]) => {
+        filtered = filtered.map(candidate => {
+            let score = 0;
+
+            // 1. Puntuar por Filtros de IA
+            if (aiResponse.filters) {
+                Object.entries(aiResponse.filters).forEach(([key, criteria]) => {
                     const searchStr = normalizeString(criteria.val || criteria);
-                    if (!searchStr) return true;
+                    if (!searchStr) return;
 
                     let candidateVal = candidate[key];
+                    if (key === 'edad') candidateVal = calculateAge(candidate.fechaNacimiento);
 
-                    // Manejo especial de EDAD
-                    if (key === 'edad') {
-                        candidateVal = calculateAge(candidate.fechaNacimiento);
-                        if (candidateVal === null) return false; // Strict: if filtering by age and no age, exclude.
-                    }
-
-                    // APLICAR FILTRO NORMALIZADO
-                    // Prioridad 1: Logica Matemática (Si criteria es objeto con op)
-                    if (typeof criteria === 'object' && criteria.op) {
-                        const { op, val } = criteria;
-                        const numVal = parseFloat(val);
-                        const numCand = parseFloat(candidateVal);
-
-                        if (isNaN(numCand)) return false; // If value is not a number, strict fail
-
-                        switch (op) {
-                            case '>': return numCand > numVal;
-                            case '<': return numCand < numVal;
-                            case '>=': return numCand >= numVal;
-                            case '<=': return numCand <= numVal;
-                            case '==': return numCand == numVal;
-                            // Add range support if needed in future
-                            default: return false;
-                        }
-                    }
-
-                    // Prioridad 2: Coincidencia de Texto (Fuzzy pero específico a la columna)
-                    if (key === 'edad') {
-                        candidateVal = calculateAge(candidate.fechaNacimiento);
-                    }
-
-                    // Manejo especial de NOMBRES (Robustez: buscar en Real y WhatsApp)
-                    if (key === 'nombreReal' || key === 'nombre') {
-                        const valReal = normalizeString(candidate.nombreReal);
-                        const valWA = normalizeString(candidate.nombre);
-                        return valReal.includes(searchStr) || valWA.includes(searchStr);
-                    }
-
-                    // APLICAR FILTRO NORMALIZADO
                     const normalizedCandidateVal = normalizeString(candidateVal);
-
-                    // 1. Coincidencia directa en el campo asignado
-                    if (normalizedCandidateVal.includes(searchStr)) return true;
-
-                    // 2. FALLBACK GLOBAL: Only if the IA specifically didn't target a field (less common now)
-                    // or as a very last resort if we want fuzzy matching.
-                    // For now, let's keep it strict if a key was assigned.
-                    if (candidateVal && normalizedCandidateVal.includes(searchStr)) return true;
-
-                    return false;
-
-                    return false;
-                });
-            });
-        }
-
-        // B. Búsqueda Profunda (Titan Search Phase 1: Indexed Keywords)
-        if (aiResponse.keywords && aiResponse.keywords.length > 0) {
-            const finalResults = [];
-            const keywordsLower = aiResponse.keywords.map(kw => kw.toLowerCase());
-
-            for (const candidate of filtered) {
-                // 🛠️ Optimization 1: Check Metadata (Fastest)
-                const metadataValues = Object.values(candidate).map(v => String(v).toLowerCase());
-                const metadataMatch = keywordsLower.some(kw =>
-                    metadataValues.some(val => val.includes(kw))
-                );
-
-                if (metadataMatch) {
-                    finalResults.push(candidate);
-                    continue;
-                }
-
-                // 🛠️ Optimization 2: Check Chat Summary (Titan Index - Medium)
-                if (candidate.chat_summary) {
-                    const summaryMatch = keywordsLower.some(kw =>
-                        candidate.chat_summary.toLowerCase().includes(kw)
-                    );
-                    if (summaryMatch) {
-                        finalResults.push(candidate);
-                        continue;
+                    if (normalizedCandidateVal.includes(searchStr)) {
+                        score += (key === 'nombreReal' || key === 'municipio') ? 100 : 50;
                     }
-                }
-
-                // 🛠️ Optimization 3: Deep Message Scan (Safety Fallback - Slowest)
-                // Only do this if we haven't found a match yet and the candidate has messages
-                const messages = await getMessages(candidate.id, 50);
-                const userChatText = messages
-                    .filter(m => m.from === 'user')
-                    .map(m => m.content)
-                    .join(' ')
-                    .toLowerCase();
-
-                const chatMatch = keywordsLower.some(kw => userChatText.includes(kw));
-
-                if (chatMatch) {
-                    finalResults.push(candidate);
-                }
+                });
             }
-            filtered = finalResults;
+
+            // 2. Puntuar por Keywords (Deep Relevance)
+            if (aiResponse.keywords && aiResponse.keywords.length > 0) {
+                const keywordsLower = aiResponse.keywords.map(kw => kw.toLowerCase());
+                const metadataValues = Object.values(candidate).map(v => String(v).toLowerCase());
+
+                keywordsLower.forEach(kw => {
+                    // Match in metadata
+                    if (metadataValues.some(val => val.includes(kw))) score += 40;
+                    // Match in summary
+                    if (candidate.chat_summary && candidate.chat_summary.toLowerCase().includes(kw)) score += 30;
+                });
+            }
+
+            return { ...candidate, _relevance: score, edad: calculateAge(candidate.fechaNacimiento) };
+        });
+
+        // 3. Optimización Titan: Deep Message Scan (Solo si el score es bajo y hay pocos resultados)
+        // Para evitar lentitud, solo escaneamos mensajes si no hay matches altos
+        const lowScoreCandidates = filtered.filter(c => c._relevance < 30).slice(0, 20);
+        for (const candidate of lowScoreCandidates) {
+            const messages = await getMessages(candidate.id, 20);
+            const chatText = messages.map(m => m.content).join(' ').toLowerCase();
+
+            if (aiResponse.keywords) {
+                aiResponse.keywords.forEach(kw => {
+                    if (chatText.includes(kw.toLowerCase())) {
+                        const cIdx = filtered.findIndex(f => f.id === candidate.id);
+                        if (cIdx !== -1) filtered[cIdx]._relevance += 25;
+                    }
+                });
+            }
         }
+
+        // 4. Ordenar por Relevancia (Google Style)
+        filtered = filtered
+            .filter(c => c._relevance > 0 || !aiResponse.filters) // Keep if matches or if query was too broad
+            .sort((a, b) => b._relevance - a._relevance);
 
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 2.1",
-            candidates: filtered.map(c => ({
-                ...c,
-                edad: calculateAge(c.fechaNacimiento)
-            })),
+            version: "Titan 2.1 (Google Search Edition)",
+            candidates: filtered.slice(0, 100), // Return top 100 for UX
             ai: aiResponse
         });
 
