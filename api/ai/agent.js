@@ -48,25 +48,28 @@ const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
 const getSessionLayer = (minSinceLastBot, botHasSpoken, hasHistory, displayName = null) => {
     let context = '';
 
-    // ANTI-AMNESIA: If we know the name, we skip formal re-introduction ALWAYS
-    if (displayName && displayName !== 'Desconocido') {
-        context += `\n[SITUACIÓN]: Ya conoces al candidato (Se llama ${displayName}). 
-PROHIBIDO presentarte con cargo/empresa o usar "mucho gusto". 
-SALUDO: Usa un saludo de confianza como "¡Hola de nuevo, ${displayName}!" o "¡Qué gusto saludarte de nuevo!".\n`;
-        return context;
-    }
+    // 🏎️ ELITE GREETING LOGIC: Fix timing bug
+    const isNewContact = !botHasSpoken;
+    const isReturningLongGap = hasHistory && minSinceLastBot >= 120;
+    const isActiveConversation = hasHistory && minSinceLastBot < 120;
 
-    if (!botHasSpoken) {
+    if (isNewContact) {
         context += `\n[PRESENTACIÓN OBLIGATORIA]: Es tu PRIMER mensaje oficial 👋. 
 INSTRUCCIÓN: Preséntate amablemente siguiendo el estilo de la Lic. Brenda Rodríguez. 🌸
 (REGLA TEMPORAL: Por ser el primer contacto, puedes usar hasta 3-4 líneas para una presentación cálida y profesional).\n`;
-    } else if (minSinceLastBot < 120 && hasHistory) {
+    } else if (isActiveConversation) {
         context += `\n[SITUACIÓN]: ESTAMOS EN UNA CHARLA ACTIVA (Pasaron menos de 2 horas). 
 REGLA DE ORO: PROHIBIDO saludarte de nuevo o usar "Hola" / "Buenos días". Ve directo al grano o usa un conector natural como "Oye...", "Dime...", "Por cierto...".\n`;
-    } else if (hasHistory) {
+    } else if (isReturningLongGap) {
         context += `\n[SITUACIÓN]: El candidato regresó tras un silencio largo (+2 horas). 
 SALUDO: Usa un saludo breve de re-conexión SIN presentarte de nuevo (ej. "¡Hola de nuevo, ${displayName || 'Oscar'}!" o "¡Qué bueno que regresaste!").\n`;
     }
+
+    // ANTI-AMNESIA: Context for known users
+    if (displayName && displayName !== 'Desconocido') {
+        context += `\n[MEMORIA]: Ya conoces al candidato (Se llama ${displayName}). No te presentes de nuevo.\n`;
+    }
+
     return context;
 };
 
@@ -284,23 +287,17 @@ REGLA: NO INVENTES CATEGORÍAS. Dile al usuario que estamos actualizando nuestra
 TIENES PROHIBIDO dar detalles de sueldos o empresas. 
 ${catInstruction}\n`;
         } else if (!isNameBoilerplate) {
-            // PROFILE COMPLETE: Human Attention Mode (Anti-Visto)
-            const greetings = ['hola', 'que tal', 'qué tal', 'que onda', 'qué onda', 'buenos dias', 'buenas tardes', 'buenas noches'];
-            const lastMsg = lastUserMessages[lastUserMessages.length - 1]?.toLowerCase() || '';
-            const isGreeting = greetings.some(g => lastMsg.includes(g)) && lastMsg.length < 15;
-
-            if (isGreeting) {
-                systemInstruction += `\n[OBJETIVO CUMPLIDO - ATENCIÓN HUMANA]:
-1. El usuario te saludó amablemente después de terminar.
-2. RESPONDE CON CERCANÍA: "¿Dime ${displayName}? ¿Qué pasó?" o "¿Qué onda ${displayName}! Sigo aquí checando el sistema para ti ✨".
-3. REAFIRMA: Menciona que sigues buscando la mejor opción para él/ella en el sistema.\n`;
-            } else {
-                systemInstruction += `\n[OBJETIVO CUMPLIDO - PERFIL COMPLETO]:
-1. Informa al candidato que ya tenemos su información completa ✨.
-2. Dile que revisaremos nuestro sistema para ver qué opciones encajan con su perfil y que nos pondremos en contacto con él muy pronto. 😊
-3. **PROHIBIDO MENCIONAR VACANTES ESPECÍFICAS, SUELDO O EMPRESA**. Mantén el interés profesional.\n`;
-            }
-        } else {
+            // --- ANTI-CHAMBER MODE (Elite Post-Completion Engagement) ---
+            systemInstruction += `\n[ESTADO: ANTESALA - PERFIL COMPLETO ✨]:
+1. El usuario ya terminó su perfil pero aún no inicia un proyecto específico.
+2. TU MISIÓN: Ser su Concierge/Anfitriona humana. NO seas rígida. ✨🌸
+3. ESTRATEGIA "AVENTAR LA BOLA" (Ball-Back): 
+   - Si te pregunta algo (chiste, hora, info), RESPONDE brevemente.
+   - INMEDIATAMENTE lanza una pregunta de vuelta para mantenerlo enganchado (ej. "¿Tú qué piensas?", "¿Te ha pasado?", "¿Estás listo para el reto?").
+   - NUNCA dejes la plática morir con un solo dato.
+4. MANTÉN LA ESPERANZA: Recuérdale que sigues trabajando en su perfil dentro del sistema para encontrarle lo mejor. 😊\n`;
+        }
+        else {
             // PROFILE SAYS COMPLETE BUT NAME IS JUNK
             systemInstruction += `\n[ALERTA]: El sistema dice que el perfil está completo, pero el NOMBRE parece basura o está ausente.
 REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
