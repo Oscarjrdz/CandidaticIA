@@ -432,8 +432,11 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
 
         await Promise.allSettled([
             deliveryPromise,
-            saveMessage({ candidateId, from: 'bot', content: responseText, timestamp: new Date().toISOString() }),
-            updateCandidate(candidateId, { lastBotMessageAt: new Date().toISOString() })
+            saveMessage(candidateId, { from: 'bot', content: responseText, timestamp: new Date().toISOString() }),
+            updateCandidate(candidateId, {
+                lastBotMessageAt: new Date().toISOString(),
+                ultimoMensaje: new Date().toISOString()
+            })
         ]);
 
         return responseText;
