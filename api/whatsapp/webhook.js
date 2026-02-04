@@ -20,11 +20,6 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, message: 'Heartbeat or invalid payload' });
     }
 
-    // 🏎️ ACKNOWLEDGE IMMEDIATELY: Prevent UltraMsg from retrying and causing duplicates
-    if (eventType.includes('message')) {
-        res.status(200).json({ success: true, received: true });
-    }
-
     try {
         // 1. Handle Message Acknowledgments
         if (eventType === 'message_ack' || eventType === 'message.ack') {
