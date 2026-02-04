@@ -120,7 +120,10 @@ ESTRATEGIA DE RAZONAMIENTO (PROTOCOLO VIPER 3.1):
    - REGLA CRÍTICA DE EVASIÓN: Si el usuario responde con frases negativas, evasivas o dice que "no" a una pregunta de datos (ej. "luego", "no te diré", "para qué"), NO extraigas nada. El valor debe ser null.
     - REGLA CRÍTICA DE SALUDOS: Frases como "hola", "buenas", "que tal", "estoy listo", "dime", "si", "no" SIN CONTEXTO de datos NO deben ser extraídas como valores. Usa null.
     - REGLA DE ADJETIVOS (JUNK): Respuestas vagas o adjetivos como "bien", "super bien", "está bien", "perfecto", "ok", "claro", "excelente", "todos", "alguno", "algunos", "cualquiera" sin un dato concreto (ej. sin un puesto o fecha real) deben ser ignoradas. El valor debe ser null.
-    - REGLA DE FECHA (PRECISIÓN): Para el campo "fechaNacimiento", el valor DEBE incluir un año plausible (ej. 1988 o 19/05/1988). Si solo menciona día y mes (ej. "19 de mayo") o la edad (ej. "45 años"), extrae null para el campo de fecha y explica en el thought_process que falta el año exacto.
+    - REGLA DE FECHA (PRECISIÓN): Para el campo "fechaNacimiento", el valor DEBE ser un string "DD/MM/YYYY". 
+      * INFERENCIA DE AÑO: Si solo da 2 dígitos (ej. "83"), infiere el siglo XX (1983). Si da "01", infiere el siglo XXI (2001).
+      * Si solo menciona día y mes (ej. "19 de mayo") o la edad (ej. "45 años"), extrae null y explica en el thought_process que falta el año exacto.
+    - REGLA DE UBICACIÓN (FRAGMENTOS): Para el campo "municipio", acepta nombres parciales o apodos (ej. "Santa" -> "Santa Catarina", "San Nico" -> "San Nicolás de los Garza"). Mapea al nombre oficial más probable de Nuevo León.
     - REGLA DE ESCOLARIDAD (VALIDACIÓN): El valor DEBE ser un nivel educativo real (ej. Primaria, Secundaria, Preparatoria, Licenciatura). Si el usuario dice "Kinder", "Ninguno", "Nada", "No estudié", o niveles similares, extrae null y explica en el thought_process que se requiere al menos nivel Primaria para el sistema.
     - REGLA DE NOMBRE: El nombre debe ser una persona real. Prohibido nombres de empresas, ciudades o frases evasivas o saludos.
    - REGLA CRÍTICA DE GÉNERO: Solo extrae datos si el Candidato los dice sobre SÍ MISMO.
@@ -265,6 +268,21 @@ ${JSON.stringify(schema, null, 2)}
                             // Scenario 2: Shield (Protect complete date from year-only fragment)
                             console.log(`[Date-Shield] Protecting complete date "${existingVal}" from fragment "${val}"`);
                             finalVal = existingVal;
+                        }
+
+                        // --- FUZZY YEAR INFERENCE (2 to 4 digits) ---
+                        if (!hasYear && /^\d{2}$/.test(val)) {
+                            const year2 = parseInt(val);
+                            const currentYear2 = new Date().getFullYear() % 100;
+                            // If year2 > currentYear2 + 2, it's likely 19xx, else 20xx
+                            const inferredYear = year2 > (currentYear2 + 2) ? `19${val}` : `20${val}`;
+                            console.log(`[Year-Inference] Inferring ${inferredYear} from ${val}`);
+
+                            if (existingHasDayMonth && !existingHasYear) {
+                                finalVal = `${existingVal} de ${inferredYear}`;
+                            } else if (!existingVal || isPlaceholder) {
+                                finalVal = inferredYear;
+                            }
                         }
                     }
 

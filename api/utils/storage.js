@@ -250,9 +250,9 @@ export const auditProfile = (c, customFields = []) => {
             val === 'perfecto' || val === 'excelente' || val === 'genial' || val === 'todo bien' ||
             val === 'todos' || val === 'alguno' || val === 'algunos' || val === 'cualquiera';
 
-        // --- DATE PRECISION (Requires 4-digit year) ---
+        // --- DATE PRECISION (Allows 2 or 4-digit years) ---
         if (field.value === 'fechaNacimiento' && !isInvalid) {
-            const hasYear = /\b(19|20)\d{2}\b/.test(val);
+            const hasYear = /\b(\d{4}|\d{2})\b/.test(val);
             if (!hasYear) isInvalid = true;
         }
 
@@ -498,9 +498,9 @@ export const isCandidateLocked = async (candidateId) => {
     const key = `${KEYS.CANDIDATE_LOCK_PREFIX}${candidateId}`;
     /**
      * ATOMIC LOCK: 'NX' means "Only set if NOT exists"
-     * 45 second expiration to prevent eternal locks if a process crashes.
+     * Reduced to 15 seconds to be less aggressive and reduce "deafness" to rapid messages.
      */
-    const result = await client.set(key, '1', 'EX', 45, 'NX');
+    const result = await client.set(key, '1', 'EX', 15, 'NX');
     return result !== 'OK';
 };
 
