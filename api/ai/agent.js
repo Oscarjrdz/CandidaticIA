@@ -75,7 +75,7 @@ SALUDO: Usa un saludo breve de re-conexión SIN presentarte de nuevo (ej. "¡Qu�
     return context;
 };
 
-const getVibeLayer = (history = []) => {
+const getVibeLayer = (history = [], isIncomplete = true) => {
     if (history.length === 0) return '';
 
     const lastThree = history.slice(-6); // last 3 turns
@@ -102,17 +102,19 @@ const getVibeLayer = (history = []) => {
     // 3. Anchor & Bridge Logic
     vibeContext += '- REGLA DE ORO "ANCLA Y PUENTE": Tu primer frase DEBE validar el mensaje actual del usuario (ancla) antes de intentar pedir un dato (puente). Ejemplo: "¡Anotado! Fíjate que para avanzar..." o "¡Me da gusto! Oye aprovechando...".\n';
 
-    // 4. Detect Agreement without Data (Lock the sequence)
-    const agreements = ['claro', 'si', 'ok', 'por supuesto', 'porsupuesto', 'esta bien', 'está bien', 'si claro', 'puedes', 'dame', 'vacantes', 'alguno', 'todos'];
-    const lastUserMsg = userMsgs[userMsgs.length - 1] || '';
-    if (agreements.some(a => lastUserMsg.includes(a)) && lastUserMsg.length < 15) {
-        vibeContext += '- INTERROGATORIO ATORADO: El usuario aceptó o preguntó pero NO dio el dato que pediste. NO cambies de tema. Insiste en el MISMO dato anterior con una frase como: "Excelente, ¡entonces dime tu [Dato] para avanzar!".\n';
-    }
+    // 4. Detect Agreement without Data (Lock the sequence) - ONLY IF INCOMPLETE
+    if (isIncomplete) {
+        const agreements = ['claro', 'si', 'ok', 'por supuesto', 'porsupuesto', 'esta bien', 'está bien', 'si claro', 'puedes', 'dame', 'vacantes', 'alguno', 'todos'];
+        const lastUserMsg = userMsgs[userMsgs.length - 1] || '';
+        if (agreements.some(a => lastUserMsg.includes(a)) && lastUserMsg.length < 15) {
+            vibeContext += '- INTERROGATORIO ATORADO: El usuario aceptó o preguntó pero NO dio el dato que pediste. NO cambies de tema. Insiste en el MISMO dato anterior con una frase como: "Excelente, ¡entonces dime tu [Dato] para avanzar!".\n';
+        }
 
-    // 5. Detect Frustration (Repeat Complaint)
-    const complaints = ['ya te lo dije', 'ya lo dije', 'ya te dije', 'ya te lo mande', 'ya te lo mandé', 'ya te mandé', 'porque me preguntas tanto', 'lee arriba', 'no lees', 'no me lees'];
-    if (complaints.some(c => lastUserMsg.includes(c))) {
-        vibeContext += '- DETECTADA FRUSTRACIÓN: El usuario siente que se está repitiendo. Pide disculpas humanas (me distraje, se me fue el avión) y reconoce el dato de forma entusiasta.\n';
+        // 5. Detect Frustration (Repeat Complaint)
+        const complaints = ['ya te lo dije', 'ya lo dije', 'ya te dije', 'ya te lo mande', 'ya te lo mandé', 'ya te mandé', 'porque me preguntas tanto', 'lee arriba', 'no lees', 'no me lees'];
+        if (complaints.some(c => lastUserMsg.includes(c))) {
+            vibeContext += '- DETECTADA FRUSTRACIÓN: El usuario siente que se está repitiendo. Pide disculpas humanas (me distraje, se me fue el avión) y reconoce el dato de forma entusiasta.\n';
+        }
     }
 
     return vibeContext;
@@ -215,7 +217,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         let systemInstruction = getIdentityLayer();
         systemInstruction += getSessionLayer(minSinceLastBot, botHasSpoken, recentHistory.length > 0, isNameBoilerplate ? null : displayName);
-        systemInstruction += getVibeLayer(recentHistory);
+        systemInstruction += getVibeLayer(recentHistory, audit.paso1Status === 'INCOMPLETO');
 
         // a. Admin Directives
         const customPrompt = await redis?.get('bot_ia_prompt') || '';
@@ -305,7 +307,7 @@ TIENES PROHIBIDO dar detalles de sueldos o empresas.
 ${catInstruction}\n`;
         } else if (!isNameBoilerplate) {
             // --- ANTI-CHAMBER MODE (Elite Post-Completion Engagement) ---
-            const lastUserMsg = (themes || '').toLowerCase();
+            const lastUserMsg = (lastUserMessages[lastUserMessages.length - 1] || '').toLowerCase().trim();
             const isClosingMsg = /\b(ok|gracias|perfecto|entendido|enterado|grx|thx|vientos|sale|va)\b/i.test(lastUserMsg) && lastUserMsg.length < 15;
 
             if (isClosingMsg) {
@@ -321,7 +323,7 @@ ${catInstruction}\n`;
 2. TU MISIÓN: Ser su Anfitriona humana. Mantén la plática viva pero SUPERFICIAL. ✨🌸
 3. ESTRATEGIA "AVENTAR LA BOLA" (Social Ball-Back): 
    - RESPONDE brevemente a sus dudas, chistes o saludos de forma variada.
-   - INMEDIATAMENTE lanza una pregunta de vuelta para mantener el compromiso de forma natural.
+   - REGLA DE ELASTICIDAD: Si el usuario responde con una sola palabra (ej. "Bien"), NO repitas la pregunta ni insistas. Acepta el comentario amablemente y opcionalmente lanza un tema nuevo (uno solo).
    - REGLA DE ORO PROHIBITIVA: Tienes PROHIBIDO preguntar sobre experiencia laboral, conocimientos técnicos, horarios específicos o zonas exactas. No profundices en la entrevista.
    - TEMAS RECOMENDADOS (Varía cada vez): 
      * MOTIVACIÓN: ¿Cómo te sientes hoy para empezar nuevos retos? ✨
