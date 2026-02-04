@@ -130,13 +130,13 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
 
     if (isPaso1Incompleto) {
         const nextTarget = missingLabels[0];
-        const backupTarget = missingLabels[1] || null;
+        const remaining = missingLabels.slice(1);
 
-        auditRules += `\n4. BLOQUEO DE SECUENCIA INTELIGENTE: El perfil está INCOMPLETO. Faltan: [${missingLabels.join(', ')}]. 
-   REGLA DE AVANCE DINÁMICO: Tu misión actual es obtener "${nextTarget}". 
-   - SI EXTRAES "${nextTarget}" EN ESTE TURNO: ¡Excelente! En tu response_text reconócelo ("¡Anotado ${nextTarget}!") y PASA AL SIGUIENTE DATO FALTANTE (${backupTarget ? `"${backupTarget}"` : 'ninguno'}) en la misma respuesta. NO preguntes de nuevo por "${nextTarget}".
-   - SI EL USUARIO NO DIO "${nextTarget}": Insiste únicamente en ese dato con el "PARA QUÉ" (beneficio).
-   BLOQUEO DE CIERRE: TIENES PROHIBIDO DESPEDIRTE.\n`;
+        auditRules += `\n4. PROTOCOLO DE AVANCE (ADN): El perfil está INCOMPLETO. Faltan: [${missingLabels.join(', ')}].
+   - PRIORIDAD: Tu objetivo es obtener "${nextTarget}".
+   - REGLA DE SALTO: Si el usuario ya te dio "${nextTarget}" en su último mensaje, NO lo vuelvas a preguntar. Acéptalo con alegría ("¡Anotado ${nextTarget}!") y en el MISMO mensaje pregunta por el siguiente dato: "${remaining[0] || 'la vacante ideal'}".
+   - REGLA DE PERSISTENCIA: Solo si el usuario NO ha dado "${nextTarget}", insiste únicamente en ese dato con el "PARA QUÉ" (beneficio).
+   BLOQUEO DE CIERRE: NO te despidas hasta que la lista de arriba esté vacía.\n`;
     }
 
     return auditRules;
@@ -246,10 +246,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const extractionRules = `
 [REGLAS DE EXTRACCIÓN (ADN)]:
 1. Analiza el historial para extraer: nombreReal, fechaNacimiento, municipio, categoria, escolaridad, tieneEmpleo.
-2. REGLA DE FECHA: Formato DD/MM/YYYY. Infiere siglo (83 -> 1983).
-3. REGLA DE UBICACIÓN: Acepta "Santa" (Santa Catarina), "San Nico" (San Nicolás), etc.
-4. CATEGORÍAS VÁLIDAS: ${categoriesList}
-5. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
+2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO (ADN)] es menos preciso o incompleto (ej. "Oscar") que lo que dice el usuario ahora (ej. "Oscar Rodriguez"), ACTUALÍZALO.
+3. REGLA DE FECHA: Formato DD/MM/YYYY. Infiere siglo (83 -> 1983).
+4. REGLA DE UBICACIÓN: Acepta "Santa" (Santa Catarina), "San Nico" (San Nicolás), etc.
+5. CATEGORÍAS VÁLIDAS: ${categoriesList}
+6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
 `;
 
         systemInstruction += `\n[ESTADO DEL CANDIDATO (ADN)]:
@@ -407,19 +408,22 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
         let responseText = aiResult.response_text || '';
         responseText = responseText.replace(/\*/g, '');
 
-        // --- FAST SYNC: Update Candidate Data ---
+        // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
+        const candidateUpdates = {
+            lastBotMessageAt: new Date().toISOString(),
+            ultimoMensaje: new Date().toISOString()
+        };
+
         if (aiResult.extracted_data) {
-            const updates = {};
             for (const [key, val] of Object.entries(aiResult.extracted_data)) {
                 if (val && val !== 'null' && val !== 'indefinido' && candidateData[key] !== val) {
-                    updates[key] = val;
+                    candidateUpdates[key] = val;
                 }
             }
-            if (Object.keys(updates).length > 0) {
-                console.log(`[Single-Call] Syncing candidate ${candidateId}:`, updates);
-                await updateCandidate(candidateId, updates);
-            }
         }
+
+        console.log(`[Consolidated Sync] Candidate ${candidateId}:`, candidateUpdates);
+        const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
         // --- MOVE KANBAN LOGIC ---
         const moveToken = (aiResult.thought_process || '').includes('{ move }');
@@ -439,10 +443,7 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
         await Promise.allSettled([
             deliveryPromise,
             saveMessage(candidateId, { from: 'bot', content: responseText, timestamp: new Date().toISOString() }),
-            updateCandidate(candidateId, {
-                lastBotMessageAt: new Date().toISOString(),
-                ultimoMensaje: new Date().toISOString()
-            })
+            updatePromise
         ]);
 
         return responseText;
