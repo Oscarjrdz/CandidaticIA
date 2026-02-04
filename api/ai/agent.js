@@ -157,7 +157,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         if (!displayName || displayName === 'Desconocido' || /^\+?\d+$/.test(displayName)) {
             displayName = null;
         }
-        const isNameBoilerplate = !displayName || /proporcionado|desconocido|luego|después|privado|\+/i.test(String(displayName));
+        const isNameBoilerplate = !displayName || /proporcionado|desconocido|luego|después|privado|hola|buenos|\+/i.test(String(displayName));
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. DEBES OBTENERLO ANTES DE TERMINAR.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
