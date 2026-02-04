@@ -193,7 +193,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const minSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 60000);
         const secSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 1000);
 
+        // 4. Layered System Instruction Build
+        const botHasSpoken = validMessages.some(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel);
+
         // THROTTLE: If we just spoke 3 seconds ago, ignore this trigger to avoid double replies
+        // Only throttle if it's the SAME trigger or very fast consecutive messages
         if (secSinceLastBot < 3 && botHasSpoken) {
             console.log(`[AI Throttle] Skipping response for ${candidateId} - Last bot message was ${secSinceLastBot}s ago.`);
             return null;
@@ -205,9 +209,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
             displayName = null;
         }
         const isNameBoilerplate = !displayName || /proporcionado|desconocido|luego|después|privado|hola|buenos|\+/i.test(String(displayName));
-
-        // 4. Layered System Instruction Build
-        const botHasSpoken = validMessages.some(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel);
 
         let systemInstruction = getIdentityLayer();
         systemInstruction += getSessionLayer(minSinceLastBot, botHasSpoken, recentHistory.length > 0, isNameBoilerplate ? null : displayName);

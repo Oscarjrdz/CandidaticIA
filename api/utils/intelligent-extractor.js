@@ -252,6 +252,17 @@ ${JSON.stringify(schema, null, 2)}
                         finalVal = cleaned || val;
                     }
 
+                    // --- DATE FUSION: Prevent overwriting day/month when only year is provided ---
+                    if (canonicalField === 'fechaNacimiento' && existingVal && !isPlaceholder) {
+                        const hasYear = /\b(19|20)\d{2}\b/.test(val);
+                        const existingHasDayMonth = /[0-9]{1,2}\s+(de\s+)?(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)/i.test(existingVal);
+
+                        if (hasYear && existingHasDayMonth && !val.includes(' ')) {
+                            // Fusion: "19 de mayo" + "1983" -> "19 de mayo de 1983"
+                            finalVal = `${existingVal} de ${val}`;
+                        }
+                    }
+
                     updateData[canonicalField] = finalVal;
 
                     // Track Evidence (Lineage)
