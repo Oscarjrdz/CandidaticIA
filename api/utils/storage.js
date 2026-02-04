@@ -246,7 +246,8 @@ export const auditProfile = (c, customFields = []) => {
             // --- JUNK DATA BLOCK (Adjectives/Vague praise) ---
             val === 'bien' || val === 'super' || val === 'súper' || val === 'super bien' || val === 'superbien' ||
             val === 'ok' || val === 'claro' || val === 'porsupuesto' || val === 'por supuesto' ||
-            val === 'perfecto' || val === 'excelente' || val === 'genial' || val === 'todo bien';
+            val === 'perfecto' || val === 'excelente' || val === 'genial' || val === 'todo bien' ||
+            val === 'todos' || val === 'alguno' || val === 'algunos' || val === 'cualquiera';
 
         // --- DATE PRECISION (Requires 4-digit year) ---
         if (field.value === 'fechaNacimiento' && !isInvalid) {

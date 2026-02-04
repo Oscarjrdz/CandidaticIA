@@ -119,7 +119,7 @@ ESTRATEGIA DE RAZONAMIENTO (PROTOCOLO VIPER 3.1):
    - REGLA CRÍTICA DE NOMBRE: El "nombreReal" NUNCA debe ser un municipio, ciudad o estado (ej. "Escobedo", "Monterrey", "Apodaca"). Si el usuario dice "Soy de Monterrey", Monterrey es el MUNICIPIO, no su nombre.
    - REGLA CRÍTICA DE EVASIÓN: Si el usuario responde con frases negativas, evasivas o dice que "no" a una pregunta de datos (ej. "luego", "no te diré", "para qué"), NO extraigas nada. El valor debe ser null.
     - REGLA CRÍTICA DE SALUDOS: Frases como "hola", "buenas", "que tal", "estoy listo", "dime", "si", "no" SIN CONTEXTO de datos NO deben ser extraídas como valores. Usa null.
-    - REGLA DE ADJETIVOS (JUNK): Respuestas vagas o adjetivos como "bien", "super bien", "está bien", "perfecto", "ok", "claro", "excelente" sin un dato concreto (ej. sin un puesto o fecha real) deben ser ignoradas. El valor debe ser null.
+    - REGLA DE ADJETIVOS (JUNK): Respuestas vagas o adjetivos como "bien", "super bien", "está bien", "perfecto", "ok", "claro", "excelente", "todos", "alguno", "algunos", "cualquiera" sin un dato concreto (ej. sin un puesto o fecha real) deben ser ignoradas. El valor debe ser null.
     - REGLA DE FECHA (PRECISIÓN): Para el campo "fechaNacimiento", el valor DEBE incluir un año plausible (ej. 1988 o 19/05/1988). Si solo menciona día y mes (ej. "19 de mayo") o la edad (ej. "45 años"), extrae null para el campo de fecha y explica en el thought_process que falta el año exacto.
     - REGLA DE NOMBRE: El nombre debe ser una persona real. Prohibido nombres de empresas, ciudades o frases evasivas o saludos.
    - REGLA CRÍTICA DE GÉNERO: Solo extrae datos si el Candidato los dice sobre SÍ MISMO.

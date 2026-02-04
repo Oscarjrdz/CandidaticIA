@@ -93,6 +93,13 @@ const getVibeLayer = (history = []) => {
     // 3. Anchor & Bridge Logic
     vibeContext += '- REGLA DE ORO "ANCLA Y PUENTE": Tu primer frase DEBE validar el mensaje actual del usuario (ancla) antes de intentar pedir un dato (puente). Ejemplo: "De nada! Fíjate que para avanzar..." o "Hola de nuevo, oye aprovechando...".\n';
 
+    // 4. Detect Agreement without Data (Lock the sequence)
+    const agreements = ['claro', 'si', 'ok', 'por supuesto', 'porsupuesto', 'esta bien', 'está bien', 'si claro', 'puedes', 'dame', 'vacantes', 'alguno', 'todos'];
+    const lastUserMsg = userMsgs[userMsgs.length - 1] || '';
+    if (agreements.some(a => lastUserMsg.includes(a)) && lastUserMsg.length < 15) {
+        vibeContext += '- INTERROGATORIO ATORADO: El usuario aceptó o preguntó pero NO dio el dato que pediste. NO cambies de tema. Insiste en el MISMO dato anterior con una frase como: "Excelente, ¡entonces dime tu [Dato] para avanzar!".\n';
+    }
+
     return vibeContext;
 };
 
@@ -104,8 +111,9 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
 3. BREVEDAD WHATSAPP: Mensajes extremadamente cortos. Sin despedidas largas.`;
 
     if (isPaso1Incompleto) {
-        auditRules += `\n4. BLOQUEO DE CIERRE (MÁXIMA PRIORIDAD): El perfil está INCOMPLETO. Faltan estos datos: [${missingLabels.join(', ')}]. 
+        auditRules += `\n4. BLOQUEO DE CIERRE (MÁXIMA PRIORIDAD): El perfil está INCOMPLETO. Faltan estos datos en orden: [${missingLabels.join(', ')}]. 
    REGLA DE HIERRO: TIENES PROHIBIDO DESPEDIRTE o usar frases como "revisaré tu perfil", "validaré con el sistema" o "en breve me comunico". 
+   BLOQUEO DE SECUENCIA: Solo puedes preguntar por el PRIMER dato de la lista anterior (${missingLabels[0]}). NO avances al siguiente si el primero no está lleno.
    INSTRUCCIÓN: Si el usuario intenta cerrar o si tú sientes que "ya terminaste", REVISA esta lista. Si falta algo (como el AÑO de nacimiento o la VACANTE real), DEBES decir: "¡Espera! Antes de mandarte con el gerente, fíjate que me falta tu [Dato]..." y lanzar el pivote.\n`;
     }
 
@@ -180,6 +188,13 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // Continuity & Session Logic
         const lastBotMsgAt = candidateData.lastBotMessageAt ? new Date(candidateData.lastBotMessageAt) : new Date(0);
         const minSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 60000);
+        const secSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 1000);
+
+        // THROTTLE: If we just spoke 3 seconds ago, ignore this trigger to avoid double replies
+        if (secSinceLastBot < 3 && botHasSpoken) {
+            console.log(`[AI Throttle] Skipping response for ${candidateId} - Last bot message was ${secSinceLastBot}s ago.`);
+            return null;
+        }
 
         // Identity Protection (Titan Shield Pass) - System context for safety
         let displayName = candidateData.nombreReal;
