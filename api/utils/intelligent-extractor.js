@@ -252,14 +252,19 @@ ${JSON.stringify(schema, null, 2)}
                         finalVal = cleaned || val;
                     }
 
-                    // --- DATE FUSION: Prevent overwriting day/month when only year is provided ---
+                    // --- DATE FUSION & SHIELD: Prevent overwriting/downgrading dates ---
                     if (canonicalField === 'fechaNacimiento' && existingVal && !isPlaceholder) {
                         const hasYear = /\b(19|20)\d{2}\b/.test(val);
+                        const existingHasYear = /\b(19|20)\d{2}\b/.test(existingVal);
                         const existingHasDayMonth = /[0-9]{1,2}\s+(de\s+)?(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)/i.test(existingVal);
 
-                        if (hasYear && existingHasDayMonth && !val.includes(' ')) {
-                            // Fusion: "19 de mayo" + "1983" -> "19 de mayo de 1983"
+                        if (hasYear && existingHasDayMonth && !existingHasYear && !val.includes(' ')) {
+                            // Scenario 1: Fusion ("19 de mayo" + "1983" -> "19 de mayo de 1983")
                             finalVal = `${existingVal} de ${val}`;
+                        } else if (existingHasYear && existingHasDayMonth && hasYear && !val.includes(' ')) {
+                            // Scenario 2: Shield (Protect complete date from year-only fragment)
+                            console.log(`[Date-Shield] Protecting complete date "${existingVal}" from fragment "${val}"`);
+                            finalVal = existingVal;
                         }
                     }
 

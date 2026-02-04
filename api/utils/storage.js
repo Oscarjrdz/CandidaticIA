@@ -77,6 +77,7 @@ const KEYS = {
     // Telemetry & Observability (Titan Standard)
     TELEMETRY_AI_LOGS: 'telemetry:ai:events', // List of recent AI events
     TELEMETRY_AI_STATS: 'telemetry:ai:stats', // Hash of lifetime stats
+    CANDIDATE_LOCK_PREFIX: 'lock:candidate:', // Per-candidate processing lock
 };
 
 export const DEFAULT_PROJECT_STEPS = [
@@ -485,6 +486,28 @@ export const unlockMessage = async (msgId) => {
     const client = getRedisClient();
     if (!client || !msgId) return;
     const key = `${KEYS.DEDUPE_PREFIX}${msgId}`;
+    await client.del(key);
+};
+
+/**
+ * 🏎️ FERRARI CANDIDATE LOCK: Prevents simultaneous AI processing for the same candidate.
+ */
+export const isCandidateLocked = async (candidateId) => {
+    const client = getRedisClient();
+    if (!client || !candidateId) return false;
+    const key = `${KEYS.CANDIDATE_LOCK_PREFIX}${candidateId}`;
+    /**
+     * ATOMIC LOCK: 'NX' means "Only set if NOT exists"
+     * 45 second expiration to prevent eternal locks if a process crashes.
+     */
+    const result = await client.set(key, '1', 'EX', 45, 'NX');
+    return result !== 'OK';
+};
+
+export const unlockCandidate = async (candidateId) => {
+    const client = getRedisClient();
+    if (!client || !candidateId) return;
+    const key = `${KEYS.CANDIDATE_LOCK_PREFIX}${candidateId}`;
     await client.del(key);
 };
 

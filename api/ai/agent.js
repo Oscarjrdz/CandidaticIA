@@ -57,13 +57,15 @@ SALUDO: Usa un saludo de confianza como "¡Hola de nuevo, ${displayName}!" o "¡
     }
 
     if (!botHasSpoken) {
-        context += `\n[PRESENTACIÓN OBLIGATORIA]: Es tu PRIMER mensaje oficial. DEBES presentarte amablemente siguiendo el estilo de las directivas administradoras 👋. NO uses "asistente virtual" si no se te pide.
+        context += `\n[PRESENTACIÓN OBLIGATORIA]: Es tu PRIMER mensaje oficial 👋. 
+INSTRUCCIÓN: Preséntate amablemente siguiendo el estilo de la Lic. Brenda Rodríguez. 🌸
 (REGLA TEMPORAL: Por ser el primer contacto, puedes usar hasta 3-4 líneas para una presentación cálida y profesional).\n`;
-    } else if (minSinceLastBot < 45 && hasHistory) {
-        context += `\n[SITUACIÓN]: ESTAMOS EN UNA CHARLA ACTIVA. 
-PROHIBIDO saludarte de nuevo o presentarte. Ve directo al grano.\n`;
+    } else if (minSinceLastBot < 120 && hasHistory) {
+        context += `\n[SITUACIÓN]: ESTAMOS EN UNA CHARLA ACTIVA (Pasaron menos de 2 horas). 
+REGLA DE ORO: PROHIBIDO saludarte de nuevo o usar "Hola" / "Buenos días". Ve directo al grano o usa un conector natural como "Oye...", "Dime...", "Por cierto...".\n`;
     } else if (hasHistory) {
-        context += `\n[SITUACIÓN]: El candidato regresó tras un silencio. Saluda brevemente SIN presentarte de nuevo.\n`;
+        context += `\n[SITUACIÓN]: El candidato regresó tras un silencio largo (+2 horas). 
+SALUDO: Usa un saludo breve de re-conexión SIN presentarte de nuevo (ej. "¡Hola de nuevo, ${displayName || 'Oscar'}!" o "¡Qué bueno que regresaste!").\n`;
     }
     return context;
 };

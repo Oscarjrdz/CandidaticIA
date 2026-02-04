@@ -1,4 +1,4 @@
-import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient, updateMessageStatus, isMessageProcessed, unlockMessage } from '../utils/storage.js';
+import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient, updateMessageStatus, isMessageProcessed, unlockMessage, isCandidateLocked, unlockCandidate } from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
 import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead } from './utils.js';
 
@@ -172,35 +172,47 @@ export default async function handler(req, res) {
                 const aiPromise = (async () => {
                     try {
                         const redis = getRedisClient();
-                        const extractionTask = (async () => {
-                            try {
-                                const { getMessages, getCandidateById } = await import('../utils/storage.js');
-                                const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
-                                const freshMessages = await getMessages(candidateId, 100);
-                                const candidate = await getCandidateById(candidateId);
-                                const historyText = freshMessages
-                                    .filter(m => m.from === 'user' || m.from === 'bot' || m.from === 'me')
-                                    .slice(-20)
-                                    .map(m => {
-                                        let sender = 'Reclutador';
-                                        if (m.from === 'user') sender = 'Candidato';
-                                        else if (m.meta?.proactiveLevel) sender = 'Lic. Brenda (Seguimiento)';
 
-                                        let content = m.content || '';
-                                        if (m.type === 'audio' || m.type === 'ptt') content = '((Mensaje de Audio))';
-                                        return `${sender}: ${content}`;
-                                    })
-                                    .join('\n');
+                        // 🏎️ CANDIDATE LOCK: Prevent simultaneous processing for the same candidate
+                        if (await isCandidateLocked(candidateId)) {
+                            console.log(`[Webhook Lock] Candidate ${candidateId} is already being processed. Skipping message.`);
+                            return;
+                        }
 
-                                // Add a system context header for Viper-Grip
-                                const contextHeader = `[CONTEXTO]: Candidato actual en DB: ${candidate?.nombreReal || candidate?.nombre || 'Desconocido'}\n---\n`;
-                                await intelligentExtract(candidateId, contextHeader + historyText);
-                            } catch (extErr) { console.error('⚠️ [Webhook] Extraction Task Error:', extErr); }
-                        })();
+                        try {
+                            const extractionTask = (async () => {
+                                try {
+                                    const { getMessages, getCandidateById } = await import('../utils/storage.js');
+                                    const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
+                                    const freshMessages = await getMessages(candidateId, 100);
+                                    const candidate = await getCandidateById(candidateId);
+                                    const historyText = freshMessages
+                                        .filter(m => m.from === 'user' || m.from === 'bot' || m.from === 'me')
+                                        .slice(-20)
+                                        .map(m => {
+                                            let sender = 'Reclutador';
+                                            if (m.from === 'user') sender = 'Candidato';
+                                            else if (m.meta?.proactiveLevel) sender = 'Lic. Brenda (Seguimiento)';
 
-                        const isActive = await redis?.get('bot_ia_active');
-                        if (isActive !== 'false') await processMessage(candidateId, agentInput);
-                        await extractionTask;
+                                            let content = m.content || '';
+                                            if (m.type === 'audio' || m.type === 'ptt') content = '((Mensaje de Audio))';
+                                            return `${sender}: ${content}`;
+                                        })
+                                        .join('\n');
+
+                                    // Add a system context header for Viper-Grip
+                                    const contextHeader = `[CONTEXTO]: Candidato actual en DB: ${candidate?.nombreReal || candidate?.nombre || 'Desconocido'}\n---\n`;
+                                    await intelligentExtract(candidateId, contextHeader + historyText);
+                                } catch (extErr) { console.error('⚠️ [Webhook] Extraction Task Error:', extErr); }
+                            })();
+
+                            const isActive = await redis?.get('bot_ia_active');
+                            if (isActive !== 'false') await processMessage(candidateId, agentInput);
+                            await extractionTask;
+                        } finally {
+                            // 🏎️ CANDIDATE UNLOCK: Release lock after processing
+                            await unlockCandidate(candidateId);
+                        }
                     } catch (e) { console.error('🤖 Ferrari AI Error:', e); }
                 })();
 
