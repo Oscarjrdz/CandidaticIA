@@ -40,8 +40,17 @@ Para sonar natural y NO como una grabadora, sigue estas reglas:
 
 const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
 
-const getSessionLayer = (minSinceLastBot, botHasSpoken, hasHistory) => {
+const getSessionLayer = (minSinceLastBot, botHasSpoken, hasHistory, displayName = null) => {
     let context = '';
+
+    // ANTI-AMNESIA: If we know the name, we skip formal re-introduction ALWAYS
+    if (displayName && displayName !== 'Desconocido') {
+        context += `\n[SITUACIÓN]: Ya conoces al candidato (Se llama ${displayName}). 
+PROHIBIDO presentarte con cargo/empresa o usar "mucho gusto". 
+SALUDO: Usa un saludo de confianza como "¡Hola de nuevo, ${displayName}!" o "¡Qué gusto saludarte de nuevo!".\n`;
+        return context;
+    }
+
     if (!botHasSpoken) {
         context += `\n[PRESENTACIÓN OBLIGATORIA]: Es tu PRIMER mensaje oficial. DEBES presentarte amablemente siguiendo el estilo de las directivas administradoras 👋. NO uses "asistente virtual" si no se te pide.
 (REGLA TEMPORAL: Por ser el primer contacto, puedes usar hasta 3-4 líneas para una presentación cálida y profesional).\n`;
@@ -93,8 +102,8 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
 
     if (isPaso1Incompleto) {
         auditRules += `\n4. BLOQUEO DE CIERRE (MÁXIMA PRIORIDAD): El perfil está INCOMPLETO. Faltan estos datos: [${missingLabels.join(', ')}]. 
-   TIENES PROHIBIDO DESPEDIRTE. 
-   INSTRUCCIÓN: Reconoce el sentimiento del usuario (usa la Bitácora de Vibe) y luego PIVOTA hacia uno de los datos faltantes usando el protocolo de "Ancla y Puente".\n`;
+   REGLA DE HIERRO: TIENES PROHIBIDO DESPEDIRTE o usar frases como "revisaré tu perfil", "validaré con el sistema" o "en breve me comunico". 
+   INSTRUCCIÓN: Si el usuario intenta cerrar o si tú sientes que "ya terminaste", REVISA esta lista. Si falta algo, DEBES decir: "¡Espera! Antes de mandarte con el gerente, fíjate que me falta tu [Dato]..." y lanzar el pivote.\n`;
     }
 
     return auditRules;
@@ -169,23 +178,24 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const lastBotMsgAt = candidateData.lastBotMessageAt ? new Date(candidateData.lastBotMessageAt) : new Date(0);
         const minSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 60000);
 
-        // 4. Layered System Instruction Build
-        const botHasSpoken = validMessages.some(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel);
-
-        let systemInstruction = getIdentityLayer();
-        systemInstruction += getSessionLayer(minSinceLastBot, botHasSpoken, recentHistory.length > 0);
-        systemInstruction += getVibeLayer(recentHistory);
-
-        // a. Admin Directives
-        const customPrompt = await redis?.get('bot_ia_prompt') || '';
-        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA - SIGUE ESTO ANTE TODO]: \n${customPrompt} \n`;
-
         // Identity Protection (Titan Shield Pass) - System context for safety
         let displayName = candidateData.nombreReal;
         if (!displayName || displayName === 'Desconocido' || /^\+?\d+$/.test(displayName)) {
             displayName = null;
         }
         const isNameBoilerplate = !displayName || /proporcionado|desconocido|luego|después|privado|hola|buenos|\+/i.test(String(displayName));
+
+        // 4. Layered System Instruction Build
+        const botHasSpoken = validMessages.some(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel);
+
+        let systemInstruction = getIdentityLayer();
+        systemInstruction += getSessionLayer(minSinceLastBot, botHasSpoken, recentHistory.length > 0, isNameBoilerplate ? null : displayName);
+        systemInstruction += getVibeLayer(recentHistory);
+
+        // a. Admin Directives
+        const customPrompt = await redis?.get('bot_ia_prompt') || '';
+        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA - SIGUE ESTO ANTE TODO]: \n${customPrompt} \n`;
+
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. DEBES OBTENERLO ANTES DE TERMINAR.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
