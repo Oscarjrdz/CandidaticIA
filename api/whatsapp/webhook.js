@@ -153,15 +153,18 @@ export default async function handler(req, res) {
                     statsType: 'incoming'
                 });
 
-                // 🏎️ [IMMEDIATE PRESENCE] - Mark as read and start typing ASAP (After transaction)
+                // 🏎️ [IMMEDIATE PRESENCE] - Mark as read FIRST, then start typing (to avoid clearing state)
                 const presenceUpdate = (async () => {
                     const config = await configPromise;
                     if (config) {
                         const { sendUltraMsgPresence } = await import('./utils.js');
-                        await Promise.allSettled([
-                            markUltraMsgAsRead(config.instanceId, config.token, from),
-                            sendUltraMsgPresence(config.instanceId, config.token, from, 'composing')
-                        ]);
+                        try {
+                            // 1. Mark as read
+                            await markUltraMsgAsRead(config.instanceId, config.token, from);
+                            // 2. Start typing (Try both keywords for maximum compatibility)
+                            await sendUltraMsgPresence(config.instanceId, config.token, from, 'composing');
+                            await sendUltraMsgPresence(config.instanceId, config.token, from, 'typing');
+                        } catch (e) { console.warn('Webhook presence update failed', e.message); }
                     }
                 })();
 

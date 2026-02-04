@@ -200,6 +200,7 @@ export const sendUltraMsgPresence = async (instanceId, token, chatId, presence =
         params.append('token', token);
         params.append('chatId', formattedChatId);
         params.append('presence', presence);
+        params.append('type', presence);
 
         const response = await axios.post(url, params, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
