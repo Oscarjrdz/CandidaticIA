@@ -173,40 +173,10 @@ export default async function handler(req, res) {
                     try {
                         const redis = getRedisClient();
 
-                        try {
-                            const extractionTask = (async () => {
-                                try {
-                                    const { getMessages, getCandidateById } = await import('../utils/storage.js');
-                                    const { intelligentExtract } = await import('../utils/intelligent-extractor.js');
-                                    const freshMessages = await getMessages(candidateId, 100);
-                                    const candidate = await getCandidateById(candidateId);
-                                    const historyText = freshMessages
-                                        .filter(m => m.from === 'user' || m.from === 'bot' || m.from === 'me')
-                                        .slice(-20)
-                                        .map(m => {
-                                            let sender = 'Reclutador';
-                                            if (m.from === 'user') sender = 'Candidato';
-                                            else if (m.meta?.proactiveLevel) sender = 'Lic. Brenda (Seguimiento)';
-
-                                            let content = m.content || '';
-                                            if (m.type === 'audio' || m.type === 'ptt') content = '((Mensaje de Audio))';
-                                            return `${sender}: ${content}`;
-                                        })
-                                        .join('\n');
-
-                                    // Add a system context header for Viper-Grip
-                                    const contextHeader = `[CONTEXTO]: Candidato actual en DB: ${candidate?.nombreReal || candidate?.nombre || 'Desconocido'}\n---\n`;
-                                    await intelligentExtract(candidateId, contextHeader + historyText);
-                                } catch (extErr) { console.error('⚠️ [Webhook] Extraction Task Error:', extErr); }
-                            })();
-
-                            const isActive = await redis?.get('bot_ia_active');
-                            if (isActive !== 'false') {
-                                // 🏎️ FAST SYNC: Await extraction before responding to avoid race conditions
-                                await extractionTask;
-                                await processMessage(candidateId, agentInput);
-                            }
-                        } catch (e) { console.error('🤖 Ferrari AI Error:', e); }
+                        const isActive = await redis?.get('bot_ia_active');
+                        if (isActive !== 'false') {
+                            await processMessage(candidateId, agentInput);
+                        }
                     } catch (e) { console.error('🤖 Ferrari AI Error:', e); }
                 })();
 

@@ -227,13 +227,32 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
         const audit = auditProfile(candidateData, customFields);
 
-        systemInstruction += `\n[ESTADO DEL CANDIDATO(ADN)]:
+        // --- NEW: Unified Extraction Protocol ---
+        let categoriesList = "";
+        try {
+            const categoriesData = await redis?.get('candidatic_categories');
+            if (categoriesData) {
+                const cats = JSON.parse(categoriesData).map(c => c.name);
+                categoriesList = cats.join(', ');
+            }
+        } catch (e) { }
+
+        const extractionRules = `
+[REGLAS DE EXTRACCIÓN (ADN)]:
+1. Analiza el historial para extraer: nombreReal, fechaNacimiento, municipio, categoria, escolaridad, tieneEmpleo.
+2. REGLA DE FECHA: Formato DD/MM/YYYY. Infiere siglo (83 -> 1983).
+3. REGLA DE UBICACIÓN: Acepta "Santa" (Santa Catarina), "San Nico" (San Nicolás), etc.
+4. CATEGORÍAS VÁLIDAS: ${categoriesList}
+5. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
+`;
+
+        systemInstruction += `\n[ESTADO DEL CANDIDATO (ADN)]:
 - Paso 1: ${audit.paso1Status}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
 ${audit.dnaLines}
 - Temas recientes: ${themes || 'Nuevo contacto'}
-`;
+\n${extractionRules}`;
 
         // c. Project/Kanban Layer
         if (candidateData.projectMetadata?.projectId) {
@@ -250,7 +269,7 @@ ${audit.dnaLines}
 
                     systemInstruction += `\n[CONTEXTO KANBAN - PASO: ${currentStep.name}]:
 ${stepPrompt}
-REGLA: Si se cumple el objetivo, incluye { move }.
+REGLA: Si se cumple el objetivo, incluye "{ move }" en tu thought_process.
 TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nextStep?.aiConfig?.prompt || 'Continúa'}"\n`;
                 }
             }
@@ -293,6 +312,21 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
 
         systemInstruction += getFinalAuditLayer(audit.paso1Status === 'INCOMPLETO', audit.missingLabels);
 
+        // --- NEW: Unified JSON Output Schema ---
+        systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
+{
+  "extracted_data": { 
+     "nombreReal": "string | null",
+     "fechaNacimiento": "string | null (DD/MM/YYYY)",
+     "municipio": "string | null",
+     "categoria": "string | null",
+     "tieneEmpleo": "string | null",
+     "escolaridad": "string | null"
+  },
+  "thought_process": "Tu razonamiento breve sobre los datos y la respuesta. Si el objetivo Kanban se cumplió, incluye { move } aquí.",
+  "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos)"
+}`;
+
         // 5. Resilience Loop (Inference)
         const genAI = new GoogleGenerativeAI(apiKey);
         const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
@@ -301,7 +335,14 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
 
         for (const mName of models) {
             try {
-                const model = genAI.getGenerativeModel({ model: mName, systemInstruction });
+                const model = genAI.getGenerativeModel({
+                    model: mName,
+                    systemInstruction,
+                    generationConfig: {
+                        temperature: 0.1,
+                        responseMimeType: "application/json"
+                    }
+                });
                 const chat = model.startChat({ history: recentHistory });
 
                 const inferencePromise = chat.sendMessage(userParts);
@@ -318,51 +359,64 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
                         latency: duration,
                         tokens: tokens,
                         candidateId: candidateId,
-                        action: 'chat_inference'
-                    });
+                        action: 'unified_inference'
+                    }).catch(() => { });
                     break;
                 }
             } catch (e) {
                 lastError = e.message;
-                console.error(`🤖 fallback model trigger: ${mName} failed.Error: `, lastError);
+                console.error(`🤖 fallback model trigger: ${mName} failed. Error: `, lastError);
             }
         }
 
-        // --- 🛡️ SAFETY NET (Amazon Style) ---
-        if (!result) {
-            console.error('❌ AI Pipeline Exhausted:', lastError);
-            const fallback = "¡Hola! Disculpa la demora, tuve un pequeño parpadeo técnico. 😅 ¿Podrías repetirme lo último o confirmarme tu nombre para seguir?";
-            await sendFallback(candidateData, fallback);
-            return fallback;
+        if (!result) throw new Error('AI Pipeline Exhausted');
+
+        const textResult = result.response.text();
+        let aiResult;
+        try {
+            aiResult = JSON.parse(textResult);
+        } catch (e) {
+            const match = textResult.match(/\{[\s\S]*\}/);
+            if (match) aiResult = JSON.parse(match[0]);
+            else throw new Error('Invalid JSON structure');
         }
 
-        const responseTextRaw = result.response.text();
-        let responseText = responseTextRaw;
-
-        // --- 🧪 FINAL ANTI-ASTERISK FILTER (HARDCODE) ---
+        let responseText = aiResult.response_text || '';
         responseText = responseText.replace(/\*/g, '');
 
-        // --- 🔎 AGENTIC REFLECTION (TITAN PASS 2) ---
-        // DEPRECATED: Restoring personality over restrictiveness
-        /* Agentic reflection removed to favor admin prompt personality */
-
-        const moveTagFound = responseText.match(/\[MOVE\]|\{MOVE\}/gi);
-        if (moveTagFound && candidateData.projectMetadata?.projectId) {
-            const { moveCandidateStep } = await import('../utils/storage.js');
-            const project = await getProjectById(candidateData.projectMetadata.projectId);
-            const nextStep = project?.steps[project.steps.findIndex(s => s.id === (candidateData.projectMetadata.stepId || 'step_new')) + 1];
-            if (nextStep) await moveCandidateStep(project.id, candidateId, nextStep.id);
+        // --- FAST SYNC: Update Candidate Data ---
+        if (aiResult.extracted_data) {
+            const updates = {};
+            for (const [key, val] of Object.entries(aiResult.extracted_data)) {
+                if (val && val !== 'null' && val !== 'null' && candidateData[key] !== val) {
+                    updates[key] = val;
+                }
+            }
+            if (Object.keys(updates).length > 0) {
+                console.log(`[Single-Call] Syncing candidate ${candidateId}:`, updates);
+                await updateCandidate(candidateId, updates);
+            }
         }
 
-        responseText = responseText.replace(/\[MOVE\]|\{MOVE\}/gi, '').trim();
+        // --- MOVE KANBAN LOGIC ---
+        const moveToken = (aiResult.thought_process || '').includes('{ move }');
+        if (moveToken && candidateData.projectMetadata?.projectId) {
+            const { moveCandidateStep } = await import('../utils/storage.js');
+            const project = await getProjectById(candidateData.projectMetadata.projectId);
+            const steps = project?.steps || [];
+            const currentIndex = steps.findIndex(s => s.id === (candidateData.projectMetadata.stepId || 'step_new'));
+            if (currentIndex !== -1 && steps[currentIndex + 1]) {
+                await moveCandidateStep(project.id, candidateId, steps[currentIndex + 1].id);
+            }
+        }
 
-        // Background Cleanup & Persistence
+        // Final Persistence
         const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
         await Promise.allSettled([
             deliveryPromise,
-            saveMessage(candidateId, { from: 'bot', content: responseText, type: 'text', timestamp: new Date().toISOString() }),
-            updateCandidate(candidateId, { lastBotMessageAt: new Date().toISOString(), ultimoMensaje: new Date().toISOString() })
+            saveMessage({ candidateId, from: 'bot', content: responseText, timestamp: new Date().toISOString() }),
+            updateCandidate(candidateId, { lastBotMessageAt: new Date().toISOString() })
         ]);
 
         return responseText;
