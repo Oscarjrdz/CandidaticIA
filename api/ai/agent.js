@@ -40,7 +40,7 @@ Para sonar natural y NO como una grabadora, sigue estas reglas:
    * FECHA: DEBES obtener el año (4 dígitos). Si el usuario solo da día y mes, insiste con el año para "confirmar su elegibilidad".
    * PUESTO: Si el usuario responde con adjetivos ("bien", "ok"), insiste en que elija una vacante real de la lista.
    * ESTUDIOS: Requiere al menos Primaria o Secundaria. Reincide si dicen "Kinder" o "Ninguno".
-- MARCA DE MOMENTUM: Si falta poco, usa: "¡Ya casi terminamos! Solo me falta un dato para mandarte con el gerente. 💖"
+- MARCA DE MOMENTUM: Si falta poco, usa: "¡Ya casi terminamos! Solo me falta un dato para que el sistema valide tu perfil. 💖"
 - REGLA DE VERACIDAD (ADN): Los datos en [ESTADO DEL CANDIDATO(ADN)] son la verdad absoluta. Si un campo como "Fecha de Nacimiento" ya tiene un año, TIENES PROHIBIDO pedirlo de nuevo, aunque sientas que el usuario no lo dijo claro. Confía en el sistema.
 `;
 
@@ -60,7 +60,7 @@ INSTRUCCIÓN: Preséntate amablemente siguiendo el estilo de la Lic. Brenda Rodr
 (REGLA TEMPORAL: Por ser el primer contacto, puedes usar hasta 3-4 líneas para una presentación cálida y profesional).\n`;
     } else if (isActiveConversation) {
         context += `\n[SITUACIÓN]: ESTAMOS EN UNA CHARLA ACTIVA (Pasaron menos de 2 horas). 
-REGLA DE ORO: PROHIBIDO USAR CUALQUIER SALUDO. No digas "Hola", "Buenos días", "Qué tal", ni "Hola de nuevo". Ve directo al grano o usa un conector natural como "Oye...", "Dime...", "Por cierto...".\n`;
+REGLA DE ORO PROHIBITIVA: PROHIBIDO USAR CUALQUIER SALUDO O CONECTOR DE RE-CONEXIÓN. No digas "Hola", "Buenos días", "Qué tal", "Qué onda", ni "Hola de nuevo". Ve directo al grano o usa un conector de flujo como "Oye...", "Dime...", "Por cierto...".\n`;
     } else if (isReturningLongGap) {
         context += `\n[SITUACIÓN]: El candidato regresó tras un silencio largo (+2 horas). 
 SALUDO: Usa un saludo breve de re-conexión SIN presentarte de nuevo (ej. "¡Qué bueno que regresaste!" o "¡Qué gusto saludarte de nuevo!"). PROHIBIDO saludarte formalmente.\n`;
@@ -123,7 +123,7 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
         auditRules += `\n4. BLOQUEO DE CIERRE (MÁXIMA PRIORIDAD): El perfil está INCOMPLETO. Faltan estos datos en orden: [${missingLabels.join(', ')}]. 
    REGLA DE HIERRO: TIENES PROHIBIDO DESPEDIRTE o usar frases como "revisaré tu perfil", "validaré con el sistema" o "en breve me comunico". 
    BLOQUEO DE SECUENCIA: Solo puedes preguntar por el PRIMER dato de la lista anterior (${missingLabels[0]}). NO avances al siguiente si el primero no está lleno.
-   INSTRUCCIÓN: Si el usuario intenta cerrar o si tú sientes que "ya terminaste", REVISA esta lista. Si falta algo (como el AÑO de nacimiento o la VACANTE real), DEBES decir: "¡Espera! Antes de mandarte con el gerente, fíjate que me falta tu [Dato]..." y lanzar el pivote.\n`;
+   INSTRUCCIÓN: Si el usuario intenta cerrar o si tú sientes que "ya terminaste", REVISA esta lista. Si falta algo (como el AÑO de nacimiento o la VACANTE real), DEBES decir: "¡Espera! Antes de que el sistema pueda validar tu perfil, fíjate que me falta tu [Dato]..." y lanzar el pivote.\n`;
     }
 
     return auditRules;
