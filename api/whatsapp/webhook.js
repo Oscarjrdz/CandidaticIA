@@ -173,12 +173,6 @@ export default async function handler(req, res) {
                     try {
                         const redis = getRedisClient();
 
-                        // 🏎️ CANDIDATE LOCK: Prevent simultaneous processing for the same candidate
-                        if (await isCandidateLocked(candidateId)) {
-                            console.log(`[Webhook Lock] Candidate ${candidateId} is already being processed. Skipping message.`);
-                            return;
-                        }
-
                         try {
                             const extractionTask = (async () => {
                                 try {
@@ -207,12 +201,12 @@ export default async function handler(req, res) {
                             })();
 
                             const isActive = await redis?.get('bot_ia_active');
-                            if (isActive !== 'false') await processMessage(candidateId, agentInput);
-                            await extractionTask;
-                        } finally {
-                            // 🏎️ CANDIDATE UNLOCK: Release lock after processing
-                            await unlockCandidate(candidateId);
-                        }
+                            if (isActive !== 'false') {
+                                // 🏎️ FAST SYNC: Await extraction before responding to avoid race conditions
+                                await extractionTask;
+                                await processMessage(candidateId, agentInput);
+                            }
+                        } catch (e) { console.error('🤖 Ferrari AI Error:', e); }
                     } catch (e) { console.error('🤖 Ferrari AI Error:', e); }
                 })();
 
