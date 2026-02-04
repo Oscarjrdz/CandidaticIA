@@ -103,7 +103,8 @@ const getVibeLayer = (history = [], isIncomplete = true) => {
     vibeContext += `- REGLA DE ORO "ANCLA Y PUENTE": Tu primer frase DEBE validar el mensaje actual del usuario (ancla). 
     - PROHIBICIÓN: Prohibido empezar siempre con "¡Anotado!". 
     - REPERTORIO DE CONECTORES: Usa variedad: "¡Súper! ✨", "¡Excelente! 😊", "¡Perfecto! Ya lo tengo... ✅", "¡Qué bien! 💖", "¡Está genial! 🌸", "¡Excelente elección! 💼".
-    - EMPATÍA GEO: Si te dan un municipio, di algo breve como: "¡Me encanta [Municipio]! 📍" o "Órale, qué buena zona. 😊".\n`;
+    - EMPATÍA GEO: Si te dan un municipio, di algo breve como: "¡Me encanta [Municipio]! 📍" o "Órale, qué buena zona. 😊".
+    - PROTOCOLO DE FECHA: Si el usuario solo te da el año, el mes o el día, NO lo borres. Dile: "¡Perfecto! Ya tengo el [Dato dado]... ¿y lo demás?". Si se traba, dile: "¡No te preocupes! Si prefieres, dime cuántos años tienes y yo le muevo aquí al sistema. 😉".\n`;
 
     // 4. Detect Agreement without Data (Lock the sequence) - ONLY IF INCOMPLETE
     if (isIncomplete) {
@@ -137,8 +138,11 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
 
         auditRules += `\n4. PROTOCOLO DE AVANCE (ADN): El perfil está INCOMPLETO. Faltan: [${missingLabels.join(', ')}].
    - PRIORIDAD: Tu objetivo es obtener "${nextTarget}".
-   - REGLA DE SALTO: Si el usuario ya te dio "${nextTarget}" en su último mensaje, NO lo vuelvas a preguntar. Acéptalo con alegría natural (Diferente a "Anotado") y en el MISMO mensaje pregunta por el siguiente dato: "${remaining[0] || 'la vacante ideal'}".
-   - REGLA DE PERSISTENCIA: Solo si el usuario NO ha dado "${nextTarget}", insiste únicamente en ese dato con el "PARA QUÉ" (beneficio).
+   - JUSTIFICACIÓN NATURAL: 
+     * Municipio: "Para ver qué vacantes te quedan más cerca de casa. 📍"
+     * Fecha: "Es para completar tu expediente y ver el rango de vacantes por tu edad. 📅" (PROHIBIDO hablar de bonos o elegibilidad técnica).
+   - REGLA DE SALTO: Si el usuario ya te dio "${nextTarget}" en su último mensaje, NO lo vuelvas a preguntar. Acéptalo con alegría natural y en el MISMO mensaje pregunta por el siguiente dato: "${remaining[0] || 'la vacante ideal'}".
+   - REGLA DE PERSISTENCIA: Solo si el usuario NO ha dado "${nextTarget}", insiste únicamente en ese dato con la justificación natural de arriba.
    BLOQUEO DE CIERRE: NO te despidas hasta que la lista de arriba esté vacía.\n`;
     }
 
@@ -249,8 +253,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const extractionRules = `
 [REGLAS DE EXTRACCIÓN (ADN)]:
 1. Analiza el historial para extraer: nombreReal, fechaNacimiento, municipio, categoria, escolaridad, tieneEmpleo.
-2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO (ADN)] es menos preciso o incompleto (ej. "Oscar") que lo que dice el usuario ahora (ej. "Oscar Rodriguez"), ACTUALÍZALO.
-3. REGLA DE FECHA: Formato DD/MM/YYYY. Infiere siglo (83 -> 1983).
+2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO (ADN)] es incompleto (ej. "Oscar" o "mayo 1983") y el usuario da más info, FUSIÓNALO para tener el dato completo (ej. "Oscar Rodriguez" o "19/05/1983").
+3. REGLA DE FECHA: Formato DD/MM/YYYY. Infiere siglo obligatoriamente (ej. 83 -> 1983, 01 -> 2001).
 4. REGLA DE UBICACIÓN: Acepta "Santa" (Santa Catarina), "San Nico" (San Nicolás), etc.
 5. CATEGORÍAS VÁLIDAS: ${categoriesList}
 6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
