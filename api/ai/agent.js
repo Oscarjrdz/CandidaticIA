@@ -224,6 +224,15 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. DEBES OBTENERLO ANTES DE TERMINAR.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
+        const aiConfigJson = await redis?.get('ai_config');
+        let apiKey = process.env.GEMINI_API_KEY;
+        let ignoreVacanciesGate = false;
+        if (aiConfigJson) {
+            const parsed = JSON.parse(aiConfigJson);
+            if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
+            if (parsed.ignoreVacancies) ignoreVacanciesGate = true;
+        }
+
         // --- NEW: Unified Extraction Protocol ---
         let categoriesList = "";
         try {
