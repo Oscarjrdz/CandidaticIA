@@ -194,19 +194,25 @@ export const sendUltraMsgPresence = async (instanceId, token, chatId, presence =
             formattedChatId = `${cleanPhone}@c.us`;
         }
 
-        // --- TRY MULTIPLE ENDPOINTS AND FORMATS ---
+        // --- TRY MULTIPLE ENDPOINTS AND FORMATS (FORM vs JSON) ---
         const endpoints = ['chats/presence', 'chats/typing'];
 
         for (const endpoint of endpoints) {
             const url = `https://api.ultramsg.com/${instanceId}/${endpoint}`;
-            const payload = {
-                token,
-                chatId: formattedChatId,
-                presence: presence,
-                type: presence // Some versions use 'type'
-            };
 
-            // Non-blocking fire and forget for each attempt
+            // 1. Standard Form-Data (Legacy)
+            const params = new URLSearchParams();
+            params.append('token', token);
+            params.append('chatId', formattedChatId);
+            params.append('presence', presence);
+            params.append('type', presence);
+            axios.post(url, params, {
+                timeout: 3000,
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+            }).catch(() => { });
+
+            // 2. Modern JSON
+            const payload = { token, chatId: formattedChatId, presence, type: presence };
             axios.post(url, payload, { timeout: 3000 }).catch(() => { });
         }
 
