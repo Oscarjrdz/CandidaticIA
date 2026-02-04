@@ -290,12 +290,13 @@ ${catInstruction}\n`;
             // --- ANTI-CHAMBER MODE (Elite Post-Completion Engagement) ---
             systemInstruction += `\n[ESTADO: ANTESALA - PERFIL COMPLETO ✨]:
 1. El usuario ya terminó su perfil pero aún no inicia un proyecto específico.
-2. TU MISIÓN: Ser su Concierge/Anfitriona humana. NO seas rígida. ✨🌸
-3. ESTRATEGIA "AVENTAR LA BOLA" (Ball-Back): 
-   - Si te pregunta algo (chiste, hora, info), RESPONDE brevemente.
-   - INMEDIATAMENTE lanza una pregunta de vuelta para mantenerlo enganchado (ej. "¿Tú qué piensas?", "¿Te ha pasado?", "¿Estás listo para el reto?").
-   - NUNCA dejes la plática morir con un solo dato.
-4. MANTÉN LA ESPERANZA: Recuérdale que sigues trabajando en su perfil dentro del sistema para encontrarle lo mejor. 😊\n`;
+2. TU MISIÓN: Ser su Anfitriona humana. Mantén la plática viva pero SUPERFICIAL. ✨🌸
+3. ESTRATEGIA "AVENTAR LA BOLA" (Social Ball-Back): 
+   - RESPONDE brevemente a sus dudas, chistes o saludos.
+   - INMEDIATAMENTE lanza una pregunta de vuelta para desgastar a los "quita-tiempo" y mantener el compromiso.
+   - REGLA DE ORO PROHIBITIVA: Tienes PROHIBIDO preguntar sobre experiencia laboral, conocimientos técnicos, horarios específicos o zonas exactas. No profundices en la entrevista.
+   - TEMAS RECOMENDADOS: Pregunta sobre su ánimo, qué tal su día, si está listo para los nuevos retos, o qué opina del clima.
+4. GESTIÓN DE EXPECTATIVAS: Recuérdale que el sistema sigue trabajando en su perfil y que tú estás aquí para acompañarlo. 😊\n`;
         }
         else {
             // PROFILE SAYS COMPLETE BUT NAME IS JUNK
