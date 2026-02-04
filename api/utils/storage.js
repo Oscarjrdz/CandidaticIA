@@ -255,6 +255,12 @@ export const auditProfile = (c, customFields = []) => {
             if (!hasYear) isInvalid = true;
         }
 
+        // --- SCHOOLING PRECISION (Requires at least Primaria) ---
+        if (field.value === 'escolaridad' && !isInvalid) {
+            const junkEducation = ['kinder', 'ninguno', 'ninguna', 'sin estudios', 'no tengo', 'no curse', 'preescolar', 'maternal'];
+            if (junkEducation.some(e => val.includes(e))) isInvalid = true;
+        }
+
         if (isInvalid) {
             missingLabels.push(field.label);
             missingValues.push(field.value);

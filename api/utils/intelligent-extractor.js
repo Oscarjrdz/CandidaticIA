@@ -121,6 +121,7 @@ ESTRATEGIA DE RAZONAMIENTO (PROTOCOLO VIPER 3.1):
     - REGLA CRÍTICA DE SALUDOS: Frases como "hola", "buenas", "que tal", "estoy listo", "dime", "si", "no" SIN CONTEXTO de datos NO deben ser extraídas como valores. Usa null.
     - REGLA DE ADJETIVOS (JUNK): Respuestas vagas o adjetivos como "bien", "super bien", "está bien", "perfecto", "ok", "claro", "excelente", "todos", "alguno", "algunos", "cualquiera" sin un dato concreto (ej. sin un puesto o fecha real) deben ser ignoradas. El valor debe ser null.
     - REGLA DE FECHA (PRECISIÓN): Para el campo "fechaNacimiento", el valor DEBE incluir un año plausible (ej. 1988 o 19/05/1988). Si solo menciona día y mes (ej. "19 de mayo") o la edad (ej. "45 años"), extrae null para el campo de fecha y explica en el thought_process que falta el año exacto.
+    - REGLA DE ESCOLARIDAD (VALIDACIÓN): El valor DEBE ser un nivel educativo real (ej. Primaria, Secundaria, Preparatoria, Licenciatura). Si el usuario dice "Kinder", "Ninguno", "Nada", "No estudié", o niveles similares, extrae null y explica en el thought_process que se requiere al menos nivel Primaria para el sistema.
     - REGLA DE NOMBRE: El nombre debe ser una persona real. Prohibido nombres de empresas, ciudades o frases evasivas o saludos.
    - REGLA CRÍTICA DE GÉNERO: Solo extrae datos si el Candidato los dice sobre SÍ MISMO.
    - REGLA DE CATEGORÍA: Si menciona "Ayudante", esa es la categoría principal.
