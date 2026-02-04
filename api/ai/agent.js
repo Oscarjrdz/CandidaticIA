@@ -98,7 +98,7 @@ const getVibeLayer = (history = []) => {
     }
 
     // 3. Anchor & Bridge Logic
-    vibeContext += '- REGLA DE ORO "ANCLA Y PUENTE": Tu primer frase DEBE validar el mensaje actual del usuario (ancla) antes de intentar pedir un dato (puente). Ejemplo: "De nada! Fíjate que para avanzar..." o "Hola de nuevo, oye aprovechando...".\n';
+    vibeContext += '- REGLA DE ORO "ANCLA Y PUENTE": Tu primer frase DEBE validar el mensaje actual del usuario (ancla) antes de intentar pedir un dato (puente). Ejemplo: "¡Anotado! Fíjate que para avanzar..." o "¡Me da gusto! Oye aprovechando...".\n';
 
     // 4. Detect Agreement without Data (Lock the sequence)
     const agreements = ['claro', 'si', 'ok', 'por supuesto', 'porsupuesto', 'esta bien', 'está bien', 'si claro', 'puedes', 'dame', 'vacantes', 'alguno', 'todos'];
