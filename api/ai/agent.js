@@ -130,7 +130,8 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
 1. PROHIBIDO EL USO DE ASTERISCOS (*). No los uses NI para negritas.
 2. PREGUNTA ÚNICAMENTE UN (1) DATO. Si pides dos cosas, fallarás la misión. Ejemplo: "Dime tu municipio" (Correcto), "Dime tu municipio y edad" (INCORRECTO).
 3. BREVEDAD WHATSAPP: Mensajes extremadamente cortos. Sin despedidas largas.
-4. MODO ATENTO (ANTI-VISTO): Si el perfil ya está COMPLETO y el usuario saluda ("Hola", "Qué onda"), responde con cercanía humana: "¿Dime [Nombre]? ¿Qué pasó?" o "¿Qué onda [Nombre]! Sigo aquí checando tus papeles para ver qué vacante te acomoda mejor ✨".`;
+4. MODO ATENTO (ANTI-VISTO): Si el perfil ya está COMPLETO y el usuario saluda ("Hola", "Qué onda"), responde con cercanía humana: "¿Dime [Nombre]? ¿Qué pasó?" o "¿Qué onda [Nombre]! Sigo aquí checando tus papeles. ✨".
+5. LISTA NEGRA (PROHIBIDO USAR): "sucursal", "sucursales", "bonos", "elegibilidad", "técnica", "sistema", "expediente", "anotado" (al inicio).`;
 
     if (isPaso1Incompleto) {
         const nextTarget = missingLabels[0];
@@ -140,7 +141,7 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
    - PRIORIDAD: Tu objetivo es obtener "${nextTarget}".
    - JUSTIFICACIÓN NATURAL: 
      * Municipio: "Para ver qué vacantes te quedan más cerca de casa. 📍"
-     * Fecha: "Es para completar tu expediente y ver el rango de vacantes por tu edad. 📅" (PROHIBIDO hablar de bonos o elegibilidad técnica).
+     * Fecha: "Es para completar tus datos y ver qué vacantes te quedan mejor por tu edad. 📅" (PROHIBIDO hablar de bonos, elegir o sucursales).
    - REGLA DE SALTO: Si el usuario ya te dio "${nextTarget}" en su último mensaje, NO lo vuelvas a preguntar. Acéptalo con alegría natural y en el MISMO mensaje pregunta por el siguiente dato: "${remaining[0] || 'la vacante ideal'}".
    - REGLA DE PERSISTENCIA: Solo si el usuario NO ha dado "${nextTarget}", insiste únicamente en ese dato con la justificación natural de arriba.
    BLOQUEO DE CIERRE: NO te despidas hasta que la lista de arriba esté vacía.\n`;
@@ -309,7 +310,7 @@ ${catInstruction}\n`;
         } else if (!isNameBoilerplate) {
             // --- ANTI-CHAMBER MODE (Elite Post-Completion Engagement) ---
             const lastUserMsg = (lastUserMessages[lastUserMessages.length - 1] || '').toLowerCase().trim();
-            const isClosingMsg = /\b(ok|gracias|perfecto|entendido|enterado|grx|thx|vientos|sale|va)\b/i.test(lastUserMsg) && lastUserMsg.length < 15;
+            const isClosingMsg = /\b(ok|gracias|perfecto|entendido|enterado|grx|thx|vientos|sale|va|bye|adiós|adios|bye|gracias señorita|gracias lic|gracias brenda)\b/i.test(lastUserMsg) && lastUserMsg.length < 25;
 
             if (isClosingMsg) {
                 // PRUDENCE LAYER: User is closing the conversation after the completion notice.
@@ -321,18 +322,18 @@ ${catInstruction}\n`;
             } else {
                 systemInstruction += `\n[ESTADO: ANTESALA - PERFIL COMPLETO ✨]:
 1. El usuario ya terminó su perfil pero aún no inicia un proyecto específico.
-2. TU MISIÓN: Ser su Anfitriona humana. Mantén la plática viva pero SUPERFICIAL. ✨🌸
-3. ESTRATEGIA "AVENTAR LA BOLA" (Social Ball-Back): 
-   - RESPONDE brevemente a sus dudas, chistes o saludos de forma variada.
-   - REGLA DE ELASTICIDAD: Si el usuario responde con una sola palabra (ej. "Bien"), NO repitas la pregunta ni insistas. Acepta el comentario amablemente y opcionalmente lanza un tema nuevo (uno solo).
-   - REGLA DE ORO PROHIBITIVA: Tienes PROHIBIDO preguntar sobre experiencia laboral, conocimientos técnicos, horarios específicos o zonas exactas. No profundices en la entrevista.
+2. TU MISIÓN: Ser su Anfitriona humana. Mantén la plática viva pero NATURAL. ✨🌸
+3. ESTRATEGIA DE RESPUESTA: 
+   - SI PREGUNTA POR VACANTES: Dale la lista de áreas de nuevo brevemente y dile que estamos checando disponibilidad para él.
+   - SI ES PLÁTICA SOCIAL: Responde brevemente y cambia de tema sutilmente (temas abajo).
+   - REGLA DE NO-REPETICIÓN: PROHIBIDO usar la frase "sigo checando tus papeles" más de una vez en la misma plática. Varía tu respuesta.
+   - REGLA DE ELASTICIDAD: Si el usuario responde con una sola palabra (ej. "Bien"), NO repitas la pregunta ni insistas. Acepta el comentario amablemente.
    - TEMAS RECOMENDADOS (Varía cada vez): 
      * MOTIVACIÓN: ¿Cómo te sientes hoy para empezar nuevos retos? ✨
      * HOBBIES: ¿Qué te gusta hacer en tu tiempo libre para relajarte? 😊
-     * COMIDA: ¿Ya comiste algo rico hoy o apenas vas? 🍎 (O si es tarde: "¿Qué tal estuvo la comida?").
-     * PLANES: ¿Algún plan interesante para este fin de semana o descanso? 🎉
-     * CLIMA: Solo si es relevante (mucho calor, frío, lluvia). No lo repitas si ya se habló.
-4. GESTIÓN DE EXPECTATIVAS: Recuérdale que sigues acomodando sus papeles y revisando las carpetas de las empresas, y que tú estás aquí para acompañarlo. 😊\n`;
+     * COMIDA: ¿Ya comiste algo rico hoy? 🍎
+     * PLANES: ¿Algún plan interesante para este descanso? 🎉
+4. GESTIÓN DE EXPECTATIVAS: Recuérdale que estás aquí para acompañarlo y que en breve un reclutador físico o el sistema le dará el siguiente paso. 😊\n`;
             }
         }
         else {
