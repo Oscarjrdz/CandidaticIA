@@ -1,4 +1,4 @@
-import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient, updateMessageStatus, isMessageProcessed, unlockMessage, isCandidateLocked, unlockCandidate } from '../utils/storage.js';
+import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient, updateMessageStatus, isMessageProcessed, unlockMessage, isCandidateLocked, unlockCandidate, addToWaitlist, getWaitlist } from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
 import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead } from './utils.js';
 
@@ -168,19 +168,38 @@ export default async function handler(req, res) {
                     }
                 })();
 
-                // AI Processing in background with Sequential Lock
+                // AI Processing in background with Industrial Waitlist
                 const aiPromise = (async () => {
                     try {
                         const redis = getRedisClient();
                         const isActive = await redis?.get('bot_ia_active');
-                        if (isActive !== 'false') {
-                            // 🏁 CANDIDATE LOCK: Prevents simultaneous AI processing
-                            if (await isCandidateLocked(candidateId)) return;
-                            await processMessage(candidateId, agentInput);
-                            await unlockCandidate(candidateId);
+                        if (isActive === 'false') return;
+
+                        // 🏁 1. ADD TO WAITLIST (Industrial Standard)
+                        await addToWaitlist(candidateId, typeof agentInput === 'string' ? agentInput : '((AUDIO/MEDIA))');
+
+                        // 🏁 2. WORKER LOCK: Check if a worker is already processing this candidate
+                        if (await isCandidateLocked(candidateId)) {
+                            console.log(`[Industrial Queue] Candidate ${candidateId} is busy. Message added to waitlist.`);
+                            return;
                         }
+
+                        // 🏁 3. WORKER LOOP: Process everything in the waitlist until drained
+                        let loopSafety = 0;
+                        while (loopSafety < 5) { // Max 5 cycles to avoid infinite loops
+                            const pendingMsgs = await getWaitlist(candidateId);
+                            if (pendingMsgs.length === 0) break;
+
+                            const aggregatedText = pendingMsgs.join(' | ');
+                            console.log(`[Industrial Queue] Processing ${pendingMsgs.length} aggregated messages for ${candidateId}.`);
+
+                            await processMessage(candidateId, aggregatedText);
+                            loopSafety++;
+                        }
+
+                        await unlockCandidate(candidateId);
                     } catch (e) {
-                        console.error('🤖 Ferrari AI Error:', e);
+                        console.error('🤖 Industrial AI Error:', e);
                         await unlockCandidate(candidateId);
                     }
                 })();

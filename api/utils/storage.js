@@ -78,6 +78,7 @@ const KEYS = {
     TELEMETRY_AI_LOGS: 'telemetry:ai:events', // List of recent AI events
     TELEMETRY_AI_STATS: 'telemetry:ai:stats', // Hash of lifetime stats
     CANDIDATE_LOCK_PREFIX: 'lock:candidate:', // Per-candidate processing lock
+    CANDIDATE_WAITLIST_PREFIX: 'waitlist:candidate:', // Pending messages while processing
 };
 
 export const DEFAULT_PROJECT_STEPS = [
@@ -509,6 +510,24 @@ export const unlockCandidate = async (candidateId) => {
     if (!client || !candidateId) return;
     const key = `${KEYS.CANDIDATE_LOCK_PREFIX}${candidateId}`;
     await client.del(key);
+};
+
+// --- INDUSTRIAL WAITLIST HELPERS ---
+export const addToWaitlist = async (candidateId, text) => {
+    const client = getRedisClient();
+    if (!client || !candidateId) return;
+    const key = `${KEYS.CANDIDATE_WAITLIST_PREFIX}${candidateId}`;
+    await client.rpush(key, text);
+    await client.expire(key, 60); // 1-minute safety TTL
+};
+
+export const getWaitlist = async (candidateId) => {
+    const client = getRedisClient();
+    if (!client || !candidateId) return [];
+    const key = `${KEYS.CANDIDATE_WAITLIST_PREFIX}${candidateId}`;
+    const msgs = await client.lrange(key, 0, -1);
+    await client.del(key);
+    return msgs;
 };
 
 export const updateCandidate = async (id, data) => {

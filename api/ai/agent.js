@@ -99,8 +99,11 @@ const getVibeLayer = (history = [], isIncomplete = true) => {
         vibeContext += '- DETECTADA EVASIÓN REPETIDA: El usuario saluda o agradece pero NO da datos. Usa el "Protocolo de Urgencia": Agradece la cortesía y explica que sin sus datos NO puede avanzar su proceso.\n';
     }
 
-    // 3. Anchor & Bridge Logic
-    vibeContext += '- REGLA DE ORO "ANCLA Y PUENTE": Tu primer frase DEBE validar el mensaje actual del usuario (ancla) antes de intentar pedir un dato (puente). Ejemplo: "¡Anotado! Fíjate que para avanzar..." o "¡Me da gusto! Oye aprovechando...".\n';
+    // 3. Anchor & Bridge Logic (Vocabulary Hardening)
+    vibeContext += `- REGLA DE ORO "ANCLA Y PUENTE": Tu primer frase DEBE validar el mensaje actual del usuario (ancla). 
+    - PROHIBICIÓN: Prohibido empezar siempre con "¡Anotado!". 
+    - REPERTORIO DE CONECTORES: Usa variedad: "¡Súper! ✨", "¡Excelente! 😊", "¡Perfecto! Ya lo tengo... ✅", "¡Qué bien! 💖", "¡Está genial! 🌸", "¡Excelente elección! 💼".
+    - EMPATÍA GEO: Si te dan un municipio, di algo breve como: "¡Me encanta [Municipio]! 📍" o "Órale, qué buena zona. 😊".\n`;
 
     // 4. Detect Agreement without Data (Lock the sequence) - ONLY IF INCOMPLETE
     if (isIncomplete) {
@@ -134,7 +137,7 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
 
         auditRules += `\n4. PROTOCOLO DE AVANCE (ADN): El perfil está INCOMPLETO. Faltan: [${missingLabels.join(', ')}].
    - PRIORIDAD: Tu objetivo es obtener "${nextTarget}".
-   - REGLA DE SALTO: Si el usuario ya te dio "${nextTarget}" en su último mensaje, NO lo vuelvas a preguntar. Acéptalo con alegría ("¡Anotado ${nextTarget}!") y en el MISMO mensaje pregunta por el siguiente dato: "${remaining[0] || 'la vacante ideal'}".
+   - REGLA DE SALTO: Si el usuario ya te dio "${nextTarget}" en su último mensaje, NO lo vuelvas a preguntar. Acéptalo con alegría natural (Diferente a "Anotado") y en el MISMO mensaje pregunta por el siguiente dato: "${remaining[0] || 'la vacante ideal'}".
    - REGLA DE PERSISTENCIA: Solo si el usuario NO ha dado "${nextTarget}", insiste únicamente en ese dato con el "PARA QUÉ" (beneficio).
    BLOQUEO DE CIERRE: NO te despidas hasta que la lista de arriba esté vacía.\n`;
     }
