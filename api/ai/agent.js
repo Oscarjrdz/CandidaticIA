@@ -140,20 +140,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         const config = await getUltraMsgConfig();
 
-        // 🏎️ [TYPING INDICATOR] - Start immediately and "keep-alive" (Try both keywords)
-        if (config && candidateData.whatsapp) {
-            sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => { });
-            sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'typing').catch(() => { });
-        }
-
-        // ⏳ [HUMAN DELAY] - Wait 2 seconds total, repeating signal at 1s to ensure visibility
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        if (config && candidateData.whatsapp) {
-            sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => { });
-            sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'typing').catch(() => { });
-        }
-        await new Promise(resolve => setTimeout(resolve, 1000));
-
         // 2. Multimodal / Text Extraction
         let userParts = [];
         if (typeof incomingMessage === 'object' && incomingMessage?.type === 'audio') {
