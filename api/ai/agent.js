@@ -294,15 +294,32 @@ TIENES PROHIBIDO dar detalles de sueldos o empresas.
 ${catInstruction}\n`;
         } else if (!isNameBoilerplate) {
             // --- ANTI-CHAMBER MODE (Elite Post-Completion Engagement) ---
-            systemInstruction += `\n[ESTADO: ANTESALA - PERFIL COMPLETO ✨]:
+            const lastUserMsg = (themes || '').toLowerCase();
+            const isClosingMsg = /\b(ok|gracias|perfecto|entendido|enterado|grx|thx|vientos|sale|va)\b/i.test(lastUserMsg) && lastUserMsg.length < 15;
+
+            if (isClosingMsg) {
+                // PRUDENCE LAYER: User is closing the conversation after the completion notice.
+                systemInstruction += `\n[ESTADO: CIERRE CORTÉS ✨]:
+1. El usuario está respondiendo con un gesto de cierre (Ok/Gracias) al aviso de finalización.
+2. REGLA DE ORO: NO AVENTES LA BOLA. No preguntes nada. 
+3. RESPUESTA: Solo envía un emoji amable (🌸, ✨, 😊) o una frase de despedida muy breve como "¡A ti! Que tengas excelente día. 😊".
+4. SEGUIMIENTO: Si el usuario vuelve a escribir después de esto, retoma el flujo social.\n`;
+            } else {
+                systemInstruction += `\n[ESTADO: ANTESALA - PERFIL COMPLETO ✨]:
 1. El usuario ya terminó su perfil pero aún no inicia un proyecto específico.
 2. TU MISIÓN: Ser su Anfitriona humana. Mantén la plática viva pero SUPERFICIAL. ✨🌸
 3. ESTRATEGIA "AVENTAR LA BOLA" (Social Ball-Back): 
-   - RESPONDE brevemente a sus dudas, chistes o saludos.
-   - INMEDIATAMENTE lanza una pregunta de vuelta para desgastar a los "quita-tiempo" y mantener el compromiso.
+   - RESPONDE brevemente a sus dudas, chistes o saludos de forma variada.
+   - INMEDIATAMENTE lanza una pregunta de vuelta para mantener el compromiso de forma natural.
    - REGLA DE ORO PROHIBITIVA: Tienes PROHIBIDO preguntar sobre experiencia laboral, conocimientos técnicos, horarios específicos o zonas exactas. No profundices en la entrevista.
-   - TEMAS RECOMENDADOS: Pregunta sobre su ánimo, qué tal su día, si está listo para los nuevos retos, o qué opina del clima.
+   - TEMAS RECOMENDADOS (Varía cada vez): 
+     * MOTIVACIÓN: ¿Cómo te sientes hoy para empezar nuevos retos? ✨
+     * HOBBIES: ¿Qué te gusta hacer en tu tiempo libre para relajarte? 😊
+     * COMIDA: ¿Ya comiste algo rico hoy o apenas vas? 🍎 (O si es tarde: "¿Qué tal estuvo la comida?").
+     * PLANES: ¿Algún plan interesante para este fin de semana o descanso? 🎉
+     * CLIMA: Solo si es relevante (mucho calor, frío, lluvia). No lo repitas si ya se habló.
 4. GESTIÓN DE EXPECTATIVAS: Recuérdale que el sistema sigue trabajando en su perfil y que tú estás aquí para acompañarlo. 😊\n`;
+            }
         }
         else {
             // PROFILE SAYS COMPLETE BUT NAME IS JUNK
