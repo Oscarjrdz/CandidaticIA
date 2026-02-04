@@ -78,14 +78,19 @@ export const processMessage = async (candidateId, incomingMessage) => {
     try {
         const redis = getRedisClient();
 
-        // 🏎️ [TYPING INDICATOR]
+        // 🏎️ [TYPING INDICATOR] - Start immediately
         const presencePromise = (async () => {
-            const cand = await getCandidateById(candidateId);
-            const config = await getUltraMsgConfig();
-            if (config && cand?.whatsapp) {
-                await sendUltraMsgPresence(config.instanceId, config.token, cand.whatsapp, 'composing');
-            }
+            try {
+                const cand = await getCandidateById(candidateId);
+                const config = await getUltraMsgConfig();
+                if (config && cand?.whatsapp) {
+                    await sendUltraMsgPresence(config.instanceId, config.token, cand.whatsapp, 'composing');
+                }
+            } catch (e) { console.warn('Typing indicator failed', e.message); }
         })();
+
+        // ⏳ [HUMAN DELAY] - Wait 2 seconds to let the "typing..." be noticed
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // 1. Context Acquisition
         const candidateData = await getCandidateById(candidateId);
