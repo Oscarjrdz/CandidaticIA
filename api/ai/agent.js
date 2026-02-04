@@ -208,6 +208,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
         }
         const isNameBoilerplate = !displayName || /proporcionado|desconocido|luego|después|privado|hola|buenos|\+/i.test(String(displayName));
 
+        // b. Data Audit Layer (Iron-Clad) - Moved up to avoid ReferenceError
+        const customFieldsJson = await redis?.get('custom_fields');
+        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+        const audit = auditProfile(candidateData, customFields);
+
         let systemInstruction = getIdentityLayer();
         systemInstruction += getSessionLayer(minSinceLastBot, botHasSpoken, recentHistory.length > 0, isNameBoilerplate ? null : displayName);
         systemInstruction += getVibeLayer(recentHistory, audit.paso1Status === 'INCOMPLETO');
@@ -218,20 +223,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. DEBES OBTENERLO ANTES DE TERMINAR.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
-
-        const aiConfigJson = await redis?.get('ai_config');
-        let apiKey = process.env.GEMINI_API_KEY;
-        let ignoreVacanciesGate = false;
-        if (aiConfigJson) {
-            const parsed = JSON.parse(aiConfigJson);
-            if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
-            if (parsed.ignoreVacancies) ignoreVacanciesGate = true;
-        }
-
-        // b. Data Audit Layer (Iron-Clad)
-        const customFieldsJson = await redis?.get('custom_fields');
-        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
-        const audit = auditProfile(candidateData, customFields);
 
         // --- NEW: Unified Extraction Protocol ---
         let categoriesList = "";
@@ -449,7 +440,9 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
 
     } catch (error) {
         console.error('❌ [AI Agent] Fatal Error:', error);
-        return "¡Ay, perdona! Me hablaron de otra oficina y me distraje un segundo. 😅 ¿Me repites lo último? 😊";
+        const fallbackMsg = "¡Ay, perdona! Me hablaron de otra oficina y me distraje un segundo. 😅 ¿Me repites lo último? 😊";
+        await sendFallback(candidateData, fallbackMsg).catch(() => { });
+        return fallbackMsg;
     }
 };
 
