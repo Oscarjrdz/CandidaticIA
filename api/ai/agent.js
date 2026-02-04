@@ -201,13 +201,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // 4. Layered System Instruction Build
         const botHasSpoken = validMessages.some(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel);
 
-        // THROTTLE: If we just spoke 3 seconds ago, ignore this trigger to avoid double replies
-        // Only throttle if it's the SAME trigger or very fast consecutive messages
-        if (secSinceLastBot < 3 && botHasSpoken) {
-            console.log(`[AI Throttle] Skipping response for ${candidateId} - Last bot message was ${secSinceLastBot}s ago.`);
-            return null;
-        }
-
         // Identity Protection (Titan Shield Pass) - System context for safety
         let displayName = candidateData.nombreReal;
         if (!displayName || displayName === 'Desconocido' || /^\+?\d+$/.test(displayName)) {

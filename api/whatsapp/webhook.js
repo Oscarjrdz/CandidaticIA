@@ -168,16 +168,21 @@ export default async function handler(req, res) {
                     }
                 })();
 
-                // AI Processing in background
+                // AI Processing in background with Sequential Lock
                 const aiPromise = (async () => {
                     try {
                         const redis = getRedisClient();
-
                         const isActive = await redis?.get('bot_ia_active');
                         if (isActive !== 'false') {
+                            // 🏁 CANDIDATE LOCK: Prevents simultaneous AI processing
+                            if (await isCandidateLocked(candidateId)) return;
                             await processMessage(candidateId, agentInput);
+                            await unlockCandidate(candidateId);
                         }
-                    } catch (e) { console.error('🤖 Ferrari AI Error:', e); }
+                    } catch (e) {
+                        console.error('🤖 Ferrari AI Error:', e);
+                        await unlockCandidate(candidateId);
+                    }
                 })();
 
                 const miscPromise = (async () => {
