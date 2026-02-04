@@ -16,7 +16,13 @@ export default async function handler(req, res) {
     try {
         const redis = getRedisClient();
 
-        // 1. Get Scheduled Rules
+        // 1. Master Toggle Check
+        const isActive = await redis.get('bot_ia_active');
+        if (isActive === 'false') {
+            return res.status(200).json({ success: true, message: 'Bot está apagado globalmente' });
+        }
+
+        // 2. Get Scheduled Rules
         const rulesJson = await redis.get('scheduled_message_rules');
         if (!rulesJson) {
             return res.status(200).json({ message: 'No rules configured' });

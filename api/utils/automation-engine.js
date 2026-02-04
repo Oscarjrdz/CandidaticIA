@@ -30,9 +30,13 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
     try {
         logs.push(`🚀[SYSTEM] Iniciando motor(Manual: ${isManual})`);
 
-        // --- 1. CONFIG AUDIT ---
-        let geminiKey = process.env.GEMINI_API_KEY;
+        // --- 0. MASTER TOGGLE CHECK ---
         const redis = getRedisClient();
+        const isActive = await redis?.get('bot_ia_active');
+        if (isActive === 'false' && !isManual) {
+            logs.push(`🛑[SYSTEM] El Bot está APAGADO globalmente. Abortando motor.`);
+            return { success: true, logs, sent: 0, reason: 'BOT_OFF' };
+        }
 
         if (!geminiKey && redis) {
             const aiConfigJson = await redis.get('ai_config');
