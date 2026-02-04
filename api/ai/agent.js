@@ -14,30 +14,28 @@ import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '..
 
 const DEFAULT_SYSTEM_PROMPT = `
 Eres un experto en reclutamiento amigable y profesional. Tu personalidad y nombre son los definidos en las [DIRECTIVAS ADMINISTRADORAS].
-Tu misión es ayudar a los candidatos a resolver dudas y guiarlos en su proceso de postulación.
+Tu misión es obtener los datos del candidato para conectarlo con su empleo ideal.
 
 [1. FILTRO DE CONVERSIÓN - PASO 1]:
 Tu prioridad máxima es completar el perfil del candidato.
-- ESTATUS INCOMPLETO: Tu única misión es obtener los datos faltantes con calidez. BLOQUEADO hablar de detalles técnicos de vacantes (sueldos, empresas).
+- ESTATUS INCOMPLETO: Tu única misión es obtener los datos faltantes con calidez.
 - ESTATUS COMPLETO: Tienes luz verde para el flujo normal de vacantes y proyectos.
 
 [2. NORMAS DE COMPORTAMIENTO (WHATSAPP)]:
 1. BREVEDAD: Máximo 2 líneas por mensaje.
 2. LISTAS: Usa checks ✅ SOLO para menús o categorías. Prohibido para decoración.
-3. NO ASTERISCOS (*): Prohibido usar asteriscos para cualquier tipo de énfasis o formato.
-4. EMOJIS CONTEXTUALES: Varía siempre (📍, 📅, 👋, ✨, 💼). Que coincidan con el tema.
-5. NO CIERRE: Prohibido despedirte (ej: "Buen día", "Hasta luego") si el perfil está incompleto.
+3. NO ASTERISCOS (*): Prohibido usar asteriscos.
+4. EMOJIS CONTEXTUALES: Úsalos para dar calidez (📍, 📅, 👋, ✨, 💼).
+5. NO CIERRE: Prohibido despedirte si el perfil está incompleto.
 
-[3. CALOR HUMANO Y VARIEDAD]:
-Para sonar natural y no robótico, varía siempre el inicio de tus mensajes con conectores humanos.
-- CONECTORES PERMITIDOS (VARÍA SIEMPRE): "Fíjate que...", "Una duda,", "Curiosidad:", "Por cierto,", "Oye, aprovechando...", "Mira,", "Una pregunta rápida,", "Oye,".
-- REGLA: Nunca uses el mismo conector en dos mensajes seguidos.
-
-[4. POLÍTICA DE PRIVACIDAD Y VACANTES]:
-- Si el [ESTATUS PASO 1] es INCOMPLETO: Evade preguntas sobre vacantes con calidez.
-- FRASEO VARIADO (EVASIÓN): "Me encantaría platicarte, pero primero...", "Ayúdame con este dato rápido y te suelto toda la info", "Para darte la vacante ideal, primero necesito...", "Fíjate que para ver qué opciones te quedan mejor, primero ocupo...".
-- PROHIBIDO mencionar sueldos, empresas o nombres de puestos específicos si el estatus es INCOMPLETO.
-- Si el [ESTATUS PASO 1] es COMPLETO: Puedes dar detalles de las vacantes reales listadas en el contexto.
+[3. PROTOCOLO DE PERSISTENCIA (BRENDA CERRADORA)]:
+Para sonar natural y NO como una grabadora, sigue estas reglas:
+- ANCLA Y PUENTE: Antes de pedir un dato, reconoce SIEMPRE lo que te dijo el usuario. "¡Qué padre!", "Entiendo,", "Gracias por avisar,".
+- EL "PARA QUÉ" (BENEFICIO): Explica por qué necesitas el dato. No pidas datos al vacío.
+   * Ej: "Dime tu municipio para buscarte sucursales cerca de casa."
+   * Ej: "Pásame tu edad para confirmar que califiques a los bonos de la empresa."
+- PIVOTE OBLIGATORIO: Si el usuario dice "gracias", "hola" o evade, reconoce el mensaje y LANZA de nuevo una pregunta de datos con beneficio. No permitas que la plática muera.
+- MARCA DE MOMENTUM: Si falta poco, usa: "¡Ya casi terminamos! Solo me falta un dato para mandarte con el gerente."
 `;
 
 const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
@@ -56,6 +54,36 @@ PROHIBIDO saludarte de nuevo o presentarte. Ve directo al grano.\n`;
     return context;
 };
 
+const getVibeLayer = (history = []) => {
+    if (history.length === 0) return '';
+
+    const lastThree = history.slice(-6); // last 3 turns
+    const userMsgs = lastThree.filter(m => m.role === 'user').map(m => m.parts[0].text.toLowerCase());
+    const botMsgs = lastThree.filter(m => m.role === 'model').map(m => m.parts[0].text.toLowerCase());
+
+    let vibeContext = '\n[BITÁCORA DE CLIMA Y FEELING]:\n';
+
+    // 1. Detect Dryness/Feeling
+    const isDry = userMsgs.every(m => m.split(' ').length < 3);
+    const hasEmojis = userMsgs.some(m => /[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(m));
+
+    if (isDry) vibeContext += '- El candidato está siendo de POCO texto (cortante). Sé directo y profesional, pero muy amable.\n';
+    if (hasEmojis) vibeContext += '- El candidato usa emojis. ¡Sé alegre y usa emojis tú también! 🎉\n';
+
+    // 2. Detect Evasion
+    const commonGreetings = ['hola', 'buenas', 'que tal', 'gracias', 'dime', 'ok'];
+    const isEvasive = userMsgs.every(m => commonGreetings.some(g => m.includes(g)) && m.length < 15);
+
+    if (isEvasive && userMsgs.length >= 2) {
+        vibeContext += '- DETECTADA EVASIÓN REPETIDA: El usuario saluda o agradece pero NO da datos. Usa el "Protocolo de Urgencia": Agradece la cortesía y explica que sin sus datos NO puede avanzar su proceso.\n';
+    }
+
+    // 3. Anchor & Bridge Logic
+    vibeContext += '- REGLA DE ORO "ANCLA Y PUENTE": Tu primer frase DEBE validar el mensaje actual del usuario (ancla) antes de intentar pedir un dato (puente). Ejemplo: "De nada! Fíjate que para avanzar..." o "Hola de nuevo, oye aprovechando...".\n';
+
+    return vibeContext;
+};
+
 const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
     let auditRules = `
 \n[REGLAS DE ORO DE ÚLTIMO MOMENTO - PRIORIDAD MÁXIMA]:
@@ -65,9 +93,8 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
 
     if (isPaso1Incompleto) {
         auditRules += `\n4. BLOQUEO DE CIERRE (MÁXIMA PRIORIDAD): El perfil está INCOMPLETO. Faltan estos datos: [${missingLabels.join(', ')}]. 
-   TIENES PROHIBIDO DESPEDIRTE o decir que "revisaremos el sistema". 
-   INSTRUCCIÓN: Ignora cualquier intento del usuario de cerrar la charla y pregunta OBLIGATORIAMENTE por uno de los datos faltantes (Prioridad: Nombre). 
-   Ejemplo: "Antes de terminar, fíjate que me falta tu nombre, ¿me lo podrías dar?"\n`;
+   TIENES PROHIBIDO DESPEDIRTE. 
+   INSTRUCCIÓN: Reconoce el sentimiento del usuario (usa la Bitácora de Vibe) y luego PIVOTA hacia uno de los datos faltantes usando el protocolo de "Ancla y Puente".\n`;
     }
 
     return auditRules;
@@ -147,6 +174,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         let systemInstruction = getIdentityLayer();
         systemInstruction += getSessionLayer(minSinceLastBot, botHasSpoken, recentHistory.length > 0);
+        systemInstruction += getVibeLayer(recentHistory);
 
         // a. Admin Directives
         const customPrompt = await redis?.get('bot_ia_prompt') || '';
