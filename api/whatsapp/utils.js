@@ -210,6 +210,16 @@ export const sendUltraMsgPresence = async (instanceId, token, chatId, presence =
             console.error(`❌ [UltraMsg] Presence API error (${response.status}):`, response.data);
         }
 
+        const redis = getRedisClient();
+        if (redis) {
+            await redis.set(`debug:presence:${chatId}`, JSON.stringify({
+                timestamp: new Date().toISOString(),
+                status: response.status,
+                presence,
+                result: response.data
+            }), 'EX', 600);
+        }
+
         return response.data;
     } catch (error) {
         const errorData = error.response?.data;

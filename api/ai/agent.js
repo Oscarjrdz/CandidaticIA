@@ -78,23 +78,23 @@ export const processMessage = async (candidateId, incomingMessage) => {
     try {
         const redis = getRedisClient();
 
-        // 🏎️ [TYPING INDICATOR] - Start immediately
-        const presencePromise = (async () => {
-            try {
-                const cand = await getCandidateById(candidateId);
-                const config = await getUltraMsgConfig();
-                if (config && cand?.whatsapp) {
-                    await sendUltraMsgPresence(config.instanceId, config.token, cand.whatsapp, 'composing');
-                }
-            } catch (e) { console.warn('Typing indicator failed', e.message); }
-        })();
-
-        // ⏳ [HUMAN DELAY] - Wait 2 seconds to let the "typing..." be noticed
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
         // 1. Context Acquisition
         const candidateData = await getCandidateById(candidateId);
         if (!candidateData) return 'ERROR: Candidate not found';
+
+        const config = await getUltraMsgConfig();
+
+        // 🏎️ [TYPING INDICATOR] - Start immediately and "keep-alive"
+        if (config && candidateData.whatsapp) {
+            sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => { });
+        }
+
+        // ⏳ [HUMAN DELAY] - Wait 2 seconds total, repeating signal at 1s to ensure visibility
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (config && candidateData.whatsapp) {
+            sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => { });
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         // 2. Multimodal / Text Extraction
         let userParts = [];
@@ -297,14 +297,12 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
         responseText = responseText.replace(/\[MOVE\]|\{MOVE\}/gi, '').trim();
 
         // Background Cleanup & Persistence
-        const config = await getUltraMsgConfig();
         const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
         await Promise.allSettled([
             deliveryPromise,
             saveMessage(candidateId, { from: 'bot', content: responseText, type: 'text', timestamp: new Date().toISOString() }),
-            updateCandidate(candidateId, { lastBotMessageAt: new Date().toISOString(), ultimoMensaje: new Date().toISOString() }),
-            presencePromise
+            updateCandidate(candidateId, { lastBotMessageAt: new Date().toISOString(), ultimoMensaje: new Date().toISOString() })
         ]);
 
         return responseText;
