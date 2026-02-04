@@ -194,37 +194,35 @@ export const sendUltraMsgPresence = async (instanceId, token, chatId, presence =
             formattedChatId = `${cleanPhone}@c.us`;
         }
 
-        const url = `https://api.ultramsg.com/${instanceId}/chats/presence`;
+        // --- TRY MULTIPLE ENDPOINTS AND FORMATS ---
+        const endpoints = ['chats/presence', 'chats/typing'];
 
-        const params = new URLSearchParams();
-        params.append('token', token);
-        params.append('chatId', formattedChatId);
-        params.append('presence', presence);
-        params.append('type', presence);
+        for (const endpoint of endpoints) {
+            const url = `https://api.ultramsg.com/${instanceId}/${endpoint}`;
+            const payload = {
+                token,
+                chatId: formattedChatId,
+                presence: presence,
+                type: presence // Some versions use 'type'
+            };
 
-        const response = await axios.post(url, params, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            timeout: 5000
-        });
-
-        if (response.status !== 200) {
-            console.error(`❌ [UltraMsg] Presence API error (${response.status}):`, response.data);
+            // Non-blocking fire and forget for each attempt
+            axios.post(url, payload, { timeout: 3000 }).catch(() => { });
         }
 
+        // Log one success (or attempt) to Redis
         const redis = getRedisClient();
         if (redis) {
-            await redis.set(`debug:presence:${chatId}`, JSON.stringify({
+            await redis.set(`debug:presence:${formattedChatId}`, JSON.stringify({
                 timestamp: new Date().toISOString(),
-                status: response.status,
                 presence,
-                result: response.data
+                attempted_endpoints: endpoints
             }), 'EX', 600);
         }
 
-        return response.data;
+        return { success: true };
     } catch (error) {
-        const errorData = error.response?.data;
-        console.error(`❌ [UltraMsg] Presence FAILED for ${chatId}:`, errorData || error.message);
+        console.error(`❌ [UltraMsg] Presence FAILED for ${chatId}:`, error.message);
         return null;
     }
 };
