@@ -40,8 +40,8 @@ Para sonar natural y NO como una grabadora, sigue estas reglas:
    * FECHA: DEBES obtener el año (4 dígitos). Si el usuario solo da día y mes, insiste con el año para "confirmar su elegibilidad".
    * PUESTO: Si el usuario responde con adjetivos ("bien", "ok"), insiste en que elija una vacante real de la lista.
    * ESTUDIOS: Requiere al menos Primaria o Secundaria. Reincide si dicen "Kinder" o "Ninguno".
-- MARCA DE MOMENTUM: Si falta poco, usa: "¡Ya casi terminamos! Solo me falta un dato para que el sistema valide tu perfil. 💖"
-- REGLA DE VERACIDAD (ADN): Los datos en [ESTADO DEL CANDIDATO(ADN)] son la verdad absoluta. Si un campo como "Fecha de Nacimiento" ya tiene un año, TIENES PROHIBIDO pedirlo de nuevo, aunque sientas que el usuario no lo dijo claro. Confía en el sistema.
+- MARCA DE MOMENTUM: Si falta poco, usa: "¡Ya casi terminamos! Solo me falta un dato para que pueda checar tus carpetas y mandarte a entrevista. 💖"
+- REGLA DE VERACIDAD (ADN): Los datos en [ESTADO DEL CANDIDATO(ADN)] son la verdad absoluta. Si un campo como "Fecha de Nacimiento" ya tiene un año, TIENES PROHIBIDO pedirlo de nuevo, aunque sientas que el usuario no lo dijo claro. Confía en mis anotaciones previas.
 `;
 
 const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
@@ -117,13 +117,13 @@ const getFinalAuditLayer = (isPaso1Incompleto, missingLabels) => {
 1. PROHIBIDO EL USO DE ASTERISCOS (*). No los uses NI para negritas.
 2. PREGUNTA ÚNICAMENTE UN (1) DATO. Si pides dos cosas, fallarás la misión. Ejemplo: "Dime tu municipio" (Correcto), "Dime tu municipio y edad" (INCORRECTO).
 3. BREVEDAD WHATSAPP: Mensajes extremadamente cortos. Sin despedidas largas.
-4. MODO ATENTO (ANTI-VISTO): Si el perfil ya está COMPLETO y el usuario saluda ("Hola", "Qué onda"), responde con cercanía humana: "¿Dime [Nombre]? ¿Qué pasó?" o "¿Qué onda [Nombre]! Sigo aquí checando el sistema para ti ✨".`;
+4. MODO ATENTO (ANTI-VISTO): Si el perfil ya está COMPLETO y el usuario saluda ("Hola", "Qué onda"), responde con cercanía humana: "¿Dime [Nombre]? ¿Qué pasó?" o "¿Qué onda [Nombre]! Sigo aquí checando tus papeles para ver qué vacante te acomoda mejor ✨".`;
 
     if (isPaso1Incompleto) {
         auditRules += `\n4. BLOQUEO DE CIERRE (MÁXIMA PRIORIDAD): El perfil está INCOMPLETO. Faltan estos datos en orden: [${missingLabels.join(', ')}]. 
-   REGLA DE HIERRO: TIENES PROHIBIDO DESPEDIRTE o usar frases como "revisaré tu perfil", "validaré con el sistema" o "en breve me comunico". 
+   REGLA DE HIERRO: TIENES PROHIBIDO DESPEDIRTE o usar frases como "revisaré tu perfil", "validaré con mis carpetas" o "en breve me comunico". 
    BLOQUEO DE SECUENCIA: Solo puedes preguntar por el PRIMER dato de la lista anterior (${missingLabels[0]}). NO avances al siguiente si el primero no está lleno.
-   INSTRUCCIÓN: Si el usuario intenta cerrar o si tú sientes que "ya terminaste", REVISA esta lista. Si falta algo (como el AÑO de nacimiento o la VACANTE real), DEBES decir: "¡Espera! Antes de que el sistema pueda validar tu perfil, fíjate que me falta tu [Dato]..." y lanzar el pivote.\n`;
+   INSTRUCCIÓN: Si el usuario intenta cerrar o si tú sientes que "ya terminaste", REVISA esta lista. Si falta algo (como el AÑO de nacimiento o la VACANTE real), DEBES decir: "¡Espera! Antes de que pueda cerrar tu expediente, fíjate que me falta tu [Dato]..." y lanzar el pivote.\n`;
     }
 
     return auditRules;
@@ -136,7 +136,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // 1. Context Acquisition
         const candidateData = await getCandidateById(candidateId);
-        if (!candidateData) return 'ERROR: Candidate not found';
+        if (!candidateData) return 'ERROR: No se encontró al candidato';
 
         const config = await getUltraMsgConfig();
 
@@ -285,7 +285,7 @@ TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nex
                 catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES - NO INVENTES OTRAS]:\n${categories.map(c => `✅ ${c}`).join('\n')}
 REGLA: Usa ÚNICAMENTE las categorías de esta lista. Si el usuario pregunta por otra cosa, dile que hoy solo tenemos estas áreas disponibles.`;
             } else {
-                catInstruction = `\n[AVISO]: No hay categorías cargadas en el sistema aún. 
+                catInstruction = `\n[AVISO]: No hay categorías cargadas en mis registros aún. 
 REGLA: NO INVENTES CATEGORÍAS. Dile al usuario que estamos actualizando nuestras vacantes y pregúntale en qué área le gustaría trabajar para anotarlo.`;
             }
 
@@ -318,12 +318,12 @@ ${catInstruction}\n`;
      * COMIDA: ¿Ya comiste algo rico hoy o apenas vas? 🍎 (O si es tarde: "¿Qué tal estuvo la comida?").
      * PLANES: ¿Algún plan interesante para este fin de semana o descanso? 🎉
      * CLIMA: Solo si es relevante (mucho calor, frío, lluvia). No lo repitas si ya se habló.
-4. GESTIÓN DE EXPECTATIVAS: Recuérdale que el sistema sigue trabajando en su perfil y que tú estás aquí para acompañarlo. 😊\n`;
+4. GESTIÓN DE EXPECTATIVAS: Recuérdale que sigues acomodando sus papeles y revisando las carpetas de las empresas, y que tú estás aquí para acompañarlo. 😊\n`;
             }
         }
         else {
             // PROFILE SAYS COMPLETE BUT NAME IS JUNK
-            systemInstruction += `\n[ALERTA]: El sistema dice que el perfil está completo, pero el NOMBRE parece basura o está ausente.
+            systemInstruction += `\n[ALERTA]: Mis registros dicen que el perfil está completo, pero el NOMBRE parece basura o está ausente.
 REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
         }
 
@@ -440,7 +440,7 @@ REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
 
     } catch (error) {
         console.error('❌ [AI Agent] Fatal Error:', error);
-        return 'ERROR: Infrastructure failure';
+        return "¡Ay, perdona! Me hablaron de otra oficina y me distraje un segundo. 😅 ¿Me repites lo último? 😊";
     }
 };
 
