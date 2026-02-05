@@ -82,7 +82,13 @@ export default async function handler(req, res) {
                     }
                 }
 
-                if (/^\d{4}$/.test(body.trim())) return res.status(200).send('pin_ignored');
+                // --- PIN/YEAR GATEKEEPER ---
+                // Allow 4-digit years (19xx, 20xx) to pass through.
+                const bodyTrim = body.trim();
+                const isAuthAttempt = /^\d{4}$/.test(bodyTrim);
+                if (isAuthAttempt && !bodyTrim.startsWith('19') && !bodyTrim.startsWith('20')) {
+                    return res.status(200).send('pin_ignored');
+                }
 
                 try {
                     const { getUsers } = await import('../utils/storage.js');
