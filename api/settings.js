@@ -136,7 +136,7 @@ export default async function handler(req, res) {
 
             if (type === 'ai_prompt') {
                 // 'data' is the prompt string
-                if (!data || typeof data !== 'string') {
+                if (typeof data !== 'string') {
                     return res.status(400).json({ error: 'Invalid prompt format' });
                 }
 
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
             }
 
             if (type === 'assistant_ai_prompt') {
-                if (!data || typeof data !== 'string') {
+                if (typeof data !== 'string') {
                     return res.status(400).json({ error: 'Invalid prompt format' });
                 }
 
