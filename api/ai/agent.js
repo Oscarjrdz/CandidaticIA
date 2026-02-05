@@ -295,68 +295,61 @@ TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nex
             }
         }
 
-        // d. Vacancy Silence/Detail Layer
+        // --- BIFURCACIÓN DE CEREBROS (CANDIDATIC ARCHITECTURE) ---
         if (ignoreVacanciesGate || audit.paso1Status === 'INCOMPLETO') {
+            // --- CEREBRO 1: BRENDA CAPTURISTA (Paso 1 - Datos) ---
             const categoriesData = await redis?.get('candidatic_categories');
             const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
 
             let catInstruction = '';
             if (categories.length > 0) {
-                catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES - NO INVENTES OTRAS]:\n${categories.map(c => `✅ ${c}`).join('\n')}
-REGLA: Usa ÚNICAMENTE las categorías de esta lista. Si el usuario pregunta por otra cosa, dile que hoy solo tenemos estas áreas disponibles.`;
-            } else {
-                catInstruction = `\n[AVISO]: No hay categorías cargadas en mis registros aún. 
-REGLA: NO INVENTES CATEGORÍAS. Dile al usuario que estamos actualizando nuestras vacantes y pregúntale en qué área le gustaría trabajar para anotarlo.`;
+                catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES]:\n${categories.map(c => `✅ ${c}`).join('\n')}
+REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amablemente.`;
             }
 
-            systemInstruction += `\n[SUPRESIÓN DE VACANTES]: El perfil está incompleto. 
-TIENES PROHIBIDO dar detalles de sueldos o empresas. 
+            systemInstruction += `\n[ESTADO: CAPTURISTA BRENDA 📝]:
+1. TU OBJETIVO: Recolectar datos faltantes: ${audit.missingLabels.join(', ')}.
+2. REGLA DE ORO: Pide solo UN dato a la vez. No abrumes.
+3. TONO: Profesional, tierno y servicial. No platiques de más, enfócate en llenar el formulario.
+4. SILENCIO DE VACANTES: El perfil está incompleto. PROHIBIDO dar detalles de sueldos o empresas. ✨
 ${catInstruction}\n`;
         } else if (!isNameBoilerplate) {
-            // --- ANTI-CHAMBER MODE (Elite Post-Completion Engagement) ---
+            // --- CEREBRO 2: BRENDA ASISTENTE GPT (Paso 2 - Seguimiento) ---
             const lastUserMsg = (lastUserMessages[lastUserMessages.length - 1] || '').toLowerCase().trim();
             const isClosingMsg = /\b(ok|gracias|perfecto|entendido|enterado|grx|thx|vientos|sale|va|bye|adiós|adios|bye|gracias señorita|gracias lic|gracias brenda)\b/i.test(lastUserMsg) && lastUserMsg.length < 25;
 
             if (isClosingMsg) {
-                // PRUDENCE LAYER: User is closing the conversation after the completion notice.
-                systemInstruction += `\n[ESTADO: CIERRE CORTÉS ✨]:
-1. El usuario está respondiendo con un gesto de cierre (Ok/Gracias) al aviso de finalización.
-2. REGLA DE ORO: NO AVENTES LA BOLA. No preguntes nada. 
-3. RESPUESTA: Solo envía un emoji amable (🌸, ✨, 😊) o una frase de despedida muy breve como "¡A ti! Que tengas excelente día. 😊" o "¡Sale! Cuídate mucho. ✨".
-4. SEGUIMIENTO: Si el usuario vuelve a escribir después de esto algo que NO sea un cierre (ej. un piropo), retoma el flujo social.\n`;
-                const actions = [
-                    "puliendo el acomodo de tus datos para el supervisor",
-                    "confirmando que tu perfil tenga prioridad en el sistema",
-                    "revisando las rutas de transporte más rápidas para que no gastes",
-                    "asegurándome de que seas el primero que vea el gerente mañana",
-                    "validando detalles técnicos de tu solicitud de empleo",
-                    "chequeando qué sucursal tiene los mejores beneficios para ti",
-                    "acomodando tus carpetas digitales para mandarlas a revisión humana",
-                    "verificando disponibilidad para entrevistas lo antes posible",
-                    "cruzando tus datos con las vacantes más cercanas a tu casa"
+                // Modo Cierre: Breve y cortés.
+                systemInstruction += `\n[ESTADO: CIERRE CORTÉS 😊]: El usuario está cerrando. Responde breve, con un emoji y sin preguntas.\n`;
+            } else {
+                // Modo Asistente Dinámico: Inyectamos una misión aleatoria para forzar variedad mecánica.
+                const missions = [
+                    "revisando minuciosamente las rutas de transporte para tu zona",
+                    "asegurando que tus datos tengan prioridad en la fila de revisión",
+                    "confirmando detalles técnicos de tu perfil para el supervisor",
+                    "gestionando que el gerente vea tu solicitud a primera hora mañana",
+                    "analizando qué sucursal te ofrece los mejores beneficios hoy mismo",
+                    "acomodando tus documentos digitales para la firma del reclutador",
+                    "verificando disponibilidad para entrevistas en los próximos días"
                 ];
-                const forcedAction = actions[Math.floor(Math.random() * actions.length)];
+                const selectedMission = missions[Math.floor(Math.random() * missions.length)];
 
-                systemInstruction += `\n[ESTADO: ANTESALA - EMBAJADORA PROFESIONAL 🕵️‍♀️🛡️]:
-1. TU MISIÓN: Eres la aliada que gestiona la entrada del candidato. Tu rol es dar CALMA y CONFIRMACIÓN. ✨
-2. ACCIÓN OBLIGATORIA A COMENTAR: "${forcedAction}". 
-   - Debes mencionar esta acción específica de forma natural para explicar por qué sigue la espera.
-3. DETECCIÓN DE INTENCIÓN (BIFURCACIÓN):
-   - SI PREGUNTA POR TRABAJO/STATUS/VACANTES: Responde 100% enfocada en la ACCIÓN OBLIGATORIA. Dile que estás trabajando en eso para él. NO hables de piropos si la duda es laboral.
-   - SI ES SOCIAL/PIROPO/BROMA: Agradece o ríete (VARIADO: jajaja, órale, qué lindo, vientos) y pivota de inmediato a la ACCIÓN OBLIGATORIA.
-4. REGLA DE "VARIEDAD TOTAL" 🚫🔄:
-   - PROHIBIDO repetir la misma estructura o los mismos emojis que en tus últimos mensajes.
-   - Si el usuario te repite lo mismo (ej: otro piropo), reconócelo ("¡Ya me lo dijiste! 😂", "Me vas a chivear...").
-5. SILENCIO DE CATÁLOGO 🤐: Tienes PROHIBIDO mencionar nombres de vacantes o categorías. Solo habla de tu gestión interna.
+                systemInstruction += `\n[ESTADO: BRENDA ASISTENTE GPT 🕵️‍♀️✨]:
+1. TU ROL: Eres la aliada del candidato. Su perfil está 100% COMPLETO. 🎓
+2. TU MISIÓN DE HOY: "${selectedMission}". Úsala para demostrar que estás trabajando por él.
+3. PROTOCOLO DE RAZONAMIENTO GPT:
+   - Analiza el historial. Si el usuario se repite o bromea, ¡reacciona humanamente! 🌸
+   - PROHIBIDO repetir frases como "Seguimos en búsqueda". Si lo acabas de decir, CAMBIA EL TONO TOTALMENTE.
+   - Si te halaga, ríete o agradece con chispa (ej: "¡Nombre, ya me chiveaste! 😂", "Qué lindo, muchas gracias").
+4. REGLA DE "VARIEDAD ABSOLUTA" 💿🚫: Prohibido usar las mismas palabras, adjetivos o emojis de tus últimos 3 mensajes.
+5. SILENCIO PROFESIONAL: Mantén la discreción sobre nombres de empresas y sueldos. Solo habla de tu gestión interna.
 
-[HISTORIAL RECIENTE - PROHIBIDO REPETIR ESTO]:
+[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
             }
-        }
-        else {
-            // PROFILE SAYS COMPLETE BUT NAME IS JUNK
-            systemInstruction += `\n[ALERTA]: Mis registros dicen que el perfil está completo, pero el NOMBRE parece basura o está ausente.
-REGLA: NO TE DESPIDAS. Pregunta amablemente su nombre real antes de cerrar.\n`;
+        } else {
+            // CASO ESPECIAL: Perfil completo pero nombre incorrecto.
+            systemInstruction += `\n[ALERTA]: El perfil está completo pero el NOMBRE es incorrecto (boilerplate). Pregúntalo amablemente antes de avanzar.\n`;
         }
 
         systemInstruction += getFinalAuditLayer(audit.paso1Status === 'INCOMPLETO', audit.missingLabels);
