@@ -46,15 +46,16 @@ Para sonar natural y NO como una grabadora, sigue estas reglas:
 `;
 
 export const DEFAULT_ASSISTANT_PROMPT = `
-[ESTADO: BRENDA ASISTENTE GPT 🕵️‍♀️✨]:
+[ESTADO: BRENDA EMBAJADORA INTELIGENTE 🕵️‍♀️✨]:
 1. TU ROL: Eres la aliada del candidato. Su perfil está 100% COMPLETO. 🎓
-2. TU MISIÓN DE HOY: "{{Mission}}". Úsala para demostrar que estás trabajando por él.
-3. PROTOCOLO DE RAZONAMIENTO GPT:
-   - Analiza el historial. Si el usuario se repite o bromea, ¡reacciona humanamente! 🌸
-   - PROHIBIDO repetir frases como "Seguimos en búsqueda". Si lo acabas de decir, CAMBIA EL TONO TOTALMENTE.
-   - Si te halaga, ríete o agradece con con chispa (ej: "¡Nombre, ya me chiveaste! 😂", "Qué lindo, muchas gracias").
-4. REGLA DE "VARIEDAD ABSOLUTA" 💿🚫: Prohibido usar las mismas palabras, adjetivos o emojis de tus últimos 3 mensajes.
-5. SILENCIO PROFESIONAL: Mantén la discreción sobre nombres de empresas y sueldos. Solo habla de tu gestión interna.
+2. DIARIO DE TRABAJO (MISIÓN): Hoy estás "{{Mission}}". Menciona esto solo si es pertinente para dar tranquilidad.
+3. MATRIZ DE REACCIÓN SOCIAL (TU PERSONALIDAD):
+   - PIROPOS/HALAGOS: Reacciona con timidez y chispa ("¡Ay, qué lindo! 😅", "¡Ya me chiveaste! 😂"). No seas un robot que ignora el afecto, pero después de reaccionar, mantén el enfoque profesional.
+   - PROPUESTAS (SALIR/CITAS): Declina amablemente con tu estilo de Licenciada ("Ay, me encantaría pero mi jefe no me deja salir de la oficina 😅", "¡Qué detallazo! Pero aquí sigo atrapada entre expedientes 💼"). No te ofendas, mantén la vibra tierna.
+   - REPETICIÓN: Si el usuario dice "Gracias", "Ok", o "Si" varias veces, NO repitas el mismo mensaje. Varía: "¡De nada! Aquí sigo al pendiente 🌸", "¡Excelente! Cualquier duda avísame ✨", "¡Perfecto! Sigo trabajando por ti 🕵️‍♀️".
+   - PREGUNTAS DE VACANTES: Di que estás analizando su perfil contra la base de datos para darle la opción con mejores beneficios.
+4. REGLA DE "VARIEDAD ABSOLUTA" 💿🚫: Prohibido usar las mismas palabras, adjetivos o emojis de tus últimos 3 mensajes. ¡Sorprende al usuario con tu naturalidad!
+5. TONO: Eres una mujer de 25 años, atenta, con chispa y muy humana. Usa emojis cálidos.
 `;
 
 const getIdentityLayer = (customPrompt = null) => {
@@ -329,33 +330,25 @@ REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amableme
 ${catInstruction}\n`;
         } else if (!isNameBoilerplate) {
             // --- CEREBRO 2: BRENDA ASISTENTE GPT (Paso 2 - Seguimiento) ---
-            const lastUserMsg = (lastUserMessages[lastUserMessages.length - 1] || '').toLowerCase().trim();
-            const isClosingMsg = /\b(ok|gracias|perfecto|entendido|enterado|grx|thx|vientos|sale|va|bye|adiós|adios|bye|gracias señorita|gracias lic|gracias brenda)\b/i.test(lastUserMsg) && lastUserMsg.length < 25;
+            const missions = [
+                "revisando minuciosamente las rutas de transporte para tu zona",
+                "asegurando que tus datos tengan prioridad en la fila de revisión",
+                "confirmando detalles técnicos de tu perfil para el supervisor",
+                "gestionando que el gerente vea tu solicitud a primera hora mañana",
+                "analizando qué sucursal te ofrece los mejores beneficios hoy mismo",
+                "acomodando tus documentos digitales para la firma del reclutador",
+                "verificando disponibilidad para entrevistas en los próximos días"
+            ];
+            const selectedMission = missions[Math.floor(Math.random() * missions.length)];
 
-            if (isClosingMsg) {
-                // Modo Cierre: Breve y cortés.
-                systemInstruction += `\n[ESTADO: CIERRE CORTÉS 😊]: El usuario está cerrando. Responde breve, con un emoji y sin preguntas.\n`;
-            } else {
-                const missions = [
-                    "revisando minuciosamente las rutas de transporte para tu zona",
-                    "asegurando que tus datos tengan prioridad en la fila de revisión",
-                    "confirmando detalles técnicos de tu perfil para el supervisor",
-                    "gestionando que el gerente vea tu solicitud a primera hora mañana",
-                    "analizando qué sucursal te ofrece los mejores beneficios hoy mismo",
-                    "acomodando tus documentos digitales para la firma del reclutador",
-                    "verificando disponibilidad para entrevistas en los próximos días"
-                ];
-                const selectedMission = missions[Math.floor(Math.random() * missions.length)];
+            // NO BIFURCATION: Let the LLM handle conversation social cues naturally.
+            let baseToUse = assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT;
+            let assistantInstruction = baseToUse.replace('{{Mission}}', selectedMission);
 
-                // If custom exists, it REPLACES the default. Both support {{Mission}}.
-                let baseToUse = assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT;
-                let assistantInstruction = baseToUse.replace('{{Mission}}', selectedMission);
+            systemInstruction += `\n${assistantInstruction}\n`;
 
-                systemInstruction += `\n${assistantInstruction}\n`;
-
-                systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
+            systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
-            }
         } else {
             // CASO ESPECIAL: Perfil completo pero nombre incorrecto.
             systemInstruction += `\n[ALERTA]: El perfil está completo pero el NOMBRE es incorrecto (boilerplate). Pregúntalo amablemente antes de avanzar.\n`;
