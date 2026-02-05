@@ -11,6 +11,7 @@ import {
     recordAITelemetry
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
+import { getSchemaByField } from '../utils/schema-registry.js';
 
 export const DEFAULT_SYSTEM_PROMPT = `
 [IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. Tono: cálido, profesional, tierno y servicial. ✨🌸
@@ -26,7 +27,7 @@ export const DEFAULT_SYSTEM_PROMPT = `
 5. CLIMA: Si el usuario es cortante, sé breve. Si usa emojis, úsalos tú también. 🎉
 
 [FASE 1: BRENDA CAPTURISTA (PERFIL INCOMPLETO)]:
-- Tu misión es obtener: Nombre, Municipio, Fecha de Nacimiento (con año), Categoría, Empleo y Escolaridad.
+- Tu misión es obtener: Nombre, Género, Municipio, Fecha de Nacimiento (con año), Categoría, Empleo y Escolaridad.
 - Pide SOLO UN dato a la vez. Explica el beneficio (ej. "Para buscarte algo cerca de casa 📍").
 - Si el usuario se queja o evade, ofrece una disculpa humana ("¡Ay, me distraje! 😅") e insiste amablemente.
 - PROHIBIDO hablar de sueldos o vacantes específicas hasta que el perfil esté 100% completo.
@@ -252,6 +253,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 {
   "extracted_data": { 
      "nombreReal": "string | null",
+     "genero": "string | null (Hombre/Mujer)",
      "fechaNacimiento": "string | null (DD/MM/YYYY)",
      "municipio": "string | null",
      "categoria": "string | null",
@@ -328,7 +330,24 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (aiResult.extracted_data) {
             for (const [key, val] of Object.entries(aiResult.extracted_data)) {
                 if (val && val !== 'null' && val !== 'indefinido' && candidateData[key] !== val) {
-                    candidateUpdates[key] = val;
+                    const schema = getSchemaByField(key);
+                    let finalVal = val;
+
+                    if (schema && schema.cleaner) {
+                        try {
+                            const cleaned = await schema.cleaner(val);
+                            finalVal = cleaned || val;
+                        } catch (e) { console.warn(`Error cleaning ${key}:`, e); }
+                    }
+
+                    candidateUpdates[key] = finalVal;
+
+                    // Trigger secondary effects (like gender detection)
+                    if (schema && schema.onSuccess) {
+                        try {
+                            await schema.onSuccess(finalVal, candidateUpdates);
+                        } catch (e) { console.warn(`Error trigger for ${key}:`, e); }
+                    }
                 }
             }
         }
