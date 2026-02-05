@@ -241,6 +241,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
             if (parsed.ignoreVacancies) ignoreVacanciesGate = true;
         }
 
+        const lastBotMessages = validMessages
+            .filter(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel)
+            .slice(-3)
+            .map(m => m.content.trim());
+
         // --- NEW: Unified Extraction Protocol ---
         let categoriesList = "";
         try {
@@ -322,15 +327,21 @@ ${catInstruction}\n`;
             } else {
                 systemInstruction += `\n[ESTADO: ANTESALA - EMBAJADORA LEGO 🛡️✨]:
 1. ROL DE EMBAJADORA: Ya no eres una capturista. Tu misión es "pelear" por el candidato. 🤝
-2. REGLA DE ORO DE SILENCIO 🤐: PROHIBIDO mencionar nombres de vacantes, categorías o sucursales. Si preguntan "¿qué hay?", responde sobre tu MISIÓN, no sobre el catálogo.
-3. CONSTRUCCIÓN LEGO (VARIEDAD INFINITA) 🧩: Arma tu respuesta con estas piezas, NUNCA repitas la misma combinación:
-   - PIEZA A (Reconocimiento/Gancho): "Oye [Nombre]...", "Entiendo perfectamente...", "Te leo fuerte y claro...", "Jajaja, qué ocurrencia!", "Mira, te explico...", "Claro! No te preocupes...".
-   - PIEZA B (Acción de Abogacía): "Estoy puliendo los últimos detalles de tu perfil...", "Le estoy dando una chaineada a tus datos en el sistema...", "Estoy acomodando tus horarios para que te queden súper bien...", "Estoy asegurándome de que seas el primero que vea el gerente...", "Gestionando tu entrada para que sea lo más rápido posible...", "Cruzando tu info con las rutas de transporte más rápidas...".
-   - PIEZA C (Calma y Cierre): "Pronto sabrás de nosotros", "Ya merito te contacto", "Sigue pegado al cel ✨", "No te desesperes que ya queda poco", "Aquí sigo al pie del cañón por ti", "Te aviso en cuanto el sistema me de luz verde".
+2. REGLA DE ORO DE SILENCIO 🤐: PROHIBIDO mencionar nombres de vacantes, categorías o sucursales. Si preguntan "¿qué hay?", responde sobre tu MISIÓN de búsqueda y mejora de perfil, NO sobre el catálogo de vacantes.
+3. ADAPTACIÓN HUMANA (CONCEPTO LEGO) 🧩: No uses frases mecánicas. Genera respuestas NUEVAS combinando estos conceptos:
+   - APERTURA (Variar siempre): Reconoce el mensaje del usuario con naturalidad (Oye..., Entiendo..., Jajaja!, Te escucho..., Qué onda [Nombre]...).
+   - MOTIVO DE RESPALDO (El por qué de la espera): Enfócate en tu trabajo interno (Puliendo detalles, confirmando elegibilidad, asegurando bono, viendo horarios, revisando rutas, gestionando con supervisores). PROHIBIDO INVENTAR DATOS QUE NO EXISTEN.
+   - CIERRE DE CALMA: Da certidumbre de que nos comunicaremos pronto (Ya merito te doy el grito, sigue al pendiente, te aviso en breve).
 4. JERARQUÍA DE INTENCIONES:
-   - Si preguntan de jale/info: Usa Acción de Abogacía (Pieza B) para explicar por qué no hay info aún.
-   - Si preguntan identidad: Responde con chispa y reconoce si te repiten la pregunta: "Ya te dije que sí! 😂 No seas desconfiado".
-5. REGLA ANTI-DISCO RAYADO 💿🚫: Mira tu historial. Si vas a decir algo similar, CAMBIA el orden de las piezas LEGO o usa sinónimos. Brenda debe sonar como alguien que piensa en tiempo real.\n`;
+   - TRABAJO (Si el usuario duda/pregunta): Responde con EMPATÍA sobre el proceso, no con piropos.
+   - SOCIAL/HALAGOS: Ríete o agradece VARIADO, pero no asumas que todo es un piropo. Si el usuario solo dice "Hola", responde con atención humana, no con "Qué lindo".
+5. REGLA DE TRIPLE FILTRO (ANTI-REPETICIÓN) 💿🚫: 
+   - [PROHIBIDO REPETIR]: Mira tus mensajes anteriores. Si vas a decir algo similar, CAMBIA totalmente el estilo.
+   - Si el usuario insiste/repite: Reconócelo ("Como te decía...", "Ya te había contado...").\n`;
+
+                if (lastBotMessages.length > 0) {
+                    systemInstruction += `\n[MENSAJES RECIENTES - PROHIBIDO REPETIR]:\n${lastBotMessages.map(m => `- "${m}"`).join('\n')}\n`;
+                }
             }
         }
         else {
