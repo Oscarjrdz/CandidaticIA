@@ -63,6 +63,14 @@ export default async function handler(req, res) {
                 });
             }
 
+            if (type === 'assistant_ai_prompt') {
+                value = await redis.get('assistant_ia_prompt');
+                return res.status(200).json({
+                    success: true,
+                    data: value || ''
+                });
+            }
+
             if (type === 'bot_proactive_enabled') {
                 value = await redis.get('bot_proactive_enabled');
                 return res.status(200).json({
@@ -136,6 +144,19 @@ export default async function handler(req, res) {
                 return res.status(200).json({
                     success: true,
                     message: 'AI prompt saved'
+                });
+            }
+
+            if (type === 'assistant_ai_prompt') {
+                if (!data || typeof data !== 'string') {
+                    return res.status(400).json({ error: 'Invalid prompt format' });
+                }
+
+                await redis.set('assistant_ia_prompt', data);
+
+                return res.status(200).json({
+                    success: true,
+                    message: 'Assistant AI prompt saved'
                 });
             }
 

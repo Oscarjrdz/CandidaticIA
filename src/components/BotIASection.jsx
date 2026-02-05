@@ -11,6 +11,7 @@ const BotIASection = ({ showToast }) => {
 
     // AI Settings
     const [systemPrompt, setSystemPrompt] = useState('');
+    const [assistantPrompt, setAssistantPrompt] = useState('');
     const [aiModel, setAiModel] = useState('gemini-2.5-flash');
     const [stats, setStats] = useState({ today: 0, totalSent: 0, totalRecovered: 0 });
 
@@ -23,6 +24,12 @@ const BotIASection = ({ showToast }) => {
                     setSystemPrompt(data.systemPrompt || '');
                     setIsActive(data.isActive);
                     if (data.stats) setStats(data.stats);
+                }
+
+                const resAssistant = await fetch('/api/settings?type=assistant_ai_prompt');
+                if (resAssistant.ok) {
+                    const data = await resAssistant.json();
+                    setAssistantPrompt(data.data || '');
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
@@ -53,7 +60,16 @@ const BotIASection = ({ showToast }) => {
                 })
             });
 
-            if (resConfig.ok && resPrompt.ok) {
+            const resAssistant = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type: 'assistant_ai_prompt',
+                    data: assistantPrompt
+                })
+            });
+
+            if (resConfig.ok && resPrompt.ok && resAssistant.ok) {
                 showToast('Configuraciones guardadas correctamente', 'success');
             } else {
                 showToast('Error guardando configuración', 'error');
@@ -116,12 +132,25 @@ const BotIASection = ({ showToast }) => {
                                 Prompt del Sistema
                             </label>
                             <textarea
-                                className="w-full h-64 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner"
+                                className="w-full h-48 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner"
                                 placeholder="Eres un asistente útil de RRHH..."
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
                             />
-                            <p className="text-xs text-gray-500 mt-1">Defina la personalidad y reglas del bot.</p>
+                            <p className="text-[10px] text-gray-500 mt-1 italic">Prompt 1: Capturista (Extracción de Datos)</p>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Brenda Assistant (Paso 2: Seguimiento)
+                            </label>
+                            <textarea
+                                className="w-full h-48 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner"
+                                placeholder="Ahora que el perfil está completo, eres la embajadora..."
+                                value={assistantPrompt}
+                                onChange={(e) => setAssistantPrompt(e.target.value)}
+                            />
+                            <p className="text-[10px] text-gray-500 mt-1 italic">Prompt 2: Asistente GPT (Seguimiento e Inteligencia)</p>
                         </div>
 
                         <div className="grid grid-cols-1 gap-4">

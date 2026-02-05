@@ -227,7 +227,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         // a. Admin Directives
         const customPrompt = await redis?.get('bot_ia_prompt') || '';
-        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA - SIGUE ESTO ANTE TODO]: \n${customPrompt} \n`;
+        const assistantCustomPrompt = await redis?.get('assistant_ia_prompt') || '';
+        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA (CAPTURA)]: \n${customPrompt} \n`;
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. DEBES OBTENERLO ANTES DE TERMINAR.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
@@ -335,6 +336,7 @@ ${catInstruction}\n`;
                 const selectedMission = missions[Math.floor(Math.random() * missions.length)];
 
                 systemInstruction += `\n[ESTADO: BRENDA ASISTENTE GPT 🕵️‍♀️✨]:
+${assistantCustomPrompt ? `\n[DIRECTIVA PERSONALIZADA - SIGUE ESTO ANTE TODO]:\n${assistantCustomPrompt}\n` : ''}
 1. TU ROL: Eres la aliada del candidato. Su perfil está 100% COMPLETO. 🎓
 2. TU MISIÓN DE HOY: "${selectedMission}". Úsala para demostrar que estás trabajando por él.
 3. PROTOCOLO DE RAZONAMIENTO GPT:
