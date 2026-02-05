@@ -128,29 +128,34 @@ const BotIASection = ({ showToast }) => {
                 <Card title="Cerebro del Asistente" icon={SettingsIcon}>
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Prompt del Sistema
+                            <label className="flex items-center justify-between text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                <span>Fase 1: Brenda Capturista 📝</span>
+                                <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Perfil Incompleto</span>
                             </label>
                             <textarea
-                                className="w-full h-48 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner"
-                                placeholder="Eres un asistente útil de RRHH..."
+                                className="w-full h-48 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono"
+                                placeholder="Reglas de extracción de datos..."
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
                             />
-                            <p className="text-[10px] text-gray-500 mt-1 italic">Prompt 1: Capturista (Extracción de Datos)</p>
+                            <p className="text-[10px] text-gray-500 mt-1 italic">Este cerebro gobierna la recolección de Nombre, Municipio, Edad y Categoría.</p>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Brenda Assistant (Paso 2: Seguimiento)
+                            <label className="flex items-center justify-between text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                                <span>Fase 2: Brenda Asistente GPT 🕵️‍♀️✨</span>
+                                <span className="text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Perfil 100% Completo</span>
                             </label>
                             <textarea
-                                className="w-full h-48 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner"
-                                placeholder="Ahora que el perfil está completo, eres la embajadora..."
+                                className="w-full h-48 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono"
+                                placeholder="Personalidad para el seguimiento..."
                                 value={assistantPrompt}
                                 onChange={(e) => setAssistantPrompt(e.target.value)}
                             />
-                            <p className="text-[10px] text-gray-500 mt-1 italic">Prompt 2: Asistente GPT (Seguimiento e Inteligencia)</p>
+                            <p className="text-[10px] text-gray-500 mt-1 italic">
+                                Úsalo para definir su personalidad de embajadora.
+                                <span className="font-bold text-blue-500 ml-1 underline">Tip:</span> Usa <code className="bg-gray-200 px-1 rounded">{"{{Mission}}"}</code> para inyectar una tarea aleatoria.
+                            </p>
                         </div>
 
                         <div className="grid grid-cols-1 gap-4">

@@ -5,6 +5,7 @@
  */
 
 import { getRedisClient } from './utils/storage.js';
+import { DEFAULT_SYSTEM_PROMPT, DEFAULT_ASSISTANT_PROMPT } from './ai/agent.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -59,7 +60,7 @@ export default async function handler(req, res) {
                 value = await redis.get('bot_ia_prompt');
                 return res.status(200).json({
                     success: true,
-                    data: value || ''
+                    data: value || DEFAULT_SYSTEM_PROMPT
                 });
             }
 
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
                 value = await redis.get('assistant_ia_prompt');
                 return res.status(200).json({
                     success: true,
-                    data: value || ''
+                    data: value || DEFAULT_ASSISTANT_PROMPT
                 });
             }
 

@@ -12,7 +12,7 @@ import {
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
 
-const DEFAULT_SYSTEM_PROMPT = `
+export const DEFAULT_SYSTEM_PROMPT = `
 Eres la Lic. Brenda Rodríguez, una reclutadora de 25 años, amigable, cálida y muy profesional. Tu personalidad es "tierna" pero enfocada: usas un lenguaje cercano y muchos emojis para conectar con los candidatos. ✨🌸
 
 Tu misión es obtener los datos del candidato para conectarlo con su empleo ideal.
@@ -42,10 +42,24 @@ Para sonar natural y NO como una grabadora, sigue estas reglas:
    * ESTUDIOS: Requiere al menos Primaria o Secundaria. Reincide si dicen "Kinder" o "Ninguno".
 - RESILIENCIA: Si el candidato se queja ("Ya te dije", "No me lees"), pide una disculpa humana con un toque divertido (ej. "¡Ay, perdona! Es que me llegó mucha gente a la oficina y me distraje un segundo 😅") y asegúrate de reconocer que ya anotaste lo que te dijo.
 - MARCA DE MOMENTUM: Si falta poco, usa: "¡Ya casi terminamos! Solo me falta un dato para que pueda checar tus carpetas y mandarte a entrevista. 💖"
-- REGLA DE VERACIDAD (ADN): Los datos en [ESTADO DEL CANDIDATO(ADN)] son la verdad absoluta. Si un campo como "Fecha de Nacimiento" ya tiene un año, TIENES PROHIBIDO pedirlo de nuevo. Confía en mis anotaciones.
+- REGLA DE VERACIDAD (ADN): Los datos en [ESTADO DEL CANDIDATO(ADN)] los tomo como verdad absoluta. Confía en mis anotaciones.
 `;
 
-const getIdentityLayer = () => DEFAULT_SYSTEM_PROMPT;
+export const DEFAULT_ASSISTANT_PROMPT = `
+[ESTADO: BRENDA ASISTENTE GPT 🕵️‍♀️✨]:
+1. TU ROL: Eres la aliada del candidato. Su perfil está 100% COMPLETO. 🎓
+2. TU MISIÓN DE HOY: "{{Mission}}". Úsala para demostrar que estás trabajando por él.
+3. PROTOCOLO DE RAZONAMIENTO GPT:
+   - Analiza el historial. Si el usuario se repite o bromea, ¡reacciona humanamente! 🌸
+   - PROHIBIDO repetir frases como "Seguimos en búsqueda". Si lo acabas de decir, CAMBIA EL TONO TOTALMENTE.
+   - Si te halaga, ríete o agradece con con chispa (ej: "¡Nombre, ya me chiveaste! 😂", "Qué lindo, muchas gracias").
+4. REGLA DE "VARIEDAD ABSOLUTA" 💿🚫: Prohibido usar las mismas palabras, adjetivos o emojis de tus últimos 3 mensajes.
+5. SILENCIO PROFESIONAL: Mantén la discreción sobre nombres de empresas y sueldos. Solo habla de tu gestión interna.
+`;
+
+const getIdentityLayer = (customPrompt = null) => {
+    return customPrompt || DEFAULT_SYSTEM_PROMPT;
+};
 
 const getSessionLayer = (minSinceLastBot, botHasSpoken, hasHistory, displayName = null) => {
     let context = '';
@@ -221,14 +235,13 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
         const audit = auditProfile(candidateData, customFields);
 
-        let systemInstruction = getIdentityLayer();
-        systemInstruction += getSessionLayer(minSinceLastBot, botHasSpoken, recentHistory.length > 0, isNameBoilerplate ? null : displayName);
-        systemInstruction += getVibeLayer(recentHistory, audit.paso1Status === 'INCOMPLETO');
-
-        // a. Admin Directives
+        // a. Admin Directives (Fetched early for identity layer)
         const customPrompt = await redis?.get('bot_ia_prompt') || '';
         const assistantCustomPrompt = await redis?.get('assistant_ia_prompt') || '';
-        if (customPrompt) systemInstruction += `\n[DIRECTIVA ADMINISTRADORA (CAPTURA)]: \n${customPrompt} \n`;
+
+        let systemInstruction = getIdentityLayer(customPrompt);
+        systemInstruction += getSessionLayer(minSinceLastBot, botHasSpoken, recentHistory.length > 0, isNameBoilerplate ? null : displayName);
+        systemInstruction += getVibeLayer(recentHistory, audit.paso1Status === 'INCOMPLETO');
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. DEBES OBTENERLO ANTES DE TERMINAR.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
@@ -323,7 +336,6 @@ ${catInstruction}\n`;
                 // Modo Cierre: Breve y cortés.
                 systemInstruction += `\n[ESTADO: CIERRE CORTÉS 😊]: El usuario está cerrando. Responde breve, con un emoji y sin preguntas.\n`;
             } else {
-                // Modo Asistente Dinámico: Inyectamos una misión aleatoria para forzar variedad mecánica.
                 const missions = [
                     "revisando minuciosamente las rutas de transporte para tu zona",
                     "asegurando que tus datos tengan prioridad en la fila de revisión",
@@ -335,18 +347,13 @@ ${catInstruction}\n`;
                 ];
                 const selectedMission = missions[Math.floor(Math.random() * missions.length)];
 
-                systemInstruction += `\n[ESTADO: BRENDA ASISTENTE GPT 🕵️‍♀️✨]:
-${assistantCustomPrompt ? `\n[DIRECTIVA PERSONALIZADA - SIGUE ESTO ANTE TODO]:\n${assistantCustomPrompt}\n` : ''}
-1. TU ROL: Eres la aliada del candidato. Su perfil está 100% COMPLETO. 🎓
-2. TU MISIÓN DE HOY: "${selectedMission}". Úsala para demostrar que estás trabajando por él.
-3. PROTOCOLO DE RAZONAMIENTO GPT:
-   - Analiza el historial. Si el usuario se repite o bromea, ¡reacciona humanamente! 🌸
-   - PROHIBIDO repetir frases como "Seguimos en búsqueda". Si lo acabas de decir, CAMBIA EL TONO TOTALMENTE.
-   - Si te halaga, ríete o agradece con chispa (ej: "¡Nombre, ya me chiveaste! 😂", "Qué lindo, muchas gracias").
-4. REGLA DE "VARIEDAD ABSOLUTA" 💿🚫: Prohibido usar las mismas palabras, adjetivos o emojis de tus últimos 3 mensajes.
-5. SILENCIO PROFESIONAL: Mantén la discreción sobre nombres de empresas y sueldos. Solo habla de tu gestión interna.
+                // If custom exists, it REPLACES the default. Both support {{Mission}}.
+                let baseToUse = assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT;
+                let assistantInstruction = baseToUse.replace('{{Mission}}', selectedMission);
 
-[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
+                systemInstruction += `\n${assistantInstruction}\n`;
+
+                systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
             }
         } else {
