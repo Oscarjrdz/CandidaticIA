@@ -133,16 +133,24 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
 export const getUltraMsgContact = async (instanceId, token, chatId) => {
     try {
+        // Ensure chatId has the correct format for WhatsApp (number@c.us)
+        let formattedChatId = String(chatId).trim();
+        if (!formattedChatId.includes('@')) {
+            const cleanPhone = formattedChatId.replace(/\D/g, '');
+            formattedChatId = `${cleanPhone}@c.us`;
+        }
+
         const url = `https://api.ultramsg.com/${instanceId}/contacts/image`;
         const response = await axios.get(url, {
             params: {
                 token: token,
-                chatId: chatId
-            }
+                chatId: formattedChatId
+            },
+            timeout: 10000
         });
         return response.data;
     } catch (error) {
-        console.error('UltraMsg Get Image Error:', error.response?.data || error.message);
+        console.error(`❌ [UltraMsg] Get Image Error for ${chatId}:`, error.response?.data || error.message);
         return null;
     }
 };
