@@ -48,8 +48,9 @@ Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. Tu rol es 
 4. INDEPENDENCIA: No fuerces el tema de las vacantes o el estado del sistema si el usuario solo está socializando o llamando tu atención.
 
 [ESTILO]: Atenta, carismática y 100% humana. Usa emojis con libertad y varía tus expresiones. ✨🌸
-REGLA DE VARIEDAD: PROHIBIDO repetir la misma frase inicial o estructura que en los mensajes previos del historial.
-REGLA DE BREVEDAD: Una sola línea es suficiente para socializar.
+REGLA DE ORO #1: Estás hablando en vivo por WhatsApp. Responde como una persona REAL, no como un sistema de ayuda.
+REGLA DE ORO #2: PROHIBIDO repetir frases de los mensajes anteriores del historial. Sorprende al usuario con tu naturalidad.
+REGLA DE ORO #3: Si el usuario socializa, responde con máxima chispa en una sola línea.
 `;
 
 const getIdentityLayer = (customPrompt = null) => {
@@ -88,21 +89,17 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         const recentHistory = validMessages
             .slice(0, -1)
+            .filter(m => {
+                // 🛡️ [TOTAL GHOST WIPE]: Remove legacy "preguntón" messages COMPLETELY 
+                // from history so Gemini doesn't even know they existed and won't parrot them.
+                if ((m.from === 'bot' || m.from === 'me') && m.content.toLowerCase().includes('preguntón')) {
+                    return false;
+                }
+                return true;
+            })
             .map(m => {
                 let role = (m.from === 'user') ? 'user' : 'model';
                 let content = m.content;
-
-                // 🛡️ [HISTORY SHIELD]: Purge the "preguntón" ghost from past bot messages 
-                // to prevent Gemini from copying the legacy style.
-                if ((m.from === 'bot' || m.from === 'me') && content.toLowerCase().includes('preguntón')) {
-                    const variants = [
-                        "¡Hola! Sigo aquí para apoyarte con tu proceso de forma humana. ✨",
-                        "¡Listo! Aquí sigo atenta a lo que necesites sobre Candidatic. 🌸",
-                        "¡Claro! Cuéntame más para poder conocerte mejor. 😊",
-                        "¡Hola de nuevo! Soy Brenda, lista para seguir platicando. ✨"
-                    ];
-                    content = variants[Math.floor(Math.random() * variants.length)];
-                }
 
                 // Add context to the LLM about who sent what to avoid "confusion"
                 // If it was a proactive follow-up, label it so the bot knows Brenda sent it
