@@ -263,6 +263,7 @@ ${catInstruction}\n`;
         } else if (isInWaitingRoom) {
             // --- CEREBRO 2: SALA DE ESPERA (Datos completos, sin proyecto) ---
             console.log(`🌸 [Waiting Room Mode] Activado para ${candidateData.nombreReal || candidateData.whatsapp}`);
+            console.log(`🎯 [Intent Detected]: ${intent}`);
 
             let waitingRoomPrompt = (assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT);
 
@@ -274,11 +275,15 @@ ${catInstruction}\n`;
 - Categoría: ${candidateData.categoria || 'No especificada'}
 - Municipio: ${candidateData.municipio || 'No especificado'}
 
+[INTENCIÓN DETECTADA]: ${intent}
+${DECISION_MATRIX[intent] || ''}
+
 [REGLAS DE SALA DE ESPERA]:
-1. CONVERSACIÓN LIGERA Y DIVERTIDA: Sigue CUALQUIER tema que el usuario proponga
-2. SI PREGUNTA POR TRABAJO: Responde con creatividad que estás "buscando en el sistema la mejor vacante para él/ella" pero con emojis y estilo natural ✨
-3. PROHIBIDO REPETIR: Revisa tu memoria del hilo para NO decir lo mismo dos veces
-4. MÁXIMA NATURALIDAD: Suenas como una reclutadora de 25 años platicando, no como un bot
+1. CONVERSACIÓN COHERENTE: Responde a lo que el usuario te dice, no repitas frases genéricas
+2. SI ES SOCIAL (saludo, charla, despedida): Sigue la conversación con naturalidad, máximo 1 línea
+3. SI PREGUNTA POR TRABAJO: Responde con creatividad variada que estás "buscando en el sistema la mejor vacante" ✨
+4. PROHIBIDO REPETIR: Revisa tu memoria del hilo para NO decir lo mismo dos veces
+5. MÁXIMA NATURALIDAD: Suenas como una reclutadora de 25 años platicando, no como un bot
 
 [MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
@@ -295,25 +300,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             systemInstruction += `\n[ALERTA]: El perfil está completo pero el NOMBRE es incorrecto (boilerplate). Pregúntalo amablemente antes de avanzar.\n`;
         }
 
+        // Only add this instruction for Capturista mode
         if (audit.paso1Status === 'INCOMPLETO') {
             const nextTarget = audit.missingLabels[0];
             systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
-        }
-
-        // --- NEW: Assistant 2.0 (Intention) Mindset ---
-        if (['ATTENTION', 'SMALL_TALK', 'CLOSURE'].includes(intent)) {
-            console.log(`[Intention Phase] FORCING social mindset for: ${intent}`);
-            // PURE INTENTION ISOLATION: 
-            // Social intents should NOT have professional context baggage or infected instructions
-            systemInstruction = `
-[IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. ✨🌸
-[ESTADO SOCIAL]: El usuario está socializando. Responde con carisma humano y coherencia total.
-${DECISION_MATRIX[intent]}
-REGLA: Máximo 1 línea. PROHIBIDO hablar de trabajo o vacantes. (Brenda Social Protocol v2.1)
-${extractionRules}
-`;
-        } else {
-            systemInstruction += `\n[ESTADO PROFESIONAL]:\n${DECISION_MATRIX[intent] || ''}\n`;
         }
 
         // Final sanity check: if the constructed systemInstruction STILL has the ghost text, filter it line by line.
