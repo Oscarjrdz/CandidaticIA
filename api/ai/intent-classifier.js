@@ -40,8 +40,8 @@ CATEGORÍAS:
    - Ejemplos: "Vivo en Mty", "Me llamo Juan", "Tengo 20 años".
 4. QUERY: Preguntas sobre vacantes, sueldos, procesos o dudas técnicas.
    - Ejemplos: "¿Hay vacantes?", "¿Cuánto pagan?", "¿Cómo va mi proceso?".
-5. CLOSURE: Agradecimientos, confirmaciones cortas o despedidas.
-   - Ejemplos: "Gracias", "Ok", "Muy bien", "Adiós", "Gracias Brenda".
+5. CLOSURE: Despedidas, agradecimientos finales, confirmaciones de cierre.
+   - Ejemplos: "Gracias", "Ok", "Muy bien", "Adiós", "Hasta luego", "Bye", "Nos vemos", "Chao", "Bueno gracias", "Vale", "Perfecto", "Entendido", "Hasta pronto", "Cuídate", "Saludos".
 
 ULTIMO MENSAJE: "${lastMessage}"
 CONTEXTO:
