@@ -130,6 +130,12 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         let systemInstruction = getIdentityLayer(customPrompt);
 
+        // 🛡️ [NUCLEAR GHOST SHIELD]: If the base prompt is infected, purge it.
+        if (systemInstruction.toLowerCase().includes('preguntón') || systemInstruction.toLowerCase().includes('focusada')) {
+            console.warn('⚠️ [Nuclear Shield] Infected BASE prompt detected. Neutralizing identity.');
+            systemInstruction = DEFAULT_SYSTEM_PROMPT;
+        }
+
         // SESSION & VIBE DATA (Injecting RAW data for the LLM to process according to the VISIBLE prompt)
         systemInstruction += `\n[CONTEXTO DE TIEMPO]: Han pasado ${minSinceLastBot} minutos desde el último mensaje de Brenda.`;
         if (botHasSpoken) systemInstruction += `\n[HISTORIAL]: Ya has hablado con este candidato anteriormente.`;
@@ -268,12 +274,23 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         // --- NEW: Assistant 2.0 (Intention) Mindset ---
-        // We use the decision matrix to guide the identity, not to force a script.
         if (['ATTENTION', 'SMALL_TALK', 'CLOSURE'].includes(intent)) {
-            console.log(`[Intention Phase] Applying social mindset for: ${intent}`);
-            systemInstruction += `\n[ESTADO SOCIAL]: El usuario está socializando. Ignora cualquier tema de trabajo y responde con carisma humano.\n${DECISION_MATRIX[intent]}\n`;
+            console.log(`[Intention Phase] FORCING social mindset for: ${intent}`);
+            // FORCED OVERRIDE: Social intents should NOT have professional context baggage
+            systemInstruction = `
+[IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. ✨🌸
+[ESTADO SOCIAL]: El usuario está socializando. Responde con carisma humano y coherencia total.
+${DECISION_MATRIX[intent]}
+REGLA: Máximo 1 línea. PROHIBIDO hablar de trabajo o vacantes.
+${extractionRules}
+`;
         } else {
             systemInstruction += `\n[ESTADO PROFESIONAL]:\n${DECISION_MATRIX[intent] || ''}\n`;
+        }
+
+        // Final sanity check: if the constructed systemInstruction STILL has the ghost text, erase it.
+        if (systemInstruction.toLowerCase().includes('preguntón')) {
+            systemInstruction = systemInstruction.split('\n').filter(line => !line.toLowerCase().includes('preguntón') && !line.toLowerCase().includes('focusada')).join('\n');
         }
 
         // --- NEW: Unified JSON Output Schema ---
