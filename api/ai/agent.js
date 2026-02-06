@@ -241,6 +241,8 @@ TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nex
         }
 
         // --- BIFURCACIÓN DE CEREBROS (CANDIDATIC ARCHITECTURE) ---
+        const isInWaitingRoom = audit.paso1Status === 'COMPLETO' && !candidateData.projectMetadata?.projectId;
+
         if (ignoreVacanciesGate || audit.paso1Status === 'INCOMPLETO') {
             // --- CEREBRO 1: BRENDA CAPTURISTA (Paso 1 - Datos) ---
             const categoriesData = await redis?.get('candidatic_categories');
@@ -258,8 +260,30 @@ REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amableme
 3. TONO: Profesional, tierno y servicial. No platiques de más, enfócate en llenar el formulario.
 4. SILENCIO DE VACANTES: El perfil está incompleto. PROHIBIDO dar detalles de sueldos o empresas. ✨
 ${catInstruction}\n`;
+        } else if (isInWaitingRoom) {
+            // --- CEREBRO 2: SALA DE ESPERA (Datos completos, sin proyecto) ---
+            console.log(`🌸 [Waiting Room Mode] Activado para ${candidateData.nombreReal || candidateData.whatsapp}`);
+
+            let waitingRoomPrompt = (assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT);
+
+            systemInstruction += `\n${waitingRoomPrompt}\n`;
+
+            systemInstruction += `\n[CONTEXTO DE SALA DE ESPERA]:
+- El candidato YA TIENE perfil completo ✅
+- Nombre: ${candidateData.nombreReal || 'No proporcionado'}
+- Categoría: ${candidateData.categoria || 'No especificada'}
+- Municipio: ${candidateData.municipio || 'No especificado'}
+
+[REGLAS DE SALA DE ESPERA]:
+1. CONVERSACIÓN LIGERA Y DIVERTIDA: Sigue CUALQUIER tema que el usuario proponga
+2. SI PREGUNTA POR TRABAJO: Responde con creatividad que estás "buscando en el sistema la mejor vacante para él/ella" pero con emojis y estilo natural ✨
+3. PROHIBIDO REPETIR: Revisa tu memoria del hilo para NO decir lo mismo dos veces
+4. MÁXIMA NATURALIDAD: Suenas como una reclutadora de 25 años platicando, no como un bot
+
+[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
+${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
         } else if (!isNameBoilerplate) {
-            // --- CEREBRO 2: ASSISTANT 2.0 (PURE INTENTION) ---
+            // --- CEREBRO 3: ASSISTANT 2.0 (Con proyecto asignado) ---
             let originalInstruction = (assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT);
 
             systemInstruction += `\n${originalInstruction}\n`;
