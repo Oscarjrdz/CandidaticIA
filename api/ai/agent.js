@@ -338,8 +338,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             else throw new Error('Invalid JSON structure');
         }
 
-        let responseText = aiResult.response_text || '';
-        responseText = responseText.replace(/\*/g, '');
+        // 🧪 [DIAGNOSTIC TEST]: HARDCODED RESPONSE TO ISOLATE GHOST SOURCE
+        let responseText = "BRENDA_TEST_CLEAN: Si lees esto, el código está respondiendo correctamente. Si lees 'preguntón', el fantasma está fuera de este repositorio.";
+        // old: let responseText = aiResult.response_text || '';
+        // old: responseText = responseText.replace(/\*/g, '');
 
         // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
         const candidateUpdates = {
