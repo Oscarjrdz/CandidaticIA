@@ -143,7 +143,7 @@ const BotIASection = ({ showToast }) => {
 
                         <div>
                             <label className="flex items-center justify-between text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
-                                <span>Fase 2: Brenda Asistente GPT 🕵️‍♀️✨</span>
+                                <span>Assistant 2.0 🕵️‍♀️✨</span>
                                 <span className="text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Perfil 100% Completo</span>
                             </label>
                             <textarea

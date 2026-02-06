@@ -12,6 +12,7 @@ import {
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
+import { classifyIntent } from './intent-classifier.js';
 
 export const DEFAULT_SYSTEM_PROMPT = `
 [IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. Tono: cálido, profesional, tierno y servicial. ✨🌸
@@ -36,7 +37,7 @@ export const DEFAULT_SYSTEM_PROMPT = `
 `;
 
 export const DEFAULT_ASSISTANT_PROMPT = `
-[ESTADO: BRENDA EMBAJADORA (PERFIL COMPLETO) 🕵️‍♀️✨]:
+[ESTADO: ASSISTANT 2.0 🕵️‍♀️✨]:
 Eres la aliada humana del candidato. Tu rol es acompañarlo mientras el sistema procesa su perfil.
 
 [DIARIO DE TRABAJO]: Actualmente estás "{{Mission}}".
@@ -148,6 +149,20 @@ export const processMessage = async (candidateId, incomingMessage) => {
             if (parsed.ignoreVacancies) ignoreVacanciesGate = true;
         }
 
+        // --- NEW: Assistant 2.0 Intent Detection ---
+        const userText = String(incomingMessage?.content || incomingMessage || '').trim();
+        const historyText = validMessages.map(m => `${m.from}: ${m.content}`).join('\n');
+        const intent = await classifyIntent(candidateId, userText, historyText);
+        console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent}`);
+
+        const DECISION_MATRIX = {
+            'ATTENTION': '\n[MICRO-POLICY]: El usuario solo busca tu atención. Responde con brevedad máxima, naturalidad y carisma. PROHIBIDO mencionar el sistema, el trabajo, las misiones o pedir datos. Solo di que estás ahí para escucharlo. 🤩',
+            'SMALL_TALK': '\n[MICRO-POLICY]: El usuario está platicando o bromeando. Usa tu ingenio y "bateo elegante". Sé divertida y femenina. Mantén el tono social, NO fuerces el tema laboral si no es necesario, pero si está en Fase 1, intenta regresar al dato sutilmente.',
+            'CLOSURE': '\n[MICRO-POLICY]: El usuario se está despidiendo o agradeciendo. Responde ÚNICAMENTE con: "Por nada amigo😜😎" o una variante muy corta. No agregues nada más.',
+            'DATA_GIVE': '\n[MICRO-POLICY]: El usuario está dando información. Usa la regla de Ancla y Puente. Valida el dato y pide el que sigue amablemente.',
+            'QUERY': '\n[MICRO-POLICY]: El usuario tiene dudas reales. Responde con autoridad pero amabilidad. Si es sobre su proceso, dile que el sistema está trabajando en ello.'
+        };
+
         const lastBotMessages = validMessages
             .filter(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel)
             .slice(-3)
@@ -173,10 +188,14 @@ export const processMessage = async (candidateId, incomingMessage) => {
 6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
 `;
 
+        systemInstruction += `\n${DECISION_MATRIX[intent] || ''}\n`;
+
         systemInstruction += `\n[ESTADO DEL CANDIDATO (ADN)]:
 - Paso 1: ${audit.paso1Status}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
+- Municipio: ${candidateData.municipio || 'No proporcionado'}
+- Categoría: ${candidateData.categoria || 'No proporcionado'}
 ${audit.dnaLines}
 - Temas recientes: ${themes || 'Nuevo contacto'}
 \n${extractionRules}`;
@@ -221,7 +240,7 @@ REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amableme
 4. SILENCIO DE VACANTES: El perfil está incompleto. PROHIBIDO dar detalles de sueldos o empresas. ✨
 ${catInstruction}\n`;
         } else if (!isNameBoilerplate) {
-            // --- CEREBRO 2: BRENDA ASISTENTE GPT (Paso 2 - Seguimiento) ---
+            // --- CEREBRO 2: ASSISTANT 2.0 (Seguimiento Inteligente) ---
             const missions = [
                 "revisando minuciosamente las rutas de transporte para tu zona",
                 "asegurando que tus datos tengan prioridad en la fila de revisión",
