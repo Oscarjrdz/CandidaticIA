@@ -487,17 +487,6 @@ const CandidatesSection = ({ showToast }) => {
                                     </p>
                                 </div>
                             </div>
-                            <button
-                                onClick={() => {
-                                    setAiFilteredCandidates(null);
-                                    setAiExplanation('');
-                                    setCurrentPage(1);
-                                    loadCandidates(1);
-                                }}
-                                className="text-[10px] font-bold text-gray-700 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 px-3 py-1.5 rounded-full transition-colors"
-                            >
-                                Limpiar
-                            </button>
                         </div>
                     </div>
                 )}
