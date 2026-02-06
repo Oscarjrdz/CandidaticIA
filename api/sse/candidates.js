@@ -1,99 +1,79 @@
 /**
  * Server-Sent Events (SSE) Endpoint for Real-Time Candidate Updates
- * Compatible with Vercel Edge Runtime
+ * Uses Node.js runtime for Redis compatibility
  * Streams new candidate events to connected clients
  */
 
 import { getRedisClient } from '../utils/storage.js';
 
-// Use Edge Runtime for SSE support
+// Node.js runtime for Redis support
 export const config = {
-    runtime: 'edge'
+    api: {
+        bodyParser: false,
+        responseLimit: false,
+    }
 };
 
-export default async function handler(req) {
+export default async function handler(req, res) {
     // Only accept GET for SSE
     if (req.method !== 'GET') {
-        return new Response('Method not allowed', { status: 405 });
+        return res.status(405).send('Method not allowed');
     }
 
-    // Create a TransformStream for SSE
-    const stream = new TransformStream();
-    const writer = stream.writable.getWriter();
-    const encoder = new TextEncoder();
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
 
     // Send SSE event helper
-    const sendEvent = async (data) => {
-        const message = `data: ${JSON.stringify(data)}\n\n`;
-        await writer.write(encoder.encode(message));
+    const sendEvent = (data) => {
+        res.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    // Keep-alive ping every 30s to prevent timeout
-    const keepAlive = setInterval(async () => {
-        try {
-            await writer.write(encoder.encode(': ping\n\n'));
-        } catch (error) {
-            clearInterval(keepAlive);
-        }
+    // Send initial connection success
+    sendEvent({ type: 'connected', timestamp: new Date().toISOString() });
+
+    // Keep-alive ping every 30s
+    const keepAliveInterval = setInterval(() => {
+        res.write(': ping\n\n');
     }, 30000);
 
-    // Initialize connection
-    (async () => {
+    // Get Redis client
+    const redis = getRedisClient();
+    let lastCheck = Date.now();
+
+    // Polling loop
+    const pollInterval = setInterval(async () => {
         try {
-            // Send initial connection success
-            await sendEvent({ type: 'connected', timestamp: new Date().toISOString() });
+            if (!redis) return;
 
-            // Subscribe to Redis pubsub for candidate events
-            const redis = getRedisClient();
+            // Check for new candidate signal
+            const latestCandidate = await redis.get('sse_new_candidate');
 
-            // Poll for Redis pubsub messages (Edge Runtime limitation)
-            // In production, this would use Redis SUBSCRIBE, but Edge doesn't support it
-            // So we'll use a different approach: check for a "latest_candidate" key
+            if (latestCandidate) {
+                const candidate = JSON.parse(latestCandidate);
 
-            let lastCheck = Date.now();
-
-            while (true) {
-                try {
-                    // Check for new candidate signal every 2 seconds
-                    const latestCandidate = await redis?.get('sse_new_candidate');
-
-                    if (latestCandidate) {
-                        const candidate = JSON.parse(latestCandidate);
-
-                        // Only send if this is new (within last 5 seconds)
-                        const candidateTime = new Date(candidate.timestamp || 0).getTime();
-                        if (candidateTime > lastCheck) {
-                            await sendEvent({
-                                type: 'candidate:new',
-                                data: candidate
-                            });
-                            lastCheck = Date.now();
-                        }
-                    }
-
-                    // Wait 2 seconds before next check
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                } catch (pollError) {
-                    console.error('SSE poll error:', pollError);
-                    // Continue polling even on error
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                // Only send if this is new (within last 5 seconds)
+                const candidateTime = new Date(candidate.timestamp || 0).getTime();
+                if (candidateTime > lastCheck) {
+                    sendEvent({
+                        type: 'candidate:new',
+                        data: candidate
+                    });
+                    lastCheck = Date.now();
                 }
             }
         } catch (error) {
-            console.error('SSE error:', error);
-        } finally {
-            clearInterval(keepAlive);
-            await writer.close();
+            console.error('SSE poll error:', error);
         }
-    })();
+    }, 2000); // Poll every 2 seconds
 
-    // Return SSE response
-    return new Response(stream.readable, {
-        headers: {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': '*'
-        }
+    // Clean up on client disconnect
+    req.on('close', () => {
+        clearInterval(keepAliveInterval);
+        clearInterval(pollInterval);
+        res.end();
     });
 }
