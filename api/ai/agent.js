@@ -89,6 +89,12 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 let role = (m.from === 'user') ? 'user' : 'model';
                 let content = m.content;
 
+                // 🛡️ [HISTORY SHIELD]: Purge the "preguntón" ghost from past bot messages 
+                // to prevent Gemini from copying the legacy style.
+                if ((m.from === 'bot' || m.from === 'me') && content.toLowerCase().includes('preguntón')) {
+                    content = "¡Hola! Sigo aquí para ayudarte con tu proceso de forma humana.";
+                }
+
                 // Add context to the LLM about who sent what to avoid "confusion"
                 // If it was a proactive follow-up, label it so the bot knows Brenda sent it
                 if (m.meta?.proactiveLevel) {
