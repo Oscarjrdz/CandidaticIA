@@ -29,28 +29,40 @@ export async function classifyIntent(candidateId, lastMessage, historyText = "")
         });
 
         const prompt = `[INTENT CLASSIFIER v2.0]
-Analiza el último mensaje del usuario y clasifícalo en una de las siguientes INTENCIONES:
+Analiza el último mensaje del usuario y el contexto para clasificarlo en una INTENCIÓN.
 
-1. ATTENTION: El usuario solo busca llamar la atención o iniciar contacto (ej: "Oye", "Ey", "Hola", "Brenda", "Toño").
-2. SMALL_TALK: Plática social, bromas, halagos, o preguntas personales fuera de lo laboral.
-3. DATA_GIVE: El usuario está proporcionando un dato específico (Nombre, Municipio, Escolaridad, etc.).
-4. QUERY: El usuario tiene una duda técnica o pregunta por vacantes, sueldos o el estado de su proceso.
-5. CLOSURE: Despedidas o agradecimientos finales (ej: "Gracias", "Ok", "Sale", "Adiós").
-6. UNKNOWN: Mensajes ambiguos o no clasificados.
+CATEGORÍAS:
+1. ATTENTION: Saludos cortos, llamados de atención o inicio de contacto.
+   - Ejemplos: "Oye", "Hola", "Brenda", "Toño", "¿Estás ahí?", "Ey".
+2. SMALL_TALK: Socialización, piropos, bromas o preguntas personales.
+   - Ejemplos: "Qué guapa", "Jajaja", "¿Cómo estás?", "Eres muy amable".
+3. DATA_GIVE: Entrega de información personal o profesional.
+   - Ejemplos: "Vivo en Mty", "Me llamo Juan", "Tengo 20 años".
+4. QUERY: Preguntas sobre vacantes, sueldos, procesos o dudas técnicas.
+   - Ejemplos: "¿Hay vacantes?", "¿Cuánto pagan?", "¿Cómo va mi proceso?".
+5. CLOSURE: Agradecimientos, confirmaciones cortas o despedidas.
+   - Ejemplos: "Gracias", "Ok", "Muy bien", "Adiós", "Gracias Brenda".
 
-MENSAJE DEL USUARIO: "${lastMessage}"
-HISTORIAL RECIENTE (Contexto):
-${historyText.substring(0, 500)}
+ULTIMO MENSAJE: "${lastMessage}"
+CONTEXTO:
+${historyText.substring(0, 300)}
 
 Responde ÚNICAMENTE con el nombre de la categoría en MAYÚSCULAS.
 Respuesta:`;
 
         const result = await model.generateContent(prompt);
         const response = await result.response;
-        const intent = response.text().trim().toUpperCase();
+        const text = response.text().toUpperCase();
 
-        const validIntents = ['ATTENTION', 'SMALL_TALK', 'DATA_GIVE', 'QUERY', 'CLOSURE'];
-        return validIntents.includes(intent) ? intent : 'UNKNOWN';
+        console.log(`[Intent Classifier] Raw LLM Response: "${text}"`);
+
+        if (text.includes('ATTENTION')) return 'ATTENTION';
+        if (text.includes('SMALL_TALK')) return 'SMALL_TALK';
+        if (text.includes('DATA_GIVE')) return 'DATA_GIVE';
+        if (text.includes('QUERY')) return 'QUERY';
+        if (text.includes('CLOSURE')) return 'CLOSURE';
+
+        return 'UNKNOWN';
 
     } catch (error) {
         console.error('❌ [Intent Classifier] Error:', error);

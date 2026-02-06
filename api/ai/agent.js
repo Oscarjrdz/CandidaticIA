@@ -156,11 +156,12 @@ export const processMessage = async (candidateId, incomingMessage) => {
         console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent}`);
 
         const DECISION_MATRIX = {
-            'ATTENTION': '\n[MICRO-POLICY]: El usuario solo busca tu atención. Responde con brevedad máxima, naturalidad y carisma. PROHIBIDO mencionar el sistema, el trabajo, las misiones o pedir datos. Solo di que estás ahí para escucharlo. 🤩',
-            'SMALL_TALK': '\n[MICRO-POLICY]: El usuario está platicando o bromeando. Usa tu ingenio y "bateo elegante". Sé divertida y femenina. Mantén el tono social, NO fuerces el tema laboral si no es necesario, pero si está en Fase 1, intenta regresar al dato sutilmente.',
-            'CLOSURE': '\n[MICRO-POLICY]: El usuario se está despidiendo o agradeciendo. Responde ÚNICAMENTE con: "Por nada amigo😜😎" o una variante muy corta. No agregues nada más.',
-            'DATA_GIVE': '\n[MICRO-POLICY]: El usuario está dando información. Usa la regla de Ancla y Puente. Valida el dato y pide el que sigue amablemente.',
-            'QUERY': '\n[MICRO-POLICY]: El usuario tiene dudas reales. Responde con autoridad pero amabilidad. Si es sobre su proceso, dile que el sistema está trabajando en ello.'
+            'ATTENTION': '\n[POLÍTICA CRÍTICA - PRIORIDAD MÁXIMA]: El usuario solo busca atención o saludó. PROHIBIDO hablar de trabajo, avisos, vacantes o misiones. Mantén la plática 100% social y breve. Responde con carisma y di que aquí estás para lo que necesite. 😍',
+            'SMALL_TALK': '\n[POLÍTICA CRÍTICA - PRIORIDAD MÁXIMA]: El usuario está socializando. NO hables de temas laborales. Sé divertida, usa emojis y responde al comentario social con ingenio. 💅✨',
+            'CLOSURE': '\n[POLÍTICA CRÍTICA - PRIORIDAD MÁXIMA]: El usuario se despidió. Responde ÚNICAMENTE: "¡Por nada amigo! 😜😎" o similar. Cero información adicional. 🛑',
+            'DATA_GIVE': '\n[POLÍTICA CRÍTICA - PRIORIDAD MÁXIMA]: El usuario dio un dato. Valídalo ("¡Anotado! 📍") y pide el siguiente dato si falta, o confirma que lo tienes si ya está completo.',
+            'QUERY': '\n[POLÍTICA CRÍTICA - PRIORIDAD MÁXIMA]: El usuario tiene una duda. Responde con la verdad sobre su proceso de forma ejecutiva pero amable.',
+            'UNKNOWN': '\n[POLÍTICA]: Responde de forma natural y fluida al último mensaje del usuario, priorizando el contexto social sobre el laboral.'
         };
 
         const lastBotMessages = validMessages
@@ -188,7 +189,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
 6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
 `;
 
-        systemInstruction += `\n${DECISION_MATRIX[intent] || ''}\n`;
+
 
         systemInstruction += `\n[ESTADO DEL CANDIDATO (ADN)]:
 - Paso 1: ${audit.paso1Status}
@@ -266,6 +267,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             const nextTarget = audit.missingLabels[0];
             systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
         }
+
+        // --- NEW: Assistant 2.0 Micro-Policy Priority ---
+        // We inject this LAST so it overrides any contradictory instructions in the main prompts.
+        systemInstruction += `\n[DIRECTIVA DE INTENCIÓN DOMINANTE]:\n${DECISION_MATRIX[intent] || ''}\n`;
 
         // --- NEW: Unified JSON Output Schema ---
         systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
