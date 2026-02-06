@@ -11,6 +11,7 @@ import { getFields } from '../services/automationsService';
 import { getExportSettings, saveExportSettings, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
 import { generateChatHistoryText } from '../services/chatExportService';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
+import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 
 /**
  * Sección de Candidatos con Auto-Exportación
@@ -43,6 +44,18 @@ const CandidatesSection = ({ showToast }) => {
 
     // --- 🪄 MAGIC AI FIX STATE ---
     const [magicLoading, setMagicLoading] = useState({});
+
+    // 📡 SSE: Real-time candidate updates
+    const { newCandidate, connected: sseConnected } = useCandidatesSSE();
+
+    // Listen for new candidates via SSE
+    useEffect(() => {
+        if (newCandidate) {
+            // Prepend new candidate to list
+            setCandidates(prev => [newCandidate, ...prev]);
+            showToast && showToast('Nuevo candidato recibido 🎉', 'success');
+        }
+    }, [newCandidate, showToast]);
 
     useEffect(() => {
         const loadInitialData = async () => {

@@ -119,6 +119,12 @@ export default async function handler(req, res) {
                     });
                     candidateId = newCandidate.id;
                     candidate = newCandidate;
+
+                    // 📡 SSE: Notify real-time clients of new candidate
+                    const { notifyNewCandidate } = await import('../utils/sse-notify.js');
+                    notifyNewCandidate(newCandidate).catch(err =>
+                        console.warn('SSE notification failed:', err.message)
+                    );
                 }
 
                 // Prepare Message Object
