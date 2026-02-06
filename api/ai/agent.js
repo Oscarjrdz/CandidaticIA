@@ -153,12 +153,12 @@ export const processMessage = async (candidateId, incomingMessage) => {
         console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent}`);
 
         const DECISION_MATRIX = {
-            'ATTENTION': '\n[INTENCIÓN: ATENCIÓN]: El usuario te está llamando o saludando. Responde con calidez y naturalidad. No intentes vender nada ni hablar de procesos. Solo demuestra que estás ahí escuchando. 🤩',
-            'SMALL_TALK': '\n[INTENCIÓN: SOCIAL]: El usuario quiere platicar, bromear o preguntar cosas personales. Usa tu ingenio y carisma. Sé divertida y mantén la fluidez social sin forzar el tema laboral. 💅✨',
-            'CLOSURE': '\n[INTENCIÓN: CIERRE]: El usuario se despide o agradece. Responde con un cierre amable y corto. Por ejemplo: "¡Por nada amigo! 😜😎" o "¡Excelente noche! 🌸".',
-            'DATA_GIVE': '\n[INTENCIÓN: DATOS]: El usuario está dando información. Valida el dato con entusiasmo y, si falta algo para completar el Paso 1, pídelo amablemente.',
-            'QUERY': '\n[INTENCIÓN: DUDA]: El usuario tiene una pregunta sobre vacantes o su proceso. Responde con autoridad y amabilidad sobre el estado actual de su perfil.',
-            'UNKNOWN': '\n[INTENCIÓN: FLUIDO]: Responde siguiendo el flujo natural de la conversación con coherencia total.'
+            'ATTENTION': '\n[INTENTO: ATENCIÓN]: El usuario te está llamando. Responde con un saludo carismático de máximo 1 línea. NO hables de trabajo. Solo sé Brenda. ✨',
+            'SMALL_TALK': '\n[INTENTO: PLÁTICA]: El usuario está socializando. Responde con gracia y coherencia. Si es un halago, se vale bromear. Prohibido mencionar el proceso de selección o vacantes. 💅',
+            'CLOSURE': '\n[INTENTO: CIERRE]: El usuario se despidió. Despídete con onda: "¡Por nada amigo! 😜😎".',
+            'DATA_GIVE': '\n[INTENTO: DATOS]: El usuario mandó información. Dile "¡Anotado! 📍" o similar y sigue el flujo natural.',
+            'QUERY': '\n[INTENTO: DUDA]: El usuario quiere saber algo. Responde con la verdad de su proceso pero mantente breve.',
+            'UNKNOWN': '\n[INTENTO: FLUIDO]: Responde siguiendo el flujo natural de la conversación con coherencia total.'
         };
 
         const lastBotMessages = validMessages
@@ -240,6 +240,13 @@ ${catInstruction}\n`;
         } else if (!isNameBoilerplate) {
             // --- CEREBRO 2: ASSISTANT 2.0 (PURE INTENTION) ---
             let originalInstruction = (assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT);
+
+            // 🛡️ [GHOST SHIELD]: If the Redis prompt still contains "preguntón", it's a legacy ghost. PURGE IT.
+            if (originalInstruction.toLowerCase().includes('preguntón') || originalInstruction.toLowerCase().includes('focusada')) {
+                console.warn('⚠️ [Ghost Shield] Infected prompt detected in Redis. Falling back to DEFAULT_ASSISTANT_PROMPT.');
+                originalInstruction = DEFAULT_ASSISTANT_PROMPT;
+            }
+
             systemInstruction += `\n${originalInstruction}\n`;
 
             systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
@@ -254,19 +261,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
         }
 
-        // --- NEW: Assistant 2.0 Titan Override (Intent-First Brain) ---
-        // If it's a social intent, we bypass the heavy prompts to avoid loops/repetition.
+        // --- NEW: Assistant 2.0 (Intention) Mindset ---
+        // We use the decision matrix to guide the identity, not to force a script.
         if (['ATTENTION', 'SMALL_TALK', 'CLOSURE'].includes(intent)) {
-            console.log(`[Titan Override] Using focused Mini-Brain for intent: ${intent}`);
-            systemInstruction = `
-[IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. ✨🌸
-[INSTRUCCIÓN CRÍTICA]: El usuario solo está saludando, llamando tu atención o socializando.
-${DECISION_MATRIX[intent]}
-REGLA: Responde en máximo 1 línea. Sé natural, carismática y humana. PROHIBIDO hablar de trabajo, misiones o búsqueda de perfiles.
-`;
+            console.log(`[Intention Phase] Applying social mindset for: ${intent}`);
+            systemInstruction += `\n[ESTADO SOCIAL]: El usuario está socializando. Ignora cualquier tema de trabajo y responde con carisma humano.\n${DECISION_MATRIX[intent]}\n`;
         } else {
-            // Only add the micro-policy as a suffix for complex intents
-            systemInstruction += `\n[DIRECTIVA DE INTENCIÓN DOMINANTE]:\n${DECISION_MATRIX[intent] || ''}\n`;
+            systemInstruction += `\n[ESTADO PROFESIONAL]:\n${DECISION_MATRIX[intent] || ''}\n`;
         }
 
         // --- NEW: Unified JSON Output Schema ---
