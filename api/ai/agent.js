@@ -268,9 +268,20 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
         }
 
-        // --- NEW: Assistant 2.0 Micro-Policy Priority ---
-        // We inject this LAST so it overrides any contradictory instructions in the main prompts.
-        systemInstruction += `\n[DIRECTIVA DE INTENCIÓN DOMINANTE]:\n${DECISION_MATRIX[intent] || ''}\n`;
+        // --- NEW: Assistant 2.0 Titan Override (Intent-First Brain) ---
+        // If it's a social intent, we bypass the heavy prompts to avoid loops/repetition.
+        if (['ATTENTION', 'SMALL_TALK', 'CLOSURE'].includes(intent)) {
+            console.log(`[Titan Override] Using focused Mini-Brain for intent: ${intent}`);
+            systemInstruction = `
+[IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. ✨🌸
+[INSTRUCCIÓN CRÍTICA]: El usuario solo está saludando, llamando tu atención o socializando.
+${DECISION_MATRIX[intent]}
+REGLA: Responde en máximo 1 línea. Sé natural, carismática y humana. PROHIBIDO hablar de trabajo, misiones o búsqueda de perfiles.
+`;
+        } else {
+            // Only add the micro-policy as a suffix for complex intents
+            systemInstruction += `\n[DIRECTIVA DE INTENCIÓN DOMINANTE]:\n${DECISION_MATRIX[intent] || ''}\n`;
+        }
 
         // --- NEW: Unified JSON Output Schema ---
         systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
@@ -293,6 +304,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
         let result;
         let lastError = '';
+
+        // --- DEBUG: SEE FINAL PROMPT ---
+        // console.log("===== FINAL SYSTEM INSTRUCTION =====");
+        // console.log(systemInstruction);
+        // console.log("=====================================");
 
         for (const mName of models) {
             try {
