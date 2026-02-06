@@ -92,7 +92,9 @@ export const processMessage = async (candidateId, incomingMessage) => {
             .filter(m => {
                 // 🛡️ [TOTAL GHOST WIPE]: Remove legacy "preguntón" messages COMPLETELY 
                 // from history so Gemini doesn't even know they existed and won't parrot them.
-                if ((m.from === 'bot' || m.from === 'me') && m.content.toLowerCase().includes('preguntón')) {
+                const ghostKeywords = ['preguntón', 'focusada', 'sigo aquí para ayudarte', 'procesa su perfil'];
+                if ((m.from === 'bot' || m.from === 'me') && ghostKeywords.some(kw => m.content.toLowerCase().includes(kw))) {
+                    console.log(`[Ghost Shield] Wiping ghost message from history: "${m.content.substring(0, 30)}..."`);
                     return false;
                 }
                 return true;
