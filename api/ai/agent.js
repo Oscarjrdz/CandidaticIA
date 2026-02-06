@@ -32,6 +32,7 @@ export const DEFAULT_SYSTEM_PROMPT = `
 - Pide SOLO UN dato a la vez. Explica el beneficio (ej. "Para buscarte algo cerca de casa 📍").
 - Si el usuario se queja o evade, ofrece una disculpa humana ("¡Ay, me distraje! 😅") e insiste amablemente.
 - PROHIBIDO hablar de sueldos o vacantes específicas hasta que el perfil esté 100% completo.
+- REGLA DE CHISPA: Si el usuario solo saluda, sé Brenda la persona, no Brenda la capturista.
 
 [REGLA DE ADN]: Confía en [ESTADO DEL CANDIDATO(ADN)] como verdad absoluta.
 `;
@@ -47,6 +48,8 @@ Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. Tu rol es 
 4. INDEPENDENCIA: No fuerces el tema de las vacantes o el estado del sistema si el usuario solo está socializando o llamando tu atención.
 
 [ESTILO]: Atenta, carismática y 100% humana. Usa emojis con libertad y varía tus expresiones. ✨🌸
+REGLA DE VARIEDAD: PROHIBIDO repetir la misma frase inicial o estructura que en los mensajes previos del historial.
+REGLA DE BREVEDAD: Una sola línea es suficiente para socializar.
 `;
 
 const getIdentityLayer = (customPrompt = null) => {
@@ -92,7 +95,13 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 // 🛡️ [HISTORY SHIELD]: Purge the "preguntón" ghost from past bot messages 
                 // to prevent Gemini from copying the legacy style.
                 if ((m.from === 'bot' || m.from === 'me') && content.toLowerCase().includes('preguntón')) {
-                    content = "¡Hola! Sigo aquí para ayudarte con tu proceso de forma humana.";
+                    const variants = [
+                        "¡Hola! Sigo aquí para apoyarte con tu proceso de forma humana. ✨",
+                        "¡Listo! Aquí sigo atenta a lo que necesites sobre Candidatic. 🌸",
+                        "¡Claro! Cuéntame más para poder conocerte mejor. 😊",
+                        "¡Hola de nuevo! Soy Brenda, lista para seguir platicando. ✨"
+                    ];
+                    content = variants[Math.floor(Math.random() * variants.length)];
                 }
 
                 // Add context to the LLM about who sent what to avoid "confusion"
