@@ -211,6 +211,12 @@ ${audit.dnaLines}
                         .replace(/{{Candidato}}/g, candidateData.nombreReal || 'Candidato')
                         .replace(/{{Vacante}}/g, vacancy?.name || 'la posición');
 
+                    // 🛡️ [GHOST SHIELD]: Apply to projects too
+                    if (stepPrompt.toLowerCase().includes('preguntón') || stepPrompt.toLowerCase().includes('focusada')) {
+                        console.warn('⚠️ [Ghost Shield] Infected PROJECT prompt detected. Neutralizing.');
+                        stepPrompt = 'Acompaña al candidato de forma humana y coherente.';
+                    }
+
                     systemInstruction += `\n[CONTEXTO KANBAN - PASO: ${currentStep.name}]:
 ${stepPrompt}
 REGLA: Si se cumple el objetivo, incluye "{ move }" en tu thought_process.
