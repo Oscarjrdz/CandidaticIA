@@ -13,6 +13,8 @@ import {
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
 import { classifyIntent } from './intent-classifier.js';
+import { getCachedConfig } from '../utils/cache.js';
+import { FEATURES } from '../utils/feature-flags.js';
 
 export const DEFAULT_SYSTEM_PROMPT = `
 [IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. Tono: cálido, profesional, tierno y servicial. ✨🌸
@@ -158,7 +160,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
-        const aiConfigJson = await redis?.get('ai_config');
+        // Use cache if feature flag enabled, otherwise direct Redis
+        const aiConfigJson = FEATURES.USE_BACKEND_CACHE
+            ? await getCachedConfig(redis, 'ai_config')
+            : await redis?.get('ai_config');
+
         let apiKey = process.env.GEMINI_API_KEY;
         let ignoreVacanciesGate = false;
         if (aiConfigJson) {
@@ -190,7 +196,9 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // --- NEW: Unified Extraction Protocol ---
         let categoriesList = "";
         try {
-            const categoriesData = await redis?.get('candidatic_categories');
+            const categoriesData = FEATURES.USE_BACKEND_CACHE
+                ? await getCachedConfig(redis, 'candidatic_categories')
+                : await redis?.get('candidatic_categories');
             if (categoriesData) {
                 const cats = JSON.parse(categoriesData).map(c => c.name);
                 categoriesList = cats.join(', ');
@@ -245,7 +253,9 @@ TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nex
 
         if (ignoreVacanciesGate || audit.paso1Status === 'INCOMPLETO') {
             // --- CEREBRO 1: BRENDA CAPTURISTA (Paso 1 - Datos) ---
-            const categoriesData = await redis?.get('candidatic_categories');
+            const categoriesData = FEATURES.USE_BACKEND_CACHE
+                ? await getCachedConfig(redis, 'candidatic_categories')
+                : await redis?.get('candidatic_categories');
             const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
 
             let catInstruction = '';

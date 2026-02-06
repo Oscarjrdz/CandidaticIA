@@ -1,5 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getRedisClient } from '../utils/storage.js';
+import { getCachedConfig } from '../utils/cache.js';
+import { FEATURES } from '../utils/feature-flags.js';
 
 /**
  * Assistant 2.0 Intent Classifier
@@ -13,7 +15,11 @@ export async function classifyIntent(candidateId, lastMessage, historyText = "")
         let apiKey = process.env.GEMINI_API_KEY;
 
         if (!apiKey && redis) {
-            const aiConfigJson = await redis.get('ai_config');
+            // Use cache if feature flag enabled, otherwise direct Redis
+            const aiConfigJson = FEATURES.USE_BACKEND_CACHE
+                ? await getCachedConfig(redis, 'ai_config')
+                : await redis.get('ai_config');
+
             if (aiConfigJson) {
                 const aiConfig = JSON.parse(aiConfigJson);
                 apiKey = aiConfig.geminiApiKey;
