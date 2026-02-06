@@ -4,8 +4,8 @@
  */
 
 export const FEATURES = {
-    // Backend Cache (Fase 1)
-    USE_BACKEND_CACHE: process.env.ENABLE_CACHE === 'true',
+    // Backend Cache (Fase 1) - ENABLED BY DEFAULT ✅
+    USE_BACKEND_CACHE: process.env.ENABLE_CACHE !== 'false',
 
     // Message Queue (Fase 2)
     USE_MESSAGE_QUEUE: process.env.ENABLE_QUEUE === 'true',
