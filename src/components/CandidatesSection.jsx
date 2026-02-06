@@ -50,10 +50,18 @@ const CandidatesSection = ({ showToast }) => {
 
     // Listen for new candidates via SSE
     useEffect(() => {
-        if (newCandidate) {
-            // Prepend new candidate to list
-            setCandidates(prev => [newCandidate, ...prev]);
-            showToast && showToast('Nuevo candidato recibido 🎉', 'success');
+        if (newCandidate && newCandidate.id) {
+            // Check if candidate already exists (prevent duplicates)
+            setCandidates(prev => {
+                const exists = prev.some(c => c.id === newCandidate.id);
+                if (exists) {
+                    console.log('Candidate already exists, skipping:', newCandidate.id);
+                    return prev; // Don't add duplicate
+                }
+                // Prepend new candidate to list
+                showToast && showToast('Nuevo candidato recibido 🎉', 'success');
+                return [newCandidate, ...prev];
+            });
         }
     }, [newCandidate, showToast]);
 
