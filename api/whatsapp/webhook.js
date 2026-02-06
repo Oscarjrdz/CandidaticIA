@@ -1,6 +1,7 @@
 import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient, updateMessageStatus, isMessageProcessed, unlockMessage, isCandidateLocked, unlockCandidate, addToWaitlist, getWaitlist } from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
 import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead } from './utils.js';
+import { FEATURES } from '../utils/feature-flags.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -199,7 +200,33 @@ export default async function handler(req, res) {
                             const aggregatedText = pendingMsgs.join(' | ');
                             console.log(`[Industrial Queue] Processing ${pendingMsgs.length} aggregated messages for ${candidateId}.`);
 
-                            await processMessage(candidateId, aggregatedText);
+                            // 🚀 ASYNC PROCESSING BIFURCATION (Feature Flag)
+                            if (FEATURES.USE_MESSAGE_QUEUE) {
+                                // Async: Fire and forget to worker endpoint
+                                const protocol = req.headers['x-forwarded-proto'] || 'https';
+                                const host = req.headers.host;
+                                const workerUrl = `${protocol}://${host}/api/workers/process-message`;
+
+                                fetch(workerUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        candidateId,
+                                        message: aggregatedText,
+                                        messageId: msgId,
+                                        from: phone
+                                    })
+                                }).catch(err => {
+                                    console.error('❌ Worker queue error:', err.message);
+                                    // Fallback to sync if worker fails
+                                    processMessage(candidateId, aggregatedText).catch(console.error);
+                                });
+
+                                console.log(`✅ Message queued for async processing (worker)`);
+                            } else {
+                                // Sync: Current behavior (blocking)
+                                await processMessage(candidateId, aggregatedText);
+                            }
                             loopSafety++;
                         }
 

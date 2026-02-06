@@ -7,8 +7,8 @@ export const FEATURES = {
     // Backend Cache (Fase 1) - ENABLED BY DEFAULT ✅
     USE_BACKEND_CACHE: process.env.ENABLE_CACHE !== 'false',
 
-    // Message Queue (Fase 2)
-    USE_MESSAGE_QUEUE: process.env.ENABLE_QUEUE === 'true',
+    // Message Queue (Fase 2) - ENABLED BY DEFAULT ✅
+    USE_MESSAGE_QUEUE: process.env.ENABLE_QUEUE !== 'false',
 
     // WebSockets (Fase 3)
     USE_WEBSOCKETS: process.env.ENABLE_WEBSOCKETS === 'true',
