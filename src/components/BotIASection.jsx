@@ -273,12 +273,6 @@ const BotIASection = ({ showToast }) => {
                                     <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter text-slate-600 dark:text-slate-400">Etapa 4: 7 Días</p>
                                     <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Despido amigable y limpieza de base.</p>
                                 </div>
-
-                                <div className="relative">
-                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-blue-400 border-4 border-white dark:border-gray-800 shadow-sm"></div>
-                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 3: 72 Horas</p>
-                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Aviso de perfil incompleto (Última llamada).</p>
-                                </div>
                             </div>
                         </div>
                     </div>

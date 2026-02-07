@@ -253,7 +253,9 @@ const CandidatesSection = ({ showToast }) => {
         loadCandidates();
     };
 
-    const handleDelete = async (id, nombre) => {
+    const handleDelete = async (e, id, nombre) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+
         if (!window.confirm(`¿Estás seguro de eliminar a "${nombre}" permanentemente?\n\nEsta acción no se puede deshacer.`)) {
             return;
         }
@@ -411,6 +413,7 @@ const CandidatesSection = ({ showToast }) => {
                             </span>
                         </div>
                         <button
+                            type="button"
                             onClick={toggleProactive}
                             disabled={proactiveLoading}
                             className={`
@@ -458,6 +461,7 @@ const CandidatesSection = ({ showToast }) => {
                     </div>
 
                     <button
+                        type="button"
                         onClick={() => {
                             setSearch('');
                             setAiFilteredCandidates(null);
@@ -625,6 +629,7 @@ const CandidatesSection = ({ showToast }) => {
 
                                         <td className="py-0.5 px-2.5 text-center">
                                             <button
+                                                type="button"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleOpenChat(candidate);
@@ -638,7 +643,8 @@ const CandidatesSection = ({ showToast }) => {
                                         </td>
                                         <td className="py-0.5 px-2.5 text-center">
                                             <button
-                                                onClick={() => handleDelete(candidate.id, candidate.nombre)}
+                                                type="button"
+                                                onClick={(e) => handleDelete(e, candidate.id, candidate.nombre)}
                                                 className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
                                                 title="Eliminar permanentemente"
                                             >
@@ -660,6 +666,7 @@ const CandidatesSection = ({ showToast }) => {
                         </div>
                         <div className="flex space-x-2">
                             <button
+                                type="button"
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1 || loading}
                                 className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[12px]"
@@ -670,6 +677,7 @@ const CandidatesSection = ({ showToast }) => {
                                 Página {currentPage}
                             </div>
                             <button
+                                type="button"
                                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                 disabled={currentPage >= totalPages || loading}
                                 className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-[12px]"
