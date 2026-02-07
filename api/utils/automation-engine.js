@@ -83,20 +83,24 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
         if (isProactiveEnabled) {
             logs.push(`🔍[PROACTIVE] Iniciando análisis de seguimiento...`);
 
-            // Check Time Window (7 AM - 11 PM) - Force UTC-6 (Mexico)
+            // Fetch Dynamic Config
+            const opConfigJson = await redis.get('bot_operative_config');
+            const opConfig = opConfigJson ? JSON.parse(opConfigJson) : { startHour: 7, endHour: 23, dailyLimit: 300 };
+
+            // Check Time Window - Force UTC-6 (Mexico)
             const now = new Date();
             const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
             const mxTime = new Date(utc + (3600000 * -6));
             const nowHour = mxTime.getHours();
 
-            if (nowHour < 7 || nowHour >= 23) {
-                logs.push(`💤[PROACTIVE] Fuera de horario permitido(7:00 - 23:00). Hora MX calculada: ${mxTime.toLocaleTimeString('es-MX')}`);
+            if (nowHour < opConfig.startHour || nowHour >= opConfig.endHour) {
+                logs.push(`💤[PROACTIVE] Fuera de horario permitido(${opConfig.startHour}:00 - ${opConfig.endHour}:00). Hora MX: ${mxTime.toLocaleTimeString('es-MX')}`);
             } else {
                 // Check Daily Limit
                 const todayKey = `ai:proactive:count:${new Date().toISOString().split('T')[0]}`;
                 const dailyCount = parseInt(await redis.get(todayKey) || '0');
-                if (dailyCount >= 300) {
-                    logs.push(`🛑[PROACTIVE] Límite diario alcanzado(300 / día).`);
+                if (dailyCount >= opConfig.dailyLimit) {
+                    logs.push(`🛑[PROACTIVE] Límite diario alcanzado(${opConfig.dailyLimit} / día).`);
                 } else {
                     // Strictly follow the 1 message per minute rate limit
                     await processNativeProactive(redis, model, config, logs, todayKey, now, 1);
@@ -319,11 +323,23 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
         const lastMsgAt = new Date(Math.max(tUser, tBot));
         const hoursInactive = (now - lastMsgAt) / (1000 * 60 * 60);
 
+        // Dynamic Levels (Stages)
+        const stagesJson = await redis.get('bot_inactive_stages');
+        const stages = stagesJson ? JSON.parse(stagesJson) : [
+            { hours: 24, label: 'Recordatorio (Lic. Brenda)' },
+            { hours: 48, label: 'Re-confirmación interés' },
+            { hours: 72, label: 'Último aviso de vacante' },
+            { hours: 168, label: 'Limpieza de base' }
+        ];
+
+        // Find the highest level that matches current inactivity
         let level = 0;
-        if (hoursInactive >= 168) level = 168; // Level 4: 7 Days
-        else if (hoursInactive >= 72) level = 72;
-        else if (hoursInactive >= 48) level = 48;
-        else if (hoursInactive >= 24) level = 24;
+        const sortedStages = [...stages].sort((a, b) => b.hours - a.hours); // Descending
+        const currentStage = sortedStages.find(s => hoursInactive >= s.hours);
+
+        if (currentStage) {
+            level = currentStage.hours;
+        }
 
         const sessionKey = `proactive:${cand.id}:${level}:${cand.lastUserMessageAt}`;
         const alreadySent = await redis.get(sessionKey);

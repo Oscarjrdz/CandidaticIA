@@ -16,6 +16,8 @@ const BotIASection = ({ showToast }) => {
     const [proactiveEnabled, setProactiveEnabled] = useState(false);
     const [aiModel, setAiModel] = useState('gemini-2.0-flash');
     const [stats, setStats] = useState({ today: 0, totalSent: 0, totalRecovered: 0 });
+    const [operativeConfig, setOperativeConfig] = useState({ startHour: 7, endHour: 23, dailyLimit: 300 });
+    const [inactiveStages, setInactiveStages] = useState([]);
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -28,6 +30,8 @@ const BotIASection = ({ showToast }) => {
                     setIsActive(data.isActive);
                     setProactiveEnabled(data.proactiveEnabled);
                     if (data.stats) setStats(data.stats);
+                    if (data.operativeConfig) setOperativeConfig(data.operativeConfig);
+                    if (data.inactiveStages) setInactiveStages(data.inactiveStages);
                 }
 
                 const resAssistant = await fetch('/api/settings?type=assistant_ai_prompt');
@@ -50,6 +54,8 @@ const BotIASection = ({ showToast }) => {
                     // but NOT the prompts to avoid erasing user input
                     setIsActive(data.isActive);
                     setProactiveEnabled(data.proactiveEnabled);
+                    if (data.operativeConfig) setOperativeConfig(data.operativeConfig);
+                    if (data.inactiveStages) setInactiveStages(data.inactiveStages);
                 }
             } catch (error) {
                 console.error('Error polling stats:', error);
@@ -74,7 +80,11 @@ const BotIASection = ({ showToast }) => {
             const resConfig = await fetch('/api/bot-ia/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ proactivePrompt })
+                body: JSON.stringify({
+                    proactivePrompt,
+                    operativeConfig,
+                    inactiveStages
+                })
             });
 
             const resPrompt = await fetch('/api/settings', {
@@ -320,7 +330,7 @@ const BotIASection = ({ showToast }) => {
                             </div>
                         </div>
 
-                        {/* Operative Rules */}
+                        {/* Operative Rules - Dynamic Level */}
                         <div className="bg-gray-50 dark:bg-gray-900/40 p-3 rounded-2xl border border-gray-100 dark:border-gray-800/50">
                             <h4 className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                 <Shield className="w-4 h-4 text-blue-500" /> Configuración Operativa
@@ -328,46 +338,99 @@ const BotIASection = ({ showToast }) => {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
                                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter italic">Ventana Horaria</p>
-                                    <p className="text-xs font-black text-gray-700 dark:text-gray-300">07:00 - 23:00</p>
-                                    <p className="text-[9px] text-gray-500">Hora CDMX</p>
+                                    <div className="flex items-center gap-1">
+                                        <input
+                                            type="number"
+                                            value={operativeConfig.startHour}
+                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) })}
+                                            className="w-8 bg-transparent border-none text-xs font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
+                                        />
+                                        <span className="text-xs text-gray-400">-</span>
+                                        <input
+                                            type="number"
+                                            value={operativeConfig.endHour}
+                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) })}
+                                            className="w-8 bg-transparent border-none text-xs font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
+                                        />
+                                    </div>
+                                    <p className="text-[9px] text-gray-500">Hora CDMX (24h)</p>
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter italic">Seguridad Anti-Spam</p>
-                                    <p className="text-xs font-black text-gray-700 dark:text-gray-300 text-red-500/80">Máx 300 / Día</p>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-[10px] text-gray-400">Máx</span>
+                                        <input
+                                            type="number"
+                                            value={operativeConfig.dailyLimit}
+                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) })}
+                                            className="w-12 bg-transparent border-none text-xs font-black text-red-500/80 p-0 focus:ring-0"
+                                        />
+                                        <span className="text-[10px] text-gray-400">/ Día</span>
+                                    </div>
                                     <p className="text-[9px] text-gray-500">Límite por cuenta</p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Protocol Timeline - Horizontal Layout */}
+                        {/* Protocol Timeline - Dynamic Version */}
                         <div className="space-y-3">
-                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Ciclo de Inactividad</h4>
-                            <div className="relative pt-6 pb-1 grid grid-cols-4 gap-2">
+                            <div className="flex items-center justify-between px-1">
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ciclo de Inactividad</h4>
+                                <button
+                                    onClick={() => setInactiveStages([...inactiveStages, { hours: 24, label: 'Nueva Etapa' }])}
+                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
+                                >
+                                    + Añadir Etapa
+                                </button>
+                            </div>
+
+                            <div className="relative pt-6 pb-2 min-h-[100px] flex items-start overflow-x-auto no-scrollbar">
                                 {/* Horizontal Line */}
-                                <div className="absolute top-[13px] left-[12.5%] right-[12.5%] h-0.5 bg-gray-100 dark:bg-gray-800"></div>
+                                <div className="absolute top-[13px] left-0 right-0 h-0.5 bg-gray-100 dark:bg-gray-800"></div>
 
-                                <div className="relative flex flex-col items-center text-center">
-                                    <div className="absolute -top-[23px] w-4 h-4 rounded-full bg-blue-600 border-4 border-white dark:border-gray-800 shadow-sm z-10"></div>
-                                    <p className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 1: 24h</p>
-                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic mt-1">Recordatorio (Lic. Brenda)</p>
-                                </div>
+                                <div className="flex w-full justify-between items-start px-4 gap-4">
+                                    {inactiveStages.map((stage, idx) => (
+                                        <div key={idx} className="relative flex flex-col items-center min-w-[80px] group">
+                                            {/* Dot */}
+                                            <div className={`absolute -top-[23px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-800 shadow-sm z-10 
+                                                ${idx === 0 ? 'bg-blue-600' : idx === 1 ? 'bg-blue-500' : idx === 2 ? 'bg-indigo-500' : 'bg-slate-500'}`}
+                                            ></div>
 
-                                <div className="relative flex flex-col items-center text-center">
-                                    <div className="absolute -top-[23px] w-4 h-4 rounded-full bg-blue-500 border-4 border-white dark:border-gray-800 shadow-sm z-10"></div>
-                                    <p className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 2: 48h</p>
-                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic mt-1">Re-confirmación interés</p>
-                                </div>
+                                            {/* Delete Button (Hover Only) */}
+                                            <button
+                                                onClick={() => setInactiveStages(inactiveStages.filter((_, i) => i !== idx))}
+                                                className="absolute -top-[45px] opacity-0 group-hover:opacity-100 transition-opacity bg-red-100 text-red-600 p-1 rounded-full text-[8px]"
+                                            >
+                                                ✕
+                                            </button>
 
-                                <div className="relative flex flex-col items-center text-center">
-                                    <div className="absolute -top-[23px] w-4 h-4 rounded-full bg-indigo-500 border-4 border-white dark:border-gray-800 shadow-sm z-10"></div>
-                                    <p className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 3: 72h</p>
-                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic mt-1">Último aviso de vacante</p>
-                                </div>
-
-                                <div className="relative flex flex-col items-center text-center">
-                                    <div className="absolute -top-[23px] w-4 h-4 rounded-full bg-slate-500 border-4 border-white dark:border-gray-800 shadow-sm z-10"></div>
-                                    <p className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-tighter text-slate-600 dark:text-slate-400">Etapa 4: 7d</p>
-                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic mt-1">Limpieza de base</p>
+                                            <div className="flex flex-col items-center gap-0.5">
+                                                <div className="flex items-center justify-center">
+                                                    <input
+                                                        type="number"
+                                                        value={stage.hours}
+                                                        onChange={(e) => {
+                                                            const newStages = [...inactiveStages];
+                                                            newStages[idx].hours = parseInt(e.target.value);
+                                                            setInactiveStages(newStages);
+                                                        }}
+                                                        className="w-6 bg-transparent border-none text-[9px] font-bold text-gray-900 dark:text-white p-0 focus:ring-0 text-center uppercase tracking-tighter"
+                                                    />
+                                                    <span className="text-[9px] font-bold text-gray-900 dark:text-white">h</span>
+                                                </div>
+                                                <textarea
+                                                    value={stage.label}
+                                                    rows={2}
+                                                    onChange={(e) => {
+                                                        const newStages = [...inactiveStages];
+                                                        newStages[idx].label = e.target.value;
+                                                        setInactiveStages(newStages);
+                                                    }}
+                                                    className="w-full bg-transparent border-none text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic text-center p-0 focus:ring-0 resize-none overflow-hidden"
+                                                />
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>

@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
         try {
-            const { instanceId, token, systemPrompt, isActive, proactiveEnabled } = req.body;
+            const { instanceId, token, systemPrompt, isActive, proactiveEnabled, operativeConfig, inactiveStages } = req.body;
 
             // 1. WhatsApp Config (UltraMsg)
             if (instanceId !== undefined || token !== undefined) {
@@ -33,14 +33,19 @@ export default async function handler(req, res) {
                 await redis.set('bot_proactive_prompt', req.body.proactivePrompt);
             }
 
-            // 3. Bot Status (Master)
-            if (isActive !== undefined) {
-                await redis.set('bot_ia_active', String(isActive));
-            }
-
             // 4. Proactive Status (Follow-up)
             if (proactiveEnabled !== undefined) {
                 await redis.set('bot_proactive_enabled', String(proactiveEnabled));
+            }
+
+            // 5. Operative Config (Hours, Limits)
+            if (operativeConfig !== undefined) {
+                await redis.set('bot_operative_config', JSON.stringify(operativeConfig));
+            }
+
+            // 6. Inactive Stages (Timeline)
+            if (inactiveStages !== undefined) {
+                await redis.set('bot_inactive_stages', JSON.stringify(inactiveStages));
             }
 
             return res.status(200).json({ success: true });
@@ -59,6 +64,21 @@ export default async function handler(req, res) {
             const proactivePrompt = await redis.get('bot_proactive_prompt');
             const isActive = await redis.get('bot_ia_active');
             const proactiveEnabled = await redis.get('bot_proactive_enabled');
+            const operativeConfigJson = await redis.get('bot_operative_config');
+            const inactiveStagesJson = await redis.get('bot_inactive_stages');
+
+            const operativeConfig = operativeConfigJson ? JSON.parse(operativeConfigJson) : {
+                startHour: 7,
+                endHour: 23,
+                dailyLimit: 300
+            };
+
+            const inactiveStages = inactiveStagesJson ? JSON.parse(inactiveStagesJson) : [
+                { hours: 24, label: 'Recordatorio (Lic. Brenda)' },
+                { hours: 48, label: 'Re-confirmación interés' },
+                { hours: 72, label: 'Último aviso de vacante' },
+                { hours: 168, label: 'Limpieza de base' }
+            ];
 
             // Default Stats state (Safe fallback)
             let stats = {
@@ -179,6 +199,8 @@ export default async function handler(req, res) {
                 proactivePrompt: proactivePrompt || '',
                 isActive: isActive === 'true',
                 proactiveEnabled: proactiveEnabled === 'true',
+                operativeConfig,
+                inactiveStages,
                 stats
             });
 
