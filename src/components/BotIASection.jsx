@@ -264,35 +264,35 @@ const BotIASection = ({ showToast }) => {
                             </div>
                         </div>
 
-                        {/* Protocol Timeline */}
+                        {/* Protocol Timeline - Horizontal Layout */}
                         <div className="space-y-4">
                             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Ciclo de Inactividad</h4>
-                            <div className="relative pl-6 space-y-5">
-                                {/* Vertical Line */}
-                                <div className="absolute left-[11px] top-2 bottom-2 w-0.5 bg-gray-100 dark:bg-gray-800"></div>
+                            <div className="relative pt-8 pb-2 grid grid-cols-4 gap-2">
+                                {/* Horizontal Line */}
+                                <div className="absolute top-[13px] left-[12.5%] right-[12.5%] h-0.5 bg-gray-100 dark:bg-gray-800"></div>
 
-                                <div className="relative">
-                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-blue-600 border-4 border-white dark:border-gray-800 shadow-sm"></div>
-                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 1: 24 Horas</p>
-                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Recordatorio humano y servicial (Lic. Brenda).</p>
+                                <div className="relative flex flex-col items-center text-center">
+                                    <div className="absolute -top-[23px] w-4 h-4 rounded-full bg-blue-600 border-4 border-white dark:border-gray-800 shadow-sm z-10"></div>
+                                    <p className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 1: 24h</p>
+                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic mt-1">Recordatorio (Lic. Brenda)</p>
                                 </div>
 
-                                <div className="relative">
-                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white dark:border-gray-800 shadow-sm"></div>
-                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 2: 48 Horas</p>
-                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Re-confirmación de interés y vacantes.</p>
+                                <div className="relative flex flex-col items-center text-center">
+                                    <div className="absolute -top-[23px] w-4 h-4 rounded-full bg-blue-500 border-4 border-white dark:border-gray-800 shadow-sm z-10"></div>
+                                    <p className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 2: 48h</p>
+                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic mt-1">Re-confirmación interés</p>
                                 </div>
 
-                                <div className="relative">
-                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-indigo-500 border-4 border-white dark:border-gray-800 shadow-sm"></div>
-                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 3: 72 Horas</p>
-                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Último aviso de cierre de vacante.</p>
+                                <div className="relative flex flex-col items-center text-center">
+                                    <div className="absolute -top-[23px] w-4 h-4 rounded-full bg-indigo-500 border-4 border-white dark:border-gray-800 shadow-sm z-10"></div>
+                                    <p className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 3: 72h</p>
+                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic mt-1">Último aviso de vacante</p>
                                 </div>
 
-                                <div className="relative">
-                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-slate-500 border-4 border-white dark:border-gray-800 shadow-sm"></div>
-                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter text-slate-600 dark:text-slate-400">Etapa 4: 7 Días</p>
-                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Despido amigable y limpieza de base.</p>
+                                <div className="relative flex flex-col items-center text-center">
+                                    <div className="absolute -top-[23px] w-4 h-4 rounded-full bg-slate-500 border-4 border-white dark:border-gray-800 shadow-sm z-10"></div>
+                                    <p className="text-[9px] font-bold text-gray-900 dark:text-white uppercase tracking-tighter text-slate-600 dark:text-slate-400">Etapa 4: 7d</p>
+                                    <p className="text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic mt-1">Limpieza de base</p>
                                 </div>
                             </div>
                         </div>
