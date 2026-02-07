@@ -28,6 +28,11 @@ export default async function handler(req, res) {
                 await redis.set('bot_ia_prompt', systemPrompt);
             }
 
+            // 2.5 Proactive Hook Prompt
+            if (req.body.proactivePrompt !== undefined) {
+                await redis.set('bot_proactive_prompt', req.body.proactivePrompt);
+            }
+
             // 3. Bot Status
             if (isActive !== undefined) {
                 await redis.set('bot_ia_active', String(isActive));
@@ -46,6 +51,7 @@ export default async function handler(req, res) {
         try {
             const ultramsgConfig = await redis.get('ultramsg_credentials') || await redis.get('ultramsg_config');
             const systemPrompt = await redis.get('bot_ia_prompt');
+            const proactivePrompt = await redis.get('bot_proactive_prompt');
             const isActive = await redis.get('bot_ia_active');
 
             // Default Stats state (Safe fallback)
@@ -164,6 +170,7 @@ export default async function handler(req, res) {
                 instanceId,
                 token,
                 systemPrompt: systemPrompt || '',
+                proactivePrompt: proactivePrompt || '',
                 isActive: isActive === 'true',
                 stats
             });

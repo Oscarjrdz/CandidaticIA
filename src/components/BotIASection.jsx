@@ -12,7 +12,8 @@ const BotIASection = ({ showToast }) => {
     // AI Settings
     const [systemPrompt, setSystemPrompt] = useState('');
     const [assistantPrompt, setAssistantPrompt] = useState('');
-    const [aiModel, setAiModel] = useState('gemini-2.5-flash');
+    const [proactivePrompt, setProactivePrompt] = useState('');
+    const [aiModel, setAiModel] = useState('gemini-2.0-flash');
     const [stats, setStats] = useState({ today: 0, totalSent: 0, totalRecovered: 0 });
 
     useEffect(() => {
@@ -22,6 +23,7 @@ const BotIASection = ({ showToast }) => {
                 if (res.ok) {
                     const data = await res.json();
                     setSystemPrompt(data.systemPrompt || '');
+                    setProactivePrompt(data.proactivePrompt || '');
                     setIsActive(data.isActive);
                     if (data.stats) setStats(data.stats);
                 }
@@ -54,7 +56,7 @@ const BotIASection = ({ showToast }) => {
             const resConfig = await fetch('/api/bot-ia/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isActive })
+                body: JSON.stringify({ isActive, proactivePrompt })
             });
 
             const resPrompt = await fetch('/api/settings', {
@@ -136,7 +138,7 @@ const BotIASection = ({ showToast }) => {
                         <div>
                             <label className="flex items-center justify-between text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                 <span>Fase 1: Brenda Capturista 📝</span>
-                                <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Perfil Incompleto</span>
+                                <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Extracción de Datos</span>
                             </label>
                             <textarea
                                 className="w-full h-48 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono"
@@ -144,7 +146,9 @@ const BotIASection = ({ showToast }) => {
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
                             />
-                            <p className="text-[10px] text-gray-500 mt-1 italic">Este cerebro gobierna la recolección de Nombre, Municipio, Edad y Categoría.</p>
+                            <p className="text-[10px] text-gray-500 mt-1 italic">
+                                Este "Cerebro" gobierna la recolección de Nombre, Municipio, Edad y Categoría una vez que el candidato ya respondió.
+                            </p>
                         </div>
 
                         <div>
@@ -188,10 +192,27 @@ const BotIASection = ({ showToast }) => {
 
                 {/* Follow-up Rules Reference */}
                 <Card
-                    title={<span className="flex items-center gap-2">Impacto y Directrices Brenda <Sparkles className="w-4 h-4 text-purple-500" /></span>}
-                    icon={Clock}
+                    title={<span className="flex items-center gap-2">Control de Seguimiento <Sparkles className="w-4 h-4 text-blue-500" /></span>}
+                    icon={Bot}
                 >
                     <div className="space-y-6">
+                        {/* Nuevo: Prompt de Seguimiento (Hook) */}
+                        <div className="bg-blue-50/30 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-800/30">
+                            <label className="flex items-center justify-between text-sm font-bold text-blue-900 dark:text-blue-100 mb-2">
+                                <span className="flex items-center gap-2">Regla 1: El Hook de Brenda 🎯</span>
+                                <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-tighter">Primer Contacto</span>
+                            </label>
+                            <textarea
+                                className="w-full h-32 p-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-sm font-mono"
+                                placeholder="Ej: 'Hola! Soy Brenda de Candidatic, vi que iniciaste tu registro...'"
+                                value={proactivePrompt}
+                                onChange={(e) => setProactivePrompt(e.target.value)}
+                            />
+                            <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mt-2 italic px-1">
+                                <Sparkles className="w-3 h-3 inline mr-1" />
+                                Este prompt es el "Gancho" inicial. Se usa para motivar al candidato a responder cuando hay inactividad.
+                            </p>
+                        </div>
                         {/* Mini Dashboard Impacto */}
                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                             <div className="bg-gradient-to-br from-purple-500/10 to-indigo-500/5 dark:from-purple-500/20 dark:to-indigo-500/10 p-4 rounded-2xl border border-purple-100/50 dark:border-purple-800/30">

@@ -306,7 +306,7 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
         return tA - tB;
     });
 
-    const customPrompt = (await redis.get('bot_ia_prompt')) || '';
+    const customPrompt = (await redis.get('bot_proactive_prompt')) || (await redis.get('bot_ia_prompt')) || '';
 
     for (const cand of incomplete) {
         // Nivel 9/10: Salida Automática (Opt-out)
