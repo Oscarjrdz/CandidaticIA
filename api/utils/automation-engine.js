@@ -95,8 +95,8 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
                 // Check Daily Limit
                 const todayKey = `ai:proactive:count:${new Date().toISOString().split('T')[0]}`;
                 const dailyCount = parseInt(await redis.get(todayKey) || '0');
-                if (dailyCount >= 200) {
-                    logs.push(`🛑[PROACTIVE] Límite diario alcanzado(200 / día).`);
+                if (dailyCount >= 300) {
+                    logs.push(`🛑[PROACTIVE] Límite diario alcanzado(300 / día).`);
                 } else {
                     // Strictly follow the 1 message per minute rate limit
                     await processNativeProactive(redis, model, config, logs, todayKey, now, 1);

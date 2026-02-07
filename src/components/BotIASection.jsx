@@ -333,7 +333,7 @@ const BotIASection = ({ showToast }) => {
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter italic">Seguridad Anti-Spam</p>
-                                    <p className="text-xs font-black text-gray-700 dark:text-gray-300 text-red-500/80">Máx 200 / Día</p>
+                                    <p className="text-xs font-black text-gray-700 dark:text-gray-300 text-red-500/80">Máx 300 / Día</p>
                                     <p className="text-[9px] text-gray-500">Límite por cuenta</p>
                                 </div>
                             </div>
