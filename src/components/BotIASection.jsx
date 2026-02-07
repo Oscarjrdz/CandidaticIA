@@ -187,7 +187,7 @@ const BotIASection = ({ showToast }) => {
                 >
                     <div className="space-y-6">
                         {/* Mini Dashboard Impacto */}
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                             <div className="bg-gradient-to-br from-purple-500/10 to-indigo-500/5 dark:from-purple-500/20 dark:to-indigo-500/10 p-4 rounded-2xl border border-purple-100/50 dark:border-purple-800/30">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-1">Total Enviados</p>
                                 <div className="flex items-baseline gap-2">
@@ -209,7 +209,7 @@ const BotIASection = ({ showToast }) => {
                                     <span className="text-[10px] text-orange-400 font-medium leading-none">Incompletos</span>
                                 </div>
                             </div>
-                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 dark:from-blue-500/20 dark:to-cyan-500/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-800/30 col-span-2 lg:col-span-1">
+                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 dark:from-blue-500/20 dark:to-cyan-500/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-800/30">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-1">Candidatos Completos</p>
                                 <div className="flex items-baseline gap-2">
                                     <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.complete || 0}</h4>
