@@ -38,6 +38,8 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
             return { success: true, logs, sent: 0, reason: 'BOT_OFF' };
         }
 
+        let geminiKey = process.env.GEMINI_API_KEY;
+
         if (!geminiKey && redis) {
             const aiConfigJson = await redis.get('ai_config');
             if (aiConfigJson) {
@@ -47,7 +49,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
         }
 
         if (!geminiKey || geminiKey === 'undefined' || geminiKey === 'null') {
-            logs.push(`❌ CRITICAL: Falta GEMINI_API_KEY.Configure su API Key en Ajustes.`);
+            logs.push(`❌ CRITICAL: Falta GEMINI_API_KEY. Configure su API Key en Ajustes.`);
             return { success: false, error: 'GEMINI_API_KEY_MISSING', logs };
         }
 
@@ -64,7 +66,17 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
         logs.push(`✅ Configuración y API Key verificadas.`);
 
         const genAI = new GoogleGenerativeAI(geminiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }); // Reverting to 2.0 which usually exists in v1beta
+
+        // Resilience: Try 2.0 then 1.5
+        let model;
+        try {
+            model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+            // Test if model exists/accessible (briefly)
+            await model.countTokens("test");
+        } catch (e) {
+            logs.push(`⚠️ gemini-2.0-flash no disponible, usando fallback gemini-1.5-flash`);
+            model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        }
 
         // --- NATIVE PROACTIVE FOLLOW-UP LOGIC (INDEPENDENT) ---
         const isProactiveEnabled = (await redis.get('bot_proactive_enabled')) === 'true';
