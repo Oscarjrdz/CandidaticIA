@@ -35,7 +35,13 @@ const BotIASection = ({ showToast }) => {
                 console.error('Error loading settings:', error);
             }
         };
+
         loadSettings();
+
+        // Nivel 9/10: Auto-Refresh Dashboard
+        const pollInterval = setInterval(loadSettings, 15000); // Poll every 15s
+
+        return () => clearInterval(pollInterval);
     }, []);
 
     const handleSave = async () => {
