@@ -18,8 +18,8 @@ const SAFETY_LIMIT_PER_RUN = 10;
 const COOLDOWN_HOURS = 24;
 
 /**
- * runAIAutomations
- * Zuckerberg Trace Edition: Captures every step and error.
+ * Automation Engine - Brenda Proactive Follow-up
+ * Last Deploy: 2026-02-07 09:15 MX
  */
 export async function runAIAutomations(isManual = false, manualConfig = null) {
     const logs = [];
@@ -170,7 +170,6 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
             }
 
             // --- 3. EVALUATION ---
-            const redis = getRedisClient();
             for (const cand of candidates) {
                 if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
                 if (!cand?.id || !cand?.whatsapp) continue;
