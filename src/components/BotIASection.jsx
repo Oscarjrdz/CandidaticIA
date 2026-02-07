@@ -110,9 +110,9 @@ const BotIASection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-3">
             {/* Header Status Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex flex-col md:flex-row items-center justify-between gap-3">
                 <div className="flex items-center space-x-4">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isActive ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-700'}`}>
                         <Bot className={`w-6 h-6 ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
@@ -146,17 +146,17 @@ const BotIASection = ({ showToast }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* AI Configuration */}
                 <Card title="Cerebro del Asistente" icon={SettingsIcon}>
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                         <div>
                             <label className="flex items-center justify-between text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                 <span>Fase 1: Brenda Capturista 📝</span>
-                                <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Extracción de Datos</span>
+                                <span className="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Extracción de Datos</span>
                             </label>
                             <textarea
-                                className="w-full h-48 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono"
+                                className="w-full h-32 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono"
                                 placeholder="Reglas de extracción de datos..."
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
@@ -169,10 +169,10 @@ const BotIASection = ({ showToast }) => {
                         <div>
                             <label className="flex items-center justify-between text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
                                 <span>Assistant 2.0 (Intention) 🕵️‍♀️✨</span>
-                                <span className="text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Perfil 100% Completo</span>
+                                <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Perfil 100% Completo</span>
                             </label>
                             <textarea
-                                className="w-full h-48 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono"
+                                className="w-full h-32 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono"
                                 placeholder="Personalidad para el seguimiento..."
                                 value={assistantPrompt}
                                 onChange={(e) => setAssistantPrompt(e.target.value)}
@@ -210,15 +210,15 @@ const BotIASection = ({ showToast }) => {
                     title={<span className="flex items-center gap-2">Control de Seguimiento <Sparkles className="w-4 h-4 text-blue-500" /></span>}
                     icon={Bot}
                 >
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         {/* Nuevo: Prompt de Seguimiento (Hook) */}
                         <div className="bg-blue-50/30 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-800/30">
                             <label className="flex items-center justify-between text-sm font-bold text-blue-900 dark:text-blue-100 mb-2">
                                 <span className="flex items-center gap-2">Regla 1: El Hook de Brenda 🎯</span>
-                                <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-tighter">Primer Contacto</span>
+                                <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Primer Contacto</span>
                             </label>
                             <textarea
-                                className="w-full h-32 p-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-sm font-mono"
+                                className="w-full h-24 p-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-sm font-mono"
                                 placeholder="Ej: 'Hola! Soy Brenda de Candidatic, vi que iniciaste tu registro...'"
                                 value={proactivePrompt}
                                 onChange={(e) => setProactivePrompt(e.target.value)}
@@ -261,7 +261,7 @@ const BotIASection = ({ showToast }) => {
                         </div>
 
                         {/* Operative Rules */}
-                        <div className="bg-gray-50 dark:bg-gray-900/40 p-4 rounded-2xl border border-gray-100 dark:border-gray-800/50">
+                        <div className="bg-gray-50 dark:bg-gray-900/40 p-3 rounded-2xl border border-gray-100 dark:border-gray-800/50">
                             <h4 className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                                 <Shield className="w-4 h-4 text-blue-500" /> Configuración Operativa
                             </h4>
@@ -280,9 +280,9 @@ const BotIASection = ({ showToast }) => {
                         </div>
 
                         {/* Protocol Timeline - Horizontal Layout */}
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                             <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Ciclo de Inactividad</h4>
-                            <div className="relative pt-8 pb-2 grid grid-cols-4 gap-2">
+                            <div className="relative pt-6 pb-1 grid grid-cols-4 gap-2">
                                 {/* Horizontal Line */}
                                 <div className="absolute top-[13px] left-[12.5%] right-[12.5%] h-0.5 bg-gray-100 dark:bg-gray-800"></div>
 
