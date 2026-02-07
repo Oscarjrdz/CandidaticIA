@@ -12,7 +12,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
         try {
-            const { instanceId, token, systemPrompt, isActive } = req.body;
+            const { instanceId, token, systemPrompt, isActive, proactiveEnabled } = req.body;
 
             // 1. WhatsApp Config (UltraMsg)
             if (instanceId !== undefined || token !== undefined) {
@@ -33,12 +33,14 @@ export default async function handler(req, res) {
                 await redis.set('bot_proactive_prompt', req.body.proactivePrompt);
             }
 
-            // 3. Bot Status
+            // 3. Bot Status (Master)
             if (isActive !== undefined) {
-                const statusStr = String(isActive);
-                await redis.set('bot_ia_active', statusStr);
-                // Synchronize with the automation engine's preferred key
-                await redis.set('bot_proactive_enabled', statusStr === 'true' ? 'true' : 'false');
+                await redis.set('bot_ia_active', String(isActive));
+            }
+
+            // 4. Proactive Status (Follow-up)
+            if (proactiveEnabled !== undefined) {
+                await redis.set('bot_proactive_enabled', String(proactiveEnabled));
             }
 
             return res.status(200).json({ success: true });
@@ -56,6 +58,7 @@ export default async function handler(req, res) {
             const systemPrompt = await redis.get('bot_ia_prompt');
             const proactivePrompt = await redis.get('bot_proactive_prompt');
             const isActive = await redis.get('bot_ia_active');
+            const proactiveEnabled = await redis.get('bot_proactive_enabled');
 
             // Default Stats state (Safe fallback)
             let stats = {
@@ -175,6 +178,7 @@ export default async function handler(req, res) {
                 systemPrompt: systemPrompt || '',
                 proactivePrompt: proactivePrompt || '',
                 isActive: isActive === 'true',
+                proactiveEnabled: proactiveEnabled === 'true',
                 stats
             });
 

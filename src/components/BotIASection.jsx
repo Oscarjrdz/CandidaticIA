@@ -13,6 +13,7 @@ const BotIASection = ({ showToast }) => {
     const [systemPrompt, setSystemPrompt] = useState('');
     const [assistantPrompt, setAssistantPrompt] = useState('');
     const [proactivePrompt, setProactivePrompt] = useState('');
+    const [proactiveEnabled, setProactiveEnabled] = useState(false);
     const [aiModel, setAiModel] = useState('gemini-2.0-flash');
     const [stats, setStats] = useState({ today: 0, totalSent: 0, totalRecovered: 0 });
 
@@ -25,6 +26,7 @@ const BotIASection = ({ showToast }) => {
                     setSystemPrompt(data.systemPrompt || '');
                     setProactivePrompt(data.proactivePrompt || '');
                     setIsActive(data.isActive);
+                    setProactiveEnabled(data.proactiveEnabled);
                     if (data.stats) setStats(data.stats);
                 }
 
@@ -44,9 +46,10 @@ const BotIASection = ({ showToast }) => {
                 if (res.ok) {
                     const data = await res.json();
                     if (data.stats) setStats(data.stats);
-                    // Also update isActive in case it changed elsewhere, 
+                    // Also update statuses in case they changed elsewhere, 
                     // but NOT the prompts to avoid erasing user input
                     setIsActive(data.isActive);
+                    setProactiveEnabled(data.proactiveEnabled);
                 }
             } catch (error) {
                 console.error('Error polling stats:', error);
@@ -71,7 +74,7 @@ const BotIASection = ({ showToast }) => {
             const resConfig = await fetch('/api/bot-ia/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ isActive, proactivePrompt })
+                body: JSON.stringify({ proactivePrompt })
             });
 
             const resPrompt = await fetch('/api/settings', {
@@ -105,8 +108,36 @@ const BotIASection = ({ showToast }) => {
         }
     };
 
-    const toggleActive = () => {
-        setIsActive(!isActive);
+    const toggleActive = async () => {
+        const newValue = !isActive;
+        setIsActive(newValue);
+        try {
+            await fetch('/api/bot-ia/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isActive: newValue })
+            });
+        } catch (error) {
+            console.error('Error toggling Master Bot:', error);
+            showToast('Error al cambiar estado del Bot', 'error');
+            setIsActive(!newValue); // Rollback
+        }
+    };
+
+    const toggleProactive = async () => {
+        const newValue = !proactiveEnabled;
+        setProactiveEnabled(newValue);
+        try {
+            await fetch('/api/bot-ia/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ proactiveEnabled: newValue })
+            });
+        } catch (error) {
+            console.error('Error toggling Proactive:', error);
+            showToast('Error al cambiar seguimiento', 'error');
+            setProactiveEnabled(!newValue); // Rollback
+        }
     };
 
     return (
@@ -207,7 +238,30 @@ const BotIASection = ({ showToast }) => {
 
                 {/* Follow-up Rules Reference */}
                 <Card
-                    title={<span className="flex items-center gap-2">Control de Seguimiento <Sparkles className="w-4 h-4 text-blue-500" /></span>}
+                    title={
+                        <div className="flex items-center justify-between w-full pr-1">
+                            <span className="flex items-center gap-2">Control de Seguimiento <Sparkles className="w-4 h-4 text-blue-500" /></span>
+                            <div className="flex items-center gap-2">
+                                <span className={`text-[10px] font-bold uppercase ${proactiveEnabled ? 'text-green-600' : 'text-gray-400'}`}>
+                                    {proactiveEnabled ? 'On' : 'Off'}
+                                </span>
+                                <button
+                                    onClick={toggleProactive}
+                                    className={`
+                                        relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
+                                        ${proactiveEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}
+                                    `}
+                                >
+                                    <span
+                                        className={`
+                                            inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform
+                                            ${proactiveEnabled ? 'translate-x-4.5' : 'translate-x-1'}
+                                        `}
+                                    />
+                                </button>
+                            </div>
+                        </div>
+                    }
                     icon={Bot}
                 >
                     <div className="space-y-4">
