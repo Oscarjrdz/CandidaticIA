@@ -241,21 +241,27 @@ const BotIASection = ({ showToast }) => {
                     title={
                         <div className="flex items-center justify-between w-full pr-1">
                             <span className="flex items-center gap-2">Control de Seguimiento <Sparkles className="w-4 h-4 text-blue-500" /></span>
-                            <div className="flex items-center gap-2">
-                                <span className={`text-[10px] font-bold uppercase ${proactiveEnabled ? 'text-green-600' : 'text-gray-400'}`}>
-                                    {proactiveEnabled ? 'On' : 'Off'}
-                                </span>
+
+                            {/* Proactive Follow-up Toggle - Exact Look from CandidatesSection */}
+                            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90 origin-right">
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Seguimiento</span>
+                                    <span className={`text-[10px] font-bold ${proactiveEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
+                                        {proactiveEnabled ? 'AUTO' : 'OFF'}
+                                    </span>
+                                </div>
                                 <button
+                                    type="button"
                                     onClick={toggleProactive}
                                     className={`
-                                        relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
-                                        ${proactiveEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}
+                                        relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
+                                        ${proactiveEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
                                     `}
                                 >
                                     <span
                                         className={`
-                                            inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform
-                                            ${proactiveEnabled ? 'translate-x-4.5' : 'translate-x-1'}
+                                            inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                                            ${proactiveEnabled ? 'translate-x-6' : 'translate-x-1'}
                                         `}
                                     />
                                 </button>
