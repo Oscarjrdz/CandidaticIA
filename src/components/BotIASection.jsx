@@ -38,10 +38,25 @@ const BotIASection = ({ showToast }) => {
             }
         };
 
+        const loadStats = async () => {
+            try {
+                const res = await fetch('/api/bot-ia/settings');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.stats) setStats(data.stats);
+                    // Also update isActive in case it changed elsewhere, 
+                    // but NOT the prompts to avoid erasing user input
+                    setIsActive(data.isActive);
+                }
+            } catch (error) {
+                console.error('Error polling stats:', error);
+            }
+        };
+
         loadSettings();
 
-        // Nivel 9/10: Auto-Refresh Dashboard
-        const pollInterval = setInterval(loadSettings, 15000); // Poll every 15s
+        // Nivel 9/10: Auto-Refresh Dashboard (Stats only)
+        const pollInterval = setInterval(loadStats, 15000); // Poll every 15s
 
         return () => clearInterval(pollInterval);
     }, []);
