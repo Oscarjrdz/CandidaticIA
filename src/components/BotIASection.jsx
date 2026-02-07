@@ -384,13 +384,13 @@ const BotIASection = ({ showToast }) => {
                                 </button>
                             </div>
 
-                            <div className="relative pt-6 pb-2 min-h-[100px] flex items-start overflow-x-auto no-scrollbar">
+                            <div className="relative pt-6 pb-2 min-h-[110px] flex items-start overflow-x-auto no-scrollbar scroll-smooth">
                                 {/* Horizontal Line */}
                                 <div className="absolute top-[13px] left-0 right-0 h-0.5 bg-gray-100 dark:bg-gray-800"></div>
 
-                                <div className="flex w-full justify-between items-start px-4 gap-4">
+                                <div className="flex w-full justify-between items-start px-2 gap-1 md:gap-4">
                                     {inactiveStages.map((stage, idx) => (
-                                        <div key={idx} className="relative flex flex-col items-center min-w-[80px] group">
+                                        <div key={idx} className="relative flex flex-col items-center min-w-[95px] group transition-all">
                                             {/* Dot */}
                                             <div className={`absolute -top-[23px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-800 shadow-sm z-10 
                                                 ${idx === 0 ? 'bg-blue-600' : idx === 1 ? 'bg-blue-500' : idx === 2 ? 'bg-indigo-500' : 'bg-slate-500'}`}
@@ -399,24 +399,24 @@ const BotIASection = ({ showToast }) => {
                                             {/* Delete Button (Hover Only) */}
                                             <button
                                                 onClick={() => setInactiveStages(inactiveStages.filter((_, i) => i !== idx))}
-                                                className="absolute -top-[45px] opacity-0 group-hover:opacity-100 transition-opacity bg-red-100 text-red-600 p-1 rounded-full text-[8px]"
+                                                className="absolute -top-[45px] opacity-0 group-hover:opacity-100 transition-opacity bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 p-1 rounded-full text-[8px] border border-red-200 dark:border-red-800"
                                             >
                                                 ✕
                                             </button>
 
-                                            <div className="flex flex-col items-center gap-0.5">
-                                                <div className="flex items-center justify-center">
+                                            <div className="flex flex-col items-center gap-0 w-full">
+                                                <div className="flex items-center justify-center gap-0.5 mb-1">
                                                     <input
                                                         type="number"
                                                         value={stage.hours}
                                                         onChange={(e) => {
                                                             const newStages = [...inactiveStages];
-                                                            newStages[idx].hours = parseInt(e.target.value);
+                                                            newStages[idx].hours = parseInt(e.target.value) || 0;
                                                             setInactiveStages(newStages);
                                                         }}
-                                                        className="w-6 bg-transparent border-none text-[9px] font-bold text-gray-900 dark:text-white p-0 focus:ring-0 text-center uppercase tracking-tighter"
+                                                        className="w-7 bg-transparent border-none text-[11px] font-black text-gray-900 dark:text-white p-0 focus:ring-0 text-right uppercase tracking-tighter"
                                                     />
-                                                    <span className="text-[9px] font-bold text-gray-900 dark:text-white">h</span>
+                                                    <span className="text-[11px] font-black text-gray-900 dark:text-white">h</span>
                                                 </div>
                                                 <textarea
                                                     value={stage.label}
@@ -426,7 +426,8 @@ const BotIASection = ({ showToast }) => {
                                                         newStages[idx].label = e.target.value;
                                                         setInactiveStages(newStages);
                                                     }}
-                                                    className="w-full bg-transparent border-none text-[8px] text-gray-500 dark:text-gray-400 leading-tight italic text-center p-0 focus:ring-0 resize-none overflow-hidden"
+                                                    className="w-full bg-transparent border-none text-[9px] text-gray-500 dark:text-gray-400 leading-[11px] italic text-center p-0 focus:ring-0 resize-none overflow-hidden hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded transition-colors"
+                                                    placeholder="Etiqueta..."
                                                 />
                                             </div>
                                         </div>
