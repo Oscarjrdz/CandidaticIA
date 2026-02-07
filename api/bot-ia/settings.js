@@ -72,44 +72,66 @@ export default async function handler(req, res) {
                     await redis.set('ai:proactive:total_sent', todayCount);
                 }
 
-                // Calculate Counts (Completos vs Incompletos - FULL BASE)
+                // DIRECT COUNTER - NUCLEAR CHUNKED PIXELS (Nivel 9/10)
                 let pendingCount = 0;
                 let completeCount = 0;
-                let debugInfo = null;
+                let debugInfo = "";
 
                 try {
+                    const { isProfileComplete } = await import('../utils/storage.js');
                     const customFieldsJson = await redis.get('custom_fields');
                     const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
 
-                    // Scan full base (0, -1) to get real funnel metrics
-                    const result = await getCandidates(2000, 0); // Large enough for now
-                    let list = result.candidates || [];
+                    // 1. Get ALL IDs from the main index
+                    const allIds = await redis.zrevrange('candidates:list', 0, -1);
 
-                    // FALLBACK: If standard fetch is empty, try direct key scan (Nivel 9/10 Recovery)
-                    if (list.length === 0) {
-                        const allKeys = await redis.keys('candidate:*');
-                        if (allKeys.length > 0) {
+                    if (allIds && allIds.length > 0) {
+                        debugInfo = `Scanning ${allIds.length} IDs from ZSET. `;
+
+                        // 2. Chunked Pipeline Processing (Resilient)
+                        const CHUNK_SIZE = 100;
+                        for (let i = 0; i < allIds.length; i += CHUNK_SIZE) {
+                            const chunk = allIds.slice(i, i + CHUNK_SIZE);
                             const pipeline = redis.pipeline();
-                            allKeys.slice(0, 1000).forEach(k => pipeline.get(k));
+                            chunk.forEach(id => pipeline.get(`candidate:${id}`));
                             const results = await pipeline.exec();
-                            list = results
-                                .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
-                                .filter(Boolean);
-                            debugInfo = `Atomic scan recovered ${list.length} records.`;
-                        } else {
-                            debugInfo = "No 'candidate:*' keys found in Redis.";
+
+                            results.forEach(([err, res]) => {
+                                if (!err && res) {
+                                    try {
+                                        const c = JSON.parse(res);
+                                        if (isProfileComplete(c, customFields)) {
+                                            completeCount++;
+                                        } else {
+                                            pendingCount++;
+                                        }
+                                    } catch (parseErr) {
+                                        // Skip corrupted JSON
+                                    }
+                                }
+                            });
+                        }
+                        debugInfo += `Found ${pendingCount} pending, ${completeCount} complete.`;
+                    } else {
+                        // FALLBACK: Keys scan
+                        const keys = await redis.keys('candidate:*');
+                        debugInfo = `ZSET empty. Keys scan found ${keys.length} keys. `;
+                        if (keys.length > 0) {
+                            const pipeline = redis.pipeline();
+                            keys.slice(0, 500).forEach(k => pipeline.get(k));
+                            const results = await pipeline.exec();
+                            results.forEach(([err, res]) => {
+                                if (!err && res) {
+                                    const c = JSON.parse(res);
+                                    if (isProfileComplete(c, customFields)) completeCount++;
+                                    else pendingCount++;
+                                }
+                            });
                         }
                     }
-
-                    pendingCount = list.filter(c => !isProfileComplete(c, customFields)).length;
-                    completeCount = list.filter(c => isProfileComplete(c, customFields)).length;
-
-                    if (list.length > 0 && !debugInfo) {
-                        debugInfo = `Calculated from ${list.length} candidates.`;
-                    }
                 } catch (e) {
-                    console.warn('⚠️ [Stats] Error calculating funnel counts:', e.message);
-                    debugInfo = `ERR: ${e.message}`;
+                    console.error('❌ [Stats Nuclear] Fatal count error:', e);
+                    debugInfo = `Error: ${e.message}`;
                 }
 
                 stats = {
@@ -118,7 +140,6 @@ export default async function handler(req, res) {
                     totalRecovered: parseInt(totalRecovered),
                     pending: pendingCount,
                     complete: completeCount,
-                    _atomic_recovery: !!(debugInfo && debugInfo.includes('recovered')),
                     _debug: debugInfo
                 };
             } catch (statsError) {
