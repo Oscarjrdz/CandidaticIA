@@ -57,6 +57,9 @@ export default async function handler(req, res) {
             };
 
             try {
+                // Dynamic import to avoid top-level issues and match api/candidates logic
+                const { getCandidates, isProfileComplete } = await import('../utils/storage.js');
+
                 // Proactive Stats
                 const todayStr = new Date().toISOString().split('T')[0];
                 const todayCount = await redis.get(`ai:proactive:count:${todayStr}`) || '0';
@@ -69,21 +72,28 @@ export default async function handler(req, res) {
                     await redis.set('ai:proactive:total_sent', todayCount);
                 }
 
-                // Calculate Counts (Completos vs Incompletos - Optimized)
+                // Calculate Counts (Completos vs Incompletos - FULL BASE)
                 let pendingCount = 0;
                 let completeCount = 0;
+                let debugInfo = null;
+
                 try {
                     const customFieldsJson = await redis.get('custom_fields');
                     const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
 
-                    // Scan all candidates to get real funnel metrics
-                    const { candidates } = await getCandidates(1000, 0);
-                    const list = candidates || [];
+                    // Scan full base (0, -1) to get real funnel metrics
+                    const result = await getCandidates(2000, 0); // Large enough for now
+                    const list = result.candidates || [];
 
                     pendingCount = list.filter(c => !isProfileComplete(c, customFields)).length;
                     completeCount = list.filter(c => isProfileComplete(c, customFields)).length;
+
+                    if (list.length === 0 && result.total > 0) {
+                        debugInfo = `Empty list but total is ${result.total}`;
+                    }
                 } catch (e) {
                     console.warn('⚠️ [Stats] Error calculating funnel counts:', e.message);
+                    debugInfo = e.message;
                 }
 
                 stats = {
@@ -91,7 +101,8 @@ export default async function handler(req, res) {
                     totalSent: parseInt(totalSent),
                     totalRecovered: parseInt(totalRecovered),
                     pending: pendingCount,
-                    complete: completeCount
+                    complete: completeCount,
+                    _debug: debugInfo
                 };
             } catch (statsError) {
                 console.error('⚠️ [Stats] Minor failure fetching stats:', statsError.message);
