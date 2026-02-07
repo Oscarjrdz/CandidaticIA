@@ -69,24 +69,29 @@ export default async function handler(req, res) {
                     await redis.set('ai:proactive:total_sent', todayCount);
                 }
 
-                // Calculate Pending (Incomplete Profiles - Optimized and Protected)
+                // Calculate Counts (Completos vs Incompletos - Optimized)
                 let pendingCount = 0;
+                let completeCount = 0;
                 try {
                     const customFieldsJson = await redis.get('custom_fields');
                     const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
 
-                    // Limit scan to 500 for the dashboard to avoid timeouts
-                    const { candidates } = await getCandidates(500, 0);
-                    pendingCount = (candidates || []).filter(c => !isProfileComplete(c, customFields)).length;
+                    // Scan all candidates to get real funnel metrics
+                    const { candidates } = await getCandidates(1000, 0);
+                    const list = candidates || [];
+
+                    pendingCount = list.filter(c => !isProfileComplete(c, customFields)).length;
+                    completeCount = list.filter(c => isProfileComplete(c, customFields)).length;
                 } catch (e) {
-                    console.warn('⚠️ [Stats] Error calculating pending count:', e.message);
+                    console.warn('⚠️ [Stats] Error calculating funnel counts:', e.message);
                 }
 
                 stats = {
                     today: parseInt(todayCount),
                     totalSent: parseInt(totalSent),
                     totalRecovered: parseInt(totalRecovered),
-                    pending: pendingCount
+                    pending: pendingCount,
+                    complete: completeCount
                 };
             } catch (statsError) {
                 console.error('⚠️ [Stats] Minor failure fetching stats:', statsError.message);

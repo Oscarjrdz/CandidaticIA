@@ -202,11 +202,18 @@ const BotIASection = ({ showToast }) => {
                                     <span className="text-[10px] text-green-400 font-medium leading-none">ROI Éxito</span>
                                 </div>
                             </div>
-                            <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/5 dark:from-orange-500/20 dark:to-amber-500/10 p-4 rounded-2xl border border-orange-100/50 dark:border-orange-800/30 col-span-2 lg:col-span-1">
+                            <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/5 dark:from-orange-500/20 dark:to-amber-500/10 p-4 rounded-2xl border border-orange-100/50 dark:border-orange-800/30">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 mb-1">Candidatos Pendientes</p>
                                 <div className="flex items-baseline gap-2">
                                     <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.pending || 0}</h4>
-                                    <span className="text-[10px] text-orange-400 font-medium leading-none">Por Procesar</span>
+                                    <span className="text-[10px] text-orange-400 font-medium leading-none">Incompletos</span>
+                                </div>
+                            </div>
+                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 dark:from-blue-500/20 dark:to-cyan-500/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-800/30 col-span-2 lg:col-span-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-1">Candidatos Completos</p>
+                                <div className="flex items-baseline gap-2">
+                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.complete || 0}</h4>
+                                    <span className="text-[10px] text-blue-400 font-medium leading-none">Perfil 100%</span>
                                 </div>
                             </div>
                         </div>
@@ -247,6 +254,18 @@ const BotIASection = ({ showToast }) => {
                                     <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-blue-500 border-4 border-white dark:border-gray-800 shadow-sm"></div>
                                     <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 2: 48 Horas</p>
                                     <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Re-confirmación de interés y vacantes.</p>
+                                </div>
+
+                                <div className="relative">
+                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-indigo-500 border-4 border-white dark:border-gray-800 shadow-sm"></div>
+                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter">Etapa 3: 72 Horas</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Último aviso de cierre de vacante.</p>
+                                </div>
+
+                                <div className="relative">
+                                    <div className="absolute -left-[19px] top-1 w-4 h-4 rounded-full bg-slate-500 border-4 border-white dark:border-gray-800 shadow-sm"></div>
+                                    <p className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-tighter text-slate-600 dark:text-slate-400">Etapa 4: 7 Días</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-gray-400 leading-relaxed italic">Despido amigable y limpieza de base.</p>
                                 </div>
 
                                 <div className="relative">

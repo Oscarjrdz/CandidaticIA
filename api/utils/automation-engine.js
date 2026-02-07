@@ -78,10 +78,10 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
             const nowHour = mxTime.getHours();
 
             if (nowHour < 7 || nowHour >= 23) {
-                logs.push(`💤[PROACTIVE] Fuera de horario permitido(7:00 - 23:00).Hora MX actual: ${nowHour}:00`);
+                logs.push(`💤[PROACTIVE] Fuera de horario permitido(7:00 - 23:00). Hora MX calculada: ${mxTime.toLocaleTimeString('es-MX')}`);
             } else {
                 // Check Daily Limit
-                const todayKey = `ai: proactive: count:${new Date().toISOString().split('T')[0]} `;
+                const todayKey = `ai:proactive:count:${new Date().toISOString().split('T')[0]}`;
                 const dailyCount = parseInt(await redis.get(todayKey) || '0');
                 if (dailyCount >= 200) {
                     logs.push(`🛑[PROACTIVE] Límite diario alcanzado(200 / día).`);
@@ -164,8 +164,11 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
                 if (!cand?.id || !cand?.whatsapp) continue;
 
                 if (!isManual) {
-                    const last = await redis.get(`ai: automation: last:${cand.id} `);
-                    if (last) continue;
+                    const last = await redis.get(`ai:automation:last:${cand.id}`);
+                    if (last) {
+                        logs.push(`⏭️[SKIP] ${cand.nombre} ya procesado por regla recientemente.`);
+                        continue;
+                    }
                 }
 
                 const now = new Date();
@@ -231,7 +234,7 @@ Responde ÚNICAMENTE en JSON: { "ok": boolean, "msg": string, "reason": string }
                             timestamp: new Date().toISOString(),
                             meta: { automationId: rule.id, aiMatch: true }
                         });
-                        await redis.set(`ai: automation: last:${cand.id} `, new Date().toISOString(), 'EX', COOLDOWN_HOURS * 3600);
+                        await redis.set(`ai:automation:last:${cand.id}`, new Date().toISOString(), 'EX', COOLDOWN_HOURS * 3600);
                         await incrementAIAutomationSentCount(rule.id);
                         messagesSent++;
                         logs.push(`🚀 Mensaje enviado exitosamente.`);
@@ -295,17 +298,23 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
     const customPrompt = (await redis.get('bot_ia_prompt')) || '';
 
     for (const cand of incomplete) {
+        // Nivel 9/10: Salida Automática (Opt-out)
+        if (cand.proactive_opt_out) {
+            continue;
+        }
+
         const tUser = new Date(cand.lastUserMessageAt || 0).getTime();
         const tBot = new Date(cand.lastBotMessageAt || 0).getTime();
         const lastMsgAt = new Date(Math.max(tUser, tBot));
         const hoursInactive = (now - lastMsgAt) / (1000 * 60 * 60);
 
         let level = 0;
-        if (hoursInactive >= 72) level = 72;
+        if (hoursInactive >= 168) level = 168; // Level 4: 7 Days
+        else if (hoursInactive >= 72) level = 72;
         else if (hoursInactive >= 48) level = 48;
         else if (hoursInactive >= 24) level = 24;
 
-        const sessionKey = `proactive:${cand.id}:${level}:${cand.lastUserMessageAt} `;
+        const sessionKey = `proactive:${cand.id}:${level}:${cand.lastUserMessageAt}`;
         const alreadySent = await redis.get(sessionKey);
 
         if (alreadySent) {
@@ -316,15 +325,30 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
             continue;
         }
 
-        logs.push(`🎯[PROACTIVE] Candidato ${cand.nombre} CALIFICA.Nivel ${level} h(${Math.floor(hoursInactive)}h inactivo).`);
+        logs.push(`🎯[PROACTIVE] Candidato ${cand.nombre} CALIFICA. Nivel ${level}h (${Math.floor(hoursInactive)}h inactivo).`);
 
         // Centralized Gold Audit
         const { missingLabels, dnaLines } = auditProfile(cand, customFields);
         const prioritizedMissing = missingLabels.slice(0, 1);
 
+        // Nivel 9/10: Memoria Contextual
+        let messageHistory = '';
+        try {
+            const history = await getMessages(cand.id);
+            if (history && history.length > 0) {
+                const lastTwo = history.slice(-2);
+                messageHistory = lastTwo.map(m => `${m.from === 'bot' ? 'Brenda' : 'Candidato'}: ${m.content}`).join('\n');
+            }
+        } catch (e) {
+            console.warn(`⚠️ Error context memory for ${cand.nombre}:`, e.message);
+        }
+
         const prompt = `
 [DNA DEL CANDIDATO]:
 ${dnaLines}
+
+[MEMORIA DE CONVERSACIÓN RECIENTE]:
+${messageHistory || 'No hay mensajes previos.'}
 
 [REGLAS DE PERSONALIDAD]:
 "${customPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic IA, un reclutador útil, humano y proactivo.'}"
@@ -335,9 +359,11 @@ ${dnaLines}
 3. PROHIBICIÓN TOTAL DE ASTERISCOS: No uses asteriscos(*) ni guiones(-) en ninguna parte del mensaje.
 4. LISTA CON CHECKS: Si mencionas opciones(como categorías), usa SOLO el check verde: ✅
    ${categories.length > 0 ? `[CATEGORÍAS]:\n${categories.slice(0, 5).map(c => `✅ ${c}`).join('\n')}` : ''}
+5. DETECCIÓN DE INTERÉS: Si en la[MEMORIA DE CONVERSACIÓN RECIENTE] el candidato indica que "ya no le interesa", responde ÚNICAMENTE con la palabra "ABORTAR_SEGUIMIENTO".
 
 [ESTRUCTURA DEL MENSAJE]:
 - Saludo corto con su nombre.
+- Menciona brevemente algo de lo último que hablaron si es relevante (Personalidad humana).
 - Pregunta directa por el dato faltante.
 - Despedida amigable de 1 palabra.
 
@@ -356,6 +382,14 @@ Responde ÚNICAMENTE con el mensaje de texto para WhatsApp(máximo 150 caractere
                 candidateId: cand.id,
                 action: 'proactive_inference'
             });
+
+            // Nivel 9/10: Salida Automática
+            if (text.includes('ABORTAR_SEGUIMIENTO')) {
+                logs.push(`🛑[PROACTIVE] Candidato ${cand.nombre} ya no está interesado. Abortando y marcando opt-out.`);
+                const { updateCandidate } = await import('./storage.js');
+                await updateCandidate(cand.id, { proactive_opt_out: true });
+                continue;
+            }
 
             // --- 🧪 FINAL ANTI-ASTERISK FILTER ---
             text = text.replace(/\*/g, '');
