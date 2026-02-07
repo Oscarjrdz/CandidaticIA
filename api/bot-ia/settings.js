@@ -83,17 +83,33 @@ export default async function handler(req, res) {
 
                     // Scan full base (0, -1) to get real funnel metrics
                     const result = await getCandidates(2000, 0); // Large enough for now
-                    const list = result.candidates || [];
+                    let list = result.candidates || [];
+
+                    // FALLBACK: If standard fetch is empty, try direct key scan (Nivel 9/10 Recovery)
+                    if (list.length === 0) {
+                        const allKeys = await redis.keys('candidate:*');
+                        if (allKeys.length > 0) {
+                            const pipeline = redis.pipeline();
+                            allKeys.slice(0, 1000).forEach(k => pipeline.get(k));
+                            const results = await pipeline.exec();
+                            list = results
+                                .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
+                                .filter(Boolean);
+                            debugInfo = `Atomic scan recovered ${list.length} records.`;
+                        } else {
+                            debugInfo = "No 'candidate:*' keys found in Redis.";
+                        }
+                    }
 
                     pendingCount = list.filter(c => !isProfileComplete(c, customFields)).length;
                     completeCount = list.filter(c => isProfileComplete(c, customFields)).length;
 
-                    if (list.length === 0 && result.total > 0) {
-                        debugInfo = `Empty list but total is ${result.total}`;
+                    if (list.length > 0 && !debugInfo) {
+                        debugInfo = `Calculated from ${list.length} candidates.`;
                     }
                 } catch (e) {
                     console.warn('⚠️ [Stats] Error calculating funnel counts:', e.message);
-                    debugInfo = e.message;
+                    debugInfo = `ERR: ${e.message}`;
                 }
 
                 stats = {
@@ -102,6 +118,7 @@ export default async function handler(req, res) {
                     totalRecovered: parseInt(totalRecovered),
                     pending: pendingCount,
                     complete: completeCount,
+                    _atomic_recovery: !!(debugInfo && debugInfo.includes('recovered')),
                     _debug: debugInfo
                 };
             } catch (statsError) {
