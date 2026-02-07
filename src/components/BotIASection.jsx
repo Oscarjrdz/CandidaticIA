@@ -384,28 +384,28 @@ const BotIASection = ({ showToast }) => {
                                 </button>
                             </div>
 
-                            <div className="relative pt-8 pb-4 min-h-[140px] flex items-start overflow-x-auto no-scrollbar scroll-smooth">
+                            <div className="relative pt-10 pb-4 min-h-[150px] flex items-start overflow-x-auto no-scrollbar scroll-smooth">
                                 {/* Horizontal Line */}
                                 <div className="absolute top-[13px] left-0 right-0 h-0.5 bg-gray-100 dark:bg-gray-800"></div>
 
-                                <div className="flex w-full justify-between items-start px-8 gap-6 md:gap-12">
+                                <div className="flex w-full justify-between items-start px-12 gap-8 md:gap-16">
                                     {inactiveStages.map((stage, idx) => (
-                                        <div key={idx} className="relative flex flex-col items-center min-w-[140px] group transition-all">
-                                            {/* Dot */}
-                                            <div className={`absolute -top-[23px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-800 shadow-sm z-10 
+                                        <div key={idx} className="relative flex flex-col items-center min-w-[150px] group transition-all">
+                                            {/* Dot with Ring */}
+                                            <div className={`absolute -top-[23px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-800 shadow-sm z-10 transition-transform group-hover:scale-125
                                                 ${idx === 0 ? 'bg-blue-600' : idx === 1 ? 'bg-blue-500' : idx === 2 ? 'bg-indigo-500' : 'bg-slate-500'}`}
                                             ></div>
 
-                                            {/* Delete Button (Hover Only) */}
+                                            {/* Delete Button (Refined Position) */}
                                             <button
                                                 onClick={() => setInactiveStages(inactiveStages.filter((_, i) => i !== idx))}
-                                                className="absolute -top-[48px] opacity-0 group-hover:opacity-100 transition-opacity bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 p-1 rounded-full text-[10px] border border-red-200 dark:border-red-800 z-20"
+                                                className="absolute -top-[55px] opacity-0 group-hover:opacity-100 transition-all hover:scale-110 bg-red-50 dark:bg-red-900/20 text-red-500 p-1 rounded-full text-[10px] border border-red-100 dark:border-red-800 z-20 shadow-sm"
                                             >
-                                                ✕
+                                                <Trash2 className="w-3 h-3" />
                                             </button>
 
-                                            <div className="flex flex-col items-center gap-1 w-full">
-                                                <div className="flex items-center justify-center gap-1 mb-1 bg-white dark:bg-gray-800 px-2 py-0.5 rounded-lg shadow-sm border border-gray-50 dark:border-gray-700">
+                                            <div className="flex flex-col items-center gap-1.5 w-full">
+                                                <div className="flex items-center justify-center gap-1 mb-1 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-2xl shadow-sm border border-gray-100/50 dark:border-gray-700">
                                                     <input
                                                         type="number"
                                                         value={stage.hours}
@@ -414,9 +414,9 @@ const BotIASection = ({ showToast }) => {
                                                             newStages[idx].hours = parseInt(e.target.value) || 0;
                                                             setInactiveStages(newStages);
                                                         }}
-                                                        className="w-10 bg-transparent border-none text-sm font-black text-gray-900 dark:text-white p-0 focus:ring-0 text-right uppercase tracking-tighter"
+                                                        className="w-10 bg-transparent border-none text-base font-black text-gray-900 dark:text-white p-0 focus:ring-0 text-right uppercase tracking-tighter"
                                                     />
-                                                    <span className="text-sm font-black text-blue-600 dark:text-blue-400">h</span>
+                                                    <span className="text-base font-black text-blue-600 dark:text-blue-400">h</span>
                                                 </div>
                                                 <textarea
                                                     value={stage.label}
@@ -426,7 +426,7 @@ const BotIASection = ({ showToast }) => {
                                                         newStages[idx].label = e.target.value;
                                                         setInactiveStages(newStages);
                                                     }}
-                                                    className="w-full bg-transparent border-none text-[11px] font-medium text-gray-600 dark:text-gray-300 leading-normal italic text-center p-1 focus:ring-0 resize-none overflow-hidden hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-colors border-transparent hover:border-gray-100 dark:hover:border-gray-700 border"
+                                                    className="w-full bg-transparent border-none text-[12px] font-bold text-gray-600 dark:text-gray-300 leading-tight italic text-center p-1 focus:ring-0 resize-none overflow-hidden rounded-xl transition-all hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
                                                     placeholder="Etiqueta..."
                                                 />
                                             </div>
