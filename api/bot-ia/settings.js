@@ -35,7 +35,10 @@ export default async function handler(req, res) {
 
             // 3. Bot Status
             if (isActive !== undefined) {
-                await redis.set('bot_ia_active', String(isActive));
+                const statusStr = String(isActive);
+                await redis.set('bot_ia_active', statusStr);
+                // Synchronize with the automation engine's preferred key
+                await redis.set('bot_proactive_enabled', statusStr === 'true' ? 'true' : 'false');
             }
 
             return res.status(200).json({ success: true });
