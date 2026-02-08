@@ -320,7 +320,7 @@ const BotIASection = ({ showToast }) => {
                                 Hook de Brenda 👩‍💼🎯
                             </label>
                             <textarea
-                                className="w-full h-[112px] p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none font-medium leading-relaxed"
+                                className="w-full h-[132px] p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none font-medium leading-relaxed"
                                 value={proactivePrompt}
                                 onChange={(e) => setProactivePrompt(e.target.value)}
                             />
