@@ -657,27 +657,19 @@ const CandidatesSection = ({ showToast }) => {
                                             </button>
                                         </td>
                                         <td className="py-0.5 px-2.5 text-center">
-                                            {/* Leveled Checkmarks (Separate Column) */}
+                                            {/* Cumulative Colored Checkmarks (Separate Column) */}
                                             {candidate.followUps > 0 && (
                                                 <div
-                                                    className="flex items-center justify-center -space-x-1 cursor-default select-none pointer-events-none"
+                                                    className="flex items-center justify-center gap-0.5 cursor-default select-none pointer-events-none"
                                                     title={`${candidate.followUps} seguimientos enviados`}
                                                 >
-                                                    {(() => {
-                                                        let colorClass = "text-blue-500";
-                                                        if (candidate.followUps === 2) colorClass = "text-purple-500";
-                                                        if (candidate.followUps >= 3) colorClass = "text-orange-500";
+                                                    <Check className="w-4 h-4 text-blue-500" strokeWidth={5} />
+                                                    {Number(candidate.followUps) >= 2 && <Check className="w-4 h-4 text-purple-500" strokeWidth={5} />}
+                                                    {Number(candidate.followUps) >= 3 && <Check className="w-4 h-4 text-orange-500" strokeWidth={5} />}
 
-                                                        return (
-                                                            <div className="flex items-center -space-x-2">
-                                                                <Check className={`w-3 h-3 ${colorClass}`} strokeWidth={4} />
-                                                                <Check className={`w-3 h-3 ${colorClass} -ml-2`} strokeWidth={4} />
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                    {candidate.followUps > 3 && (
+                                                    {Number(candidate.followUps) > 3 && (
                                                         <span className="text-[8px] font-black text-orange-600 dark:text-orange-400 ml-1">
-                                                            +{candidate.followUps - 3}
+                                                            +{Number(candidate.followUps) - 3}
                                                         </span>
                                                     )}
                                                 </div>
