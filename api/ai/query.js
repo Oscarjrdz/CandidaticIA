@@ -82,48 +82,40 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v2]
-Eres el Motor de Relevancia de Candidatic IA (Nivel Google/CTO). 
-Tu tarea es convertir una consulta en lenguaje natural en un JSON de búsqueda semántica.
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v3]
+Eres el Motor de Relevancia Hiper-Estricto de Candidatic IA. Tu tarea es convertir una consulta de lenguaje natural en un JSON de búsqueda técnica.
 
-[REGLAS DE RELEVANCIA]:
-1. INTENCIÓN SEMÁNTICA: Si el usuario busca un puesto, expande mentalmente a sinónimos. Ejemplo: "ventas" -> incluye keywords como "comercial", "ventas", "prospección", "atención al cliente".
-2. PRIORIDAD DE CAMPOS: 
-   - Nombres de personas -> 'nombreReal'.
-   - Ciudades -> 'municipio'.
-   - Puestos -> 'categoria'.
-3. DESAMBIGUACIÓN (CRÍTICO): Oscar es el reclutador. Si la búsqueda es "oscar", busca candidatos con ese nombre, NUNCA devuelvas al reclutador.
-4. KEYWORDS DE PERFIL: Usa 'keywords' para habilidades técnicas (Python, Excel), herramientas (Soldadura TIG) o rasgos psicológicos (responsable, puntual).
+[REGLAS DE FILTRADO]:
+1. INTENCIÓN SEMÁNTICA: Traduce plurales a singulares para filtros categóricos. Ejemplo: "mujeres" -> {"genero": "Mujer"}.
+2. RANGOS NUMÉRICOS (CRÍTICO): Si el usuario pide edades (ej: "20 a 30 años"), usa min y max. 
+   - Ejemplo: "de 20 a 30 años" -> {"edad": {"min": 20, "max": 30}}
+   - Ejemplo: "más de 30" -> {"edad": {"op": ">", "val": 30}}
+3. PRIORIDAD DE CAMPOS:
+   - "nombreReal": Nombres de personas.
+   - "genero": "Hombre" o "Mujer".
+   - "municipio": Ciudades/Ubicación.
+   - "categoria": Puestos/Roles.
+4. KEYWORDS: Solo para habilidades técnicas o términos que no encajen en filtros (ej: "excel", "responsable").
+
+[FORMATO DE SALIDA]:
+{
+  "filters": { 
+    "municipio": "Monterrey", 
+    "genero": "Mujer",
+    "edad": { "min": 20, "max": 30 } 
+  },
+  "keywords": ["ventas"],
+  "explanation": "Búsqueda de mujeres de Monterrey entre 20 y 30 años con interés en ventas."
+}
 
 [BASE DE DATOS]:
 ${allFields.map(f => `- ${f.value} (${f.label})`).join('\n')}
 
-{
-  "filters": { 
-    "municipio": "Monterrey", 
-    "edad": { "op": ">", "val": 30 } 
-  },
-  "keywords": ["React", "liderazgo", "frontend"],
-  "explanation": "Busco expertos de Monterrey con experiencia en liderazgo y desarrollo frontend."
-}
-
 Consulta del usuario: "${query}"
-
-[ESCALA DE RELEVANCIA]:
-- 100 pts: Coincidencia exacta en nombre o municipio.
-- 50 pts: Coincidencia en 'categoria' o 'keywords'.
-- 20 pts: Coincidencia en chat_summary o historial.
 `;
 
-        // Intentar varios modelos hasta que uno funcione (Prioridad Flash 2.0 por velocidad)
-        const modelsToTry = [
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-exp",
-            "gemini-1.5-flash",
-            "gemini-flash-latest",
-            "gemini-1.5-pro",
-            "gemini-pro"
-        ];
+        // Intentar varios modelos hasta que uno funcione
+        const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash"];
         let result;
         let successModel = '';
         let lastError = '';
@@ -133,7 +125,7 @@ Consulta del usuario: "${query}"
                 const model = genAI.getGenerativeModel({
                     model: mName,
                     generationConfig: {
-                        temperature: 0.1, // Baja temperatura para más consistencia en JSON
+                        temperature: 0.1,
                         response_mime_type: "application/json"
                     }
                 });
@@ -147,81 +139,34 @@ Consulta del usuario: "${query}"
         }
 
         if (!successModel) {
-            throw new Error(`Ningún modelo respondió(probados: ${modelsToTry.join(', ')}).Último error: ${lastError} `);
+            throw new Error(`Ningún modelo respondió. Último error: ${lastError}`);
         }
 
-        const response = await result.response;
-        const text = response.text();
-
-        // Limpiar el texto si Gemini devuelve markdown ```json ... ```
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error(`La IA no devolvió un JSON válido.Respuesta: ${text} `);
-        }
-
+        const aiResponseRaw = (await result.response).text();
+        const jsonMatch = aiResponseRaw.match(/\{[\s\S]*\}/);
         const aiResponse = JSON.parse(jsonMatch[0]);
 
-        // 3. Ejecutar la búsqueda en los datos reales (TODOS, incluyendo incompletos)
-        const { candidates } = await getCandidates(2000, 0, '', false); // false = INCLUDE incomplete/unlinked
+        // 3. Ejecutar la búsqueda en los datos reales (TODOS)
+        const { candidates } = await getCandidates(2000, 0, '', false);
 
-        // Función para calcular edad
-        // Función para normalizar strings (quitar acentos, minúsculas)
-        const normalizeString = (str) => {
-            if (!str) return '';
-            return String(str)
-                .toLowerCase()
-                .normalize("NFD")
-                .replace(/[\u0300-\u036f]/g, "")
-                .trim();
-        };
+        // --- HELPERS DE FILTRADO ---
+        const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-        // Función para calcular edad (Robusta)
         const calculateAge = (dob) => {
             if (!dob) return null;
             let birthDate = new Date(dob);
-
-            // Intentar parsear si la fecha estándar falló
             if (isNaN(birthDate.getTime())) {
                 const cleanDob = String(dob).toLowerCase().trim();
-
-                // 1. Formato "19 de 05 de 1983" o "19 de mayo de 1983"
                 const deRegex = /(\d{1,2})\s+de\s+([a-z0-9áéíóú]+)\s+de\s+(\d{4})/;
                 const match = cleanDob.match(deRegex);
-
                 if (match) {
                     const day = parseInt(match[1]);
-                    let month = match[2];
-                    const year = parseInt(match[3]);
-                    let monthIndex = -1;
-
-                    // Si mes es número
-                    if (!isNaN(month)) {
-                        monthIndex = parseInt(month) - 1;
-                    } else {
-                        // Si mes es texto
-                        const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-                        monthIndex = months.findIndex(m => m.startsWith(month.slice(0, 3)));
-                    }
-
-                    if (monthIndex >= 0) {
-                        birthDate = new Date(year, monthIndex, day);
-                    }
-                }
-
-                // 2. Fallback a DD/MM/YYYY o DD-MM-YYYY
-                if (isNaN(birthDate.getTime())) {
-                    const parts = cleanDob.split(/[/-]/);
-                    if (parts.length === 3) {
-                        // Asumimos DD-MM-YYYY si el año está al final
-                        if (parts[2].length === 4) {
-                            birthDate = new Date(`${parts[2]} -${parts[1]} -${parts[0]} `);
-                        }
-                    }
+                    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                    const monthIndex = months.findIndex(m => m.startsWith(match[2].slice(0, 3)));
+                    if (monthIndex >= 0) birthDate = new Date(parseInt(match[3]), monthIndex, day);
                 }
             }
-
             if (isNaN(birthDate.getTime())) return null;
-
             const today = new Date();
             let age = today.getFullYear() - birthDate.getFullYear();
             const m = today.getMonth() - birthDate.getMonth();
@@ -229,70 +174,96 @@ Consulta del usuario: "${query}"
             return age;
         };
 
-        let filtered = candidates;
+        const matchesCriteria = (candidateVal, criteria) => {
+            if (criteria === undefined || criteria === null) return true;
 
-        filtered = filtered.map(candidate => {
+            // 1. Rango (min/max)
+            if (criteria.min !== undefined || criteria.max !== undefined) {
+                const val = Number(candidateVal);
+                if (isNaN(val)) return false;
+                if (criteria.min !== undefined && val < criteria.min) return false;
+                if (criteria.max !== undefined && val > criteria.max) return false;
+                return true;
+            }
+
+            // 2. Operador (op/val)
+            if (criteria.op && criteria.val !== undefined) {
+                const val = Number(candidateVal);
+                const target = Number(criteria.val);
+                if (isNaN(val) || isNaN(target)) return false;
+                switch (criteria.op) {
+                    case '>': return val > target;
+                    case '<': return val < target;
+                    case '>=': return val >= target;
+                    case '<=': return val <= target;
+                    case '=': return val === target;
+                    default: return false;
+                }
+            }
+
+            // 3. String match (Simple)
+            const cStr = normalize(candidateVal);
+            const sStr = normalize(criteria.val || criteria);
+            return cStr.includes(sStr);
+        };
+
+        // --- SCORING ENGINE (TITAN v3) ---
+        const activeFilterKeys = Object.keys(aiResponse.filters || {});
+
+        let filtered = candidates.map(candidate => {
             let score = 0;
+            let matchesCount = 0;
+            const candidateAge = calculateAge(candidate.fechaNacimiento);
 
-            // 1. Puntuar por Filtros de IA
-            if (aiResponse.filters) {
-                Object.entries(aiResponse.filters).forEach(([key, criteria]) => {
-                    const searchStr = normalizeString(criteria.val || criteria);
-                    if (!searchStr) return;
+            // 1. Scoring de Filtros Estrictos
+            activeFilterKeys.forEach(key => {
+                const criteria = aiResponse.filters[key];
+                const val = (key === 'edad') ? candidateAge : candidate[key];
 
-                    let candidateVal = candidate[key];
-                    if (key === 'edad') candidateVal = calculateAge(candidate.fechaNacimiento);
+                if (matchesCriteria(val, criteria)) {
+                    matchesCount++;
+                    // Base points for matching a key
+                    score += (key === 'nombreReal' || key === 'municipio') ? 100 : 50;
+                }
+            });
 
-                    const normalizedCandidateVal = normalizeString(candidateVal);
-                    if (normalizedCandidateVal.includes(searchStr)) {
-                        score += (key === 'nombreReal' || key === 'municipio') ? 100 : 50;
-                    }
-                });
+            // 2. Bonus Exponencial por Multi-Filtro (El "AND" effect)
+            if (matchesCount > 1) {
+                score += Math.pow(matchesCount, 3) * 10; // 2 matches: +80, 3 matches: +270, 4 matches: +640
             }
 
-            // 2. Puntuar por Keywords (Deep Relevance)
+            // 3. Keywords Relevance
             if (aiResponse.keywords && aiResponse.keywords.length > 0) {
-                const keywordsLower = aiResponse.keywords.map(kw => kw.toLowerCase());
-                const metadataValues = Object.values(candidate).map(v => String(v).toLowerCase());
+                const metadata = normalize(Object.values(candidate).join(' '));
+                const summary = normalize(candidate.chat_summary || '');
 
-                keywordsLower.forEach(kw => {
-                    // Match in metadata
-                    if (metadataValues.some(val => val.includes(kw))) score += 40;
-                    // Match in summary
-                    if (candidate.chat_summary && candidate.chat_summary.toLowerCase().includes(kw)) score += 30;
+                aiResponse.keywords.forEach(kw => {
+                    const normalizedKw = normalize(kw);
+                    if (metadata.includes(normalizedKw)) score += 30;
+                    if (summary.includes(normalizedKw)) score += 20;
                 });
             }
 
-            return { ...candidate, _relevance: score, edad: calculateAge(candidate.fechaNacimiento) };
+            return { ...candidate, _relevance: score, edad: candidateAge };
         });
 
-        // 3. Optimización Titan: Deep Message Scan (Solo si el score es bajo y hay pocos resultados)
-        // Para evitar lentitud, solo escaneamos mensajes si no hay matches altos
-        const lowScoreCandidates = filtered.filter(c => c._relevance < 30).slice(0, 20);
-        for (const candidate of lowScoreCandidates) {
-            const messages = await getMessages(candidate.id, 20);
-            const chatText = messages.map(m => m.content).join(' ').toLowerCase();
-
-            if (aiResponse.keywords) {
-                aiResponse.keywords.forEach(kw => {
-                    if (chatText.includes(kw.toLowerCase())) {
-                        const cIdx = filtered.findIndex(f => f.id === candidate.id);
-                        if (cIdx !== -1) filtered[cIdx]._relevance += 25;
-                    }
-                });
-            }
+        // 4. Filtrado Final (Threshold)
+        // Si hay filtros específicos, matamos a los que no tienen NINGÚN match de filtro
+        if (activeFilterKeys.length > 0) {
+            filtered = filtered.filter(c => c._relevance >= 50);
+        } else {
+            // Si solo hay keywords o es genérico, pedimos algo de relevancia
+            filtered = filtered.filter(c => c._relevance > 0);
         }
 
-        // 4. Ordenar por Relevancia (Google Style)
-        filtered = filtered
-            .filter(c => c._relevance > 0 || !aiResponse.filters) // Keep if matches or if query was too broad
-            .sort((a, b) => b._relevance - a._relevance);
+        // 5. Ordenar y Responder
+        filtered = filtered.sort((a, b) => b._relevance - a._relevance);
 
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 2.1 (Google Search Edition)",
-            candidates: filtered.slice(0, 100), // Return top 100 for UX
+            version: "Titan 3.0 (Strict Relevance)",
+            candidates: filtered.slice(0, 100),
             ai: aiResponse
         });
 
