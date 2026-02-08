@@ -207,32 +207,44 @@ Consulta del usuario: "${query}"
             return cStr.includes(sStr);
         };
 
-        // --- SCORING ENGINE (TITAN v3) ---
+        // --- SCORING ENGINE (TITAN v3.5 - Strict Edition) ---
         const activeFilterKeys = Object.keys(aiResponse.filters || {});
 
-        let filtered = candidates.map(candidate => {
+        // Final results collection
+        let filtered = candidates.reduce((acc, candidate) => {
             let score = 0;
             let matchesCount = 0;
+            let failedStrict = false;
             const candidateAge = calculateAge(candidate.fechaNacimiento);
 
-            // 1. Scoring de Filtros Estrictos
+            // 1. Mandatory Categorical Filtering (Strict Match)
             activeFilterKeys.forEach(key => {
                 const criteria = aiResponse.filters[key];
                 const val = (key === 'edad') ? candidateAge : candidate[key];
 
-                if (matchesCriteria(val, criteria)) {
+                // Check matchesCriteria
+                const hasMatch = matchesCriteria(val, criteria);
+
+                if (hasMatch) {
                     matchesCount++;
-                    // Base points for matching a key
                     score += (key === 'nombreReal' || key === 'municipio') ? 100 : 50;
+                } else {
+                    // STRICT FAIL: If it's a primary filter, we KILL the candidate
+                    if (['genero', 'edad', 'municipio'].includes(key)) {
+                        failedStrict = true;
+                    }
                 }
             });
 
+            // If it failed any strict filter, discard immediately
+            if (failedStrict) return acc;
+
             // 2. Bonus Exponencial por Multi-Filtro (El "AND" effect)
             if (matchesCount > 1) {
-                score += Math.pow(matchesCount, 3) * 10; // 2 matches: +80, 3 matches: +270, 4 matches: +640
+                score += Math.pow(matchesCount, 3) * 10;
             }
 
-            // 3. Keywords Relevance
+            // 3. Keywords Relevance (Additive)
             if (aiResponse.keywords && aiResponse.keywords.length > 0) {
                 const metadata = normalize(Object.values(candidate).join(' '));
                 const summary = normalize(candidate.chat_summary || '');
@@ -244,26 +256,24 @@ Consulta del usuario: "${query}"
                 });
             }
 
-            return { ...candidate, _relevance: score, edad: candidateAge };
-        });
+            // Push to results if any match or relevance
+            if (score > 0 || activeFilterKeys.length === 0) {
+                acc.push({ ...candidate, _relevance: score, edad: candidateAge });
+            }
 
-        // 4. Filtrado Final (Threshold)
-        // Si hay filtros específicos, matamos a los que no tienen NINGÚN match de filtro
-        if (activeFilterKeys.length > 0) {
-            filtered = filtered.filter(c => c._relevance >= 50);
-        } else {
-            // Si solo hay keywords o es genérico, pedimos algo de relevancia
-            filtered = filtered.filter(c => c._relevance > 0);
-        }
+            return acc;
+        }, []);
 
-        // 5. Ordenar y Responder
+        // 5. Ordenar y Responder (Expanded Limit to 500)
         filtered = filtered.sort((a, b) => b._relevance - a._relevance);
+
+        const limit = parseInt(req.query.limit || 500);
 
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 3.0 (Strict Relevance)",
-            candidates: filtered.slice(0, 100),
+            version: "Titan 3.5 (Strict Filtering)",
+            candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
 
