@@ -421,18 +421,27 @@ const BotIASection = ({ showToast }) => {
                                 </button>
                             </div>
 
-                            <div className="flex flex-row gap-3 overflow-x-auto pb-3 custom-scrollbar">
+                            <div className="flex flex-row gap-3 overflow-x-auto pb-2 custom-scrollbar">
                                 {inactiveStages.map((stage, idx) => (
-                                    <div key={idx} className="group relative flex-shrink-0 w-44 bg-blue-50/50 dark:bg-blue-900/20 p-4 rounded-3xl border border-blue-100/50 dark:border-blue-800/30 flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] hover:bg-blue-50 dark:hover:bg-blue-900/30">
-                                        <div className="flex flex-col items-center mb-2">
-                                            <div className="flex items-center justify-center gap-1 bg-white dark:bg-gray-800 px-3 py-1 rounded-xl shadow-sm border border-blue-100/50 dark:border-blue-700">
+                                    <div key={idx} className="group relative flex-shrink-0 w-44 bg-blue-50/40 dark:bg-blue-900/10 p-3 rounded-2xl border border-blue-100/30 dark:border-blue-800/20 flex flex-col items-center justify-center text-center transition-all hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                                        <div className="flex flex-col items-center mb-1.5 w-full">
+                                            {/* Step Name (Label) - Dynamic Sync */}
+                                            <input
+                                                type="text"
+                                                value={stage.label || ''}
+                                                onChange={(e) => updateStage(idx, 'label', e.target.value)}
+                                                className="w-full bg-transparent text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 focus:outline-none placeholder-blue-300 text-center mb-1"
+                                                placeholder={`PASO ${idx + 1}`}
+                                            />
+
+                                            <div className="flex items-center justify-center gap-1 bg-white dark:bg-gray-800 px-2 py-0.5 rounded-lg shadow-sm border border-blue-50 dark:border-blue-700">
                                                 <input
                                                     type="number"
                                                     value={stage.hours}
                                                     onChange={(e) => updateStage(idx, 'hours', parseInt(e.target.value))}
-                                                    className="w-10 bg-transparent text-center text-sm font-black text-blue-700 dark:text-blue-400 focus:outline-none"
+                                                    className="w-8 bg-transparent text-center text-[10px] font-black text-gray-700 dark:text-gray-300 focus:outline-none"
                                                 />
-                                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Hrs</span>
+                                                <span className="text-[7px] font-black text-gray-400 uppercase tracking-widest">Hrs</span>
                                             </div>
                                         </div>
 
@@ -440,17 +449,17 @@ const BotIASection = ({ showToast }) => {
                                             <textarea
                                                 value={stage.message}
                                                 onChange={(e) => updateStage(idx, 'message', e.target.value)}
-                                                className="w-full bg-transparent text-[10px] font-bold text-gray-700 dark:text-gray-300 focus:outline-none placeholder-gray-400 text-center resize-none leading-tight"
+                                                className="w-full bg-transparent text-[9px] font-bold text-gray-600 dark:text-gray-400 focus:outline-none placeholder-gray-300 text-center resize-none leading-none"
                                                 rows={2}
-                                                placeholder="Mensaje de seguimiento..."
+                                                placeholder="Mensaje..."
                                             />
                                         </div>
 
                                         <button
                                             onClick={() => removeStage(idx)}
-                                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-2 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-all scale-75"
+                                            className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 p-1.5 bg-red-500 text-white rounded-lg shadow-lg hover:bg-red-600 transition-all scale-75"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 ))}
