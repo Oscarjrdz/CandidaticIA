@@ -203,6 +203,7 @@ const BotIASection = ({ showToast }) => {
                     title={<span className="text-gray-900 dark:text-white font-bold text-sm">Cerebro del Asistente</span>}
                     icon={SettingsIcon}
                     className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
+                    headerClassName="h-20"
                 >
                     <div className="space-y-4">
                         <div className="space-y-1.5">
@@ -249,73 +250,71 @@ const BotIASection = ({ showToast }) => {
 
                 {/* 2. Automated Follow-up: Styled Denstiy */}
                 <Card
-                    title={
-                        <div className="flex items-center justify-between w-full pr-1">
-                            <span className="text-gray-900 dark:text-white font-bold text-sm">Seguimiento Automático</span>
-
-                            <div className="flex items-center gap-1">
-                                {/* Operative Pill: Hours */}
-                                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90">
-                                    <div className="flex flex-col min-w-[42px]">
-                                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Horario</span>
-                                        <div className="flex items-center gap-1 mt-0.5">
-                                            <input
-                                                type="text"
-                                                inputMode="numeric"
-                                                value={operativeConfig.startHour}
-                                                onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value.replace(/\D/g, '')) || 0 })}
-                                                className="w-4 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
-                                            />
-                                            <span className="text-[8px] text-gray-400 font-bold">-</span>
-                                            <input
-                                                type="text"
-                                                inputMode="numeric"
-                                                value={operativeConfig.endHour}
-                                                onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value.replace(/\D/g, '')) || 0 })}
-                                                className="w-4 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Limit Pill */}
-                                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90">
-                                    <div className="flex flex-col">
-                                        <span className="text-[8px] font-black uppercase tracking-widest text-red-400 leading-none">Límite</span>
+                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Seguimiento Automático</span>}
+                    actions={
+                        <div className="flex items-center gap-1">
+                            {/* Operative Pill: Hours */}
+                            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90 transition-all hover:border-blue-200">
+                                <div className="flex flex-col min-w-[42px]">
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Horario</span>
+                                    <div className="flex items-center gap-1 mt-0.5">
                                         <input
                                             type="text"
                                             inputMode="numeric"
-                                            value={operativeConfig.dailyLimit}
-                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value.replace(/\D/g, '')) || 0 })}
-                                            className="w-10 bg-transparent text-[10px] font-bold text-red-600 dark:text-red-400 focus:outline-none p-0 mt-0.5 font-black text-center"
+                                            value={operativeConfig.startHour}
+                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value.replace(/\D/g, '')) || 0 })}
+                                            className="w-4 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
+                                        />
+                                        <span className="text-[8px] text-gray-400 font-bold">-</span>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={operativeConfig.endHour}
+                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value.replace(/\D/g, '')) || 0 })}
+                                            className="w-4 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
                                         />
                                     </div>
                                 </div>
+                            </div>
 
-                                {/* Toggle Pill */}
-                                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90">
-                                    <div className="flex flex-col">
-                                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Seguimiento</span>
-                                        <span className={`text-[10px] font-bold ${proactiveEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
-                                            {proactiveEnabled ? 'IA AUTO' : 'OFF'}
-                                        </span>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={toggleProactive}
-                                        className={`
-                                            relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                                            ${proactiveEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
-                                        `}
-                                    >
-                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${proactiveEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                                    </button>
+                            {/* Limit Pill */}
+                            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90 transition-all hover:border-red-200">
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-red-400 leading-none">Límite</span>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        value={operativeConfig.dailyLimit}
+                                        onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value.replace(/\D/g, '')) || 0 })}
+                                        className="w-10 bg-transparent text-[10px] font-bold text-red-600 dark:text-red-400 focus:outline-none p-0 mt-0.5 font-black text-center"
+                                    />
                                 </div>
+                            </div>
+
+                            {/* Toggle Pill */}
+                            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90">
+                                <div className="flex flex-col">
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Seguimiento</span>
+                                    <span className={`text-[10px] font-bold ${proactiveEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
+                                        {proactiveEnabled ? 'IA AUTO' : 'OFF'}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={toggleProactive}
+                                    className={`
+                                        relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
+                                        ${proactiveEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
+                                    `}
+                                >
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${proactiveEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                </button>
                             </div>
                         </div>
                     }
                     icon={Sparkles}
                     className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
+                    headerClassName="h-20"
                 >
                     <div className="space-y-4">
                         {/* Hook: Refined */}
