@@ -143,20 +143,36 @@ const BotIASection = ({ showToast }) => {
         }
     };
 
+    const addStage = () => {
+        const newStages = [...inactiveStages, { hours: 24, message: '¡Hola! Sigues interesado?' }];
+        setInactiveStages(newStages);
+    };
+
+    const removeStage = (index) => {
+        const newStages = inactiveStages.filter((_, i) => i !== index);
+        setInactiveStages(newStages);
+    };
+
+    const updateStage = (index, field, value) => {
+        const newStages = [...inactiveStages];
+        newStages[index] = { ...newStages[index], [field]: value };
+        setInactiveStages(newStages);
+    };
+
     return (
         <div className="space-y-4 w-full pb-8 animate-in fade-in duration-700">
             {/* Master Bot Controller: Compact Native */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center space-x-4">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${isActive ? 'bg-blue-600 shadow-lg shadow-blue-500/20' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${isActive ? 'bg-emerald-600 shadow-lg shadow-emerald-500/20' : 'bg-gray-100 dark:bg-gray-700'}`}>
                         <Bot className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">Estado del Bot IA</h2>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">BOT IA</h2>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
-                            <p className={`text-[10px] font-black tracking-widest uppercase ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-                                {isActive ? 'Motor Activo' : 'Standby'}
+                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                            <p className={`text-[10px] font-black tracking-widest uppercase ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}`}>
+                                {isActive ? 'MOTOR ACTIVO' : 'STANDBY'}
                             </p>
                         </div>
                     </div>
@@ -164,16 +180,16 @@ const BotIASection = ({ showToast }) => {
 
                 <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm">
                     <div className="flex flex-col">
-                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Candidatic IA</span>
-                        <span className={`text-[10px] font-bold ${isActive ? 'text-blue-600' : 'text-gray-400'}`}>
-                            {isActive ? 'ACTIVO' : 'OFF'}
+                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Candidatic</span>
+                        <span className={`text-[10px] font-bold ${isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            {isActive ? 'ACTIVADO' : 'DESACTIVADO'}
                         </span>
                     </div>
                     <button
                         onClick={toggleActive}
                         className={`
                             relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                            ${isActive ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
+                            ${isActive ? 'bg-emerald-600' : 'bg-gray-300 dark:bg-gray-600'}
                         `}
                     >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -239,7 +255,7 @@ const BotIASection = ({ showToast }) => {
 
                             <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90">
                                 <div className="flex flex-col">
-                                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Servicio</span>
+                                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Seguimiento</span>
                                     <span className={`text-[10px] font-bold ${proactiveEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
                                         {proactiveEnabled ? 'IA AUTO' : 'OFF'}
                                     </span>
@@ -297,32 +313,86 @@ const BotIASection = ({ showToast }) => {
                         <div className="bg-gray-50 dark:bg-gray-900/40 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Horario Op.</span>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Horario de operación</span>
                                     <div className="flex items-center gap-2">
                                         <input
                                             type="number"
                                             value={operativeConfig.startHour}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) })}
-                                            className="w-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-black p-1.5 focus:ring-blue-500 text-center"
+                                            className="w-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-black p-1.5 focus:ring-blue-500 text-center"
                                         />
                                         <span className="text-gray-400 font-bold">-</span>
                                         <input
                                             type="number"
                                             value={operativeConfig.endHour}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) })}
-                                            className="w-10 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-black p-1.5 focus:ring-blue-500 text-center"
+                                            className="w-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-black p-1.5 focus:ring-blue-500 text-center"
                                         />
                                     </div>
                                 </div>
                                 <div className="space-y-1">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-red-500/70 block mb-1">Límite Día</span>
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-red-500/70 block mb-1">Límite de mensajes diarios</span>
                                     <input
                                         type="number"
                                         value={operativeConfig.dailyLimit}
                                         onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) })}
-                                        className="w-full bg-white dark:bg-gray-800 border border-red-500/20 rounded-lg text-xs font-black text-red-600 p-1.5 focus:ring-red-500"
+                                        className="w-20 bg-white dark:bg-gray-800 border border-red-500/20 rounded-lg text-xs font-black text-red-600 p-1.5 focus:ring-red-500"
                                     />
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Protocol Stages: Modern Clean List */}
+                        <div className="space-y-3 pt-2">
+                            <div className="flex items-center justify-between px-1">
+                                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+                                    Protocolos de Reactivación 📑
+                                </label>
+                                <button
+                                    onClick={addStage}
+                                    className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 hover:bg-blue-100 transition-colors"
+                                    title="Añadir seguimiento"
+                                >
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-2">
+                                {inactiveStages.map((stage, idx) => (
+                                    <div key={idx} className="group flex items-center gap-3 bg-white dark:bg-gray-800/60 p-3 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm transition-all hover:border-blue-200 dark:hover:border-blue-900/30">
+                                        <div className="flex flex-col items-center justify-center bg-blue-50 dark:bg-blue-900/30 w-12 h-12 rounded-xl border border-blue-100 dark:border-blue-800/50">
+                                            <input
+                                                type="number"
+                                                value={stage.hours}
+                                                onChange={(e) => updateStage(idx, 'hours', parseInt(e.target.value))}
+                                                className="w-full bg-transparent text-center text-xs font-black text-blue-700 dark:text-blue-400 focus:outline-none"
+                                            />
+                                            <span className="text-[7px] font-black text-blue-600/60 uppercase -mt-1 tracking-tighter">Horas</span>
+                                        </div>
+
+                                        <div className="flex-1">
+                                            <input
+                                                type="text"
+                                                value={stage.message}
+                                                onChange={(e) => updateStage(idx, 'message', e.target.value)}
+                                                className="w-full bg-transparent text-[11px] font-bold text-gray-700 dark:text-gray-300 focus:outline-none placeholder-gray-400"
+                                                placeholder="Mensaje de seguimiento..."
+                                            />
+                                        </div>
+
+                                        <button
+                                            onClick={() => removeStage(idx)}
+                                            className="opacity-0 group-hover:opacity-100 p-2 rounded-xl text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                                {inactiveStages.length === 0 && (
+                                    <div className="text-center py-4 rounded-3xl border-2 border-dashed border-gray-100 dark:border-gray-800">
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sin seguimientos configurados</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
