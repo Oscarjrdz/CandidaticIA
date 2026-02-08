@@ -7,7 +7,7 @@ export default async function handler(req, res) {
             // Default fields that always exist
             const DEFAULT_FIELDS = [
                 { value: 'nombreReal', label: 'Nombre Real' },
-                { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
+                { value: 'fechaNacimiento', label: 'Nacimiento' },
                 { value: 'edad', label: 'Edad' },
                 { value: 'genero', label: 'Género' },
                 { value: 'municipio', label: 'Municipio' },

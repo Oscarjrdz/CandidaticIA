@@ -545,9 +545,9 @@ const CandidatesSection = ({ showToast }) => {
                                             <MessageCircle className="w-4 h-4 opacity-50" />
                                         </div>
                                     </th>
-                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
+                                    <th className="text-center py-1 px-1 font-black text-gray-400 dark:text-gray-500 w-10">
                                         <div className="flex justify-center">
-                                            <Zap className="w-4 h-4 opacity-50 text-blue-500" />
+                                            <span className="text-[8px] uppercase tracking-tighter">Seg.</span>
                                         </div>
                                     </th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10"></th>
