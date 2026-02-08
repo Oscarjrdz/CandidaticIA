@@ -151,7 +151,7 @@ const BotIASection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto">
+        <div className="space-y-6 max-w-7xl mx-auto pb-16">
             {/* Header Status Card - Expanded */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 px-6 flex flex-col md:flex-row items-center justify-between gap-2">
                 <div className="flex items-center space-x-3">
@@ -392,7 +392,7 @@ const BotIASection = ({ showToast }) => {
                 </Card>
             </div>
 
-            <div className="flex justify-end pt-1">
+            <div className="flex justify-end mt-8">
                 <Button
                     onClick={handleSave}
                     loading={loading}
