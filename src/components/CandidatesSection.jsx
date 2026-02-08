@@ -540,9 +540,14 @@ const CandidatesSection = ({ showToast }) => {
                                     ))}
 
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
-                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
+                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
                                         <div className="flex justify-center">
                                             <MessageCircle className="w-4 h-4 opacity-50" />
+                                        </div>
+                                    </th>
+                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
+                                        <div className="flex justify-center">
+                                            <Zap className="w-4 h-4 opacity-50 text-blue-500" />
                                         </div>
                                     </th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10"></th>
@@ -634,44 +639,49 @@ const CandidatesSection = ({ showToast }) => {
                                         </td>
 
                                         <td className="py-0.5 px-2.5 text-center">
-                                            <div className="flex items-center justify-center gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleOpenChat(candidate);
-                                                    }}
-                                                    className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center"
-                                                    title="Abrir chat"
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleOpenChat(candidate);
+                                                }}
+                                                className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center"
+                                                title="Abrir chat"
+                                            >
+                                                <div className="relative">
+                                                    <MessageCircle className="w-4 h-4" />
+                                                    {candidate.ultimoMensaje && (
+                                                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        </td>
+                                        <td className="py-0.5 px-2.5 text-center">
+                                            {/* Leveled Checkmarks (Separate Column) */}
+                                            {candidate.followUps > 0 && (
+                                                <div
+                                                    className="flex items-center justify-center -space-x-1 cursor-default select-none pointer-events-none"
+                                                    title={`${candidate.followUps} seguimientos enviados`}
                                                 >
-                                                    <div className="relative">
-                                                        <MessageCircle className="w-4 h-4" />
-                                                        {candidate.ultimoMensaje && (
-                                                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
-                                                        )}
-                                                    </div>
-                                                </button>
+                                                    {(() => {
+                                                        let colorClass = "text-blue-500";
+                                                        if (candidate.followUps === 2) colorClass = "text-purple-500";
+                                                        if (candidate.followUps >= 3) colorClass = "text-orange-500";
 
-                                                {/* WhatsApp Style Checkmarks for Follow-ups (Blue) - Decorative Only */}
-                                                {(candidate.followUps > 0) && (
-                                                    <div
-                                                        className="flex items-center -space-x-1 ml-0.5 cursor-default select-none pointer-events-none"
-                                                        title={`${candidate.followUps} seguimientos enviados`}
-                                                    >
-                                                        {[...Array(Math.min(candidate.followUps, 3))].map((_, i) => (
-                                                            <div key={i} className="flex items-center -space-x-2">
-                                                                <Check className="w-3 h-3 text-blue-500" strokeWidth={4} />
-                                                                <Check className="w-3 h-3 text-blue-500 -ml-2" strokeWidth={4} />
+                                                        return (
+                                                            <div className="flex items-center -space-x-2">
+                                                                <Check className={`w-3 h-3 ${colorClass}`} strokeWidth={4} />
+                                                                <Check className={`w-3 h-3 ${colorClass} -ml-2`} strokeWidth={4} />
                                                             </div>
-                                                        ))}
-                                                        {candidate.followUps > 3 && (
-                                                            <span className="text-[8px] font-black text-blue-600 dark:text-blue-400 ml-1">
-                                                                +{candidate.followUps - 3}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
+                                                        );
+                                                    })()}
+                                                    {candidate.followUps > 3 && (
+                                                        <span className="text-[8px] font-black text-orange-600 dark:text-orange-400 ml-1">
+                                                            +{candidate.followUps - 3}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="py-0.5 px-2.5 text-center">
                                             <button
