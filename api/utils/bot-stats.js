@@ -45,19 +45,15 @@ export const calculateBotStats = async () => {
                 const pipeline = redis.pipeline();
                 chunk.forEach(id => {
                     pipeline.get(`candidate:${id}`);
-                    inactiveStages.forEach(s => {
-                        pipeline.get(`proactive:${id}:${s.hours}:${todayStr}`);
-                    });
                 });
 
-                const results = await pipeline.exec();
-                let resultIdx = 0;
+                const candidateResults = await pipeline.exec();
 
-                for (let j = 0; j < chunk.length; j++) {
-                    const [err, res] = results[resultIdx++];
-                    const sentKeysResults = results.slice(resultIdx, resultIdx + inactiveStages.length);
-                    resultIdx += inactiveStages.length;
+                // Pass 2: Get session keys for the identified levels
+                const sessionKeyPipeline = redis.pipeline();
+                const processedCandidates = [];
 
+                candidateResults.forEach(([err, res]) => {
                     if (!err && res) {
                         try {
                             const c = JSON.parse(res);
@@ -68,30 +64,49 @@ export const calculateBotStats = async () => {
                             } else {
                                 pendingCount++;
 
-                                const lastInteraction = new Date(c.ultimoMensaje || c.primerContacto || c.createdAt || 0);
+                                const tUser = new Date(c.lastUserMessageAt || 0).getTime();
+                                const tBot = new Date(c.lastBotMessageAt || 0).getTime();
+                                const lastInteraction = new Date(Math.max(tUser, tBot));
+                                const hoursInactive = (now - lastInteraction) / (1000 * 60 * 60);
 
-                                inactiveStages.forEach((s, sIdx) => {
-                                    const dueTime = new Date(lastInteraction.getTime() + (s.hours * 60 * 60 * 1000));
+                                const sortedStages = [...inactiveStages].sort((a, b) => b.hours - a.hours);
+                                const currentStage = sortedStages.find(s => hoursInactive >= s.hours);
 
-                                    if (dueTime >= todayStart && dueTime <= todayEnd) {
-                                        flightPlan[s.hours].total++;
-                                        const [sentErr, sentRes] = sentKeysResults[sIdx];
-                                        if (!sentErr && sentRes) {
-                                            flightPlan[s.hours].sent++;
-                                        }
-                                    }
-                                });
+                                if (currentStage) {
+                                    const level = currentStage.hours;
+                                    const sessionKey = `proactive:${c.id}:${level}:${c.lastUserMessageAt}`;
+                                    sessionKeyPipeline.get(sessionKey);
+                                    processedCandidates.push({ c, level });
+                                }
                             }
                         } catch (parseErr) { }
                     }
-                }
+                });
+
+                const sessionResults = await sessionKeyPipeline.exec();
+
+                // Final Pass: Update flightPlan
+                processedCandidates.forEach((item, idx) => {
+                    const { level } = item;
+                    flightPlan[level].total++;
+                    const [sErr, sRes] = sessionResults[idx];
+                    if (!sErr && sRes) {
+                        flightPlan[level].sent++;
+                    }
+                });
             }
 
-            // Calculate percentages
+            // Calculate percentages and summary
+            let totalItems = 0;
+            let totalSentItems = 0;
             Object.keys(flightPlan).forEach(h => {
                 const p = flightPlan[h];
                 p.percentage = p.total > 0 ? Math.round((p.sent / p.total) * 100) : 0;
+                totalItems += p.total;
+                totalSentItems += p.sent;
             });
+
+            flightPlan.summary = { totalItems, totalSent: totalSentItems };
         }
 
         return {
