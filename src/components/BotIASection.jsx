@@ -164,14 +164,14 @@ const BotIASection = ({ showToast }) => {
             {/* Master Bot Controller: Compact Native */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center space-x-4">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${isActive ? 'bg-emerald-600 shadow-lg shadow-emerald-500/20' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${isActive ? 'bg-green-500 shadow-lg shadow-green-500/20' : 'bg-gray-100 dark:bg-gray-700'}`}>
                         <Bot className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                     <div>
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">BOT IA</h2>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></span>
-                            <p className={`text-[10px] font-black tracking-widest uppercase ${isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                            <p className={`text-[10px] font-black tracking-widest uppercase ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
                                 {isActive ? 'MOTOR ACTIVO' : 'STANDBY'}
                             </p>
                         </div>
@@ -181,7 +181,7 @@ const BotIASection = ({ showToast }) => {
                 <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm">
                     <div className="flex flex-col">
                         <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Candidatic</span>
-                        <span className={`text-[10px] font-bold ${isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
+                        <span className={`text-[10px] font-bold ${isActive ? 'text-green-600' : 'text-gray-400'}`}>
                             {isActive ? 'ACTIVADO' : 'DESACTIVADO'}
                         </span>
                     </div>
@@ -189,7 +189,7 @@ const BotIASection = ({ showToast }) => {
                         onClick={toggleActive}
                         className={`
                             relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                            ${isActive ? 'bg-emerald-600' : 'bg-gray-300 dark:bg-gray-600'}
+                            ${isActive ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}
                         `}
                     >
                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${isActive ? 'translate-x-6' : 'translate-x-1'}`} />
