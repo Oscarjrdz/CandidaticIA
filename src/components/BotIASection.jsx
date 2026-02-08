@@ -151,214 +151,227 @@ const BotIASection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto pb-16">
-            {/* Header Status Card - Expanded */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 px-6 flex flex-col md:flex-row items-center justify-between gap-2">
-                <div className="flex items-center space-x-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActive ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                        <Bot className={`w-5 h-5 ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
+        <div className="space-y-6 w-full pb-24 animate-in fade-in duration-700">
+            {/* Master Bot Controller: Fluid Width */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center space-x-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${isActive ? 'bg-blue-600 shadow-lg shadow-blue-500/20' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                        <Bot className={`w-6 h-6 ${isActive ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">Estado del Bot IA</h2>
-                        <p className={`text-[11px] font-medium ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-                            {isActive ? 'ACTIVO' : 'INACTIVO'}
-                        </p>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">Estado del Bot IA</h2>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                            <p className={`text-xs font-bold tracking-tight ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+                                {isActive ? 'MOTOR ACTIVO Y PROCESANDO' : 'MODO STANDBY (INACTIVO)'}
+                            </p>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-2 rounded-2xl border border-gray-100 dark:border-gray-800">
                     <button
                         onClick={toggleActive}
                         className={`
-                            relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
-                            ${isActive ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}
+                            relative inline-flex h-8 w-16 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+                            ${isActive ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
                         `}
                     >
                         <span
                             className={`
-                                inline-block h-6 w-6 transform rounded-full bg-white transition-transform
-                                ${isActive ? 'translate-x-7' : 'translate-x-1'}
+                                inline-block h-6 w-6 transform rounded-full bg-white transition-transform shadow-md
+                                ${isActive ? 'translate-x-9' : 'translate-x-1'}
                             `}
                         />
                     </button>
-                    <span className="text-sm text-gray-600 dark:text-gray-300 font-bold uppercase">
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-black uppercase tracking-widest mr-2">
                         {isActive ? 'On' : 'Off'}
                     </span>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* AI Configuration */}
-                <Card title="Cerebro del Asistente" icon={SettingsIcon}>
-                    <div className="space-y-3">
-                        <div>
-                            <label className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300 mb-0.5">
-                                <span>Fase 1: Brenda Capturista 📝</span>
-                                <span className="text-[8px] bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full uppercase tracking-tighter">Extracción</span>
-                            </label>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                {/* 1. Assistant Brain: Premium Refactor */}
+                <Card
+                    title={<span className="text-gray-900 dark:text-white font-bold">Cerebro del Asistente</span>}
+                    icon={SettingsIcon}
+                    className="shadow-xl border-gray-100 dark:border-gray-700/50 rounded-3xl"
+                >
+                    <div className="space-y-6">
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between px-1">
+                                <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.15em]">
+                                    Fase 1: Brenda Capturista 📑
+                                </label>
+                                <span className="text-[9px] font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100/50 dark:border-blue-800/30 uppercase">Extracción de Datos</span>
+                            </div>
                             <textarea
-                                className="w-full h-40 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono leading-relaxed"
-                                placeholder="Reglas..."
+                                className="w-full h-48 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none transition-all leading-relaxed font-medium"
+                                placeholder="..."
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
                             />
                         </div>
 
-                        <div>
-                            <label className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300 mb-0.5">
-                                <span>Assistant 2.0 (Intention) 🕵️‍♀️✨</span>
-                                <span className="text-[8px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full uppercase tracking-tighter">Seguimiento</span>
-                            </label>
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between px-1">
+                                <label className="text-[11px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.15em]">
+                                    Assistant 2.0 (Intention) 👩‍💻✨
+                                </label>
+                                <span className="text-[9px] font-bold bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 px-2 py-0.5 rounded-full border border-indigo-100/50 dark:border-indigo-800/30 uppercase">Lógica de Diálogo</span>
+                            </div>
                             <textarea
-                                className="w-full h-40 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono leading-relaxed"
-                                placeholder="Personalidad..."
+                                className="w-full h-48 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm resize-none transition-all leading-relaxed font-medium"
+                                placeholder="..."
                                 value={assistantPrompt}
                                 onChange={(e) => setAssistantPrompt(e.target.value)}
                             />
                         </div>
 
-                        <div className="grid grid-cols-1 gap-1">
-                            <div>
-                                <select
-                                    value={aiModel}
-                                    onChange={(e) => setAiModel(e.target.value)}
-                                    className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm shadow-sm font-bold"
-                                >
-                                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                                </select>
-                            </div>
+                        <div className="pt-2">
+                            <select
+                                value={aiModel}
+                                onChange={(e) => setAiModel(e.target.value)}
+                                className="w-full p-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-2 focus:ring-blue-500 text-sm font-bold shadow-sm"
+                            >
+                                <option value="gemini-2.0-flash">🚀 Gemini 2.0 Flash (Recomendado)</option>
+                                <option value="gemini-1.5-flash">⚡ Gemini 1.5 Flash</option>
+                                <option value="gemini-1.5-pro">🧠 Gemini 1.5 Pro</option>
+                            </select>
                         </div>
                     </div>
                 </Card>
 
-                {/* Follow-up Rules Reference */}
+                {/* 2. Automated Follow-up: Design Consolidation */}
                 <Card
                     title={
                         <div className="flex items-center justify-between w-full pr-1">
-                            <span className="flex items-center gap-2 text-sm">Seguimiento <Sparkles className="w-3 h-3 text-blue-500" /></span>
+                            <span className="text-gray-900 dark:text-white font-bold">Seguimiento Automático</span>
 
-                            {/* Proactive Follow-up Toggle - Compact */}
-                            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90 origin-right">
+                            <div className="flex items-center gap-3 bg-gray-50 dark:bg-gray-900/50 px-3 py-1.5 rounded-2xl border border-gray-100 dark:border-gray-800 scale-90">
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">IA Auto</span>
                                 <button
                                     type="button"
                                     onClick={toggleProactive}
                                     className={`
-                                        relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1
-                                        ${proactiveEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
+                                        relative inline-flex h-6 w-11 items-center rounded-full transition-all
+                                        ${proactiveEnabled ? 'bg-blue-600 shadow-md shadow-blue-500/20' : 'bg-gray-300 dark:bg-gray-600'}
                                     `}
                                 >
-                                    <span
-                                        className={`
-                                            inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                                            ${proactiveEnabled ? 'translate-x-6' : 'translate-x-1'}
-                                        `}
-                                    />
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${proactiveEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                                 </button>
                             </div>
                         </div>
                     }
-                    icon={Bot}
+                    icon={Sparkles}
+                    className="shadow-xl border-gray-100 dark:border-gray-700/50 rounded-3xl"
                 >
-                    <div className="space-y-4">
-                        {/* Follow-up Hook - Compressed */}
-                        <div className="bg-blue-50/30 dark:bg-blue-900/10 p-2.5 rounded-2xl border border-blue-100/50 dark:border-blue-800/30">
-                            <label className="flex items-center justify-between text-xs font-bold text-blue-900 dark:text-blue-100 mb-1.5">
-                                <span className="flex items-center gap-2 text-[11px]">Hook de Brenda 🎯</span>
-                                <span className="text-[8px] bg-blue-600 text-white px-1 py-0.5 rounded-full uppercase tracking-tighter">Contacto</span>
+                    <div className="space-y-6">
+                        {/* Hook: Refined */}
+                        <div className="bg-blue-50/20 dark:bg-blue-900/5 p-5 rounded-3xl border border-blue-100/30 dark:border-blue-800/20">
+                            <label className="flex items-center justify-between text-[11px] font-black text-blue-900 dark:text-blue-100 mb-3 uppercase tracking-[0.10em]">
+                                Hook de Brenda 👩‍💼🎯
                             </label>
                             <textarea
-                                className="w-full h-32 p-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-sm font-mono leading-relaxed"
-                                placeholder="Ej: Hola!..."
+                                className="w-full h-36 p-5 rounded-2xl border border-blue-200/50 dark:border-blue-800/30 bg-white dark:bg-gray-900/60 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-sm font-medium leading-relaxed"
+                                placeholder="..."
                                 value={proactivePrompt}
                                 onChange={(e) => setProactivePrompt(e.target.value)}
                             />
                         </div>
-                        {/* Stats - Ultra Compact */}
-                        <div className="grid grid-cols-4 gap-2">
-                            <div className="bg-gradient-to-br from-purple-500/10 to-indigo-500/5 dark:from-purple-500/20 dark:to-indigo-500/10 p-2.5 rounded-xl border border-purple-100/50 dark:border-purple-800/30">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-0.5">Enviados</p>
-                                <h4 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{stats.totalSent}</h4>
-                            </div>
-                            <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 dark:from-green-500/20 dark:to-emerald-500/10 p-2.5 rounded-xl border border-green-100/50 dark:border-green-800/30">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-green-600 dark:text-green-400 mb-0.5">ROI</p>
-                                <h4 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{stats.totalRecovered || 0}</h4>
-                            </div>
-                            <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/5 dark:from-orange-500/20 dark:to-amber-500/10 p-2.5 rounded-xl border border-orange-100/50 dark:border-orange-800/30">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 mb-0.5">Pendientes</p>
-                                <h4 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{stats.pending || 0}</h4>
-                            </div>
-                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 dark:from-blue-500/20 dark:to-cyan-500/10 p-2.5 rounded-xl border border-blue-100/50 dark:border-blue-800/30">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-0.5">Completos</p>
-                                <h4 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{stats.complete || 0}</h4>
-                            </div>
+
+                        {/* Professional Stats: Neutral Homogenization */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            {[
+                                { label: 'Enviados', val: stats.totalSent, icon: Send, color: 'text-blue-600' },
+                                { label: 'ROI', val: stats.totalRecovered || 0, icon: RefreshCw, color: 'text-emerald-600' },
+                                { label: 'Pendientes', val: stats.pending || 0, icon: Clock, color: 'text-amber-600' },
+                                { label: 'Completos', val: stats.complete || 0, icon: CheckCircle, color: 'text-indigo-600' }
+                            ].map((s, i) => (
+                                <div key={i} className="bg-white dark:bg-gray-900 p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-all hover:border-blue-200 dark:hover:border-blue-900/30 group">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className={`p-1.5 rounded-lg bg-gray-50 dark:bg-gray-800 ${s.color} group-hover:scale-110 transition-transform`}>
+                                            <s.icon className="w-3.5 h-3.5" />
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-0.5">{s.label}</p>
+                                    <h4 className="text-2xl font-black text-gray-900 dark:text-white leading-none tracking-tight">{s.val}</h4>
+                                </div>
+                            ))}
                         </div>
 
-                        {/* Operative Rules - Compressed */}
-                        <div className="bg-gray-50 dark:bg-gray-900/40 p-3 rounded-xl border border-gray-100 dark:border-gray-800/50">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="flex items-center gap-4">
-                                    <Clock className="w-4 h-4 text-blue-500" />
-                                    <div className="flex items-center gap-2">
+                        {/* Operative Settings: Integrated Design */}
+                        <div className="bg-gray-50 dark:bg-gray-900/40 p-5 rounded-2xl border border-gray-100 dark:border-gray-800">
+                            <div className="grid grid-cols-2 gap-8">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 mb-2 text-gray-500 dark:text-gray-400">
+                                        <Clock className="w-4 h-4" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Operación</span>
+                                    </div>
+                                    <div className="flex items-center gap-3">
                                         <input
                                             type="number"
                                             value={operativeConfig.startHour}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) })}
-                                            className="w-10 bg-transparent border-none text-sm font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
+                                            className="w-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-black text-gray-900 dark:text-white p-2 focus:ring-blue-500 text-center shadow-sm"
                                         />
-                                        <span className="text-sm text-gray-400 font-bold">-</span>
+                                        <span className="text-gray-400 font-bold">-</span>
                                         <input
                                             type="number"
                                             value={operativeConfig.endHour}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) })}
-                                            className="w-10 bg-transparent border-none text-sm font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
+                                            className="w-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-black text-gray-900 dark:text-white p-2 focus:ring-blue-500 text-center shadow-sm"
                                         />
-                                        <span className="text-xs text-gray-500 uppercase font-black">h</span>
+                                        <span className="text-[11px] font-black text-gray-400">HRS</span>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                    <Shield className="w-4 h-4 text-red-500" />
-                                    <div className="flex items-center gap-1">
-                                        <span className="text-xs text-gray-400 font-bold uppercase tracking-tighter">Diario:</span>
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2 mb-2 text-red-500/80">
+                                        <Shield className="w-4 h-4" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Límite Diario</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
                                         <input
                                             type="number"
                                             value={operativeConfig.dailyLimit}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) })}
-                                            className="w-12 bg-transparent border-none text-sm font-black text-red-500 p-0 focus:ring-0"
+                                            className="w-full bg-white dark:bg-gray-800 border-2 border-red-500/30 dark:border-red-900/30 rounded-lg text-base font-black text-red-600 dark:text-red-400 p-2 focus:ring-red-500 shadow-sm"
                                         />
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="space-y-3">
+                        {/* Timeline Protocol: Refined Horizontal Scroll */}
+                        <div className="space-y-4">
                             <div className="flex items-center justify-between px-1">
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Protocolo</h4>
+                                <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Protocolo de Reactivación</h4>
                                 <button
-                                    onClick={() => setInactiveStages([...inactiveStages, { hours: 24, label: 'Etapa' }])}
-                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                                    onClick={() => setInactiveStages([...inactiveStages, { hours: 24, label: 'Recordatorio' }])}
+                                    className="px-3 py-1 text-[10px] font-black bg-blue-600 text-white rounded-full shadow-lg shadow-blue-500/20 hover:scale-105 transition-transform"
                                 >
-                                    + AÑADIR
+                                    + AÑADIR ETAPA
                                 </button>
                             </div>
 
-                            <div className="relative pt-24 pb-12 min-h-[180px] flex items-start overflow-x-auto no-scrollbar scroll-smooth bg-gray-50/30 dark:bg-gray-900/10 rounded-2xl p-6">
-                                <div className="absolute top-[47px] left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-800 mx-8"></div>
-                                <div className="flex w-full justify-between items-start px-12 gap-8">
+                            <div className="relative pt-16 pb-8 min-h-[160px] flex items-start overflow-x-auto no-scrollbar bg-gray-50/50 dark:bg-gray-900/30 rounded-[32px] px-8 border border-gray-100 dark:border-gray-800">
+                                <div className="absolute top-[48px] left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-800 mx-12"></div>
+                                <div className="flex items-start gap-12">
                                     {inactiveStages.map((stage, idx) => (
-                                        <div key={idx} className="relative flex flex-col items-center min-w-[140px] group transition-all">
-                                            <div className={`absolute top-[18px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-800 shadow-sm z-10 
-                                                ${idx === 0 ? 'bg-blue-600' : idx === 1 ? 'bg-blue-500' : 'bg-slate-500'}`}
+                                        <div key={idx} className="relative flex flex-col items-center min-w-[150px] group">
+                                            <div className={`absolute top-[18px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-900 shadow-md z-10 
+                                                ${idx % 2 === 0 ? 'bg-blue-600' : 'bg-indigo-600'}`}
                                             ></div>
+
                                             <button
                                                 onClick={() => setInactiveStages(inactiveStages.filter((_, i) => i !== idx))}
-                                                className="absolute -top-6 opacity-0 group-hover:opacity-100 transition-all text-red-500 z-30 p-1 hover:bg-red-50 rounded-full"
+                                                className="absolute -top-8 opacity-0 group-hover:opacity-100 transition-all text-red-500 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl"
                                             >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
-                                            <div className="flex flex-col items-center gap-2 w-full pt-10">
-                                                <div className="flex items-center justify-center gap-1 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+
+                                            <div className="flex flex-col items-center gap-3 w-full pt-10">
+                                                <div className="flex items-center gap-1.5 bg-white dark:bg-gray-800 px-3.5 py-1.5 rounded-xl shadow-md border border-gray-100 dark:border-gray-700">
                                                     <input
                                                         type="number"
                                                         value={stage.hours}
@@ -369,18 +382,18 @@ const BotIASection = ({ showToast }) => {
                                                         }}
                                                         className="w-10 bg-transparent border-none text-base font-black text-gray-900 dark:text-white p-0 focus:ring-0 text-right"
                                                     />
-                                                    <span className="text-base font-black text-blue-600">h</span>
+                                                    <span className="text-sm font-black text-blue-600">HRS</span>
                                                 </div>
                                                 <textarea
                                                     value={stage.label}
-                                                    rows={1}
+                                                    rows={2}
                                                     onChange={(e) => {
                                                         const newStages = [...inactiveStages];
                                                         newStages[idx].label = e.target.value;
                                                         setInactiveStages(newStages);
                                                     }}
-                                                    className="w-full bg-transparent border-none text-xs font-bold text-gray-600 dark:text-gray-400 leading-tight italic text-center p-0 focus:ring-0 resize-none overflow-hidden"
-                                                    placeholder="Etiqueta"
+                                                    className="w-full bg-transparent border-none text-[11px] font-bold text-gray-600 dark:text-gray-400 leading-tight italic text-center p-0 focus:ring-0 resize-none overflow-hidden"
+                                                    placeholder="Etiqueta..."
                                                 />
                                             </div>
                                         </div>
@@ -392,16 +405,23 @@ const BotIASection = ({ showToast }) => {
                 </Card>
             </div>
 
-            <div className="flex justify-end mt-8">
-                <Button
-                    onClick={handleSave}
-                    loading={loading}
-                    icon={Save}
-                    size="sm"
-                    className="h-10 px-8 text-[11px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/10"
-                >
-                    Guardar Cambios
-                </Button>
+            {/* Sticky Action Footer: Candidatic Pattern */}
+            <div className="fixed bottom-6 left-1/2 md:left-[calc(50%+130px)] -translate-x-1/2 z-[40] w-[calc(100%-48px)] max-w-7xl">
+                <div className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl p-4 px-8 rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-white/50 dark:border-gray-700/50 flex items-center justify-between">
+                    <div className="hidden md:flex flex-col">
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] leading-none mb-1">Panel de Configuración de IA</p>
+                        <p className="text-[12px] font-bold text-gray-600 dark:text-gray-300">Asegúrate de guardar tus reglas antes de salir.</p>
+                    </div>
+                    <Button
+                        onClick={handleSave}
+                        loading={loading}
+                        icon={Save}
+                        size="lg"
+                        className="bg-blue-600 hover:bg-blue-700 text-white h-14 px-12 rounded-[22px] text-sm font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 transform hover:scale-[1.02] active:scale-95 transition-all"
+                    >
+                        Guardar Cambios
+                    </Button>
+                </div>
             </div>
         </div>
     );
