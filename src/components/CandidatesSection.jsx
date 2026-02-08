@@ -399,7 +399,6 @@ const CandidatesSection = ({ showToast }) => {
                         onResults={(results, ai) => {
                             setAiFilteredCandidates(results);
                             setAiExplanation(ai?.explanation || 'Búsqueda completada');
-                            // Follow-up disabled per user request
                         }}
                         showToast={showToast}
                     />
