@@ -869,6 +869,23 @@ export const saveMessage = async (candidateId, message) => {
     const key = `messages:${candidateId}`;
     try {
         await client.rpush(key, JSON.stringify(message));
+
+        // Detection of follow-up messages to increment counter
+        const isFollowUp =
+            message.from === 'bot' &&
+            message.meta &&
+            (message.meta.automationId || message.meta.proactiveLevel || message.meta.pipelineStep);
+
+        if (isFollowUp) {
+            const candKey = `candidate:${candidateId}`;
+            const candRaw = await client.get(candKey);
+            if (candRaw) {
+                const cand = JSON.parse(candRaw);
+                cand.followUps = (cand.followUps || 0) + 1;
+                await client.set(candKey, JSON.stringify(cand));
+                console.log(`[Storage] Follow-up detected for ${candidateId}. Count: ${cand.followUps}`);
+            }
+        }
     } catch (e) {
         console.error('❌ [Storage] saveMessage Error:', e);
     }

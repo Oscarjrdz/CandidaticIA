@@ -640,11 +640,32 @@ const CandidatesSection = ({ showToast }) => {
                                                     e.stopPropagation();
                                                     handleOpenChat(candidate);
                                                 }}
-                                                className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative"
+                                                className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center gap-1"
                                                 title="Abrir chat"
                                             >
-                                                <MessageCircle className="w-4 h-4" />
-                                                <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
+                                                <div className="relative">
+                                                    <MessageCircle className="w-4 h-4" />
+                                                    {candidate.ultimoMensaje && (
+                                                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
+                                                    )}
+                                                </div>
+
+                                                {/* WhatsApp Style Checkmarks for Follow-ups */}
+                                                {(candidate.followUps > 0) && (
+                                                    <div className="flex items-center -space-x-1.5 ml-0.5" title={`${candidate.followUps} seguimientos enviados`}>
+                                                        {[...Array(Math.min(candidate.followUps, 3))].map((_, i) => (
+                                                            <div key={i} className="flex items-center -space-x-2.5">
+                                                                <CheckCircle className="w-2.5 h-2.5 text-green-500 fill-green-500/10" strokeWidth={3} />
+                                                                <CheckCircle className="w-2.5 h-2.5 text-green-500 fill-green-500/10 translate-x-0.5" strokeWidth={3} />
+                                                            </div>
+                                                        ))}
+                                                        {candidate.followUps > 3 && (
+                                                            <span className="text-[8px] font-black text-green-600 dark:text-green-400 ml-1">
+                                                                +{candidate.followUps - 3}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </button>
                                         </td>
                                         <td className="py-0.5 px-2.5 text-center">
