@@ -358,10 +358,11 @@ const BotIASection = ({ showToast }) => {
                                 </label>
                                 <button
                                     onClick={addStage}
-                                    className="p-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 hover:bg-blue-100 transition-colors"
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] flex items-center gap-2"
                                     title="Añadir seguimiento"
                                 >
                                     <Sparkles className="w-3.5 h-3.5" />
+                                    <span>Crear Nuevo</span>
                                 </button>
                             </div>
 
@@ -392,7 +393,7 @@ const BotIASection = ({ showToast }) => {
 
                                         <button
                                             onClick={() => removeStage(idx)}
-                                            className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 p-2 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-all scale-75"
+                                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-2 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-all scale-75"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
