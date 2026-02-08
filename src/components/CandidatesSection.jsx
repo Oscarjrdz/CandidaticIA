@@ -657,21 +657,29 @@ const CandidatesSection = ({ showToast }) => {
                                             </button>
                                         </td>
                                         <td className="py-0.5 px-2.5 text-center">
-                                            {/* Cumulative Colored Checkmarks (Separate Column) */}
+                                            {/* Rainbow Checkmarks (Separate Column) - Infinite Cycle 50% size */}
                                             {candidate.followUps > 0 && (
                                                 <div
-                                                    className="flex items-center justify-center gap-0.5 cursor-default select-none pointer-events-none"
+                                                    className="flex items-center justify-center -space-x-1 cursor-default select-none pointer-events-none flex-wrap max-w-[60px] mx-auto"
                                                     title={`${candidate.followUps} seguimientos enviados`}
                                                 >
-                                                    <Check className="w-4 h-4 text-blue-500" strokeWidth={5} />
-                                                    {Number(candidate.followUps) >= 2 && <Check className="w-4 h-4 text-purple-500" strokeWidth={5} />}
-                                                    {Number(candidate.followUps) >= 3 && <Check className="w-4 h-4 text-orange-500" strokeWidth={5} />}
+                                                    {[...Array(Number(candidate.followUps))].map((_, i) => {
+                                                        const colors = [
+                                                            'text-blue-500', 'text-purple-500', 'text-orange-500',
+                                                            'text-pink-500', 'text-emerald-500', 'text-rose-500',
+                                                            'text-amber-500', 'text-indigo-500', 'text-cyan-500',
+                                                            'text-violet-500'
+                                                        ];
+                                                        const colorClass = colors[i % colors.length];
 
-                                                    {Number(candidate.followUps) > 3 && (
-                                                        <span className="text-[8px] font-black text-orange-600 dark:text-orange-400 ml-1">
-                                                            +{Number(candidate.followUps) - 3}
-                                                        </span>
-                                                    )}
+                                                        return (
+                                                            <Check
+                                                                key={i}
+                                                                className={`w-2 h-2 ${colorClass} -ml-1 first:ml-0`}
+                                                                strokeWidth={8}
+                                                            />
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </td>

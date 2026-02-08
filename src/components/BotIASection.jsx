@@ -362,7 +362,9 @@ const BotIASection = ({ showToast }) => {
                                                     <div key={i} className="flex flex-col gap-0.5 py-1.5 first:pt-0 border-b border-indigo-100/30 dark:border-indigo-900/30 last:border-0 last:pb-0">
                                                         <div className="flex items-center justify-between text-[11px]">
                                                             <div className="flex items-center gap-1 font-bold text-gray-700 dark:text-gray-300">
-                                                                <span className="text-[10px] opacity-70">NIVEL {i + 1} ({h}H)</span>
+                                                                <span className="text-[10px] uppercase opacity-70 tracking-tighter">
+                                                                    {p.label || `Nivel ${i + 1}`} ({h}H)
+                                                                </span>
                                                             </div>
                                                             <div className="flex items-center gap-2">
                                                                 <span className="font-medium text-gray-500">{p.total} ({p.sent} env.)</span>
