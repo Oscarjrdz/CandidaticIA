@@ -151,17 +151,17 @@ const BotIASection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-3">
-            {/* Header Status Card */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex flex-col md:flex-row items-center justify-between gap-3">
-                <div className="flex items-center space-x-4">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${isActive ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                        <Bot className={`w-6 h-6 ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
+        <div className="space-y-2 max-w-7xl mx-auto">
+            {/* Header Status Card - Compressed */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-2 px-4 flex flex-col md:flex-row items-center justify-between gap-2">
+                <div className="flex items-center space-x-3">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActive ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                        <Bot className={`w-5 h-5 ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Estado del Bot IA</h2>
-                        <p className={`text-sm font-medium ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-                            {isActive ? 'ACTIVO - Respondiendo mensajes' : 'INACTIVO - Pausado'}
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">Estado del Bot IA</h2>
+                        <p className={`text-[11px] font-medium ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+                            {isActive ? 'ACTIVO' : 'INACTIVO'}
                         </p>
                     </div>
                 </div>
@@ -170,19 +170,19 @@ const BotIASection = ({ showToast }) => {
                     <button
                         onClick={toggleActive}
                         className={`
-                            relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
+                            relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500
                             ${isActive ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}
                         `}
                     >
                         <span
                             className={`
-                                inline-block h-6 w-6 transform rounded-full bg-white transition-transform
-                                ${isActive ? 'translate-x-7' : 'translate-x-1'}
+                                inline-block h-5 w-5 transform rounded-full bg-white transition-transform
+                                ${isActive ? 'translate-x-6' : 'translate-x-1'}
                             `}
                         />
                     </button>
-                    <span className="text-sm text-gray-600 dark:text-gray-300 font-medium">
-                        {isActive ? 'Encendido' : 'Apagado'}
+                    <span className="text-[11px] text-gray-600 dark:text-gray-300 font-bold uppercase">
+                        {isActive ? 'On' : 'Off'}
                     </span>
                 </div>
             </div>
@@ -192,55 +192,42 @@ const BotIASection = ({ showToast }) => {
                 <Card title="Cerebro del Asistente" icon={SettingsIcon}>
                     <div className="space-y-3">
                         <div>
-                            <label className="flex items-center justify-between text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            <label className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300 mb-0.5">
                                 <span>Fase 1: Brenda Capturista 📝</span>
-                                <span className="text-[9px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Extracción de Datos</span>
+                                <span className="text-[8px] bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full uppercase tracking-tighter">Extracción</span>
                             </label>
                             <textarea
-                                className="w-full h-32 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono"
-                                placeholder="Reglas de extracción de datos..."
+                                className="w-full h-20 p-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-xs resize-none shadow-inner font-mono"
+                                placeholder="Reglas..."
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
                             />
-                            <p className="text-[10px] text-gray-500 mt-1 italic">
-                                Este "Cerebro" gobierna la recolección de Nombre, Municipio, Edad y Categoría una vez que el candidato ya respondió.
-                            </p>
                         </div>
 
                         <div>
-                            <label className="flex items-center justify-between text-sm font-bold text-gray-700 dark:text-gray-300 mb-1">
+                            <label className="flex items-center justify-between text-xs font-bold text-gray-700 dark:text-gray-300 mb-0.5">
                                 <span>Assistant 2.0 (Intention) 🕵️‍♀️✨</span>
-                                <span className="text-[9px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Perfil 100% Completo</span>
+                                <span className="text-[8px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full uppercase tracking-tighter">Seguimiento</span>
                             </label>
                             <textarea
-                                className="w-full h-32 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono"
-                                placeholder="Personalidad para el seguimiento..."
+                                className="w-full h-20 p-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-xs resize-none shadow-inner font-mono"
+                                placeholder="Personalidad..."
                                 value={assistantPrompt}
                                 onChange={(e) => setAssistantPrompt(e.target.value)}
                             />
-                            <p className="text-[10px] text-gray-500 mt-1 italic">
-                                Úsalo para definir su personalidad de embajadora.
-                                <span className="font-bold text-blue-500 ml-1 underline">Tip:</span> Usa <code className="bg-gray-200 px-1 rounded">{"{{Mission}}"}</code> para inyectar una tarea aleatoria.
-                            </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4">
+                        <div className="grid grid-cols-1 gap-1">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Modelo de Inteligencia Artificial
-                                </label>
                                 <select
                                     value={aiModel}
                                     onChange={(e) => setAiModel(e.target.value)}
-                                    className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
+                                    className="w-full p-2 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-[11px] shadow-sm font-bold"
                                 >
-                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recomendado)</option>
-                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (Rápido)</option>
-                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro (Potente)</option>
+                                    <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                                    <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                                    <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                                 </select>
-                                <p className="text-[10px] text-gray-500 mt-1.5 px-1 italic">
-                                    * La API Key se gestiona globalmente en la sección de Settings.
-                                </p>
                             </div>
                         </div>
                     </div>
@@ -250,16 +237,10 @@ const BotIASection = ({ showToast }) => {
                 <Card
                     title={
                         <div className="flex items-center justify-between w-full pr-1">
-                            <span className="flex items-center gap-2">Control de Seguimiento <Sparkles className="w-4 h-4 text-blue-500" /></span>
+                            <span className="flex items-center gap-2 text-sm">Seguimiento <Sparkles className="w-3 h-3 text-blue-500" /></span>
 
-                            {/* Proactive Follow-up Toggle - Exact Look from CandidatesSection */}
-                            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90 origin-right">
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Seguimiento</span>
-                                    <span className={`text-[10px] font-bold ${proactiveEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
-                                        {proactiveEnabled ? 'AUTO' : 'OFF'}
-                                    </span>
-                                </div>
+                            {/* Proactive Follow-up Toggle - Compact */}
+                            <div className="flex items-center gap-2 scale-75 origin-right">
                                 <button
                                     type="button"
                                     onClick={toggleProactive}
@@ -281,131 +262,104 @@ const BotIASection = ({ showToast }) => {
                     icon={Bot}
                 >
                     <div className="space-y-4">
-                        {/* Nuevo: Prompt de Seguimiento (Hook) */}
-                        <div className="bg-blue-50/30 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-800/30">
-                            <label className="flex items-center justify-between text-sm font-bold text-blue-900 dark:text-blue-100 mb-2">
-                                <span className="flex items-center gap-2">Regla 1: El Hook de Brenda 🎯</span>
-                                <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Primer Contacto</span>
+                        {/* Follow-up Hook - Compressed */}
+                        <div className="bg-blue-50/30 dark:bg-blue-900/10 p-2.5 rounded-2xl border border-blue-100/50 dark:border-blue-800/30">
+                            <label className="flex items-center justify-between text-xs font-bold text-blue-900 dark:text-blue-100 mb-1.5">
+                                <span className="flex items-center gap-2 text-[11px]">Hook de Brenda 🎯</span>
+                                <span className="text-[8px] bg-blue-600 text-white px-1 py-0.5 rounded-full uppercase tracking-tighter">Contacto</span>
                             </label>
                             <textarea
-                                className="w-full h-24 p-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-sm font-mono"
-                                placeholder="Ej: 'Hola! Soy Brenda de Candidatic, vi que iniciaste tu registro...'"
+                                className="w-full h-14 p-2 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-xs resize-none shadow-sm font-mono"
+                                placeholder="Ej: Hola!..."
                                 value={proactivePrompt}
                                 onChange={(e) => setProactivePrompt(e.target.value)}
                             />
-                            <p className="text-[10px] text-blue-600/70 dark:text-blue-400/70 mt-2 italic px-1">
-                                <Sparkles className="w-3 h-3 inline mr-1" />
-                                Este prompt es el "Gancho" inicial. Se usa para motivar al candidato a responder cuando hay inactividad.
-                            </p>
                         </div>
-                        {/* Mini Dashboard Impacto */}
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                            <div className="bg-gradient-to-br from-purple-500/10 to-indigo-500/5 dark:from-purple-500/20 dark:to-indigo-500/10 p-4 rounded-2xl border border-purple-100/50 dark:border-purple-800/30">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-1">Total Enviados</p>
-                                <div className="flex items-baseline gap-2">
-                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.totalSent}</h4>
-                                    <span className="text-[10px] text-purple-400 font-medium">Hoy: {stats.today}</span>
-                                </div>
+                        {/* Stats - Ultra Compact */}
+                        <div className="grid grid-cols-4 gap-2">
+                            <div className="bg-gradient-to-br from-purple-500/10 to-indigo-500/5 dark:from-purple-500/20 dark:to-indigo-500/10 p-2 rounded-xl border border-purple-100/50 dark:border-purple-800/30">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-0.5">Enviados</p>
+                                <h4 className="text-base font-bold text-gray-900 dark:text-white leading-none">{stats.totalSent}</h4>
                             </div>
-                            <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 dark:from-green-500/20 dark:to-emerald-500/10 p-4 rounded-2xl border border-green-100/50 dark:border-green-800/30">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-green-600 dark:text-green-400 mb-1">Datos Recuperados</p>
-                                <div className="flex items-baseline gap-2">
-                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.totalRecovered || 0}</h4>
-                                    <span className="text-[10px] text-green-400 font-medium leading-none">ROI Éxito</span>
-                                </div>
+                            <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 dark:from-green-500/20 dark:to-emerald-500/10 p-2 rounded-xl border border-green-100/50 dark:border-green-800/30">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-green-600 dark:text-green-400 mb-0.5">Recuperados</p>
+                                <h4 className="text-base font-bold text-gray-900 dark:text-white leading-none">{stats.totalRecovered || 0}</h4>
                             </div>
-                            <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/5 dark:from-orange-500/20 dark:to-amber-500/10 p-4 rounded-2xl border border-orange-100/50 dark:border-orange-800/30">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 mb-1">Candidatos Pendientes</p>
-                                <div className="flex items-baseline gap-2">
-                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.pending || 0}</h4>
-                                    <span className="text-[10px] text-orange-400 font-medium leading-none">Incompletos</span>
-                                </div>
+                            <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/5 dark:from-orange-500/20 dark:to-amber-500/10 p-2 rounded-xl border border-orange-100/50 dark:border-orange-800/30">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 mb-0.5">Pendientes</p>
+                                <h4 className="text-base font-bold text-gray-900 dark:text-white leading-none">{stats.pending || 0}</h4>
                             </div>
-                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 dark:from-blue-500/20 dark:to-cyan-500/10 p-4 rounded-2xl border border-blue-100/50 dark:border-blue-800/30">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-1">Candidatos Completos</p>
-                                <div className="flex items-baseline gap-2">
-                                    <h4 className="text-xl font-bold text-gray-900 dark:text-white">{stats.complete || 0}</h4>
-                                    <span className="text-[10px] text-blue-400 font-medium leading-none">Perfil 100%</span>
-                                </div>
+                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 dark:from-blue-500/20 dark:to-cyan-500/10 p-2 rounded-xl border border-blue-100/50 dark:border-blue-800/30">
+                                <p className="text-[8px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-0.5">Completos</p>
+                                <h4 className="text-base font-bold text-gray-900 dark:text-white leading-none">{stats.complete || 0}</h4>
                             </div>
                         </div>
 
-                        {/* Operative Rules - Dynamic Level */}
-                        <div className="bg-gray-50 dark:bg-gray-900/40 p-3 rounded-2xl border border-gray-100 dark:border-gray-800/50">
-                            <h4 className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                <Shield className="w-4 h-4 text-blue-500" /> Configuración Operativa
-                            </h4>
+                        {/* Operative Rules - Compressed */}
+                        <div className="bg-gray-50 dark:bg-gray-900/40 p-2 rounded-xl border border-gray-100 dark:border-gray-800/50">
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter italic">Ventana Horaria</p>
+                                <div className="flex items-center gap-3">
+                                    <Clock className="w-3.5 h-3.5 text-blue-500" />
                                     <div className="flex items-center gap-1">
                                         <input
                                             type="number"
                                             value={operativeConfig.startHour}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) })}
-                                            className="w-8 bg-transparent border-none text-xs font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
+                                            className="w-8 bg-transparent border-none text-[11px] font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
                                         />
                                         <span className="text-xs text-gray-400">-</span>
                                         <input
                                             type="number"
                                             value={operativeConfig.endHour}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) })}
-                                            className="w-8 bg-transparent border-none text-xs font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
+                                            className="w-8 bg-transparent border-none text-[11px] font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
                                         />
+                                        <span className="text-[10px] text-gray-500 uppercase font-bold">h</span>
                                     </div>
-                                    <p className="text-[9px] text-gray-500">Hora CDMX (24h)</p>
                                 </div>
-                                <div className="space-y-1">
-                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter italic">Seguridad Anti-Spam</p>
+                                <div className="flex items-center gap-2">
+                                    <Shield className="w-3.5 h-3.5 text-red-500" />
                                     <div className="flex items-center gap-1">
-                                        <span className="text-[10px] text-gray-400">Máx</span>
+                                        <span className="text-[10px] text-gray-400 font-bold">Límite:</span>
                                         <input
                                             type="number"
                                             value={operativeConfig.dailyLimit}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) })}
-                                            className="w-12 bg-transparent border-none text-xs font-black text-red-500/80 p-0 focus:ring-0"
+                                            className="w-10 bg-transparent border-none text-[11px] font-black text-red-500 p-0 focus:ring-0"
                                         />
-                                        <span className="text-[10px] text-gray-400">/ Día</span>
                                     </div>
-                                    <p className="text-[9px] text-gray-500">Límite por cuenta</p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Protocol Timeline - Dynamic Version */}
-                        <div className="space-y-3">
+                        <div className="space-y-1">
                             <div className="flex items-center justify-between px-1">
-                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ciclo de Inactividad</h4>
+                                <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none">Protocolo</h4>
                                 <button
-                                    onClick={() => setInactiveStages([...inactiveStages, { hours: 24, label: 'Nueva Etapa' }])}
-                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
+                                    onClick={() => setInactiveStages([...inactiveStages, { hours: 24, label: 'Etapa' }])}
+                                    className="text-[9px] font-bold text-blue-600 hover:text-blue-700 transition-colors"
                                 >
-                                    + Añadir Etapa
+                                    + AÑADIR
                                 </button>
                             </div>
 
-                            <div className="relative pt-20 pb-6 min-h-[160px] flex items-start overflow-x-auto no-scrollbar scroll-smooth">
-                                {/* Horizontal Line - Adjusted for new PT */}
-                                <div className="absolute top-[21px] left-0 right-0 h-0.5 bg-gray-100 dark:bg-gray-800"></div>
-
-                                <div className="flex w-full justify-between items-start px-12 gap-8 md:gap-16">
+                            <div className="relative pt-10 pb-1 min-h-[90px] flex items-start overflow-x-auto no-scrollbar scroll-smooth bg-gray-50/20 dark:bg-gray-900/10 rounded-xl p-2">
+                                <div className="absolute top-[28px] left-0 right-0 h-0.5 bg-gray-100 dark:bg-gray-800 mx-4"></div>
+                                <div className="flex w-full justify-between items-start px-6 gap-3">
                                     {inactiveStages.map((stage, idx) => (
-                                        <div key={idx} className="relative flex flex-col items-center min-w-[150px] group transition-all">
-                                            {/* Dot with Ring - Adjusted top */}
-                                            <div className={`absolute -top-[31px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-800 shadow-sm z-10 transition-transform group-hover:scale-125
-                                                ${idx === 0 ? 'bg-blue-600' : idx === 1 ? 'bg-blue-500' : idx === 2 ? 'bg-indigo-500' : 'bg-slate-500'}`}
+                                        <div key={idx} className="relative flex flex-col items-center min-w-[100px] group transition-all">
+                                            <div className={`absolute top-[13.5px] w-3 h-3 rounded-full border-2 border-white dark:border-gray-800 shadow-sm z-10 
+                                                ${idx === 0 ? 'bg-blue-600' : idx === 1 ? 'bg-blue-500' : 'bg-slate-500'}`}
                                             ></div>
-
-                                            {/* Delete Button (Brought to front) */}
                                             <button
                                                 onClick={() => setInactiveStages(inactiveStages.filter((_, i) => i !== idx))}
-                                                className="absolute -top-[65px] opacity-0 group-hover:opacity-100 transition-all hover:scale-110 bg-red-50 dark:bg-red-900/40 text-red-500 p-1.5 rounded-full text-[10px] border border-red-100 dark:border-red-800 z-30 shadow-md"
+                                                className="absolute -top-1 opacity-0 group-hover:opacity-100 transition-all text-red-500 z-30"
                                             >
-                                                <Trash2 className="w-3.5 h-3.5" />
+                                                <Trash2 className="w-3 h-3" />
                                             </button>
 
-                                            <div className="flex flex-col items-center gap-1.5 w-full">
-                                                <div className="flex items-center justify-center gap-1 mb-1 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-2xl shadow-sm border border-gray-100/50 dark:border-gray-700">
+                                            <div className="flex flex-col items-center gap-1 w-full pt-6">
+                                                <div className="flex items-center justify-center gap-0.5 bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded-lg shadow-sm border border-gray-100">
                                                     <input
                                                         type="number"
                                                         value={stage.hours}
@@ -414,20 +368,20 @@ const BotIASection = ({ showToast }) => {
                                                             newStages[idx].hours = parseInt(e.target.value) || 0;
                                                             setInactiveStages(newStages);
                                                         }}
-                                                        className="w-10 bg-transparent border-none text-base font-black text-gray-900 dark:text-white p-0 focus:ring-0 text-right uppercase tracking-tighter"
+                                                        className="w-7 bg-transparent border-none text-[11px] font-black text-gray-900 dark:text-white p-0 focus:ring-0 text-right"
                                                     />
-                                                    <span className="text-base font-black text-blue-600 dark:text-blue-400">h</span>
+                                                    <span className="text-[11px] font-black text-blue-600">h</span>
                                                 </div>
                                                 <textarea
                                                     value={stage.label}
-                                                    rows={2}
+                                                    rows={1}
                                                     onChange={(e) => {
                                                         const newStages = [...inactiveStages];
                                                         newStages[idx].label = e.target.value;
                                                         setInactiveStages(newStages);
                                                     }}
-                                                    className="w-full bg-transparent border-none text-[12px] font-bold text-gray-600 dark:text-gray-300 leading-tight italic text-center p-1 focus:ring-0 resize-none overflow-hidden rounded-xl transition-all hover:bg-white dark:hover:bg-gray-800 border border-transparent hover:border-gray-100 dark:hover:border-gray-700"
-                                                    placeholder="Etiqueta..."
+                                                    className="w-full bg-transparent border-none text-[9px] font-bold text-gray-500 dark:text-gray-400 leading-none italic text-center p-0 focus:ring-0 resize-none overflow-hidden"
+                                                    placeholder="Etiqueta"
                                                 />
                                             </div>
                                         </div>
@@ -439,14 +393,15 @@ const BotIASection = ({ showToast }) => {
                 </Card>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex justify-end pt-1">
                 <Button
                     onClick={handleSave}
                     loading={loading}
                     icon={Save}
-                    size="lg"
+                    size="sm"
+                    className="h-10 px-8 text-[11px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/10"
                 >
-                    Guardar Configuración
+                    Guardar Cambios
                 </Button>
             </div>
         </div>
