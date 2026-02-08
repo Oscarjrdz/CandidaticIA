@@ -213,7 +213,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] font-bold text-blue-600 uppercase">Extractora</span>
                             </div>
                             <textarea
-                                className="w-full h-[170px] p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
+                                className="w-full h-[175px] p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
                             />
@@ -227,7 +227,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] font-bold text-indigo-600 uppercase">Diálogo</span>
                             </div>
                             <textarea
-                                className="w-full h-[170px] p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
+                                className="w-full h-[175px] p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
                                 value={assistantPrompt}
                                 onChange={(e) => setAssistantPrompt(e.target.value)}
                             />
@@ -253,23 +253,61 @@ const BotIASection = ({ showToast }) => {
                         <div className="flex items-center justify-between w-full pr-1">
                             <span className="text-gray-900 dark:text-white font-bold text-sm">Seguimiento Automático</span>
 
-                            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90">
-                                <div className="flex flex-col">
-                                    <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Seguimiento</span>
-                                    <span className={`text-[10px] font-bold ${proactiveEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
-                                        {proactiveEnabled ? 'IA AUTO' : 'OFF'}
-                                    </span>
+                            <div className="flex items-center gap-1">
+                                {/* Operative Pill: Hours */}
+                                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90">
+                                    <div className="flex flex-col min-w-[42px]">
+                                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Horario</span>
+                                        <div className="flex items-center gap-1 mt-0.5">
+                                            <input
+                                                type="number"
+                                                value={operativeConfig.startHour}
+                                                onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) })}
+                                                className="w-5 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
+                                            />
+                                            <span className="text-[8px] text-gray-400 font-bold">-</span>
+                                            <input
+                                                type="number"
+                                                value={operativeConfig.endHour}
+                                                onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) })}
+                                                className="w-5 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={toggleProactive}
-                                    className={`
-                                        relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                                        ${proactiveEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
-                                    `}
-                                >
-                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${proactiveEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                                </button>
+
+                                {/* Limit Pill */}
+                                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90">
+                                    <div className="flex flex-col">
+                                        <span className="text-[8px] font-black uppercase tracking-widest text-red-400 leading-none">Límite</span>
+                                        <input
+                                            type="number"
+                                            value={operativeConfig.dailyLimit}
+                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) })}
+                                            className="w-8 bg-transparent text-[10px] font-bold text-red-600 dark:text-red-400 focus:outline-none p-0 mt-0.5 font-black"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Toggle Pill */}
+                                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90">
+                                    <div className="flex flex-col">
+                                        <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Seguimiento</span>
+                                        <span className={`text-[10px] font-bold ${proactiveEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
+                                            {proactiveEnabled ? 'IA AUTO' : 'OFF'}
+                                        </span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={toggleProactive}
+                                        className={`
+                                            relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
+                                            ${proactiveEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
+                                        `}
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${proactiveEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     }
@@ -309,38 +347,6 @@ const BotIASection = ({ showToast }) => {
                             ))}
                         </div>
 
-                        {/* Operative Settings: Integrated Design */}
-                        <div className="bg-gray-50 dark:bg-gray-900/40 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 block mb-1">Horario de operación</span>
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="number"
-                                            value={operativeConfig.startHour}
-                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) })}
-                                            className="w-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-black p-1.5 focus:ring-blue-500 text-center"
-                                        />
-                                        <span className="text-gray-400 font-bold">-</span>
-                                        <input
-                                            type="number"
-                                            value={operativeConfig.endHour}
-                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) })}
-                                            className="w-12 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-black p-1.5 focus:ring-blue-500 text-center"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-1">
-                                    <span className="text-[9px] font-black uppercase tracking-widest text-red-500/70 block mb-1">Límite de mensajes diarios</span>
-                                    <input
-                                        type="number"
-                                        value={operativeConfig.dailyLimit}
-                                        onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) })}
-                                        className="w-20 bg-white dark:bg-gray-800 border border-red-500/20 rounded-lg text-xs font-black text-red-600 p-1.5 focus:ring-red-500"
-                                    />
-                                </div>
-                            </div>
-                        </div>
 
                         {/* Protocol Stages: Horizontal Centered Clean List */}
                         <div className="space-y-2 pt-2">
