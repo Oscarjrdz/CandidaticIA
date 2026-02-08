@@ -329,7 +329,7 @@ const BotIASection = ({ showToast }) => {
                         {/* Professional Stats: Colored Restore */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             {[
-                                { label: 'Enviados', val: stats.totalSent, icon: Send, bg: 'bg-indigo-50 dark:bg-indigo-900/20', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-100/50 dark:border-indigo-900/30' },
+                                { label: 'Enviados Hoy', val: stats.today || 0, icon: Send, bg: 'bg-indigo-50 dark:bg-indigo-900/20', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-100/50 dark:border-indigo-900/30' },
                                 { label: 'ROI', val: stats.totalRecovered || 0, icon: RefreshCw, bg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-100/50 dark:border-emerald-900/30' },
                                 { label: 'Pendientes', val: stats.pending || 0, icon: Clock, bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-100/50 dark:border-amber-900/30' },
                                 { label: 'Completos', val: stats.complete || 0, icon: CheckCircle, bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-600 dark:text-blue-400', border: 'border-blue-100/50 dark:border-blue-900/30' }
