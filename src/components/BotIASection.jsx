@@ -352,32 +352,35 @@ const BotIASection = ({ showToast }) => {
                                     </span>
                                 </div>
                                 <div className="space-y-1">
-                                    {stats.flightPlan && Object.keys(stats.flightPlan).length > 0 ? (
-                                        Object.keys(stats.flightPlan).map((h, i) => {
-                                            const p = stats.flightPlan[h];
-                                            return (
-                                                <div key={i} className="flex flex-col gap-0.5">
-                                                    <div className="flex items-center justify-between text-[10px]">
-                                                        <div className="flex items-center gap-1 font-bold text-gray-600 dark:text-gray-300">
-                                                            <span>🎯 Nivel {i + 1} ({h}h):</span>
+                                    {stats.flightPlan && Object.keys(stats.flightPlan).filter(k => k !== 'summary').length > 0 ? (
+                                        Object.keys(stats.flightPlan)
+                                            .filter(k => k !== 'summary')
+                                            .sort((a, b) => parseInt(a) - parseInt(b))
+                                            .map((h, i) => {
+                                                const p = stats.flightPlan[h];
+                                                return (
+                                                    <div key={i} className="flex flex-col gap-0.5 py-1.5 first:pt-0 border-b border-indigo-100/30 dark:border-indigo-900/30 last:border-0 last:pb-0">
+                                                        <div className="flex items-center justify-between text-[11px]">
+                                                            <div className="flex items-center gap-1 font-bold text-gray-700 dark:text-gray-300">
+                                                                <span className="text-[10px] opacity-70">NIVEL {i + 1} ({h}H)</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-medium text-gray-500">{p.total} ({p.sent} env.)</span>
+                                                                <span className="font-black text-indigo-600 dark:text-indigo-400">{p.percentage}%</span>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-medium text-gray-500">{p.total} ({p.sent} env.)</span>
-                                                            <span className="font-black text-indigo-600 dark:text-indigo-400">{p.percentage}%</span>
+                                                        {/* Mini bar */}
+                                                        <div className="w-full h-1 bg-white/50 dark:bg-gray-800/50 rounded-full overflow-hidden mt-0.5">
+                                                            <div
+                                                                className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
+                                                                style={{ width: `${p.percentage}%` }}
+                                                            />
                                                         </div>
                                                     </div>
-                                                    {/* Mini bar */}
-                                                    <div className="w-full h-1 bg-white/50 dark:bg-gray-800/50 rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
-                                                            style={{ width: `${p.percentage}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            );
-                                        })
+                                                );
+                                            })
                                     ) : (
-                                        <p className="text-[10px] text-gray-400 italic font-medium px-1">Calculando ruta de hoy...</p>
+                                        <p className="text-[10px] text-gray-400 italic font-medium px-1">No hay vuelos programados para hoy.</p>
                                     )}
                                 </div>
                             </div>

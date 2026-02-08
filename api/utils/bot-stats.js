@@ -70,13 +70,22 @@ export const calculateBotStats = async () => {
                                 const hoursInactive = (now - lastInteraction) / (1000 * 60 * 60);
 
                                 const sortedStages = [...inactiveStages].sort((a, b) => b.hours - a.hours);
+
+                                // Determine the HIGHEST level the candidate qualifies for
                                 const currentStage = sortedStages.find(s => hoursInactive >= s.hours);
 
                                 if (currentStage) {
                                     const level = currentStage.hours;
-                                    const sessionKey = `proactive:${c.id}:${level}:${c.lastUserMessageAt}`;
-                                    sessionKeyPipeline.get(sessionKey);
-                                    processedCandidates.push({ c, level });
+                                    const dueTime = new Date(lastInteraction.getTime() + (level * 60 * 60 * 1000));
+
+                                    // Strictly count only if they became due today (to match "Today's Flight Plan")
+                                    // Or if they were already due but for some reason we count them in today's quota
+                                    // User said "cuantos de cada paso hoy voy a mandar solamente hoy"
+                                    if (dueTime <= todayEnd) {
+                                        const sessionKey = `proactive:${c.id}:${level}:${c.lastUserMessageAt}`;
+                                        sessionKeyPipeline.get(sessionKey);
+                                        processedCandidates.push({ c, level });
+                                    }
                                 }
                             }
                         } catch (parseErr) { }
