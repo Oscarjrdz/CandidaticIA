@@ -384,24 +384,24 @@ const BotIASection = ({ showToast }) => {
                                 </button>
                             </div>
 
-                            <div className="relative pt-10 pb-4 min-h-[150px] flex items-start overflow-x-auto no-scrollbar scroll-smooth">
-                                {/* Horizontal Line */}
-                                <div className="absolute top-[13px] left-0 right-0 h-0.5 bg-gray-100 dark:bg-gray-800"></div>
+                            <div className="relative pt-20 pb-6 min-h-[160px] flex items-start overflow-x-auto no-scrollbar scroll-smooth">
+                                {/* Horizontal Line - Adjusted for new PT */}
+                                <div className="absolute top-[21px] left-0 right-0 h-0.5 bg-gray-100 dark:bg-gray-800"></div>
 
                                 <div className="flex w-full justify-between items-start px-12 gap-8 md:gap-16">
                                     {inactiveStages.map((stage, idx) => (
                                         <div key={idx} className="relative flex flex-col items-center min-w-[150px] group transition-all">
-                                            {/* Dot with Ring */}
-                                            <div className={`absolute -top-[23px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-800 shadow-sm z-10 transition-transform group-hover:scale-125
+                                            {/* Dot with Ring - Adjusted top */}
+                                            <div className={`absolute -top-[31px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-800 shadow-sm z-10 transition-transform group-hover:scale-125
                                                 ${idx === 0 ? 'bg-blue-600' : idx === 1 ? 'bg-blue-500' : idx === 2 ? 'bg-indigo-500' : 'bg-slate-500'}`}
                                             ></div>
 
-                                            {/* Delete Button (Refined Position) */}
+                                            {/* Delete Button (Brought to front) */}
                                             <button
                                                 onClick={() => setInactiveStages(inactiveStages.filter((_, i) => i !== idx))}
-                                                className="absolute -top-[55px] opacity-0 group-hover:opacity-100 transition-all hover:scale-110 bg-red-50 dark:bg-red-900/20 text-red-500 p-1 rounded-full text-[10px] border border-red-100 dark:border-red-800 z-20 shadow-sm"
+                                                className="absolute -top-[65px] opacity-0 group-hover:opacity-100 transition-all hover:scale-110 bg-red-50 dark:bg-red-900/40 text-red-500 p-1.5 rounded-full text-[10px] border border-red-100 dark:border-red-800 z-30 shadow-md"
                                             >
-                                                <Trash2 className="w-3 h-3" />
+                                                <Trash2 className="w-3.5 h-3.5" />
                                             </button>
 
                                             <div className="flex flex-col items-center gap-1.5 w-full">
