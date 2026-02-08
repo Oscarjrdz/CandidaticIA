@@ -70,20 +70,44 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         const config = await getUltraMsgConfig();
 
-        // 2. Multimodal / Text Extraction
+        // 2. Multimodal / Text Extraction (Unified Loop)
         let userParts = [];
-        if (typeof incomingMessage === 'object' && incomingMessage?.type === 'audio') {
-            const { downloadMedia } = await import('../whatsapp/utils.js');
-            const media = await downloadMedia(incomingMessage.url);
-            if (media) {
-                userParts.push({ inlineData: { mimeType: 'audio/mp3', data: media.data } });
-                userParts.push({ text: 'Escucha este audio del candidato y responde amablemente.' });
+        let aggregatedText = "";
+
+        // Handle incomingMessage as potentially aggregated waitlist
+        const messagesToProcess = String(incomingMessage).includes(' | ')
+            ? String(incomingMessage).split(' | ')
+            : [incomingMessage];
+
+        for (const msg of messagesToProcess) {
+            let parsed = msg;
+            try {
+                // If it looks like JSON, it might be an audio object
+                if (typeof msg === 'string' && msg.trim().startsWith('{')) {
+                    parsed = JSON.parse(msg);
+                }
+            } catch (e) { }
+
+            if (typeof parsed === 'object' && parsed?.type === 'audio') {
+                const { downloadMedia } = await import('../whatsapp/utils.js');
+                const media = await downloadMedia(parsed.url);
+                if (media) {
+                    userParts.push({ inlineData: { mimeType: 'audio/mp3', data: media.data } });
+                    userParts.push({ text: '[Audio recibido del candidato]' });
+                } else {
+                    userParts.push({ text: '((Audio no disponible))' });
+                    aggregatedText += " ((audio)) ";
+                }
             } else {
-                userParts.push({ text: '((Audio no disponible))' });
+                const textVal = String(parsed || '').trim();
+                if (textVal) {
+                    userParts.push({ text: textVal });
+                    aggregatedText += (aggregatedText ? " | " : "") + textVal;
+                }
             }
-        } else {
-            userParts.push({ text: String(incomingMessage || '').trim() || 'Hola' });
         }
+
+        if (userParts.length === 0) userParts.push({ text: 'Hola' });
 
         // 3. History Retrieval
         const allMessages = await getMessages(candidateId, 20);
@@ -337,6 +361,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
      "escolaridad": "string | null"
   },
   "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
+  "audio_transcription": "Si recibiste audio, escribe aquí la transcripción exacta. Si no, pon null.",
   "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos)"
 }`;
 
@@ -403,9 +428,16 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         responseText = responseText.replace(/\*/g, '');
 
         // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]
-        // If the AI mentioned what it heard, we can log it. 
-        // Gemini usually transcribes internally. We can ask it to include transcription in a future version.
-        // For now, we update the candidate timestamp.
+        // If we have a transcription, we override the "((audio))" message in history to make it searchable/readable.
+        if (aiResult.audio_transcription) {
+            await saveMessage(candidateId, {
+                from: 'user',
+                content: `🎙️ [AUDIO TRANSCRITO]: "${aiResult.audio_transcription}"`,
+                type: 'text',
+                timestamp: new Date().toISOString(),
+                meta: { transcribed: true }
+            });
+        }
 
         // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
         const candidateUpdates = {
