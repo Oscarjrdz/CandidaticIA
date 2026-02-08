@@ -46,7 +46,7 @@ const CandidatesSection = ({ showToast }) => {
     const [magicLoading, setMagicLoading] = useState({});
 
     // 📡 SSE: Real-time candidate updates
-    const { newCandidate, connected: sseConnected } = useCandidatesSSE();
+    const { newCandidate, globalStats, connected: sseConnected } = useCandidatesSSE();
 
     // Listen for new candidates via SSE
     useEffect(() => {
@@ -64,6 +64,13 @@ const CandidatesSection = ({ showToast }) => {
             });
         }
     }, [newCandidate, showToast]);
+
+    // Live Stats Integration: Update dashboard when globalStats pulse arrives
+    useEffect(() => {
+        if (globalStats) {
+            setStats(prev => ({ ...prev, ...globalStats }));
+        }
+    }, [globalStats]);
 
     useEffect(() => {
         const loadInitialData = async () => {

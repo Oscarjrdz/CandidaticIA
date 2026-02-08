@@ -65,6 +65,20 @@ export default async function handler(req, res) {
                     lastCheck = Date.now();
                 }
             }
+
+            // --- Stats Pulse (Global) ---
+            const incoming = await redis.get('stats:msg:incoming') || '0';
+            const outgoing = await redis.get('stats:msg:outgoing') || '0';
+            const totalCands = await redis.zcard('candidates:list');
+
+            sendEvent({
+                type: 'stats:global',
+                data: {
+                    incoming: parseInt(incoming),
+                    outgoing: parseInt(outgoing),
+                    total: totalCands
+                }
+            });
         } catch (error) {
             console.error('SSE poll error:', error);
         }

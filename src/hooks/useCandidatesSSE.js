@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
  */
 export function useCandidatesSSE() {
     const [newCandidate, setNewCandidate] = useState(null);
+    const [globalStats, setGlobalStats] = useState(null);
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState(null);
     const eventSourceRef = useRef(null);
@@ -39,6 +40,8 @@ export function useCandidatesSSE() {
                         } else if (data.type === 'candidate:new') {
                             console.log('🆕 New candidate via SSE:', data.data);
                             setNewCandidate(data.data);
+                        } else if (data.type === 'stats:global') {
+                            setGlobalStats(data.data);
                         }
                     } catch (parseError) {
                         console.error('SSE parse error:', parseError);
@@ -90,6 +93,7 @@ export function useCandidatesSSE() {
 
     return {
         newCandidate,
+        globalStats,
         connected,
         error
     };
