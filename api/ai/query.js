@@ -82,30 +82,28 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v3]
-Eres el Motor de Relevancia Hiper-Estricto de Candidatic IA. Tu tarea es convertir una consulta de lenguaje natural en un JSON de búsqueda técnica.
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v3.8]
+Eres el Motor de Relevancia UNIVERSAL-ESTRICTO de Candidatic IA. Tu tarea es convertir una consulta de lenguaje natural en un JSON de búsqueda técnica.
 
 [REGLAS DE FILTRADO]:
 1. INTENCIÓN SEMÁNTICA: Traduce plurales a singulares para filtros categóricos. Ejemplo: "mujeres" -> {"genero": "Mujer"}.
 2. RANGOS NUMÉRICOS (CRÍTICO): Si el usuario pide edades (ej: "20 a 30 años"), usa min y max. 
    - Ejemplo: "de 20 a 30 años" -> {"edad": {"min": 20, "max": 30}}
    - Ejemplo: "más de 30" -> {"edad": {"op": ">", "val": 30}}
-3. PRIORIDAD DE CAMPOS:
-   - "nombreReal": Nombres de personas.
-   - "genero": "Hombre" o "Mujer".
-   - "municipio": Ciudades/Ubicación.
-   - "categoria": Puestos/Roles.
-4. KEYWORDS: Solo para habilidades técnicas o términos que no encajen en filtros (ej: "excel", "responsable").
+3. ESCOLARIDAD (NORMALIZACIÓN): Usa solo estos términos: "Primaria", "Secundaria", "Preparatoria", "Técnica", "Licenciatura", "Posgrado". 
+   - Ejemplo: "licenciados" -> {"escolaridad": "Licenciatura"}.
+4. KEYWORDS: Solo para habilidades técnicas (ej: "excel") o rasgos psicológicos.
 
 [FORMATO DE SALIDA]:
 {
   "filters": { 
     "municipio": "Monterrey", 
     "genero": "Mujer",
+    "escolaridad": "Licenciatura",
     "edad": { "min": 20, "max": 30 } 
   },
   "keywords": ["ventas"],
-  "explanation": "Búsqueda de mujeres de Monterrey entre 20 y 30 años con interés en ventas."
+  "explanation": "Búsqueda estricta de mujeres licenciadas de Monterrey entre 20 y 30 años."
 }
 
 [BASE DE DATOS]:
@@ -175,7 +173,7 @@ Consulta del usuario: "${query}"
         };
 
         const matchesCriteria = (candidateVal, criteria) => {
-            if (criteria === undefined || criteria === null) return true;
+            if (criteria === undefined || criteria === null || criteria === '') return true;
 
             // 1. Rango (min/max)
             if (criteria.min !== undefined || criteria.max !== undefined) {
@@ -201,13 +199,16 @@ Consulta del usuario: "${query}"
                 }
             }
 
-            // 3. String match (Simple)
+            // 3. String match (Categorical Strict)
             const cStr = normalize(candidateVal);
             const sStr = normalize(criteria.val || criteria);
+
+            if (!cStr || cStr === 'no proporcionado' || cStr === 'n/a' || cStr === 'na') return false;
+
             return cStr.includes(sStr);
         };
 
-        // --- SCORING ENGINE (TITAN v3.5 - Strict Edition) ---
+        // --- SCORING ENGINE (TITAN v3.8 - Universal Strict Edition) ---
         const activeFilterKeys = Object.keys(aiResponse.filters || {});
 
         // Final results collection
@@ -217,26 +218,24 @@ Consulta del usuario: "${query}"
             let failedStrict = false;
             const candidateAge = calculateAge(candidate.fechaNacimiento);
 
-            // 1. Mandatory Categorical Filtering (Strict Match)
+            // 1. Universal Mandatory Filtering
             activeFilterKeys.forEach(key => {
                 const criteria = aiResponse.filters[key];
                 const val = (key === 'edad') ? candidateAge : candidate[key];
 
-                // Check matchesCriteria
                 const hasMatch = matchesCriteria(val, criteria);
 
                 if (hasMatch) {
                     matchesCount++;
-                    score += (key === 'nombreReal' || key === 'municipio') ? 100 : 50;
+                    score += (key === 'nombreReal') ? 100 : 80; // Heavier weight for filters
                 } else {
-                    // STRICT FAIL: If it's a primary filter, we KILL the candidate
-                    if (['genero', 'edad', 'municipio'].includes(key)) {
+                    // UNIVERSAL STRICT FAIL: If it matches any key except nombreReal, it's mandatory
+                    if (key !== 'nombreReal') {
                         failedStrict = true;
                     }
                 }
             });
 
-            // If it failed any strict filter, discard immediately
             if (failedStrict) return acc;
 
             // 2. Bonus Exponencial por Multi-Filtro (El "AND" effect)
@@ -264,7 +263,7 @@ Consulta del usuario: "${query}"
             return acc;
         }, []);
 
-        // 5. Ordenar y Responder (Expanded Limit to 500)
+        // 5. Sort & Cap (Expanded Limit to 500)
         filtered = filtered.sort((a, b) => b._relevance - a._relevance);
 
         const limit = parseInt(req.query.limit || 500);
@@ -272,7 +271,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 3.5 (Strict Filtering)",
+            version: "Titan 3.8 (Universal Strict)",
             candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
