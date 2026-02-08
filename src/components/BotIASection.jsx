@@ -151,7 +151,7 @@ const BotIASection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-2 max-w-7xl mx-auto">
+        <div className="space-y-4 max-w-7xl mx-auto">
             {/* Header Status Card - Compressed */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-2 px-4 flex flex-col md:flex-row items-center justify-between gap-2">
                 <div className="flex items-center space-x-3">
@@ -170,18 +170,18 @@ const BotIASection = ({ showToast }) => {
                     <button
                         onClick={toggleActive}
                         className={`
-                            relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500
+                            relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2
                             ${isActive ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}
                         `}
                     >
                         <span
                             className={`
-                                inline-block h-5 w-5 transform rounded-full bg-white transition-transform
-                                ${isActive ? 'translate-x-6' : 'translate-x-1'}
+                                inline-block h-6 w-6 transform rounded-full bg-white transition-transform
+                                ${isActive ? 'translate-x-7' : 'translate-x-1'}
                             `}
                         />
                     </button>
-                    <span className="text-[11px] text-gray-600 dark:text-gray-300 font-bold uppercase">
+                    <span className="text-sm text-gray-600 dark:text-gray-300 font-bold uppercase">
                         {isActive ? 'On' : 'Off'}
                     </span>
                 </div>
@@ -197,7 +197,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full uppercase tracking-tighter">Extracción</span>
                             </label>
                             <textarea
-                                className="w-full h-20 p-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-xs resize-none shadow-inner font-mono"
+                                className="w-full h-32 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono leading-relaxed"
                                 placeholder="Reglas..."
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
@@ -210,7 +210,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full uppercase tracking-tighter">Seguimiento</span>
                             </label>
                             <textarea
-                                className="w-full h-20 p-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-xs resize-none shadow-inner font-mono"
+                                className="w-full h-32 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono leading-relaxed"
                                 placeholder="Personalidad..."
                                 value={assistantPrompt}
                                 onChange={(e) => setAssistantPrompt(e.target.value)}
@@ -222,7 +222,7 @@ const BotIASection = ({ showToast }) => {
                                 <select
                                     value={aiModel}
                                     onChange={(e) => setAiModel(e.target.value)}
-                                    className="w-full p-2 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-[11px] shadow-sm font-bold"
+                                    className="w-full p-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm shadow-sm font-bold"
                                 >
                                     <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
                                     <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
@@ -240,7 +240,7 @@ const BotIASection = ({ showToast }) => {
                             <span className="flex items-center gap-2 text-sm">Seguimiento <Sparkles className="w-3 h-3 text-blue-500" /></span>
 
                             {/* Proactive Follow-up Toggle - Compact */}
-                            <div className="flex items-center gap-2 scale-75 origin-right">
+                            <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm scale-90 origin-right">
                                 <button
                                     type="button"
                                     onClick={toggleProactive}
@@ -269,7 +269,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] bg-blue-600 text-white px-1 py-0.5 rounded-full uppercase tracking-tighter">Contacto</span>
                             </label>
                             <textarea
-                                className="w-full h-14 p-2 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-xs resize-none shadow-sm font-mono"
+                                className="w-full h-24 p-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-sm font-mono leading-relaxed"
                                 placeholder="Ej: Hola!..."
                                 value={proactivePrompt}
                                 onChange={(e) => setProactivePrompt(e.target.value)}
@@ -277,89 +277,88 @@ const BotIASection = ({ showToast }) => {
                         </div>
                         {/* Stats - Ultra Compact */}
                         <div className="grid grid-cols-4 gap-2">
-                            <div className="bg-gradient-to-br from-purple-500/10 to-indigo-500/5 dark:from-purple-500/20 dark:to-indigo-500/10 p-2 rounded-xl border border-purple-100/50 dark:border-purple-800/30">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-0.5">Enviados</p>
-                                <h4 className="text-base font-bold text-gray-900 dark:text-white leading-none">{stats.totalSent}</h4>
+                            <div className="bg-gradient-to-br from-purple-500/10 to-indigo-500/5 dark:from-purple-500/20 dark:to-indigo-500/10 p-2.5 rounded-xl border border-purple-100/50 dark:border-purple-800/30">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-0.5">Enviados</p>
+                                <h4 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{stats.totalSent}</h4>
                             </div>
-                            <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 dark:from-green-500/20 dark:to-emerald-500/10 p-2 rounded-xl border border-green-100/50 dark:border-green-800/30">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-green-600 dark:text-green-400 mb-0.5">Recuperados</p>
-                                <h4 className="text-base font-bold text-gray-900 dark:text-white leading-none">{stats.totalRecovered || 0}</h4>
+                            <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 dark:from-green-500/20 dark:to-emerald-500/10 p-2.5 rounded-xl border border-green-100/50 dark:border-green-800/30">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-green-600 dark:text-green-400 mb-0.5">ROI</p>
+                                <h4 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{stats.totalRecovered || 0}</h4>
                             </div>
-                            <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/5 dark:from-orange-500/20 dark:to-amber-500/10 p-2 rounded-xl border border-orange-100/50 dark:border-orange-800/30">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 mb-0.5">Pendientes</p>
-                                <h4 className="text-base font-bold text-gray-900 dark:text-white leading-none">{stats.pending || 0}</h4>
+                            <div className="bg-gradient-to-br from-orange-500/10 to-amber-500/5 dark:from-orange-500/20 dark:to-amber-500/10 p-2.5 rounded-xl border border-orange-100/50 dark:border-orange-800/30">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400 mb-0.5">Pendientes</p>
+                                <h4 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{stats.pending || 0}</h4>
                             </div>
-                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 dark:from-blue-500/20 dark:to-cyan-500/10 p-2 rounded-xl border border-blue-100/50 dark:border-blue-800/30">
-                                <p className="text-[8px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-0.5">Completos</p>
-                                <h4 className="text-base font-bold text-gray-900 dark:text-white leading-none">{stats.complete || 0}</h4>
+                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 dark:from-blue-500/20 dark:to-cyan-500/10 p-2.5 rounded-xl border border-blue-100/50 dark:border-blue-800/30">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 mb-0.5">Completos</p>
+                                <h4 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{stats.complete || 0}</h4>
                             </div>
                         </div>
 
                         {/* Operative Rules - Compressed */}
-                        <div className="bg-gray-50 dark:bg-gray-900/40 p-2 rounded-xl border border-gray-100 dark:border-gray-800/50">
+                        <div className="bg-gray-50 dark:bg-gray-900/40 p-3 rounded-xl border border-gray-100 dark:border-gray-800/50">
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="flex items-center gap-3">
-                                    <Clock className="w-3.5 h-3.5 text-blue-500" />
-                                    <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-4">
+                                    <Clock className="w-4 h-4 text-blue-500" />
+                                    <div className="flex items-center gap-2">
                                         <input
                                             type="number"
                                             value={operativeConfig.startHour}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) })}
-                                            className="w-8 bg-transparent border-none text-[11px] font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
+                                            className="w-10 bg-transparent border-none text-sm font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
                                         />
-                                        <span className="text-xs text-gray-400">-</span>
+                                        <span className="text-sm text-gray-400 font-bold">-</span>
                                         <input
                                             type="number"
                                             value={operativeConfig.endHour}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) })}
-                                            className="w-8 bg-transparent border-none text-[11px] font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
+                                            className="w-10 bg-transparent border-none text-sm font-black text-gray-700 dark:text-gray-300 p-0 focus:ring-0 text-center"
                                         />
-                                        <span className="text-[10px] text-gray-500 uppercase font-bold">h</span>
+                                        <span className="text-xs text-gray-500 uppercase font-black">h</span>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <Shield className="w-3.5 h-3.5 text-red-500" />
+                                <div className="flex items-center gap-3">
+                                    <Shield className="w-4 h-4 text-red-500" />
                                     <div className="flex items-center gap-1">
-                                        <span className="text-[10px] text-gray-400 font-bold">Límite:</span>
+                                        <span className="text-xs text-gray-400 font-bold uppercase tracking-tighter">Diario:</span>
                                         <input
                                             type="number"
                                             value={operativeConfig.dailyLimit}
                                             onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) })}
-                                            className="w-10 bg-transparent border-none text-[11px] font-black text-red-500 p-0 focus:ring-0"
+                                            className="w-12 bg-transparent border-none text-sm font-black text-red-500 p-0 focus:ring-0"
                                         />
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="space-y-1">
+                        <div className="space-y-3">
                             <div className="flex items-center justify-between px-1">
-                                <h4 className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none">Protocolo</h4>
+                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Protocolo</h4>
                                 <button
                                     onClick={() => setInactiveStages([...inactiveStages, { hours: 24, label: 'Etapa' }])}
-                                    className="text-[9px] font-bold text-blue-600 hover:text-blue-700 transition-colors"
+                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 transition-colors"
                                 >
                                     + AÑADIR
                                 </button>
                             </div>
 
-                            <div className="relative pt-10 pb-1 min-h-[90px] flex items-start overflow-x-auto no-scrollbar scroll-smooth bg-gray-50/20 dark:bg-gray-900/10 rounded-xl p-2">
-                                <div className="absolute top-[28px] left-0 right-0 h-0.5 bg-gray-100 dark:bg-gray-800 mx-4"></div>
-                                <div className="flex w-full justify-between items-start px-6 gap-3">
+                            <div className="relative pt-16 pb-8 min-h-[140px] flex items-start overflow-x-auto no-scrollbar scroll-smooth bg-gray-50/30 dark:bg-gray-900/10 rounded-2xl p-4">
+                                <div className="absolute top-[39px] left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-800 mx-6"></div>
+                                <div className="flex w-full justify-between items-start px-12 gap-8">
                                     {inactiveStages.map((stage, idx) => (
-                                        <div key={idx} className="relative flex flex-col items-center min-w-[100px] group transition-all">
-                                            <div className={`absolute top-[13.5px] w-3 h-3 rounded-full border-2 border-white dark:border-gray-800 shadow-sm z-10 
+                                        <div key={idx} className="relative flex flex-col items-center min-w-[140px] group transition-all">
+                                            <div className={`absolute top-[18px] w-4 h-4 rounded-full border-4 border-white dark:border-gray-800 shadow-sm z-10 
                                                 ${idx === 0 ? 'bg-blue-600' : idx === 1 ? 'bg-blue-500' : 'bg-slate-500'}`}
                                             ></div>
                                             <button
                                                 onClick={() => setInactiveStages(inactiveStages.filter((_, i) => i !== idx))}
-                                                className="absolute -top-1 opacity-0 group-hover:opacity-100 transition-all text-red-500 z-30"
+                                                className="absolute -top-6 opacity-0 group-hover:opacity-100 transition-all text-red-500 z-30 p-1 hover:bg-red-50 rounded-full"
                                             >
-                                                <Trash2 className="w-3 h-3" />
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
-
-                                            <div className="flex flex-col items-center gap-1 w-full pt-6">
-                                                <div className="flex items-center justify-center gap-0.5 bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded-lg shadow-sm border border-gray-100">
+                                            <div className="flex flex-col items-center gap-2 w-full pt-10">
+                                                <div className="flex items-center justify-center gap-1 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
                                                     <input
                                                         type="number"
                                                         value={stage.hours}
@@ -368,9 +367,9 @@ const BotIASection = ({ showToast }) => {
                                                             newStages[idx].hours = parseInt(e.target.value) || 0;
                                                             setInactiveStages(newStages);
                                                         }}
-                                                        className="w-7 bg-transparent border-none text-[11px] font-black text-gray-900 dark:text-white p-0 focus:ring-0 text-right"
+                                                        className="w-10 bg-transparent border-none text-base font-black text-gray-900 dark:text-white p-0 focus:ring-0 text-right"
                                                     />
-                                                    <span className="text-[11px] font-black text-blue-600">h</span>
+                                                    <span className="text-base font-black text-blue-600">h</span>
                                                 </div>
                                                 <textarea
                                                     value={stage.label}
@@ -380,7 +379,7 @@ const BotIASection = ({ showToast }) => {
                                                         newStages[idx].label = e.target.value;
                                                         setInactiveStages(newStages);
                                                     }}
-                                                    className="w-full bg-transparent border-none text-[9px] font-bold text-gray-500 dark:text-gray-400 leading-none italic text-center p-0 focus:ring-0 resize-none overflow-hidden"
+                                                    className="w-full bg-transparent border-none text-xs font-bold text-gray-600 dark:text-gray-400 leading-tight italic text-center p-0 focus:ring-0 resize-none overflow-hidden"
                                                     placeholder="Etiqueta"
                                                 />
                                             </div>
