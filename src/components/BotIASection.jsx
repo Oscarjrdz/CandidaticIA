@@ -342,8 +342,8 @@ const BotIASection = ({ showToast }) => {
                             </div>
                         </div>
 
-                        {/* Protocol Stages: Modern Clean List */}
-                        <div className="space-y-3 pt-2">
+                        {/* Protocol Stages: Horizontal Centered Clean List */}
+                        <div className="space-y-2 pt-2">
                             <div className="flex items-center justify-between px-1">
                                 <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
                                     Protocolos de Reactivación 📑
@@ -357,39 +357,41 @@ const BotIASection = ({ showToast }) => {
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-2">
+                            <div className="flex flex-row gap-3 overflow-x-auto pb-3 custom-scrollbar">
                                 {inactiveStages.map((stage, idx) => (
-                                    <div key={idx} className="group flex items-center gap-3 bg-white dark:bg-gray-800/60 p-3 rounded-2xl border border-gray-100 dark:border-gray-700 shadow-sm transition-all hover:border-blue-200 dark:hover:border-blue-900/30">
-                                        <div className="flex flex-col items-center justify-center bg-blue-50 dark:bg-blue-900/30 w-12 h-12 rounded-xl border border-blue-100 dark:border-blue-800/50">
-                                            <input
-                                                type="number"
-                                                value={stage.hours}
-                                                onChange={(e) => updateStage(idx, 'hours', parseInt(e.target.value))}
-                                                className="w-full bg-transparent text-center text-xs font-black text-blue-700 dark:text-blue-400 focus:outline-none"
-                                            />
-                                            <span className="text-[7px] font-black text-blue-600/60 uppercase -mt-1 tracking-tighter">Horas</span>
+                                    <div key={idx} className="group relative flex-shrink-0 w-44 bg-blue-50/50 dark:bg-blue-900/20 p-4 rounded-3xl border border-blue-100/50 dark:border-blue-800/30 flex flex-col items-center justify-center text-center transition-all hover:scale-[1.02] hover:bg-blue-50 dark:hover:bg-blue-900/30">
+                                        <div className="flex flex-col items-center mb-2">
+                                            <div className="flex items-center justify-center gap-1 bg-white dark:bg-gray-800 px-3 py-1 rounded-xl shadow-sm border border-blue-100/50 dark:border-blue-700">
+                                                <input
+                                                    type="number"
+                                                    value={stage.hours}
+                                                    onChange={(e) => updateStage(idx, 'hours', parseInt(e.target.value))}
+                                                    className="w-10 bg-transparent text-center text-sm font-black text-blue-700 dark:text-blue-400 focus:outline-none"
+                                                />
+                                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Hrs</span>
+                                            </div>
                                         </div>
 
-                                        <div className="flex-1">
-                                            <input
-                                                type="text"
+                                        <div className="w-full">
+                                            <textarea
                                                 value={stage.message}
                                                 onChange={(e) => updateStage(idx, 'message', e.target.value)}
-                                                className="w-full bg-transparent text-[11px] font-bold text-gray-700 dark:text-gray-300 focus:outline-none placeholder-gray-400"
+                                                className="w-full bg-transparent text-[10px] font-bold text-gray-700 dark:text-gray-300 focus:outline-none placeholder-gray-400 text-center resize-none leading-tight"
+                                                rows={2}
                                                 placeholder="Mensaje de seguimiento..."
                                             />
                                         </div>
 
                                         <button
                                             onClick={() => removeStage(idx)}
-                                            className="opacity-0 group-hover:opacity-100 p-2 rounded-xl text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                                            className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 p-2 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-all scale-75"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
                                 ))}
                                 {inactiveStages.length === 0 && (
-                                    <div className="text-center py-4 rounded-3xl border-2 border-dashed border-gray-100 dark:border-gray-800">
+                                    <div className="flex-1 text-center py-6 rounded-3xl border-2 border-dashed border-gray-100 dark:border-gray-800">
                                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sin seguimientos configurados</p>
                                     </div>
                                 )}
