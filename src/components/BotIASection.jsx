@@ -4,6 +4,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import { useToast } from '../hooks/useToast';
+
 const BotIASection = ({ showToast }) => {
     // Bot Status & Config
     const [isActive, setIsActive] = useState(false);
@@ -50,8 +51,6 @@ const BotIASection = ({ showToast }) => {
                 if (res.ok) {
                     const data = await res.json();
                     if (data.stats) setStats(data.stats);
-                    // Also update statuses in case they changed elsewhere, 
-                    // but NOT the prompts to avoid erasing user input
                     setIsActive(data.isActive);
                     setProactiveEnabled(data.proactiveEnabled);
                     if (data.operativeConfig) setOperativeConfig(data.operativeConfig);
@@ -63,8 +62,6 @@ const BotIASection = ({ showToast }) => {
         };
 
         loadSettings();
-
-        // Nivel 9/10: Auto-Refresh Dashboard (Stats only)
         const pollInterval = setInterval(loadStats, 15000); // Poll every 15s
 
         return () => clearInterval(pollInterval);
@@ -72,10 +69,6 @@ const BotIASection = ({ showToast }) => {
 
     const handleSave = async () => {
         setLoading(true);
-
-        localStorage.setItem('bot_ia_prompt', systemPrompt);
-        localStorage.setItem('bot_ia_active', isActive);
-
         try {
             const resConfig = await fetch('/api/bot-ia/settings', {
                 method: 'POST',
