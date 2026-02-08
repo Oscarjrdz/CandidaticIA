@@ -59,9 +59,21 @@ const BotIASection = ({ showToast }) => {
         };
 
         loadSettings();
-        const pollInterval = setInterval(loadStats, 15000); // Poll every 15s
 
-        return () => clearInterval(pollInterval);
+        // SSE for Live Stats & Flight Plan
+        const eventSource = new EventSource('/api/bot-ia/stats-stream');
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data) setStats(data);
+            } catch (err) {
+                console.error('SSE Parse Error:', err);
+            }
+        };
+
+        return () => {
+            eventSource.close();
+        };
     }, []);
 
     const handleSave = async () => {
@@ -327,17 +339,59 @@ const BotIASection = ({ showToast }) => {
                         </div>
 
                         {/* Professional Stats: Colored Restore */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {/* ✈️ PLAN DE VUELO DE HOY - ESPECÍFICO */}
+                            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-900/30 p-3 rounded-2xl shadow-sm transition-all hover:scale-[1.02] col-span-1 sm:col-span-2">
+                                <div className="flex items-center justify-between mb-2">
+                                    <div className="text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                        <Send className="w-3.5 h-3.5" />
+                                        <p className="text-[10px] font-black uppercase tracking-widest leading-none">Plan de Vuelo de Hoy ✈️</p>
+                                    </div>
+                                    <span className="text-[10px] font-black text-indigo-500 bg-white dark:bg-gray-800 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800 shadow-sm">
+                                        Total: {stats.today || 0}
+                                    </span>
+                                </div>
+                                <div className="space-y-1.5">
+                                    {stats.flightPlan && Object.keys(stats.flightPlan).length > 0 ? (
+                                        Object.keys(stats.flightPlan).map((h, i) => {
+                                            const p = stats.flightPlan[h];
+                                            return (
+                                                <div key={i} className="flex flex-col gap-1">
+                                                    <div className="flex items-center justify-between text-[10px]">
+                                                        <div className="flex items-center gap-1 font-bold text-gray-600 dark:text-gray-300">
+                                                            <span>🎯 Nivel {i + 1} ({h}h):</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-medium text-gray-500">{p.total} ({p.sent} env.)</span>
+                                                            <span className="font-black text-indigo-600 dark:text-indigo-400">{p.percentage}%</span>
+                                                        </div>
+                                                    </div>
+                                                    {/* Mini bar */}
+                                                    <div className="w-full h-1 bg-white/50 dark:bg-gray-800/50 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
+                                                            style={{ width: `${p.percentage}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <p className="text-[10px] text-gray-400 italic font-medium px-1">Calculando ruta de hoy...</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* RESTO DE STATS */}
                             {[
-                                { label: 'Enviados Hoy', val: stats.today || 0, icon: Send, bg: 'bg-indigo-50 dark:bg-indigo-900/20', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-100/50 dark:border-indigo-900/30' },
                                 { label: 'ROI', val: stats.totalRecovered || 0, icon: RefreshCw, bg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-100/50 dark:border-emerald-900/30' },
                                 { label: 'Pendientes', val: stats.pending || 0, icon: Clock, bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-100/50 dark:border-amber-900/30' },
                                 { label: 'Completos', val: stats.complete || 0, icon: CheckCircle, bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-600 dark:text-blue-400', border: 'border-blue-100/50 dark:border-blue-900/30' }
                             ].map((s, i) => (
-                                <div key={i} className={`${s.bg} ${s.border} border p-3 rounded-2xl shadow-sm transition-all hover:scale-[1.02]`}>
+                                <div key={i} className={`${s.bg} ${s.border} border p-3 rounded-2xl shadow-sm transition-all hover:scale-[1.02] flex flex-col justify-center`}>
                                     <div className="flex items-center justify-between mb-1">
                                         <div className={`${s.text} opacity-70`}>
-                                            <s.icon className="w-3 h-3" />
+                                            <s.icon className="w-3.5 h-3.5" />
                                         </div>
                                     </div>
                                     <p className="text-[8px] font-black uppercase tracking-widest text-gray-500/70 mb-0.5">{s.label}</p>

@@ -89,91 +89,11 @@ export default async function handler(req, res) {
             };
 
             try {
-                // Dynamic import to avoid top-level issues and match api/candidates logic
-                const { getCandidates, isProfileComplete } = await import('../utils/storage.js');
-
-                // Proactive Stats
-                const todayStr = new Date().toISOString().split('T')[0];
-                const todayCount = await redis.get(`ai:proactive:count:${todayStr}`) || '0';
-                let totalSent = await redis.get('ai:proactive:total_sent') || '0';
-                const totalRecovered = await redis.get('ai:proactive:total_recovered') || '0';
-
-                // Sync: If total is 0 but we already have sends today, homologate
-                if (totalSent === '0' && parseInt(todayCount) > 0) {
-                    totalSent = todayCount;
-                    await redis.set('ai:proactive:total_sent', todayCount);
+                const { calculateBotStats } = await import('../utils/bot-stats.js');
+                const calculatedStats = await calculateBotStats();
+                if (calculatedStats) {
+                    stats = calculatedStats;
                 }
-
-                // DIRECT COUNTER - NUCLEAR CHUNKED PIXELS (Nivel 9/10)
-                let pendingCount = 0;
-                let completeCount = 0;
-                let debugInfo = "";
-
-                try {
-                    const { isProfileComplete } = await import('../utils/storage.js');
-                    const customFieldsJson = await redis.get('custom_fields');
-                    const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
-
-                    // 1. Get ALL IDs from the main index
-                    const allIds = await redis.zrevrange('candidates:list', 0, -1);
-
-                    if (allIds && allIds.length > 0) {
-                        debugInfo = `Scanning ${allIds.length} IDs from ZSET. `;
-
-                        // 2. Chunked Pipeline Processing (Resilient)
-                        const CHUNK_SIZE = 100;
-                        for (let i = 0; i < allIds.length; i += CHUNK_SIZE) {
-                            const chunk = allIds.slice(i, i + CHUNK_SIZE);
-                            const pipeline = redis.pipeline();
-                            chunk.forEach(id => pipeline.get(`candidate:${id}`));
-                            const results = await pipeline.exec();
-
-                            results.forEach(([err, res]) => {
-                                if (!err && res) {
-                                    try {
-                                        const c = JSON.parse(res);
-                                        if (isProfileComplete(c, customFields)) {
-                                            completeCount++;
-                                        } else {
-                                            pendingCount++;
-                                        }
-                                    } catch (parseErr) {
-                                        // Skip corrupted JSON
-                                    }
-                                }
-                            });
-                        }
-                        debugInfo += `Found ${pendingCount} pending, ${completeCount} complete.`;
-                    } else {
-                        // FALLBACK: Keys scan
-                        const keys = await redis.keys('candidate:*');
-                        debugInfo = `ZSET empty. Keys scan found ${keys.length} keys. `;
-                        if (keys.length > 0) {
-                            const pipeline = redis.pipeline();
-                            keys.slice(0, 500).forEach(k => pipeline.get(k));
-                            const results = await pipeline.exec();
-                            results.forEach(([err, res]) => {
-                                if (!err && res) {
-                                    const c = JSON.parse(res);
-                                    if (isProfileComplete(c, customFields)) completeCount++;
-                                    else pendingCount++;
-                                }
-                            });
-                        }
-                    }
-                } catch (e) {
-                    console.error('❌ [Stats Nuclear] Fatal count error:', e);
-                    debugInfo = `Error: ${e.message}`;
-                }
-
-                stats = {
-                    today: parseInt(todayCount),
-                    totalSent: parseInt(totalSent),
-                    totalRecovered: parseInt(totalRecovered),
-                    pending: pendingCount,
-                    complete: completeCount,
-                    _debug: debugInfo
-                };
             } catch (statsError) {
                 console.error('⚠️ [Stats] Minor failure fetching stats:', statsError.message);
                 // We let it continue with default 0s so the UI doesn't break
