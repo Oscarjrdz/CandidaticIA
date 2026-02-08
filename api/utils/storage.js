@@ -517,7 +517,8 @@ export const addToWaitlist = async (candidateId, text) => {
     const client = getRedisClient();
     if (!client || !candidateId) return;
     const key = `${KEYS.CANDIDATE_WAITLIST_PREFIX}${candidateId}`;
-    await client.rpush(key, text);
+    const value = typeof text === 'object' ? JSON.stringify(text) : text;
+    await client.rpush(key, value);
     await client.expire(key, 60); // 1-minute safety TTL
 };
 

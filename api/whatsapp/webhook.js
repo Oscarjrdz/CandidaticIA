@@ -189,7 +189,7 @@ export default async function handler(req, res) {
                         if (isActive === 'false') return;
 
                         // 🏁 1. ADD TO WAITLIST (Industrial Standard)
-                        await addToWaitlist(candidateId, typeof agentInput === 'string' ? agentInput : '((AUDIO/MEDIA))');
+                        await addToWaitlist(candidateId, agentInput);
 
                         // 🏁 2. WORKER LOCK: Check if a worker is already processing this candidate
                         if (await isCandidateLocked(candidateId)) {

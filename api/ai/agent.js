@@ -402,6 +402,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         let responseText = aiResult.response_text || '';
         responseText = responseText.replace(/\*/g, '');
 
+        // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]
+        // If the AI mentioned what it heard, we can log it. 
+        // Gemini usually transcribes internally. We can ask it to include transcription in a future version.
+        // For now, we update the candidate timestamp.
+
         // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
         const candidateUpdates = {
             lastBotMessageAt: new Date().toISOString(),
