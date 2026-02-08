@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Sparkles, Send, Zap } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap } from 'lucide-react';
 import Card from './ui/Card';
 import ErrorBoundary from './ui/ErrorBoundary';
 import Button from './ui/Button';
@@ -650,17 +650,17 @@ const CandidatesSection = ({ showToast }) => {
                                                     )}
                                                 </div>
 
-                                                {/* WhatsApp Style Checkmarks for Follow-ups */}
+                                                {/* WhatsApp Style Checkmarks for Follow-ups (Blue) */}
                                                 {(candidate.followUps > 0) && (
-                                                    <div className="flex items-center -space-x-1.5 ml-0.5" title={`${candidate.followUps} seguimientos enviados`}>
+                                                    <div className="flex items-center -space-x-1 ml-0.5" title={`${candidate.followUps} seguimientos enviados`}>
                                                         {[...Array(Math.min(candidate.followUps, 3))].map((_, i) => (
-                                                            <div key={i} className="flex items-center -space-x-2.5">
-                                                                <CheckCircle className="w-2.5 h-2.5 text-green-500 fill-green-500/10" strokeWidth={3} />
-                                                                <CheckCircle className="w-2.5 h-2.5 text-green-500 fill-green-500/10 translate-x-0.5" strokeWidth={3} />
+                                                            <div key={i} className="flex items-center -space-x-2">
+                                                                <Check className="w-3 h-3 text-blue-500" strokeWidth={4} />
+                                                                <Check className="w-3 h-3 text-blue-500 -ml-2" strokeWidth={4} />
                                                             </div>
                                                         ))}
                                                         {candidate.followUps > 3 && (
-                                                            <span className="text-[8px] font-black text-green-600 dark:text-green-400 ml-1">
+                                                            <span className="text-[8px] font-black text-blue-600 dark:text-blue-400 ml-1">
                                                                 +{candidate.followUps - 3}
                                                             </span>
                                                         )}

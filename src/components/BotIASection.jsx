@@ -384,7 +384,6 @@ const BotIASection = ({ showToast }) => {
 
                             {/* RESTO DE STATS */}
                             {[
-                                { label: 'ROI', val: stats.totalRecovered || 0, icon: RefreshCw, bg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-100/50 dark:border-emerald-900/30' },
                                 { label: 'Pendientes', val: stats.pending || 0, icon: Clock, bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-600 dark:text-amber-400', border: 'border-amber-100/50 dark:border-amber-900/30' },
                                 { label: 'Completos', val: stats.complete || 0, icon: CheckCircle, bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-600 dark:text-blue-400', border: 'border-blue-100/50 dark:border-blue-900/30' }
                             ].map((s, i) => (
