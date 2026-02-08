@@ -151,9 +151,9 @@ const BotIASection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-4 max-w-7xl mx-auto">
-            {/* Header Status Card - Compressed */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-2 px-4 flex flex-col md:flex-row items-center justify-between gap-2">
+        <div className="space-y-6 max-w-7xl mx-auto">
+            {/* Header Status Card - Expanded */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 px-6 flex flex-col md:flex-row items-center justify-between gap-2">
                 <div className="flex items-center space-x-3">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isActive ? 'bg-green-100 dark:bg-green-900/30' : 'bg-gray-100 dark:bg-gray-700'}`}>
                         <Bot className={`w-5 h-5 ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
@@ -197,7 +197,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full uppercase tracking-tighter">Extracción</span>
                             </label>
                             <textarea
-                                className="w-full h-32 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono leading-relaxed"
+                                className="w-full h-40 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono leading-relaxed"
                                 placeholder="Reglas..."
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
@@ -210,7 +210,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full uppercase tracking-tighter">Seguimiento</span>
                             </label>
                             <textarea
-                                className="w-full h-32 p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono leading-relaxed"
+                                className="w-full h-40 p-4 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-inner font-mono leading-relaxed"
                                 placeholder="Personalidad..."
                                 value={assistantPrompt}
                                 onChange={(e) => setAssistantPrompt(e.target.value)}
@@ -269,7 +269,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] bg-blue-600 text-white px-1 py-0.5 rounded-full uppercase tracking-tighter">Contacto</span>
                             </label>
                             <textarea
-                                className="w-full h-24 p-3 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-sm font-mono leading-relaxed"
+                                className="w-full h-32 p-4 rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 text-sm resize-none shadow-sm font-mono leading-relaxed"
                                 placeholder="Ej: Hola!..."
                                 value={proactivePrompt}
                                 onChange={(e) => setProactivePrompt(e.target.value)}
@@ -343,8 +343,8 @@ const BotIASection = ({ showToast }) => {
                                 </button>
                             </div>
 
-                            <div className="relative pt-16 pb-8 min-h-[140px] flex items-start overflow-x-auto no-scrollbar scroll-smooth bg-gray-50/30 dark:bg-gray-900/10 rounded-2xl p-4">
-                                <div className="absolute top-[39px] left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-800 mx-6"></div>
+                            <div className="relative pt-24 pb-12 min-h-[180px] flex items-start overflow-x-auto no-scrollbar scroll-smooth bg-gray-50/30 dark:bg-gray-900/10 rounded-2xl p-6">
+                                <div className="absolute top-[47px] left-0 right-0 h-0.5 bg-gray-200 dark:bg-gray-800 mx-8"></div>
                                 <div className="flex w-full justify-between items-start px-12 gap-8">
                                     {inactiveStages.map((stage, idx) => (
                                         <div key={idx} className="relative flex flex-col items-center min-w-[140px] group transition-all">
