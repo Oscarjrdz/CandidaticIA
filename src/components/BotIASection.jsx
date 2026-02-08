@@ -213,7 +213,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] font-bold text-blue-600 uppercase">Extractora</span>
                             </div>
                             <textarea
-                                className="w-full h-32 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
+                                className="w-full h-[400px] p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
                             />
@@ -227,7 +227,7 @@ const BotIASection = ({ showToast }) => {
                                 <span className="text-[8px] font-bold text-indigo-600 uppercase">Diálogo</span>
                             </div>
                             <textarea
-                                className="w-full h-32 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
+                                className="w-full h-[400px] p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
                                 value={assistantPrompt}
                                 onChange={(e) => setAssistantPrompt(e.target.value)}
                             />
