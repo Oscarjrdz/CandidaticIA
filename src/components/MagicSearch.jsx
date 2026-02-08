@@ -128,7 +128,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                 ref={modalRef}
                 className="w-full max-w-2xl bg-white dark:bg-gray-950 rounded-[40px] shadow-[0_40px_100px_rgba(0,0,0,0.5)] overflow-hidden animate-spring-in border border-white/20"
             >
-                <div className="p-12 space-y-10">
+                <div className="p-8 space-y-6">
                     {/* Header: Zuckerberg Style */}
                     <div className="flex items-start justify-between">
                         <div className="space-y-2">
@@ -157,7 +157,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                     </div>
 
                     {/* Input Section */}
-                    <div className="space-y-8">
+                    <div className="space-y-6">
                         <form onSubmit={handleSearch} className="relative group">
                             <div className="flex items-center space-x-6">
                                 <div className="flex-shrink-0">
@@ -167,8 +167,8 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                                             <Sparkles className="absolute inset-3 w-6 h-6 text-blue-600 animate-pulse" />
                                         </div>
                                     ) : (
-                                        <div className="w-14 h-14 bg-blue-50 dark:bg-blue-900/20 rounded-2xl flex items-center justify-center border border-blue-100/50 dark:border-blue-800/30">
-                                            <Sparkles className={`w-8 h-8 ${mode === 'action' ? 'text-purple-600' : 'text-blue-600'}`} />
+                                        <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center border border-blue-100/50 dark:border-blue-800/30">
+                                            <Sparkles className={`w-5 h-5 ${mode === 'action' ? 'text-purple-600' : 'text-blue-600'}`} />
                                         </div>
                                     )}
                                 </div>
@@ -179,7 +179,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
                                         placeholder={customPlaceholder || "Describe a tu candidato ideal..."}
                                         value={query}
                                         onChange={(e) => setQuery(e.target.value)}
-                                        className="w-full bg-transparent outline-none text-[28px] font-semibold text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 border-none focus:ring-0 p-0"
+                                        className="w-full bg-transparent outline-none text-[22px] font-semibold text-gray-900 dark:text-white placeholder-gray-300 dark:placeholder-gray-700 border-none focus:ring-0 p-0"
                                     />
                                 </div>
                             </div>

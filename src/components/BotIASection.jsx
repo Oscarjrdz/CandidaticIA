@@ -339,24 +339,24 @@ const BotIASection = ({ showToast }) => {
                         </div>
 
                         {/* Professional Stats: Colored Restore */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                             {/* ✈️ PLAN DE VUELO DE HOY - ESPECÍFICO */}
-                            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-900/30 p-3 rounded-2xl shadow-sm transition-all hover:scale-[1.02] col-span-1 sm:col-span-2">
+                            <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100/50 dark:border-indigo-900/30 p-2.5 rounded-2xl shadow-sm transition-all hover:scale-[1.01] col-span-1 sm:col-span-2">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
                                         <Send className="w-3.5 h-3.5" />
                                         <p className="text-[10px] font-black uppercase tracking-widest leading-none">Plan de Vuelo de Hoy ✈️</p>
                                     </div>
                                     <span className="text-[10px] font-black text-indigo-500 bg-white dark:bg-gray-800 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-800 shadow-sm">
-                                        Total: {stats.today || 0}
+                                        Total: {stats.flightPlan?.summary?.totalItems || 0}
                                     </span>
                                 </div>
-                                <div className="space-y-1.5">
+                                <div className="space-y-1">
                                     {stats.flightPlan && Object.keys(stats.flightPlan).length > 0 ? (
                                         Object.keys(stats.flightPlan).map((h, i) => {
                                             const p = stats.flightPlan[h];
                                             return (
-                                                <div key={i} className="flex flex-col gap-1">
+                                                <div key={i} className="flex flex-col gap-0.5">
                                                     <div className="flex items-center justify-between text-[10px]">
                                                         <div className="flex items-center gap-1 font-bold text-gray-600 dark:text-gray-300">
                                                             <span>🎯 Nivel {i + 1} ({h}h):</span>
