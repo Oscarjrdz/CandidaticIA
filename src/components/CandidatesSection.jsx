@@ -328,7 +328,7 @@ const CandidatesSection = ({ showToast }) => {
     };
 
     return (
-        <div className="h-[calc(100vh-theme(spacing.24))] flex flex-col space-y-4">
+        <div className="flex-1 min-h-0 flex flex-col space-y-4">
             {/* Sticky Header Wrapper */}
             <div className="flex-none space-y-4">
 
@@ -354,7 +354,7 @@ const CandidatesSection = ({ showToast }) => {
                     {/* Card 2: Incoming Messages (Live) */}
                     <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                         <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <MessageCircle className="w-16 h-16 text-emerald-500 transform -rotate-12" />
+                            <MessageCircle className="w-16 h-16 text-green-500 opacity-20 transform -rotate-12" />
                         </div>
                         <div className="flex flex-col relative z-10">
                             <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
@@ -364,10 +364,10 @@ const CandidatesSection = ({ showToast }) => {
                                 </h3>
                                 <div className="flex items-center space-x-1">
                                     <span className="relative flex h-2.5 w-2.5">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
                                     </span>
-                                    <span className="text-[10px] text-emerald-500 font-medium ml-1">En vivo</span>
+                                    <span className="text-[10px] text-green-500 font-medium ml-1">En vivo</span>
                                 </div>
                             </div>
                         </div>
