@@ -634,25 +634,30 @@ const CandidatesSection = ({ showToast }) => {
                                         </td>
 
                                         <td className="py-0.5 px-2.5 text-center">
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleOpenChat(candidate);
-                                                }}
-                                                className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center gap-1"
-                                                title="Abrir chat"
-                                            >
-                                                <div className="relative">
-                                                    <MessageCircle className="w-4 h-4" />
-                                                    {candidate.ultimoMensaje && (
-                                                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
-                                                    )}
-                                                </div>
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleOpenChat(candidate);
+                                                    }}
+                                                    className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center"
+                                                    title="Abrir chat"
+                                                >
+                                                    <div className="relative">
+                                                        <MessageCircle className="w-4 h-4" />
+                                                        {candidate.ultimoMensaje && (
+                                                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
+                                                        )}
+                                                    </div>
+                                                </button>
 
-                                                {/* WhatsApp Style Checkmarks for Follow-ups (Blue) */}
+                                                {/* WhatsApp Style Checkmarks for Follow-ups (Blue) - Decorative Only */}
                                                 {(candidate.followUps > 0) && (
-                                                    <div className="flex items-center -space-x-1 ml-0.5" title={`${candidate.followUps} seguimientos enviados`}>
+                                                    <div
+                                                        className="flex items-center -space-x-1 ml-0.5 cursor-default select-none pointer-events-none"
+                                                        title={`${candidate.followUps} seguimientos enviados`}
+                                                    >
                                                         {[...Array(Math.min(candidate.followUps, 3))].map((_, i) => (
                                                             <div key={i} className="flex items-center -space-x-2">
                                                                 <Check className="w-3 h-3 text-blue-500" strokeWidth={4} />
@@ -666,7 +671,7 @@ const CandidatesSection = ({ showToast }) => {
                                                         )}
                                                     </div>
                                                 )}
-                                            </button>
+                                            </div>
                                         </td>
                                         <td className="py-0.5 px-2.5 text-center">
                                             <button
