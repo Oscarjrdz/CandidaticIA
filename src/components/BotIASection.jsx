@@ -260,17 +260,19 @@ const BotIASection = ({ showToast }) => {
                                         <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Horario</span>
                                         <div className="flex items-center gap-1 mt-0.5">
                                             <input
-                                                type="number"
+                                                type="text"
+                                                inputMode="numeric"
                                                 value={operativeConfig.startHour}
-                                                onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) })}
-                                                className="w-5 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
+                                                onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value.replace(/\D/g, '')) || 0 })}
+                                                className="w-4 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
                                             />
                                             <span className="text-[8px] text-gray-400 font-bold">-</span>
                                             <input
-                                                type="number"
+                                                type="text"
+                                                inputMode="numeric"
                                                 value={operativeConfig.endHour}
-                                                onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) })}
-                                                className="w-5 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
+                                                onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value.replace(/\D/g, '')) || 0 })}
+                                                className="w-4 bg-transparent text-[10px] font-bold text-blue-600 dark:text-blue-400 focus:outline-none text-center p-0"
                                             />
                                         </div>
                                     </div>
@@ -281,10 +283,11 @@ const BotIASection = ({ showToast }) => {
                                     <div className="flex flex-col">
                                         <span className="text-[8px] font-black uppercase tracking-widest text-red-400 leading-none">Límite</span>
                                         <input
-                                            type="number"
+                                            type="text"
+                                            inputMode="numeric"
                                             value={operativeConfig.dailyLimit}
-                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) })}
-                                            className="w-8 bg-transparent text-[10px] font-bold text-red-600 dark:text-red-400 focus:outline-none p-0 mt-0.5 font-black"
+                                            onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value.replace(/\D/g, '')) || 0 })}
+                                            className="w-10 bg-transparent text-[10px] font-bold text-red-600 dark:text-red-400 focus:outline-none p-0 mt-0.5 font-black text-center"
                                         />
                                     </div>
                                 </div>
