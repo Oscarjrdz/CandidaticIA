@@ -51,10 +51,7 @@ const BotIASection = ({ showToast }) => {
                 if (res.ok) {
                     const data = await res.json();
                     if (data.stats) setStats(data.stats);
-                    setIsActive(data.isActive);
-                    setProactiveEnabled(data.proactiveEnabled);
-                    if (data.operativeConfig) setOperativeConfig(data.operativeConfig);
-                    if (data.inactiveStages) setInactiveStages(data.inactiveStages);
+                    // Polling now ONLY updates statistics to prevent overwriting user edits in progress.
                 }
             } catch (error) {
                 console.error('Error polling stats:', error);
