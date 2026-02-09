@@ -526,9 +526,17 @@ export const getWaitlist = async (candidateId) => {
     const client = getRedisClient();
     if (!client || !candidateId) return [];
     const key = `${KEYS.CANDIDATE_WAITLIST_PREFIX}${candidateId}`;
-    const msgs = await client.lrange(key, 0, -1);
-    await client.del(key);
-    return msgs;
+    try {
+        const pipeline = client.pipeline();
+        pipeline.lrange(key, 0, -1);
+        pipeline.del(key);
+        const results = await pipeline.exec();
+        const messages = results[0][1] || [];
+        return messages;
+    } catch (e) {
+        console.error('❌ [Storage] getWaitlist Error:', e);
+        return [];
+    }
 };
 
 export const updateCandidate = async (id, data) => {
