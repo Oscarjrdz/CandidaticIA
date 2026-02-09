@@ -524,16 +524,15 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         // Final Persistence
-        const taggedResponse = `[V3-LIVE] ${responseText}`;
-        const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, taggedResponse);
+        const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
         await Promise.allSettled([
             deliveryPromise,
-            saveMessage(candidateId, { from: 'bot', content: taggedResponse, timestamp: new Date().toISOString() }),
+            saveMessage(candidateId, { from: 'bot', content: responseText, timestamp: new Date().toISOString() }),
             updatePromise
         ]);
 
-        return taggedResponse;
+        return responseText;
 
     } catch (error) {
         console.error('❌ [AI Agent] Fatal Error:', error);

@@ -129,11 +129,11 @@ export default async function handler(req, res) {
 
                 // 🛡️ [WEBHOOK TRANSCRIPTION SHIELD]: Ignore external transcriptions (likely from UltraMsg STT)
                 if (String(body).includes('[AUDIO TRANSCRITO]') || String(body).includes('🎙️')) {
-                    console.log(`[W2.0-LIVE] 🛡️ Blocked external transcription for ${phone}: ${body.substring(0, 30)}...`);
+                    console.log(`[AUDIO SHIELD] 🛡️ Blocked external transcription for ${phone}: ${body.substring(0, 30)}...`);
                     return res.status(200).send('transcription_ignored');
                 }
 
-                console.log(`[W2.0-LIVE] Incoming message from ${phone}: ${body.substring(0, 30)}...`);
+                console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}...`);
 
                 // Prepare Message Object
                 let agentInput = body;
@@ -274,7 +274,7 @@ export default async function handler(req, res) {
         return res.status(200).send('ignored');
 
     } catch (error) {
-        console.error('❌ [Webhook W2.0-LIVE] Fatal Error:', error);
+        console.error('❌ [Webhook] Fatal Error:', error);
         return res.status(200).send('error_handled');
     }
 }
