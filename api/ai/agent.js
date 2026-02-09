@@ -386,7 +386,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     model: mName,
                     systemInstruction,
                     generationConfig: {
-                        temperature: 0.1,
+                        temperature: 0.4,
                         responseMimeType: "application/json"
                     }
                 });
@@ -432,8 +432,9 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         responseText = responseText.replace(/\*/g, '');
 
         // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]
-        // If we have a transcription, we override the "((audio))" message in history to make it searchable/readable.
-        if (aiResult.audio_transcription) {
+        // If we have a transcription AND it was actually an audio message, 
+        // we override the "((audio))" message in history to make it searchable/readable.
+        if (hasAudio && aiResult.audio_transcription) {
             await saveMessage(candidateId, {
                 from: 'user',
                 content: `🎙️ [AUDIO TRANSCRITO]: "${aiResult.audio_transcription}"`,

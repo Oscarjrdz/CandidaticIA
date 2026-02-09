@@ -31,7 +31,7 @@ export async function classifyIntent(candidateId, lastMessage, historyText = "",
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({
             model: "gemini-1.5-flash",
-            generationConfig: { temperature: 0.1 }
+            generationConfig: { temperature: 0.4 }
         });
 
         const prompt = `[INTENT CLASSIFIER v2.1]
