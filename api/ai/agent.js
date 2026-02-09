@@ -474,30 +474,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         let responseText = aiResult.response_text || '';
         responseText = responseText.replace(/\*/g, '');
 
-        // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]: Only if Turn has NEW audio
-        if (hasAudio && aiResult.audio_transcription && turnAudioUrls.length > 0) {
-            const primaryUrl = turnAudioUrls[0];
-            const cleanTranscription = String(aiResult.audio_transcription).toLowerCase().trim();
-
-            const isAlreadyInHistory = validMessages.some(m => {
-                const sameUrl = m.meta?.audioUrl === primaryUrl;
-                const sameContent = m.content && m.content.toLowerCase().includes(cleanTranscription);
-                return sameUrl || sameContent;
-            });
-
-            if (!isAlreadyInHistory) {
-                console.log(`[AI DEBUG] Saving verified unique transcription for ${primaryUrl}: "${aiResult.audio_transcription}"`);
-                await saveMessage(candidateId, {
-                    from: 'user',
-                    content: `🎙️ [AUDIO TRANSCRITO]: "${aiResult.audio_transcription}"`,
-                    type: 'text',
-                    timestamp: new Date().toISOString(),
-                    meta: { transcribed: true, audioUrl: primaryUrl }
-                });
-            } else {
-                console.log(`[AI DEBUG] Skipping known transcription match in history for ${primaryUrl}`);
-            }
-        }
+        // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]: REMOVED at user request to keep chat clean.
+        // Brenda still sees the audio context internally to extraction data, but we won't save a text version.
 
         // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
         const candidateUpdates = {
