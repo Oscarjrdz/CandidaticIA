@@ -197,7 +197,7 @@ export default async function handler(req, res) {
                         const isLocked = await isCandidateLocked(candidateId);
                         if (isLocked) {
                             console.log(`[Industrial Queue] Candidate ${candidateId} is busy. Message added to waitlist.`);
-                            return;
+                            return res.status(200).json({ status: 'queued', candidateId });
                         }
 
                         // 🏁 3. WORKER LOOP: Process everything in the waitlist until drained

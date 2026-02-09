@@ -80,7 +80,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
             ? String(incomingMessage).split(' | ')
             : [incomingMessage];
 
-        console.log(`[AI DEBUG] Turn for ${candidateId}. Messages:`, messagesToProcess);
+        console.log(`[GHOST HUNT] Messages for ${candidateId}:`, messagesToProcess);
 
         for (const msg of messagesToProcess) {
             let parsed = msg;
@@ -94,7 +94,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
             // 🛡️ [HYPER-PRECISE AUDIO CHECK]: Must be an object with type 'audio' AND a physical URL
             if (isJson && parsed && typeof parsed === 'object' && parsed.type === 'audio' && (parsed.url || parsed.file)) {
-                console.log(`[AI DEBUG] ✅ GENUINE AUDIO Turn detected for ${candidateId}. URL: ${parsed.url || parsed.file}`);
+                console.log(`[GHOST HUNT] ✅ GENUINE AUDIO detected for ${candidateId}. URL: ${parsed.url || parsed.file}`);
                 hasAudio = true;
                 const { downloadMedia } = await import('../whatsapp/utils.js');
                 const media = await downloadMedia(parsed.url || parsed.file);
@@ -107,18 +107,17 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 }
             } else {
                 // 🛡️ [FEEDBACK LOOP SHIELD]: If the input text contains the transcription prefix, skip it entirely.
-                // This prevents "Monterrey" + historical transcriptions from being aggregated and confusing Gemini.
                 const textVal = (isJson || typeof parsed === 'object') ? (parsed.body || parsed.content || JSON.stringify(parsed)) : String(parsed || '').trim();
 
                 if (textVal && textVal !== '{}' && !textVal.includes('[AUDIO TRANSCRITO]') && !textVal.includes('🎙️')) {
                     userParts.push({ text: textVal });
                     aggregatedText += (aggregatedText ? " | " : "") + textVal;
                 } else {
-                    console.log(`[AI DEBUG] 🛡️ Filtered out non-primary input/transcription from current turn processing.`);
+                    console.log(`[GHOST HUNT] 🛡️ Skipping non-primary input/transcription: ${textVal.substring(0, 30)}...`);
                 }
             }
         }
-        console.log(`[AI DEBUG] Final hasAudio for this processMessage run: ${hasAudio}`);
+        console.log(`[GHOST HUNT] Final hasAudio for ${candidateId}: ${hasAudio}`);
 
         if (userParts.length === 0) userParts.push({ text: 'Hola' });
 
