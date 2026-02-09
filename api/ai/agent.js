@@ -8,9 +8,10 @@ import {
     auditProfile,
     getProjectById,
     getVacancyById,
-    recordAITelemetry
+    recordAITelemetry,
+    moveCandidateStep
 } from '../utils/storage.js';
-import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence } from '../whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, downloadMedia } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
 import { classifyIntent } from './intent-classifier.js';
 import { getCachedConfig } from '../utils/cache.js';
@@ -134,22 +135,12 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 const isAlreadyInTurn = turnAudioUrls.includes(audioUrl);
 
                 if (isAlreadyInHistory || isAlreadyInTurn) {
-                    console.log(`[GHOST HUNT] 🛡️ Deduplicated Audio URL (already done): ${audioUrl}`);
                     continue;
                 }
 
-                // [DIAGNOSTIC]: Check if there's *any* transcription in recent history (last 5 turns) 
-                // that might be a content-match for a likely retry.
-                const recentTranscriptions = validMessages.slice(-10).filter(m => m.meta?.transcribed);
-                if (recentTranscriptions.length > 0) {
-                    console.log(`[GHOST HUNT] Info: Candidate has ${recentTranscriptions.length} recent transcriptions in history.`);
-                }
-
-                console.log(`[GHOST HUNT] ✅ NEW GENUINE AUDIO for ${candidateId}. URL: ${audioUrl}`);
                 hasAudio = true;
                 turnAudioUrls.push(audioUrl);
 
-                const { downloadMedia } = await import('../whatsapp/utils.js');
                 const media = await downloadMedia(audioUrl);
                 if (media) {
                     userParts.push({ inlineData: { mimeType: 'audio/mp3', data: media.data } });
@@ -168,8 +159,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 if (textVal && textVal !== '{}' && !isTranscriptionPrefix && !isInternalJson) {
                     userParts.push({ text: textVal });
                     aggregatedText += (aggregatedText ? " | " : "") + textVal;
-                } else {
-                    console.log(`[GHOST HUNT] 🛡️ Skipping internal/stale input: ${textVal.substring(0, 30)}...`);
                 }
             }
         }
@@ -180,11 +169,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const recentHistory = validMessages
             .slice(0, -1)
             .filter(m => {
-                // 🛡️ [TOTAL GHOST WIPE]: Remove legacy "preguntón" messages COMPLETELY 
-                // from history so Gemini doesn't even know they existed and won't parrot them.
                 const ghostKeywords = ['preguntón', 'focusada', 'procesa su perfil'];
                 if ((m.from === 'bot' || m.from === 'me') && ghostKeywords.some(kw => m.content.toLowerCase().includes(kw))) {
-                    console.log(`[Ghost Shield] Wiping ghost message from history: "${m.content.substring(0, 30)}..."`);
                     return false;
                 }
                 return true;
@@ -233,13 +219,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const assistantCustomPrompt = await redis?.get('assistant_ia_prompt') || '';
 
         let systemInstruction = getIdentityLayer(customPrompt);
-
-        // 🛡️ [NUCLEAR GHOST SHIELD]: If the base prompt from Redis is infected with the legacy "preguntón", purge it.
-        if (systemInstruction.toLowerCase().includes('preguntón') || systemInstruction.toLowerCase().includes('focusada')) {
-            console.warn('⚠️ [Nuclear Shield] Infected BASE prompt detected. Neutralizing identity.');
-            systemInstruction = `[IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. ✨🌸
-[ESTILO]: Atenta, carismática y 100% humana. Usa emojis con libertad y varía tus expresiones.`;
-        }
 
         // SESSION & VIBE DATA (Injecting RAW data for the LLM to process according to the VISIBLE prompt)
         console.log(`[AI DEBUG] Session timer for ${candidateId}: ${minSinceLastBot} min.`);
@@ -541,7 +520,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // --- MOVE KANBAN LOGIC ---
         const moveToken = (aiResult.thought_process || '').includes('{ move }');
         if (moveToken && candidateData.projectMetadata?.projectId) {
-            const { moveCandidateStep } = await import('../utils/storage.js');
             const project = await getProjectById(candidateData.projectMetadata.projectId);
             const steps = project?.steps || [];
             const currentIndex = steps.findIndex(s => s.id === (candidateData.projectMetadata.stepId || 'step_new'));

@@ -1,7 +1,26 @@
-import { saveMessage, getCandidateIdByPhone, saveCandidate, updateCandidate, getRedisClient, updateMessageStatus, isMessageProcessed, unlockMessage, isCandidateLocked, unlockCandidate, addToWaitlist, getWaitlist } from '../utils/storage.js';
+import {
+    saveMessage,
+    getCandidateIdByPhone,
+    saveCandidate,
+    updateCandidate,
+    getRedisClient,
+    updateMessageStatus,
+    isMessageProcessed,
+    unlockMessage,
+    isCandidateLocked,
+    unlockCandidate,
+    addToWaitlist,
+    getWaitlist,
+    getCandidateById,
+    getUsers,
+    saveUser,
+    saveWebhookTransaction
+} from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
-import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead } from './utils.js';
+import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead, sendUltraMsgPresence } from './utils.js';
 import { FEATURES } from '../utils/feature-flags.js';
+import { sendMessage } from '../utils/messenger.js';
+import { notifyNewCandidate } from '../utils/sse-notify.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -60,8 +79,6 @@ export default async function handler(req, res) {
                         const targetPhone = lowerBody.replace('simon', '').replace(/\D/g, '');
                         if (targetPhone) {
                             try {
-                                const { getUsers, saveUser } = await import('../utils/storage.js');
-                                const { sendMessage } = await import('../utils/messenger.js');
                                 const users = await getUsers();
                                 const userIndex = users.findIndex(u => u.whatsapp.includes(targetPhone));
                                 if (userIndex !== -1) {
@@ -92,7 +109,6 @@ export default async function handler(req, res) {
                 }
 
                 try {
-                    const { getUsers } = await import('../utils/storage.js');
                     const allUsers = await getUsers();
                     const isPending = allUsers.find(u => u.whatsapp.includes(phone) && u.status === 'Pending');
                     const isAdmin = phone.includes('8116038195');
@@ -104,13 +120,11 @@ export default async function handler(req, res) {
                 let candidate = null;
 
                 if (candidateId) {
-                    const { getCandidateById } = await import('../utils/storage.js');
                     candidate = await getCandidateById(candidateId);
                     if (!candidate) candidateId = null; // Re-create if ghost
                 }
 
                 if (!candidateId) {
-                    const { saveCandidate } = await import('../utils/storage.js');
                     const newCandidate = await saveCandidate({
                         whatsapp: phone,
                         nombre: messageData.pushname || messageData.pushName || messageData.name || 'Desconocido',
@@ -121,7 +135,6 @@ export default async function handler(req, res) {
                     candidate = newCandidate;
 
                     // 📡 SSE: Notify real-time clients of new candidate
-                    const { notifyNewCandidate } = await import('../utils/sse-notify.js');
                     notifyNewCandidate(newCandidate).catch(err =>
                         console.warn('SSE notification failed:', err.message)
                     );
@@ -158,8 +171,6 @@ export default async function handler(req, res) {
                 }
 
                 // 🏎️ ATOMIC COMMIT (Pipelining)
-                // We combine Event saving, Message saving, and Candidate state updates.
-                const { saveWebhookTransaction } = await import('../utils/storage.js');
                 const updatedCandidate = {
                     ...candidate,
                     ultimoMensaje: new Date().toISOString(),
@@ -182,14 +193,13 @@ export default async function handler(req, res) {
                 const presenceUpdate = (async () => {
                     const config = await configPromise;
                     if (config) {
-                        const { sendUltraMsgPresence } = await import('./utils.js');
                         try {
                             // 1. Mark as read
                             await markUltraMsgAsRead(config.instanceId, config.token, from);
                             // 2. Start typing (Try both keywords for maximum compatibility)
                             await sendUltraMsgPresence(config.instanceId, config.token, from, 'composing');
                             await sendUltraMsgPresence(config.instanceId, config.token, from, 'typing');
-                        } catch (e) { console.warn('Webhook presence update failed', e.message); }
+                        } catch (e) { }
                     }
                 })();
 
@@ -259,7 +269,6 @@ export default async function handler(req, res) {
                         const info = await getUltraMsgContact(config.instanceId, config.token, from);
                         const url = info?.success || info?.image;
                         if (url?.startsWith('http')) {
-                            const { updateCandidate } = await import('../utils/storage.js');
                             await updateCandidate(candidateId, { profilePic: url });
                         }
                     } catch (e) { }
