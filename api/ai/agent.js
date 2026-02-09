@@ -92,12 +92,12 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 }
             } catch (e) { }
 
-            // NUCLEAR CHECK: Only truly audio-typed objects count as audio turns
-            if (isJson && parsed && typeof parsed === 'object' && parsed.type === 'audio' && parsed.url) {
-                console.log(`[AI DEBUG] ✅ Audio detected in waitlist for ${candidateId}`);
+            // 🛡️ [HYPER-PRECISE AUDIO CHECK]: Must be an object with type 'audio' AND a physical URL
+            if (isJson && parsed && typeof parsed === 'object' && parsed.type === 'audio' && (parsed.url || parsed.file)) {
+                console.log(`[AI DEBUG] ✅ GENUINE AUDIO Turn detected for ${candidateId}. URL: ${parsed.url || parsed.file}`);
                 hasAudio = true;
                 const { downloadMedia } = await import('../whatsapp/utils.js');
-                const media = await downloadMedia(parsed.url);
+                const media = await downloadMedia(parsed.url || parsed.file);
                 if (media) {
                     userParts.push({ inlineData: { mimeType: 'audio/mp3', data: media.data } });
                     userParts.push({ text: '[Audio recibido del candidato]' });
@@ -106,12 +106,15 @@ export const processMessage = async (candidateId, incomingMessage) => {
                     aggregatedText += " ((audio)) ";
                 }
             } else {
-                // If it's the stringified version of an object from an old bug, clean it
+                // 🛡️ [FEEDBACK LOOP SHIELD]: If the input text contains the transcription prefix, skip it entirely.
+                // This prevents "Monterrey" + historical transcriptions from being aggregated and confusing Gemini.
                 const textVal = (isJson || typeof parsed === 'object') ? (parsed.body || parsed.content || JSON.stringify(parsed)) : String(parsed || '').trim();
 
-                if (textVal && textVal !== '{}' && !textVal.includes('[AUDIO TRANSCRITO]')) {
+                if (textVal && textVal !== '{}' && !textVal.includes('[AUDIO TRANSCRITO]') && !textVal.includes('🎙️')) {
                     userParts.push({ text: textVal });
                     aggregatedText += (aggregatedText ? " | " : "") + textVal;
+                } else {
+                    console.log(`[AI DEBUG] 🛡️ Filtered out non-primary input/transcription from current turn processing.`);
                 }
             }
         }
@@ -436,11 +439,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             if (match) aiResult = JSON.parse(match[0]);
             else throw new Error('Invalid JSON structure');
         }
-        // 🛡️ [GHOST TRANSCRIPTION NUCLEAR FIX v2]
-        // If the turn is text-only, we MUST clear any hallucinated transcription.
+        // 🛡️ [GHOST TRANSCRIPTION HYPER-FIX]: 
+        // If the turn is text-only, we MUST clear any hallucinated transcription from Gemini.
         if (!hasAudio) {
             if (aiResult.audio_transcription) {
-                console.log(`[AI NUCLEAR SHIELD] Blocked ghost transcription: "${aiResult.audio_transcription}"`);
+                console.log(`[AI NUCLEAR SHIELD] Blocked hallucinated ghost transcription: "${aiResult.audio_transcription}"`);
             }
             aiResult.audio_transcription = null;
         }
@@ -448,11 +451,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         let responseText = aiResult.response_text || '';
         responseText = responseText.replace(/\*/g, '');
 
-        // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]
-        // Save ONLY if hasAudio is true AND aiResult has a transcription AND we haven't already saved it in history.
+        // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]: Only if Turn has NEW audio
         if (hasAudio && aiResult.audio_transcription) {
+            // Re-check history to avoid duplicates even if hasAudio is true (Turn aggregated with text)
             const isAlreadyInHistory = validMessages.some(m =>
-                m.content && m.content.includes(aiResult.audio_transcription)
+                m.content && m.content.toLowerCase().includes(aiResult.audio_transcription.toLowerCase())
             );
 
             if (!isAlreadyInHistory) {
@@ -465,7 +468,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     meta: { transcribed: true }
                 });
             } else {
-                console.log(`[AI DEBUG] Skipping known transcription from history: "${aiResult.audio_transcription}"`);
+                console.log(`[AI DEBUG] Skipping known/repeated transcription: "${aiResult.audio_transcription}"`);
             }
         }
 

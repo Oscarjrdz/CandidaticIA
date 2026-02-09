@@ -527,14 +527,16 @@ export const getWaitlist = async (candidateId) => {
     if (!client || !candidateId) return [];
     const key = `${KEYS.CANDIDATE_WAITLIST_PREFIX}${candidateId}`;
     try {
-        const pipeline = client.pipeline();
-        pipeline.lrange(key, 0, -1);
-        pipeline.del(key);
-        const results = await pipeline.exec();
-        const messages = results[0][1] || [];
+        const results = await client.multi()
+            .lrange(key, 0, -1)
+            .del(key)
+            .exec();
+
+        // ioredis results format: [[null, [msg1, msg2]], [null, 1]]
+        const messages = results && results[0] && results[0][1] ? results[0][1] : [];
         return messages;
     } catch (e) {
-        console.error('❌ [Storage] getWaitlist Error:', e);
+        console.error('❌ [Storage] getWaitlist Atomic Error:', e);
         return [];
     }
 };
