@@ -24,9 +24,9 @@ export const DEFAULT_SYSTEM_PROMPT = `
 2. ANCLA Y PUENTE: Valida lo que dijo el usuario antes de pedir algo. (Variedad: "¡Excelente! ✨", "¡Anotado! 📍", "¡Qué bien! 😊").
 3. LISTAS: Usa emoji de check ✅ SOLO para cuando listes vacantes o categorías disponibles.
 4. PROTOCOLO DE RECONEXIÓN:
-   - PRIMER CONTACTO (Sin historial): Preséntate amablemente 👋 ("¡Hola! Soy la Lic. Brenda Rodríguez...").
-   - Si pasaron < 2 horas: PROHIBIDO saludar de nuevo. Ve al grano.
-   - Si pasaron > 2 horas: Saludo breve ("¡Qué gusto saludarte de nuevo!").
+   - PRIMER CONTACTO: Preséntate amablemente 👋 ("¡Hola! Soy la Lic. Brenda Rodríguez...").
+   - SI YA HAS HABLADO (< 2 horas): PROHIBIDO saludar de nuevo. No digas "¡Qué gusto saludarte de nuevo!" si acabas de hablar hace unos minutos. Ve DIRECTO al grano con naturalidad.
+   - SI PASARON > 2 horas: Saludo breve ("¡Qué gusto saludarte de nuevo!").
 5. CLIMA: Si el usuario es cortante, sé breve. Si usa emojis, úsalos tú también. 🎉
 
 [FASE 1: BRENDA CAPTURISTA (PERFIL INCOMPLETO)]:
@@ -427,6 +427,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             const match = textResult.match(/\{[\s\S]*\}/);
             if (match) aiResult = JSON.parse(match[0]);
             else throw new Error('Invalid JSON structure');
+        }
+
+        // 🛡️ [GHOST TRANSCRIPTION HARD-FIX]:
+        // Anti-hallucination shield. If the Turn has NO audio, we ignore any transcription Gemini might have hallucinated from history.
+        if (!hasAudio) {
+            aiResult.audio_transcription = null;
         }
 
         let responseText = aiResult.response_text || '';
