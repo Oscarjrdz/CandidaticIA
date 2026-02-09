@@ -83,8 +83,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
         for (const msg of messagesToProcess) {
             let parsed = msg;
             try {
-                // If it looks like JSON, it might be an audio object
-                if (typeof msg === 'string' && msg.trim().startsWith('{')) {
+                // If it looks like JSON string or is already an object, handle it
+                if (typeof msg === 'string' && (msg.trim().startsWith('{') || msg.trim().startsWith('['))) {
                     parsed = JSON.parse(msg);
                 }
             } catch (e) { }
@@ -101,7 +101,8 @@ export const processMessage = async (candidateId, incomingMessage) => {
                     aggregatedText += " ((audio)) ";
                 }
             } else {
-                const textVal = String(parsed || '').trim();
+                // Handle case where parsed might still be an object due to improper aggregation in previous logs
+                const textVal = (typeof parsed === 'object') ? JSON.stringify(parsed) : String(parsed || '').trim();
                 if (textVal) {
                     userParts.push({ text: textVal });
                     aggregatedText += (aggregatedText ? " | " : "") + textVal;
@@ -386,7 +387,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     model: mName,
                     systemInstruction,
                     generationConfig: {
-                        temperature: 0.4,
+                        temperature: 0.7,
                         responseMimeType: "application/json"
                     }
                 });

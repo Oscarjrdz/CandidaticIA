@@ -189,7 +189,9 @@ export default async function handler(req, res) {
                         if (isActive === 'false') return;
 
                         // 🏁 1. ADD TO WAITLIST (Industrial Standard)
-                        await addToWaitlist(candidateId, agentInput);
+                        // ENSURE JSON SERIALIZATION to avoid [object Object] during aggregation
+                        const waitlistValue = typeof agentInput === 'object' ? JSON.stringify(agentInput) : agentInput;
+                        await addToWaitlist(candidateId, waitlistValue);
 
                         // 🏁 2. WORKER LOCK: Check if a worker is already processing this candidate
                         if (await isCandidateLocked(candidateId)) {
