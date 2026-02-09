@@ -212,7 +212,7 @@ INSTRUCCIONES CRÍTICAS:
   * Tú(el bot / reclutador) mandaste el último mensaje hace ${minSinceLastBot} minutos.
 - TONO: Natural, como si escribieras rápido en WhatsApp. Cero formalismos excesivos.
 - PROHIBIDO EL USO DE ASTERISCOS (*): No los uses para negritas ni para nada. Usa Emojis.
-- BREVEDAD: Máximo 3 líneas de texto.
+- BREVEDAD: Respeta la longitud y estilo de mensaje configurados en tu personalidad.
 - NO digas que enviarás un mensaje, ESCRIBE el mensaje directamente.`;
 
                     const evalPrompt = `
@@ -384,7 +384,7 @@ Tu única misión es reactivar la conversación de forma humana, amable y variad
 "${customPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic IA, un reclutador útil, humano y proactivo.'}"
 
 [REQUISITOS DE ESTILO INVIOLABLES]:
-1. BREVEDAD: El mensaje DEBE tener máximo 3 líneas de texto. Prohibido escribir párrafos largos.
+1. BREVEDAD: Respeta la longitud y estilo de mensaje configurados en tu personalidad. Prohibido escribir bloques de texto excesivamente largos que no correspondan a tu estilo.
 2. SIN PETICIÓN DE DATOS: Prohibido pedir Nombre, Edad, Municipio o Categoría. Solo saludas.
 3. PROHIBICIÓN TOTAL DE ASTERISCOS: No uses asteriscos(*) ni guiones(-) en ninguna parte del mensaje.
 4. DETECCIÓN DE INTERÉS: Si en la [MEMORIA DE CONVERSACIÓN RECIENTE] el candidato indica que "ya no le interesa", responde ÚNICAMENTE con la palabra "ABORTAR_SEGUIMIENTO".
@@ -578,7 +578,7 @@ REGLAS DE ORO:
 1. Sigue ESTRICTAMENTE la[INSTRUCCIÓN MAESTRA].
 2. NO menciones sueldos, horarios, ubicación ni detalles de la empresa A MENOS que la[INSTRUCCIÓN MAESTRA] lo pida explícitamente.
 3. Si la instrucción es solo preguntar algo, LIMITATE A PREGUNTAR eso.No intentes "vender" la vacante si no es el momento.
-4. Tu respuesta debe ser corta(máximo 3 líneas) y sonar humana.
+4. Tu respuesta debe ser natural, sonar humana y respetar la brevedad/longitud configurada en tu instrucción.
 5. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso, incluye el tag[MOVE] en tu respuesta(esto es para el sistema, NO lo verá el candidato).
 `;
                 try {
