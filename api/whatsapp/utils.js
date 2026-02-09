@@ -39,7 +39,7 @@ export const getUltraMsgConfig = async () => {
 export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     try {
         let endpoint = type;
-        if (!['chat', 'image', 'video', 'audio', 'voice', 'document'].includes(endpoint)) endpoint = 'chat';
+        if (!['chat', 'image', 'video', 'audio', 'voice', 'document', 'sticker'].includes(endpoint)) endpoint = 'chat';
 
         const payload = { token, to };
 
@@ -58,6 +58,9 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'document':
                 payload.document = body;
                 payload.filename = extraParams.filename || 'document.pdf';
+                break;
+            case 'sticker':
+                payload.sticker = body;
                 break;
             default:
                 payload.body = body;

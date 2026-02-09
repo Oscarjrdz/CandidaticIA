@@ -152,9 +152,19 @@ export default async function handler(req, res) {
 
                 console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}...`);
 
-                // Prepare Message Object
-                let agentInput = body;
+                // --- ADMIN STICKER CAPTURE ---
                 const messageType = messageData.type || 'text';
+                if (phone === adminNumber && (messageType === 'sticker' || messageType === 'stickerMessage')) {
+                    const stickerUrl = messageData.media || messageData.body || messageData.file;
+                    if (stickerUrl && stickerUrl.startsWith('http')) {
+                        const redis = getRedisClient();
+                        await redis.set('bot_celebration_sticker', stickerUrl);
+                        console.log(`[ADMIN] 🖼️ Celebration sticker captured and saved: ${stickerUrl}`);
+                        await sendMessage(adminNumber, `✅ ¡Sticker de festejo guardado con éxito! Lo usaré cuando un candidato complete su perfil al 100%. ✨🎉`);
+                        return res.status(200).send('sticker_captured');
+                    }
+                }
+                let agentInput = body;
                 const msgToSave = {
                     from: 'user', content: body, type: messageType,
                     timestamp: new Date().toISOString()

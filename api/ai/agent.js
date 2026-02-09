@@ -213,6 +213,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         const customFieldsJson = await redis?.get('custom_fields');
         const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
         const audit = auditProfile(candidateData, customFields);
+        const initialStatus = audit.paso1Status;
 
         // a. Admin Directives (Fetched early for identity layer)
         const customPrompt = await redis?.get('bot_ia_prompt') || '';
@@ -531,8 +532,23 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // Final Persistence
         const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
+        // --- STICKER CELEBRATION ---
+        let stickerPromise = Promise.resolve();
+        if (initialStatus === 'INCOMPLETO') {
+            const finalMerged = { ...candidateData, ...candidateUpdates };
+            const finalAudit = auditProfile(finalMerged, customFields);
+            if (finalAudit.paso1Status === 'COMPLETO') {
+                const stickerUrl = await redis?.get('bot_celebration_sticker');
+                if (stickerUrl) {
+                    console.log(`[CELEBRATION] 🎨 Sending sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
+                    stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
+                }
+            }
+        }
+
         await Promise.allSettled([
             deliveryPromise,
+            stickerPromise,
             saveMessage(candidateId, { from: 'bot', content: responseText, timestamp: new Date().toISOString() }),
             updatePromise
         ]);
