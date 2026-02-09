@@ -73,6 +73,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // 2. Multimodal / Text Extraction (Unified Loop)
         let userParts = [];
         let aggregatedText = "";
+        let hasAudio = false;
 
         // Handle incomingMessage as potentially aggregated waitlist
         const messagesToProcess = String(incomingMessage).includes(' | ')
@@ -89,6 +90,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
             } catch (e) { }
 
             if (typeof parsed === 'object' && parsed?.type === 'audio') {
+                hasAudio = true;
                 const { downloadMedia } = await import('../whatsapp/utils.js');
                 const media = await downloadMedia(parsed.url);
                 if (media) {
@@ -200,10 +202,11 @@ export const processMessage = async (candidateId, incomingMessage) => {
         // --- NEW: Assistant 2.0 Intent Detection ---
         const userText = String(incomingMessage?.content || incomingMessage || '').trim();
         const historyText = validMessages.map(m => `${m.from}: ${m.content}`).join('\n');
-        const intent = await classifyIntent(candidateId, userText, historyText);
-        console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent}`);
+        const intent = await classifyIntent(candidateId, userText, historyText, hasAudio);
+        console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent} (HasAudio: ${hasAudio})`);
 
         const DECISION_MATRIX = {
+            'AUDIO_INTERACTION': '\n[INTENTO: AUDIO]: El usuario envió un audio. ES PRIORITARIO procesar el contenido de este audio. Escucha lo que dice y responde con coherencia total. Si es una duda, respóndela; si es un saludo, socializa. Pero RECONOCE que escuchaste su mensaje de voz. 🎙️✨',
             'ATTENTION': '\n[INTENTO: ATENCIÓN]: El usuario te está llamando. Responde con un saludo carismático de máximo 1 línea. NO hables de trabajo. Solo sé Brenda. ✨',
             'SMALL_TALK': '\n[INTENTO: PLÁTICA]: El usuario está socializando. Responde con gracia y coherencia. Si es un halago, se vale bromear. Prohibido mencionar el proceso de selección o vacantes. 💅',
             'CLOSURE': '\n[INTENTO: DESPEDIDA]: El usuario se despide o confirma el cierre de la conversación.\nRESPONDE: Despídete de forma amigable y breve (máximo 1 línea).\nVARIACIONES: \"¡Nos vemos!\", \"¡Hasta pronto!\", \"¡Cuídate!\", \"¡Suerte!\", \"¡Ánimo!\", \"¡Que te vaya super!\"\nPROHIBIDO ABSOLUTO: Mencionar vacantes, trabajo, o seguir la conversación. Solo despídete.',
@@ -313,12 +316,13 @@ ${catInstruction}\n`;
 ${DECISION_MATRIX[intent] || ''}
 
 [REGLAS DE SALA DE ESPERA]:
-1. CONVERSACIÓN COHERENTE: Responde EXACTAMENTE a lo que el usuario te dice. Si saluda, saluda. Si se despide, DESPÍDETE.
-2. SI ES SOCIAL (saludo, charla): Sigue la conversación con naturalidad, máximo 1 línea
-3. SI ES DESPEDIDA: SOLO despídete con 1 línea amigable. PROHIBIDO mencionar vacantes o trabajo.
-4. SI PREGUNTA POR TRABAJO: Di con creatividad que estás buscando opciones. VARÍA cada vez (no copies frases exactas).
-5. PROHIBIDO REPETIR: Si ya usaste una frase, NUNCA la repitas exacta. Cambia palabras, emojis, estructura.
-6. MÁXIMA NATURALIDAD: Suenas como una reclutadora de 25 años platicando, no como un bot
+1. CONVERSACIÓN COHERENTE: Responde EXACTAMENTE a lo que el usuario te dice. Si el mensaje es un AUDIO, procesa su contenido con prioridad 🎙️.
+2. PRIORIDAD AUDIO: Si hay un audio, reconoce que lo escuchaste ("Te escucho fuerte y claro...", "Anotado lo que me dices en tu audio...", etc.) antes de responder al fondo.
+3. SI ES SOCIAL (saludo, charla): Sigue la conversación con naturalidad, máximo 1 línea.
+4. SI ES DESPEDIDA: SOLO despídete con 1 línea amigable. PROHIBIDO mencionar vacantes o trabajo.
+5. SI PREGUNTA POR TRABAJO: Di con creatividad que estás buscando opciones. VARÍA cada vez (no copies frases exactas).
+6. PROHIBIDO REPETIR: Si ya usaste una frase, NUNCA la repitas exacta. Cambia palabras, emojis, estructura.
+7. MÁXIMA NATURALIDAD: Suenas como una reclutadora de 25 años platicando, no como un bot.
 
 [MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
