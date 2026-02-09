@@ -189,60 +189,54 @@ export default async function handler(req, res) {
                         if (isActive === 'false') return;
 
                         // 🏁 1. ADD TO WAITLIST (Industrial Standard)
-                        // ENSURE JSON SERIALIZATION to avoid [object Object] during aggregation
                         const waitlistValue = typeof agentInput === 'object' ? JSON.stringify(agentInput) : agentInput;
                         await addToWaitlist(candidateId, waitlistValue);
 
-                        // 🏁 2. WORKER LOCK: Check if a worker is already processing this candidate
+                        // 🏁 2. WORKER LOCK
                         const isLocked = await isCandidateLocked(candidateId);
                         if (isLocked) {
                             console.log(`[Industrial Queue] Candidate ${candidateId} is busy. Message added to waitlist.`);
                             return res.status(200).json({ status: 'queued', candidateId });
                         }
 
-                        // 🏁 3. WORKER LOOP: Process everything in the waitlist until drained
-                        let loopSafety = 0;
-                        while (loopSafety < 5) { // Max 5 cycles to avoid infinite loops
-                            const pendingMsgs = await getWaitlist(candidateId);
-                            if (pendingMsgs.length === 0) break;
+                        try {
+                            // 🏁 3. WORKER LOOP: Process everything in the waitlist until drained
+                            let loopSafety = 0;
+                            while (loopSafety < 5) { // Max 5 cycles to avoid infinite loops
+                                const pendingMsgs = await getWaitlist(candidateId);
+                                if (pendingMsgs.length === 0) break;
 
-                            const aggregatedText = pendingMsgs.join(' | ');
-                            console.log(`[Industrial Queue] Processing ${pendingMsgs.length} aggregated messages for ${candidateId}.`);
+                                const aggregatedText = pendingMsgs.join(' | ');
+                                console.log(`[Industrial Queue] Processing ${pendingMsgs.length} aggregated messages for ${candidateId}.`);
 
-                            // 🚀 ASYNC PROCESSING BIFURCATION (Feature Flag)
-                            if (FEATURES.USE_MESSAGE_QUEUE) {
-                                // Async: Fire and forget to worker endpoint
-                                const protocol = req.headers['x-forwarded-proto'] || 'https';
-                                const host = req.headers.host;
-                                const workerUrl = `${protocol}://${host}/api/workers/process-message`;
+                                // 🚀 ASYNC PROCESSING BIFURCATION
+                                if (FEATURES.USE_MESSAGE_QUEUE) {
+                                    const protocol = req.headers['x-forwarded-proto'] || 'https';
+                                    const host = req.headers.host;
+                                    const workerUrl = `${protocol}://${host}/api/workers/process-message`;
 
-                                fetch(workerUrl, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                        candidateId,
-                                        message: aggregatedText,
-                                        messageId: msgId,
-                                        from: phone
-                                    })
-                                }).catch(err => {
-                                    console.error('❌ Worker queue error:', err.message);
-                                    // Fallback to sync if worker fails
-                                    processMessage(candidateId, aggregatedText).catch(console.error);
-                                });
+                                    await fetch(workerUrl, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            candidateId,
+                                            message: aggregatedText,
+                                            messageId: msgId,
+                                            from: phone
+                                        })
+                                    });
+                                } else {
+                                    await processMessage(candidateId, aggregatedText);
+                                }
 
-                                console.log(`✅ Message queued for async processing (worker)`);
-                            } else {
-                                // Sync: Current behavior (blocking)
-                                await processMessage(candidateId, aggregatedText);
+                                loopSafety++;
                             }
-                            loopSafety++;
+                        } finally {
+                            // 🏁 4. CRITICAL: Release the lock so subsequent messages aren't delayed by 15s
+                            await unlockCandidate(candidateId);
                         }
-
-                        await unlockCandidate(candidateId);
-                    } catch (e) {
-                        console.error('🤖 Industrial AI Error:', e);
-                        await unlockCandidate(candidateId);
+                    } catch (error) {
+                        console.error('❌ AI Pipeline Error:', error);
                     }
                 })();
 

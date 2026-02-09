@@ -82,6 +82,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         console.log(`[GHOST HUNT] Messages for ${candidateId}:`, messagesToProcess);
 
+        let turnAudioUrls = [];
         for (const msg of messagesToProcess) {
             let parsed = msg;
             let isJson = false;
@@ -94,10 +95,23 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
             // 🛡️ [HYPER-PRECISE AUDIO CHECK]: Must be an object with type 'audio' AND a physical URL
             if (isJson && parsed && typeof parsed === 'object' && parsed.type === 'audio' && (parsed.url || parsed.file)) {
-                console.log(`[GHOST HUNT] ✅ GENUINE AUDIO detected for ${candidateId}. URL: ${parsed.url || parsed.file}`);
+                const audioUrl = parsed.url || parsed.file;
+
+                // 🛡️ [URL FINGERPRINTING]: Avoid processing the same audio twice if already in history or already in this turn
+                const isAlreadyInHistory = validMessages.some(m => m.meta?.audioUrl === audioUrl);
+                const isAlreadyInTurn = turnAudioUrls.includes(audioUrl);
+
+                if (isAlreadyInHistory || isAlreadyInTurn) {
+                    console.log(`[GHOST HUNT] 🛡️ Deduplicated audio URL: ${audioUrl} (History: ${isAlreadyInHistory}, Turn: ${isAlreadyInTurn})`);
+                    continue;
+                }
+
+                console.log(`[GHOST HUNT] ✅ NEW AUDIO detected for ${candidateId}. URL: ${audioUrl}`);
                 hasAudio = true;
+                turnAudioUrls.push(audioUrl);
+
                 const { downloadMedia } = await import('../whatsapp/utils.js');
-                const media = await downloadMedia(parsed.url || parsed.file);
+                const media = await downloadMedia(audioUrl);
                 if (media) {
                     userParts.push({ inlineData: { mimeType: 'audio/mp3', data: media.data } });
                     userParts.push({ text: '[Audio recibido del candidato]' });
@@ -106,7 +120,7 @@ export const processMessage = async (candidateId, incomingMessage) => {
                     aggregatedText += " ((audio)) ";
                 }
             } else {
-                // 🛡️ [FEEDBACK LOOP SHIELD]: If the input text contains the transcription prefix, skip it entirely.
+                // 🛡️ [FEEDBACK LOOP SHIELD]: If the input text contains the transcription prefix, skip it
                 const textVal = (isJson || typeof parsed === 'object') ? (parsed.body || parsed.content || JSON.stringify(parsed)) : String(parsed || '').trim();
 
                 if (textVal && textVal !== '{}' && !textVal.includes('[AUDIO TRANSCRITO]') && !textVal.includes('🎙️')) {
@@ -451,23 +465,24 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         responseText = responseText.replace(/\*/g, '');
 
         // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]: Only if Turn has NEW audio
-        if (hasAudio && aiResult.audio_transcription) {
-            // Re-check history to avoid duplicates even if hasAudio is true (Turn aggregated with text)
+        if (hasAudio && aiResult.audio_transcription && turnAudioUrls.length > 0) {
+            const primaryUrl = turnAudioUrls[0];
             const isAlreadyInHistory = validMessages.some(m =>
-                m.content && m.content.toLowerCase().includes(aiResult.audio_transcription.toLowerCase())
+                (m.meta?.audioUrl === primaryUrl) ||
+                (m.content && m.content.toLowerCase().includes(aiResult.audio_transcription.toLowerCase()))
             );
 
             if (!isAlreadyInHistory) {
-                console.log(`[AI DEBUG] Saving verified unique transcription: "${aiResult.audio_transcription}"`);
+                console.log(`[AI DEBUG] Saving verified unique transcription for ${primaryUrl}: "${aiResult.audio_transcription}"`);
                 await saveMessage(candidateId, {
                     from: 'user',
                     content: `🎙️ [AUDIO TRANSCRITO]: "${aiResult.audio_transcription}"`,
                     type: 'text',
                     timestamp: new Date().toISOString(),
-                    meta: { transcribed: true }
+                    meta: { transcribed: true, audioUrl: primaryUrl }
                 });
             } else {
-                console.log(`[AI DEBUG] Skipping known/repeated transcription: "${aiResult.audio_transcription}"`);
+                console.log(`[AI DEBUG] Skipping known/repeated transcription for ${primaryUrl}`);
             }
         }
 
