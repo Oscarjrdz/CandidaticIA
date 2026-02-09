@@ -194,7 +194,8 @@ export default async function handler(req, res) {
                         await addToWaitlist(candidateId, waitlistValue);
 
                         // 🏁 2. WORKER LOCK: Check if a worker is already processing this candidate
-                        if (await isCandidateLocked(candidateId)) {
+                        const isLocked = await isCandidateLocked(candidateId);
+                        if (isLocked) {
                             console.log(`[Industrial Queue] Candidate ${candidateId} is busy. Message added to waitlist.`);
                             return;
                         }

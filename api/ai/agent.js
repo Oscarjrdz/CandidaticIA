@@ -75,23 +75,26 @@ export const processMessage = async (candidateId, incomingMessage) => {
         let aggregatedText = "";
         let hasAudio = false;
 
+        // 🧪 TELEMETRY & AGGREGATION
         const messagesToProcess = String(incomingMessage).includes(' | ')
             ? String(incomingMessage).split(' | ')
             : [incomingMessage];
 
-        console.log(`[AI DEBUG] Processing turn for ${candidateId}. Messages:`, messagesToProcess);
+        console.log(`[AI DEBUG] Turn for ${candidateId}. Messages:`, messagesToProcess);
 
         for (const msg of messagesToProcess) {
             let parsed = msg;
+            let isJson = false;
             try {
-                // Robust JSON detection
                 if (typeof msg === 'string' && (msg.trim().startsWith('{') || msg.trim().startsWith('['))) {
                     parsed = JSON.parse(msg);
+                    isJson = true;
                 }
             } catch (e) { }
 
-            // Strict object validation: Must have type 'audio' AND a valid URL
-            if (parsed && typeof parsed === 'object' && parsed.type === 'audio' && parsed.url) {
+            // NUCLEAR CHECK: Only truly audio-typed objects count as audio turns
+            if (isJson && parsed && typeof parsed === 'object' && parsed.type === 'audio' && parsed.url) {
+                console.log(`[AI DEBUG] ✅ Audio detected in waitlist for ${candidateId}`);
                 hasAudio = true;
                 const { downloadMedia } = await import('../whatsapp/utils.js');
                 const media = await downloadMedia(parsed.url);
@@ -103,15 +106,16 @@ export const processMessage = async (candidateId, incomingMessage) => {
                     aggregatedText += " ((audio)) ";
                 }
             } else {
-                // If it's an object but not audio, stringify it carefully or take it as is
-                const textVal = (parsed && typeof parsed === 'object') ? JSON.stringify(parsed) : String(parsed || '').trim();
-                if (textVal && textVal !== '{}') {
+                // If it's the stringified version of an object from an old bug, clean it
+                const textVal = (isJson || typeof parsed === 'object') ? (parsed.body || parsed.content || JSON.stringify(parsed)) : String(parsed || '').trim();
+
+                if (textVal && textVal !== '{}' && !textVal.includes('[AUDIO TRANSCRITO]')) {
                     userParts.push({ text: textVal });
                     aggregatedText += (aggregatedText ? " | " : "") + textVal;
                 }
             }
         }
-        console.log(`[AI DEBUG] hasAudio detection for this turn: ${hasAudio}`);
+        console.log(`[AI DEBUG] Final hasAudio for this processMessage run: ${hasAudio}`);
 
         if (userParts.length === 0) userParts.push({ text: 'Hola' });
 
@@ -432,11 +436,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             if (match) aiResult = JSON.parse(match[0]);
             else throw new Error('Invalid JSON structure');
         }
-
-        // 🛡️ [GHOST TRANSCRIPTION NUCLEAR FIX]:
-        // Anti-hallucination shield. If the Turn has NO audio, we ignore any transcription Gemini might have hallucinated from history.
+        // 🛡️ [GHOST TRANSCRIPTION NUCLEAR FIX v2]
+        // If the turn is text-only, we MUST clear any hallucinated transcription.
         if (!hasAudio) {
-            if (aiResult.audio_transcription) console.log(`[AI DEBUG] Turn has no audio. Hard-clearing hallucinated transcription: "${aiResult.audio_transcription}"`);
+            if (aiResult.audio_transcription) {
+                console.log(`[AI NUCLEAR SHIELD] Blocked ghost transcription: "${aiResult.audio_transcription}"`);
+            }
             aiResult.audio_transcription = null;
         }
 
@@ -444,12 +449,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         responseText = responseText.replace(/\*/g, '');
 
         // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]
-        // Save ONLY if hasAudio is true AND aiResult has a transcription AND we haven't already saved it.
+        // Save ONLY if hasAudio is true AND aiResult has a transcription AND we haven't already saved it in history.
         if (hasAudio && aiResult.audio_transcription) {
-            const lastMsg = validMessages[validMessages.length - 1];
-            const isDuplicate = lastMsg && lastMsg.from === 'user' && lastMsg.content.includes(aiResult.audio_transcription);
+            const isAlreadyInHistory = validMessages.some(m =>
+                m.content && m.content.includes(aiResult.audio_transcription)
+            );
 
-            if (!isDuplicate) {
+            if (!isAlreadyInHistory) {
                 console.log(`[AI DEBUG] Saving verified unique transcription: "${aiResult.audio_transcription}"`);
                 await saveMessage(candidateId, {
                     from: 'user',
@@ -459,7 +465,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     meta: { transcribed: true }
                 });
             } else {
-                console.log(`[AI DEBUG] Skipping duplicate transcription: "${aiResult.audio_transcription}"`);
+                console.log(`[AI DEBUG] Skipping known transcription from history: "${aiResult.audio_transcription}"`);
             }
         }
 
