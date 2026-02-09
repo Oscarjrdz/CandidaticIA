@@ -20,6 +20,12 @@ const BotIASection = ({ showToast }) => {
     const [operativeConfig, setOperativeConfig] = useState({ startHour: 7, endHour: 23, dailyLimit: 300 });
     const [inactiveStages, setInactiveStages] = useState([]);
 
+    // Advanced Internal Protocols
+    const [extractionRules, setExtractionRules] = useState('');
+    const [cerebro1Rules, setCerebro1Rules] = useState('');
+    const [cerebro2Context, setCerebro2Context] = useState('');
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
     useEffect(() => {
         const loadSettings = async () => {
             try {
@@ -30,6 +36,9 @@ const BotIASection = ({ showToast }) => {
                     setProactivePrompt(data.proactivePrompt || '');
                     setIsActive(data.isActive);
                     setProactiveEnabled(data.proactiveEnabled);
+                    setExtractionRules(data.extractionRules || '');
+                    setCerebro1Rules(data.cerebro1Rules || '');
+                    setCerebro2Context(data.cerebro2Context || '');
                     if (data.stats) setStats(data.stats);
                     if (data.operativeConfig) setOperativeConfig(data.operativeConfig);
                     if (data.inactiveStages) setInactiveStages(data.inactiveStages);
@@ -107,7 +116,17 @@ const BotIASection = ({ showToast }) => {
                 })
             });
 
-            if (resConfig.ok && resPrompt.ok && resAssistant.ok) {
+            const resAdvanced = await fetch('/api/bot-ia/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    extractionRules,
+                    cerebro1Rules,
+                    cerebro2Context
+                })
+            });
+
+            if (resConfig.ok && resPrompt.ok && resAssistant.ok && resAdvanced.ok) {
                 showToast('Configuraciones guardadas correctamente', 'success');
             } else {
                 showToast('Error guardando configuración', 'error');
@@ -242,6 +261,65 @@ const BotIASection = ({ showToast }) => {
                                 onChange={(e) => setAssistantPrompt(e.target.value)}
                             />
                         </div>
+
+                        <div className="pt-2">
+                            <button
+                                onClick={() => setShowAdvanced(!showAdvanced)}
+                                className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400 hover:text-blue-700 transition-colors"
+                            >
+                                <SettingsIcon className={`w-3.5 h-3.5 ${showAdvanced ? 'rotate-90' : ''} transition-transform`} />
+                                <span>{showAdvanced ? 'Ocultar Protocolos Internos' : 'Ver Protocolos Internos (Avanzado)'}</span>
+                            </button>
+                        </div>
+
+                        {showAdvanced && (
+                            <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-gray-700 animate-in slide-in-from-top-2 duration-300">
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between px-1">
+                                        <label className="text-[9px] font-black text-amber-500 uppercase tracking-widest">
+                                            Reglas de Extracción (ADN) 🧬
+                                        </label>
+                                        <span className="text-[7px] font-bold text-gray-400 uppercase">Pre-procesamiento</span>
+                                    </div>
+                                    <textarea
+                                        className="w-full h-32 p-3 rounded-2xl border border-amber-100 dark:border-amber-900/30 bg-amber-50/20 dark:bg-amber-900/10 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-amber-500 text-[11px] resize-none transition-all leading-snug font-mono"
+                                        value={extractionRules}
+                                        onChange={(e) => setExtractionRules(e.target.value)}
+                                        placeholder="Usa {{categorias}} para inyectar las categorías dinámicas..."
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between px-1">
+                                        <label className="text-[9px] font-black text-rose-500 uppercase tracking-widest">
+                                            Protocolos Cerebro 1 📑
+                                        </label>
+                                        <span className="text-[7px] font-bold text-gray-400 uppercase">Fase Capturista</span>
+                                    </div>
+                                    <textarea
+                                        className="w-full h-32 p-3 rounded-2xl border border-rose-100 dark:border-rose-900/30 bg-rose-50/20 dark:bg-rose-900/10 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-rose-500 text-[11px] resize-none transition-all leading-snug font-mono"
+                                        value={cerebro1Rules}
+                                        onChange={(e) => setCerebro1Rules(e.target.value)}
+                                        placeholder="Usa {{faltantes}} para listar los campos pendientes..."
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between px-1">
+                                        <label className="text-[9px] font-black text-purple-500 uppercase tracking-widest">
+                                            Contexto Cerebro 2 🧠
+                                        </label>
+                                        <span className="text-[7px] font-bold text-gray-400 uppercase">Sala de Espera</span>
+                                    </div>
+                                    <textarea
+                                        className="w-full h-32 p-3 rounded-2xl border border-purple-100 dark:border-purple-900/30 bg-purple-50/20 dark:bg-purple-900/10 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-purple-500 text-[11px] resize-none transition-all leading-snug font-mono"
+                                        value={cerebro2Context}
+                                        onChange={(e) => setCerebro2Context(e.target.value)}
+                                        placeholder="Usa {{nombre}}, {{categoria}}, {{municipio}} e {{intent}}..."
+                                    />
+                                </div>
+                            </div>
+                        )}
 
                         <div className="pt-1">
                             <select

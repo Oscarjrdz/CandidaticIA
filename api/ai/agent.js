@@ -16,6 +16,34 @@ import { classifyIntent } from './intent-classifier.js';
 import { getCachedConfig } from '../utils/cache.js';
 import { FEATURES } from '../utils/feature-flags.js';
 
+export const DEFAULT_EXTRACTION_RULES = `
+[REGLAS DE EXTRACCIÓN (ADN)]:
+1. Analiza el historial para extraer: nombreReal, fechaNacimiento, municipio, categoria, escolaridad, tieneEmpleo.
+2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO (ADN)] es incompleto (ej. "Oscar" o "mayo 1983") y el usuario da más info, FUSIÓNALO para tener el dato completo (ej. "Oscar Rodriguez" o "19/05/1983").
+3. REGLA DE FECHA: Formato DD/MM/YYYY. Infiere siglo obligatoriamente (ej. 83 -> 1983, 01 -> 2001).
+4. REGLA DE UBICACIÓN: Acepta "Santa" (Santa Catarina), "San Nico" (San Nicolás), etc.
+5. REGLA DE CATEGORÍA: Solo categorías válidas del sistema.
+6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
+`;
+
+export const DEFAULT_CEREBRO1_RULES = `
+[ESTADO: CAPTURISTA BRENDA 📝]:
+1. TU OBJETIVO: Recolectar datos faltantes: {{faltantes}}.
+2. REGLA DE ORO: Pide solo UN dato a la vez. No abrumes.
+3. TONO: Profesional, tierno y servicial. No pláticas de más, enfócate en llenar el formulario.
+4. SILENCIO DE VACANTES: El perfil está incompleto. PROHIBIDO dar detalles de sueldos o empresas. ✨
+`;
+
+export const DEFAULT_CEREBRO2_CONTEXT = `
+[CONTEXTO DE SALA DE ESPERA]:
+- El candidato YA TIENE perfil completo ✅
+- Nombre: {{nombre}}
+- Categoría: {{categoria}}
+- Municipio: {{municipio}}
+
+[INTENCIÓN DETECTADA]: {{intent}}
+`;
+
 export const DEFAULT_SYSTEM_PROMPT = `
 [IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. Tono: cálido, profesional, tierno y servicial. ✨🌸
 
@@ -267,15 +295,10 @@ export const processMessage = async (candidateId, incomingMessage) => {
             }
         } catch (e) { }
 
-        const extractionRules = `
-[REGLAS DE EXTRACCIÓN (ADN)]:
-1. Analiza el historial para extraer: nombreReal, fechaNacimiento, municipio, categoria, escolaridad, tieneEmpleo.
-2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO (ADN)] es incompleto (ej. "Oscar" o "mayo 1983") y el usuario da más info, FUSIÓNALO para tener el dato completo (ej. "Oscar Rodriguez" o "19/05/1983").
-3. REGLA DE FECHA: Formato DD/MM/YYYY. Infiere siglo obligatoriamente (ej. 83 -> 1983, 01 -> 2001).
-4. REGLA DE UBICACIÓN: Acepta "Santa" (Santa Catarina), "San Nico" (San Nicolás), etc.
-5. CATEGORÍAS VÁLIDAS: ${categoriesList}
-6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
-`;
+        const customExtractionRules = await redis?.get('bot_extraction_rules');
+        const extractionRules = (customExtractionRules || DEFAULT_EXTRACTION_RULES)
+            .replace('{{categorias}}', categoriesList)
+            .replace('CATEGORÍAS VÁLIDAS: ', `CATEGORÍAS VÁLIDAS: ${categoriesList}`);
 
 
 
@@ -326,12 +349,11 @@ TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nex
 REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amablemente.`;
             }
 
-            systemInstruction += `\n[ESTADO: CAPTURISTA BRENDA 📝]:
-1. TU OBJETIVO: Recolectar datos faltantes: ${audit.missingLabels.join(', ')}.
-2. REGLA DE ORO: Pide solo UN dato a la vez. No abrumes.
-3. TONO: Profesional, tierno y servicial. No platiques de más, enfócate en llenar el formulario.
-4. SILENCIO DE VACANTES: El perfil está incompleto. PROHIBIDO dar detalles de sueldos o empresas. ✨
-${catInstruction}\n`;
+            const customCerebro1Rules = await redis?.get('bot_cerebro1_rules');
+            const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
+                .replace('{{faltantes}}', audit.missingLabels.join(', '));
+
+            systemInstruction += `\n${cerebro1Rules}\n${catInstruction}\n`;
         } else if (isInWaitingRoom) {
             // --- CEREBRO 2: SALA DE ESPERA (Datos completos, sin proyecto) ---
             console.log(`🌸 [Waiting Room Mode] Activado para ${candidateData.nombreReal || candidateData.whatsapp}`);
@@ -341,13 +363,16 @@ ${catInstruction}\n`;
 
             systemInstruction += `\n${waitingRoomPrompt}\n`;
 
-            systemInstruction += `\n[CONTEXTO DE SALA DE ESPERA]:
-- El candidato YA TIENE perfil completo ✅
-- Nombre: ${candidateData.nombreReal || 'No proporcionado'}
-- Categoría: ${candidateData.categoria || 'No especificada'}
-- Municipio: ${candidateData.municipio || 'No especificado'}
+            const customCerebro2Context = await redis?.get('bot_cerebro2_context');
+            const cerebro2Context = (customCerebro2Context || DEFAULT_CEREBRO2_CONTEXT)
+                .replace('{{nombre}}', candidateData.nombreReal || 'No proporcionado')
+                .replace('{{categoria}}', candidateData.categoria || 'No especificada')
+                .replace('{{municipio}}', candidateData.municipio || 'No especificado')
+                .replace('{{intent}}', intent);
 
-[INTENCIÓN DETECTADA]: ${intent}
+            systemInstruction += `\n${cerebro2Context}\n`;
+
+            systemInstruction += `\n[INTENCIÓN DETECTADA]: ${intent}
 ${DECISION_MATRIX[intent] || ''}
 
 [REGLAS DE SALA DE ESPERA]:

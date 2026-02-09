@@ -12,7 +12,18 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
         try {
-            const { instanceId, token, systemPrompt, isActive, proactiveEnabled, operativeConfig, inactiveStages } = req.body;
+            const {
+                instanceId,
+                token,
+                systemPrompt,
+                isActive,
+                proactiveEnabled,
+                operativeConfig,
+                inactiveStages,
+                extractionRules,
+                cerebro1Rules,
+                cerebro2Context
+            } = req.body;
 
             // 1. WhatsApp Config (UltraMsg)
             if (instanceId !== undefined || token !== undefined) {
@@ -48,6 +59,11 @@ export default async function handler(req, res) {
                 await redis.set('bot_inactive_stages', JSON.stringify(inactiveStages));
             }
 
+            // 7. Advanced Internal Protocols
+            if (extractionRules !== undefined) await redis.set('bot_extraction_rules', extractionRules);
+            if (cerebro1Rules !== undefined) await redis.set('bot_cerebro1_rules', cerebro1Rules);
+            if (cerebro2Context !== undefined) await redis.set('bot_cerebro2_context', cerebro2Context);
+
             return res.status(200).json({ success: true });
 
         } catch (error) {
@@ -66,6 +82,9 @@ export default async function handler(req, res) {
             const proactiveEnabled = await redis.get('bot_proactive_enabled');
             const operativeConfigJson = await redis.get('bot_operative_config');
             const inactiveStagesJson = await redis.get('bot_inactive_stages');
+            const extractionRules = await redis.get('bot_extraction_rules');
+            const cerebro1Rules = await redis.get('bot_cerebro1_rules');
+            const cerebro2Context = await redis.get('bot_cerebro2_context');
 
             const operativeConfig = operativeConfigJson ? JSON.parse(operativeConfigJson) : {
                 startHour: 7,
@@ -121,6 +140,9 @@ export default async function handler(req, res) {
                 proactiveEnabled: proactiveEnabled === 'true',
                 operativeConfig,
                 inactiveStages,
+                extractionRules: extractionRules || '',
+                cerebro1Rules: cerebro1Rules || '',
+                cerebro2Context: cerebro2Context || '',
                 stats
             });
 
