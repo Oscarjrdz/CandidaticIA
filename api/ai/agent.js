@@ -93,20 +93,27 @@ export const processMessage = async (candidateId, incomingMessage) => {
                 }
             } catch (e) { }
 
-            // 🛡️ [HYPER-PRECISE AUDIO CHECK]: Must be an object with type 'audio' AND a physical URL
+            // 🛡️ [HYPER-PRECISE AUDIO CHECK v2]: Must be an audio object
             if (isJson && parsed && typeof parsed === 'object' && parsed.type === 'audio' && (parsed.url || parsed.file)) {
                 const audioUrl = parsed.url || parsed.file;
 
-                // 🛡️ [URL FINGERPRINTING]: Avoid processing the same audio twice if already in history or already in this turn
+                // 🛡️ [FINGERPRINTING ENHANCED]: URL match OR Turn match
                 const isAlreadyInHistory = validMessages.some(m => m.meta?.audioUrl === audioUrl);
                 const isAlreadyInTurn = turnAudioUrls.includes(audioUrl);
 
                 if (isAlreadyInHistory || isAlreadyInTurn) {
-                    console.log(`[GHOST HUNT] 🛡️ Deduplicated audio URL: ${audioUrl} (History: ${isAlreadyInHistory}, Turn: ${isAlreadyInTurn})`);
+                    console.log(`[GHOST HUNT] 🛡️ Deduplicated Audio URL (already done): ${audioUrl}`);
                     continue;
                 }
 
-                console.log(`[GHOST HUNT] ✅ NEW AUDIO detected for ${candidateId}. URL: ${audioUrl}`);
+                // [DIAGNOSTIC]: Check if there's *any* transcription in recent history (last 5 turns) 
+                // that might be a content-match for a likely retry.
+                const recentTranscriptions = validMessages.slice(-10).filter(m => m.meta?.transcribed);
+                if (recentTranscriptions.length > 0) {
+                    console.log(`[GHOST HUNT] Info: Candidate has ${recentTranscriptions.length} recent transcriptions in history.`);
+                }
+
+                console.log(`[GHOST HUNT] ✅ NEW GENUINE AUDIO for ${candidateId}. URL: ${audioUrl}`);
                 hasAudio = true;
                 turnAudioUrls.push(audioUrl);
 
@@ -120,14 +127,17 @@ export const processMessage = async (candidateId, incomingMessage) => {
                     aggregatedText += " ((audio)) ";
                 }
             } else {
-                // 🛡️ [FEEDBACK LOOP SHIELD]: If the input text contains the transcription prefix, skip it
+                // 🛡️ [FEEDBACK LOOP SHIELD v2]: Skip any text that looks like a transcription or internal tag
                 const textVal = (isJson || typeof parsed === 'object') ? (parsed.body || parsed.content || JSON.stringify(parsed)) : String(parsed || '').trim();
 
-                if (textVal && textVal !== '{}' && !textVal.includes('[AUDIO TRANSCRITO]') && !textVal.includes('🎙️')) {
+                const isTranscriptionPrefix = textVal.includes('[AUDIO TRANSCRITO]') || textVal.includes('🎙️');
+                const isInternalJson = isJson && (parsed.extracted_data || parsed.thought_process);
+
+                if (textVal && textVal !== '{}' && !isTranscriptionPrefix && !isInternalJson) {
                     userParts.push({ text: textVal });
                     aggregatedText += (aggregatedText ? " | " : "") + textVal;
                 } else {
-                    console.log(`[GHOST HUNT] 🛡️ Skipping non-primary input/transcription: ${textVal.substring(0, 30)}...`);
+                    console.log(`[GHOST HUNT] 🛡️ Skipping internal/stale input: ${textVal.substring(0, 30)}...`);
                 }
             }
         }
@@ -467,10 +477,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]: Only if Turn has NEW audio
         if (hasAudio && aiResult.audio_transcription && turnAudioUrls.length > 0) {
             const primaryUrl = turnAudioUrls[0];
-            const isAlreadyInHistory = validMessages.some(m =>
-                (m.meta?.audioUrl === primaryUrl) ||
-                (m.content && m.content.toLowerCase().includes(aiResult.audio_transcription.toLowerCase()))
-            );
+            const cleanTranscription = String(aiResult.audio_transcription).toLowerCase().trim();
+
+            const isAlreadyInHistory = validMessages.some(m => {
+                const sameUrl = m.meta?.audioUrl === primaryUrl;
+                const sameContent = m.content && m.content.toLowerCase().includes(cleanTranscription);
+                return sameUrl || sameContent;
+            });
 
             if (!isAlreadyInHistory) {
                 console.log(`[AI DEBUG] Saving verified unique transcription for ${primaryUrl}: "${aiResult.audio_transcription}"`);
@@ -482,7 +495,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     meta: { transcribed: true, audioUrl: primaryUrl }
                 });
             } else {
-                console.log(`[AI DEBUG] Skipping known/repeated transcription for ${primaryUrl}`);
+                console.log(`[AI DEBUG] Skipping known transcription match in history for ${primaryUrl}`);
             }
         }
 
