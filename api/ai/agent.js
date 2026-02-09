@@ -447,7 +447,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     systemInstruction,
                     generationConfig: {
                         maxOutputTokens: 1000,
-                        temperature: 0.8,
+                        temperature: 0.72,
                         topP: 0.95,
                         responseMimeType: "application/json"
                     }
