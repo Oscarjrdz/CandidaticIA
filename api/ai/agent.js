@@ -70,6 +70,10 @@ export const processMessage = async (candidateId, incomingMessage) => {
 
         const config = await getUltraMsgConfig();
 
+        // 3. History Retrieval (MOVED UP to fix ReferenceError)
+        const allMessages = await getMessages(candidateId, 20);
+        const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
+
         // 2. Multimodal / Text Extraction (Unified Loop)
         let userParts = [];
         let aggregatedText = "";
@@ -144,10 +148,6 @@ export const processMessage = async (candidateId, incomingMessage) => {
         console.log(`[GHOST HUNT] Final hasAudio for ${candidateId}: ${hasAudio}`);
 
         if (userParts.length === 0) userParts.push({ text: 'Hola' });
-
-        // 3. History Retrieval
-        const allMessages = await getMessages(candidateId, 20);
-        const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
 
         const recentHistory = validMessages
             .slice(0, -1)

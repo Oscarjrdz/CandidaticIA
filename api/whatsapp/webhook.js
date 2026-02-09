@@ -128,8 +128,12 @@ export default async function handler(req, res) {
                 }
 
                 // 🛡️ [WEBHOOK TRANSCRIPTION SHIELD]: Ignore external transcriptions (likely from UltraMsg STT)
-                if (String(body).includes('[AUDIO TRANSCRITO]') || String(body).includes('🎙️')) {
-                    console.log(`[AUDIO SHIELD] 🛡️ Blocked external transcription for ${phone}: ${body.substring(0, 30)}...`);
+                // Only block if it's a chat/text message. PTT/Audio messages should never be blocked here.
+                const isTextType = !messageData.type || messageData.type === 'chat' || messageData.type === 'text';
+                const hasGhostPattern = String(body).includes('[AUDIO TRANSCRITO]') || String(body).includes('🎙️');
+
+                if (isTextType && hasGhostPattern) {
+                    console.log(`[AUDIO SHIELD] 🛡️ Blocked external text-transcription for ${phone}: ${body.substring(0, 30)}...`);
                     return res.status(200).send('transcription_ignored');
                 }
 
