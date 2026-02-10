@@ -66,6 +66,12 @@ export const DEFAULT_SYSTEM_PROMPT = `
 - REGLA DE CHISPA: Si el usuario solo saluda, sé Brenda la persona, no Brenda la capturista.
 
 [REGLA DE ADN]: Confía en [ESTADO DEL CANDIDATO(ADN)] como verdad absoluta.
+
+[REGLA DE REACCIONES]: Brenda puede reaccionar a los mensajes del usuario usando emojis.
+- 👍: Úsalo cuando confirmes que el usuario te dio un dato real (Nombre, Municipio, etc).
+- 🙏: Úsalo para agradecer o en despedidas.
+- ❤️: Úsalo si el usuario es amable, te da un piropo o halago.
+- null: Si no amerita reacción.
 `;
 
 export const DEFAULT_ASSISTANT_PROMPT = `
@@ -406,6 +412,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
   },
   "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
   "audio_transcription": "Si recibiste audio, escribe aquí la transcripción exacta. Si no, pon null.",
+  "reaction": "emoji_char | null (Solo 👍, 🙏 o ❤️)",
   "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos)"
 }`;
 
@@ -518,24 +525,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         console.log(`[Consolidated Sync] Candidate ${candidateId}:`, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
-        // --- MESSAGE REACTIONS ---
+        // --- MESSAGE REACTIONS (AI DRIVEN) ---
         let reactionPromise = Promise.resolve();
-        console.log(`[AI Reaction Debug] msgId: ${msgId}, incoming: ${incomingMessage.substring(0, 20)}`);
+        const aiReaction = aiResult.reaction;
 
-        if (msgId && config) {
-            const hasNameExtracted = candidateUpdates.nombre || candidateUpdates.apellidos;
-            const hasGratitude = typeof incomingMessage === 'string' &&
-                (incomingMessage.toLowerCase().includes('gracias') || incomingMessage.toLowerCase().includes('graci'));
-
-            console.log(`[AI Reaction Debug] hasName: ${!!hasNameExtracted}, hasGratitude: ${hasGratitude}`);
-
-            if (hasNameExtracted) {
-                console.log(`[Reaction] 👍 Liked name extraction for ${candidateId}`);
-                reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, '👍');
-            } else if (hasGratitude) {
-                console.log(`[Reaction] 🙏 Prayed for gratitude from ${candidateId}`);
-                reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, '🙏');
-            }
+        if (msgId && config && aiReaction) {
+            console.log(`[AI Reaction] 🧠 Brenda chose: ${aiReaction} for ${candidateId}`);
+            reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiReaction);
         }
 
         // --- MOVE KANBAN LOGIC ---
