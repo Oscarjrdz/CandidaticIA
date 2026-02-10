@@ -93,7 +93,8 @@ export default async function handler(req, res) {
                     outgoing: parseInt(outgoing),
                     total: totalCands,
                     complete: parseInt(complete || '0'),
-                    pending: parseInt(pending || '0')
+                    pending: parseInt(pending || '0'),
+                    flightPlan: await redis.get('stats:bot:flight_plan').then(res => res ? JSON.parse(res) : null)
                 }
             });
         } catch (error) {

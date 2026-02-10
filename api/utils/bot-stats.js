@@ -95,7 +95,7 @@ export const calculateBotStats = async () => {
                 const sessionResults = await sessionKeyPipeline.exec();
 
                 // Final Pass: Update flightPlan
-                const mxToday = new Date(new Date().getTime() - (6 * 3600000)).toISOString().split('T')[0];
+                const utcToday = new Date().toISOString().split('T')[0];
 
                 processedCandidates.forEach((item, idx) => {
                     const { level } = item;
@@ -105,14 +105,12 @@ export const calculateBotStats = async () => {
                     if (!sErr && sRes) {
                         // Check if sRes is 'sent' (legacy) or a timestamp
                         if (sRes === 'sent') {
-                            // Legacy keys: We'll count them as sent today ONLY for the first transition phase
-                            // Actually, legacy keys don't have date, so it's safer to skip or assume old.
-                            // User wants it to be 0 if bot was off, so legacy 'sent' should be ignored for daily.
+                            // Legacy keys: Ignore for daily.
                         } else {
                             try {
                                 const sentDate = new Date(sRes);
-                                const sentMxStr = new Date(sentDate.getTime() - (6 * 3600000)).toISOString().split('T')[0];
-                                if (sentMxStr === mxToday) {
+                                const sentUtcStr = sentDate.toISOString().split('T')[0];
+                                if (sentUtcStr === utcToday) {
                                     flightPlan[level].sent++;
                                 }
                             } catch (e) {
@@ -148,6 +146,7 @@ export const calculateBotStats = async () => {
         // Cache for SSE/Live Dashboard
         await redis.set('stats:bot:complete', completeCount);
         await redis.set('stats:bot:pending', pendingCount);
+        await redis.set('stats:bot:flight_plan', JSON.stringify(flightPlan)); // Cache flight plan too
 
         return result;
 
