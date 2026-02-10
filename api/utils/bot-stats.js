@@ -1,4 +1,4 @@
-import { getRedisClient, isProfileComplete } from './storage.js';
+import { getRedisClient, isProfileComplete, auditProfile } from './storage.js';
 
 export const calculateBotStats = async () => {
     const redis = getRedisClient();
@@ -20,7 +20,6 @@ export const calculateBotStats = async () => {
 
         let pendingCount = 0;
         let completeCount = 0;
-        let debugInfo = "";
 
         const flightPlan = inactiveStages.reduce((acc, s) => {
             acc[s.hours] = { label: s.label, total: 0, sent: 0, percentage: 0 };
@@ -49,15 +48,23 @@ export const calculateBotStats = async () => {
 
                 const candidateResults = await pipeline.exec();
 
-                // Pass 2: Get session keys for the identified levels
+                // Pipeline for session keys
                 const sessionKeyPipeline = redis.pipeline();
                 const processedCandidates = [];
 
-                candidateResults.forEach(([err, res]) => {
+                candidateResults.forEach(([err, res], idx) => {
                     if (!err && res) {
                         try {
                             const c = JSON.parse(res);
-                            const isComp = isProfileComplete(c, customFields);
+
+                            // [IRON-CLAD QUALITY SHIELD] Use auditProfile with a safety catch
+                            let isComp = false;
+                            try {
+                                isComp = isProfileComplete(c, customFields);
+                            } catch (e) {
+                                console.error(`❌ [Audit Error] ID ${chunk[idx]}:`, e.message);
+                                isComp = false; // Graceful degradation to incomplete
+                            }
 
                             if (isComp) {
                                 completeCount++;
@@ -70,17 +77,12 @@ export const calculateBotStats = async () => {
                                 const hoursInactive = (now - lastInteraction) / (1000 * 60 * 60);
 
                                 const sortedStages = [...inactiveStages].sort((a, b) => b.hours - a.hours);
-
-                                // Determine the HIGHEST level the candidate qualifies for
                                 const currentStage = sortedStages.find(s => hoursInactive >= s.hours);
 
                                 if (currentStage) {
                                     const level = currentStage.hours;
                                     const dueTime = new Date(lastInteraction.getTime() + (level * 60 * 60 * 1000));
 
-                                    // Strictly count only if they became due today (to match "Today's Flight Plan")
-                                    // Or if they were already due but for some reason we count them in today's quota
-                                    // User said "cuantos de cada paso hoy voy a mandar solamente hoy"
                                     if (dueTime <= todayEnd) {
                                         const sessionKey = `proactive:${c.id}:${level}:${c.lastUserMessageAt}`;
                                         sessionKeyPipeline.get(sessionKey);
@@ -88,7 +90,9 @@ export const calculateBotStats = async () => {
                                     }
                                 }
                             }
-                        } catch (parseErr) { }
+                        } catch (parseErr) {
+                            console.error(`❌ [Stats Parse Error] ID ${chunk[idx]}:`, parseErr.message);
+                        }
                     }
                 });
 
@@ -100,59 +104,59 @@ export const calculateBotStats = async () => {
                 processedCandidates.forEach((item, idx) => {
                     const { level } = item;
                     flightPlan[level].total++;
-                    const [sErr, sRes] = sessionResults[idx];
+                    const sessionItem = sessionResults[idx];
 
-                    if (!sErr && sRes) {
-                        // Check if sRes is 'sent' (legacy) or a timestamp
-                        if (sRes === 'sent') {
-                            // Legacy keys: Ignore for daily.
-                        } else {
+                    if (sessionItem && !sessionItem[0] && sessionItem[1]) {
+                        const sRes = sessionItem[1];
+                        if (sRes !== 'sent') {
                             try {
                                 const sentDate = new Date(sRes);
-                                const sentUtcStr = sentDate.toISOString().split('T')[0];
-                                if (sentUtcStr === utcToday) {
+                                if (sentDate.toISOString().split('T')[0] === utcToday) {
                                     flightPlan[level].sent++;
                                 }
-                            } catch (e) {
-                                // Fallback for corrupt data
-                            }
+                            } catch (e) { }
                         }
                     }
                 });
             }
-
-            // Calculate percentages and summary
-            let totalItems = 0;
-            let totalSentItems = 0;
-            Object.keys(flightPlan).forEach(h => {
-                const p = flightPlan[h];
-                p.percentage = p.total > 0 ? Math.round((p.sent / p.total) * 100) : 0;
-                totalItems += p.total;
-                totalSentItems += p.sent;
-            });
-
-            flightPlan.summary = { totalItems, totalSent: totalSentItems };
         }
 
+        // --- Consistency Guard ---
+        const totalCalculated = completeCount + pendingCount;
+
+        // Calculate percentages and summary
+        let totalFlightPlanSent = 0;
+        let totalFlightPlanTarget = 0;
+        Object.keys(flightPlan).forEach(h => {
+            const p = flightPlan[h];
+            p.percentage = p.total > 0 ? Math.round((p.sent / p.total) * 100) : 0;
+            totalFlightPlanTarget += p.total;
+            totalFlightPlanSent += p.sent;
+        });
+        flightPlan.summary = { totalItems: totalFlightPlanTarget, totalSent: totalFlightPlanSent };
+
         const result = {
+            version: '1.2.8-TOTAL-SYNC',
             today: parseInt(todayCount),
             totalSent: parseInt(totalSent),
             totalRecovered: parseInt(totalRecovered),
             pending: pendingCount,
             complete: completeCount,
+            total: totalCalculated,
             flightPlan
         };
 
         // Cache for SSE/Live Dashboard
         await redis.set('stats:bot:complete', completeCount);
         await redis.set('stats:bot:pending', pendingCount);
-        await redis.set('stats:bot:total', completeCount + pendingCount); // Consistent total
-        await redis.set('stats:bot:flight_plan', JSON.stringify(flightPlan)); // Cache flight plan too
+        await redis.set('stats:bot:total', totalCalculated);
+        await redis.set('stats:bot:version', result.version);
+        await redis.set('stats:bot:flight_plan', JSON.stringify(flightPlan));
 
         return result;
 
     } catch (error) {
-        console.error('Error calculating bot stats:', error);
+        console.error('❌ [Stats Engine] Fatal Error:', error);
         return null;
     }
 };
