@@ -151,7 +151,7 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v7.0 - ZERO LEAK]
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v8.5 - GEOGRAPHIC STRICTNESS]
 Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es convertir lenguaje natural en filtros técnicos INVIOLABLES.
 
 [REGLAS DE FILTRADO]:
@@ -166,10 +166,11 @@ Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es conv
 3. EDAD (ESTRICTO): 
    - SIEMPRE usa el campo "edad".
    - "18 años" -> {"edad": 18}.
-4. MUNICIPIOS: Si mencionan un lugar, asígnalo a "municipio" o "colonia".
-5. KEYWORDS: Solo para nombres de personas ("Oscar") o habilidades que no tengan campo fijo.
+4. MUNICIPIOS (CRÍTICO): 
+   - Si mencionan un lugar (Monterrey, Apodaca, Guadalupe, etc.), ASÍGNALO SIEMPRE al campo "municipio".
+   - NUNCA pongas nombres de municipios en keywords. Es un error de filtración grave.
+5. KEYWORDS: Solo para nombres de personas ("Oscar") o habilidades técnicas específicas que no tengan campo.
 6. BÚSQUEDA DE FALTANTES: Si el usuario pide específicamente "sin [campo]", usa el valor "$missing". 
-   - Ejemplo: "sin nombre" -> {"nombreReal": "$missing"}
 
 [FORMATO DE SALIDA]: JSON JSON JSON. NO TEXTO ADICIONAL.
 
@@ -211,10 +212,11 @@ Consulta del usuario: "${query}"
         const jsonMatch = aiResponseRaw.match(/\{[\s\S]*\}/);
         const aiResponse = JSON.parse(jsonMatch[0]);
 
-        // --- TITAN v8.0 HARDCODED SNIFFER (Intent Protection) ---
+        // --- TITAN v8.5 ADVANCED SNIFFER (Intent Protection) ---
         const queryLower = normalize(query);
         const genderTerms = ['hombre', 'hombres', 'caballero', 'caballeros', 'chico', 'chicos'];
         const femaleTerms = ['mujer', 'mujeres', 'dama', 'damas', 'chica', 'chicas'];
+        const muniTerms = ['monterrey', 'apodaca', 'guadalupe', 'san nicolas', 'escobedo', 'santa catarina', 'garcia', 'juarez', 'cadereyta', 'san pedro'];
 
         if (!aiResponse.filters) aiResponse.filters = {};
         if (!aiResponse.keywords) aiResponse.keywords = [];
@@ -231,8 +233,14 @@ Consulta del usuario: "${query}"
             else if (['pendiente', 'falta', 'incompleto'].some(t => queryLower.includes(t))) aiResponse.filters.statusAudit = 'pending';
         }
 
-        // 3. Keyword Blacklist (Categorical cleanup)
-        const blacklist = [...genderTerms, ...femaleTerms, 'completo', 'pendientes', 'listos', 'faltan'];
+        // 3. Force Municipality Filter (Sniffer)
+        if (!aiResponse.filters.municipio) {
+            const foundMuni = muniTerms.find(t => queryLower.includes(t));
+            if (foundMuni) aiResponse.filters.municipio = foundMuni;
+        }
+
+        // 4. Keyword Blacklist (Categorical cleanup)
+        const blacklist = [...genderTerms, ...femaleTerms, ...muniTerms, 'completo', 'pendientes', 'listos', 'faltan'];
         aiResponse.keywords = aiResponse.keywords.filter(kw => !blacklist.includes(normalize(kw)));
 
         // 3. Ejecutar la búsqueda en los datos reales (TODOS)
@@ -331,7 +339,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 8.0 (Categorical Supremacy)",
+            version: "Titan 8.5 (Geographic Strictness)",
             candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
