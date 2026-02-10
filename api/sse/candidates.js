@@ -49,13 +49,10 @@ export default async function handler(req, res) {
         try {
             if (!redis) return;
 
-            // Check for new candidate signal
+            // 🏎️ 1. Real-time Candidate Signal (New Candidates)
             const latestCandidate = await redis.get('sse_new_candidate');
-
             if (latestCandidate) {
                 const candidate = JSON.parse(latestCandidate);
-
-                // Only send if this is new (within last 5 seconds)
                 const candidateTime = new Date(candidate.timestamp || 0).getTime();
                 if (candidateTime > lastCheck) {
                     sendEvent({
@@ -66,35 +63,23 @@ export default async function handler(req, res) {
                 }
             }
 
-            // --- Stats Pulse (Global) ---
+            // 🏎️ 2. Global Stats Signal (Table and Badge reactivity)
             const incoming = await redis.get('stats:msg:incoming') || '0';
             const outgoing = await redis.get('stats:msg:outgoing') || '0';
-            const cachedTotal = await redis.get('stats:bot:total');
-            const totalCands = cachedTotal ? parseInt(cachedTotal) : await redis.zcard('candidates:list');
-            let complete = await redis.get('stats:bot:complete');
-            let pending = await redis.get('stats:bot:pending');
 
-            // --- SELF-HEALING: Trigger calculation if missing or every 1 hour ---
+            // source of truth for table re-polling
+            const totalVal = await redis.zcard('candidates:list');
+
+            const complete = await redis.get('stats:bot:complete');
+            const pending = await redis.get('stats:bot:pending');
             const lastFullCalc = await redis.get('stats:bot:last_calc');
+
+            // Trigger background calculation if stale (5 mins)
             const now = Date.now();
-            const staleTime = 60 * 60 * 1000; // 1 hour
-
-            if (complete === null || pending === null || !lastFullCalc || (now - parseInt(lastFullCalc)) > staleTime) {
-                console.log('🔄 Dashboard Stats Stale/Missing. Triggering background calculation...');
-                // We do it in background so SSE doesn't hang
-                import('../utils/bot-stats.js').then(m => m.calculateBotStats().then(() => {
-                    redis.set('stats:bot:last_calc', now.toString());
-                }));
-            }
-
-            let completeVal = parseInt(complete || '0');
-            let pendingVal = parseInt(pending || '0');
-            let totalVal = totalCands;
-
-            // [SSE SELF-HEALING] Cross-verify consistency
-            if (completeVal + pendingVal !== totalVal && cachedTotal !== null) {
-                // If inconsistent, we don't block SSE but we signal a refresh
+            if (complete === null || pending === null || !lastFullCalc || (now - parseInt(lastFullCalc)) > 300000) {
                 import('../utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
+                // We set a temporary flag to avoid spamming the import
+                await redis.set('stats:bot:last_calc', now.toString(), 'EX', 60);
             }
 
             sendEvent({
@@ -103,11 +88,12 @@ export default async function handler(req, res) {
                     incoming: parseInt(incoming),
                     outgoing: parseInt(outgoing),
                     total: totalVal,
-                    complete: completeVal,
-                    pending: pendingVal,
-                    flightPlan: await redis.get('stats:bot:flight_plan').then(res => res ? JSON.parse(res) : null)
+                    complete: parseInt(complete || '0'),
+                    pending: parseInt(pending || '0'),
+                    flightPlan: await redis.get('stats:bot:flight_plan').then(res => res ? JSON.parse(res) : null).catch(() => null)
                 }
             });
+
         } catch (error) {
             console.error('SSE poll error:', error);
         }

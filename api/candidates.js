@@ -31,21 +31,11 @@ export default async function handler(req, res) {
 
                 let completeVal = parseInt(complete || '0');
                 let pendingVal = parseInt(pending || '0');
-                let totalVal = cachedTotal ? parseInt(cachedTotal) : candidatesStats.total;
+                let totalVal = total; // Use the live total from getCandidates (which uses zcard)
 
-                // [SELF-HEALING] If sum doesn't match total, force a fresh calculation
+                // [POST-VERIFY] If sum doesn't match total, trigger background recalc (don't block)
                 if (completeVal + pendingVal !== totalVal) {
-                    try {
-                        const { calculateBotStats } = await import('./utils/bot-stats.js');
-                        const fresh = await calculateBotStats();
-                        if (fresh) {
-                            completeVal = fresh.complete;
-                            pendingVal = fresh.pending;
-                            totalVal = fresh.total;
-                        }
-                    } catch (e) {
-                        console.error('❌ Stats healing failed:', e);
-                    }
+                    import('./utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
                 }
 
                 statsData = {
@@ -130,13 +120,8 @@ export default async function handler(req, res) {
             }
 
             const updatedCandidate = await updateCandidate(id, updates);
-            // Trigger stats refresh in background
-            try {
-                const { calculateBotStats } = await import('./utils/bot-stats.js');
-                await calculateBotStats();
-            } catch (e) {
-                console.error('❌ Error refreshing stats after update:', e);
-            }
+            // Trigger stats refresh in background (don't block the UI)
+            import('./utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
 
             return res.status(200).json({
                 success: true,
@@ -156,13 +141,8 @@ export default async function handler(req, res) {
             }
 
             await deleteCandidate(id);
-            // Wait for stats refresh for immediate consistency
-            try {
-                const { calculateBotStats } = await import('./utils/bot-stats.js');
-                await calculateBotStats();
-            } catch (e) {
-                console.error('❌ Error refreshing stats after delete:', e);
-            }
+            // Non-blocking background sync
+            import('./utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
 
             return res.status(200).json({
                 success: true,
