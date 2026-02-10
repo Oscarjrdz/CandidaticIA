@@ -144,6 +144,30 @@ Consulta del usuario: "${query}"
         const jsonMatch = aiResponseRaw.match(/\{[\s\S]*\}/);
         const aiResponse = JSON.parse(jsonMatch[0]);
 
+        // --- TITAN v8.0 HARDCODED SNIFFER (Intent Protection) ---
+        const queryLower = normalize(query);
+        const genderTerms = ['hombre', 'hombres', 'caballero', 'caballeros', 'chico', 'chicos'];
+        const femaleTerms = ['mujer', 'mujeres', 'dama', 'damas', 'chica', 'chicas'];
+
+        if (!aiResponse.filters) aiResponse.filters = {};
+        if (!aiResponse.keywords) aiResponse.keywords = [];
+
+        // 1. Force Gender Filter
+        if (!aiResponse.filters.genero) {
+            if (genderTerms.some(t => queryLower.includes(t))) aiResponse.filters.genero = 'Hombre';
+            else if (femaleTerms.some(t => queryLower.includes(t))) aiResponse.filters.genero = 'Mujer';
+        }
+
+        // 2. Force Status Audit Filter
+        if (!aiResponse.filters.statusAudit) {
+            if (['completo', 'listo', 'registrado', 'termino'].some(t => queryLower.includes(t))) aiResponse.filters.statusAudit = 'complete';
+            else if (['pendiente', 'falta', 'incompleto'].some(t => queryLower.includes(t))) aiResponse.filters.statusAudit = 'pending';
+        }
+
+        // 3. Keyword Blacklist (Categorical cleanup)
+        const blacklist = [...genderTerms, ...femaleTerms, 'completo', 'pendientes', 'listos', 'faltan'];
+        aiResponse.keywords = aiResponse.keywords.filter(kw => !blacklist.includes(normalize(kw)));
+
         // 3. Ejecutar la búsqueda en los datos reales (TODOS)
         const { candidates } = await getCandidates(10000, 0, '', false);
 
@@ -307,7 +331,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 7.0 (Zero Leak Protocol)",
+            version: "Titan 8.0 (Categorical Supremacy)",
             candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
