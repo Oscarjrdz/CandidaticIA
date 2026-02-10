@@ -11,7 +11,7 @@ import {
     recordAITelemetry,
     moveCandidateStep
 } from '../utils/storage.js';
-import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, downloadMedia } from '../whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, downloadMedia, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
 import { classifyIntent } from './intent-classifier.js';
 import { getCachedConfig } from '../utils/cache.js';
@@ -88,7 +88,7 @@ const getIdentityLayer = (customPrompt = null) => {
     return customPrompt || DEFAULT_SYSTEM_PROMPT;
 };
 
-export const processMessage = async (candidateId, incomingMessage) => {
+export const processMessage = async (candidateId, incomingMessage, msgId = null) => {
     const startTime = Date.now();
     try {
         const redis = getRedisClient();
@@ -518,6 +518,22 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         console.log(`[Consolidated Sync] Candidate ${candidateId}:`, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
+        // --- MESSAGE REACTIONS ---
+        let reactionPromise = Promise.resolve();
+        if (msgId && config) {
+            const hasNameExtracted = candidateUpdates.nombre || candidateUpdates.apellidos;
+            const hasGratitude = typeof incomingMessage === 'string' &&
+                (incomingMessage.toLowerCase().includes('gracias') || incomingMessage.toLowerCase().includes('graci'));
+
+            if (hasNameExtracted) {
+                console.log(`[Reaction] 👍 Liked name extraction for ${candidateId}`);
+                reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, '👍');
+            } else if (hasGratitude) {
+                console.log(`[Reaction] 🙏 Prayed for gratitude from ${candidateId}`);
+                reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, '🙏');
+            }
+        }
+
         // --- MOVE KANBAN LOGIC ---
         const moveToken = (aiResult.thought_process || '').includes('{ move }');
         if (moveToken && candidateData.projectMetadata?.projectId) {
@@ -549,6 +565,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         await Promise.allSettled([
             deliveryPromise,
             stickerPromise,
+            reactionPromise,
             saveMessage(candidateId, { from: 'bot', content: responseText, timestamp: new Date().toISOString() }),
             updatePromise
         ]);

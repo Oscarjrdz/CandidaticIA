@@ -258,7 +258,7 @@ export default async function handler(req, res) {
                                         })
                                     });
                                 } else {
-                                    await processMessage(candidateId, aggregatedText);
+                                    await processMessage(candidateId, aggregatedText, msgId);
                                 }
 
                                 loopSafety++;

@@ -257,3 +257,16 @@ export const downloadMedia = async (url) => {
         return null;
     }
 };
+
+export const sendUltraMsgReaction = async (instanceId, token, msgId, emoji) => {
+    try {
+        if (!msgId) return null;
+        const url = `https://api.ultramsg.com/${instanceId}/messages/reaction`;
+        const payload = { token, msgId, emoji };
+        const response = await axios.post(url, payload, { timeout: 10000 });
+        return response.data;
+    } catch (error) {
+        console.error('❌ Failed to send reaction:', error.message);
+        return null;
+    }
+};
