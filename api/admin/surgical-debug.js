@@ -51,11 +51,18 @@ export default async function handler(req, res) {
             });
         }
 
+        // Forzar actualización de caché para el tablero
+        await redis.set('stats:bot:complete', complete);
+        await redis.set('stats:bot:pending', pending);
+        await redis.set('stats:bot:total', complete + pending);
+        await redis.set('stats:bot:last_calc', Date.now().toString());
+
         return res.json({
             success: true,
             totalIds: allIds.length,
             sumMatched: complete + pending,
             gap: allIds.length - (complete + pending),
+            cacheStatus: 'UPDATED',
             stats: {
                 complete,
                 pending,
