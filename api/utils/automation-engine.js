@@ -121,6 +121,9 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
         const rules = await getAIAutomations(redis);
         const activeRules = (rules || []).filter(a => a?.active && a?.prompt);
 
+        const customFieldsJson = await redis.get('custom_fields');
+        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+
         if (activeRules.length === 0) {
             logs.push(`ℹ️ No se encontraron reglas activas para procesar.`);
             return { success: true, logs, processedCount };
@@ -195,10 +198,16 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
                 const minSinceLastBot = lastBotMsg ? Math.floor((now - lastBotMsg) / 60000) : 999;
 
                 evaluatedCount++;
+                // --- SAFETY GUARD: Skip if profile is ALREADY complete (and rule is about completion) ---
+                if (cand.statusAudit === 'complete') {
+                    logs.push(`⏭️[SKIP] ${cand.nombre} ya tiene perfil completo.`);
+                    continue;
+                }
+
                 try {
                     logs.push(`🤔 Evaluando a ${cand.nombre} (Inactividad Usuario: ${minSinceLastUser} m, Bot: ${minSinceLastBot}m)...`);
 
-                    const { dnaLines } = auditProfile(cand, []); // Custom fields not needed for DNA in rules engine
+                    const { dnaLines } = auditProfile(cand, customFields);
 
                     const systemContext = `Eres un reclutador experto y proactivo de Candidatic IA.Tu tarea es analizar si un candidato cumple con una REGLA y actuar de inmediato.
 INSTRUCCIONES CRÍTICAS:
