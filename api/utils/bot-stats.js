@@ -146,6 +146,7 @@ export const calculateBotStats = async () => {
         // Cache for SSE/Live Dashboard
         await redis.set('stats:bot:complete', completeCount);
         await redis.set('stats:bot:pending', pendingCount);
+        await redis.set('stats:bot:total', completeCount + pendingCount); // Consistent total
         await redis.set('stats:bot:flight_plan', JSON.stringify(flightPlan)); // Cache flight plan too
 
         return result;

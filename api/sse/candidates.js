@@ -69,7 +69,8 @@ export default async function handler(req, res) {
             // --- Stats Pulse (Global) ---
             const incoming = await redis.get('stats:msg:incoming') || '0';
             const outgoing = await redis.get('stats:msg:outgoing') || '0';
-            const totalCands = await redis.zcard('candidates:list');
+            const cachedTotal = await redis.get('stats:bot:total');
+            const totalCands = cachedTotal ? parseInt(cachedTotal) : await redis.zcard('candidates:list');
             let complete = await redis.get('stats:bot:complete');
             let pending = await redis.get('stats:bot:pending');
 

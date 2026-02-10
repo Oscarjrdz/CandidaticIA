@@ -31,9 +31,10 @@ export default async function handler(req, res) {
 
                 const complete = redis ? await redis.get('stats:bot:complete') : '0';
                 const pending = redis ? await redis.get('stats:bot:pending') : '0';
+                const cachedTotal = redis ? await redis.get('stats:bot:total') : null;
 
                 statsData = {
-                    candidates: candidatesStats.total,
+                    candidates: cachedTotal ? parseInt(cachedTotal) : candidatesStats.total,
                     incoming: msgStats.incoming,
                     outgoing: msgStats.outgoing,
                     complete: parseInt(complete || '0'),
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 success: true,
                 count: candidates.length,
-                total: total,
+                total: statsData?.candidates || total,
                 candidates: candidates,
                 pagination: {
                     limit: parseInt(limit),
