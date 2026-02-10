@@ -221,10 +221,19 @@ Consulta del usuario: "${query}"
         if (!aiResponse.filters) aiResponse.filters = {};
         if (!aiResponse.keywords) aiResponse.keywords = [];
 
-        // 1. Force Gender Filter
+        // 1. Force Gender Filter (Inclusive Sniffer)
+        const hasMale = genderTerms.some(t => queryLower.includes(t));
+        const hasFemale = femaleTerms.some(t => queryLower.includes(t));
+
         if (!aiResponse.filters.genero) {
-            if (genderTerms.some(t => queryLower.includes(t))) aiResponse.filters.genero = 'Hombre';
-            else if (femaleTerms.some(t => queryLower.includes(t))) aiResponse.filters.genero = 'Mujer';
+            if (hasMale && hasFemale) {
+                // Multi-gender intent: We do NOT force a strict filter, allowing inclusion of both
+                console.log("Inclusive Gender search detected.");
+            } else if (hasMale) {
+                aiResponse.filters.genero = 'Hombre';
+            } else if (hasFemale) {
+                aiResponse.filters.genero = 'Mujer';
+            }
         }
 
         // 2. Force Status Audit Filter
