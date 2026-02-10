@@ -15,12 +15,19 @@ export default async function handler(req, res) {
         for (let i = 0; i < allIds.length; i += CHUNK_SIZE) {
             const chunk = allIds.slice(i, i + CHUNK_SIZE);
             const pipeline = redis.pipeline();
-            chunk.forEach(id => pipeline.exists(`candidate:${id}`));
+            chunk.forEach(id => pipeline.get(`candidate:${id}`)); // GET instead of EXISTS for deep check
             const results = await pipeline.exec();
 
-            results.forEach(([err, exists], idx) => {
-                if (!err && exists === 0) {
-                    orphans.push(chunk[idx]);
+            results.forEach(([err, res], idx) => {
+                const id = chunk[idx];
+                if (err || !res) {
+                    orphans.push(id);
+                } else {
+                    try {
+                        JSON.parse(res);
+                    } catch (e) {
+                        orphans.push(id); // Invalid JSON is also a ghost
+                    }
                 }
             });
         }
