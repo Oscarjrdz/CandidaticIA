@@ -208,14 +208,16 @@ Consulta del usuario: "${query}"
             return cStr.includes(sStr);
         };
 
-        // --- SCORING ENGINE (TITAN v3.8 - Universal Strict Edition) ---
+        // --- SCORING ENGINE (TITAN v4.0 - Inclusive Edition) ---
         const activeFilterKeys = Object.keys(aiResponse.filters || {});
 
         // Final results collection
         let filtered = candidates.reduce((acc, candidate) => {
             let score = 0;
             let matchesCount = 0;
-            let failedStrict = false;
+            let totalFiltersApplied = activeFilterKeys.length;
+            let mismatchFound = false;
+
             const candidateAge = calculateAge(candidate.fechaNacimiento);
 
             // 1. Universal Mandatory Filtering
@@ -223,24 +225,34 @@ Consulta del usuario: "${query}"
                 const criteria = aiResponse.filters[key];
                 const val = (key === 'edad') ? candidateAge : candidate[key];
 
-                const hasMatch = matchesCriteria(val, criteria);
+                // Check for a hard mismatch (only if value exists)
+                const cStr = normalize(val);
+                const sStr = normalize(criteria.val || criteria);
 
-                if (hasMatch) {
-                    matchesCount++;
-                    score += (key === 'nombreReal') ? 100 : 80; // Heavier weight for filters
+                // Check for missing data
+                const isMissing = !cStr || ['no proporcionado', 'n/a', 'na', 'null', 'undefined'].includes(cStr);
+
+                if (isMissing) {
+                    // MISSING DATA: No points, but NOT a failure. This allows candidates with partial profiles to stay.
+                    score += 0;
                 } else {
-                    // UNIVERSAL STRICT FAIL: If it matches any key except nombreReal, it's mandatory
-                    if (key !== 'nombreReal') {
-                        failedStrict = true;
+                    const hasMatch = matchesCriteria(val, criteria);
+                    if (hasMatch) {
+                        matchesCount++;
+                        score += 100; // Base match points
+                    } else {
+                        // HARD MISMATCH: If values exist and don't match, this is a real fail.
+                        mismatchFound = true;
                     }
                 }
             });
 
-            if (failedStrict) return acc;
+            // If we found a clear mismatch (e.g. asked for Monterrey, lives in Apodaca), we skip.
+            if (mismatchFound) return acc;
 
-            // 2. Bonus Exponencial por Multi-Filtro (El "AND" effect)
+            // 2. Bonus Exponencial por Multi-Filtro (The "AND" effect)
             if (matchesCount > 1) {
-                score += Math.pow(matchesCount, 3) * 10;
+                score *= (1 + (matchesCount / totalFiltersApplied));
             }
 
             // 3. Keywords Relevance (Additive)
@@ -250,14 +262,17 @@ Consulta del usuario: "${query}"
 
                 aiResponse.keywords.forEach(kw => {
                     const normalizedKw = normalize(kw);
-                    if (metadata.includes(normalizedKw)) score += 30;
-                    if (summary.includes(normalizedKw)) score += 20;
+                    if (metadata.includes(normalizedKw)) score += 50;
+                    if (summary.includes(normalizedKw)) score += 30;
                 });
             }
 
-            // Push to results if any match or relevance
-            if (score > 0 || activeFilterKeys.length === 0) {
-                acc.push({ ...candidate, _relevance: score, edad: candidateAge });
+            // 4. Default Base Score (to ensure they appear if searched)
+            if (totalFiltersApplied === 0) score = 10;
+
+            // Push to results if they have some relevance or we are doing a general search
+            if (score > 0 || totalFiltersApplied === 0) {
+                acc.push({ ...candidate, _relevance: Math.round(score), edad: candidateAge });
             }
 
             return acc;
