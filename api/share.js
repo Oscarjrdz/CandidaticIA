@@ -17,13 +17,19 @@ export default async function handler(req, res) {
     const baseUrl = `${protocol}://${host}`;
     const currentUrl = `${baseUrl}${req.url}`;
 
+    // --- [FERRARI JUMP] Bot Detection ---
+    const userAgent = req.headers['user-agent'] || '';
+    const isBot = /facebookexternalhit|WhatsApp|Twitterbot|LinkedInBot|Pinterest|Slackbot|Googlebot|TelegramBot/i.test(userAgent);
+
     // If ID is present, try to fetch from Redis
     if (id) {
         try {
             const client = getRedisClient();
             if (client) {
-                // Increment click counter async (no await needed for blocking response)
-                client.incr(`clicks:${id}`).catch(err => console.error('Error incrementing clicks:', err));
+                // Increment click counter ONLY for humans
+                if (!isBot) {
+                    client.incr(`clicks:${id}`).catch(err => console.error('Error incrementing clicks:', err));
+                }
 
                 const rawData = await client.get(`share:${id}`);
                 if (rawData) {
@@ -50,10 +56,6 @@ export default async function handler(req, res) {
     if (absoluteImage && absoluteImage.includes('/api/image') && !absoluteImage.includes('.')) {
         absoluteImage += '.jpg';
     }
-
-    // --- [FERRARI JUMP] Bot Detection & Instant Redirection ---
-    const userAgent = req.headers['user-agent'] || '';
-    const isBot = /facebookexternalhit|WhatsApp|Twitterbot|LinkedInBot|Pinterest|Slackbot|Googlebot|TelegramBot/i.test(userAgent);
 
     if (!isBot && data.redirectEnabled && data.redirectUrl) {
         let safeUrl = data.redirectUrl;
