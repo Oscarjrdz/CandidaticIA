@@ -24,8 +24,6 @@ const CandidatesSection = ({ showToast }) => {
     const [search, setSearch] = useState('');
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
-    const [aiMetadata, setAiMetadata] = useState(null); // Technical intent data (filters, keywords)
-    const [showAiDebug, setShowAiDebug] = useState(false); // Toggle visibility
     const [lastUpdate, setLastUpdate] = useState(null);
     const [proactiveEnabled, setProactiveEnabled] = useState(false);
     const [proactiveLoading, setProactiveLoading] = useState(false);
@@ -413,11 +411,9 @@ const CandidatesSection = ({ showToast }) => {
                 {/* Búsqueda */}
                 <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center">
                     <MagicSearch
-                        onResults={(results, ai, query) => {
+                        onResults={(results, ai) => {
                             setAiFilteredCandidates(results);
                             setAiExplanation(ai?.explanation || 'Búsqueda completada');
-                            setAiMetadata(ai);
-                            setShowAiDebug(false); // Reset debug on new search
                         }}
                         showToast={showToast}
                     />
@@ -509,69 +505,7 @@ const CandidatesSection = ({ showToast }) => {
                                     </p>
                                 </div>
                             </div>
-
-                            <button
-                                onClick={() => setShowAiDebug(!showAiDebug)}
-                                className="px-3 py-1.5 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded-lg text-[10px] font-bold hover:bg-blue-100 dark:hover:bg-blue-800 transition-all border border-blue-100 dark:border-blue-700/50"
-                            >
-                                {showAiDebug ? 'Ocultar Interpretación' : '¿Qué buscó la IA?'}
-                            </button>
                         </div>
-
-                        {/* AI Intent Debugger Panel (v8.5 Transparency) */}
-                        {showAiDebug && aiMetadata && (
-                            <div className="mt-2 ios-glass p-5 rounded-[20px] shadow-lg border-gray-100 dark:border-gray-800 animate-in slide-in-from-top-4 duration-500 overflow-hidden relative">
-                                <div className="absolute top-0 right-0 p-4 opacity-10">
-                                    <Command className="w-20 h-20 text-blue-500 rotate-12" />
-                                </div>
-
-                                <div className="relative z-10 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400">Interpretación de Titan Search</h4>
-                                        <span className="text-[9px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-500">v{aiMetadata.version || '8.5'}</span>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {/* Filters Detail */}
-                                        <div className="space-y-2">
-                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Filtros Estrictos (AND)</span>
-                                            <div className="flex flex-wrap gap-2">
-                                                {Object.keys(aiMetadata.filters || {}).length > 0 ? (
-                                                    Object.entries(aiMetadata.filters).map(([key, val]) => (
-                                                        <div key={key} className="flex flex-col bg-white dark:bg-gray-800/80 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                                                            <span className="text-[8px] font-black uppercase text-gray-400 leading-none mb-1">{key}</span>
-                                                            <span className="text-[10px] font-bold text-gray-900 dark:text-white">{typeof val === 'object' ? JSON.stringify(val) : val}</span>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <span className="text-[10px] text-gray-400 italic">Ningún filtro aplicado</span>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Keywords Detail */}
-                                        <div className="space-y-2">
-                                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Palabras Clave (Relevancia)</span>
-                                            <div className="flex flex-wrap gap-2">
-                                                {(aiMetadata.keywords || []).length > 0 ? (
-                                                    aiMetadata.keywords.map((kw, i) => (
-                                                        <span key={i} className="text-[10px] font-bold bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 px-2.5 py-1 rounded-full border border-blue-100 dark:border-blue-800">
-                                                            "{kw}"
-                                                        </span>
-                                                    ))
-                                                ) : (
-                                                    <span className="text-[10px] text-gray-400 italic">Búsqueda directa</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <p className="text-[9px] text-gray-400 font-medium pt-2 border-t border-gray-100 dark:border-gray-800">
-                                        * Los filtros son obligatorios. Las palabras clave aumentan la puntuación de relevancia.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 )}
 
