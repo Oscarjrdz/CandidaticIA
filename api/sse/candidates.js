@@ -70,13 +70,17 @@ export default async function handler(req, res) {
             const incoming = await redis.get('stats:msg:incoming') || '0';
             const outgoing = await redis.get('stats:msg:outgoing') || '0';
             const totalCands = await redis.zcard('candidates:list');
+            const complete = await redis.get('stats:bot:complete') || '0';
+            const pending = await redis.get('stats:bot:pending') || '0';
 
             sendEvent({
                 type: 'stats:global',
                 data: {
                     incoming: parseInt(incoming),
                     outgoing: parseInt(outgoing),
-                    total: totalCands
+                    total: totalCands,
+                    complete: parseInt(complete),
+                    pending: parseInt(pending)
                 }
             });
         } catch (error) {

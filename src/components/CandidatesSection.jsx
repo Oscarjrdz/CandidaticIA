@@ -349,11 +349,19 @@ const CandidatesSection = ({ showToast }) => {
                         </div>
                         <div className="flex flex-col relative z-10">
                             <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
-                            <div className="flex items-baseline space-x-2">
-                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">{totalItems}</h3>
-                                <span className="text-[10px] text-green-500 font-medium flex items-center bg-green-50 dark:bg-green-900/20 px-1.5 py-0.5 rounded-full">
-                                    <Zap className="w-3 h-3 mr-0.5" /> Activos
-                                </span>
+                            <div className="flex items-center flex-wrap gap-2">
+                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none">{totalItems}</h3>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[10px] text-emerald-500 font-bold flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/50">
+                                        <CheckCircle className="w-3 h-3 mr-1" /> {stats?.complete || 0} Completos
+                                    </span>
+                                    <span className="text-[10px] text-amber-500 font-bold flex items-center bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full border border-amber-100 dark:border-amber-800/50">
+                                        <Clock className="w-3 h-3 mr-1" /> {stats?.pending || 0} Incompletos
+                                    </span>
+                                    <span className="text-[10px] text-blue-500 font-bold flex items-center bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-800/50">
+                                        <Zap className="w-3 h-3 mr-1" /> Activos
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>

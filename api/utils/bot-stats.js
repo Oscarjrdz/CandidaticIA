@@ -118,7 +118,7 @@ export const calculateBotStats = async () => {
             flightPlan.summary = { totalItems, totalSent: totalSentItems };
         }
 
-        return {
+        const result = {
             today: parseInt(todayCount),
             totalSent: parseInt(totalSent),
             totalRecovered: parseInt(totalRecovered),
@@ -126,6 +126,12 @@ export const calculateBotStats = async () => {
             complete: completeCount,
             flightPlan
         };
+
+        // Cache for SSE/Live Dashboard
+        await redis.set('stats:bot:complete', completeCount);
+        await redis.set('stats:bot:pending', pendingCount);
+
+        return result;
 
     } catch (error) {
         console.error('Error calculating bot stats:', error);
