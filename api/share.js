@@ -44,6 +44,13 @@ export default async function handler(req, res) {
         absoluteImage = `${baseUrl}${metaImage}`;
     }
 
+    // --- [FACEBOOK FIX] Force extension for Social Previews ---
+    // If the image is from our internal API and doesn't have an extension, append .jpg
+    // api/image.js will split by '.' and capture the correct ID.
+    if (absoluteImage && absoluteImage.includes('/api/image') && !absoluteImage.includes('.')) {
+        absoluteImage += '.jpg';
+    }
+
     // --- [FERRARI JUMP] Bot Detection & Instant Redirection ---
     const userAgent = req.headers['user-agent'] || '';
     const isBot = /facebookexternalhit|WhatsApp|Twitterbot|LinkedInBot|Pinterest|Slackbot|Googlebot|TelegramBot/i.test(userAgent);
