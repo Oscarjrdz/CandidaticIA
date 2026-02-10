@@ -390,8 +390,11 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
  * [SIN TANTO ROLLO] Atomic Statistic Synchronizer
  * Moves candidate ID between 'complete' and 'pending' sets based on audit.
  * This makes global counting O(1) via SCARD.
+ * @param {string} id - The candidate ID
+ * @param {object} candidateData - Optional: The full candidate object (avoids extra GET)
+ * @param {object} pipeline - Optional: A Redis pipeline to add commands to
  */
-export const syncCandidateStats = async (id, candidateData = null) => {
+export const syncCandidateStats = async (id, candidateData = null, pipeline = null) => {
     const client = getRedisClient();
     if (!client) return;
 
@@ -399,8 +402,15 @@ export const syncCandidateStats = async (id, candidateData = null) => {
         const c = candidateData || await getCandidateById(id);
         if (!c) {
             // If candidate doesn't exist, cleanup from sets
-            await client.srem(KEYS.LIST_COMPLETE, id);
-            await client.srem(KEYS.LIST_PENDING, id);
+            if (pipeline) {
+                pipeline.srem(KEYS.LIST_COMPLETE, id);
+                pipeline.srem(KEYS.LIST_PENDING, id);
+            } else {
+                await client.multi()
+                    .srem(KEYS.LIST_COMPLETE, id)
+                    .srem(KEYS.LIST_PENDING, id)
+                    .exec();
+            }
             return;
         }
 
@@ -413,16 +423,26 @@ export const syncCandidateStats = async (id, candidateData = null) => {
         c.statusAudit = isComplete ? 'complete' : 'pending';
 
         // 3. Update Sets Atomically
-        if (isComplete) {
-            await client.multi()
-                .sadd(KEYS.LIST_COMPLETE, id)
-                .srem(KEYS.LIST_PENDING, id)
-                .exec();
+        if (pipeline) {
+            if (isComplete) {
+                pipeline.sadd(KEYS.LIST_COMPLETE, id);
+                pipeline.srem(KEYS.LIST_PENDING, id);
+            } else {
+                pipeline.sadd(KEYS.LIST_PENDING, id);
+                pipeline.srem(KEYS.LIST_COMPLETE, id);
+            }
         } else {
-            await client.multi()
-                .sadd(KEYS.LIST_PENDING, id)
-                .srem(KEYS.LIST_COMPLETE, id)
-                .exec();
+            if (isComplete) {
+                await client.multi()
+                    .sadd(KEYS.LIST_COMPLETE, id)
+                    .srem(KEYS.LIST_PENDING, id)
+                    .exec();
+            } else {
+                await client.multi()
+                    .sadd(KEYS.LIST_PENDING, id)
+                    .srem(KEYS.LIST_COMPLETE, id)
+                    .exec();
+            }
         }
 
         // 4. Return the enriched candidate for saving if it was passed in
@@ -607,7 +627,10 @@ export const updateCandidate = async (id, data) => {
     const candidate = await getCandidateById(id);
     if (!candidate) return null;
     const updated = { ...candidate, ...data };
-    // NEW: Clean up some potentially large keys if they are old (optional)
+
+    // [SIN TANTO ROLLO] Atomic Status Sync
+    await syncCandidateStats(id, updated);
+
     return await saveCandidate(updated);
 };
 
@@ -1025,20 +1048,22 @@ export const saveWebhookTransaction = async ({
     }
 
     // 3. Update Candidate (SET)
-    // Note: Since updateCandidate usually requires a GET first, we pass the final object here
-    // or we just set specific fields if we migrate to HASHes later. 
-    // For now, we expect candidateUpdates to be the FULL updated object if provided.
     if (candidateId && candidateUpdates) {
-        pipeline.set(`${KEYS.CANDIDATE_PREFIX}${candidateId}`, JSON.stringify(candidateUpdates));
+        // [SIN TANTO ROLLO] Ensure candidate status is synced in specialized sets
+        // This makes sure new candidates or status changes are reflected in O(1) SCARD results.
+        const enriched = await syncCandidateStats(candidateId, candidateUpdates, pipeline);
+        const finalCandidate = enriched || candidateUpdates;
+
+        pipeline.set(`${KEYS.CANDIDATE_PREFIX}${candidateId}`, JSON.stringify(finalCandidate));
 
         // Update Index if it's a new candidate or phone changed (safety)
-        if (candidateUpdates.whatsapp) {
-            const cleanPhone = candidateUpdates.whatsapp.replace(/\D/g, '');
+        if (finalCandidate.whatsapp) {
+            const cleanPhone = finalCandidate.whatsapp.replace(/\D/g, '');
             pipeline.hset(KEYS.PHONE_INDEX, cleanPhone, candidateId);
         }
 
         // Update Sorting Score in List
-        const score = new Date(candidateUpdates.ultimoMensaje || candidateUpdates.primerContacto || Date.now()).getTime();
+        const score = new Date(finalCandidate.ultimoMensaje || finalCandidate.primerContacto || Date.now()).getTime();
         pipeline.zadd(KEYS.CANDIDATES_LIST, score, candidateId);
     }
 
