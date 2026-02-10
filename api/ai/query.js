@@ -1,5 +1,72 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+// --- HELPERS DE FILTRADO (Global Scope) ---
+const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+const calculateAge = (dob) => {
+    if (!dob) return null;
+    let birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) {
+        const cleanDob = String(dob).toLowerCase().trim();
+        const deRegex = /(\d{1,2})\s+de\s+([a-z0-9áéíóú]+)\s+de\s+(\d{4})/;
+        const match = cleanDob.match(deRegex);
+        if (match) {
+            const day = parseInt(match[1]);
+            const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            const monthIndex = months.findIndex(m => m.startsWith(match[2].slice(0, 3)));
+            if (monthIndex >= 0) birthDate = new Date(parseInt(match[3]), monthIndex, day);
+        }
+    }
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+    return age;
+};
+
+const matchesCriteria = (candidateVal, criteria) => {
+    if (criteria === undefined || criteria === null || criteria === '') return true;
+
+    // 1. Numeric Equality (Strict for Age)
+    const numCandidate = Number(candidateVal);
+    if (typeof criteria === 'number' || (!isNaN(criteria) && typeof criteria !== 'object')) {
+        const numTarget = Number(criteria);
+        if (isNaN(numCandidate)) return false;
+        return numCandidate === numTarget;
+    }
+
+    // 2. Rango (min/max)
+    if (criteria.min !== undefined || criteria.max !== undefined) {
+        if (isNaN(numCandidate)) return false;
+        if (criteria.min !== undefined && numCandidate < criteria.min) return false;
+        if (criteria.max !== undefined && numCandidate > criteria.max) return false;
+        return true;
+    }
+
+    // 3. Operador (op/val)
+    if (criteria.op && criteria.val !== undefined) {
+        const target = Number(criteria.val);
+        if (isNaN(numCandidate) || isNaN(target)) return false;
+        switch (criteria.op) {
+            case '>': return numCandidate > target;
+            case '<': return numCandidate < target;
+            case '>=': return numCandidate >= target;
+            case '<=': return numCandidate <= target;
+            case '=': return numCandidate === target;
+            default: return false;
+        }
+    }
+
+    // 4. String match (Categorical Strict)
+    const cStr = normalize(candidateVal);
+    const sStr = normalize(criteria.val || criteria);
+
+    if (!cStr || cStr === 'no proporcionado' || cStr === 'n/a' || cStr === 'na') return false;
+
+    return cStr.includes(sStr);
+};
+
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -170,73 +237,6 @@ Consulta del usuario: "${query}"
 
         // 3. Ejecutar la búsqueda en los datos reales (TODOS)
         const { candidates } = await getCandidates(10000, 0, '', false);
-
-        // --- HELPERS DE FILTRADO ---
-        const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-
-        const calculateAge = (dob) => {
-            if (!dob) return null;
-            let birthDate = new Date(dob);
-            if (isNaN(birthDate.getTime())) {
-                const cleanDob = String(dob).toLowerCase().trim();
-                const deRegex = /(\d{1,2})\s+de\s+([a-z0-9áéíóú]+)\s+de\s+(\d{4})/;
-                const match = cleanDob.match(deRegex);
-                if (match) {
-                    const day = parseInt(match[1]);
-                    const months = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-                    const monthIndex = months.findIndex(m => m.startsWith(match[2].slice(0, 3)));
-                    if (monthIndex >= 0) birthDate = new Date(parseInt(match[3]), monthIndex, day);
-                }
-            }
-            if (isNaN(birthDate.getTime())) return null;
-            const today = new Date();
-            let age = today.getFullYear() - birthDate.getFullYear();
-            const m = today.getMonth() - birthDate.getMonth();
-            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-            return age;
-        };
-
-        const matchesCriteria = (candidateVal, criteria) => {
-            if (criteria === undefined || criteria === null || criteria === '') return true;
-
-            // 1. Numeric Equality (Strict for Age)
-            const numCandidate = Number(candidateVal);
-            if (typeof criteria === 'number' || (!isNaN(criteria) && typeof criteria !== 'object')) {
-                const numTarget = Number(criteria);
-                if (isNaN(numCandidate)) return false;
-                return numCandidate === numTarget;
-            }
-
-            // 2. Rango (min/max)
-            if (criteria.min !== undefined || criteria.max !== undefined) {
-                if (isNaN(numCandidate)) return false;
-                if (criteria.min !== undefined && numCandidate < criteria.min) return false;
-                if (criteria.max !== undefined && numCandidate > criteria.max) return false;
-                return true;
-            }
-
-            // 3. Operador (op/val)
-            if (criteria.op && criteria.val !== undefined) {
-                const target = Number(criteria.val);
-                if (isNaN(numCandidate) || isNaN(target)) return false;
-                switch (criteria.op) {
-                    case '>': return numCandidate > target;
-                    case '<': return numCandidate < target;
-                    case '>=': return numCandidate >= target;
-                    case '<=': return numCandidate <= target;
-                    case '=': return numCandidate === target;
-                    default: return false;
-                }
-            }
-
-            // 4. String match (Categorical Strict)
-            const cStr = normalize(candidateVal);
-            const sStr = normalize(criteria.val || criteria);
-
-            if (!cStr || cStr === 'no proporcionado' || cStr === 'n/a' || cStr === 'na') return false;
-
-            return cStr.includes(sStr);
-        };
 
         // --- SCORING ENGINE (TITAN v4.0 - Inclusive Edition) ---
         const activeFilterKeys = Object.keys(aiResponse.filters || {});
