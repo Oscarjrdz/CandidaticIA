@@ -29,16 +29,31 @@ export default async function handler(req, res) {
                 const msgStats = await getEventStats();
                 const redis = getRedisClient();
 
-                const complete = redis ? await redis.get('stats:bot:complete') : '0';
-                const pending = redis ? await redis.get('stats:bot:pending') : '0';
-                const cachedTotal = redis ? await redis.get('stats:bot:total') : null;
+                let completeVal = parseInt(complete || '0');
+                let pendingVal = parseInt(pending || '0');
+                let totalVal = cachedTotal ? parseInt(cachedTotal) : candidatesStats.total;
+
+                // [SELF-HEALING] If sum doesn't match total, force a fresh calculation
+                if (completeVal + pendingVal !== totalVal) {
+                    try {
+                        const { calculateBotStats } = await import('./utils/bot-stats.js');
+                        const fresh = await calculateBotStats();
+                        if (fresh) {
+                            completeVal = fresh.complete;
+                            pendingVal = fresh.pending;
+                            totalVal = fresh.total;
+                        }
+                    } catch (e) {
+                        console.error('❌ Stats healing failed:', e);
+                    }
+                }
 
                 statsData = {
-                    candidates: cachedTotal ? parseInt(cachedTotal) : candidatesStats.total,
+                    candidates: totalVal,
                     incoming: msgStats.incoming,
                     outgoing: msgStats.outgoing,
-                    complete: parseInt(complete || '0'),
-                    pending: parseInt(pending || '0')
+                    complete: completeVal,
+                    pending: pendingVal
                 };
             }
 
@@ -115,6 +130,13 @@ export default async function handler(req, res) {
             }
 
             const updatedCandidate = await updateCandidate(id, updates);
+            // Trigger stats refresh in background
+            try {
+                const { calculateBotStats } = await import('./utils/bot-stats.js');
+                await calculateBotStats();
+            } catch (e) {
+                console.error('❌ Error refreshing stats after update:', e);
+            }
 
             return res.status(200).json({
                 success: true,
@@ -133,13 +155,13 @@ export default async function handler(req, res) {
                 });
             }
 
-            const deleted = await deleteCandidate(id);
-
-            if (!deleted) {
-                return res.status(404).json({
-                    success: false,
-                    error: 'Candidato no encontrado'
-                });
+            await deleteCandidate(id);
+            // Wait for stats refresh for immediate consistency
+            try {
+                const { calculateBotStats } = await import('./utils/bot-stats.js');
+                await calculateBotStats();
+            } catch (e) {
+                console.error('❌ Error refreshing stats after delete:', e);
             }
 
             return res.status(200).json({

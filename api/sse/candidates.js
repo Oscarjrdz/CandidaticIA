@@ -87,14 +87,24 @@ export default async function handler(req, res) {
                 }));
             }
 
+            let completeVal = parseInt(complete || '0');
+            let pendingVal = parseInt(pending || '0');
+            let totalVal = totalCands;
+
+            // [SSE SELF-HEALING] Cross-verify consistency
+            if (completeVal + pendingVal !== totalVal && cachedTotal !== null) {
+                // If inconsistent, we don't block SSE but we signal a refresh
+                import('../utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
+            }
+
             sendEvent({
                 type: 'stats:global',
                 data: {
                     incoming: parseInt(incoming),
                     outgoing: parseInt(outgoing),
-                    total: totalCands,
-                    complete: parseInt(complete || '0'),
-                    pending: parseInt(pending || '0'),
+                    total: totalVal,
+                    complete: completeVal,
+                    pending: pendingVal,
                     flightPlan: await redis.get('stats:bot:flight_plan').then(res => res ? JSON.parse(res) : null)
                 }
             });
