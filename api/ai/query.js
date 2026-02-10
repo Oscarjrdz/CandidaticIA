@@ -84,23 +84,27 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v5.5]
-Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu tarea es extraer filtros técnicos de una consulta natural.
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v6.0 - STRICT HYBRID]
+Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es convertir lenguaje natural en filtros técnicos INVIOLABLES.
 
 [REGLAS DE FILTRADO]:
 1. statusAudit (CRÍTICO): 
-   - Si piden "completos", "ya terminaron", "registrados", "listos" -> {"statusAudit": "complete"}.
-   - Si piden "pendientes", "faltan", "no han terminado", "incompletos" -> {"statusAudit": "pending"}.
-2. INTENCIÓN SEMÁNTICA: Traduce plurales a singulares. Ejemplo: "mujeres" -> {"genero": "Mujer"}.
-3. RANGOS DE EDAD (CRÍTICO): 
-   - SIEMPRE usa el campo "edad" para filtros de años.
-   - Ejemplo: "de 20 a 30 años" -> {"edad": {"min": 20, "max": 30}}
-   - Ejemplo: "más de 30" -> {"edad": {"op": ">", "val": 30}}
-   - Ejemplo: "18 años" -> {"edad": 18}
-4. MUNICIPIOS: Si mencionan un lugar, asígnalo a "municipio" o "colonia" según corresponda.
-5. KEYWORDS: Solo para nombres específicos (ej: "Oscar") o habilidades que NO estén en los campos fijos.
-6. BÚSQUEDA DE FALTANTES (CRÍTICO): Si el usuario pide específicamente "sin [campo]", "que no tengan [campo]" o "falta [campo]", usa el valor "$missing". 
-   - Ejemplo: "que le falte el nombre" -> {"nombreReal": "$missing"}
+   - SIEMPRE usa esto para intención de completitud.
+   - "completos", "ya terminaron", "registrados", "listos" -> {"statusAudit": "complete"}.
+   - "pendientes", "faltan", "no han terminado", "incompletos" -> {"statusAudit": "pending"}.
+2. GENERO (ESTRICTO):
+   - NUNCA pongas "mujer" o "hombre" en keywords.
+   - "mujeres", "damas", "chicas" -> {"genero": "Mujer"}.
+   - "hombres", "caballeros", "chicos" -> {"genero": "Hombre"}.
+3. RANGOS DE EDAD (ESTRICTO): 
+   - SIEMPRE usa el campo "edad".
+   - "18 años" -> {"edad": 18}.
+4. MUNICIPIOS: Si mencionan un lugar, asígnalo a "municipio" o "colonia".
+5. KEYWORDS: Solo para nombres de personas ("Oscar") o habilidades que no tengan campo fijo.
+6. BÚSQUEDA DE FALTANTES: Si el usuario pide específicamente "sin [campo]", usa el valor "$missing". 
+   - Ejemplo: "sin nombre" -> {"nombreReal": "$missing"}
+
+[FORMATO DE SALIDA]: JSON JSON JSON. NO TEXTO ADICIONAL.
 
 [BASE DE DATOS DE ATRIBUTOS]:
 ${allFields.map(f => `- ${f.value} (${f.label})`).join('\n')}
@@ -227,41 +231,39 @@ Consulta del usuario: "${query}"
                 const criteria = aiResponse.filters[key];
                 const val = (key === 'edad') ? candidateAge : candidate[key];
 
-                // Check for a hard mismatch (only if value exists)
                 const cStr = normalize(val);
-                const sStr = normalize(criteria.val || criteria);
+                const isTargetMissing = criteria === "$missing";
 
-                // Check for missing data
-                const isMissing = !cStr || ['no proporcionado', 'n/a', 'na', 'null', 'undefined'].includes(cStr);
-                const targetIsMissing = criteria === "$missing";
+                // --- NOISE DETECTION (Logical Missing) ---
+                // Only for strings. Numbers are never "missing" by noise list.
+                const isNumeric = typeof val === 'number' || (val && !isNaN(val) && String(val).trim() !== '');
+                const noiseList = ['proporcionado', 'n/a', 'na', 'null', 'undefined', 'general', 'sin nombre', 'sin apellido'];
+                const isMissing = !isNumeric && (!cStr || noiseList.some(noise => cStr === noise || cStr.includes("no " + noise)) || cStr.length < 2);
 
                 if (isMissing) {
-                    if (targetIsMissing) {
-                        // User specifically ASKED for missing data in this field
+                    if (isTargetMissing) {
                         matchesCount++;
-                        score += 100;
+                        score += 2000; // Big boost for explicit missing search
                     } else {
-                        // Normal missing data: No points, but NOT a failure. This allows candidates with partial profiles to stay.
-                        score += 0;
+                        // Inclusive penalization (stay in list but at the bottom)
+                        score += 1;
                     }
                 } else {
-                    if (targetIsMissing) {
-                        // User asked for MISSING, but we HAVE data. This is a mismatch.
+                    if (isTargetMissing) {
                         mismatchFound = true;
                     } else {
                         const hasMatch = matchesCriteria(val, criteria);
                         if (hasMatch) {
                             matchesCount++;
-                            score += 100; // Base match points
+                            score += 5000; // Confirmed matches go to the top
                         } else {
-                            // HARD MISMATCH: If values exist and don't match, this is a real fail.
+                            // CATEGORICAL/NUMERIC STRICTNESS: If value exists and doesn't match, EXCLUDE.
                             mismatchFound = true;
                         }
                     }
                 }
             });
 
-            // If we found a clear mismatch (e.g. asked for Monterrey, lives in Apodaca), we skip.
             if (mismatchFound) return acc;
 
             // 2. Bonus Exponencial por Multi-Filtro (The "AND" effect)
@@ -306,7 +308,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 5.5 (Precision Protocol)",
+            version: "Titan 6.0 (Strict Hybrid)",
             candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
