@@ -442,7 +442,7 @@ Responde ÚNICAMENTE con el mensaje de texto para WhatsApp (máximo 150 caracter
                 });
 
                 // Mark as sent for this level and this interaction session
-                await redis.set(sessionKey, 'sent', 'EX', 7 * 24 * 3600); // 1 week expiration
+                await redis.set(sessionKey, new Date().toISOString(), 'EX', 7 * 24 * 3600); // 1 week expiration
                 await redis.incr(todayKey);
                 await redis.incr('ai:proactive:total_sent'); // Track total impact
                 await redis.expire(todayKey, 48 * 3600);

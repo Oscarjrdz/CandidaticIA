@@ -95,12 +95,30 @@ export const calculateBotStats = async () => {
                 const sessionResults = await sessionKeyPipeline.exec();
 
                 // Final Pass: Update flightPlan
+                const mxToday = new Date(new Date().getTime() - (6 * 3600000)).toISOString().split('T')[0];
+
                 processedCandidates.forEach((item, idx) => {
                     const { level } = item;
                     flightPlan[level].total++;
                     const [sErr, sRes] = sessionResults[idx];
+
                     if (!sErr && sRes) {
-                        flightPlan[level].sent++;
+                        // Check if sRes is 'sent' (legacy) or a timestamp
+                        if (sRes === 'sent') {
+                            // Legacy keys: We'll count them as sent today ONLY for the first transition phase
+                            // Actually, legacy keys don't have date, so it's safer to skip or assume old.
+                            // User wants it to be 0 if bot was off, so legacy 'sent' should be ignored for daily.
+                        } else {
+                            try {
+                                const sentDate = new Date(sRes);
+                                const sentMxStr = new Date(sentDate.getTime() - (6 * 3600000)).toISOString().split('T')[0];
+                                if (sentMxStr === mxToday) {
+                                    flightPlan[level].sent++;
+                                }
+                            } catch (e) {
+                                // Fallback for corrupt data
+                            }
+                        }
                     }
                 });
             }
