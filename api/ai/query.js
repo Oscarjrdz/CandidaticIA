@@ -145,7 +145,7 @@ Consulta del usuario: "${query}"
         const aiResponse = JSON.parse(jsonMatch[0]);
 
         // 3. Ejecutar la búsqueda en los datos reales (TODOS)
-        const { candidates } = await getCandidates(2000, 0, '', false);
+        const { candidates } = await getCandidates(10000, 0, '', false);
 
         // --- HELPERS DE FILTRADO ---
         const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -266,7 +266,7 @@ Consulta del usuario: "${query}"
         // 5. Sort & Cap (Expanded Limit to 500)
         filtered = filtered.sort((a, b) => b._relevance - a._relevance);
 
-        const limit = parseInt(req.query.limit || 500);
+        const limit = parseInt(req.query.limit || 5000);
 
         return res.status(200).json({
             success: true,
