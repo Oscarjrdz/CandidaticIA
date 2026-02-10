@@ -63,6 +63,7 @@ export default async function handler(req, res) {
             { value: 'nombreReal', label: 'Nombre Real' },
             { value: 'genero', label: 'Género' },
             { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
+            { value: 'edad', label: 'Edad (Número)' },
             { value: 'municipio', label: 'Municipio' },
             { value: 'categoria', label: 'Categoría' },
             { value: 'tieneEmpleo', label: 'Tiene empleo' },
@@ -83,7 +84,7 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v5.0]
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v5.5]
 Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu tarea es extraer filtros técnicos de una consulta natural.
 
 [REGLAS DE FILTRADO]:
@@ -91,28 +92,15 @@ Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu tarea es extrae
    - Si piden "completos", "ya terminaron", "registrados", "listos" -> {"statusAudit": "complete"}.
    - Si piden "pendientes", "faltan", "no han terminado", "incompletos" -> {"statusAudit": "pending"}.
 2. INTENCIÓN SEMÁNTICA: Traduce plurales a singulares. Ejemplo: "mujeres" -> {"genero": "Mujer"}.
-3. RANGOS DE EDAD: 
+3. RANGOS DE EDAD (CRÍTICO): 
+   - SIEMPRE usa el campo "edad" para filtros de años.
    - Ejemplo: "de 20 a 30 años" -> {"edad": {"min": 20, "max": 30}}
    - Ejemplo: "más de 30" -> {"edad": {"op": ">", "val": 30}}
+   - Ejemplo: "18 años" -> {"edad": 18}
 4. MUNICIPIOS: Si mencionan un lugar, asígnalo a "municipio" o "colonia" según corresponda.
 5. KEYWORDS: Solo para nombres específicos (ej: "Oscar") o habilidades que NO estén en los campos fijos.
-
-[FORMATO DE SALIDA]:
 6. BÚSQUEDA DE FALTANTES (CRÍTICO): Si el usuario pide específicamente "sin [campo]", "que no tengan [campo]" o "falta [campo]", usa el valor "$missing". 
-   - Ejemplo: "sin telefono" -> {"whatsapp": "$missing"}
    - Ejemplo: "que le falte el nombre" -> {"nombreReal": "$missing"}
-
-[FORMATO DE SALIDA]:
-{
-  "filters": { 
-    "municipio": "Apodaca", 
-    "genero": "Hombre",
-    "statusAudit": "complete",
-    "edad": { "min": 18, "max": 40 } 
-  },
-  "keywords": ["Oscar"],
-  "explanation": "Búsqueda híbrida de hombres adultos de Apodaca con registro completo."
-}
 
 [BASE DE DATOS DE ATRIBUTOS]:
 ${allFields.map(f => `- ${f.value} (${f.label})`).join('\n')}
@@ -145,7 +133,7 @@ Consulta del usuario: "${query}"
         }
 
         if (!successModel) {
-            throw new Error(`Ningún modelo respondió. Último error: ${lastError}`);
+            throw new Error(`Ningún modelo respondió.Último error: ${lastError} `);
         }
 
         const aiResponseRaw = (await result.response).text();
@@ -183,31 +171,37 @@ Consulta del usuario: "${query}"
         const matchesCriteria = (candidateVal, criteria) => {
             if (criteria === undefined || criteria === null || criteria === '') return true;
 
-            // 1. Rango (min/max)
+            // 1. Numeric Equality (Strict for Age)
+            const numCandidate = Number(candidateVal);
+            if (typeof criteria === 'number' || (!isNaN(criteria) && typeof criteria !== 'object')) {
+                const numTarget = Number(criteria);
+                if (isNaN(numCandidate)) return false;
+                return numCandidate === numTarget;
+            }
+
+            // 2. Rango (min/max)
             if (criteria.min !== undefined || criteria.max !== undefined) {
-                const val = Number(candidateVal);
-                if (isNaN(val)) return false;
-                if (criteria.min !== undefined && val < criteria.min) return false;
-                if (criteria.max !== undefined && val > criteria.max) return false;
+                if (isNaN(numCandidate)) return false;
+                if (criteria.min !== undefined && numCandidate < criteria.min) return false;
+                if (criteria.max !== undefined && numCandidate > criteria.max) return false;
                 return true;
             }
 
-            // 2. Operador (op/val)
+            // 3. Operador (op/val)
             if (criteria.op && criteria.val !== undefined) {
-                const val = Number(candidateVal);
                 const target = Number(criteria.val);
-                if (isNaN(val) || isNaN(target)) return false;
+                if (isNaN(numCandidate) || isNaN(target)) return false;
                 switch (criteria.op) {
-                    case '>': return val > target;
-                    case '<': return val < target;
-                    case '>=': return val >= target;
-                    case '<=': return val <= target;
-                    case '=': return val === target;
+                    case '>': return numCandidate > target;
+                    case '<': return numCandidate < target;
+                    case '>=': return numCandidate >= target;
+                    case '<=': return numCandidate <= target;
+                    case '=': return numCandidate === target;
                     default: return false;
                 }
             }
 
-            // 3. String match (Categorical Strict)
+            // 4. String match (Categorical Strict)
             const cStr = normalize(candidateVal);
             const sStr = normalize(criteria.val || criteria);
 
@@ -312,7 +306,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 5.0 (Hybrid NL2Query)",
+            version: "Titan 5.5 (Precision Protocol)",
             candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
