@@ -320,9 +320,10 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     // If searching, we currently have to do a scan (unless we index names too)
     // For now, if search is empty, we use the ultra-fast F1 Steering.
     if (!search && !excludeLinked) {
+        const sumCount = async () => (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
         const stop = offset + limit - 1;
         const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, offset, stop);
-        if (!ids || ids.length === 0) return { candidates: [], total: await client.zcard(KEYS.CANDIDATES_LIST) };
+        if (!ids || ids.length === 0) return { candidates: [], total: await sumCount() };
 
         // Optimized Pipeline Loading
         const pipeline = client.pipeline();
@@ -333,7 +334,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
             .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
             .filter(Boolean);
 
-        const total = await client.zcard(KEYS.CANDIDATES_LIST);
+        const total = await sumCount();
         return { candidates, total };
     }
 
@@ -634,8 +635,14 @@ export const getLastActiveUser = async () => {
 export const getCandidatesStats = async () => {
     const client = getClient();
     if (!client) return { total: 0 };
-    const count = await client.zcard(KEYS.CANDIDATES_LIST);
-    return { total: count };
+    // [SIN TANTO ROLLO] Sum of Sets for ultra-fast total
+    const complete = await client.scard(KEYS.LIST_COMPLETE);
+    const pending = await client.scard(KEYS.LIST_PENDING);
+    return {
+        total: complete + pending,
+        complete,
+        pending
+    };
 };
 
 /**
