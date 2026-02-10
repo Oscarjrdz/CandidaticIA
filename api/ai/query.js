@@ -98,6 +98,11 @@ Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu tarea es extrae
 5. KEYWORDS: Solo para nombres específicos (ej: "Oscar") o habilidades que NO estén en los campos fijos.
 
 [FORMATO DE SALIDA]:
+6. BÚSQUEDA DE FALTANTES (CRÍTICO): Si el usuario pide específicamente "sin [campo]", "que no tengan [campo]" o "falta [campo]", usa el valor "$missing". 
+   - Ejemplo: "sin telefono" -> {"whatsapp": "$missing"}
+   - Ejemplo: "que le falte el nombre" -> {"nombreReal": "$missing"}
+
+[FORMATO DE SALIDA]:
 {
   "filters": { 
     "municipio": "Apodaca", 
@@ -234,18 +239,30 @@ Consulta del usuario: "${query}"
 
                 // Check for missing data
                 const isMissing = !cStr || ['no proporcionado', 'n/a', 'na', 'null', 'undefined'].includes(cStr);
+                const targetIsMissing = criteria === "$missing";
 
                 if (isMissing) {
-                    // MISSING DATA: No points, but NOT a failure. This allows candidates with partial profiles to stay.
-                    score += 0;
-                } else {
-                    const hasMatch = matchesCriteria(val, criteria);
-                    if (hasMatch) {
+                    if (targetIsMissing) {
+                        // User specifically ASKED for missing data in this field
                         matchesCount++;
-                        score += 100; // Base match points
+                        score += 100;
                     } else {
-                        // HARD MISMATCH: If values exist and don't match, this is a real fail.
+                        // Normal missing data: No points, but NOT a failure. This allows candidates with partial profiles to stay.
+                        score += 0;
+                    }
+                } else {
+                    if (targetIsMissing) {
+                        // User asked for MISSING, but we HAVE data. This is a mismatch.
                         mismatchFound = true;
+                    } else {
+                        const hasMatch = matchesCriteria(val, criteria);
+                        if (hasMatch) {
+                            matchesCount++;
+                            score += 100; // Base match points
+                        } else {
+                            // HARD MISMATCH: If values exist and don't match, this is a real fail.
+                            mismatchFound = true;
+                        }
                     }
                 }
             });
