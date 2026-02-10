@@ -67,7 +67,8 @@ export default async function handler(req, res) {
             { value: 'categoria', label: 'Categoría' },
             { value: 'tieneEmpleo', label: 'Tiene empleo' },
             { value: 'nombre', label: 'Nombre de WhatsApp' },
-            { value: 'whatsapp', label: 'Teléfono/WhatsApp' }
+            { value: 'whatsapp', label: 'Teléfono/WhatsApp' },
+            { value: 'statusAudit', label: 'Estado del registro (completos/pendientes)' }
         ];
 
         let allFields = [...DEFAULT_FIELDS];
@@ -82,31 +83,33 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v3.8]
-Eres el Motor de Relevancia UNIVERSAL-ESTRICTO de Candidatic IA. Tu tarea es convertir una consulta de lenguaje natural en un JSON de búsqueda técnica.
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v5.0]
+Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu tarea es extraer filtros técnicos de una consulta natural.
 
 [REGLAS DE FILTRADO]:
-1. INTENCIÓN SEMÁNTICA: Traduce plurales a singulares para filtros categóricos. Ejemplo: "mujeres" -> {"genero": "Mujer"}.
-2. RANGOS NUMÉRICOS (CRÍTICO): Si el usuario pide edades (ej: "20 a 30 años"), usa min y max. 
+1. statusAudit (CRÍTICO): 
+   - Si piden "completos", "ya terminaron", "registrados", "listos" -> {"statusAudit": "complete"}.
+   - Si piden "pendientes", "faltan", "no han terminado", "incompletos" -> {"statusAudit": "pending"}.
+2. INTENCIÓN SEMÁNTICA: Traduce plurales a singulares. Ejemplo: "mujeres" -> {"genero": "Mujer"}.
+3. RANGOS DE EDAD: 
    - Ejemplo: "de 20 a 30 años" -> {"edad": {"min": 20, "max": 30}}
    - Ejemplo: "más de 30" -> {"edad": {"op": ">", "val": 30}}
-3. ESCOLARIDAD (NORMALIZACIÓN): Usa solo estos términos: "Primaria", "Secundaria", "Preparatoria", "Técnica", "Licenciatura", "Posgrado". 
-   - Ejemplo: "licenciados" -> {"escolaridad": "Licenciatura"}.
-4. KEYWORDS: Solo para habilidades técnicas (ej: "excel") o rasgos psicológicos.
+4. MUNICIPIOS: Si mencionan un lugar, asígnalo a "municipio" o "colonia" según corresponda.
+5. KEYWORDS: Solo para nombres específicos (ej: "Oscar") o habilidades que NO estén en los campos fijos.
 
 [FORMATO DE SALIDA]:
 {
   "filters": { 
-    "municipio": "Monterrey", 
-    "genero": "Mujer",
-    "escolaridad": "Licenciatura",
-    "edad": { "min": 20, "max": 30 } 
+    "municipio": "Apodaca", 
+    "genero": "Hombre",
+    "statusAudit": "complete",
+    "edad": { "min": 18, "max": 40 } 
   },
-  "keywords": ["ventas"],
-  "explanation": "Búsqueda estricta de mujeres licenciadas de Monterrey entre 20 y 30 años."
+  "keywords": ["Oscar"],
+  "explanation": "Búsqueda híbrida de hombres adultos de Apodaca con registro completo."
 }
 
-[BASE DE DATOS]:
+[BASE DE DATOS DE ATRIBUTOS]:
 ${allFields.map(f => `- ${f.value} (${f.label})`).join('\n')}
 
 Consulta del usuario: "${query}"
@@ -292,7 +295,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 3.8 (Universal Strict)",
+            version: "Titan 5.0 (Hybrid NL2Query)",
             candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
