@@ -1,5 +1,10 @@
-import { getRedisClient, isProfileComplete, auditProfile } from './storage.js';
+import { getRedisClient } from './storage.js';
 
+/**
+ * [SIN TANTO ROLLO] Optimized Stats Engine
+ * Uses Redis Sets for O(1) counting of Complete/Pending candidates.
+ * Only audits Pending candidates for the Flight Plan, making it extremely fast.
+ */
 export const calculateBotStats = async () => {
     const redis = getRedisClient();
     if (!redis) return null;
@@ -7,9 +12,15 @@ export const calculateBotStats = async () => {
     try {
         const todayStr = new Date().toISOString().split('T')[0];
         const todayCount = await redis.get(`ai:proactive:count:${todayStr}`) || '0';
-        let totalSent = await redis.get('ai:proactive:total_sent') || '0';
+        const totalSent = await redis.get('ai:proactive:total_sent') || '0';
         const totalRecovered = await redis.get('ai:proactive:total_recovered') || '0';
 
+        // 1. Instant O(1) Counts from specialized sets
+        const completeCount = await redis.scard('stats:list:complete');
+        const pendingCount = await redis.scard('stats:list:pending');
+        const totalCalculated = completeCount + pendingCount;
+
+        // 2. Flight Plan Logic (Optimized: Only process Pending candidates)
         const inactiveStagesJson = await redis.get('bot_inactive_stages');
         const inactiveStages = inactiveStagesJson ? JSON.parse(inactiveStagesJson) : [
             { hours: 24, label: 'Recordatorio (Lic. Brenda)' },
@@ -18,100 +29,65 @@ export const calculateBotStats = async () => {
             { hours: 168, label: 'Limpieza de base' }
         ];
 
-        let pendingCount = 0;
-        let completeCount = 0;
-
         const flightPlan = inactiveStages.reduce((acc, s) => {
             acc[s.hours] = { label: s.label, total: 0, sent: 0, percentage: 0 };
             return acc;
         }, {});
 
-        const now = new Date();
-        const todayStart = new Date(now.getTime());
-        todayStart.setHours(0, 0, 0, 0);
-        const todayEnd = new Date(now.getTime());
+        const now = Date.now();
+        const todayEnd = new Date();
         todayEnd.setHours(23, 59, 59, 999);
+        const utcToday = new Date().toISOString().split('T')[0];
 
-        const customFieldsJson = await redis.get('custom_fields');
-        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+        // Fetch all pending IDs (Flight plan candidates only live here)
+        const pendingIds = await redis.smembers('stats:list:pending');
 
-        const allIds = await redis.zrevrange('candidates:list', 0, -1);
-
-        if (allIds && allIds.length > 0) {
+        if (pendingIds && pendingIds.length > 0) {
             const CHUNK_SIZE = 100;
-            for (let i = 0; i < allIds.length; i += CHUNK_SIZE) {
-                const chunk = allIds.slice(i, i + CHUNK_SIZE);
+            for (let i = 0; i < pendingIds.length; i += CHUNK_SIZE) {
+                const chunk = pendingIds.slice(i, i + CHUNK_SIZE);
                 const pipeline = redis.pipeline();
-                chunk.forEach(id => {
-                    pipeline.get(`candidate:${id}`);
-                });
+                chunk.forEach(id => pipeline.get(`candidate:${id}`));
 
-                const candidateResults = await pipeline.exec();
-
-                // Pipeline for session keys
+                const results = await pipeline.exec();
                 const sessionKeyPipeline = redis.pipeline();
-                const processedCandidates = [];
+                const processedInChunk = [];
 
-                candidateResults.forEach(([err, res], idx) => {
-                    if (!err && res) {
-                        try {
-                            const c = JSON.parse(res);
+                results.forEach(([err, res]) => {
+                    if (err || !res) return;
+                    try {
+                        const c = JSON.parse(res);
+                        const tUser = new Date(c.lastUserMessageAt || 0).getTime();
+                        const tBot = new Date(c.lastBotMessageAt || 0).getTime();
+                        const lastInteraction = Math.max(tUser, tBot);
+                        const hoursInactive = (now - lastInteraction) / (1000 * 60 * 60);
 
-                            // [IRON-CLAD QUALITY SHIELD] Use auditProfile with a safety catch
-                            let isComp = false;
-                            try {
-                                isComp = isProfileComplete(c, customFields);
-                            } catch (e) {
-                                console.error(`❌ [Audit Error] ID ${chunk[idx]}:`, e.message);
-                                isComp = false; // Graceful degradation to incomplete
+                        const sortedStages = [...inactiveStages].sort((a, b) => b.hours - a.hours);
+                        const currentStage = sortedStages.find(s => hoursInactive >= s.hours);
+
+                        if (currentStage) {
+                            const level = currentStage.hours;
+                            const dueTime = lastInteraction + (level * 60 * 60 * 1000);
+
+                            if (dueTime <= todayEnd.getTime()) {
+                                const sessionKey = `proactive:${c.id}:${level}:${c.lastUserMessageAt}`;
+                                sessionKeyPipeline.get(sessionKey);
+                                processedInChunk.push({ level });
                             }
-
-                            if (isComp) {
-                                completeCount++;
-                            } else {
-                                pendingCount++;
-
-                                const tUser = new Date(c.lastUserMessageAt || 0).getTime();
-                                const tBot = new Date(c.lastBotMessageAt || 0).getTime();
-                                const lastInteraction = new Date(Math.max(tUser, tBot));
-                                const hoursInactive = (now - lastInteraction) / (1000 * 60 * 60);
-
-                                const sortedStages = [...inactiveStages].sort((a, b) => b.hours - a.hours);
-                                const currentStage = sortedStages.find(s => hoursInactive >= s.hours);
-
-                                if (currentStage) {
-                                    const level = currentStage.hours;
-                                    const dueTime = new Date(lastInteraction.getTime() + (level * 60 * 60 * 1000));
-
-                                    if (dueTime <= todayEnd) {
-                                        const sessionKey = `proactive:${c.id}:${level}:${c.lastUserMessageAt}`;
-                                        sessionKeyPipeline.get(sessionKey);
-                                        processedCandidates.push({ c, level });
-                                    }
-                                }
-                            }
-                        } catch (parseErr) {
-                            console.error(`❌ [Stats Parse Error] ID ${chunk[idx]}:`, parseErr.message);
                         }
-                    }
+                    } catch (e) { }
                 });
 
                 const sessionResults = await sessionKeyPipeline.exec();
-
-                // Final Pass: Update flightPlan
-                const utcToday = new Date().toISOString().split('T')[0];
-
-                processedCandidates.forEach((item, idx) => {
+                processedInChunk.forEach((item, idx) => {
                     const { level } = item;
                     flightPlan[level].total++;
-                    const sessionItem = sessionResults[idx];
-
-                    if (sessionItem && !sessionItem[0] && sessionItem[1]) {
-                        const sRes = sessionItem[1];
+                    const sItem = sessionResults[idx];
+                    if (sItem && !sItem[0] && sItem[1]) {
+                        const sRes = sItem[1];
                         if (sRes !== 'sent') {
                             try {
-                                const sentDate = new Date(sRes);
-                                if (sentDate.toISOString().split('T')[0] === utcToday) {
+                                if (new Date(sRes).toISOString().split('T')[0] === utcToday) {
                                     flightPlan[level].sent++;
                                 }
                             } catch (e) { }
@@ -121,10 +97,7 @@ export const calculateBotStats = async () => {
             }
         }
 
-        // --- Consistency Guard ---
-        const totalCalculated = completeCount + pendingCount;
-
-        // Calculate percentages and summary
+        // Summary calculations
         let totalFlightPlanSent = 0;
         let totalFlightPlanTarget = 0;
         Object.keys(flightPlan).forEach(h => {
@@ -136,7 +109,7 @@ export const calculateBotStats = async () => {
         flightPlan.summary = { totalItems: totalFlightPlanTarget, totalSent: totalFlightPlanSent };
 
         const result = {
-            version: '1.2.8-TOTAL-SYNC',
+            version: '1.3.0-SIMPLE-SETS',
             today: parseInt(todayCount),
             totalSent: parseInt(totalSent),
             totalRecovered: parseInt(totalRecovered),
@@ -152,6 +125,7 @@ export const calculateBotStats = async () => {
         await redis.set('stats:bot:total', totalCalculated);
         await redis.set('stats:bot:version', result.version);
         await redis.set('stats:bot:flight_plan', JSON.stringify(flightPlan));
+        await redis.set('stats:bot:last_calc', now.toString());
 
         return result;
 

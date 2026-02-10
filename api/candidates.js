@@ -29,21 +29,24 @@ export default async function handler(req, res) {
                 const msgStats = await getEventStats();
                 const redis = getRedisClient();
 
-                let completeVal = parseInt(complete || '0');
-                let pendingVal = parseInt(pending || '0');
-                let totalVal = total; // Use the live total from getCandidates (which uses zcard)
+                const pipeline = redis.pipeline();
+                pipeline.get('stats:msg:incoming');
+                pipeline.get('stats:msg:outgoing');
+                pipeline.scard('stats:list:complete');
+                pipeline.scard('stats:list:pending');
+                const results = await pipeline.exec();
 
-                // [POST-VERIFY] If sum doesn't match total, trigger background recalc (don't block)
-                if (completeVal + pendingVal !== totalVal) {
-                    import('./utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
-                }
+                const incoming = results[0][1] || '0';
+                const outgoing = results[1][1] || '0';
+                const completeCount = results[2][1] || 0;
+                const pendingCount = results[3][1] || 0;
 
                 statsData = {
-                    candidates: totalVal,
-                    incoming: msgStats.incoming,
-                    outgoing: msgStats.outgoing,
-                    complete: completeVal,
-                    pending: pendingVal
+                    candidates: completeCount + pendingCount,
+                    incoming: parseInt(incoming),
+                    outgoing: parseInt(outgoing),
+                    complete: completeCount,
+                    pending: pendingCount
                 };
             }
 

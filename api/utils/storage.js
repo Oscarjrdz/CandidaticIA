@@ -76,9 +76,12 @@ const KEYS = {
 
     // Telemetry & Observability (Titan Standard)
     TELEMETRY_AI_LOGS: 'telemetry:ai:events', // List of recent AI events
-    TELEMETRY_AI_STATS: 'telemetry:ai:stats', // Hash of lifetime stats
     CANDIDATE_LOCK_PREFIX: 'lock:candidate:', // Per-candidate processing lock
     CANDIDATE_WAITLIST_PREFIX: 'waitlist:candidate:', // Pending messages while processing
+
+    // Optimized Statistics Sets (O(1) scard)
+    LIST_COMPLETE: 'stats:list:complete',
+    LIST_PENDING: 'stats:list:pending'
 };
 
 export const DEFAULT_PROJECT_STEPS = [
@@ -382,6 +385,52 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     };
 };
 
+/**
+ * [SIN TANTO ROLLO] Atomic Statistic Synchronizer
+ * Moves candidate ID between 'complete' and 'pending' sets based on audit.
+ * This makes global counting O(1) via SCARD.
+ */
+export const syncCandidateStats = async (id, candidateData = null) => {
+    const client = getRedisClient();
+    if (!client) return;
+
+    try {
+        const c = candidateData || await getCandidateById(id);
+        if (!c) {
+            // If candidate doesn't exist, cleanup from sets
+            await client.srem(KEYS.LIST_COMPLETE, id);
+            await client.srem(KEYS.LIST_PENDING, id);
+            return;
+        }
+
+        // 1. Audit
+        const customFieldsJson = await client.get('custom_fields');
+        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+        const { isComplete } = auditProfile(c, customFields);
+
+        // 2. Denormalize status inside the object
+        c.statusAudit = isComplete ? 'complete' : 'pending';
+
+        // 3. Update Sets Atomically
+        if (isComplete) {
+            await client.multi()
+                .sadd(KEYS.LIST_COMPLETE, id)
+                .srem(KEYS.LIST_PENDING, id)
+                .exec();
+        } else {
+            await client.multi()
+                .sadd(KEYS.LIST_PENDING, id)
+                .srem(KEYS.LIST_COMPLETE, id)
+                .exec();
+        }
+
+        // 4. Return the enriched candidate for saving if it was passed in
+        return c;
+    } catch (e) {
+        console.error(`❌ [Storage] syncCandidateStats Error for ${id}:`, e);
+    }
+};
+
 export const saveCandidate = async (candidate) => {
     if (!candidate.id) {
         candidate.id = `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -395,9 +444,13 @@ export const saveCandidate = async (candidate) => {
         await client.hset(KEYS.PHONE_INDEX, cleanPhone, candidate.id).catch(() => { });
     }
 
+    // [SIN TANTO ROLLO] Atomic Status Sync
+    const enriched = await syncCandidateStats(candidate.id, candidate);
+    const finalCandidate = enriched || candidate;
+
     // Sort by Last Message (Desc) or Creation Time
-    const score = new Date(candidate.ultimoMensaje || candidate.primerContacto || Date.now()).getTime();
-    return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, candidate, candidate.id, score);
+    const score = new Date(finalCandidate.ultimoMensaje || finalCandidate.primerContacto || Date.now()).getTime();
+    return await saveDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, finalCandidate, finalCandidate.id, score);
 };
 
 export const getCandidateByPhone = async (phone) => {
@@ -433,6 +486,14 @@ export const getCandidateByPhone = async (phone) => {
 };
 
 export const deleteCandidate = async (id) => {
+    const client = getRedisClient();
+    if (client) {
+        // Atomic cleanup from specialized stat sets
+        await client.multi()
+            .srem(KEYS.LIST_COMPLETE, id)
+            .srem(KEYS.LIST_PENDING, id)
+            .exec();
+    }
     return await deleteDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, id);
 };
 
