@@ -262,8 +262,16 @@ export const sendUltraMsgReaction = async (instanceId, token, msgId, emoji) => {
     try {
         if (!msgId) return null;
         const url = `https://api.ultramsg.com/${instanceId}/messages/reaction`;
-        const payload = { token, msgId, emoji };
-        const response = await axios.post(url, payload, { timeout: 10000 });
+
+        const params = new URLSearchParams();
+        params.append('token', token);
+        params.append('msgId', msgId);
+        params.append('emoji', emoji);
+
+        const response = await axios.post(url, params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 10000
+        });
         return response.data;
     } catch (error) {
         console.error('❌ Failed to send reaction:', error.message);

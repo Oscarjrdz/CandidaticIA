@@ -520,10 +520,14 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         // --- MESSAGE REACTIONS ---
         let reactionPromise = Promise.resolve();
+        console.log(`[AI Reaction Debug] msgId: ${msgId}, incoming: ${incomingMessage.substring(0, 20)}`);
+
         if (msgId && config) {
             const hasNameExtracted = candidateUpdates.nombre || candidateUpdates.apellidos;
             const hasGratitude = typeof incomingMessage === 'string' &&
                 (incomingMessage.toLowerCase().includes('gracias') || incomingMessage.toLowerCase().includes('graci'));
+
+            console.log(`[AI Reaction Debug] hasName: ${!!hasNameExtracted}, hasGratitude: ${hasGratitude}`);
 
             if (hasNameExtracted) {
                 console.log(`[Reaction] 👍 Liked name extraction for ${candidateId}`);

@@ -166,6 +166,7 @@ export default async function handler(req, res) {
                 }
                 let agentInput = body;
                 const msgToSave = {
+                    id: msgId,
                     from: 'user', content: body, type: messageType,
                     timestamp: new Date().toISOString()
                 };
