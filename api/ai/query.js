@@ -84,11 +84,11 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v6.0 - STRICT HYBRID]
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v7.0 - ZERO LEAK]
 Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es convertir lenguaje natural en filtros técnicos INVIOLABLES.
 
 [REGLAS DE FILTRADO]:
-1. statusAudit (CRÍTICO): 
+1. statusAudit (ESTRICTO): 
    - SIEMPRE usa esto para intención de completitud.
    - "completos", "ya terminaron", "registrados", "listos" -> {"statusAudit": "complete"}.
    - "pendientes", "faltan", "no han terminado", "incompletos" -> {"statusAudit": "pending"}.
@@ -96,7 +96,7 @@ Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es conv
    - NUNCA pongas "mujer" o "hombre" en keywords.
    - "mujeres", "damas", "chicas" -> {"genero": "Mujer"}.
    - "hombres", "caballeros", "chicos" -> {"genero": "Hombre"}.
-3. RANGOS DE EDAD (ESTRICTO): 
+3. EDAD (ESTRICTO): 
    - SIEMPRE usa el campo "edad".
    - "18 años" -> {"edad": 18}.
 4. MUNICIPIOS: Si mencionan un lugar, asígnalo a "municipio" o "colonia".
@@ -235,7 +235,6 @@ Consulta del usuario: "${query}"
                 const isTargetMissing = criteria === "$missing";
 
                 // --- NOISE DETECTION (Logical Missing) ---
-                // Only for strings. Numbers are never "missing" by noise list.
                 const isNumeric = typeof val === 'number' || (val && !isNaN(val) && String(val).trim() !== '');
                 const noiseList = ['proporcionado', 'n/a', 'na', 'null', 'undefined', 'general', 'sin nombre', 'sin apellido'];
                 const isMissing = !isNumeric && (!cStr || noiseList.some(noise => cStr === noise || cStr.includes("no " + noise)) || cStr.length < 2);
@@ -243,10 +242,11 @@ Consulta del usuario: "${query}"
                 if (isMissing) {
                     if (isTargetMissing) {
                         matchesCount++;
-                        score += 2000; // Big boost for explicit missing search
+                        score += 5000;
                     } else {
-                        // Inclusive penalization (stay in list but at the bottom)
-                        score += 1;
+                        // TITAN v7.0 NO LEAK: If a filter is present, missing data is EXCLUDED.
+                        // This prevents showing the entire DB of "pending" candidates when searching for "Hombres".
+                        mismatchFound = true;
                     }
                 } else {
                     if (isTargetMissing) {
@@ -255,9 +255,8 @@ Consulta del usuario: "${query}"
                         const hasMatch = matchesCriteria(val, criteria);
                         if (hasMatch) {
                             matchesCount++;
-                            score += 5000; // Confirmed matches go to the top
+                            score += 10000; // Big boost for confirmed matches
                         } else {
-                            // CATEGORICAL/NUMERIC STRICTNESS: If value exists and doesn't match, EXCLUDE.
                             mismatchFound = true;
                         }
                     }
@@ -308,7 +307,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 6.0 (Strict Hybrid)",
+            version: "Titan 7.0 (Zero Leak Protocol)",
             candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
