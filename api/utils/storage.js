@@ -217,7 +217,7 @@ export const auditProfile = (c, customFields = []) => {
         const rawVal = c[field.value];
         const val = String(rawVal || '').toLowerCase().trim();
 
-        const isInvalid = !rawVal ||
+        let isInvalid = !rawVal ||
             val.includes(field.invalidValue) ||
             val.includes('proporcionado') ||
             val === 'desconocido' ||
