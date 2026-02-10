@@ -110,7 +110,7 @@ const CandidatesSection = ({ showToast }) => {
             // Only update if not filtering by AI (polling refreshes full list based on current page/search)
             if (!aiFilteredCandidates) {
                 setCandidates(newCandidates);
-                if (newStats) setStats(newStats); // Update live stats
+                if (newStats) setStats(prev => ({ ...prev, ...newStats })); // Merge live stats
                 setLastUpdate(new Date());
             }
         }, 3000);

@@ -24,14 +24,20 @@ export default async function handler(req, res) {
             // Estadísticas (Optional mixed response)
             let statsData = null;
             if (stats === 'true') {
-                const { getEventStats, getCandidatesStats } = await import('./utils/storage.js');
+                const { getEventStats, getCandidatesStats, getRedisClient } = await import('./utils/storage.js');
                 const candidatesStats = await getCandidatesStats();
                 const msgStats = await getEventStats();
+                const redis = getRedisClient();
+
+                const complete = redis ? await redis.get('stats:bot:complete') : '0';
+                const pending = redis ? await redis.get('stats:bot:pending') : '0';
 
                 statsData = {
                     candidates: candidatesStats.total,
                     incoming: msgStats.incoming,
-                    outgoing: msgStats.outgoing
+                    outgoing: msgStats.outgoing,
+                    complete: parseInt(complete || '0'),
+                    pending: parseInt(pending || '0')
                 };
             }
 
