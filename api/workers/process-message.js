@@ -11,10 +11,11 @@ import { getCandidateById } from '../utils/storage.js';
  * Process message with automatic retry
  * @param {string} candidateId - Candidate ID
  * @param {string} message - Message content
+ * @param {string} messageId - Message ID for reactions
  * @param {number} attempt - Current attempt number
  * @returns {Promise<Object>}
  */
-async function processWithRetry(candidateId, message, attempt = 1) {
+async function processWithRetry(candidateId, message, messageId = null, attempt = 1) {
     const MAX_RETRIES = 3;
     const BASE_DELAY = 2000; // 2 seconds
 
@@ -26,7 +27,7 @@ async function processWithRetry(candidateId, message, attempt = 1) {
         }
 
         // Process message with Brenda
-        await processMessage(candidateId, message);
+        await processMessage(candidateId, message, messageId);
 
         return {
             success: true,
@@ -42,7 +43,7 @@ async function processWithRetry(candidateId, message, attempt = 1) {
             console.log(`⏳ Retrying in ${delay}ms...`);
 
             await new Promise(resolve => setTimeout(resolve, delay));
-            return processWithRetry(candidateId, message, attempt + 1);
+            return processWithRetry(candidateId, message, messageId, attempt + 1);
         }
 
         // Max retries exceeded
@@ -73,7 +74,7 @@ export default async function handler(req, res) {
     try {
         console.log(`🔄 Worker processing message ${messageId} from ${from}`);
 
-        const result = await processWithRetry(candidateId, message);
+        const result = await processWithRetry(candidateId, message, messageId);
 
         console.log(`✅ Worker completed:`, result);
 
