@@ -44,6 +44,21 @@ export default async function handler(req, res) {
         absoluteImage = `${baseUrl}${metaImage}`;
     }
 
+    // --- [FERRARI JUMP] Bot Detection & Instant Redirection ---
+    const userAgent = req.headers['user-agent'] || '';
+    const isBot = /facebookexternalhit|WhatsApp|Twitterbot|LinkedInBot|Pinterest|Slackbot|Googlebot|TelegramBot/i.test(userAgent);
+
+    if (!isBot && data.redirectEnabled && data.redirectUrl) {
+        let safeUrl = data.redirectUrl;
+        if (!safeUrl.startsWith('http://') && !safeUrl.startsWith('https://')) {
+            safeUrl = 'https://' + safeUrl;
+        }
+
+        console.log(`[Ferrari Jump] Instant redirect for human user to: ${safeUrl}`);
+        res.setHeader('Location', safeUrl);
+        return res.status(302).end();
+    }
+
     const html = `
     <!DOCTYPE html>
     <html lang="es" prefix="og: https://ogp.me/ns#">
@@ -145,9 +160,6 @@ export default async function handler(req, res) {
             <div class="content">
                 <h1>${metaTitle}</h1>
                 <p>${metaDesc}</p>
-                
-                <!-- Optional: Add a general Call to Action if desirable, or keeps it clean -->
-                <!-- <a href="https://wa.me/5218116038195" class="whatsapp-btn">Contactar por WhatsApp</a> -->
                 
                 ${(data.redirectEnabled && data.redirectUrl) ? (() => {
             let safeUrl = data.redirectUrl;
