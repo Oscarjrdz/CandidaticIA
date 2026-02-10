@@ -267,11 +267,17 @@ Consulta del usuario: "${query}"
                 });
             }
 
-            // 4. Default Base Score (to ensure they appear if searched)
-            if (totalFiltersApplied === 0) score = 10;
+            // 4. Final Validation: "Inclusive" but not "Spammy"
+            const hasKeywords = aiResponse.keywords && aiResponse.keywords.length > 0;
+            const hasFilters = totalFiltersApplied > 0;
+
+            // If it's a completely empty search (no filters, no keywords), show everything with a base score
+            if (!hasFilters && !hasKeywords) {
+                score = 10;
+            }
 
             // Push to results if they have some relevance or we are doing a general search
-            if (score > 0 || totalFiltersApplied === 0) {
+            if (score > 0) {
                 acc.push({ ...candidate, _relevance: Math.round(score), edad: candidateAge });
             }
 
