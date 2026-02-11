@@ -177,6 +177,9 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 if (textVal && textVal !== '{}' && !isTranscriptionPrefix && !isInternalJson) {
                     userParts.push({ text: textVal });
                     aggregatedText += (aggregatedText ? " | " : "") + textVal;
+                } else if (isAudioObj) {
+                    // Placeholder for aggregated text in history
+                    aggregatedText += (aggregatedText ? " | " : "") + "[MENSAJE DE VOZ]";
                 }
             }
         }
@@ -369,7 +372,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 .replace('{{municipio}}', candidateData.municipio || 'No especificado')
                 .replace('{{intent}}', intent);
 
-            systemInstruction += `\n[ESTADO DE CIERRE]: ${hasBeenCongratulated ? 'Ya felicitaste al usuario por completar su perfil. NO repitas el mensaje de éxito.' : 'Aún no has felicitado al usuario.'}\n`;
+            systemInstruction += `\n[ESTADO DE CIERRE]: ${hasBeenCongratulated ? 'Ya felicitaste al usuario por completar su perfil. Sigue platicando socialmente con naturalidad y carisma. NO menciones el éxito del registro de nuevo.' : 'Aún no has felicitado al usuario.'}\n`;
 
             systemInstruction += `\n${cerebro2Context}\n`;
 
@@ -524,6 +527,16 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         } catch (e) { console.warn(`Error trigger for ${key}:`, e); }
                     }
                 }
+            }
+        }
+
+        // --- SANITY CHECK: Kill 1900 zombies ---
+        const yearMatch = String(candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento || '').match(/\b(19|20)\d{2}\b/);
+        if (yearMatch) {
+            const yearValue = parseInt(yearMatch[0]);
+            if (yearValue < 1940) {
+                console.log(`[Sanity Check] Killing year zombie: ${yearValue}`);
+                candidateUpdates.fechaNacimiento = null;
             }
         }
 
