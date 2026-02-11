@@ -31,10 +31,12 @@ export default async function handler(req, res) {
 
         // 2. Ejecutar acción en UltraMsg
         let remoteResult;
+        const chatId = candidate.whatsapp || candidate.phone || id;
+
         if (block) {
-            remoteResult = await blockUltraMsgContact(config.instanceId, config.token, candidate.phone || id);
+            remoteResult = await blockUltraMsgContact(config.instanceId, config.token, chatId);
         } else {
-            remoteResult = await unblockUltraMsgContact(config.instanceId, config.token, candidate.phone || id);
+            remoteResult = await unblockUltraMsgContact(config.instanceId, config.token, chatId);
         }
 
         if (!remoteResult.success) {
