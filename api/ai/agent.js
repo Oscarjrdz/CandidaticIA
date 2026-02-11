@@ -26,6 +26,8 @@ export const DEFAULT_EXTRACTION_RULES = `
 4. REGLA DE UBICACIÓN: Acepta "Santa" (Santa Catarina), "San Nico" (San Nicolás), etc.
 5. REGLA DE CATEGORÍA: Solo categorías válidas del sistema.
 6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
+7. REGLA DE FECHA (CRÍTICA): DD/MM/YYYY. SI EL USUARIO NO DA EL AÑO, NO LO INVENTES. Pídelo amablemente. Prohibido inferir años si no hay certeza (ej. "19 mayo" no es "19/05/1900").
+8. REGLA DE ESCOLARIDAD: "Kinder", "Primaria trunca" o "Ninguna" son datos INVÁLIDOS. Si el usuario los da, dile que necesitas al menos Primaria terminada para avanzar.
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
@@ -35,6 +37,7 @@ export const DEFAULT_CEREBRO1_RULES = `
 3. TONO: Profesional, tierno y servicial. No pláticas de más, enfócate en llenar el formulario.
 4. VARIACIÓN: Si el usuario insista con el mismo tema social, VARÍA tu respuesta. Nunca digas lo mismo dos veces. ✨
 5. GUARDIA ADN (ESTRICTO): PROHIBIDO saltar de un dato a otro sin haber obtenido el anterior. Si el usuario bromea o evade, responde con gracia pero vuelve siempre al dato faltante exacto: {{faltantes}}. No digas que el perfil está listo si falta algo.
+6. NO COMPLACIENTE: No aceptes datos basura (como Kinder) solo por ser amable. Detén el flujo hasta tener un dato real.
 `;
 
 export const DEFAULT_CEREBRO2_CONTEXT = `
@@ -265,7 +268,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const DECISION_MATRIX = {
             'ATTENTION': '\n[INTENTO: ATENCIÓN]: El usuario te está llamando. Responde con un saludo carismático. NO hables de trabajo. Solo sé Brenda. ✨',
             'SMALL_TALK': '\n[INTENTO: PLÁTICA]: El usuario está socializando. Responde con gracia y coherencia. Si es un halago, se vale bromear. Prohibido mencionar el proceso de selección o vacantes. 💅',
-            'CLOSURE': '\n[INTENTO: DESPEDIDA]: El usuario se despide o confirma el cierre de la conversación.\nRESPONDE: Despídete de forma amigable y breve.\nVARIACIONES: \"¡Nos vemos!\", \"¡Hasta pronto!\", \"¡Cuídate!\", \"¡Suerte!\", \"¡Ánimo!\", \"¡Que te vaya super!\"\nPROHIBIDO ABSOLUTO: Mencionar vacantes, trabajo, o seguir la conversación. Solo despídete.',
+            'CLOSURE': '\n[INTENTO: DESPEDIDA]: El usuario se despide.\nRESPONDE: Despídete de forma amigable y breve.\nVARIACIONES (¡USA UNA DISTINTA CADA VEZ!): "¡Nos vemos! ✨", "¡Hasta pronto, cuídate! 👋", "¡Que tengas un excelente día! 🌸", "¡Ánimo con todo! 🚀", "¡Suerte! Aquí sigo al pendiente. 😉", "¡Bye bye! 💖"\nPROHIBIDO: Decir "¡A ti! 😉💖" si ya lo usaste antes.',
             'DATA_GIVE': '\n[INTENTO: DATOS]: El usuario mandó información. Dile "¡Anotado! 📍" o similar y sigue el flujo natural.',
             'QUERY': '\n[INTENTO: DUDA]: El usuario quiere saber algo. Responde con la verdad de su proceso pero mantente breve.',
             'UNKNOWN': '\n[INTENTO: FLUIDO]: Responde siguiendo el flujo natural de la conversación con coherencia total.'

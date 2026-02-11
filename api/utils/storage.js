@@ -257,7 +257,17 @@ export const auditProfile = (c, customFields = []) => {
         // --- DATE PRECISION (Allows 2 or 4-digit years) ---
         if (field.value === 'fechaNacimiento' && !isInvalid) {
             const hasYear = /\b(\d{4}|\d{2})\b/.test(val);
-            if (!hasYear) isInvalid = true;
+            if (!hasYear) {
+                isInvalid = true;
+            } else {
+                // Reasonable Age Check (1940 - Current Year)
+                const yearMatch = val.match(/\b(19|20)\d{2}\b/);
+                if (yearMatch) {
+                    const yearValue = parseInt(yearMatch[0]);
+                    const currentYear = new Date().getFullYear();
+                    if (yearValue < 1940 || yearValue > currentYear) isInvalid = true;
+                }
+            }
         }
 
         // --- SCHOOLING PRECISION (Requires at least Primaria) ---
