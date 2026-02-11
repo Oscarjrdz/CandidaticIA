@@ -320,7 +320,7 @@ ${audit.dnaLines}
                     const nextStep = project.steps[project.steps.indexOf(currentStep) + 1];
                     let stepPrompt = currentStep.aiConfig.prompt
                         .replace(/{{Candidato}}/g, candidateData.nombreReal || 'Candidato')
-                        .replace(/{{Vacante}}/g, vacancy?.name || 'la posición');
+                        .replace(/{{Vacante}}/g, vacancy?.messageDescription || vacancy?.name || 'la posición');
 
                     systemInstruction += `\n[CONTEXTO KANBAN - PASO: ${currentStep.name}]:
 ${stepPrompt}

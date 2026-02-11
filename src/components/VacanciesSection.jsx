@@ -25,7 +25,8 @@ const VacanciesSection = ({ showToast }) => {
         name: '',
         company: '',
         category: '',
-        description: ''
+        description: '',
+        messageDescription: ''
     });
 
     const [availableFields, setAvailableFields] = useState([]);
@@ -99,7 +100,7 @@ const VacanciesSection = ({ showToast }) => {
 
     const handleOpenCreate = () => {
         setEditingId(null);
-        setFormData({ name: '', company: '', category: '', description: '' });
+        setFormData({ name: '', company: '', category: '', description: '', messageDescription: '' });
         setIsModalOpen(true);
     };
 
@@ -109,7 +110,8 @@ const VacanciesSection = ({ showToast }) => {
             name: vacancy.name,
             company: vacancy.company,
             category: vacancy.category,
-            description: vacancy.description || ''
+            description: vacancy.description || '',
+            messageDescription: vacancy.messageDescription || ''
         });
         setIsModalOpen(true);
     };
@@ -136,7 +138,7 @@ const VacanciesSection = ({ showToast }) => {
             if (data.success) {
                 showToast(editingId ? 'Vacante actualizada' : 'Vacante creada exitosamente', 'success');
                 setIsModalOpen(false);
-                setFormData({ name: '', company: '', category: '', description: '' });
+                setFormData({ name: '', company: '', category: '', description: '', messageDescription: '' });
                 setEditingId(null);
                 loadVacancies(); // Reload list
             } else {
@@ -400,21 +402,23 @@ const VacanciesSection = ({ showToast }) => {
                 title={editingId ? "Editar Vacante" : "Nueva Vacante"}
             >
                 <div className="space-y-4">
-                    <Input
-                        label="Nombre de la Vacante"
-                        placeholder="Ej. Desarrollador Senior"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        autoFocus
-                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                            label="Nombre de la Vacante"
+                            placeholder="Ej. Desarrollador Senior"
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            autoFocus
+                        />
 
-                    <Input
-                        label="Empresa"
-                        placeholder="Ej. Tech Corp"
-                        icon={Building2}
-                        value={formData.company}
-                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                    />
+                        <Input
+                            label="Empresa"
+                            placeholder="Ej. Tech Corp"
+                            icon={Building2}
+                            value={formData.company}
+                            onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                        />
+                    </div>
 
                     <div className="space-y-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -441,31 +445,28 @@ const VacanciesSection = ({ showToast }) => {
                     </div>
 
                     <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                Descripción
-                            </label>
-                            <div className="flex flex-wrap gap-1 justify-end">
-                                {availableTags.map(tag => (
-                                    <button
-                                        key={tag.value}
-                                        type="button"
-                                        onClick={() => handleTagClick(tag.value)}
-                                        className="px-2 py-1 bg-gray-100 dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-[10px] font-mono text-gray-600 dark:text-gray-400 rounded border border-gray-200 dark:border-gray-700 flex items-center gap-1 transition-all"
-                                        title={`Copiar e insertar ${tag.label}`}
-                                    >
-                                        <span>{tag.value}</span>
-                                        <Copy className="w-2.5 h-2.5 opacity-50" />
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Descripción
+                        </label>
                         <textarea
                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm"
-                            rows={4}
+                            rows={12}
                             placeholder="Detalles sobre el puesto..."
                             value={formData.description}
                             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="space-y-1">
+                        <label className="block text-[10px] font-black tracking-widest text-blue-600 dark:text-blue-400 uppercase">
+                            Vacante para Mensaje (Info para el Bot)
+                        </label>
+                        <textarea
+                            className="w-full px-4 py-2 border border-blue-100 dark:border-blue-900/50 rounded-lg focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800/20 focus:border-blue-300 bg-blue-50/30 dark:bg-blue-900/10 text-gray-900 dark:text-white text-sm italic"
+                            rows={6}
+                            placeholder="Escribe aquí la información simplificada que el bot mandará por WhatsApp..."
+                            value={formData.messageDescription}
+                            onChange={(e) => setFormData({ ...formData, messageDescription: e.target.value })}
                         />
                     </div>
 

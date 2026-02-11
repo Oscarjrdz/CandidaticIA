@@ -58,7 +58,7 @@ export default async function handler(req, res) {
         // POST - Create vacancy
         if (req.method === 'POST') {
             const body = req.body;
-            const { name, company, category, description } = body;
+            const { name, company, category, description, messageDescription } = body;
 
             if (!name || !company || !category) {
                 return res.status(400).json({ error: 'Missing required fields (name, company, category)' });
@@ -70,6 +70,7 @@ export default async function handler(req, res) {
                 company,
                 category,
                 description: description || '',
+                messageDescription: messageDescription || '',
                 createdAt: new Date().toISOString(),
                 active: true
             };
