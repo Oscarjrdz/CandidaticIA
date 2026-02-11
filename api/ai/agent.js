@@ -128,7 +128,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             ? incomingMessage.split(' | ')
             : [incomingMessage];
 
-        console.log(`[TEXT ONLY MODE] Messages for ${candidateId}:`, messagesToProcess);
+        console.log(`[Unified Mode] Messages for ${candidateId}:`, messagesToProcess);
 
         for (const msg of messagesToProcess) {
             let parsed = msg;
@@ -141,7 +141,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             } catch (e) { }
 
             // 🎙️ [AUDIO HANDLER]: Support for multimodal voice messages
-            const isAudioObj = parsed && typeof parsed === 'object' && (parsed.type === 'audio' || parsed.url?.includes('.ogg') || parsed.file?.includes('.ogg') || parsed.mediaUrl?.includes('.ogg'));
+            const isAudioObj = parsed && typeof parsed === 'object' &&
+                (parsed.type === 'audio' || parsed.type === 'voice' || parsed.mediaUrl || parsed.url?.includes('.ogg') || parsed.file?.includes('.ogg'));
 
             if (isAudioObj) {
                 const audioUrl = parsed.mediaUrl || parsed.url || parsed.file;

@@ -212,7 +212,10 @@ export default async function handler(req, res) {
                                     catch (e) { return { text: m }; }
                                 });
 
-                                const aggregatedText = pendingMsgs.map(m => m.text?.url || m.text || m).join(' | ');
+                                const aggregatedText = pendingMsgs.map(m => {
+                                    const val = m.text?.url || m.text || m;
+                                    return (typeof val === 'object') ? JSON.stringify(val) : val;
+                                }).join(' | ');
                                 const msgIds = pendingMsgs.map(m => m.msgId).filter(id => id);
                                 if (msgId && !msgIds.includes(msgId)) msgIds.push(msgId);
 
