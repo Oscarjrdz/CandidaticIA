@@ -33,7 +33,8 @@ export const DEFAULT_CEREBRO1_RULES = `
 1. TU OBJETIVO: Recolectar datos faltantes: {{faltantes}}.
 2. REGLA DE ORO: Pide solo UN dato a la vez. No abrumes.
 3. TONO: Profesional, tierno y servicial. No pláticas de más, enfócate en llenar el formulario.
-4. VARIACIÓN: Si el usuario insiste con el mismo tema social, VARÍA tu respuesta. Nunca digas lo mismo dos veces. ✨
+4. VARIACIÓN: Si el usuario insista con el mismo tema social, VARÍA tu respuesta. Nunca digas lo mismo dos veces. ✨
+5. GUARDIA ADN (ESTRICTO): PROHIBIDO saltar de un dato a otro sin haber obtenido el anterior. Si el usuario bromea o evade, responde con gracia pero vuelve siempre al dato faltante exacto: {{faltantes}}. No digas que el perfil está listo si falta algo.
 `;
 
 export const DEFAULT_CEREBRO2_CONTEXT = `
@@ -365,6 +366,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 .replace('{{municipio}}', candidateData.municipio || 'No especificado')
                 .replace('{{intent}}', intent);
 
+            systemInstruction += `\n[ESTADO DE CIERRE]: ${hasBeenCongratulated ? 'Ya felicitaste al usuario por completar su perfil. NO repitas el mensaje de éxito.' : 'Aún no has felicitado al usuario.'}\n`;
+
             systemInstruction += `\n${cerebro2Context}\n`;
 
             systemInstruction += `\n[INTENCIÓN DETECTADA]: ${intent}
@@ -420,6 +423,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
   },
   "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
   "reaction": "emoji_char | null (Solo 👍, 🙏 o ❤️)",
+  "trigger_media": "string | null (Usa 'success_sticker' SOLO cuando el perfil se complete en este mensaje exacto)",
   "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos)"
 }`;
 
@@ -520,6 +524,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
+        // --- PERSISTENT CONGRATULATIONS FLAG ---
+        const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
+        if (aiResult.trigger_media === 'success_sticker' && !hasBeenCongratulated) {
+            candidateUpdates.congratulated = true;
+        }
+
         console.log(`[Consolidated Sync] Candidate ${candidateId}:`, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
@@ -546,16 +556,26 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // Final Persistence
         const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
-        // --- STICKER CELEBRATION ---
+        // --- STICKER CELEBRATION (AI DRIVEN) ---
         let stickerPromise = Promise.resolve();
-        if (initialStatus === 'INCOMPLETO') {
+        const shouldSendSticker = aiResult.trigger_media === 'success_sticker' && !hasBeenCongratulated;
+
+        if (shouldSendSticker) {
+            const stickerUrl = await redis?.get('bot_celebration_sticker');
+            if (stickerUrl) {
+                console.log(`[CELEBRATION] 🎨 Sending AI-triggered sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
+                stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
+            }
+        } else if (initialStatus === 'INCOMPLETO' && !hasBeenCongratulated) {
+            // Fallback: Automatic detection if AI forgot to trigger but audit says it's done
             const finalMerged = { ...candidateData, ...candidateUpdates };
             const finalAudit = auditProfile(finalMerged, customFields);
             if (finalAudit.paso1Status === 'COMPLETO') {
                 const stickerUrl = await redis?.get('bot_celebration_sticker');
                 if (stickerUrl) {
-                    console.log(`[CELEBRATION] 🎨 Sending sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
+                    console.log(`[CELEBRATION] 🎨 Sending Auto-triggered sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
                     stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
+                    candidateUpdates.congratulated = true;
                 }
             }
         }
