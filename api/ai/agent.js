@@ -561,10 +561,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         // 🎙️ [VOICE AUTOMATION]: If candidate sent audio, respond with audio
         if (hasAudio && responseText) {
-            // Optimized Google TTS Bridge (Simulating a file for stability)
             const cleanText = responseText.substring(0, 200).replace(/[^\w\s,.¡!¿?]/gi, '');
             const encodedText = encodeURIComponent(cleanText);
-            const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=es&client=tw-ob&file=.mp3`;
+            // Use the new Vercel proxy URL to satisfy UltraMsg's extension requirement
+            const ttsUrl = `https://candidatic-ia.vercel.app/api/tts/${encodedText}.mp3`;
 
             console.log(`[VOICE SYNTHESIS] 🎙️ Attempting voice response to ${candidateData.whatsapp}`);
 
