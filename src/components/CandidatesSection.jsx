@@ -272,11 +272,17 @@ const CandidatesSection = ({ showToast }) => {
         try {
             const result = await blockCandidate(candidate.id, !isCurrentlyBlocked);
             if (result.success) {
-                const remoteMsg = result.remote?.data?.message || JSON.stringify(result.remote?.data);
+                const remoteSuccess = result.remote?.success;
+                const remoteMsg = result.remote?.data?.message || result.remote?.error || '';
                 const instanceStr = result.instanceId ? ` [Instancia: ${result.instanceId}]` : '';
-                const detail = remoteMsg ? ` (${remoteMsg})` : (result.remote?.success ? ' (Success)' : ' (No Response)');
+                const detail = remoteMsg ? ` (${remoteMsg})` : (remoteSuccess ? ' (Success)' : ' (No Response)');
 
-                showToast(`Candidato ${isCurrentlyBlocked ? 'desbloqueado' : 'bloqueado'} correctamente${instanceStr}${detail}`, 'success');
+                const toastType = remoteSuccess ? 'success' : 'warning';
+                const mainMsg = remoteSuccess
+                    ? `Candidato ${isCurrentlyBlocked ? 'desbloqueado' : 'bloqueado'} correctamente`
+                    : `Candidato actualizado localmente, pero falló UltraMsg`;
+
+                showToast(`${mainMsg}${instanceStr}${detail}`, toastType);
 
                 // Actualizar estado local
                 setCandidates(prev => prev.map(c =>

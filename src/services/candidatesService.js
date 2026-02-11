@@ -222,7 +222,7 @@ export const blockCandidate = async (id, block = true) => {
 
         return {
             success: true,
-            message: data.message
+            ...data
         };
     } catch (error) {
         return {
