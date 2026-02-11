@@ -559,12 +559,14 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         // 🎙️ [VOICE AUTOMATION]: If candidate sent audio, respond with audio
         if (hasAudio && responseText) {
-            const encodedText = encodeURIComponent(responseText.substring(0, 200)); // Google TTS limit ~200 chars
-            const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=es&client=tw-ob`;
+            // DIAGNOSTIC ECHO: Using the incoming audio URL (or the verified test URL)
+            // to pinpoint if the delivery failure is at the TTS bridge or UltraMsg.
+            const echoUrl = (turnAudioUrls && turnAudioUrls.length > 0)
+                ? turnAudioUrls[0]
+                : 'https://file-example.s3-accelerate.amazonaws.com/voice/oog_example.ogg';
 
-            console.log(`[VOICE MODE] 🎙️ Sending voice response to ${candidateData.whatsapp}`);
-            // Use type 'voice' for PTT (Push-to-Talk) style note
-            deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, ttsUrl, 'voice');
+            console.log(`[VOICE ECHO MODE] 🎙️ Echoing audio to ${candidateData.whatsapp}: ${echoUrl}`);
+            deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, echoUrl, 'voice');
         } else {
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
         }
