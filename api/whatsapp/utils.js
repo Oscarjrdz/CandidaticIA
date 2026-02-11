@@ -230,20 +230,6 @@ export const sendUltraMsgPresence = async (instanceId, token, chatId, presence =
                 timeout: 3000,
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
             }).catch(() => { });
-
-            // 2. Modern JSON
-            const payload = { token, chatId: formattedChatId, presence, type: presence };
-            axios.post(url, payload, { timeout: 3000 }).catch(() => { });
-        }
-
-        // Log one success (or attempt) to Redis
-        const redis = getRedisClient();
-        if (redis) {
-            await redis.set(`debug:presence:${formattedChatId}`, JSON.stringify({
-                timestamp: new Date().toISOString(),
-                presence,
-                attempted_endpoints: endpoints
-            }), 'EX', 600);
         }
 
         return { success: true };
@@ -253,23 +239,37 @@ export const sendUltraMsgPresence = async (instanceId, token, chatId, presence =
     }
 };
 
-export const downloadMedia = async (url) => {
-    try {
-        const response = await axios.get(url, {
-            responseType: 'arraybuffer',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+/**
+ * Downloads media from a URL with automatic retries and backoff.
+ * Standardizes buffer to Base64 for Gemini ingestion.
+ */
+export const downloadMedia = async (url, retries = 3) => {
+    let attempt = 0;
+    while (attempt < retries) {
+        try {
+            const response = await axios.get(url, {
+                responseType: 'arraybuffer',
+                timeout: 15000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
+            });
+            const buffer = Buffer.from(response.data);
+            return {
+                data: buffer.toString('base64'),
+                mimeType: response.headers['content-type'] || 'audio/ogg'
+            };
+        } catch (error) {
+            attempt++;
+            console.warn(`⚠️ [Audio] Download attempt ${attempt}/${retries} failed: ${error.message}`);
+            if (attempt < retries) {
+                const delay = Math.pow(2, attempt) * 1000; // 2s, 4s...
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
-        });
-        const buffer = Buffer.from(response.data);
-        return {
-            data: buffer.toString('base64'),
-            mimeType: response.headers['content-type']
-        };
-    } catch (error) {
-        console.error('❌ Failed to download media:', error.message);
-        return null;
+        }
     }
+    console.error(`❌ [Audio] Failed to download media after ${retries} attempts: ${url}`);
+    return null;
 };
 
 export const sendUltraMsgReaction = async (instanceId, token, msgId, emoji) => {

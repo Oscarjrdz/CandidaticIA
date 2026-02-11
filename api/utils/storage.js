@@ -527,42 +527,68 @@ export const getCandidateById = async (id) => {
 
 // Optimized Lookup: O(1) Redis Hash
 export const getCandidateIdByPhone = async (phone) => {
+    if (!phone) return null;
     const target = phone.replace(/\D/g, '');
     const client = getRedisClient();
 
     if (client) {
-        const fastId = await client.hget(KEYS.PHONE_INDEX, target);
+        // 1. Try direct match
+        let fastId = await client.hget(KEYS.PHONE_INDEX, target);
         if (fastId) return fastId;
+
+        // 2. Try variations (especially for Mexico 52 vs 521)
+        const last10 = target.slice(-10);
+        if (last10.length === 10) {
+            const variations = [last10, '52' + last10, '521' + last10];
+            for (const v of variations) {
+                if (v === target) continue;
+                fastId = await client.hget(KEYS.PHONE_INDEX, v);
+                if (fastId) return fastId;
+            }
+        }
     }
 
-    // 2. Fallback to full search (Legacy upgrade/Safety)
-    const { candidates } = await getCandidates(1000);
+    // 3. Fallback to full search (Legacy upgrade/Safety)
+    const { candidates } = await getCandidates(2000); // Increased limit for safety
     const match = candidates.find(c => {
         if (!c.whatsapp) return false;
         const dbPhone = c.whatsapp.replace(/\D/g, '');
-        return dbPhone.endsWith(target) || target.endsWith(dbPhone);
+        const dbLast10 = dbPhone.slice(-10);
+        const targetLast10 = target.slice(-10);
+        return dbLast10 === targetLast10 && dbLast10.length === 10;
     });
 
     if (match && client) {
+        // Self-heal index
         await client.hset(KEYS.PHONE_INDEX, target, match.id).catch(() => { });
     }
 
     return match ? match.id : null;
 };
 
-// Deduplication: Atomic SET NX
+/**
+ * 🔒 MESSAGE DEDUPLICATION (Two-Phase Commit)
+ * Prevents multiple webhooks for the same message from being processed.
+ */
 export const isMessageProcessed = async (msgId) => {
     const client = getRedisClient();
     if (!client || !msgId) return false;
-
     const key = `${KEYS.DEDUPE_PREFIX}${msgId}`;
     /**
      * ATOMIC LOCK: 'NX' means "Only set if NOT exists"
-     * This is an atomic operation in Redis. 
-     * If it returns 'OK', it was set (new). If null, it already existed.
+     * Initially set for 10 minutes to cover the processing window.
+     * Webhook MUST call markMessageAsDone() to extend to 24h or unlockMessage() to abort.
      */
-    const result = await client.set(key, '1', 'EX', 86400, 'NX');
+    const result = await client.set(key, 'PROCESSING', 'EX', 600, 'NX');
     return result !== 'OK';
+};
+
+export const markMessageAsDone = async (msgId) => {
+    const client = getRedisClient();
+    if (!client || !msgId) return;
+    const key = `${KEYS.DEDUPE_PREFIX}${msgId}`;
+    // Finalize: Set to '1' and extend to 24 hours
+    await client.set(key, '1', 'EX', 86400);
 };
 
 export const unlockMessage = async (msgId) => {

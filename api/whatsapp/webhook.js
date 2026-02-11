@@ -14,7 +14,8 @@ import {
     getCandidateById,
     getUsers,
     saveUser,
-    saveWebhookTransaction
+    saveWebhookTransaction,
+    markMessageAsDone
 } from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
 import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead, sendUltraMsgPresence } from './utils.js';
@@ -28,13 +29,8 @@ export default async function handler(req, res) {
     }
 
     const data = req.body || {};
-
-    // Support Hybrid Event Names (UltraMSG native vs Proxy/Wrapper)
     const eventType = data.event_type || data.event || data.eventName;
     const messageData = data.data || data;
-
-    // 🏎️ FERRARI WEBHOOK OPTIMIZATION: Atomic Pipelining
-    // We delay saving event/stats until we have the candidate context to做 it in 1 round-trip.
 
     if (!eventType) {
         return res.status(200).json({ success: true, message: 'Heartbeat or invalid payload' });
@@ -59,19 +55,18 @@ export default async function handler(req, res) {
             const msgId = messageData.id;
             const phone = from.replace(/\D/g, '');
 
-            // 🏎️ FERRARI DEDUPLICATION: Atomic Lock (SET NX)
+            // 🏎️ DEDUPLICATION: Atomic Lock (Two-Phase Commit)
             if (await isMessageProcessed(msgId)) {
                 return res.status(200).send('duplicate_ignored');
             }
 
-            // IGNORE OUTGOING MESSAGES (Avoid loops/self-replies)
+            // IGNORE OUTGOING MESSAGES
             if (messageData.fromMe || messageData.from_me) {
                 return res.status(200).send('from_me_ignored');
             }
 
             try {
-                // --- ADMIN COMMANDS & FILTERS ---
-                // [Omitted for brevity in this replacement chunk, but keeping original logic flow]
+                // --- ADMIN COMMANDS ---
                 const adminNumber = '5218116038195';
                 if (phone === adminNumber) {
                     const lowerBody = body.toLowerCase().trim();
@@ -94,14 +89,12 @@ export default async function handler(req, res) {
                                 }
                             } catch (err) {
                                 console.error('Error activating user:', err);
-                                return res.status(200).send('activation_error');
                             }
                         }
                     }
                 }
 
-                // --- PIN/YEAR GATEKEEPER ---
-                // Allow 4-digit years (19xx, 20xx) to pass through.
+                // --- GATEKEEPERS ---
                 const bodyTrim = body.trim();
                 const isAuthAttempt = /^\d{4}$/.test(bodyTrim);
                 if (isAuthAttempt && !bodyTrim.startsWith('19') && !bodyTrim.startsWith('20')) {
@@ -111,59 +104,43 @@ export default async function handler(req, res) {
                 try {
                     const allUsers = await getUsers();
                     const isPending = allUsers.find(u => u.whatsapp.includes(phone) && u.status === 'Pending');
-                    const isAdmin = phone.includes('8116038195');
-                    if (isPending && !isAdmin) return res.status(200).send('pending_user_ignored');
+                    if (isPending && phone !== '8116038195') return res.status(200).send('pending_user_ignored');
                 } catch (e) { }
 
-                // 🏎️ FERRARI LOOKUP
+                // --- CANDIDATE LOOKUP ---
                 let candidateId = await getCandidateIdByPhone(phone);
                 let candidate = null;
 
                 if (candidateId) {
                     candidate = await getCandidateById(candidateId);
-                    if (!candidate) candidateId = null; // Re-create if ghost
+                    if (!candidate) candidateId = null;
                 }
 
                 if (!candidateId) {
-                    const newCandidate = await saveCandidate({
+                    candidate = await saveCandidate({
                         whatsapp: phone,
                         nombre: messageData.pushname || messageData.pushName || messageData.name || 'Desconocido',
                         origen: 'whatsapp_v2',
                         primerContacto: new Date().toISOString()
                     });
-                    candidateId = newCandidate.id;
-                    candidate = newCandidate;
-
-                    // 📡 SSE: Notify real-time clients of new candidate
-                    notifyNewCandidate(newCandidate).catch(err =>
-                        console.warn('SSE notification failed:', err.message)
-                    );
-                }
-
-                // 🛡️ [WEBHOOK TRANSCRIPTION SHIELD]: Ignore external transcriptions (likely from UltraMsg STT)
-                // Only block if it's a chat/text message. PTT/Audio messages should never be blocked here.
-                const isTextType = !messageData.type || messageData.type === 'chat' || messageData.type === 'text';
-                const hasGhostPattern = String(body).includes('[AUDIO TRANSCRITO]') || String(body).includes('🎙️');
-
-                if (isTextType && hasGhostPattern) {
-                    console.log(`[AUDIO SHIELD] 🛡️ Blocked external text-transcription for ${phone}: ${body.substring(0, 30)}...`);
-                    return res.status(200).send('transcription_ignored');
+                    candidateId = candidate.id;
+                    notifyNewCandidate(candidate).catch(() => { });
                 }
 
                 console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}...`);
 
-                // --- ADMIN STICKER CAPTURE ---
+                // --- ADMIN STICKER ---
                 const messageType = messageData.type || 'text';
                 if (phone === adminNumber && (messageType === 'sticker' || messageType === 'stickerMessage')) {
                     const stickerUrl = messageData.media || messageData.body || messageData.file;
-                    if (stickerUrl && stickerUrl.startsWith('http')) {
+                    if (stickerUrl?.startsWith('http')) {
                         const redis = getRedisClient();
                         await redis.set('bot_celebration_sticker', stickerUrl);
-                        console.log(`[ADMIN] 🖼️ Celebration sticker captured and saved: ${stickerUrl}`);
-                        await sendMessage(adminNumber, `✅ ¡Sticker de festejo guardado con éxito! Lo usaré cuando un candidato complete su perfil al 100%. ✨🎉`);
+                        await sendMessage(adminNumber, `✅ ¡Sticker de festejo guardado!✨🎉`);
                         return res.status(200).send('sticker_captured');
                     }
                 }
+
                 let agentInput = body;
                 const msgToSave = {
                     id: msgId,
@@ -173,7 +150,7 @@ export default async function handler(req, res) {
 
                 if (messageType === 'ptt' || messageType === 'audio') {
                     const mediaUrl = messageData.media || messageData.body;
-                    if (mediaUrl && mediaUrl.startsWith('http')) {
+                    if (mediaUrl?.startsWith('http')) {
                         msgToSave.mediaUrl = mediaUrl;
                         agentInput = { type: 'audio', url: mediaUrl };
                     }
@@ -181,7 +158,7 @@ export default async function handler(req, res) {
                     msgToSave.mediaUrl = messageData.media;
                 }
 
-                // 🏎️ ATOMIC COMMIT (Pipelining)
+                // --- PERSISTENCE ---
                 const updatedCandidate = {
                     ...candidate,
                     ultimoMensaje: new Date().toISOString(),
@@ -189,7 +166,6 @@ export default async function handler(req, res) {
                     unread: true
                 };
 
-                // Move some non-critical background tasks here
                 const configPromise = getUltraMsgConfig();
 
                 await saveWebhookTransaction({
@@ -200,78 +176,86 @@ export default async function handler(req, res) {
                     statsType: 'incoming'
                 });
 
-                // 🏎️ [IMMEDIATE PRESENCE] - Mark as read FIRST, then start typing (to avoid clearing state)
+                // --- PRESENCE ---
                 const presenceUpdate = (async () => {
                     const config = await configPromise;
                     if (config) {
                         try {
-                            // 1. Mark as read
                             await markUltraMsgAsRead(config.instanceId, config.token, from);
-                            // 2. Start typing (Try both keywords for maximum compatibility)
                             await sendUltraMsgPresence(config.instanceId, config.token, from, 'composing');
-                            await sendUltraMsgPresence(config.instanceId, config.token, from, 'typing');
                         } catch (e) { }
                     }
                 })();
 
-                // AI Processing in background with Industrial Waitlist
+                // --- AI PROCESSING (Industrial Waitlist) ---
                 const aiPromise = (async () => {
                     try {
                         const redis = getRedisClient();
                         const isActive = await redis?.get('bot_ia_active');
-                        if (isActive === 'false') return;
+                        if (isActive === 'false' || candidate?.blocked === true) return;
 
-                        // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
-                        if (candidate?.blocked === true) {
-                            console.log(`[BLOCK SHIELD] Webhook skipping AI trigger for blocked candidate: ${candidateId}`);
-                            return;
-                        }
-
-                        // 🏁 1. ADD TO WAITLIST (Industrial Standard)
-                        const waitlistValue = typeof agentInput === 'object' ? JSON.stringify(agentInput) : agentInput;
-                        await addToWaitlist(candidateId, waitlistValue);
+                        // 🏁 1. ADD TO WAITLIST
+                        await addToWaitlist(candidateId, { text: agentInput, msgId });
 
                         // 🏁 2. WORKER LOCK
                         const isLocked = await isCandidateLocked(candidateId);
                         if (isLocked) {
-                            console.log(`[Industrial Queue] Candidate ${candidateId} is busy. Message added to waitlist.`);
-                            return res.status(200).json({ status: 'queued', candidateId });
+                            console.log(`[Industrial Queue] Candidate ${candidateId} is busy. Queued.`);
+                            return;
                         }
 
                         try {
-                            // 🏁 3. WORKER LOOP: Process everything in the waitlist until drained
+                            // 🏁 3. DRAIN LOOP
                             let loopSafety = 0;
-                            while (loopSafety < 5) { // Max 5 cycles to avoid infinite loops
-                                const pendingMsgs = await getWaitlist(candidateId);
-                                if (pendingMsgs.length === 0) break;
+                            while (loopSafety < 10) {
+                                const rawPendingMsgs = await getWaitlist(candidateId);
+                                if (!rawPendingMsgs || rawPendingMsgs.length === 0) break;
 
-                                const aggregatedText = pendingMsgs.join(' | ');
-                                console.log(`[Industrial Queue] Processing ${pendingMsgs.length} aggregated messages for ${candidateId}.`);
+                                const pendingMsgs = rawPendingMsgs.map(m => {
+                                    try { return typeof m === 'string' ? JSON.parse(m) : m; }
+                                    catch (e) { return { text: m }; }
+                                });
 
-                                // 🚀 ASYNC PROCESSING BIFURCATION
-                                if (FEATURES.USE_MESSAGE_QUEUE) {
-                                    const protocol = req.headers['x-forwarded-proto'] || 'https';
-                                    const host = req.headers.host;
-                                    const workerUrl = `${protocol}://${host}/api/workers/process-message`;
+                                const aggregatedText = pendingMsgs.map(m => m.text?.url || m.text || m).join(' | ');
+                                const msgIds = pendingMsgs.map(m => m.msgId).filter(id => id);
+                                if (msgId && !msgIds.includes(msgId)) msgIds.push(msgId);
 
-                                    await fetch(workerUrl, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                            candidateId,
-                                            message: aggregatedText,
-                                            messageId: msgId,
-                                            from: phone
-                                        })
-                                    });
+                                console.log(`[Industrial Queue] Processing burst for ${candidateId}. Count: ${pendingMsgs.length}`);
+
+                                let processingError = null;
+                                try {
+                                    if (FEATURES.USE_MESSAGE_QUEUE) {
+                                        const protocol = req.headers['x-forwarded-proto'] || 'https';
+                                        const host = req.headers.host;
+                                        const workerUrl = `${protocol}://${host}/api/workers/process-message`;
+
+                                        const workerRes = await fetch(workerUrl, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ candidateId, message: aggregatedText, messageId: msgId, from: phone })
+                                        });
+                                        if (!workerRes.ok) throw new Error('Worker HTTP fail');
+                                    } else {
+                                        await processMessage(candidateId, aggregatedText, msgId);
+                                    }
+                                } catch (e) {
+                                    processingError = e;
+                                    console.error('❌ AI Processing Failed:', e.message);
+                                }
+
+                                // 🏁 4. DEDUPLICATION COMMIT
+                                if (!processingError) {
+                                    await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));
                                 } else {
-                                    await processMessage(candidateId, aggregatedText, msgId);
+                                    await Promise.all(msgIds.map(id => unlockMessage(id).catch(() => { })));
+                                    throw processingError;
                                 }
 
                                 loopSafety++;
+                                const more = await getWaitlist(candidateId);
+                                if (!more || more.length === 0) break;
                             }
                         } finally {
-                            // 🏁 4. CRITICAL: Release the lock so subsequent messages aren't delayed by 15s
                             await unlockCandidate(candidateId);
                         }
                     } catch (error) {
@@ -295,16 +279,15 @@ export default async function handler(req, res) {
                 return res.status(200).send('success');
 
             } catch (err) {
-                console.error(`⚠️ Error processing message ${msgId}, releasing lock.`);
+                console.error(`⚠️ Webhook logic error for ${msgId}:`, err);
                 await unlockMessage(msgId);
-                throw err;
+                return res.status(200).send('logic_error');
             }
         }
-
         return res.status(200).send('ignored');
 
     } catch (error) {
         console.error('❌ [Webhook] Fatal Error:', error);
-        return res.status(200).send('error_handled');
+        return res.status(200).send('fatal_error');
     }
 }

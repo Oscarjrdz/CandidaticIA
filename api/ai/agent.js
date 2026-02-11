@@ -59,6 +59,7 @@ export const DEFAULT_SYSTEM_PROMPT = `
    - SI YA HAS HABLADO (< 2 horas - MODO DIRECTO): PROHIBIDO saludar de nuevo. PROHIBIDO usar puentes sociales. Ve DIRECTO al grano.
    - SI PASARON > 2 horas: Saludo breve ("¡Qué gusto saludarte de nuevo!").
 5. CLIMA: Si el usuario es cortante, sé breve. Si usa emojis, úsalos tú también. 🎉
+6. GANCHOS DE CIERRE: Si detectas que la conversación está terminando (Saludos finales, agradecimientos), sé extremadamente breve (máximo 1 oración) o usa solo emojis si el sistema lo permite.
 
 [FASE 1: BRENDA CAPTURISTA (PERFIL INCOMPLETO)]:
 - Tu misión es obtener: Nombre, Género, Municipio, Fecha de Nacimiento (con año), Categoría, Empleo y Escolaridad.
@@ -70,7 +71,7 @@ export const DEFAULT_SYSTEM_PROMPT = `
 [REGLA DE ADN]: Confía en [ESTADO DEL CANDIDATO(ADN)] como verdad absoluta.
 
 [REGLA DE REACCIONES - MANDATORIA]:
-- 👍: Úsalo OBLIGATORIAMENTE cuando detectes y extraigas el NOMBRE real del usuario por primera vez o un cambio de nombre.
+- 👍: Úsalo OBLIGATORIAMENTE cuando detectes y extraigas el NOMBRE real del usuario por primera vez o un cambio de nombre. También úsalo para confirmaciones de cierre ("Igualmente", "Sale", "Enterado").
 - 🙏: Úsalo OBLIGATORIAMENTE cada vez que el mensaje del usuario contenga la palabra "gracias" o sus variantes (graci, gracias mil, etc), sin importar el resto del texto.
 - ❤️: Úsalo si el usuario te da un piropo (guapa, hermosa) o es súper atento.
 - null: Solo si no hay ninguno de los casos anteriores.
@@ -264,6 +265,34 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const historyText = validMessages.map(m => `${m.from}: ${m.content}`).join('\n');
         const intent = await classifyIntent(candidateId, userText, historyText, hasAudio);
         console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent} (HasAudio: ${hasAudio})`);
+
+        // 🛡️ [MECHANICAL HUMANIZATION GATES]: Rules 2 & 3 (Silence & Reactions)
+        // ONLY active if profile is 100% COMPLETE. If incomplete, ALWAYS RESPOND to get data.
+        if (intent === 'CLOSURE' && !hasAudio && audit.paso1Status === 'COMPLETO') {
+            const lastBotMsg = validMessages.findLast(m => m.from === 'bot' || m.from === 'me');
+            const botClosedRecently = lastBotMsg && /gracias|suerte|ánimo|pronto|día|bye|vemos|atenderte|ayudarte|atenta/i.test(lastBotMsg.content);
+            const userIsShort = userText.length < 25; // Slightly increased threshold
+
+            if (botClosedRecently && userIsShort) {
+                console.log(`[HUMANIZATION] 🤫 Silence Gate triggered for ${candidateId}. User said: "${userText}". Profile is COMPLETE.`);
+
+                // MANDATORY REACTION (Rule 2 + Safety)
+                if (msgId && config) {
+                    const reaction = /gracia/i.test(userText) ? "🙏" : "👍";
+                    await sendUltraMsgReaction(config.instanceId, config.token, msgId, reaction).catch(() => { });
+                    console.log(`[HUMANIZATION] ✅ Reaction sent: ${reaction} (No text response)`);
+                }
+
+                // Update candidate stats to show they were heard
+                await updateCandidate(candidateId, {
+                    ultimoMensaje: new Date().toISOString(),
+                    lastUserMessageAt: new Date().toISOString(),
+                    unread: false
+                });
+
+                return '[SILENCE_GATE_ACTIVE]';
+            }
+        }
 
         const DECISION_MATRIX = {
             'AUDIO_INTERACTION': '\n[INTENTO: AUDIO]: El usuario envió un audio. ES PRIORITARIO procesar el contenido de este audio. Escucha lo que dice y responde con COHERENCIA TOTAL a su petición o duda. SI PREGUNTA POR VACANTES O SUELDOS, responde con la verdad o indica que estás revisando, pero NO IGNORES lo que dijo en el audio. Primero reconoce el audio ("Te escucho...") y luego responde al fondo.',
@@ -574,10 +603,23 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
+        // --- AUDIO MEMORY TRANSCRIPTION ---
+        let transcriptionPromise = Promise.resolve();
+        if (hasAudio && aiResult.audio_transcription) {
+            console.log(`[AUDIO MEMORY] 🎙️ Saving transcription for ${candidateId}: ${aiResult.audio_transcription.substring(0, 30)}...`);
+            transcriptionPromise = saveMessage(candidateId, {
+                from: 'user',
+                content: `🎙️ [AUDIO TRANSCRITO]: ${aiResult.audio_transcription}`,
+                timestamp: new Date().toISOString(),
+                meta: { type: 'transcription' }
+            });
+        }
+
         await Promise.allSettled([
             deliveryPromise,
             stickerPromise,
             reactionPromise,
+            transcriptionPromise,
             saveMessage(candidateId, { from: 'bot', content: responseText, timestamp: new Date().toISOString() }),
             updatePromise
         ]);

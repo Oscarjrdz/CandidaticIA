@@ -47,8 +47,8 @@ CATEGORÍAS:
    - Ejemplos: "Vivo en Mty", "Me llamo Juan", "Tengo 20 años".
 5. QUERY: Preguntas sobre vacantes, sueldos, procesos o dudas técnicas por texto.
    - Ejemplos: "¿Hay vacantes?", "¿Cuánto pagan?", "¿Cómo va mi proceso?".
-6. CLOSURE: Despedidas, agradecimientos finales, confirmaciones de cierre.
-   - Ejemplos: "Gracias", "Ok", "Muy bien", "Adiós", "Hasta luego", "Bye", "Nos vemos", "Chao", "Bueno gracias", "Vale", "Perfecto", "Entendido", "Hasta pronto", "Cuídate", "Saludos".
+6. CLOSURE: Despedidas, agradecimientos finales, confirmaciones de cierre o frases de cortesía mutua.
+   - Ejemplos: "Gracias", "Ok", "Muy bien", "Adiós", "Hasta luego", "Bye", "Nos vemos", "Chao", "Bueno gracias", "Vale", "Perfecto", "Entendido", "Hasta pronto", "Cuídate", "Saludos", "Igualmente", "Sale", "Enterado", "Anotado", "Excelente", "Listo", "Que tengas buen día".
 
 DATOS DE ENTRADA:
 - ¿ES AUDIO?: ${isAudio ? 'SÍ' : 'NO'}
