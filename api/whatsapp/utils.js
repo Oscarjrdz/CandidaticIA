@@ -62,6 +62,10 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'sticker':
                 payload.sticker = body;
                 break;
+            case 'audio':
+            case 'voice':
+                payload.audio = body;
+                break;
             default:
                 payload.body = body;
         }
@@ -400,4 +404,16 @@ export const unblockUltraMsgContact = async (instanceId, token, chatId) => {
         console.error(`❌ [UltraMsg] Unblock FAILED for ${chatId}:`, error.message);
         return { success: false, error: error.message };
     }
+};
+
+/**
+ * Envía una nota de voz (PTT) vía UltraMsg
+ * @param {string} instanceId 
+ * @param {string} token 
+ * @param {string} to - Número o JID del destinatario
+ * @param {string} audioUrl - URL del archivo de audio (ogg/mp3)
+ * @returns {Promise<Object>}
+ */
+export const sendUltraMsgVoice = async (instanceId, token, to, audioUrl) => {
+    return sendUltraMsgMessage(instanceId, token, to, audioUrl, 'voice');
 };
