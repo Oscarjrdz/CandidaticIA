@@ -614,19 +614,24 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     pipeline.zadd('candidatic:media_library', Date.now(), voiceId);
                     await pipeline.exec();
 
+                    // 🚀 [VOICE PERMANENCE]: Deliver as Base64 (Reliability First)
+                    // We send AFTER saving to Redis to ensure the library is populated,
+                    // but we use base64 to avoid URL resolution/firewall issues with UltraMsg.
+                    const base64ForUltraMsg = `data:audio/ogg;base64,${base64Audio}`;
                     const permanentUrl = `${baseUrl}/api/media/${voiceId}.ogg`;
-                    console.log(`[VOICE PERMANENCE] ✅ Saved as ${voiceId}. Sending link: ${permanentUrl}`);
 
-                    const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, permanentUrl, 'voice');
+                    console.log(`[VOICE PERMANENCE] ✅ Saved as ${voiceId}. Delivering via Base64...`);
+
+                    const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, base64ForUltraMsg, 'voice');
                     const isOk = res && (res.success || res.status === 200 || res.id);
 
                     if (!isOk) {
-                        console.warn(`⚠️ [VOICE FALLBACK] Delivery failure! UltraMsg Response: ${JSON.stringify(res)}`);
+                        console.warn(`⚠️ [VOICE FALLBACK] Base64 delivery failure! Response: ${JSON.stringify(res)}`);
                         console.warn(`[VOICE FALLBACK] Sending text as rescue.`);
                         return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
                     }
 
-                    console.log(`[VOICE PERMANENCE] 🚀 Delivery initiated successfully: ${JSON.stringify(res.data || res)}`);
+                    console.log(`[VOICE PERMANENCE] 🚀 Delivery initiated successfully: ${res.id || 'OK'}`);
                     return res;
                 } catch (e) {
                     console.error(`❌ [VOICE PERMANENCE] Fatal error during delivery:`, e.message);
