@@ -289,9 +289,20 @@ export const blockUltraMsgContact = async (instanceId, token, chatId) => {
     try {
         let formattedChatId = String(chatId).trim();
         if (!formattedChatId.includes('@')) {
-            const cleanPhone = formattedChatId.replace(/\D/g, '');
+            let cleanPhone = formattedChatId.replace(/\D/g, '');
+
+            // 🇲🇽 [MEXICO NORMALIZATION]:
+            // Mexican mobile numbers often come as 521XXXXXXXXXX but WhatsApp JIDs
+            // often require 52XXXXXXXXXX (dropping the '1' mobile prefix).
+            if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
+                console.log(`[Normalization] Mexico mobile prefix detected: ${cleanPhone} -> dropping '1'`);
+                cleanPhone = '52' + cleanPhone.substring(3);
+            }
+
             formattedChatId = `${cleanPhone}@c.us`;
         }
+
+        console.log(`[UltraMsg] Attempting BLOCK for: ${formattedChatId}`);
 
         const url = `https://api.ultramsg.com/${instanceId}/contacts/block`;
 
@@ -326,9 +337,17 @@ export const unblockUltraMsgContact = async (instanceId, token, chatId) => {
     try {
         let formattedChatId = String(chatId).trim();
         if (!formattedChatId.includes('@')) {
-            const cleanPhone = formattedChatId.replace(/\D/g, '');
+            let cleanPhone = formattedChatId.replace(/\D/g, '');
+
+            if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
+                console.log(`[Normalization] Mexico mobile prefix detected: ${cleanPhone} -> dropping '1'`);
+                cleanPhone = '52' + cleanPhone.substring(3);
+            }
+
             formattedChatId = `${cleanPhone}@c.us`;
         }
+
+        console.log(`[UltraMsg] Attempting UNBLOCK for: ${formattedChatId}`);
 
         const url = `https://api.ultramsg.com/${instanceId}/contacts/unblock`;
 
@@ -340,6 +359,11 @@ export const unblockUltraMsgContact = async (instanceId, token, chatId) => {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             timeout: 10000
         });
+
+        if (response.status !== 200) {
+            console.error(`❌ [UltraMsg] Unblock API Error (${response.status}):`, response.data);
+            return { success: false, error: response.data };
+        }
 
         return { success: true, data: response.data };
     } catch (error) {
