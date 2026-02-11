@@ -40,8 +40,9 @@ export default async function handler(req, res) {
         }
 
         if (!remoteResult.success) {
-            // Even if remotly fails (maybe already blocked), we might want to update local state
-            console.warn(`[Block] UltraMsg error for ${id}:`, remoteResult.error);
+            console.warn(`❌ [Block] UltraMsg error for ${id}:`, remoteResult.error);
+        } else {
+            console.log(`✅ [Block] UltraMsg success for ${id}:`, remoteResult.data);
         }
 
         // 3. Marcar en base de datos local
@@ -49,7 +50,8 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
             success: true,
-            message: block ? 'Candidato bloqueado correctamente' : 'Candidato desbloqueado'
+            message: block ? 'Candidato bloqueado correctamente' : 'Candidato desbloqueado',
+            remote: remoteResult // Expose the actual answer from UltraMsg
         });
 
     } catch (error) {

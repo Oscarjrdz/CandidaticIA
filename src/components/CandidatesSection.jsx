@@ -272,7 +272,10 @@ const CandidatesSection = ({ showToast }) => {
         try {
             const result = await blockCandidate(candidate.id, !isCurrentlyBlocked);
             if (result.success) {
-                showToast(`Candidato ${isCurrentlyBlocked ? 'desbloqueado' : 'bloqueado'} correctamente`, 'success');
+                const remoteMsg = result.remote?.data?.message || '';
+                const detail = remoteMsg ? ` (${remoteMsg})` : '';
+                showToast(`Candidato ${isCurrentlyBlocked ? 'desbloqueado' : 'bloqueado'} correctamente${detail}`, 'success');
+
                 // Actualizar estado local
                 setCandidates(prev => prev.map(c =>
                     c.id === candidate.id ? { ...c, blocked: !isCurrentlyBlocked } : c
