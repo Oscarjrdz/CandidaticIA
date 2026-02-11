@@ -37,6 +37,28 @@ const MediaLibrarySection = ({ showToast }) => {
         asset.id?.toLowerCase().includes(search.toLowerCase())
     );
 
+    const handleDelete = async (id) => {
+        if (!window.confirm('¿Estás seguro de que quieres eliminar este archivo?')) return;
+
+        try {
+            const res = await fetch('/api/media/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast?.('Archivo eliminado con éxito', 'success');
+                fetchAssets();
+            } else {
+                throw new Error(data.error || 'Error al eliminar');
+            }
+        } catch (error) {
+            console.error('Error deleting asset:', error);
+            showToast?.('Error al eliminar el archivo', 'error');
+        }
+    };
+
     const getIcon = (mime) => {
         if (mime?.includes('image')) return <ImageIcon className="w-6 h-6 text-blue-500" />;
         if (mime?.includes('video')) return <Video className="w-6 h-6 text-red-500" />;
@@ -121,7 +143,10 @@ const MediaLibrarySection = ({ showToast }) => {
                                         >
                                             <Search className="w-3.5 h-3.5 text-gray-700 dark:text-gray-300" />
                                         </button>
-                                        <button className="p-1.5 bg-red-50/90 dark:bg-red-900/90 rounded-md hover:bg-red-50 shadow-sm border border-red-100 dark:border-red-900 text-red-600">
+                                        <button
+                                            onClick={() => handleDelete(file.id)}
+                                            className="p-1.5 bg-red-50/90 dark:bg-red-900/90 rounded-md hover:bg-red-50 shadow-sm border border-red-100 dark:border-red-900 text-red-600"
+                                        >
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
