@@ -151,7 +151,7 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v8.5 - GEOGRAPHIC STRICTNESS]
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v8.6 - MATHEMATICAL PRECISION]
 Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es convertir lenguaje natural en filtros técnicos INVIOLABLES.
 
 [REGLAS DE FILTRADO]:
@@ -163,12 +163,16 @@ Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es conv
    - NUNCA pongas "mujer" o "hombre" en keywords.
    - "mujeres", "damas", "chicas" -> {"genero": "Mujer"}.
    - "hombres", "caballeros", "chicos" -> {"genero": "Hombre"}.
-3. EDAD (ESTRICTO): 
+3. EDAD (ESTRICTO - MATEMÁTICO): 
    - SIEMPRE usa el campo "edad".
-   - "18 años" -> {"edad": 18}.
+   - IGUALDAD: "tiene 25" -> {"edad": 25}.
+   - OPERADORES: "mayores de 40", "más de 40", "> 40" -> {"edad": {"op": ">", "val": 40}}.
+   - OPERADORES: "menores de 20", "menos de 20", "< 20" -> {"edad": {"op": "<", "val": 20}}.
+   - RANGOS: "entre 18 y 30", "de 18 a 30" -> {"edad": {"min": 18, "max": 30}}.
+   - NUNCA pongas números de edad o términos como "mayores" en keywords.
 4. MUNICIPIOS (CRÍTICO): 
    - Si mencionan un lugar (Monterrey, Apodaca, Guadalupe, etc.), ASÍGNALO SIEMPRE al campo "municipio".
-   - NUNCA pongas nombres de municipios en keywords. Es un error de filtración grave.
+   - NUNCA pongas nombres de municipios en keywords.
 5. KEYWORDS: Solo para nombres de personas ("Oscar") o habilidades técnicas específicas que no tengan campo.
 6. BÚSQUEDA DE FALTANTES: Si el usuario pide específicamente "sin [campo]", usa el valor "$missing". 
 
@@ -248,8 +252,23 @@ Consulta del usuario: "${query}"
             if (foundMuni) aiResponse.filters.municipio = foundMuni;
         }
 
-        // 4. Keyword Blacklist (Categorical cleanup)
-        const blacklist = [...genderTerms, ...femaleTerms, ...muniTerms, 'completo', 'pendientes', 'listos', 'faltan'];
+        // 4. Force Age Filter (Mathematical Sniffer v8.6)
+        if (!aiResponse.filters.edad) {
+            // "mayores de 40", "mas de 40", "mayor de 40"
+            const greaterMatch = queryLower.match(/(?:mayor|mayores|mas) de (\d+)/);
+            if (greaterMatch) aiResponse.filters.edad = { op: '>', val: parseInt(greaterMatch[1]) };
+
+            // "menores de 20", "menos de 20", "menor de 20"
+            const lowerMatch = queryLower.match(/(?:menor|menores|menos) de (\d+)/);
+            if (lowerMatch) aiResponse.filters.edad = { op: '<', val: parseInt(lowerMatch[1]) };
+
+            // "entre 18 y 30"
+            const rangeMatch = queryLower.match(/entre (\d+) y (\d+)/);
+            if (rangeMatch) aiResponse.filters.edad = { min: parseInt(rangeMatch[1]), max: parseInt(rangeMatch[2]) };
+        }
+
+        // 5. Keyword Blacklist (Categorical cleanup)
+        const blacklist = [...genderTerms, ...femaleTerms, ...muniTerms, 'completo', 'pendientes', 'listos', 'faltan', 'mayor', 'menor', 'años'];
         aiResponse.keywords = aiResponse.keywords.filter(kw => !blacklist.includes(normalize(kw)));
 
         // 3. Ejecutar la búsqueda en los datos reales (TODOS)
@@ -348,7 +367,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 8.5 (Geographic Strictness)",
+            version: "Titan 8.6 (Mathematical Precision)",
             candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
