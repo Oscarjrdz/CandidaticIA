@@ -27,6 +27,7 @@ export const DEFAULT_EXTRACTION_RULES = `
 6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
 7. REGLA DE AUDIO 🎙️: La información en AUDIO es tan válida como el texto. Transcribe mentalmente y EXTRAE el dato DIRECTAMENTE a 'extracted_data'.
 8. REGLA DE EMPLEO (AUDIO) 🔨: Si la pregunta fue sobre trabajo y hay audio, EXTRAE "Sí" o "No" del audio. (ej. "Ando jalando" -> Sí, "Estoy sin chamba" -> No).
+9. REGLA DE OIDO ABSOLUTO 👂: Si el usuario manda AUDIO para CUALQUIER dato (Nombre, fecha, municipio), CONFÍA EN EL AUDIO. Aunque la transcripción sea imperfecta, intenta extraer el dato fonéticamente.
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
