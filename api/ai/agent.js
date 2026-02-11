@@ -141,8 +141,10 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 }
             } catch (e) { }
 
-            // 🛡️ [HYPER-PRECISE AUDIO CHECK v2]: Must be an audio object
-            if (isJson && parsed && typeof parsed === 'object' && parsed.type === 'audio' && (parsed.url || parsed.file)) {
+            // 🛡️ [HYPER-PRECISION AUDIO CHECK]: Handle both pre-parsed objects and strings
+            const isAudioObj = parsed && typeof parsed === 'object' && parsed.type === 'audio' && (parsed.url || parsed.file);
+
+            if (isAudioObj) {
                 const audioUrl = parsed.url || parsed.file;
 
                 // 🛡️ [FINGERPRINTING ENHANCED]: URL match OR Turn match

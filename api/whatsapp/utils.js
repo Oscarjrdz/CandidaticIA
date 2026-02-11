@@ -35,13 +35,18 @@ export const getUltraMsgConfig = async () => {
 
     return null;
 };
-
 export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     try {
         let endpoint = type;
         if (!['chat', 'image', 'video', 'audio', 'voice', 'document', 'sticker'].includes(endpoint)) endpoint = 'chat';
 
-        const payload = { token, to };
+        let formattedTo = String(to).trim();
+        if (!formattedTo.includes('@')) {
+            const cleanPhone = formattedTo.replace(/\D/g, '');
+            formattedTo = `${cleanPhone}@c.us`;
+        }
+
+        const payload = { token, to: formattedTo };
 
         // Handle Base64 vs URL
         const isHttp = typeof body === 'string' && body.startsWith('http');
