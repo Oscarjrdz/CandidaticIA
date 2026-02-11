@@ -181,6 +181,12 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
                 if (messagesSent >= SAFETY_LIMIT_PER_RUN) break;
                 if (!cand?.id || !cand?.whatsapp) continue;
 
+                // 🛡️ [BLOCK SHIELD]: Force skipping for blocked candidates
+                if (cand.blocked === true) {
+                    logs.push(`⏭️[BLOCK SHIELD] Skipping blocked candidate: ${cand.nombre}`);
+                    continue;
+                }
+
                 if (!isManual) {
                     const last = await redis.get(`ai:automation:last:${cand.id}`);
                     if (last) {
@@ -322,6 +328,11 @@ async function processNativeProactive(redis, model, config, logs, todayKey, now,
     const customPrompt = (await redis.get('bot_proactive_prompt')) || (await redis.get('bot_ia_prompt')) || '';
 
     for (const cand of incomplete) {
+        // 🛡️ [BLOCK SHIELD]: Force skipping for blocked candidates
+        if (cand.blocked === true) {
+            continue;
+        }
+
         // Nivel 9/10: Salida Automática (Opt-out)
         if (cand.proactive_opt_out) {
             continue;
@@ -546,6 +557,12 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
 
             for (const cand of candidatesInStep) {
                 logs.push(`👤[DEBUG] Evaluando: "${cand.nombre}"(ID: ${cand.id})...`);
+
+                // 🛡️ [BLOCK SHIELD]: Force skipping for blocked candidates
+                if (cand.blocked === true) {
+                    logs.push(`⏭️[BLOCK SHIELD] Skipping blocked candidate: ${cand.nombre}`);
+                    continue;
+                }
                 // Check if already processed for this specific step
                 const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}: processed`;
                 const isProcessed = await redis.get(metaKey);

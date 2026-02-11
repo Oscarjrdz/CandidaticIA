@@ -26,6 +26,12 @@ async function processWithRetry(candidateId, message, messageId = null, attempt 
             throw new Error(`Candidate ${candidateId} not found`);
         }
 
+        // 🛡️ [BLOCK SHIELD]: Force early exit if candidate is blocked
+        if (candidate.blocked === true) {
+            console.log(`[BLOCK SHIELD] Skipping worker processing for blocked candidate: ${candidateId}`);
+            return { success: true, message: 'Candidate is blocked', blocked: true };
+        }
+
         // Process message with Brenda
         await processMessage(candidateId, message, messageId);
 

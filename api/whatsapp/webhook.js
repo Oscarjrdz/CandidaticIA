@@ -221,6 +221,12 @@ export default async function handler(req, res) {
                         const isActive = await redis?.get('bot_ia_active');
                         if (isActive === 'false') return;
 
+                        // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
+                        if (candidate?.blocked === true) {
+                            console.log(`[BLOCK SHIELD] Webhook skipping AI trigger for blocked candidate: ${candidateId}`);
+                            return;
+                        }
+
                         // 🏁 1. ADD TO WAITLIST (Industrial Standard)
                         const waitlistValue = typeof agentInput === 'object' ? JSON.stringify(agentInput) : agentInput;
                         await addToWaitlist(candidateId, waitlistValue);

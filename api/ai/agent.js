@@ -106,6 +106,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const candidateData = await getCandidateById(candidateId);
         if (!candidateData) return 'ERROR: No se encontró al candidato';
 
+        // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
+        if (candidateData.blocked === true) {
+            console.log(`[BLOCK SHIELD] Skipping processMessage for blocked candidate: ${candidateId}`);
+            return null;
+        }
+
         const config = await getUltraMsgConfig();
 
         // 3. History Retrieval (MOVED UP to fix ReferenceError)
