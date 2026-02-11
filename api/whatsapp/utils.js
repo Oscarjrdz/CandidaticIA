@@ -278,3 +278,72 @@ export const sendUltraMsgReaction = async (instanceId, token, msgId, emoji) => {
         return null;
     }
 };
+
+/**
+ * Bloquea un contacto en UltraMsg
+ * @param {string} instanceId 
+ * @param {string} token 
+ * @param {string} chatId - ID del chat o número telefónico
+ */
+export const blockUltraMsgContact = async (instanceId, token, chatId) => {
+    try {
+        let formattedChatId = String(chatId).trim();
+        if (!formattedChatId.includes('@')) {
+            const cleanPhone = formattedChatId.replace(/\D/g, '');
+            formattedChatId = `${cleanPhone}@c.us`;
+        }
+
+        const url = `https://api.ultramsg.com/${instanceId}/contacts/block`;
+
+        const params = new URLSearchParams();
+        params.append('token', token);
+        params.append('chatId', formattedChatId);
+
+        const response = await axios.post(url, params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 10000
+        });
+
+        if (response.status !== 200) {
+            console.error(`❌ [UltraMsg] Block API Error (${response.status}):`, response.data);
+            return { success: false, error: response.data };
+        }
+
+        return { success: true, data: response.data };
+    } catch (error) {
+        console.error(`❌ [UltraMsg] Block FAILED for ${chatId}:`, error.message);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Desbloquea un contacto en UltraMsg
+ * @param {string} instanceId 
+ * @param {string} token 
+ * @param {string} chatId 
+ */
+export const unblockUltraMsgContact = async (instanceId, token, chatId) => {
+    try {
+        let formattedChatId = String(chatId).trim();
+        if (!formattedChatId.includes('@')) {
+            const cleanPhone = formattedChatId.replace(/\D/g, '');
+            formattedChatId = `${cleanPhone}@c.us`;
+        }
+
+        const url = `https://api.ultramsg.com/${instanceId}/contacts/unblock`;
+
+        const params = new URLSearchParams();
+        params.append('token', token);
+        params.append('chatId', formattedChatId);
+
+        const response = await axios.post(url, params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 10000
+        });
+
+        return { success: true, data: response.data };
+    } catch (error) {
+        console.error(`❌ [UltraMsg] Unblock FAILED for ${chatId}:`, error.message);
+        return { success: false, error: error.message };
+    }
+};

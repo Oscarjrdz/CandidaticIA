@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban } from 'lucide-react';
 import Card from './ui/Card';
 import ErrorBoundary from './ui/ErrorBoundary';
 import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
 import ChatHistoryModal from './ChatHistoryModal';
 import MagicSearch from './MagicSearch';
-import { getCandidates, deleteCandidate, CandidatesSubscription } from '../services/candidatesService';
+import { getCandidates, deleteCandidate, blockCandidate, CandidatesSubscription } from '../services/candidatesService';
 import { getFields } from '../services/automationsService';
 import { getExportSettings, saveExportSettings, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
 import { generateChatHistoryText } from '../services/chatExportService';
@@ -44,6 +44,7 @@ const CandidatesSection = ({ showToast }) => {
 
     // --- 🪄 MAGIC AI FIX STATE ---
     const [magicLoading, setMagicLoading] = useState({});
+    const [blockLoading, setBlockLoading] = useState({});
 
     // 📡 SSE: Real-time candidate updates
     const { newCandidate, globalStats, connected: sseConnected } = useCandidatesSSE();
@@ -553,6 +554,11 @@ const CandidatesSection = ({ showToast }) => {
                                             <MessageCircle className="w-4 h-4 opacity-50" />
                                         </div>
                                     </th>
+                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
+                                        <div className="flex justify-center">
+                                            <Ban className="w-3.5 h-3.5 opacity-50" />
+                                        </div>
+                                    </th>
                                     <th className="text-center py-1 px-1 font-black text-gray-400 dark:text-gray-500 w-10">
                                         <div className="flex justify-center">
                                             <span className="text-[8px] uppercase tracking-tighter">Seg.</span>
@@ -663,6 +669,30 @@ const CandidatesSection = ({ showToast }) => {
                                                     )}
                                                 </div>
                                             </button>
+                                        </td>
+                                        <td className="py-0.5 px-2 text-center">
+                                            <div className="flex justify-center items-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleBlockToggle(candidate);
+                                                    }}
+                                                    disabled={blockLoading[candidate.id]}
+                                                    className={`w-6 h-3 rounded-full relative transition-colors duration-200 focus:outline-none ${candidate.blocked ? 'bg-red-500' : 'bg-gray-200 dark:bg-gray-700'
+                                                        }`}
+                                                    title={candidate.blocked ? 'Desbloquear candidato' : 'Bloquear candidato'}
+                                                >
+                                                    <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white shadow-sm transition-transform duration-200 ${candidate.blocked ? 'left-3.5' : 'left-0.5'
+                                                        }`}>
+                                                        {blockLoading[candidate.id] && (
+                                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                                <Loader2 className="w-2 h-2 text-red-500 animate-spin" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            </div>
                                         </td>
                                         <td className="py-0.5 px-2.5 text-center">
                                             {/* Rainbow Checkmarks (Separate Column) - Infinite Cycle 50% size */}

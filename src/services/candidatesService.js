@@ -200,3 +200,34 @@ export const aiQuery = async (query) => {
         };
     }
 };
+
+/**
+ * Bloquea o desbloquea un candidato
+ */
+export const blockCandidate = async (id, block = true) => {
+    try {
+        const response = await fetch(`${API_BASE}/api/candidates/block`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id, block })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Error procesando bloqueo');
+        }
+
+        return {
+            success: true,
+            message: data.message
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+};
