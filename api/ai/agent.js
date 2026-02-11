@@ -570,12 +570,20 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
             // Critical Wrap: Try voice, fallback to text if API rejects/fails
             deliveryPromise = (async () => {
-                const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, ttsUrl, 'voice');
-                if (!res.success) {
-                    console.warn(`⚠️ [VOICE FALLBACK] Voice delivery failed, sending text instead:`, res.error);
+                try {
+                    const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, ttsUrl, 'voice');
+                    // Check for standard UltraMsg success field 'sent'
+                    const isSuccess = res && (res.sent === 'true' || res.sent === true);
+
+                    if (!isSuccess) {
+                        console.warn(`⚠️ [VOICE FALLBACK] Voice delivery failed (Status: ${res?.sent}), sending text instead.`);
+                        return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
+                    }
+                    return res;
+                } catch (e) {
+                    console.error(`❌ [VOICE FATAL] Critical delivery failure, falling back to text:`, e.message);
                     return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
                 }
-                return res;
             })();
         } else {
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
