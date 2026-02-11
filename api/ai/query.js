@@ -213,8 +213,56 @@ Consulta del usuario: "${query}"
         }
 
         const aiResponseRaw = (await result.response).text();
-        const jsonMatch = aiResponseRaw.match(/\{[\s\S]*\}/);
-        const aiResponse = JSON.parse(jsonMatch[0]);
+
+        // --- ROBUST JSON EXTRACTION ---
+        let cleaned = aiResponseRaw.trim();
+
+        // 1. Remove Markdown code blocks if present
+        if (cleaned.startsWith('```')) {
+            cleaned = cleaned.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+        }
+
+        // 2. Extract balanced JSON object (Prevents trailing noise/braces from breaking parse)
+        const startIdx = cleaned.indexOf('{');
+        if (startIdx === -1) {
+            throw new Error(`AI no devolvió un JSON válido. Raw: ${aiResponseRaw.substring(0, 100)}...`);
+        }
+
+        let aiResponse;
+        let success = false;
+
+        // Try greedy match first (fastest)
+        const greedyMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (greedyMatch) {
+            try {
+                aiResponse = JSON.parse(greedyMatch[0]);
+                success = true;
+            } catch (e) {
+                // If greedy fails (e.g. extra '}'), try manual balanced extraction
+                let braceCount = 0;
+                let endIdx = -1;
+                for (let i = startIdx; i < cleaned.length; i++) {
+                    if (cleaned[i] === '{') braceCount++;
+                    else if (cleaned[i] === '}') {
+                        braceCount--;
+                        if (braceCount === 0) {
+                            endIdx = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (endIdx !== -1) {
+                    const balancedJson = cleaned.substring(startIdx, endIdx + 1);
+                    aiResponse = JSON.parse(balancedJson);
+                    success = true;
+                }
+            }
+        }
+
+        if (!success) {
+            throw new Error(`Error fatal al parsear respuesta de IA. Raw: ${aiResponseRaw.substring(0, 100)}...`);
+        }
 
         // --- TITAN v8.5 ADVANCED SNIFFER (Intent Protection) ---
         const queryLower = normalize(query);
