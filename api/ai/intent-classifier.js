@@ -52,7 +52,7 @@ CATEGORÍAS:
 DATOS DE ENTRADA:
 - ULTIMO MENSAJE (TEXTO): "${lastMessage}"
 - CONTEXTO:
-${historyText.substring(0, 300)}
+${historyText.slice(-1000)}
 
 Responde ÚNICAMENTE con el nombre de la categoría en MAYÚSCULAS.
 Respuesta:`;

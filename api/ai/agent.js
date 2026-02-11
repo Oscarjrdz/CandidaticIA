@@ -271,7 +271,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         const lastBotMessages = validMessages
             .filter(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel)
-            .slice(-3)
+            .slice(-10)
             .map(m => m.content.trim());
 
         // --- NEW: Unified Extraction Protocol ---
