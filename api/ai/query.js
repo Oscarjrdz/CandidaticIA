@@ -3,7 +3,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // --- HELPERS DE FILTRADO (Global Scope) ---
 const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-const calculateAge = (dob) => {
+const calculateAge = (dob, storedAge) => {
+    // 1. Prioritize stored age if valid
+    if (storedAge && !isNaN(storedAge) && parseInt(storedAge) > 0) {
+        return parseInt(storedAge);
+    }
+
     if (!dob) return null;
     let birthDate = new Date(dob);
     if (isNaN(birthDate.getTime())) {
@@ -332,7 +337,7 @@ Consulta del usuario: "${query}"
             let totalFiltersApplied = activeFilterKeys.length;
             let mismatchFound = false;
 
-            const candidateAge = calculateAge(candidate.fechaNacimiento);
+            const candidateAge = calculateAge(candidate.fechaNacimiento, candidate.edad);
 
             // 1. Universal Mandatory Filtering
             activeFilterKeys.forEach(key => {
@@ -343,9 +348,9 @@ Consulta del usuario: "${query}"
                 const isTargetMissing = criteria === "$missing";
 
                 // --- NOISE DETECTION (Logical Missing) ---
-                const isNumeric = typeof val === 'number' || (val && !isNaN(val) && String(val).trim() !== '');
+                const isNumeric = typeof val === 'number' && !isNaN(val);
                 const noiseList = ['proporcionado', 'n/a', 'na', 'null', 'undefined', 'general', 'sin nombre', 'sin apellido'];
-                const isMissing = !isNumeric && (!cStr || noiseList.some(noise => cStr === noise || cStr.includes("no " + noise)) || cStr.length < 2);
+                const isMissing = val === null || val === undefined || (!isNumeric && (!cStr || noiseList.some(noise => cStr === noise || cStr.includes("no " + noise)) || cStr.length < 2));
 
                 if (isMissing) {
                     if (isTargetMissing) {
@@ -415,7 +420,7 @@ Consulta del usuario: "${query}"
         return res.status(200).json({
             success: true,
             count: filtered.length,
-            version: "Titan 8.6 (Mathematical Precision)",
+            version: "Titan 8.7 (Zero Leak Pro)",
             candidates: filtered.slice(0, limit),
             ai: aiResponse
         });
