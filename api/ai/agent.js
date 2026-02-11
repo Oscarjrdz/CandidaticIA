@@ -26,6 +26,7 @@ export const DEFAULT_EXTRACTION_RULES = `
 5. REGLA DE CATEGORÍA: Solo categorías válidas del sistema.
 6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
 7. REGLA DE AUDIO 🎙️: La información en AUDIO es tan válida como el texto. Transcribe mentalmente y EXTRAE el dato DIRECTAMENTE a 'extracted_data'.
+8. REGLA DE EMPLEO (AUDIO) 🔨: Si la pregunta fue sobre trabajo y hay audio, EXTRAE "Sí" o "No" del audio. (ej. "Ando jalando" -> Sí, "Estoy sin chamba" -> No).
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
@@ -35,6 +36,7 @@ export const DEFAULT_CEREBRO1_RULES = `
 3. TONO: Profesional, tierno y servicial. No pláticas de más, enfócate en llenar el formulario.
 4. SILENCIO DE VACANTES: El perfil está incompleto. PROHIBIDO dar detalles de sueldos o empresas. ✨
 5. MODO ESCUCHA 🛑: Si hay AUDIO, ÚSALO. Extrae los datos DIRECTAMENTE del audio y ponlos en 'extracted_data'. NO PREGUNTES lo que ya se dijo en el audio.
+6. EMPLEO URGENTE 🔨: Si el dato faltante es 'tieneEmpleo' y hay AUDIO, asume que ahí está la respuesta. Extrae "Sí" o "No".
 `;
 
 export const DEFAULT_CEREBRO2_CONTEXT = `
