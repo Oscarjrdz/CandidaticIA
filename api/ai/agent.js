@@ -97,7 +97,11 @@ const getIdentityLayer = (customPrompt = null) => {
     return customPrompt || DEFAULT_SYSTEM_PROMPT;
 };
 
-export const processMessage = async (candidateId, incomingMessage, msgId = null) => {
+export const processMessage = async (candidateId, incomingMessage, options = {}) => {
+    const msgId = typeof options === 'string' ? options : options.msgId;
+    const host = options.host || process.env.APP_URL || 'candidatic-ia.vercel.app';
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const baseUrl = `${protocol}://${host}`;
     const startTime = Date.now();
     try {
         const redis = getRedisClient();
@@ -610,18 +614,19 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     pipeline.zadd('candidatic:media_library', Date.now(), voiceId);
                     await pipeline.exec();
 
-                    const permanentUrl = `https://candidatic-ia.vercel.app/api/image?id=${voiceId}.ogg`;
+                    const permanentUrl = `${baseUrl}/api/media/${voiceId}.mp3`;
                     console.log(`[VOICE PERMANENCE] ✅ Saved as ${voiceId}. Sending link: ${permanentUrl}`);
 
                     const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, permanentUrl, 'voice');
                     const isOk = res && (res.success || res.status === 200 || res.id);
 
                     if (!isOk) {
-                        console.warn(`⚠️ [VOICE FALLBACK] Delivery failure, sending text as rescue.`);
+                        console.warn(`⚠️ [VOICE FALLBACK] Delivery failure! UltraMsg Response: ${JSON.stringify(res)}`);
+                        console.warn(`[VOICE FALLBACK] Sending text as rescue.`);
                         return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
                     }
 
-                    console.log(`[VOICE PERMANENCE] 🚀 Delivery initiated successfully.`);
+                    console.log(`[VOICE PERMANENCE] 🚀 Delivery initiated successfully: ${JSON.stringify(res.data || res)}`);
                     return res;
                 } catch (e) {
                     console.error(`❌ [VOICE PERMANENCE] Fatal error during delivery:`, e.message);

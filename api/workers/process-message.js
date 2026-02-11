@@ -15,7 +15,8 @@ import { getCandidateById } from '../utils/storage.js';
  * @param {number} attempt - Current attempt number
  * @returns {Promise<Object>}
  */
-async function processWithRetry(candidateId, message, messageId = null, attempt = 1) {
+async function processWithRetry(candidateId, message, options = {}, attempt = 1) {
+    const { messageId, host } = options;
     const MAX_RETRIES = 3;
     const BASE_DELAY = 2000; // 2 seconds
 
@@ -33,7 +34,7 @@ async function processWithRetry(candidateId, message, messageId = null, attempt 
         }
 
         // Process message with Brenda
-        await processMessage(candidateId, message, messageId);
+        await processMessage(candidateId, message, { msgId: messageId, host });
 
         return {
             success: true,
@@ -49,7 +50,7 @@ async function processWithRetry(candidateId, message, messageId = null, attempt 
             console.log(`⏳ Retrying in ${delay}ms...`);
 
             await new Promise(resolve => setTimeout(resolve, delay));
-            return processWithRetry(candidateId, message, messageId, attempt + 1);
+            return processWithRetry(candidateId, message, options, attempt + 1);
         }
 
         // Max retries exceeded
@@ -67,7 +68,7 @@ export default async function handler(req, res) {
         });
     }
 
-    const { candidateId, message, messageId, from } = req.body;
+    const { candidateId, message, messageId, from, host } = req.body;
 
     // Validate required fields
     if (!candidateId || !message) {
@@ -78,9 +79,9 @@ export default async function handler(req, res) {
     }
 
     try {
-        console.log(`🔄 Worker processing message ${messageId} from ${from}`);
+        console.log(`🔄 Worker processing message ${messageId} from ${from} (Host: ${host})`);
 
-        const result = await processWithRetry(candidateId, message, messageId);
+        const result = await processWithRetry(candidateId, message, { messageId, host });
 
         console.log(`✅ Worker completed:`, result);
 
