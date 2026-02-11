@@ -54,11 +54,9 @@ export default async function handler(req, res) {
         await client.ltrim('debug:media_access', 0, 49); // Keep last 50
 
 
-        // MIME Spoofing (WhatsApp standard is ogg)
+        // MIME Handling
         let finalMime = meta.mime;
-        if (requestedExt === 'ogg' || (meta.mime && meta.mime.includes('audio'))) {
-            finalMime = 'audio/ogg';
-        } else if (requestedExt === 'mp3') {
+        if (requestedExt === 'mp3') {
             finalMime = 'audio/mpeg';
         } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
             finalMime = 'image/jpeg';

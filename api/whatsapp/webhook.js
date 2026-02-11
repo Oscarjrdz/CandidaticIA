@@ -249,10 +249,9 @@ export default async function handler(req, res) {
                                 console.log(`[Industrial Queue] Processing ${pendingMsgs.length} aggregated messages for ${candidateId}.`);
 
                                 // 🚀 ASYNC PROCESSING BIFURCATION
-                                const protocol = req.headers['x-forwarded-proto'] || 'https';
-                                const host = req.headers.host;
-
                                 if (FEATURES.USE_MESSAGE_QUEUE) {
+                                    const protocol = req.headers['x-forwarded-proto'] || 'https';
+                                    const host = req.headers.host;
                                     const workerUrl = `${protocol}://${host}/api/workers/process-message`;
 
                                     await fetch(workerUrl, {
@@ -262,12 +261,11 @@ export default async function handler(req, res) {
                                             candidateId,
                                             message: aggregatedText,
                                             messageId: msgId,
-                                            from: phone,
-                                            host
+                                            from: phone
                                         })
                                     });
                                 } else {
-                                    await processMessage(candidateId, aggregatedText, { msgId, host });
+                                    await processMessage(candidateId, aggregatedText, msgId);
                                 }
 
                                 loopSafety++;

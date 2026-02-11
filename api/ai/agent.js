@@ -97,11 +97,7 @@ const getIdentityLayer = (customPrompt = null) => {
     return customPrompt || DEFAULT_SYSTEM_PROMPT;
 };
 
-export const processMessage = async (candidateId, incomingMessage, options = {}) => {
-    const msgId = typeof options === 'string' ? options : options.msgId;
-    const host = options.host || process.env.APP_URL || 'candidatic-ia.vercel.app';
-    const protocol = host.includes('localhost') ? 'http' : 'https';
-    const baseUrl = `${protocol}://${host}`;
+export const processMessage = async (candidateId, incomingMessage, msgId = null) => {
     const startTime = Date.now();
     try {
         const redis = getRedisClient();
@@ -561,86 +557,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         // Final Persistence
-        let deliveryPromise;
-
-        // 🎙️ [VOICE PERMANENCE]: If candidate sent audio, bottle Brenda's voice forever
-        if (hasAudio && responseText) {
-            const cleanText = responseText.replace(/[^\w\s,.¡!¿?]/gi, '');
-
-            console.log(`[VOICE PERMANENCE] 🍾 Bottling response for ${candidateData.whatsapp}...`);
-
-            deliveryPromise = (async () => {
-                try {
-                    const client = getRedisClient();
-                    if (!client) throw new Error('Redis client not available for bottling');
-
-                    // 1. Synthesize and "Bottle" the audio (with chunking for long texts)
-                    const chunks = [];
-                    const maxChunk = 180; // Safety limit for Google TTS tw-ob
-                    for (let i = 0; i < cleanText.length; i += maxChunk) {
-                        chunks.push(cleanText.substring(i, i + maxChunk));
-                    }
-
-                    console.log(`[VOICE PERMANENCE] 📥 Downloading TTS in ${chunks.length} chunks...`);
-                    const audioBuffers = [];
-                    for (const chunk of chunks) {
-                        const encodedChunk = encodeURIComponent(chunk);
-                        const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedChunk}&tl=es&client=tw-ob`;
-                        const media = await downloadMedia(googleTtsUrl);
-                        if (media && media.data) {
-                            audioBuffers.push(Buffer.from(media.data, 'base64'));
-                        }
-                    }
-
-                    if (audioBuffers.length === 0) throw new Error('Failed to download any TTS chunks');
-
-                    const combinedBuffer = Buffer.concat(audioBuffers);
-                    const base64Audio = combinedBuffer.toString('base64');
-
-                    const voiceId = `vid_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-                    const mediaKey = `image:${voiceId}`;
-                    const metaKey = `meta:image:${voiceId}`;
-
-                    const pipeline = client.pipeline();
-                    pipeline.set(mediaKey, base64Audio, 'EX', 30 * 24 * 60 * 60);
-                    pipeline.set(metaKey, JSON.stringify({
-                        mime: 'audio/ogg',
-                        size: combinedBuffer.length,
-                        name: `Respuesta Brenda a ${candidateData.nombreReal || candidateData.whatsapp}`,
-                        type: 'brenda_voice',
-                        createdAt: new Date().toISOString()
-                    }), 'EX', 30 * 24 * 60 * 60);
-
-                    pipeline.zadd('candidatic:media_library', Date.now(), voiceId);
-                    await pipeline.exec();
-
-                    // 🚀 [VOICE PERMANENCE]: Deliver as Base64 (Reliability First)
-                    // We send AFTER saving to Redis to ensure the library is populated,
-                    // but we use base64 to avoid URL resolution/firewall issues with UltraMsg.
-                    const base64ForUltraMsg = `data:audio/ogg;base64,${base64Audio}`;
-                    const permanentUrl = `${baseUrl}/api/media/${voiceId}.ogg`;
-
-                    console.log(`[VOICE PERMANENCE] ✅ Saved as ${voiceId}. Delivering via Base64...`);
-
-                    const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, base64ForUltraMsg, 'voice');
-                    const isOk = res && (res.success || res.status === 200 || res.id);
-
-                    if (!isOk) {
-                        console.warn(`⚠️ [VOICE FALLBACK] Base64 delivery failure! Response: ${JSON.stringify(res)}`);
-                        console.warn(`[VOICE FALLBACK] Sending text as rescue.`);
-                        return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
-                    }
-
-                    console.log(`[VOICE PERMANENCE] 🚀 Delivery initiated successfully: ${res.id || 'OK'}`);
-                    return res;
-                } catch (e) {
-                    console.error(`❌ [VOICE PERMANENCE] Fatal error during delivery:`, e.message);
-                    return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
-                }
-            })();
-        } else {
-            deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
-        }
+        // Final Persistence
+        const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
         // --- STICKER CELEBRATION ---
         let stickerPromise = Promise.resolve();
