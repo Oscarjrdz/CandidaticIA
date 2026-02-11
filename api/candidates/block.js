@@ -51,7 +51,8 @@ export default async function handler(req, res) {
         return res.status(200).json({
             success: true,
             message: block ? 'Candidato bloqueado correctamente' : 'Candidato desbloqueado',
-            remote: remoteResult // Expose the actual answer from UltraMsg
+            instanceId: config.instanceId, // NEW: For verification
+            remote: remoteResult
         });
 
     } catch (error) {
