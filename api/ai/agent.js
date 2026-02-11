@@ -566,9 +566,17 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             const encodedText = encodeURIComponent(cleanText);
             const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=es&client=tw-ob&file=.mp3`;
 
-            console.log(`[VOICE SYNTHESIS] 🎙️ Sending generated voice response to ${candidateData.whatsapp}`);
-            // Use type 'voice' for PTT (Push-to-Talk) style note
-            deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, ttsUrl, 'voice');
+            console.log(`[VOICE SYNTHESIS] 🎙️ Attempting voice response to ${candidateData.whatsapp}`);
+
+            // Critical Wrap: Try voice, fallback to text if API rejects/fails
+            deliveryPromise = (async () => {
+                const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, ttsUrl, 'voice');
+                if (!res.success) {
+                    console.warn(`⚠️ [VOICE FALLBACK] Voice delivery failed, sending text instead:`, res.error);
+                    return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
+                }
+                return res;
+            })();
         } else {
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
         }
