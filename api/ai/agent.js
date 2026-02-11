@@ -556,27 +556,23 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // Final Persistence
         const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
-        // --- STICKER CELEBRATION (AI DRIVEN) ---
+        // --- STICKER CELEBRATION (AI DRIVEN + AUDIT SHIELD) ---
         let stickerPromise = Promise.resolve();
-        const shouldSendSticker = aiResult.trigger_media === 'success_sticker' && !hasBeenCongratulated;
+        const finalMerged = { ...candidateData, ...candidateUpdates };
+        const finalAudit = auditProfile(finalMerged, customFields);
+        const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
+
+        // ONLY send if: (AI wants it OR it just became complete) AND it IS objectively complete AND hasn't been congratulated yet.
+        const shouldSendSticker = (aiResult.trigger_media === 'success_sticker' || (initialStatus === 'INCOMPLETO' && isNowComplete))
+            && isNowComplete
+            && !hasBeenCongratulated;
 
         if (shouldSendSticker) {
             const stickerUrl = await redis?.get('bot_celebration_sticker');
             if (stickerUrl) {
-                console.log(`[CELEBRATION] 🎨 Sending AI-triggered sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
+                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
                 stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
-            }
-        } else if (initialStatus === 'INCOMPLETO' && !hasBeenCongratulated) {
-            // Fallback: Automatic detection if AI forgot to trigger but audit says it's done
-            const finalMerged = { ...candidateData, ...candidateUpdates };
-            const finalAudit = auditProfile(finalMerged, customFields);
-            if (finalAudit.paso1Status === 'COMPLETO') {
-                const stickerUrl = await redis?.get('bot_celebration_sticker');
-                if (stickerUrl) {
-                    console.log(`[CELEBRATION] 🎨 Sending Auto-triggered sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
-                    stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
-                    candidateUpdates.congratulated = true;
-                }
+                candidateUpdates.congratulated = true;
             }
         }
 
