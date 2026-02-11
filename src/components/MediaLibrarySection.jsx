@@ -98,14 +98,31 @@ const MediaLibrarySection = ({ showToast }) => {
                                 <div className="aspect-video bg-gray-50 dark:bg-gray-900 flex items-center justify-center relative">
                                     {file.mime?.includes('image') ? (
                                         <img src={file.url} alt="" className="w-full h-full object-cover" />
-                                    ) : getIcon(file.mime)}
+                                    ) : (
+                                        <div className="flex flex-col items-center space-y-2">
+                                            {getIcon(file.mime)}
+                                            {file.mime?.includes('audio') && (
+                                                <audio
+                                                    controls
+                                                    className="h-8 max-w-[140px] scale-75"
+                                                    src={file.url}
+                                                >
+                                                    Tu navegador no soporta audio.
+                                                </audio>
+                                            )}
+                                        </div>
+                                    )}
 
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center space-x-2">
-                                        <a href={file.url} target="_blank" rel="noreferrer" className="p-2 bg-white rounded-full hover:bg-gray-100 shadow-lg">
-                                            <Search className="w-4 h-4 text-gray-900" />
-                                        </a>
-                                        <button className="p-2 bg-red-500 rounded-full hover:bg-red-600 shadow-lg text-white">
-                                            <Trash2 className="w-4 h-4" />
+                                    <div className="absolute top-2 right-2 flex flex-col space-y-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={() => window.open(file.url, '_blank')}
+                                            className="p-1.5 bg-white/90 dark:bg-gray-800/90 rounded-md hover:bg-white shadow-sm border border-gray-100 dark:border-gray-700"
+                                            title="Ver enlace directo"
+                                        >
+                                            <Search className="w-3.5 h-3.5 text-gray-700 dark:text-gray-300" />
+                                        </button>
+                                        <button className="p-1.5 bg-red-50/90 dark:bg-red-900/90 rounded-md hover:bg-red-50 shadow-sm border border-red-100 dark:border-red-900 text-red-600">
+                                            <Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 </div>
