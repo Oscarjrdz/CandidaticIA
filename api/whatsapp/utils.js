@@ -280,6 +280,59 @@ export const sendUltraMsgReaction = async (instanceId, token, msgId, emoji) => {
 };
 
 /**
+ * Intenta encontrar el JID correcto (chatId) para un número, 
+ * probando diferentes formatos (especialmente para México).
+ */
+export const resolveUltraMsgJid = async (instanceId, token, phone) => {
+    try {
+        const cleanPhone = String(phone).replace(/\D/g, '');
+        if (!cleanPhone) return null;
+
+        // Formatos a probar
+        const formats = [];
+
+        // 1. Formato tal cual (limpio)
+        formats.push(`${cleanPhone}@c.us`);
+
+        // 2. Si es México y tiene el '1', probar sin el '1'
+        if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
+            formats.push(`52${cleanPhone.substring(3)}@c.us`);
+        }
+
+        // 3. Si es México y NO tiene el '1', probar con el '1'
+        if (cleanPhone.startsWith('52') && cleanPhone.length === 12) {
+            formats.push(`521${cleanPhone.substring(2)}@c.us`);
+        }
+
+        console.log(`[JID Discovery] Testing formats for ${phone}:`, formats);
+
+        for (const jid of formats) {
+            try {
+                const url = `https://api.ultramsg.com/${instanceId}/contacts/contact`;
+                const response = await axios.get(url, {
+                    params: { token, chatId: jid },
+                    timeout: 5000
+                });
+
+                // Si el API devuelve datos del contacto (nombre, etc), este es el JID correcto
+                if (response.data && (response.data.name || response.data.id)) {
+                    console.log(`[JID Discovery] Found valid JID: ${jid}`);
+                    return jid;
+                }
+            } catch (e) {
+                // Continuar al siguiente formato
+            }
+        }
+
+        // Si nada funcionó, devolver el primer formato como fallback
+        return formats[0];
+    } catch (error) {
+        console.error('[JID Discovery] Fatal error:', error.message);
+        return null;
+    }
+};
+
+/**
  * Bloquea un contacto en UltraMsg
  * @param {string} instanceId 
  * @param {string} token 
@@ -287,28 +340,17 @@ export const sendUltraMsgReaction = async (instanceId, token, msgId, emoji) => {
  */
 export const blockUltraMsgContact = async (instanceId, token, chatId) => {
     try {
-        let formattedChatId = String(chatId).trim();
-        if (!formattedChatId.includes('@')) {
-            let cleanPhone = formattedChatId.replace(/\D/g, '');
+        // 🔍 [JID DISCOVERY]: Resolve the correct JID (chatId) before blocking
+        const resolvedChatId = await resolveUltraMsgJid(instanceId, token, chatId);
+        const finalChatId = resolvedChatId || chatId;
 
-            // 🇲🇽 [MEXICO NORMALIZATION]:
-            // Mexican mobile numbers often come as 521XXXXXXXXXX but WhatsApp JIDs
-            // often require 52XXXXXXXXXX (dropping the '1' mobile prefix).
-            if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
-                console.log(`[Normalization] Mexico mobile prefix detected: ${cleanPhone} -> dropping '1'`);
-                cleanPhone = '52' + cleanPhone.substring(3);
-            }
-
-            formattedChatId = `${cleanPhone}@c.us`;
-        }
-
-        console.log(`[UltraMsg] Attempting BLOCK for: ${formattedChatId}`);
+        console.log(`[UltraMsg] Attempting BLOCK for: ${finalChatId}`);
 
         const url = `https://api.ultramsg.com/${instanceId}/contacts/block`;
 
         const params = new URLSearchParams();
         params.append('token', token);
-        params.append('chatId', formattedChatId);
+        params.append('chatId', finalChatId);
 
         const response = await axios.post(url, params, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -335,25 +377,17 @@ export const blockUltraMsgContact = async (instanceId, token, chatId) => {
  */
 export const unblockUltraMsgContact = async (instanceId, token, chatId) => {
     try {
-        let formattedChatId = String(chatId).trim();
-        if (!formattedChatId.includes('@')) {
-            let cleanPhone = formattedChatId.replace(/\D/g, '');
+        // 🔍 [JID DISCOVERY]: Resolve the correct JID (chatId) before unblocking
+        const resolvedChatId = await resolveUltraMsgJid(instanceId, token, chatId);
+        const finalChatId = resolvedChatId || chatId;
 
-            if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
-                console.log(`[Normalization] Mexico mobile prefix detected: ${cleanPhone} -> dropping '1'`);
-                cleanPhone = '52' + cleanPhone.substring(3);
-            }
-
-            formattedChatId = `${cleanPhone}@c.us`;
-        }
-
-        console.log(`[UltraMsg] Attempting UNBLOCK for: ${formattedChatId}`);
+        console.log(`[UltraMsg] Attempting UNBLOCK for: ${finalChatId}`);
 
         const url = `https://api.ultramsg.com/${instanceId}/contacts/unblock`;
 
         const params = new URLSearchParams();
         params.append('token', token);
-        params.append('chatId', formattedChatId);
+        params.append('chatId', finalChatId);
 
         const response = await axios.post(url, params, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
