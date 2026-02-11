@@ -38,12 +38,18 @@ export default async function handler(req, res) {
         const metaKey = `meta:image:${id}`;
 
         // Store in Redis
-        await client.set(key, base64Data, 'EX', 30 * 24 * 60 * 60);
-        await client.set(metaKey, JSON.stringify({
+        const pipeline = client.pipeline();
+        pipeline.set(key, base64Data, 'EX', 30 * 24 * 60 * 60);
+        pipeline.set(metaKey, JSON.stringify({
             mime,
             size: base64Data.length,
             createdAt: new Date().toISOString()
         }), 'EX', 30 * 24 * 60 * 60);
+
+        // Register in Library Index (O(1) scard)
+        pipeline.zadd('candidatic:media_library', Date.now(), id);
+
+        await pipeline.exec();
 
         // Return relative path
         const publicUrl = `/api/image?id=${id}`;

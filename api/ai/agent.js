@@ -559,29 +559,52 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // Final Persistence
         let deliveryPromise;
 
-        // 🎙️ [VOICE AUTOMATION]: If candidate sent audio, respond with audio
+        // 🎙️ [VOICE PERMANENCE]: If candidate sent audio, bottle Brenda's voice forever
         if (hasAudio && responseText) {
             const cleanText = responseText.substring(0, 200).replace(/[^\w\s,.¡!¿?]/gi, '');
             const encodedText = encodeURIComponent(cleanText);
-            // Use the new Vercel proxy URL to satisfy UltraMsg's extension requirement
-            const ttsUrl = `https://candidatic-ia.vercel.app/api/tts/${encodedText}.mp3`;
+            const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=es&client=tw-ob`;
 
-            console.log(`[VOICE SYNTHESIS] 🎙️ Attempting voice response to ${candidateData.whatsapp}`);
+            console.log(`[VOICE PERMANENCE] 🍾 Bottling response for ${candidateData.whatsapp}...`);
 
-            // Critical Wrap: Try voice, fallback to text if API rejects/fails
             deliveryPromise = (async () => {
                 try {
-                    const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, ttsUrl, 'voice');
-                    // Check for standard UltraMsg success field 'sent'
+                    // 1. Download and "Bottle" the audio
+                    const media = await downloadMedia(googleTtsUrl);
+                    if (!media) throw new Error('Failed to download TTS from Google');
+
+                    const voiceId = `vid_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+                    const mediaKey = `image:${voiceId}`;
+                    const metaKey = `meta:image:${voiceId}`;
+
+                    const pipeline = redis.pipeline();
+                    pipeline.set(mediaKey, media.data, 'EX', 30 * 24 * 60 * 60); // 30 days
+                    pipeline.set(metaKey, JSON.stringify({
+                        mime: 'audio/mpeg',
+                        size: media.data.length,
+                        name: `Respuesta Brenda a ${candidateData.nombreReal || candidateData.whatsapp}`,
+                        type: 'brenda_voice',
+                        createdAt: new Date().toISOString()
+                    }), 'EX', 30 * 24 * 60 * 60);
+
+                    // Register in library for the user to see
+                    pipeline.zadd('candidatic:media_library', Date.now(), voiceId);
+                    await pipeline.exec();
+
+                    // 2. Use the permanent library URL
+                    const permanentUrl = `https://candidatic-ia.vercel.app/api/image?id=${voiceId}.mp3`;
+                    console.log(`[VOICE PERMANENCE] ✅ Saved as ${voiceId}. Sending permanent link.`);
+
+                    const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, permanentUrl, 'voice');
                     const isSuccess = res && (res.sent === 'true' || res.sent === true);
 
                     if (!isSuccess) {
-                        console.warn(`⚠️ [VOICE FALLBACK] Voice delivery failed (Status: ${res?.sent}), sending text instead.`);
+                        console.warn(`⚠️ [VOICE FALLBACK] Permanent voice delivery failed, sending text.`);
                         return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
                     }
                     return res;
                 } catch (e) {
-                    console.error(`❌ [VOICE FATAL] Critical delivery failure, falling back to text:`, e.message);
+                    console.error(`❌ [VOICE PERMANENCE] Fatal bottling error, falling back to text:`, e.message);
                     return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
                 }
             })();
