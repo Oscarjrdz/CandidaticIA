@@ -348,12 +348,10 @@ export const blockUltraMsgContact = async (instanceId, token, chatId) => {
 
         const url = `https://api.ultramsg.com/${instanceId}/contacts/block`;
 
-        const params = new URLSearchParams();
-        params.append('token', token);
-        params.append('chatId', finalChatId);
-
-        const response = await axios.post(url, params, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        const response = await axios.post(url, {
+            token: token,
+            chatId: finalChatId
+        }, {
             timeout: 10000
         });
 
@@ -385,12 +383,10 @@ export const unblockUltraMsgContact = async (instanceId, token, chatId) => {
 
         const url = `https://api.ultramsg.com/${instanceId}/contacts/unblock`;
 
-        const params = new URLSearchParams();
-        params.append('token', token);
-        params.append('chatId', finalChatId);
-
-        const response = await axios.post(url, params, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        const response = await axios.post(url, {
+            token: token,
+            chatId: finalChatId
+        }, {
             timeout: 10000
         });
 
