@@ -604,7 +604,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     const pipeline = client.pipeline();
                     pipeline.set(mediaKey, base64Audio, 'EX', 30 * 24 * 60 * 60);
                     pipeline.set(metaKey, JSON.stringify({
-                        mime: 'audio/mpeg',
+                        mime: 'audio/ogg',
                         size: combinedBuffer.length,
                         name: `Respuesta Brenda a ${candidateData.nombreReal || candidateData.whatsapp}`,
                         type: 'brenda_voice',
@@ -614,7 +614,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     pipeline.zadd('candidatic:media_library', Date.now(), voiceId);
                     await pipeline.exec();
 
-                    const permanentUrl = `${baseUrl}/api/media/${voiceId}.mp3`;
+                    const permanentUrl = `${baseUrl}/api/media/${voiceId}.ogg`;
                     console.log(`[VOICE PERMANENCE] ✅ Saved as ${voiceId}. Sending link: ${permanentUrl}`);
 
                     const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, permanentUrl, 'voice');
