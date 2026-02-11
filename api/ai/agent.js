@@ -345,6 +345,9 @@ REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amableme
                 .replace('{{faltantes}}', audit.missingLabels.join(', '));
 
             systemInstruction += `\n${cerebro1Rules}\n${catInstruction}\n`;
+
+            systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
+${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
         } else if (isInWaitingRoom) {
             // --- CEREBRO 2: SALA DE ESPERA (Datos completos, sin proyecto) ---
             console.log(`🌸 [Waiting Room Mode] Activado para ${candidateData.nombreReal || candidateData.whatsapp}`);
