@@ -261,6 +261,37 @@ const CandidatesSection = ({ showToast }) => {
         loadCandidates();
     };
 
+    /**
+     * Alternar estado de bloqueo del candidato
+     */
+    const handleBlockToggle = async (candidate) => {
+        const isCurrentlyBlocked = candidate.blocked === true;
+        const action = isCurrentlyBlocked ? 'desbloquear' : 'bloquear';
+
+        setBlockLoading(prev => ({ ...prev, [candidate.id]: true }));
+        try {
+            const result = await blockCandidate(candidate.id, !isCurrentlyBlocked);
+            if (result.success) {
+                showToast(`Candidato ${isCurrentlyBlocked ? 'desbloqueado' : 'bloqueado'} correctamente`, 'success');
+                // Actualizar estado local
+                setCandidates(prev => prev.map(c =>
+                    c.id === candidate.id ? { ...c, blocked: !isCurrentlyBlocked } : c
+                ));
+                if (aiFilteredCandidates) {
+                    setAiFilteredCandidates(prev => prev.map(c =>
+                        c.id === candidate.id ? { ...c, blocked: !isCurrentlyBlocked } : c
+                    ));
+                }
+            } else {
+                showToast(`Error al ${action} candidato: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            showToast(`Error de red al ${action} candidato`, 'error');
+        } finally {
+            setBlockLoading(prev => ({ ...prev, [candidate.id]: false }));
+        }
+    };
+
     const handleDelete = async (e, id, nombre) => {
         if (e && e.stopPropagation) e.stopPropagation();
 
