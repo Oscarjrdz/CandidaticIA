@@ -124,8 +124,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         let hasAudio = false;
 
         // 🧪 TELEMETRY & AGGREGATION
-        const messagesToProcess = String(incomingMessage).includes(' | ')
-            ? String(incomingMessage).split(' | ')
+        const messagesToProcess = (typeof incomingMessage === 'string' && incomingMessage.includes(' | '))
+            ? incomingMessage.split(' | ')
             : [incomingMessage];
 
         console.log(`[GHOST HUNT] Messages for ${candidateId}:`, messagesToProcess);
