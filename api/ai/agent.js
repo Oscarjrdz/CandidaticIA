@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import axios from "axios";
 import {
     getRedisClient,
     getMessages,
@@ -11,7 +12,7 @@ import {
     recordAITelemetry,
     moveCandidateStep
 } from '../utils/storage.js';
-import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, downloadMedia, sendUltraMsgReaction } from '../whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
 import { classifyIntent } from './intent-classifier.js';
 import { getCachedConfig } from '../utils/cache.js';
@@ -118,19 +119,17 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const allMessages = await getMessages(candidateId, 20);
         const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
 
-        // 2. Multimodal / Text Extraction (Unified Loop)
+        // 2. Text Extraction (Unified Loop)
         let userParts = [];
         let aggregatedText = "";
-        let hasAudio = false;
 
         // 🧪 TELEMETRY & AGGREGATION
         const messagesToProcess = (typeof incomingMessage === 'string' && incomingMessage.includes(' | '))
             ? incomingMessage.split(' | ')
             : [incomingMessage];
 
-        console.log(`[GHOST HUNT] Messages for ${candidateId}:`, messagesToProcess);
+        console.log(`[TEXT ONLY MODE] Messages for ${candidateId}:`, messagesToProcess);
 
-        let turnAudioUrls = [];
         for (const msg of messagesToProcess) {
             let parsed = msg;
             let isJson = false;
@@ -141,30 +140,26 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 }
             } catch (e) { }
 
-            // 🛡️ [HYPER-PRECISION AUDIO CHECK]: Handle both pre-parsed objects and strings
-            const isAudioObj = parsed && typeof parsed === 'object' && parsed.type === 'audio' && (parsed.url || parsed.file);
+            // 🎙️ [AUDIO HANDLER]: Support for multimodal voice messages
+            const isAudioObj = parsed && typeof parsed === 'object' && (parsed.type === 'audio' || parsed.url?.includes('.ogg') || parsed.file?.includes('.ogg') || parsed.mediaUrl?.includes('.ogg'));
 
             if (isAudioObj) {
-                const audioUrl = parsed.url || parsed.file;
-
-                // 🛡️ [FINGERPRINTING ENHANCED]: URL match OR Turn match
-                const isAlreadyInHistory = validMessages.some(m => m.meta?.audioUrl === audioUrl);
-                const isAlreadyInTurn = turnAudioUrls.includes(audioUrl);
-
-                if (isAlreadyInHistory || isAlreadyInTurn) {
-                    continue;
-                }
-
-                hasAudio = true;
-                turnAudioUrls.push(audioUrl);
-
-                const media = await downloadMedia(audioUrl);
-                if (media) {
-                    userParts.push({ inlineData: { mimeType: 'audio/mp3', data: media.data } });
-                    userParts.push({ text: '[Audio recibido del candidato]' });
-                } else {
-                    userParts.push({ text: '((Audio no disponible))' });
-                    aggregatedText += " ((audio)) ";
+                const audioUrl = parsed.mediaUrl || parsed.url || parsed.file;
+                if (audioUrl) {
+                    console.log(`[AUDIO DETECTED] Processing multimodal audio for ${candidateId}: ${audioUrl}`);
+                    try {
+                        const audioResponse = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 15000 });
+                        const base64Audio = Buffer.from(audioResponse.data).toString('base64');
+                        userParts.push({
+                            inlineData: {
+                                mimeType: "audio/ogg",
+                                data: base64Audio
+                            }
+                        });
+                        aggregatedText += (aggregatedText ? " | " : "") + "[MENSAJE DE VOZ]";
+                    } catch (err) {
+                        console.error(`❌ Failed to download audio for ${candidateId}:`, err.message);
+                    }
                 }
             } else {
                 // 🛡️ [FEEDBACK LOOP SHIELD v2]: Skip any text that looks like a transcription or internal tag
@@ -179,7 +174,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 }
             }
         }
-        console.log(`[GHOST HUNT] Final hasAudio for ${candidateId}: ${hasAudio}`);
 
         if (userParts.length === 0) userParts.push({ text: 'Hola' });
 
@@ -260,13 +254,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         }
 
         // --- NEW: Assistant 2.0 Intent Detection ---
-        const userText = String(incomingMessage?.content || incomingMessage || '').trim();
+        const userText = aggregatedText;
         const historyText = validMessages.map(m => `${m.from}: ${m.content}`).join('\n');
-        const intent = await classifyIntent(candidateId, userText, historyText, hasAudio);
-        console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent} (HasAudio: ${hasAudio})`);
+        const intent = await classifyIntent(candidateId, userText, historyText);
+        console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent}`);
 
         const DECISION_MATRIX = {
-            'AUDIO_INTERACTION': '\n[INTENTO: AUDIO]: El usuario envió un audio. ES PRIORITARIO procesar el contenido de este audio. Escucha lo que dice y responde con COHERENCIA TOTAL a su petición o duda. SI PREGUNTA POR VACANTES O SUELDOS, responde con la verdad o indica que estás revisando, pero NO IGNORES lo que dijo en el audio. Primero reconoce el audio ("Te escucho...") y luego responde al fondo.',
             'ATTENTION': '\n[INTENTO: ATENCIÓN]: El usuario te está llamando. Responde con un saludo carismático. NO hables de trabajo. Solo sé Brenda. ✨',
             'SMALL_TALK': '\n[INTENTO: PLÁTICA]: El usuario está socializando. Responde con gracia y coherencia. Si es un halago, se vale bromear. Prohibido mencionar el proceso de selección o vacantes. 💅',
             'CLOSURE': '\n[INTENTO: DESPEDIDA]: El usuario se despide o confirma el cierre de la conversación.\nRESPONDE: Despídete de forma amigable y breve.\nVARIACIONES: \"¡Nos vemos!\", \"¡Hasta pronto!\", \"¡Cuídate!\", \"¡Suerte!\", \"¡Ánimo!\", \"¡Que te vaya super!\"\nPROHIBIDO ABSOLUTO: Mencionar vacantes, trabajo, o seguir la conversación. Solo despídete.',
@@ -373,13 +366,12 @@ REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amableme
 ${DECISION_MATRIX[intent] || ''}
 
 [REGLAS DE SALA DE ESPERA]:
-1. CONVERSACIÓN COHERENTE: Responde EXACTAMENTE a lo que el usuario te dice. Si el mensaje es un AUDIO, procesa su contenido con prioridad 🎙️ y responde con la extensión necesaria para aclarar sus dudas, priorizando tu configuración personalizada.
-2. PRIORIDAD AUDIO: Si hay un audio, reconoce que lo escuchaste ("Te escucho...", "Anotado lo que me dices...") y responde a la petición central del audio.
-3. SI ES SOCIAL (saludo, charla): Sigue la conversación con naturalidad y carisma.
-4. SI ES DESPEDIDA: SOLO despídete de forma amigable. PROHIBIDO mencionar vacantes o trabajo.
-5. SI PREGUNTA POR TRABAJO: Di con creatividad que estás buscando opciones. VARÍA cada vez (no copies frases exactas).
-6. PROHIBIDO REPETIR: Si ya usaste una frase, NUNCA la repitas exacta. Cambia palabras, emojis, estructura.
-7. MÁXIMA NATURALIDAD: Suenas como una reclutadora de 25 años platicando, no como un bot. Respeta la longitud configurada por el usuario.
+1. CONVERSACIÓN COHERENTE: Responde EXACTAMENTE a lo que el usuario te dice por texto.
+2. SI ES SOCIAL (saludo, charla): Sigue la conversación con naturalidad y carisma.
+3. SI ES DESPEDIDA: SOLO despídete de forma amigable. PROHIBIDO mencionar vacantes o trabajo.
+4. SI PREGUNTA POR TRABAJO: Di con creatividad que estás buscando opciones. VARÍA cada vez (no copies frases exactas).
+5. PROHIBIDO REPETIR: Si ya usaste una frase, NUNCA la repitas exacta. Cambia palabras, emojis, estructura.
+6. MÁXIMA NATURALIDAD: Suenas como una reclutadora de 25 años platicando, no como un bot. Respeta la longitud configurada por el usuario.
 
 [MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
@@ -422,7 +414,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
      "escolaridad": "string | null"
   },
   "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
-  "audio_transcription": "Si recibiste audio, escribe aquí la transcripción exacta. Si no, pon null.",
   "reaction": "emoji_char | null (Solo 👍, 🙏 o ❤️)",
   "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos)"
 }`;
@@ -487,15 +478,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             if (match) aiResult = JSON.parse(match[0]);
             else throw new Error('Invalid JSON structure');
         }
-        // 🛡️ [GHOST TRANSCRIPTION HYPER-FIX]: 
-        // If the turn is text-only, we MUST clear any hallucinated transcription from Gemini.
-        if (!hasAudio) {
-            if (aiResult.audio_transcription) {
-                console.log(`[AI NUCLEAR SHIELD] Blocked hallucinated ghost transcription: "${aiResult.audio_transcription}"`);
-            }
-            aiResult.audio_transcription = null;
-        }
-
         let responseText = aiResult.response_text || '';
         responseText = responseText.replace(/\*/g, '');
 
@@ -557,80 +539,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         // Final Persistence
-        let deliveryPromise;
-
-        // 🎙️ [VOICE PERMANENCE]: If candidate sent audio, bottle Brenda's voice forever
-        if (hasAudio && responseText) {
-            const cleanText = responseText.replace(/[^\w\s,.¡!¿?]/gi, '');
-
-            console.log(`[VOICE PERMANENCE] 🍾 Bottling response for ${candidateData.whatsapp}...`);
-
-            deliveryPromise = (async () => {
-                try {
-                    const client = getRedisClient();
-                    if (!client) throw new Error('Redis client not available for bottling');
-
-                    // 1. Synthesize and "Bottle" the audio (with chunking for long texts)
-                    const chunks = [];
-                    const maxChunk = 180; // Safety limit for Google TTS tw-ob
-                    for (let i = 0; i < cleanText.length; i += maxChunk) {
-                        chunks.push(cleanText.substring(i, i + maxChunk));
-                    }
-
-                    console.log(`[VOICE PERMANENCE] 📥 Downloading TTS in ${chunks.length} chunks...`);
-                    const audioBuffers = [];
-                    for (const chunk of chunks) {
-                        const encodedChunk = encodeURIComponent(chunk);
-                        const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedChunk}&tl=es&client=tw-ob`;
-                        const media = await downloadMedia(googleTtsUrl);
-                        if (media && media.data) {
-                            audioBuffers.push(Buffer.from(media.data, 'base64'));
-                        }
-                    }
-
-                    if (audioBuffers.length === 0) throw new Error('Failed to download any TTS chunks');
-
-                    const combinedBuffer = Buffer.concat(audioBuffers);
-                    const base64Audio = combinedBuffer.toString('base64');
-
-                    const voiceId = `vid_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
-                    const mediaKey = `image:${voiceId}`;
-                    const metaKey = `meta:image:${voiceId}`;
-
-                    const pipeline = client.pipeline();
-                    pipeline.set(mediaKey, base64Audio, 'EX', 30 * 24 * 60 * 60);
-                    pipeline.set(metaKey, JSON.stringify({
-                        mime: 'audio/mpeg',
-                        size: combinedBuffer.length,
-                        name: `Respuesta Brenda a ${candidateData.nombreReal || candidateData.whatsapp}`,
-                        type: 'brenda_voice',
-                        createdAt: new Date().toISOString()
-                    }), 'EX', 30 * 24 * 60 * 60);
-
-                    pipeline.zadd('candidatic:media_library', Date.now(), voiceId);
-                    await pipeline.exec();
-
-                    const permanentUrl = `https://candidatic-ia.vercel.app/api/image?id=${voiceId}.ogg`;
-                    console.log(`[VOICE PERMANENCE] ✅ Saved as ${voiceId}. Sending link: ${permanentUrl}`);
-
-                    const res = await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, permanentUrl, 'voice');
-                    const isOk = res && (res.success || res.status === 200 || res.id);
-
-                    if (!isOk) {
-                        console.warn(`⚠️ [VOICE FALLBACK] Delivery failure, sending text as rescue.`);
-                        return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
-                    }
-
-                    console.log(`[VOICE PERMANENCE] 🚀 Delivery initiated successfully.`);
-                    return res;
-                } catch (e) {
-                    console.error(`❌ [VOICE PERMANENCE] Fatal error during delivery:`, e.message);
-                    return sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
-                }
-            })();
-        } else {
-            deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
-        }
+        const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
         // --- STICKER CELEBRATION ---
         let stickerPromise = Promise.resolve();

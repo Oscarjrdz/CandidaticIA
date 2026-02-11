@@ -73,17 +73,11 @@ export default async function handler(req, res) {
                     const protocol = req.headers['x-forwarded-proto'] || 'http';
                     const host = req.headers.host;
 
-                    // For voice notes, Base64 is much more reliable than URL-fetching on Vercel
-                    if (type === 'voice' && base64Data) {
-                        deliveryContent = base64Data;
-                    } else {
-                        // For images and other media, use the clean static-like URL
-                        const urlObj = new URL(mediaUrl, `${protocol}://${host}`);
-                        const id = urlObj.searchParams.get('id');
-                        if (id) {
-                            const ext = type === 'video' ? '.mp4' : '.jpg';
-                            deliveryContent = `${protocol}://${host}/api/media/${id}${ext}`;
-                        }
+                    const urlObj = new URL(mediaUrl, `${protocol}://${host}`);
+                    const id = urlObj.searchParams.get('id');
+                    if (id) {
+                        const ext = type === 'video' ? '.mp4' : '.jpg';
+                        deliveryContent = `${protocol}://${host}/api/media/${id}${ext}`;
                     }
                 }
 

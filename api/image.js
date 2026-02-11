@@ -14,15 +14,9 @@ export default async function handler(req, res) {
             return res.status(500).send('Database Error');
         }
 
-        // Handle both ?id=img_123 and ?id=img_123.ogg (helper for some APIs)
-        const parts = id.split('.');
-        const rawId = parts[0];
-        let requestedExt = parts[1] || req.query.ext;
-
-        // Clean leading dots
-        if (requestedExt && requestedExt.startsWith('.')) {
-            requestedExt = requestedExt.substring(1);
-        }
+        // Handle ?id=img_123
+        const rawId = id.split('.')[0];
+        let requestedExt = req.query.ext;
 
 
         const key = `image:${rawId}`;
@@ -56,9 +50,7 @@ export default async function handler(req, res) {
 
         // MIME Handling
         let finalMime = meta.mime;
-        if (requestedExt === 'mp3') {
-            finalMime = 'audio/mpeg';
-        } else if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
+        if (requestedExt === 'jpg' || requestedExt === 'jpeg') {
             finalMime = 'image/jpeg';
         }
 

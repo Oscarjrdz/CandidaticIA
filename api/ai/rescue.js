@@ -51,7 +51,6 @@ export default async function handler(req, res) {
                     .map(m => {
                         const sender = (m.from === 'user') ? 'Candidato' : 'Reclutador';
                         let content = m.content || '';
-                        if (m.type === 'audio' || m.type === 'ptt') content = '((Mensaje de Audio))';
                         return `${sender}: ${content}`;
                     })
                     .join('\n');

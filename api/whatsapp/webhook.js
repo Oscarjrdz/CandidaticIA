@@ -141,20 +141,16 @@ export default async function handler(req, res) {
                     }
                 }
 
-                let agentInput = body;
+                let agentInput = (messageType === 'audio' || messageType === 'voice' || messageData.media)
+                    ? { body, type: messageType, mediaUrl: messageData.media || body }
+                    : body;
                 const msgToSave = {
                     id: msgId,
                     from: 'user', content: body, type: messageType,
                     timestamp: new Date().toISOString()
                 };
 
-                if (messageType === 'ptt' || messageType === 'audio') {
-                    const mediaUrl = messageData.media || messageData.body;
-                    if (mediaUrl?.startsWith('http')) {
-                        msgToSave.mediaUrl = mediaUrl;
-                        agentInput = { type: 'audio', url: mediaUrl };
-                    }
-                } else if (messageData.media) {
+                if (messageData.media) {
                     msgToSave.mediaUrl = messageData.media;
                 }
 

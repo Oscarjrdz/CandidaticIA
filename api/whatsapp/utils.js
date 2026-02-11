@@ -11,20 +11,13 @@ export const getUltraMsgConfig = async () => {
     }
 
     // 2. Try Redis (dynamic config)
-    // Note: In a real implementation where we receive a webhook, 
-    // we might not know ISNTANCE_ID unless passed in URL.
-    // For single-tenant, storing in Redis is fine.
     try {
         const redis = getRedisClient();
         if (redis) {
-            // First try 'ultramsg_credentials' (new standard)
             let config = await redis.get('ultramsg_credentials');
-
-            // Fallback to 'ultramsg_config' (old key)
             if (!config) {
                 config = await redis.get('ultramsg_config');
             }
-
             if (config) {
                 return JSON.parse(config);
             }
@@ -35,10 +28,11 @@ export const getUltraMsgConfig = async () => {
 
     return null;
 };
+
 export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     try {
         let endpoint = type;
-        if (!['chat', 'image', 'video', 'audio', 'voice', 'document', 'sticker'].includes(endpoint)) endpoint = 'chat';
+        if (!['chat', 'image', 'video', 'document', 'sticker'].includes(endpoint)) endpoint = 'chat';
 
         let formattedTo = String(to).trim();
         if (!formattedTo.includes('@')) {
@@ -47,8 +41,6 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         }
 
         const payload = { token, to: formattedTo };
-
-        // Handle Base64 vs URL
         const isHttp = typeof body === 'string' && body.startsWith('http');
 
         switch (endpoint) {
@@ -67,17 +59,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'sticker':
                 payload.sticker = body;
                 break;
-            case 'audio':
-            case 'voice':
-                payload.audio = body;
-                break;
             default:
                 payload.body = body;
         }
 
         const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
-
-
         const redis = getRedisClient();
         const debugKey = `debug:ultramsg:${to}`;
 
@@ -88,7 +74,7 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 timeout: 30000,
                 maxContentLength: Infinity,
                 maxBodyLength: Infinity,
-                validateStatus: (status) => true // Capture all status codes
+                validateStatus: (status) => true
             });
             const duration = Date.now() - startTime;
 
@@ -107,35 +93,17 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 }), 'EX', 3600);
             }
 
-            if (response.status !== 200) {
-                console.error(`❌ UltraMSG [${type}] API Error (${response.status}):`, response.data);
-                return {
-                    success: false,
-                    status: response.status,
-                    error: (response.data && typeof response.data === 'object') ? JSON.stringify(response.data) : (response.data || 'Unknown API Error')
-                };
-            }
-
-            // COUNT STATS (OUTGOING)
             if (response.status === 200) {
                 try {
                     const { incrementMessageStats } = await import('../utils/storage.js');
                     await incrementMessageStats('outgoing');
-                } catch (e) {
-                    console.warn('Failed to increment stats', e.message);
-                }
+                } catch (e) { }
             }
 
-            return {
-                success: true,
-                data: response.data
-            };
+            return { success: response.status === 200, data: response.data };
         } catch (error) {
             console.error(`❌ UltraMSG [${type}] Connection Error:`, error.message);
-            return {
-                success: false,
-                error: error.message || 'Connection failed'
-            };
+            return { success: false, error: error.message };
         }
     } catch (outerError) {
         console.error('❌ sendUltraMsgMessage fatal error:', outerError.message);
@@ -145,285 +113,110 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
 export const getUltraMsgContact = async (instanceId, token, chatId) => {
     try {
-        // Ensure chatId has the correct format for WhatsApp (number@c.us)
         let formattedChatId = String(chatId).trim();
         if (!formattedChatId.includes('@')) {
-            const cleanPhone = formattedChatId.replace(/\D/g, '');
-            formattedChatId = `${cleanPhone}@c.us`;
+            formattedChatId = `${formattedChatId.replace(/\D/g, '')}@c.us`;
         }
-
         const url = `https://api.ultramsg.com/${instanceId}/contacts/image`;
         const response = await axios.get(url, {
-            params: {
-                token: token,
-                chatId: formattedChatId
-            },
+            params: { token, chatId: formattedChatId },
             timeout: 10000
         });
         return response.data;
-    } catch (error) {
-        console.error(`❌ [UltraMsg] Get Image Error for ${chatId}:`, error.response?.data || error.message);
-        return null;
-    }
+    } catch (e) { return null; }
 };
+
 export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
     try {
-        // Ensure chatId has the correct format for WhatsApp (number@c.us)
         let formattedChatId = String(chatId).trim();
         if (!formattedChatId.includes('@')) {
-            // Clean non-digits and add suffix
-            const cleanPhone = formattedChatId.replace(/\D/g, '');
-            formattedChatId = `${cleanPhone}@c.us`;
+            formattedChatId = `${formattedChatId.replace(/\D/g, '')}@c.us`;
         }
-
         const url = `https://api.ultramsg.com/${instanceId}/chats/read`;
-
         const params = new URLSearchParams();
         params.append('token', token);
         params.append('chatId', formattedChatId);
-
         const response = await axios.post(url, params, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             timeout: 5000
         });
-
-        if (response.status !== 200) {
-            console.error(`❌ [UltraMsg] Mark as read API error (${response.status}):`, response.data);
-        }
-
         return response.data;
-    } catch (error) {
-        const errorData = error.response?.data;
-        console.error(`❌ [UltraMsg] Mark as read FAILED for ${chatId}:`, errorData || error.message);
-        return null;
-    }
+    } catch (e) { return null; }
 };
 
-/**
- * Send presence (typing/recording) status
- * @param {string} instanceId 
- * @param {string} token 
- * @param {string} chatId 
- * @param {string} presence - 'composing' (typing) or 'recording'
- */
 export const sendUltraMsgPresence = async (instanceId, token, chatId, presence = 'composing') => {
     try {
         let formattedChatId = String(chatId).trim();
         if (!formattedChatId.includes('@')) {
-            const cleanPhone = formattedChatId.replace(/\D/g, '');
-            formattedChatId = `${cleanPhone}@c.us`;
+            formattedChatId = `${formattedChatId.replace(/\D/g, '')}@c.us`;
         }
-
-        // --- TRY MULTIPLE ENDPOINTS AND FORMATS (FORM vs JSON) ---
-        const endpoints = ['chats/presence', 'chats/typing'];
-
-        for (const endpoint of endpoints) {
-            const url = `https://api.ultramsg.com/${instanceId}/${endpoint}`;
-
-            // 1. Standard Form-Data (Legacy)
-            const params = new URLSearchParams();
-            params.append('token', token);
-            params.append('chatId', formattedChatId);
-            params.append('presence', presence);
-            params.append('type', presence);
-            axios.post(url, params, {
-                timeout: 3000,
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            }).catch(() => { });
-        }
-
+        const url = `https://api.ultramsg.com/${instanceId}/chats/presence`;
+        const params = new URLSearchParams();
+        params.append('token', token);
+        params.append('chatId', formattedChatId);
+        params.append('presence', presence);
+        axios.post(url, params, {
+            timeout: 3000,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        }).catch(() => { });
         return { success: true };
-    } catch (error) {
-        console.error(`❌ [UltraMsg] Presence FAILED for ${chatId}:`, error.message);
-        return null;
-    }
-};
-
-/**
- * Downloads media from a URL with automatic retries and backoff.
- * Standardizes buffer to Base64 for Gemini ingestion.
- */
-export const downloadMedia = async (url, retries = 3) => {
-    let attempt = 0;
-    while (attempt < retries) {
-        try {
-            const response = await axios.get(url, {
-                responseType: 'arraybuffer',
-                timeout: 15000,
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-            });
-            const buffer = Buffer.from(response.data);
-            return {
-                data: buffer.toString('base64'),
-                mimeType: response.headers['content-type'] || 'audio/ogg'
-            };
-        } catch (error) {
-            attempt++;
-            console.warn(`⚠️ [Audio] Download attempt ${attempt}/${retries} failed: ${error.message}`);
-            if (attempt < retries) {
-                const delay = Math.pow(2, attempt) * 1000; // 2s, 4s...
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
-    }
-    console.error(`❌ [Audio] Failed to download media after ${retries} attempts: ${url}`);
-    return null;
+    } catch (e) { return null; }
 };
 
 export const sendUltraMsgReaction = async (instanceId, token, msgId, emoji) => {
     try {
         if (!msgId) return null;
         const url = `https://api.ultramsg.com/${instanceId}/messages/reaction`;
-
         const params = new URLSearchParams();
         params.append('token', token);
         params.append('msgId', msgId);
         params.append('emoji', emoji);
-
         const response = await axios.post(url, params, {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             timeout: 10000
         });
         return response.data;
-    } catch (error) {
-        console.error('❌ Failed to send reaction:', error.message);
-        return null;
-    }
+    } catch (e) { return null; }
 };
 
-/**
- * Intenta encontrar el JID correcto (chatId) para un número, 
- * probando diferentes formatos (especialmente para México).
- */
 export const resolveUltraMsgJid = async (instanceId, token, phone) => {
     try {
         const cleanPhone = String(phone).replace(/\D/g, '');
         if (!cleanPhone) return null;
-
-        // Formatos a probar
-        const formats = [];
-
-        // 1. Formato tal cual (limpio)
-        formats.push(`${cleanPhone}@c.us`);
-
-        // 2. Si es México y tiene el '1', probar sin el '1'
+        const formats = [`${cleanPhone}@c.us`];
         if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
             formats.push(`52${cleanPhone.substring(3)}@c.us`);
         }
-
-        // 3. Si es México y NO tiene el '1', probar con el '1'
         if (cleanPhone.startsWith('52') && cleanPhone.length === 12) {
             formats.push(`521${cleanPhone.substring(2)}@c.us`);
         }
-
-        console.log(`[JID Discovery] Testing formats for ${phone}:`, formats);
-
         for (const jid of formats) {
             try {
                 const url = `https://api.ultramsg.com/${instanceId}/contacts/contact`;
-                const response = await axios.get(url, {
-                    params: { token, chatId: jid },
-                    timeout: 5000
-                });
-
-                // Si el API devuelve datos del contacto (nombre, etc), este es el JID correcto
-                if (response.data && (response.data.name || response.data.id)) {
-                    console.log(`[JID Discovery] Found valid JID: ${jid}`);
-                    return jid;
-                }
-            } catch (e) {
-                // Continuar al siguiente formato
-            }
+                const response = await axios.get(url, { params: { token, chatId: jid }, timeout: 5000 });
+                if (response.data && (response.data.name || response.data.id)) return jid;
+            } catch (e) { }
         }
-
-        // Si nada funcionó, devolver el primer formato como fallback
         return formats[0];
-    } catch (error) {
-        console.error('[JID Discovery] Fatal error:', error.message);
-        return null;
-    }
+    } catch (e) { return null; }
 };
 
-/**
- * Bloquea un contacto en UltraMsg
- * @param {string} instanceId 
- * @param {string} token 
- * @param {string} chatId - ID del chat o número telefónico
- */
 export const blockUltraMsgContact = async (instanceId, token, chatId) => {
     try {
-        // 🔍 [JID DISCOVERY]: Resolve the correct JID (chatId) before blocking
         const resolvedChatId = await resolveUltraMsgJid(instanceId, token, chatId);
         const finalChatId = resolvedChatId || chatId;
-
-        console.log(`[UltraMsg] Attempting BLOCK for: ${finalChatId}`);
-
         const url = `https://api.ultramsg.com/${instanceId}/contacts/block`;
-
-        const response = await axios.post(url, {
-            token: token,
-            chatId: finalChatId
-        }, {
-            timeout: 10000
-        });
-
-        if (response.status !== 200) {
-            console.error(`❌ [UltraMsg] Block API Error (${response.status}):`, response.data);
-            return { success: false, error: response.data };
-        }
-
-        return { success: true, data: response.data };
-    } catch (error) {
-        console.error(`❌ [UltraMsg] Block FAILED for ${chatId}:`, error.message);
-        return { success: false, error: error.message };
-    }
+        const res = await axios.post(url, { token, chatId: finalChatId }, { timeout: 10000 });
+        return { success: res.status === 200, data: res.data };
+    } catch (e) { return { success: false, error: e.message }; }
 };
 
-/**
- * Desbloquea un contacto en UltraMsg
- * @param {string} instanceId 
- * @param {string} token 
- * @param {string} chatId 
- */
 export const unblockUltraMsgContact = async (instanceId, token, chatId) => {
     try {
-        // 🔍 [JID DISCOVERY]: Resolve the correct JID (chatId) before unblocking
         const resolvedChatId = await resolveUltraMsgJid(instanceId, token, chatId);
         const finalChatId = resolvedChatId || chatId;
-
-        console.log(`[UltraMsg] Attempting UNBLOCK for: ${finalChatId}`);
-
         const url = `https://api.ultramsg.com/${instanceId}/contacts/unblock`;
-
-        const response = await axios.post(url, {
-            token: token,
-            chatId: finalChatId
-        }, {
-            timeout: 10000
-        });
-
-        if (response.status !== 200) {
-            console.error(`❌ [UltraMsg] Unblock API Error (${response.status}):`, response.data);
-            return { success: false, error: response.data };
-        }
-
-        return { success: true, data: response.data };
-    } catch (error) {
-        console.error(`❌ [UltraMsg] Unblock FAILED for ${chatId}:`, error.message);
-        return { success: false, error: error.message };
-    }
-};
-
-/**
- * Envía una nota de voz (PTT) vía UltraMsg
- * @param {string} instanceId 
- * @param {string} token 
- * @param {string} to - Número o JID del destinatario
- * @param {string} audioUrl - URL del archivo de audio (ogg/mp3)
- * @returns {Promise<Object>}
- */
-export const sendUltraMsgVoice = async (instanceId, token, to, audioUrl) => {
-    return sendUltraMsgMessage(instanceId, token, to, audioUrl, 'voice');
+        const res = await axios.post(url, { token, chatId: finalChatId }, { timeout: 10000 });
+        return { success: res.status === 200, data: res.data };
+    } catch (e) { return { success: false, error: e.message }; }
 };
