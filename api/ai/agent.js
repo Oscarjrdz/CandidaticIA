@@ -234,15 +234,18 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const isNewFlag = candidateData.esNuevo === 'SI';
         const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
         const isSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
+        const isWakeupActive = candidateData.despertarActivo === true || candidateData.despertarActivo === 'true';
         const isLongSilence = minSinceLastBot >= 5;
 
-        // Reset silence if user writes back after a long time OR if intent requires action
+        // Atomic "Wake-up" calculation
         let currentHasGratitude = hasGratitude;
         let currentIsSilenced = isSilenced;
+        let currentWakeup = isWakeupActive;
 
         const BREAKS_SILENCE_INTENTS = ['ATTENTION', 'SMALL_TALK', 'QUERY', 'DATA_GIVE'];
         if ((isSilenced && isLongSilence) || (isSilenced && BREAKS_SILENCE_INTENTS.includes(intent))) {
-            console.log(`[Grace & Silence] Breaking silence for ${candidateId} (Reason: ${isLongSilence ? '5m Gap' : 'Active Intent: ' + intent}).`);
+            console.log(`[Assistant 2.0] Triggering Persistent Wake-up for ${candidateId} (Reason: ${isLongSilence ? '5m Gap' : 'Active Intent: ' + intent}).`);
+            currentWakeup = true;
             currentIsSilenced = false;
             currentHasGratitude = false;
         }
@@ -253,8 +256,13 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 - primer_contacto: ${isNewFlag ? 'SÍ' : 'NO'}
 - gratitud_alcanzada: ${currentHasGratitude ? 'SÍ' : 'NO'}
 - silencio_operativo: ${currentIsSilenced ? 'SÍ' : 'NO'}
+- despertar_pendiente: ${currentWakeup ? 'SÍ' : 'NO'}
 - inactividad: ${minSinceLastBot} min
 - intención_usuario: ${intent}
+
+[REGLAS DE COMPORTAMIENTO (ESTRICTAS)]:
+1. SILENCIO DINÁMICO: Si silencio_operativo es SÍ y el usuario solo envía cortesías cortas (Ok, Gracias), responde ÚNICAMENTE con una reacción (👍). Pero SI despertar_pendiente es SÍ, DEBES responder con texto cálido.
+2. CONFIRMACIÓN DE CAMBIOS: Si corriges un dato, confirma el cambio específico (ej. "Anotado, ya actualicé tu nombre").
 `;
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
@@ -302,8 +310,9 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 .replace('{{faltantes}}', audit.missingLabels.join(', '));
             systemInstruction += `\nMISIÓN ACTUAL (CAPTURA): ${cerebro1Rules}`;
         } else {
-            // Updated to use the variable "currentHasGratitude" instead of the old database state
-            if (!currentHasGratitude) {
+            if (currentWakeup) {
+                systemInstruction += `\nMISIÓN ACTUAL (DESPERTAR): El silencio se ha roto. Retoma la charla con calidez, resuelve dudas o despídete amablemente si ya no hay más que decir.`;
+            } else if (!currentHasGratitude) {
                 systemInstruction += `\nMISIÓN ACTUAL (SOCIAL): El perfil está completo. Sé atenta, resuelve dudas y busca cerrar amablemente.`;
             } else {
                 systemInstruction += `\nMISIÓN ACTUAL (CIERRE): El usuario ya agradeció. Solo reacciona (👍) y termina.`;
@@ -441,6 +450,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         // --- PERSISTENCE: GRACE & SILENCE ---
+        candidateUpdates.despertarActivo = currentWakeup; // Persist current state
+
         if (aiResult.gratitude_reached) {
             console.log(`[Grace & Silence] Gratitude detected for ${candidateId}. Marking flag.`);
             candidateUpdates.gratitudAlcanzada = true;
@@ -449,12 +460,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (aiResult.close_conversation) {
             console.log(`[Grace & Silence] Closing conversation for ${candidateId}. Marking silence.`);
             candidateUpdates.silencioActivo = true;
+            candidateUpdates.despertarActivo = false; // Reset on close
         }
 
-        // Fresh Start reset
-        if (isSilenced && isLongSilence) {
-            candidateUpdates.silencioActivo = false;
-            candidateUpdates.gratitudAlcanzada = false;
+        // --- WAKE-UP CONSUMPTION: Only reset if we actually sent text ---
+        if (responseTextVal && responseTextVal !== 'null' && currentWakeup) {
+            console.log(`[Assistant 2.0] Wake-up successful. Resetting persistent flag for ${candidateId}.`);
+            candidateUpdates.despertarActivo = false;
         }
 
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
