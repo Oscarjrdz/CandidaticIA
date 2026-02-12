@@ -65,21 +65,9 @@ export const DEFAULT_SYSTEM_PROMPT = `
 5. CLIMA: Si el usuario es cortante, sé breve. Si usa emojis, úsalos tú también. 🎉
 6. ANTI-REPETICIÓN (PENALIDAD FATAL): Está PROHIBIDO usar las mismas frases o estructuras de [MEMORIA DEL HILO]. Si te repites, fallas en tu misión humana. Cambia palabras, orden y estilo.
 
-[FASE 1: BRENDA CAPTURISTA (PERFIL INCOMPLETO)]:
-- Tu misión es obtener: Nombre, Género, Municipio, Fecha de Nacimiento (con año), Categoría, Empleo y Escolaridad.
-- Pide SOLO UN dato a la vez. Explica el beneficio (ej. "Para buscarte algo cerca de casa 📍").
-- Si el usuario se queja o evade, ofrece una disculpa humana ("¡Ay, me distraje! 😅") e insiste amablemente.
-- PROHIBIDO hablar de sueldos o vacantes específicas hasta que el perfil esté 100% completo.
-- REGLA DE CHISPA: Si el usuario solo saluda, sé Brenda la persona, no Brenda la capturista.
-
-[REGLA DE ADN]: Confía en [ESTADO DEL CANDIDATO(ADN)] como verdad absoluta.
-
-[REGLA DE REACCIONES - MANDATORIA]:
-- 👍: Úsalo OBLIGATORIAMENTE cuando detectes y extraigas el NOMBRE real del usuario por primera vez o un cambio de nombre.
-- 🙏: Úsalo OBLIGATORIAMENTE cada vez que el mensaje del usuario contenga la palabra "gracias" o sus variantes (graci, gracias mil, etc), sin importar el resto del texto.
-- ❤️: Úsalo si el usuario te da un piropo (guapa, hermosa) o es súper atento.
-- null: Solo si no hay ninguno de los casos anteriores.
-REGLA DE ORO: Si detectas gratitud o nombre, el campo "reaction" NO puede ser null.
+[REGLA DE REACCIONES]:
+- 👍: Úsalo ÚNICAMENTE cuando decidas cerrar la conversación (close_conversation: true). 
+- PROHIBIDAS todas las demás reacciones (🙏, ❤️, etc.) durante la captura de datos para evitar ruidos en las pruebas.
 `;
 
 export const DEFAULT_ASSISTANT_PROMPT = `
@@ -132,7 +120,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             ? incomingMessage.split(' | ')
             : [incomingMessage];
 
-        console.log(`[Unified Mode] Messages for ${candidateId}:`, messagesToProcess);
+        console.log(`[Unified Mode] Messages for ${candidateId}: `, messagesToProcess);
 
         for (const msg of messagesToProcess) {
             let parsed = msg;
@@ -174,7 +162,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 // Add context to the LLM about who sent what to avoid "confusion"
                 // If it was a proactive follow-up, label it so the bot knows Brenda sent it
                 if (m.meta?.proactiveLevel) {
-                    content = `[Mensaje de Lic.Brenda - Seguimiento Automático]: ${content} `;
+                    content = `[Mensaje de Lic. Brenda - Seguimiento Automático]: ${content}`;
                 }
 
                 return {
@@ -224,12 +212,14 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             console.log(`[Grace & Silence] 5m Gap detected. Resetting silence for fresh start.`);
         }
 
+        const isProfileComplete = audit.paso1Status === 'COMPLETO';
         systemInstruction += `\n[ESTADO DE MISIÓN]:
-- Perfil Completo: ${audit.paso1Status === 'COMPLETO' ? 'SÍ' : 'NO'}
+- PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
 - ¿Es Primer Contacto?: ${isNewFlag ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
 - Gratitud Alcanzada: ${hasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
 - Silencio Operativo: ${isSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
-- Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})`;
+- Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
+\n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
@@ -272,8 +262,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             .replace('{{categorias}}', categoriesList)
             .replace('CATEGORÍAS VÁLIDAS: ', `CATEGORÍAS VÁLIDAS: ${categoriesList}`);
 
-
-
         systemInstruction += `\n[ESTADO DEL CANDIDATO (BRÚJULAS)]:
 - Perfil Completo: ${audit.paso1Status === 'COMPLETO' ? 'SÍ' : 'NO'}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
@@ -300,12 +288,13 @@ ${audit.dnaLines}
                     systemInstruction += `\n[CONTEXTO KANBAN - PASO: ${currentStep.name}]:
 ${stepPrompt}
 REGLA: Si se cumple el objetivo, incluye "{ move }" en tu thought_process.
-TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nextStep?.aiConfig?.prompt || 'Continúa'}"\n`;
+    TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nextStep?.aiConfig?.prompt || 'Continúa'}"\n`;
                 }
             }
         }
 
         // --- CEREBRO MAESTRO ÚNICO (DYNAMICS) ---
+
         if (isNewFlag) {
             systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
         } else if (!isProfileComplete) {
@@ -316,7 +305,7 @@ TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nex
 
             let catInstruction = '';
             if (categories.length > 0) {
-                catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES]:\n${categories.map(c => `✅ ${c}`).join('\n')}
+                catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES]: \n${categories.map(c => `✅ ${c}`).join('\n')}
 REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amablemente.`;
             }
 
@@ -324,7 +313,7 @@ REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amableme
             const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
                 .replace('{{faltantes}}', audit.missingLabels.join(', '));
 
-            systemInstruction += `\n${cerebro1Rules}\n${catInstruction}\n`;
+            systemInstruction += `\n${cerebro1Rules} \n${catInstruction} \n`;
 
             const nextTarget = audit.missingLabels[0];
             systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
@@ -333,43 +322,38 @@ REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amableme
             if (!hasGratitude) {
                 systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
             } else {
-                systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias. Ya cumpliste. NO escribas texto (response_text: null). Solo pon una reacción (👍 o ❤️) y marca close_conversation: true. 👋🤫\n`;
+                systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias. Ya cumpliste. NO escribas texto (response_text: null). SOLO pon una reacción (👍) y marca close_conversation: true. 👋🤫\n`;
             }
         }
 
         systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
-${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
+${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
 
         // --- NEW: Unified JSON Output Schema ---
         systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
-            {
-                "extracted_data": {
-                    "nombreReal": "string | null",
-                        "genero": "string | null (Hombre/Mujer)",
-                            "fechaNacimiento": "string | null (DD/MM/YYYY)",
-                                "municipio": "string | null",
-                                    "categoria": "string | null",
-                                        "tieneEmpleo": "string | null",
-                                            "escolaridad": "string | null"
-                },
-                "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
-                    "reaction": "emoji_char | null (Solo 👍, 🙏 o ❤️)",
-                        "trigger_media": "string | null (Usa 'success_sticker' SOLO cuando el perfil se complete en este mensaje exacto)",
-                            "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos). Si decides solo reaccionar, deja esto null.",
-                    "gratitude_reached": "boolean (Activa true si el usuario te dio las gracias en este mensaje)",
-                    "close_conversation": "boolean (Activa true si decides que ya no hay nada más que decir y solo cerrarás con reacción o silencio)"
-            } `;
+{
+    "extracted_data": {
+        "nombreReal": "string | null",
+        "genero": "string | null (Hombre/Mujer)",
+        "fechaNacimiento": "string | null (DD/MM/YYYY)",
+        "municipio": "string | null",
+        "categoria": "string | null",
+        "tieneEmpleo": "string | null",
+        "escolaridad": "string | null"
+    },
+    "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
+    "reaction": "emoji_char | null (Usa 👍 SOLO cuando cierres la conversación)",
+    "trigger_media": "string | null (Usa 'success_sticker' SOLO cuando el perfil se complete en este mensaje exacto)",
+    "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos). Si decides solo reaccionar, deja esto null.",
+    "gratitude_reached": "boolean (Activa true si el usuario te dio las gracias en este mensaje)",
+    "close_conversation": "boolean (Activa true si decides que ya no hay nada más que decir y solo cerrarás con reacción o silencio)"
+} `;
 
         // 5. Resilience Loop (Inference)
         const genAI = new GoogleGenerativeAI(apiKey);
         const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
         let result;
         let lastError = '';
-
-        // --- DEBUG: SEE FINAL PROMPT ---
-        // console.log("===== FINAL SYSTEM INSTRUCTION =====");
-        // console.log(systemInstruction);
-        // console.log("=====================================");
 
         for (const mName of models) {
             try {
@@ -405,7 +389,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 }
             } catch (e) {
                 lastError = e.message;
-                console.error(`🤖 fallback model trigger: ${mName} failed.Error: `, lastError);
+                console.error(`🤖 fallback model trigger: ${mName} failed. Error: `, lastError);
             }
         }
 
@@ -422,9 +406,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
         let responseTextVal = aiResult.response_text || '';
         responseTextVal = responseTextVal.replace(/\*/g, '');
-
-        // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]: REMOVED at user request to keep chat clean.
-        // Brenda still sees the audio context internally to extraction data, but we won't save a text version.
 
         // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
         const candidateUpdates = {
@@ -447,7 +428,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
                     candidateUpdates[key] = finalVal;
 
-                    // Trigger secondary effects (like gender detection)
                     if (schema && schema.onSuccess) {
                         try {
                             await schema.onSuccess(finalVal, candidateUpdates);
@@ -462,7 +442,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (yearMatch) {
             const yearValue = parseInt(yearMatch[0]);
             if (yearValue < 1940) {
-                console.log(`[Sanity Check] Killing year zombie: ${yearValue} `);
+                console.log(`[Sanity Check] Killing year zombie: ${yearValue}`);
                 candidateUpdates.fechaNacimiento = null;
             }
         }
@@ -486,8 +466,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // Fresh Start reset
         if (isSilenced && isLongSilence) {
             candidateUpdates.silencioActivo = false;
-            candidateUpdates.gratitudAlcanzada = false; // Optional: maybe we want to keep gratitude reached but reset silence? 
-            // User said "para que le sirva al bot como regresar". If we reset silence, Brenda talks again.
+            candidateUpdates.gratitudAlcanzada = false;
         }
 
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
@@ -529,7 +508,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const finalAudit = auditProfile(finalMerged, customFields);
         const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
 
-        // ONLY send if: (AI wants it OR it just became complete) AND it IS objectively complete AND hasn't been congratulated yet.
         const shouldSendSticker = (aiResult.trigger_media === 'success_sticker' || (initialStatus === 'INCOMPLETO' && isNowComplete))
             && isNowComplete
             && !hasBeenCongratulated;
@@ -537,7 +515,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (shouldSendSticker) {
             const stickerUrl = await redis?.get('bot_celebration_sticker');
             if (stickerUrl) {
-                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${candidateData.whatsapp}: ${stickerUrl} `);
+                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
                 stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
                 candidateUpdates.congratulated = true;
             }
