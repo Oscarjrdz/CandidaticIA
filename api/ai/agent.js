@@ -126,7 +126,14 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             ? incomingMessage.split(' | ')
             : [incomingMessage];
 
-        console.log(`[Unified Mode] Messages for ${candidateId}: `, messagesToProcess);
+        console.log(`[DEBUG AGENT ENTRY] Candidate: ${candidateId} | Messages: ${allMessages.length}`);
+
+        if (incomingMessage === 'DEBUG' || (typeof incomingMessage === 'string' && incomingMessage.includes('DEBUG'))) {
+            const rawPhone = candidateData ? candidateData.whatsapp : 'NULL';
+            const configKeys = config ? Object.keys(config) : 'NULL';
+            const aiKeys = aiConfigJson ? Object.keys(aiConfigJson) : 'NULL';
+            return `🔍 DIAGNOSTIC: CanID=${candidateId} | Phone=${rawPhone} | AI_Config_Keys=${aiKeys}`;
+        }
 
         for (const msg of messagesToProcess) {
             let parsed = msg;
