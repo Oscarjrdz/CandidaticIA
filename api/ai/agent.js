@@ -254,9 +254,29 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // 🔍 DEBUG COMMAND (MOVED HERE FOR SAFETY)
         if (incomingMessage === 'DEBUG' || (typeof incomingMessage === 'string' && incomingMessage.includes('DEBUG'))) {
             const rawPhone = candidateData ? candidateData.whatsapp : 'NULL';
-            const configKeys = config ? Object.keys(config) : 'NULL'; // config from start
-            const aiKeys = aiConfigJson ? Object.keys(typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : 'NULL';
-            const debugMsg = `🔍 DIAGNOSTIC: CanID=${candidateId} | Phone=${rawPhone} | AI_Config_Keys=${aiKeys}`;
+
+            // Re-calculate Beta Tester logic exactly as used later
+            const possibleFormats = [
+                rawPhone || '',
+                (rawPhone || '').replace(/\D/g, ''),
+                `52${(rawPhone || '').replace(/\D/g, '')}`,
+                `521${(rawPhone || '').replace(/\D/g, '')}`
+            ];
+            const isBetaCalc = possibleFormats.some(p => p.endsWith('8116038195'));
+
+            let parsedConfig = {};
+            try {
+                parsedConfig = typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : (aiConfigJson || {});
+            } catch (e) { parsedConfig = { error: 'PARSE_FAIL' }; }
+
+            const debugMsg = `🔍 DEEP DIAGNOSTIC:
+Phone=${rawPhone}
+IsBeta=${isBetaCalc}
+GPT_Enabled=${parsedConfig.gptHostEnabled} (${typeof parsedConfig.gptHostEnabled})
+HasKey=${!!parsedConfig.openaiApiKey}
+Model=${parsedConfig.openaiModel}
+Audit=${audit.paso1Status}`;
+
             if (config) {
                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, debugMsg);
             }
