@@ -228,14 +228,17 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const intent = await classifyIntent(candidateId, userText, historyText);
         console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent}`);
 
-        // --- GRACE & SILENCE ARCHITECTURE (Legacy Timer Removed) ---
+        // --- GRACE & SILENCE ARCHITECTURE (Total Responsiveness) ---
         const isNewFlag = candidateData.esNuevo === 'SI';
-        const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
-        const isSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
 
-        // Direct Logic: Any message breaks local silence for the rest of this session's context.
-        let currentHasGratitude = hasGratitude;
-        let currentIsSilenced = isSilenced;
+        // Direct Logic: Every incoming message ATOMICALLY breaks previous silence/gratitude states.
+        // We only enter silence/gratitude if the CURRENT response detects it.
+        let currentHasGratitude = false;
+        let currentIsSilenced = false;
+
+        // Still keep track of DB state for logging/meta if needed, but the AI won't be restricted by it.
+        const wasSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
+        if (wasSilenced) console.log(`[Assistant 2.0] Breaking previous silence for ${candidateId} due to new message.`);
 
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
         systemInstruction += `\n[ESTADO ACTUAL DEL SISTEMA]:
@@ -289,7 +292,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         systemInstruction += `\n[INSTRUCCIONES DE EXTRACCIÓN]:\n${extractionRules}`;
 
         if (isNewFlag) {
-            systemInstruction += `\nMISIÓN ACTUAL (REGISTRO): Es el primer contacto. Preséntate y solicita el nombre.`;
+            systemInstruction += `\nMISIÓN ACTUAL (REGISTRO): Es el primer contacto. DEBES PRESENTARTE como Lic. Brenda de Candidatic y solicitar el nombre del candidato de forma cálida. NO puedes estar en silencio ahora.`;
         } else if (!isProfileComplete) {
             const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
             const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
@@ -434,15 +437,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         // --- PERSISTENCE: GRACE & SILENCE ---
-        if (aiResult.gratitude_reached) {
-            console.log(`[Grace & Silence] Gratitude detected for ${candidateId}. Marking flag.`);
-            candidateUpdates.gratitudAlcanzada = true;
-        }
+        // --- PERSISTENCE: GRACE & SILENCE (Clear on any interaction) ---
+        candidateUpdates.gratitudAlcanzada = aiResult.gratitude_reached === true;
+        candidateUpdates.silencioActivo = aiResult.close_conversation === true;
 
-        if (aiResult.close_conversation) {
-            console.log(`[Grace & Silence] Closing conversation for ${candidateId}. Marking silence.`);
-            candidateUpdates.silencioActivo = true;
-        }
+        if (candidateUpdates.gratitudAlcanzada) console.log(`[Grace & Silence] Gratitude active for ${candidateId}.`);
+        if (candidateUpdates.silencioActivo) console.log(`[Grace & Silence] Silence active for ${candidateId}.`);
 
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
@@ -467,13 +467,22 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
+        // --- PRESENCIA CONSTANTE (Minimum Feedback Logic) ---
+        if (!responseTextVal || responseTextVal === 'null' || responseTextVal === '[SILENCIO]') {
+            if (!aiResult.reaction) {
+                console.log(`[Always Present] No text and no reaction from AI. Forcing fallback reaction for ${candidateId}.`);
+                aiResult.reaction = '👍'; // Baseline presence
+            }
+            responseTextVal = null; // Clean up for internal logic
+        }
+
         // Final Persistence
         let deliveryPromise = Promise.resolve();
 
-        if (responseTextVal && responseTextVal !== 'null') {
+        if (responseTextVal) {
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
         } else {
-            console.log(`[Grace & Silence] Text suppressed for ${candidateId} (Only reaction or silence).`);
+            console.log(`[Presencia Constante] Text suppressed for ${candidateId}. Final Reaction: ${aiResult.reaction}`);
         }
 
         // --- STICKER CELEBRATION (AI DRIVEN + AUDIT SHIELD) ---
