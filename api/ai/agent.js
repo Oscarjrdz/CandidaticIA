@@ -213,10 +213,23 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         let systemInstruction = getIdentityLayer(customPrompt);
 
-        // SESSION & VIBE DATA (Injecting RAW data for the LLM to process according to the VISIBLE prompt)
-        console.log(`[AI DEBUG] Session timer for ${candidateId}: ${minSinceLastBot} min.`);
-        systemInstruction += `\n[CONTEXTO DE TIEMPO]: Han pasado ${minSinceLastBot} minutos desde el último mensaje de Brenda.`;
-        if (botHasSpoken) systemInstruction += `\n[HISTORIAL]: Ya has hablado con este candidato anteriormente.`;
+        // --- GRACE & SILENCE ARCHITECTURE ---
+        const isNewFlag = candidateData.esNuevo === 'SI';
+        const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
+        const isSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
+        const isLongSilence = minSinceLastBot >= 5;
+
+        // Reset silence if user writes back after a long time
+        if (isSilenced && isLongSilence) {
+            console.log(`[Grace & Silence] 5m Gap detected. Resetting silence for fresh start.`);
+        }
+
+        systemInstruction += `\n[ESTADO DE MISIÓN]:
+- Perfil Completo: ${audit.paso1Status === 'COMPLETO' ? 'SÍ' : 'NO'}
+- ¿Es Primer Contacto?: ${isNewFlag ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
+- Gratitud Alcanzada: ${hasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
+- Silencio Operativo: ${isSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
+- Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})`;
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
@@ -261,12 +274,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
 
 
-        const isNewFlag = candidateData.esNuevo === 'SI';
-        const isProfileComplete = audit.paso1Status === 'COMPLETO';
-
         systemInstruction += `\n[ESTADO DEL CANDIDATO (BRÚJULAS)]:
-- Perfil Completo: ${isProfileComplete ? 'SÍ' : 'NO'}
-- ¿Es Primer Contacto?: ${isNewFlag ? 'SÍ (Handshake)' : 'NO (Ya saludaste)'}
+- Perfil Completo: ${audit.paso1Status === 'COMPLETO' ? 'SÍ' : 'NO'}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
 - Municipio: ${candidateData.municipio || 'No proporcionado'}
@@ -320,8 +329,12 @@ REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amableme
             const nextTarget = audit.missingLabels[0];
             systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
         } else {
-            // PERFIL COMPLETO: MODO SOCIAL / LARGAS
-            systemInstruction += `\n[MISIÓN ACTUAL: ACOMPAÑAMIENTO SOCIAL]: El perfil ya está 100% completo. NO pidas más datos. NO repitas felicitaciones. Mantén la plática con carisma, humor y calidez. Si te dicen "Hola" o "Bye", varía tus respuestas al infinito. ✨💅\n`;
+            // PERFIL COMPLETO: MODO SOCIAL / GRACIA / SILENCIO
+            if (!hasGratitude) {
+                systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
+            } else {
+                systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias. Ya cumpliste. NO escribas texto (response_text: null). Solo pon una reacción (👍 o ❤️) y marca close_conversation: true. 👋🤫\n`;
+            }
         }
 
         systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
@@ -342,7 +355,9 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
                     "reaction": "emoji_char | null (Solo 👍, 🙏 o ❤️)",
                         "trigger_media": "string | null (Usa 'success_sticker' SOLO cuando el perfil se complete en este mensaje exacto)",
-                            "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos)"
+                            "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos). Si decides solo reaccionar, deja esto null.",
+                    "gratitude_reached": "boolean (Activa true si el usuario te dio las gracias en este mensaje)",
+                    "close_conversation": "boolean (Activa true si decides que ya no hay nada más que decir y solo cerrarás con reacción o silencio)"
             } `;
 
         // 5. Resilience Loop (Inference)
@@ -405,8 +420,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             if (match) aiResult = JSON.parse(match[0]);
             else throw new Error('Invalid JSON structure');
         }
-        let responseText = aiResult.response_text || '';
-        responseText = responseText.replace(/\*/g, '');
+        let responseTextVal = aiResult.response_text || '';
+        responseTextVal = responseTextVal.replace(/\*/g, '');
 
         // 🛡️ [AUDIO TRANSCRIPTION PERSISTENCE]: REMOVED at user request to keep chat clean.
         // Brenda still sees the audio context internally to extraction data, but we won't save a text version.
@@ -457,6 +472,24 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             candidateUpdates.esNuevo = 'NO';
         }
 
+        // --- PERSISTENCE: GRACE & SILENCE ---
+        if (aiResult.gratitude_reached) {
+            console.log(`[Grace & Silence] Gratitude detected for ${candidateId}. Marking flag.`);
+            candidateUpdates.gratitudAlcanzada = true;
+        }
+
+        if (aiResult.close_conversation) {
+            console.log(`[Grace & Silence] Closing conversation for ${candidateId}. Marking silence.`);
+            candidateUpdates.silencioActivo = true;
+        }
+
+        // Fresh Start reset
+        if (isSilenced && isLongSilence) {
+            candidateUpdates.silencioActivo = false;
+            candidateUpdates.gratitudAlcanzada = false; // Optional: maybe we want to keep gratitude reached but reset silence? 
+            // User said "para que le sirva al bot como regresar". If we reset silence, Brenda talks again.
+        }
+
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
@@ -481,7 +514,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         // Final Persistence
-        const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
+        let deliveryPromise = Promise.resolve();
+
+        if (responseTextVal && responseTextVal !== 'null') {
+            deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
+        } else {
+            console.log(`[Grace & Silence] Text suppressed for ${candidateId} (Only reaction or silence).`);
+        }
 
         // --- STICKER CELEBRATION (AI DRIVEN + AUDIT SHIELD) ---
         const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
@@ -508,11 +547,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             deliveryPromise,
             stickerPromise,
             reactionPromise,
-            saveMessage(candidateId, { from: 'bot', content: responseText, timestamp: new Date().toISOString() }),
+            saveMessage(candidateId, { from: 'bot', content: responseTextVal || '[REACCIÓN/SILENCIO]', timestamp: new Date().toISOString() }),
             updatePromise
         ]);
 
-        return responseText;
+        return responseTextVal || '[SILENCIO]';
 
     } catch (error) {
         console.error('❌ [AI Agent] Fatal Error:', error);
