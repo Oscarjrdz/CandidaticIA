@@ -349,6 +349,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 });
                 const chat = model.startChat({ history: recentHistory });
 
+                console.log(`[Assistant 2.0] System Instruction Length: ${systemInstruction.length}`);
                 const inferencePromise = chat.sendMessage(userParts);
                 const timeoutPromise = new Promise((_, reject) =>
                     setTimeout(() => reject(new Error('TIMEOUT')), 25000)
@@ -358,6 +359,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 if (result) {
                     const duration = Date.now() - startTime;
                     const tokens = result.response?.usageMetadata?.totalTokenCount || 0;
+                    console.log(`[Assistant 2.0] Inference successful with ${mName} in ${duration}ms. Tokens: ${tokens}`);
                     recordAITelemetry({
                         model: mName,
                         latency: duration,
@@ -376,10 +378,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (!result) throw new Error('AI Pipeline Exhausted');
 
         const textResult = result.response.text();
+        console.log(`[Assistant 2.0] Raw AI response for ${candidateId}: ${textResult}`);
         let aiResult;
         try {
             aiResult = JSON.parse(textResult);
         } catch (e) {
+            console.error(`[Assistant 2.0] JSON Parse Error for ${candidateId}:`, e.message);
             const match = textResult.match(/\{[\s\S]*\}/);
             if (match) aiResult = JSON.parse(match[0]);
             else throw new Error('Invalid JSON structure');
@@ -444,12 +448,22 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (candidateUpdates.gratitudAlcanzada) console.log(`[Grace & Silence] Gratitude active for ${candidateId}.`);
         if (candidateUpdates.silencioActivo) console.log(`[Grace & Silence] Silence active for ${candidateId}.`);
 
+        // --- PRESENCIA CONSTANTE (Minimum Feedback Logic) ---
+        // We do this BEFORE creating promises to ensure fallback reactions are captured.
+        if (!responseTextVal || responseTextVal === 'null' || responseTextVal === '[SILENCIO]') {
+            if (!aiResult.reaction) {
+                console.log(`[Always Present] No text and no reaction from AI. Forcing fallback reaction for ${candidateId}.`);
+                aiResult.reaction = '👍'; // Baseline presence
+            }
+            responseTextVal = null; // Clean up for internal logic
+        }
+
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
         // --- MESSAGE REACTIONS (AI DRIVEN) ---
         let reactionPromise = Promise.resolve();
-        const aiReaction = aiResult.reaction;
+        const aiReaction = aiResult.reaction; // This now includes the fallback if needed
 
         if (msgId && config && aiReaction) {
             console.log(`[AI Reaction] 🧠 Brenda chose: ${aiReaction} for ${candidateId}`);
@@ -465,15 +479,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             if (currentIndex !== -1 && steps[currentIndex + 1]) {
                 await moveCandidateStep(project.id, candidateId, steps[currentIndex + 1].id);
             }
-        }
-
-        // --- PRESENCIA CONSTANTE (Minimum Feedback Logic) ---
-        if (!responseTextVal || responseTextVal === 'null' || responseTextVal === '[SILENCIO]') {
-            if (!aiResult.reaction) {
-                console.log(`[Always Present] No text and no reaction from AI. Forcing fallback reaction for ${candidateId}.`);
-                aiResult.reaction = '👍'; // Baseline presence
-            }
-            responseTextVal = null; // Clean up for internal logic
         }
 
         // Final Persistence
