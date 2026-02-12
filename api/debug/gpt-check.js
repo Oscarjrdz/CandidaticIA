@@ -18,10 +18,39 @@ export default async function handler(req, res) {
     try {
         const redis = getRedisClient();
 
-        // 1. Get Candidate
-        const candidateKey = await redis.hget('candidatic:phone_index', phone);
+        // 1. Get Candidate (Multi-Format Lookup)
+        const possibleKeys = [
+            phone,
+            phone.replace(/\D/g, ''),
+            `52${phone.replace(/\D/g, '')}`,
+            `521${phone.replace(/\D/g, '')}`,
+            `+52 ${phone.replace(/\D/g, '').slice(-10).replace(/(\d{3})(\d{3})(\d{4})/, '$1 $2 $3')}`, // +52 811 603 8195
+            `52 ${phone.replace(/\D/g, '').slice(-10)}`
+        ];
+
+        let candidateKey = null;
+        for (const key of possibleKeys) {
+            const found = await redis.hget('candidatic:phone_index', key);
+            if (found) {
+                candidateKey = found;
+                break;
+            }
+        }
+
+        if (!candidateKey) {
+            // Last Resort: Scan the index for the 10-digit match
+            const allIndex = await redis.hgetall('candidatic:phone_index');
+            for (const [k, v] of Object.entries(allIndex)) {
+                if (k.replace(/\D/g, '').endsWith(phone.slice(-10))) {
+                    candidateKey = v;
+                    break;
+                }
+            }
+        }
+
         if (!candidateKey) {
             report.decision = 'CANDIDATE_NOT_FOUND_IN_INDEX';
+            report.triedKeys = possibleKeys;
             return res.json(report);
         }
 
