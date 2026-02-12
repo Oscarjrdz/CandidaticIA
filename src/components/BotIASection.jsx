@@ -12,7 +12,6 @@ const BotIASection = ({ showToast }) => {
 
     // AI Settings
     const [systemPrompt, setSystemPrompt] = useState('');
-    const [assistantPrompt, setAssistantPrompt] = useState('');
     const [proactivePrompt, setProactivePrompt] = useState('');
     const [proactiveEnabled, setProactiveEnabled] = useState(false);
     const [aiModel, setAiModel] = useState('gemini-2.0-flash');
@@ -23,7 +22,6 @@ const BotIASection = ({ showToast }) => {
     // Advanced Internal Protocols
     const [extractionRules, setExtractionRules] = useState('');
     const [cerebro1Rules, setCerebro1Rules] = useState('');
-    const [cerebro2Context, setCerebro2Context] = useState('');
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     useEffect(() => {
@@ -38,16 +36,9 @@ const BotIASection = ({ showToast }) => {
                     setProactiveEnabled(data.proactiveEnabled);
                     setExtractionRules(data.extractionRules || '');
                     setCerebro1Rules(data.cerebro1Rules || '');
-                    setCerebro2Context(data.cerebro2Context || '');
                     if (data.stats) setStats(data.stats);
                     if (data.operativeConfig) setOperativeConfig(data.operativeConfig);
                     if (data.inactiveStages) setInactiveStages(data.inactiveStages);
-                }
-
-                const resAssistant = await fetch('/api/settings?type=assistant_ai_prompt');
-                if (resAssistant.ok) {
-                    const data = await resAssistant.json();
-                    setAssistantPrompt(data.data || '');
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
@@ -107,26 +98,16 @@ const BotIASection = ({ showToast }) => {
                 })
             });
 
-            const resAssistant = await fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'assistant_ai_prompt',
-                    data: assistantPrompt
-                })
-            });
-
             const resAdvanced = await fetch('/api/bot-ia/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     extractionRules,
-                    cerebro1Rules,
-                    cerebro2Context
+                    cerebro1Rules
                 })
             });
 
-            if (resConfig.ok && resPrompt.ok && resAssistant.ok && resAdvanced.ok) {
+            if (resConfig.ok && resPrompt.ok && resAdvanced.ok) {
                 showToast('Configuraciones guardadas correctamente', 'success');
             } else {
                 showToast('Error guardando configuración', 'error');
@@ -237,28 +218,15 @@ const BotIASection = ({ showToast }) => {
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between px-1">
                                 <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                                    Fase 1: Brenda 📑
+                                    Cerebro Maestro de Brenda 📑✨
                                 </label>
-                                <span className="text-[8px] font-bold text-blue-600 uppercase">Extractora</span>
+                                <span className="text-[8px] font-bold text-blue-600 uppercase">Personalidad Única</span>
                             </div>
                             <textarea
-                                className="w-full h-[175px] p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
+                                className="w-full h-[360px] p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
                                 value={systemPrompt}
                                 onChange={(e) => setSystemPrompt(e.target.value)}
-                            />
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between px-1">
-                                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest">
-                                    Assistant 2.0 👩‍💻✨
-                                </label>
-                                <span className="text-[8px] font-bold text-indigo-600 uppercase">Diálogo</span>
-                            </div>
-                            <textarea
-                                className="w-full h-[175px] p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none transition-all leading-relaxed font-medium"
-                                value={assistantPrompt}
-                                onChange={(e) => setAssistantPrompt(e.target.value)}
+                                placeholder="Escribe aquí las directivas maestras de Brenda..."
                             />
                         </div>
 
@@ -292,30 +260,15 @@ const BotIASection = ({ showToast }) => {
                                 <div className="space-y-1.5">
                                     <div className="flex items-center justify-between px-1">
                                         <label className="text-[9px] font-black text-rose-500 uppercase tracking-widest">
-                                            Protocolos Cerebro 1 📑
+                                            Protocolos de Operación 📑
                                         </label>
-                                        <span className="text-[7px] font-bold text-gray-400 uppercase">Fase Capturista</span>
+                                        <span className="text-[7px] font-bold text-gray-400 uppercase">Directivas</span>
                                     </div>
                                     <textarea
                                         className="w-full h-32 p-3 rounded-2xl border border-rose-100 dark:border-rose-900/30 bg-rose-50/20 dark:bg-rose-900/10 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-rose-500 text-[11px] resize-none transition-all leading-snug font-mono"
                                         value={cerebro1Rules}
                                         onChange={(e) => setCerebro1Rules(e.target.value)}
-                                        placeholder="Usa {{faltantes}} para listar los campos pendientes..."
-                                    />
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center justify-between px-1">
-                                        <label className="text-[9px] font-black text-purple-500 uppercase tracking-widest">
-                                            Contexto Cerebro 2 🧠
-                                        </label>
-                                        <span className="text-[7px] font-bold text-gray-400 uppercase">Sala de Espera</span>
-                                    </div>
-                                    <textarea
-                                        className="w-full h-32 p-3 rounded-2xl border border-purple-100 dark:border-purple-900/30 bg-purple-50/20 dark:bg-purple-900/10 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-purple-500 text-[11px] resize-none transition-all leading-snug font-mono"
-                                        value={cerebro2Context}
-                                        onChange={(e) => setCerebro2Context(e.target.value)}
-                                        placeholder="Usa {{nombre}}, {{categoria}}, {{municipio}} e {{intent}}..."
+                                        placeholder="Reglas específicas para la fase de datos..."
                                     />
                                 </div>
                             </div>

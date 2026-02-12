@@ -14,7 +14,6 @@ import {
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
-import { classifyIntent } from './intent-classifier.js';
 import { getCachedConfig } from '../utils/cache.js';
 import { FEATURES } from '../utils/feature-flags.js';
 
@@ -145,39 +144,15 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 }
             } catch (e) { }
 
-            // 🎙️ [AUDIO HANDLER]: Support for multimodal voice messages
-            const isAudioObj = parsed && typeof parsed === 'object' &&
-                (parsed.type === 'audio' || parsed.type === 'voice' || parsed.mediaUrl || parsed.url?.includes('.ogg') || parsed.file?.includes('.ogg'));
+            // 🛡️ [FEEDBACK LOOP SHIELD v2]: Skip any text that looks like a transcription or internal tag
+            const textVal = (isJson || typeof parsed === 'object') ? (parsed.body || parsed.content || JSON.stringify(parsed)) : String(parsed || '').trim();
 
-            if (isAudioObj) {
-                const audioUrl = parsed.mediaUrl || parsed.url || parsed.file;
-                if (audioUrl) {
-                    console.log(`[AUDIO DETECTED] Processing multimodal audio for ${candidateId}: ${audioUrl}`);
-                    try {
-                        const audioResponse = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 15000 });
-                        const base64Audio = Buffer.from(audioResponse.data).toString('base64');
-                        userParts.push({
-                            inlineData: {
-                                mimeType: "audio/ogg",
-                                data: base64Audio
-                            }
-                        });
-                        aggregatedText += (aggregatedText ? " | " : "") + "[MENSAJE DE VOZ]";
-                    } catch (err) {
-                        console.error(`❌ Failed to download audio for ${candidateId}:`, err.message);
-                    }
-                }
-            } else {
-                // 🛡️ [FEEDBACK LOOP SHIELD v2]: Skip any text that looks like a transcription or internal tag
-                const textVal = (isJson || typeof parsed === 'object') ? (parsed.body || parsed.content || JSON.stringify(parsed)) : String(parsed || '').trim();
+            const isTranscriptionPrefix = textVal.includes('[AUDIO TRANSCRITO]') || textVal.includes('🎙️');
+            const isInternalJson = isJson && (parsed.extracted_data || parsed.thought_process);
 
-                const isTranscriptionPrefix = textVal.includes('[AUDIO TRANSCRITO]') || textVal.includes('🎙️');
-                const isInternalJson = isJson && (parsed.extracted_data || parsed.thought_process);
-
-                if (textVal && textVal !== '{}' && !isTranscriptionPrefix && !isInternalJson) {
-                    userParts.push({ text: textVal });
-                    aggregatedText += (aggregatedText ? " | " : "") + textVal;
-                }
+            if (textVal && textVal !== '{}' && !isTranscriptionPrefix && !isInternalJson) {
+                userParts.push({ text: textVal });
+                aggregatedText += (aggregatedText ? " | " : "") + textVal;
             }
         }
 
@@ -298,8 +273,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
 
 
-        systemInstruction += `\n[ESTADO DEL CANDIDATO (ADN)]:
-- Paso 1: ${audit.paso1Status}
+        const isNewFlag = candidateData.esNuevo === 'SI';
+        const isProfileComplete = audit.paso1Status === 'COMPLETO';
+
+        systemInstruction += `\n[ESTADO DEL CANDIDATO (BRÚJULAS)]:
+- Perfil Completo: ${isProfileComplete ? 'SÍ' : 'NO'}
+- ¿Es Primer Contacto?: ${isNewFlag ? 'SÍ (Handshake)' : 'NO (Ya saludaste)'}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
 - Municipio: ${candidateData.municipio || 'No proporcionado'}
@@ -329,11 +308,10 @@ TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nex
             }
         }
 
-        // --- BIFURCACIÓN DE CEREBROS (CANDIDATIC ARCHITECTURE) ---
-        const isInWaitingRoom = audit.paso1Status === 'COMPLETO' && !candidateData.projectMetadata?.projectId;
-
-        if (ignoreVacanciesGate || audit.paso1Status === 'INCOMPLETO') {
-            // --- CEREBRO 1: BRENDA CAPTURISTA (Paso 1 - Datos) ---
+        // --- CEREBRO MAESTRO ÚNICO (DYNAMICS) ---
+        if (isNewFlag) {
+            systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
+        } else if (!isProfileComplete) {
             const categoriesData = FEATURES.USE_BACKEND_CACHE
                 ? await getCachedConfig(redis, 'candidatic_categories')
                 : await redis?.get('candidatic_categories');
@@ -351,63 +329,15 @@ REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amableme
 
             systemInstruction += `\n${cerebro1Rules}\n${catInstruction}\n`;
 
-            systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
-${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
-        } else if (isInWaitingRoom) {
-            // --- CEREBRO 2: SALA DE ESPERA (Datos completos, sin proyecto) ---
-            console.log(`🌸 [Waiting Room Mode] Activado para ${candidateData.nombreReal || candidateData.whatsapp}`);
-            console.log(`🎯 [Intent Detected]: ${intent}`);
-
-            const customCerebro2Context = await redis?.get('bot_cerebro2_context');
-            const cerebro2Context = (customCerebro2Context || DEFAULT_CEREBRO2_CONTEXT)
-                .replace('{{nombre}}', candidateData.nombreReal || 'No proporcionado')
-                .replace('{{categoria}}', candidateData.categoria || 'No especificada')
-                .replace('{{municipio}}', candidateData.municipio || 'No especificado')
-                .replace('{{intent}}', intent);
-
-            systemInstruction += `
-[MODO: SALA DE ESPERA - LIC. BRENDA (HUMANA)]:
-Tu misión es mantener al usuario interesado y feliz mientras el sistema busca vacantes.
-${cerebro2Context}
-
-[REGLAS DE ORO]:
-1. TOTAL COHERENCIA: Responde EXACTAMENTE a lo que el usuario te dice. Si bromea, bromea. Si pregunta algo personal, responde como Brenda.
-2. NO REPETIR ÉXITO: Jamás menciones que el registro fue exitoso. Eso ya pasó.
-3. VARIEDAD ABSOLUTA (PENALIDAD FATAL): Está PROHIBIDO usar las mismas frases de la memoria. Si ya dijiste "¡Qué estés muy bien!", busca OTRA forma de despedirte. Si ya dijiste "¡A ti!", busca otra forma de agradecer.
-4. DETECTAR LLAMADOS: Si te dicen "Lic", "Oiga" o "Brenda", responde con carisma y disponibilidad.
-5. NO ROBOTISMO: Prohibido dar respuestas genéricas de "estamos buscando" si el usuario te está haciendo una pregunta personal o bromeando. Sigue su juego.
-
-[INTENCIÓN DETECTADA]: ${intent}
-${DECISION_MATRIX[intent] || ''}
-`;
-
-            systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
-${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
-        } else if (!isNameBoilerplate) {
-            // --- CEREBRO 3: ASSISTANT 2.0 (Con proyecto asignado) ---
-            let originalInstruction = (assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT);
-
-            systemInstruction += `\n${originalInstruction} \n`;
-
-            systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
-${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
-        } else {
-            // CASO ESPECIAL: Perfil completo pero nombre incorrecto.
-            systemInstruction += `\n[ALERTA]: El perfil está completo pero el NOMBRE es incorrecto(boilerplate).Pregúntalo amablemente antes de avanzar.\n`;
-        }
-
-        // Only add this instruction for Capturista mode
-        if (audit.paso1Status === 'INCOMPLETO') {
             const nextTarget = audit.missingLabels[0];
-            systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos.Prioridad actual: "${nextTarget}".Pide solo este dato amablemente.\n`;
+            systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
+        } else {
+            // PERFIL COMPLETO: MODO SOCIAL / LARGAS
+            systemInstruction += `\n[MISIÓN ACTUAL: ACOMPAÑAMIENTO SOCIAL]: El perfil ya está 100% completo. NO pidas más datos. NO repitas felicitaciones. Mantén la plática con carisma, humor y calidez. Si te dicen "Hola" o "Bye", varía tus respuestas al infinito. ✨💅\n`;
         }
 
-        // Final sanity check: if the constructed systemInstruction STILL has the ghost text, filter it line by line.
-        if (systemInstruction.toLowerCase().includes('preguntón')) {
-            systemInstruction = systemInstruction.split('\n')
-                .filter(line => !line.toLowerCase().includes('preguntón') && !line.toLowerCase().includes('focusada'))
-                .join('\n');
-        }
+        systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
+${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
 
         // --- NEW: Unified JSON Output Schema ---
         systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
@@ -534,10 +464,9 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
-        // --- PERSISTENT CONGRATULATIONS FLAG ---
-        const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
-        if (aiResult.trigger_media === 'success_sticker' && !hasBeenCongratulated) {
-            candidateUpdates.congratulated = true;
+        if (isNewFlag) {
+            console.log(`[HANDSHAKE] handshake completed for ${candidateId}. Switching esNuevo to 'NO'.`);
+            candidateUpdates.esNuevo = 'NO';
         }
 
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);

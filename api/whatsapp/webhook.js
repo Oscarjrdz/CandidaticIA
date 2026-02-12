@@ -121,6 +121,7 @@ export default async function handler(req, res) {
                         whatsapp: phone,
                         nombre: messageData.pushname || messageData.pushName || messageData.name || 'Desconocido',
                         origen: 'whatsapp_v2',
+                        esNuevo: 'SI', // Brújula interna: Fase de presentación
                         primerContacto: new Date().toISOString()
                     });
                     candidateId = candidate.id;
@@ -141,15 +142,10 @@ export default async function handler(req, res) {
                     }
                 }
 
-                let agentInput = (messageType === 'audio' || messageType === 'voice' || messageData.media)
-                    ? { body, type: messageType, mediaUrl: messageData.media || body }
-                    : body;
-                const isAudio = messageType === 'audio' || messageType === 'voice';
+                const agentInput = body;
                 const msgToSave = {
                     id: msgId,
-                    from: 'user',
-                    content: isAudio ? '[MENSAJE DE VOZ]' : body,
-                    type: messageType,
+                    from: 'user', content: body, type: messageType,
                     timestamp: new Date().toISOString()
                 };
 
