@@ -556,7 +556,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 }
             } catch (gptErr) {
                 console.error(`[GPT Host Pilot] ❌ Failure:`, gptErr.message);
-                // Fallback to Gemini (already in responseTextVal)
+                // 🚨 TRAP: If Admin, reveal the error!
+                if (isBetaTester) {
+                    responseTextVal = `🚨 GPT SYSTEM ERROR: ${gptErr.message}`;
+                    if (gptErr.response) responseTextVal += ` | Status: ${gptErr.response.status}`;
+                }
+                // Fallback to Gemini (only if not trapped, or if trapped we effectively replace the gemini response with the error)
             }
         }
 
