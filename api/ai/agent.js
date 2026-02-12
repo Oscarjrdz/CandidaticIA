@@ -234,20 +234,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             if (parsed.ignoreVacancies) ignoreVacanciesGate = true;
         }
 
-        // --- NEW: Assistant 2.0 Intent Detection ---
+        // --- PRE-PROCESS: User Voice/Text Aggregation ---
         const userText = aggregatedText;
-        const historyText = validMessages.map(m => `${m.from}: ${m.content}`).join('\n');
-        const intent = await classifyIntent(candidateId, userText, historyText);
-        console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent}`);
-
-        const DECISION_MATRIX = {
-            'ATTENTION': '\n[INTENTO: ATENCIÓN]: El usuario te llama. Responde con calidez y disponibilidad inmediata. ✨',
-            'SMALL_TALK': '\n[INTENTO: PLÁTICA]: Sigue la plática con carisma y humor. 💅',
-            'CLOSURE': '\n[INTENTO: DESPEDIDA]: Despídete amablemente. Cambia tu frase cada vez. 👋',
-            'DATA_GIVE': '\n[INTENTO: DATOS]: Confirma la recepción amablemente. 📍',
-            'QUERY': '\n[INTENTO: DUDA]: Responde breve y humano. 🕵️‍♀️',
-            'UNKNOWN': '\n[INTENTO: FLUIDO]: Mantén la conversación viva y natural. ✨'
-        };
 
         const lastBotMessages = validMessages
             .filter(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel)
@@ -496,6 +484,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseText);
 
         // --- STICKER CELEBRATION (AI DRIVEN + AUDIT SHIELD) ---
+        const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
         let stickerPromise = Promise.resolve();
         const finalMerged = { ...candidateData, ...candidateUpdates };
         const finalAudit = auditProfile(finalMerged, customFields);
