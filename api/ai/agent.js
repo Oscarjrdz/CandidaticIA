@@ -177,9 +177,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 if (textVal && textVal !== '{}' && !isTranscriptionPrefix && !isInternalJson) {
                     userParts.push({ text: textVal });
                     aggregatedText += (aggregatedText ? " | " : "") + textVal;
-                } else if (isAudioObj) {
-                    // Placeholder for aggregated text in history
-                    aggregatedText += (aggregatedText ? " | " : "") + "[MENSAJE DE VOZ]";
                 }
             }
         }
@@ -361,49 +358,31 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             console.log(`🌸 [Waiting Room Mode] Activado para ${candidateData.nombreReal || candidateData.whatsapp}`);
             console.log(`🎯 [Intent Detected]: ${intent}`);
 
-            let waitingRoomPrompt = (assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT);
+            [SALA DE ESPERA - ASISTENTE 2.0]:
+            1. TOTAL DISPONIBILIDAD: El usuario ya completó su registro.Es momento de ser Brenda la persona.Responde a TODO con carisma, humor y calidez.
+2. NO REPETIR ÉXITO: Ya felicitaste al usuario por su registro.Está PROHIBIDO volver a decir "¡Listo! Perfil completo" o frases similares de éxito.
+3. CONVERSACIÓN FLUIDA: Si el usuario te saluda, te llama("Lic", "Oiga") o bromea, síguele la plática de forma natural y profesional.
+4. VARIACIÓN: Nunca digas lo mismo dos veces.Cambia tus saludos y despedidas constantemente. ✨🌸
 
-            systemInstruction += `\n${waitingRoomPrompt}\n`;
-
-            const customCerebro2Context = await redis?.get('bot_cerebro2_context');
-            const cerebro2Context = (customCerebro2Context || DEFAULT_CEREBRO2_CONTEXT)
-                .replace('{{nombre}}', candidateData.nombreReal || 'No proporcionado')
-                .replace('{{categoria}}', candidateData.categoria || 'No especificada')
-                .replace('{{municipio}}', candidateData.municipio || 'No especificado')
-                .replace('{{intent}}', intent);
-
-            systemInstruction += `\n[ESTADO DE CIERRE]: ${hasBeenCongratulated ? 'Ya felicitaste al usuario por completar su perfil. Sigue platicando socialmente con naturalidad y carisma. NO menciones el éxito del registro de nuevo.' : 'Aún no has felicitado al usuario.'}\n`;
-
-            systemInstruction += `\n${cerebro2Context}\n`;
-
-            systemInstruction += `\n[INTENCIÓN DETECTADA]: ${intent}
-${DECISION_MATRIX[intent] || ''}
-
-[REGLAS DE SALA DE ESPERA]:
-1. TOTAL DISPONIBILIDAD: Si el usuario te llama o pregunta algo, responde SIEMPRE con carisma. No ignores ningún mensaje.
-2. CARISMA HUMANO: Olvida que eres un bot. Respóndele como a un amigo, respetando tu identidad de Licenciada de 25 años.
-3. NO REPETIR ÉXITO: Está prohibido anunciar de nuevo que el registro fue exitoso. Ya lo sabe. Habla de cualquier otra cosa social.
-4. VARIEDAD: Usa emojis y cambia tu forma de saludar o despedirte constantemente.
-
-[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
-${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
+            [MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
+${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)' } \n`;
         } else if (!isNameBoilerplate) {
             // --- CEREBRO 3: ASSISTANT 2.0 (Con proyecto asignado) ---
             let originalInstruction = (assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT);
 
-            systemInstruction += `\n${originalInstruction}\n`;
+            systemInstruction += `\n${ originalInstruction } \n`;
 
             systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
-${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}\n`;
+${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)' } \n`;
         } else {
             // CASO ESPECIAL: Perfil completo pero nombre incorrecto.
-            systemInstruction += `\n[ALERTA]: El perfil está completo pero el NOMBRE es incorrecto (boilerplate). Pregúntalo amablemente antes de avanzar.\n`;
+            systemInstruction += `\n[ALERTA]: El perfil está completo pero el NOMBRE es incorrecto(boilerplate).Pregúntalo amablemente antes de avanzar.\n`;
         }
 
         // Only add this instruction for Capturista mode
         if (audit.paso1Status === 'INCOMPLETO') {
             const nextTarget = audit.missingLabels[0];
-            systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
+            systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos.Prioridad actual: "${nextTarget}".Pide solo este dato amablemente.\n`;
         }
 
         // Final sanity check: if the constructed systemInstruction STILL has the ghost text, filter it line by line.
@@ -415,21 +394,21 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         // --- NEW: Unified JSON Output Schema ---
         systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
-{
-  "extracted_data": { 
-     "nombreReal": "string | null",
-     "genero": "string | null (Hombre/Mujer)",
-     "fechaNacimiento": "string | null (DD/MM/YYYY)",
-     "municipio": "string | null",
-     "categoria": "string | null",
-     "tieneEmpleo": "string | null",
-     "escolaridad": "string | null"
-  },
-  "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
-  "reaction": "emoji_char | null (Solo 👍, 🙏 o ❤️)",
-  "trigger_media": "string | null (Usa 'success_sticker' SOLO cuando el perfil se complete en este mensaje exacto)",
-  "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos)"
-}`;
+            {
+                "extracted_data": {
+                    "nombreReal": "string | null",
+                        "genero": "string | null (Hombre/Mujer)",
+                            "fechaNacimiento": "string | null (DD/MM/YYYY)",
+                                "municipio": "string | null",
+                                    "categoria": "string | null",
+                                        "tieneEmpleo": "string | null",
+                                            "escolaridad": "string | null"
+                },
+                "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
+                    "reaction": "emoji_char | null (Solo 👍, 🙏 o ❤️)",
+                        "trigger_media": "string | null (Usa 'success_sticker' SOLO cuando el perfil se complete en este mensaje exacto)",
+                            "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos)"
+            } `;
 
         // 5. Resilience Loop (Inference)
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -476,7 +455,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 }
             } catch (e) {
                 lastError = e.message;
-                console.error(`🤖 fallback model trigger: ${mName} failed. Error: `, lastError);
+                console.error(`🤖 fallback model trigger: ${ mName } failed.Error: `, lastError);
             }
         }
 
@@ -513,7 +492,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         try {
                             const cleaned = await schema.cleaner(val);
                             finalVal = cleaned || val;
-                        } catch (e) { console.warn(`Error cleaning ${key}:`, e); }
+                        } catch (e) { console.warn(`Error cleaning ${ key }: `, e); }
                     }
 
                     candidateUpdates[key] = finalVal;
@@ -522,7 +501,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     if (schema && schema.onSuccess) {
                         try {
                             await schema.onSuccess(finalVal, candidateUpdates);
-                        } catch (e) { console.warn(`Error trigger for ${key}:`, e); }
+                        } catch (e) { console.warn(`Error trigger for ${ key }: `, e); }
                     }
                 }
             }
@@ -533,7 +512,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (yearMatch) {
             const yearValue = parseInt(yearMatch[0]);
             if (yearValue < 1940) {
-                console.log(`[Sanity Check] Killing year zombie: ${yearValue}`);
+                console.log(`[Sanity Check] Killing year zombie: ${ yearValue } `);
                 candidateUpdates.fechaNacimiento = null;
             }
         }
@@ -544,7 +523,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             candidateUpdates.congratulated = true;
         }
 
-        console.log(`[Consolidated Sync] Candidate ${candidateId}:`, candidateUpdates);
+        console.log(`[Consolidated Sync] Candidate ${ candidateId }: `, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
         // --- MESSAGE REACTIONS (AI DRIVEN) ---
@@ -552,7 +531,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const aiReaction = aiResult.reaction;
 
         if (msgId && config && aiReaction) {
-            console.log(`[AI Reaction] 🧠 Brenda chose: ${aiReaction} for ${candidateId}`);
+            console.log(`[AI Reaction] 🧠 Brenda chose: ${ aiReaction } for ${ candidateId }`);
             reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiReaction);
         }
 
@@ -584,7 +563,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (shouldSendSticker) {
             const stickerUrl = await redis?.get('bot_celebration_sticker');
             if (stickerUrl) {
-                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
+                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${ candidateData.whatsapp }: ${ stickerUrl } `);
                 stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
                 candidateUpdates.congratulated = true;
             }

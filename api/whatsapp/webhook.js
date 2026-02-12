@@ -144,9 +144,12 @@ export default async function handler(req, res) {
                 let agentInput = (messageType === 'audio' || messageType === 'voice' || messageData.media)
                     ? { body, type: messageType, mediaUrl: messageData.media || body }
                     : body;
+                const isAudio = messageType === 'audio' || messageType === 'voice';
                 const msgToSave = {
                     id: msgId,
-                    from: 'user', content: body, type: messageType,
+                    from: 'user',
+                    content: isAudio ? '[MENSAJE DE VOZ]' : body,
+                    type: messageType,
                     timestamp: new Date().toISOString()
                 };
 
