@@ -137,6 +137,7 @@ export default async function handler(req, res) {
             { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
             { value: 'edad', label: 'Edad (Número)' },
             { value: 'municipio', label: 'Municipio' },
+            { value: 'escolaridad', label: 'Nivel educativo / Escolaridad' },
             { value: 'categoria', label: 'Categoría' },
             { value: 'tieneEmpleo', label: 'Tiene empleo' },
             { value: 'nombre', label: 'Nombre de WhatsApp' },
@@ -156,7 +157,7 @@ export default async function handler(req, res) {
         // 2. Configurar Gemini
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v8.6 - MATHEMATICAL PRECISION]
+        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v9.0 - MATHEMATICAL PRECISION]
 Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es convertir lenguaje natural en filtros técnicos INVIOLABLES.
 
 [REGLAS DE FILTRADO]:
@@ -174,12 +175,13 @@ Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es conv
    - OPERADORES: "mayores de 40", "más de 40", "> 40" -> {"edad": {"op": ">", "val": 40}}.
    - OPERADORES: "menores de 20", "menos de 20", "< 20" -> {"edad": {"op": "<", "val": 20}}.
    - RANGOS: "entre 18 y 30", "de 18 a 30" -> {"edad": {"min": 18, "max": 30}}.
-   - NUNCA pongas números de edad o términos como "mayores" en keywords.
-4. MUNICIPIOS (CRÍTICO): 
+4. ESCOLARIDAD (CRÍTICO):
+   - Si mencionan nivel de estudios (prepa, secundaria, carrera, universidad, etc.), ASÍGNALO SIEMPRE al campo "escolaridad".
+   - "prepa", "preparatoria", "bachillerato" -> {"escolaridad": "preparatoria"}.
+   - "secundaria" -> {"escolaridad": "secundaria"}.
+5. MUNICIPIOS (CRÍTICO): 
    - Si mencionan un lugar (Monterrey, Apodaca, Guadalupe, etc.), ASÍGNALO SIEMPRE al campo "municipio".
-   - NUNCA pongas nombres de municipios en keywords.
-5. KEYWORDS: Solo para nombres de personas ("Oscar") o habilidades técnicas específicas que no tengan campo.
-6. BÚSQUEDA DE FALTANTES: Si el usuario pide específicamente "sin [campo]", usa el valor "$missing". 
+6. KEYWORDS: Solo para nombres de personas ("Oscar") o habilidades técnicas específicas que no tengan campo.
 
 [FORMATO DE SALIDA]: JSON JSON JSON. NO TEXTO ADICIONAL.
 
@@ -214,114 +216,86 @@ Consulta del usuario: "${query}"
         }
 
         if (!successModel) {
-            throw new Error(`Ningún modelo respondió.Último error: ${lastError} `);
+            throw new Error(`Ningún modelo respondió. Último error: ${lastError}`);
         }
 
         const aiResponseRaw = (await result.response).text();
 
         // --- ROBUST JSON EXTRACTION ---
         let cleaned = aiResponseRaw.trim();
-
-        // 1. Remove Markdown code blocks if present
         if (cleaned.startsWith('```')) {
             cleaned = cleaned.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
         }
 
-        // 2. Extract balanced JSON object (Prevents trailing noise/braces from breaking parse)
         const startIdx = cleaned.indexOf('{');
         if (startIdx === -1) {
             throw new Error(`AI no devolvió un JSON válido. Raw: ${aiResponseRaw.substring(0, 100)}...`);
         }
 
-        let aiResponse;
-        let success = false;
+        let aiRaw;
+        try {
+            aiRaw = JSON.parse(cleaned);
+        } catch (e) {
+            // Greedy match backup
+            const greedyMatch = cleaned.match(/\{[\s\S]*\}/);
+            if (greedyMatch) aiRaw = JSON.parse(greedyMatch[0]);
+            else throw new Error("JSON parse failure");
+        }
 
-        // Try greedy match first (fastest)
-        const greedyMatch = cleaned.match(/\{[\s\S]*\}/);
-        if (greedyMatch) {
-            try {
-                aiResponse = JSON.parse(greedyMatch[0]);
-                success = true;
-            } catch (e) {
-                // If greedy fails (e.g. extra '}'), try manual balanced extraction
-                let braceCount = 0;
-                let endIdx = -1;
-                for (let i = startIdx; i < cleaned.length; i++) {
-                    if (cleaned[i] === '{') braceCount++;
-                    else if (cleaned[i] === '}') {
-                        braceCount--;
-                        if (braceCount === 0) {
-                            endIdx = i;
-                            break;
-                        }
-                    }
-                }
+        // --- TITAN v9.0 RESPONSE FLATTENING & SNIFFER ---
+        const aiResponse = { filters: aiRaw.filters || {}, keywords: aiRaw.keywords || [] };
 
-                if (endIdx !== -1) {
-                    const balancedJson = cleaned.substring(startIdx, endIdx + 1);
-                    aiResponse = JSON.parse(balancedJson);
-                    success = true;
-                }
+        // 1. Flatten top-level fields into filters
+        const primaryFields = ['edad', 'genero', 'municipio', 'escolaridad', 'statusAudit', 'categoria'];
+        primaryFields.forEach(field => {
+            if (aiRaw[field] !== undefined && aiResponse.filters[field] === undefined) {
+                aiResponse.filters[field] = aiRaw[field];
             }
-        }
+        });
 
-        if (!success) {
-            throw new Error(`Error fatal al parsear respuesta de IA. Raw: ${aiResponseRaw.substring(0, 100)}...`);
-        }
-
-        // --- TITAN v8.5 ADVANCED SNIFFER (Intent Protection) ---
         const queryLower = normalize(query);
         const genderTerms = ['hombre', 'hombres', 'caballero', 'caballeros', 'chico', 'chicos'];
         const femaleTerms = ['mujer', 'mujeres', 'dama', 'damas', 'chica', 'chicas'];
         const muniTerms = ['monterrey', 'apodaca', 'guadalupe', 'san nicolas', 'escobedo', 'santa catarina', 'garcia', 'juarez', 'cadereyta', 'san pedro'];
+        const educationTerms = ['preparatoria', 'prepa', 'bachillerato', 'secundaria', 'primaria', 'universidad', 'carrera', 'licenciatura', 'ingenieria'];
 
-        if (!aiResponse.filters) aiResponse.filters = {};
-        if (!aiResponse.keywords) aiResponse.keywords = [];
-
-        // 1. Force Gender Filter (Inclusive Sniffer)
+        // 2. Force Gender Filter (Sniffer)
         const hasMale = genderTerms.some(t => queryLower.includes(t));
         const hasFemale = femaleTerms.some(t => queryLower.includes(t));
-
         if (!aiResponse.filters.genero) {
-            if (hasMale && hasFemale) {
-                // Multi-gender intent: We do NOT force a strict filter, allowing inclusion of both
-                console.log("Inclusive Gender search detected.");
-            } else if (hasMale) {
-                aiResponse.filters.genero = 'Hombre';
-            } else if (hasFemale) {
-                aiResponse.filters.genero = 'Mujer';
-            }
+            if (hasMale && !hasFemale) aiResponse.filters.genero = 'Hombre';
+            else if (hasFemale && !hasMale) aiResponse.filters.genero = 'Mujer';
         }
 
-        // 2. Force Status Audit Filter
+        // 3. Force Status Audit Filter
         if (!aiResponse.filters.statusAudit) {
             if (['completo', 'listo', 'registrado', 'termino'].some(t => queryLower.includes(t))) aiResponse.filters.statusAudit = 'complete';
             else if (['pendiente', 'falta', 'incompleto'].some(t => queryLower.includes(t))) aiResponse.filters.statusAudit = 'pending';
         }
 
-        // 3. Force Municipality Filter (Sniffer)
+        // 4. Force Municipality Filter (Sniffer)
         if (!aiResponse.filters.municipio) {
             const foundMuni = muniTerms.find(t => queryLower.includes(t));
             if (foundMuni) aiResponse.filters.municipio = foundMuni;
         }
 
-        // 4. Force Age Filter (Mathematical Sniffer v8.6)
+        // 5. Force Age Filter (Mathematical Sniffer v9.0)
         if (!aiResponse.filters.edad) {
-            // "mayores de 40", "mas de 40", "mayor de 40"
+            const exactMatch = queryLower.match(/(?:tengo|tiene|de|edad)\s+(\d{2})\s+(?:años|edad)?/);
+            if (exactMatch) aiResponse.filters.edad = parseInt(exactMatch[1]);
+
             const greaterMatch = queryLower.match(/(?:mayor|mayores|mas) de (\d+)/);
             if (greaterMatch) aiResponse.filters.edad = { op: '>', val: parseInt(greaterMatch[1]) };
 
-            // "menores de 20", "menos de 20", "menor de 20"
             const lowerMatch = queryLower.match(/(?:menor|menores|menos) de (\d+)/);
             if (lowerMatch) aiResponse.filters.edad = { op: '<', val: parseInt(lowerMatch[1]) };
 
-            // "entre 18 y 30"
             const rangeMatch = queryLower.match(/entre (\d+) y (\d+)/);
             if (rangeMatch) aiResponse.filters.edad = { min: parseInt(rangeMatch[1]), max: parseInt(rangeMatch[2]) };
         }
 
-        // 5. Keyword Blacklist (Categorical cleanup)
-        const blacklist = [...genderTerms, ...femaleTerms, ...muniTerms, 'completo', 'pendientes', 'listos', 'faltan', 'mayor', 'menor', 'años'];
+        // 6. Keyword Blacklist (Categorical cleanup)
+        const blacklist = [...genderTerms, ...femaleTerms, ...muniTerms, ...educationTerms, 'completo', 'pendientes', 'listos', 'faltan', 'mayor', 'menor', 'años', 'edad', 'gente', 'personas'];
         aiResponse.keywords = aiResponse.keywords.filter(kw => !blacklist.includes(normalize(kw)));
 
         // 3. Ejecutar la búsqueda en los datos reales (TODOS)
