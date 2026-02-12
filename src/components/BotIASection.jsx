@@ -190,6 +190,30 @@ const BotIASection = ({ showToast }) => {
         setInactiveStages(newStages);
     };
 
+    // ⚡ Auto-Save for GPT Host Toggle
+    const toggleGptHost = async () => {
+        const newValue = !gptConfig.gptHostEnabled;
+        // 1. Optimistic Update
+        setGptConfig(prev => ({ ...prev, gptHostEnabled: newValue }));
+
+        // 2. Persist to Server
+        try {
+            await fetch('/api/bot-ia/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    gptHostEnabled: newValue
+                })
+            });
+            showToast(newValue ? 'Sala de Espera Activada' : 'Sala de Espera Desactivada', 'success');
+        } catch (error) {
+            console.error('Error saving GPT Host toggle:', error);
+            showToast('Error al guardar cambio', 'error');
+            // Rollback
+            setGptConfig(prev => ({ ...prev, gptHostEnabled: !newValue }));
+        }
+    };
+
     return (
         <div className="space-y-4 w-full pb-8 animate-in fade-in duration-700">
             {/* Master Bot Controller: Compact Native */}
@@ -286,16 +310,16 @@ const BotIASection = ({ showToast }) => {
                     }
                 >
                     <div className="space-y-3">
-                        {/* 1. Hook */}
-                        <div className="bg-gray-50/50 dark:bg-gray-900/20 p-2.5 rounded-2xl border border-gray-100/50 dark:border-gray-800/30">
+                        {/* 1. Hook - UI MATCHING CARD 1 */}
+                        <div className="space-y-1.5">
                             <div className="flex items-center justify-between mb-1.5">
-                                <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest block">
+                                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
                                     PROMPT DE SEGUIMIENTO 🎯
                                 </label>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase">Gemini Powered</span>
                             </div>
                             <textarea
-                                className="w-full h-20 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-[10px] resize-none font-medium transition-all"
+                                className="w-full h-24 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
                                 value={proactivePrompt}
                                 onChange={(e) => setProactivePrompt(e.target.value)}
                                 placeholder="Mensaje inicial..."
@@ -414,7 +438,7 @@ const BotIASection = ({ showToast }) => {
                     actions={
                         <button
                             type="button"
-                            onClick={(e) => setGptConfig({ ...gptConfig, gptHostEnabled: !gptConfig.gptHostEnabled })}
+                            onClick={toggleGptHost} // ⚡ Auto-Save Bound
                             className={`
                                 relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
                                 ${gptConfig.gptHostEnabled ? 'bg-purple-600' : 'bg-gray-300 dark:bg-gray-600'}
@@ -427,13 +451,13 @@ const BotIASection = ({ showToast }) => {
                     <div className="space-y-4">
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between mb-1.5">
-                                <label className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+                                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
                                     PROMPT SALA DE ESPERA ✨
                                 </label>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase">OpenAI Powered</span>
                             </div>
                             <textarea
-                                className="w-full h-80 p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-purple-500 text-xs resize-none font-medium leading-relaxed transition-all"
+                                className="w-full h-80 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
                                 value={gptConfig.gptHostPrompt}
                                 onChange={(e) => setGptConfig({ ...gptConfig, gptHostPrompt: e.target.value })}
                                 placeholder="Define la actitud social del Host..."
