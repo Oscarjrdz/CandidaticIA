@@ -132,7 +132,11 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             const rawPhone = candidateData ? candidateData.whatsapp : 'NULL';
             const configKeys = config ? Object.keys(config) : 'NULL';
             const aiKeys = aiConfigJson ? Object.keys(aiConfigJson) : 'NULL';
-            return `🔍 DIAGNOSTIC: CanID=${candidateId} | Phone=${rawPhone} | AI_Config_Keys=${aiKeys}`;
+            const debugMsg = `🔍 DIAGNOSTIC: CanID=${candidateId} | Phone=${rawPhone} | AI_Config_Keys=${aiKeys}`;
+            if (config) {
+                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, debugMsg);
+            }
+            return debugMsg;
         }
 
         for (const msg of messagesToProcess) {
