@@ -14,7 +14,7 @@ import {
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
-import { getCachedConfig } from '../utils/cache.js';
+import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { FEATURES } from '../utils/feature-flags.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
@@ -100,8 +100,13 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
     try {
         const redis = getRedisClient();
 
-        // 1. Context Acquisition
-        const candidateData = await getCandidateById(candidateId);
+        // 1. Initial High-Speed Parallel Acquisition
+        const [candidateData, config, allMessages] = await Promise.all([
+            getCandidateById(candidateId),
+            getUltraMsgConfig(),
+            getMessages(candidateId, 20)
+        ]);
+
         if (!candidateData) return 'ERROR: No se encontró al candidato';
 
         // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
@@ -110,10 +115,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             return null;
         }
 
-        const config = await getUltraMsgConfig();
-
-        // 3. History Retrieval (MOVED UP to fix ReferenceError)
-        const allMessages = await getMessages(candidateId, 20);
         const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
 
         // 2. Text Extraction (Unified Loop)
@@ -194,15 +195,32 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         }
         const isNameBoilerplate = !displayName || /proporcionado|desconocido|luego|después|privado|hola|buenos|\+/i.test(String(displayName));
 
-        // b. Data Audit Layer (Iron-Clad) - Moved up to avoid ReferenceError
-        const customFieldsJson = await redis?.get('custom_fields');
-        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
+        // b. Nitro Batch Acquisition: Fetch all rules and prompts in one go
+        const configKeys = [
+            'custom_fields',
+            'bot_ia_prompt',
+            'assistant_ia_prompt',
+            'ai_config',
+            'candidatic_categories',
+            'bot_extraction_rules',
+            'bot_cerebro1_rules'
+        ];
+
+        const batchConfig = FEATURES.USE_BACKEND_CACHE
+            ? await getCachedConfigBatch(redis, configKeys)
+            : await (async () => {
+                const values = await redis?.mget(configKeys);
+                const obj = {};
+                configKeys.forEach((key, i) => obj[key] = values ? values[i] : null);
+                return obj;
+            })();
+
+        const customFields = batchConfig.custom_fields ? JSON.parse(batchConfig.custom_fields) : [];
         const audit = auditProfile(candidateData, customFields);
         const initialStatus = audit.paso1Status;
 
-        // a. Admin Directives (Fetched early for identity layer)
-        const customPrompt = await redis?.get('bot_ia_prompt') || '';
-        const assistantCustomPrompt = await redis?.get('assistant_ia_prompt') || '';
+        const customPrompt = batchConfig.bot_ia_prompt || '';
+        const assistantCustomPrompt = batchConfig.assistant_ia_prompt || '';
 
         let systemInstruction = getIdentityLayer(customPrompt);
 
@@ -229,15 +247,13 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
-        // Use cache if feature flag enabled, otherwise direct Redis
-        const aiConfigJson = FEATURES.USE_BACKEND_CACHE
-            ? await getCachedConfig(redis, 'ai_config')
-            : await redis?.get('ai_config');
+        // Use Nitro Cached Config
+        const aiConfigJson = batchConfig.ai_config;
 
         let apiKey = process.env.GEMINI_API_KEY;
         let ignoreVacanciesGate = false;
         if (aiConfigJson) {
-            const parsed = JSON.parse(aiConfigJson);
+            const parsed = typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson;
             if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
             if (parsed.ignoreVacancies) ignoreVacanciesGate = true;
         }
@@ -250,19 +266,17 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             .slice(-10)
             .map(m => m.content.trim());
 
-        // --- NEW: Unified Extraction Protocol ---
+        // --- Nitro Extraction Protocol ---
         let categoriesList = "";
-        try {
-            const categoriesData = FEATURES.USE_BACKEND_CACHE
-                ? await getCachedConfig(redis, 'candidatic_categories')
-                : await redis?.get('candidatic_categories');
-            if (categoriesData) {
+        const categoriesData = batchConfig.candidatic_categories;
+        if (categoriesData) {
+            try {
                 const cats = JSON.parse(categoriesData).map(c => c.name);
                 categoriesList = cats.join(', ');
-            }
-        } catch (e) { }
+            } catch (e) { }
+        }
 
-        const customExtractionRules = await redis?.get('bot_extraction_rules');
+        const customExtractionRules = batchConfig.bot_extraction_rules;
         const extractionRules = (customExtractionRules || DEFAULT_EXTRACTION_RULES)
             .replace('{{categorias}}', categoriesList)
             .replace('CATEGORÍAS VÁLIDAS: ', `CATEGORÍAS VÁLIDAS: ${categoriesList}`);
@@ -303,9 +317,7 @@ REGLA: Si se cumple el objetivo, incluye "{ move }" en tu thought_process.
         if (isNewFlag) {
             systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
         } else if (!isProfileComplete) {
-            const categoriesData = FEATURES.USE_BACKEND_CACHE
-                ? await getCachedConfig(redis, 'candidatic_categories')
-                : await redis?.get('candidatic_categories');
+            const categoriesData = batchConfig.candidatic_categories;
             const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
 
             let catInstruction = '';
@@ -314,7 +326,7 @@ REGLA: Si se cumple el objetivo, incluye "{ move }" en tu thought_process.
 REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amablemente.`;
             }
 
-            const customCerebro1Rules = await redis?.get('bot_cerebro1_rules');
+            const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
             const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
                 .replace('{{faltantes}}', audit.missingLabels.join(', '));
 
@@ -419,7 +431,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         };
 
         if (aiResult.extracted_data) {
-            for (const [key, val] of Object.entries(aiResult.extracted_data)) {
+            const extractionStartTime = Date.now();
+            const extractionEntries = Object.entries(aiResult.extracted_data);
+
+            await Promise.all(extractionEntries.map(async ([key, val]) => {
                 if (val && val !== 'null' && val !== 'indefinido' && candidateData[key] !== val) {
                     const schema = getSchemaByField(key);
                     let finalVal = val;
@@ -439,7 +454,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         } catch (e) { console.warn(`Error trigger for ${key}: `, e); }
                     }
                 }
-            }
+            }));
+            console.log(`[Nitro ADN] Extraction processing took ${Date.now() - extractionStartTime}ms`);
         }
 
         // --- SANITY CHECK: Kill 1900 zombies ---
