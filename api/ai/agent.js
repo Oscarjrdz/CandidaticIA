@@ -507,10 +507,25 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // --- 🤖 GPT HOST PILOT (Filtro Beta Tester: 8116038195) ---
         // Reutilizamos aiConfigJson que ya viene del batchConfig al inicio de la función
         const currentAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
-        const cleanPhone = candidateData.whatsapp ? candidateData.whatsapp.replace(/\D/g, '') : '';
-        const isBetaTester = cleanPhone.endsWith('8116038195');
 
-        console.log(`[DEBUG GPT HOST] Phone: ${candidateData.whatsapp} | Clean: ${cleanPhone} | IsBeta: ${isBetaTester} | Enabled: ${currentAiConfig.gptHostEnabled} | Key: ${!!currentAiConfig.openaiApiKey}`);
+        // Multi-Format Phone Check (Robust)
+        const rawPhone = candidateData.whatsapp || '';
+        const possibleFormats = [
+            rawPhone,
+            rawPhone.replace(/\D/g, ''),
+            `52${rawPhone.replace(/\D/g, '')}`,
+            `521${rawPhone.replace(/\D/g, '')}`
+        ];
+        const isBetaTester = possibleFormats.some(p => p.endsWith('8116038195'));
+
+        const gptConditions = {
+            isNowComplete,
+            isBetaTester,
+            enabled: currentAiConfig.gptHostEnabled,
+            hasKey: !!currentAiConfig.openaiApiKey
+        };
+
+        console.log(`[DEBUG GPT HOST] Phone: ${rawPhone} | IsBeta: ${isBetaTester} | Conditions: ${JSON.stringify(gptConditions)}`);
 
         if ((isNowComplete || isBetaTester) && isBetaTester && currentAiConfig.gptHostEnabled && currentAiConfig.openaiApiKey) {
             console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
