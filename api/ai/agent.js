@@ -579,6 +579,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         if ((isNowComplete || isBetaTester) && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
             console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
+
+            // 🚨 DEBUG BEACON: Confirm Entry
+            if (config) {
+                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, "🚀 [DEBUG] Entering GPT Block...");
+            }
+
             try {
                 const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic. Sé amable.';
                 const adnContext = `\n[REFERENCIA DEL CANDIDATO (ADN)]: ${JSON.stringify(candidateData)}`;
@@ -592,10 +598,14 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     activeAiConfig.openaiModel || 'gpt-4o-mini',
                     activeAiConfig.openaiApiKey
                 );
+
                 if (gptResponse && gptResponse.content) {
                     console.log(`[GPT Host Pilot] ✨ Response acquired. Latency optimization active.`);
                     responseTextVal = gptResponse.content.replace(/\*/g, ''); // Clean formatting
+                } else {
+                    if (isBetaTester) responseTextVal = `🚨 GPT RETURNED EMPTY CONTENT: ${JSON.stringify(gptResponse)}`;
                 }
+
             } catch (gptErr) {
                 console.error(`[GPT Host Pilot] ❌ Failure:`, gptErr.message);
                 // 🚨 TRAP: If Admin, reveal the error!
