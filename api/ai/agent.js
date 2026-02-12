@@ -231,16 +231,21 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const isLongSilence = minSinceLastBot >= 5;
 
         // Reset silence if user writes back after a long time
+        let currentHasGratitude = hasGratitude;
+        let currentIsSilenced = isSilenced;
+
         if (isSilenced && isLongSilence) {
             console.log(`[Grace & Silence] 5m Gap detected. Resetting silence for fresh start.`);
+            currentIsSilenced = false;
+            currentHasGratitude = false;
         }
 
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
 - ¿Es Primer Contacto?: ${isNewFlag ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
-- Gratitud Alcanzada: ${hasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
-- Silencio Operativo: ${isSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
+- Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
+- Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
 - Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
 \n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
 
