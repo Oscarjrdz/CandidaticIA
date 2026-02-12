@@ -483,6 +483,31 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (candidateUpdates.gratitudAlcanzada) console.log(`[Grace & Silence] Gratitude active for ${candidateId}.`);
         if (candidateUpdates.silencioActivo) console.log(`[Grace & Silence] Silence active for ${candidateId}.`);
 
+        // --- STICKER CELEBRATION (Lock / Candado) ---
+        const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
+        let stickerPromise = Promise.resolve();
+        const finalMerged = { ...candidateData, ...candidateUpdates };
+        const finalAudit = auditProfile(finalMerged, customFields);
+        const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
+
+        const shouldSendSticker = (aiResult.trigger_media === 'success_sticker' || (initialStatus === 'INCOMPLETO' && isNowComplete))
+            && isNowComplete
+            && !hasBeenCongratulated;
+
+        if (shouldSendSticker) {
+            const stickerUrl = await redis?.get('bot_celebration_sticker');
+            if (stickerUrl) {
+                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
+                // Text Message + Sticker
+                const congratsMsg = "¡Felicidades! 🎉 Ya tenemos tu perfil completo. Estaremos en contacto muy pronto. 😊";
+                stickerPromise = (async () => {
+                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, congratsMsg);
+                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
+                })();
+                candidateUpdates.congratulated = true;
+            }
+        }
+
 
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
@@ -526,25 +551,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             console.log(`[Presencia Constante] Text suppressed for ${candidateId}. Final Reaction: ${aiResult.reaction}`);
         }
 
-        // --- STICKER CELEBRATION (AI DRIVEN + AUDIT SHIELD) ---
-        const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
-        let stickerPromise = Promise.resolve();
-        const finalMerged = { ...candidateData, ...candidateUpdates };
-        const finalAudit = auditProfile(finalMerged, customFields);
-        const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
-
-        const shouldSendSticker = (aiResult.trigger_media === 'success_sticker' || (initialStatus === 'INCOMPLETO' && isNowComplete))
-            && isNowComplete
-            && !hasBeenCongratulated;
-
-        if (shouldSendSticker) {
-            const stickerUrl = await redis?.get('bot_celebration_sticker');
-            if (stickerUrl) {
-                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
-                stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
-                candidateUpdates.congratulated = true;
-            }
-        }
 
         await Promise.allSettled([
             deliveryPromise,
