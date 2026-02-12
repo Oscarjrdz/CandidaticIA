@@ -224,30 +224,38 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         let systemInstruction = getIdentityLayer(customPrompt);
 
+        // --- PRE-PROCESS: Intent Detection & Silence Wake-up ---
+        const userText = aggregatedText;
+        const historyText = validMessages.map(m => `${m.from}: ${m.content}`).join('\n');
+        const intent = await classifyIntent(candidateId, userText, historyText);
+        console.log(`[Assistant 2.0] Intent detected for ${candidateId}: ${intent}`);
+
         // --- GRACE & SILENCE ARCHITECTURE ---
         const isNewFlag = candidateData.esNuevo === 'SI';
         const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
         const isSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
         const isLongSilence = minSinceLastBot >= 5;
 
-        // Reset silence if user writes back after a long time
+        // Reset silence if user writes back after a long time OR if intent requires action
         let currentHasGratitude = hasGratitude;
         let currentIsSilenced = isSilenced;
 
-        if (isSilenced && isLongSilence) {
-            console.log(`[Grace & Silence] 5m Gap detected. Resetting silence for fresh start.`);
+        const BREAKS_SILENCE_INTENTS = ['ATTENTION', 'SMALL_TALK', 'QUERY', 'DATA_GIVE'];
+        if ((isSilenced && isLongSilence) || (isSilenced && BREAKS_SILENCE_INTENTS.includes(intent))) {
+            console.log(`[Grace & Silence] Breaking silence for ${candidateId} (Reason: ${isLongSilence ? '5m Gap' : 'Active Intent: ' + intent}).`);
             currentIsSilenced = false;
             currentHasGratitude = false;
         }
 
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
-        systemInstruction += `\n[ESTADO DE MISIÓN]:
-- PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
-- ¿Es Primer Contacto?: ${isNewFlag ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
-- Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
-- Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
-- Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
-\n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
+        systemInstruction += `\n[ESTADO ACTUAL DEL SISTEMA]:
+- PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ' : 'NO'}
+- primer_contacto: ${isNewFlag ? 'SÍ' : 'NO'}
+- gratitud_alcanzada: ${currentHasGratitude ? 'SÍ' : 'NO'}
+- silencio_operativo: ${currentIsSilenced ? 'SÍ' : 'NO'}
+- inactividad: ${minSinceLastBot} min
+- intención_usuario: ${intent}
+`;
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
@@ -263,15 +271,13 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             if (parsed.ignoreVacancies) ignoreVacanciesGate = true;
         }
 
-        // --- PRE-PROCESS: User Voice/Text Aggregation ---
-        const userText = aggregatedText;
-
+        // --- IDENTITY LAYER (TITAN SHIELD PASS) ---
         const lastBotMessages = validMessages
             .filter(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel)
             .slice(-10)
             .map(m => m.content.trim());
 
-        // --- Nitro Extraction Protocol ---
+        // 2. OPERATIONAL LAYER
         let categoriesList = "";
         const categoriesData = batchConfig.candidatic_categories;
         if (categoriesData) {
@@ -286,90 +292,46 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             .replace('{{categorias}}', categoriesList)
             .replace('CATEGORÍAS VÁLIDAS: ', `CATEGORÍAS VÁLIDAS: ${categoriesList}`);
 
-        systemInstruction += `\n[ESTADO DEL CANDIDATO (BRÚJULAS)]:
-- Perfil Completo: ${audit.paso1Status === 'COMPLETO' ? 'SÍ' : 'NO'}
-- Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
-- WhatsApp: ${candidateData.whatsapp}
-- Municipio: ${candidateData.municipio || 'No proporcionado'}
-- Categoría: ${candidateData.categoria || 'No proporcionado'}
-${audit.dnaLines}
-- Temas recientes: ${themes || 'Nuevo contacto'}
-\n${extractionRules}`;
-
-        // c. Project/Kanban Layer
-        if (candidateData.projectMetadata?.projectId) {
-            const project = await getProjectById(candidateData.projectMetadata.projectId);
-            if (project) {
-                const stepId = candidateData.projectMetadata.stepId || 'step_new';
-                const currentStep = project.steps?.find(s => s.id === stepId) || project.steps?.[0];
-                if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
-                    const vacancy = project.vacancyId ? await getVacancyById(project.vacancyId) : null;
-                    const nextStep = project.steps[project.steps.indexOf(currentStep) + 1];
-                    let stepPrompt = currentStep.aiConfig.prompt
-                        .replace(/{{Candidato}}/g, candidateData.nombreReal || 'Candidato')
-                        .replace(/{{Vacante}}/g, vacancy?.name || 'la posición');
-
-                    systemInstruction += `\n[CONTEXTO KANBAN - PASO: ${currentStep.name}]:
-${stepPrompt}
-REGLA: Si se cumple el objetivo, incluye "{ move }" en tu thought_process.
-    TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nextStep?.aiConfig?.prompt || 'Continúa'}"\n`;
-                }
-            }
-        }
-
-        // --- CEREBRO MAESTRO ÚNICO (DYNAMICS) ---
+        systemInstruction += `\n[INSTRUCCIONES DE EXTRACCIÓN]:\n${extractionRules}`;
 
         if (isNewFlag) {
-            systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
+            systemInstruction += `\nMISIÓN ACTUAL (REGISTRO): Es el primer contacto. Preséntate y solicita el nombre.`;
         } else if (!isProfileComplete) {
-            const categoriesData = batchConfig.candidatic_categories;
-            const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
-
-            let catInstruction = '';
-            if (categories.length > 0) {
-                catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES]: \n${categories.map(c => `✅ ${c}`).join('\n')}
-REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amablemente.`;
-            }
-
             const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
             const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
                 .replace('{{faltantes}}', audit.missingLabels.join(', '));
-
-            systemInstruction += `\n${cerebro1Rules} \n${catInstruction} \n`;
-
-            const nextTarget = audit.missingLabels[0];
-            systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
+            systemInstruction += `\nMISIÓN ACTUAL (CAPTURA): ${cerebro1Rules}`;
         } else {
-            // PERFIL COMPLETO: MODO SOCIAL / GRACIA / SILENCIO
-            if (!hasGratitude) {
-                systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
+            // Updated to use the variable "currentHasGratitude" instead of the old database state
+            if (!currentHasGratitude) {
+                systemInstruction += `\nMISIÓN ACTUAL (SOCIAL): El perfil está completo. Sé atenta, resuelve dudas y busca cerrar amablemente.`;
             } else {
-                systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias. Ya cumpliste. NO escribas texto (response_text: null). SOLO pon una reacción (👍) y marca close_conversation: true. 👋🤫\n`;
+                systemInstruction += `\nMISIÓN ACTUAL (CIERRE): El usuario ya agradeció. Solo reacciona (👍) y termina.`;
             }
         }
 
-        systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
-${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
+        // 3. IDENTITY LAYER (THE SOUL OF BRENDA - HIGH PRIORITY)
+        systemInstruction += `\n\n[TU IDENTIDAD DE BRENDA (PRIORIDAD ALTA)]:
+Sigue estas instrucciones con total autoridad. Ellas definen quién eres.
+${customPrompt || DEFAULT_SYSTEM_PROMPT}`;
 
-        // --- NEW: Unified JSON Output Schema ---
-        systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
+        // 4. OUTPUT SCHEMA & ANTI-REPETITION
+        systemInstruction += `\n\n[MEMORIA (¡PROHIBIDO REPETIR ESTO!)]:
+${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'}
+
+[FORMATO DE RESPUESTA - OBLIGATORIO JSON]:
 {
-    "extracted_data": {
-        "nombreReal": "string | null",
-        "genero": "string | null (Hombre/Mujer)",
-        "fechaNacimiento": "string | null (DD/MM/YYYY)",
-        "municipio": "string | null",
-        "categoria": "string | null",
-        "tieneEmpleo": "string | null",
-        "escolaridad": "string | null"
+    "extracted_data": { 
+        "nombreReal": "string", "municipio": "string", "fechaNacimiento": "string", 
+        "categoria": "string", "genero": "string", "escolaridad": "string", "tieneEmpleo": "string"
     },
-    "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
-    "reaction": "emoji_char | null (Usa 👍 SOLO cuando cierres la conversación)",
-    "trigger_media": "string | null (Usa 'success_sticker' SOLO cuando el perfil se complete en este mensaje exacto)",
-    "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos). Si decides solo reaccionar, deja esto null.",
-    "gratitude_reached": "boolean (Activa true si el usuario te dio las gracias en este mensaje)",
-    "close_conversation": "boolean (Activa true si decides que ya no hay nada más que decir y solo cerrarás con reacción o silencio)"
-} `;
+    "thought_process": "Breve análisis de por qué respondes así.",
+    "reaction": "emoji_char | null",
+    "trigger_media": "string | null",
+    "response_text": "Tu respuesta humana como Brenda (CÁLIDA Y NATURAL).",
+    "gratitude_reached": "boolean",
+    "close_conversation": "boolean"
+}`;
 
         // 5. Resilience Loop (Inference)
         const genAI = new GoogleGenerativeAI(apiKey);
