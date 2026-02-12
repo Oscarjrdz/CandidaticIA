@@ -105,25 +105,21 @@ const BotIASection = ({ showToast }) => {
     const handleSave = async () => {
         setLoading(true);
         try {
+            // 1. Bot Behavior & Rules (Consolidated)
             const resConfig = await fetch('/api/bot-ia/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    systemPrompt, // Added systemPrompt here
                     proactivePrompt,
                     operativeConfig,
-                    inactiveStages
+                    inactiveStages,
+                    extractionRules,
+                    cerebro1Rules
                 })
             });
 
-            const resPrompt = await fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'ai_prompt',
-                    data: systemPrompt
-                })
-            });
-
+            // 2. GPT Config (Host Mode)
             const resGpt = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -133,7 +129,7 @@ const BotIASection = ({ showToast }) => {
                 })
             });
 
-            if (resConfig.ok && resPrompt.ok && resAdvanced.ok && resGpt.ok) {
+            if (resConfig.ok && resGpt.ok) {
                 showToast('Configuraciones guardadas correctamente', 'success');
             } else {
                 showToast('Error guardando configuración', 'error');
