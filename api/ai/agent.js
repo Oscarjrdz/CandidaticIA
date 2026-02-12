@@ -510,10 +510,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if (isNowComplete && isBetaTester && currentAiConfig.gptHostEnabled && currentAiConfig.openaiApiKey) {
             console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
             try {
-                const hostPrompt = currentAiConfig.gptHostPrompt || 'Eres la Lic. Brenda en modo Host. Se amable e informal.';
-                const adnContext = `\n[ESTADO DEL CANDIDATO (ADN)]: ${JSON.stringify(finalAudit.data)}`;
+                const hostPrompt = currentAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez. Sé amable e informal.';
+                const adnContext = `\n[IDENTIDAD]: Eres la Lic. Brenda Rodríguez de Candidatic. NUNCA digas que eres ChatGPT o un modelo de IA. Mantén siempre tu personaje humano.\n[ESTADO DEL CANDIDATO (ADN)]: ${JSON.stringify(candidateData)}`;
                 const fullSystemPrompt = `${hostPrompt}\n\n${adnContext}`;
 
+                console.log(`[GPT Host Pilot] 🚀 Using System Prompt: ${fullSystemPrompt.substring(0, 100)}...`);
                 const gptResponse = await getOpenAIResponse(allMessages, fullSystemPrompt, currentAiConfig.openaiModel || 'gpt-4o-mini');
                 if (gptResponse && gptResponse.content) {
                     console.log(`[GPT Host Pilot] ✨ Response acquired. Latency optimization active.`);
