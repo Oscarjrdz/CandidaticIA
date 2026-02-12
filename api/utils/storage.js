@@ -197,9 +197,10 @@ export const deleteAuthToken = async (phone) => {
  */
 export const CORE_REQUIRED_FIELDS = [
     { value: 'nombreReal', label: 'Nombre Real', invalidValue: 'proporcionado' },
+    { value: 'genero', label: 'Género', invalidValue: 'desconocido' },
     { value: 'municipio', label: 'Municipio', invalidValue: 'proporcionado' },
     { value: 'fechaNacimiento', label: 'Fecha de Nacimiento', invalidValue: 'proporcionada' },
-    { value: 'categoria', label: 'Categoría', invalidValue: 'proporcionas' }, // Matches "No proporcionado" and "No proporcionada"
+    { value: 'categoria', label: 'Categoría', invalidValue: 'proporcionas' },
     { value: 'tieneEmpleo', label: 'Empleo', invalidValue: 'proporcionado' },
     { value: 'escolaridad', label: 'Escolaridad', invalidValue: 'proporcionado' }
 ];
@@ -254,10 +255,10 @@ export const auditProfile = (c, customFields = []) => {
             val === 'perfecto' || val === 'excelente' || val === 'genial' || val === 'todo bien' ||
             val === 'todos' || val === 'alguno' || val === 'algunos' || val === 'cualquiera';
 
-        // --- DATE PRECISION (Allows 2 or 4-digit years) ---
+        // --- DATE PRECISION (DD/MM/YYYY) ---
         if (field.value === 'fechaNacimiento' && !isInvalid) {
-            const hasYear = /\b(\d{4}|\d{2})\b/.test(val);
-            if (!hasYear) {
+            const dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[012])\/\d{4}$/;
+            if (!dateRegex.test(val)) {
                 isInvalid = true;
             } else {
                 // Reasonable Age Check (1940 - Current Year)

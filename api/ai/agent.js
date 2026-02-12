@@ -19,14 +19,11 @@ import { FEATURES } from '../utils/feature-flags.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
 [REGLAS DE EXTRACCIÓN (ADN)]:
-1. Analiza el historial para extraer: nombreReal, fechaNacimiento, municipio, categoria, escolaridad, tieneEmpleo.
-2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO (ADN)] es incompleto (ej. "Oscar" o "mayo 1983") y el usuario da más info, FUSIÓNALO para tener el dato completo (ej. "Oscar Rodriguez" o "19/05/1983").
-3. REGLA DE FECHA: Formato DD/MM/YYYY. Infiere siglo obligatoriamente (ej. 83 -> 1983, 01 -> 2001).
-4. REGLA DE UBICACIÓN: Acepta "Santa" (Santa Catarina), "San Nico" (San Nicolás), etc.
-5. REGLA DE CATEGORÍA: Solo categorías válidas del sistema.
-6. REGLA DE NOMBRE: Solo nombres reales de personas. No lugares o evasiones.
-7. REGLA DE FECHA (CRÍTICA): DD/MM/YYYY. SI EL USUARIO NO DA EL AÑO, NO LO INVENTES. Pídelo amablemente. Prohibido inferir años si no hay certeza (ej. "19 mayo" no es "19/05/1900").
-8. REGLA DE ESCOLARIDAD: "Kinder", "Primaria trunca" o "Ninguna" son datos INVÁLIDOS. Si el usuario los da, dile que necesitas al menos Primaria terminada para avanzar.
+1. Analiza el historial para extraer: nombreReal, genero, fechaNacimiento, municipio, categoria, escolaridad, tieneEmpleo.
+2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO (ADN)] es incompleto y el usuario da más info, FUSIÓNALO.
+3. REGLA DE FECHA: Formato DD/MM/YYYY.
+4. REGLA DE ESCOLARIDAD (GOLD): "Kinder", "Primaria trunca" o "Ninguna" son INVÁLIDOS. Solo acepta Primaria terminada en adelante.
+5. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
@@ -100,11 +97,11 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
     try {
         const redis = getRedisClient();
 
-        // 1. Initial High-Speed Parallel Acquisition
+        // 1. Initial High-Speed Parallel Acquisition (Memory Boost: 40 messages)
         const [candidateData, config, allMessages] = await Promise.all([
             getCandidateById(candidateId),
             getUltraMsgConfig(),
-            getMessages(candidateId, 20)
+            getMessages(candidateId, 40)
         ]);
 
         if (!candidateData) return 'ERROR: No se encontró al candidato';
@@ -153,7 +150,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         if (userParts.length === 0) userParts.push({ text: 'Hola' });
 
         const recentHistory = validMessages
-            .slice(0, -1)
+            .slice(-21, -1) // Memory Boost: 20 messages of history
             .filter(m => {
                 const ghostKeywords = ['preguntón', 'focusada', 'procesa su perfil'];
                 if ((m.from === 'bot' || m.from === 'me') && ghostKeywords.some(kw => m.content.toLowerCase().includes(kw))) {
@@ -266,7 +263,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         const lastBotMessages = validMessages
             .filter(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel)
-            .slice(-10)
+            .slice(-20) // Extended unique history
             .map(m => m.content.trim());
 
         // --- Nitro Extraction Protocol ---
@@ -413,16 +410,30 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
-        if (!result) throw new Error('AI Pipeline Exhausted');
-
         const textResult = result.response.text();
+
+        // --- GOLD JSON RESILIENCE (Titan Grade) ---
         let aiResult;
         try {
-            aiResult = JSON.parse(textResult);
+            // Remove markdown code blocks and cleanup whitespace
+            const sanitized = textResult.replace(/```json|```/g, '').trim();
+            aiResult = JSON.parse(sanitized);
         } catch (e) {
-            const match = textResult.match(/\{[\s\S]*\}/);
-            if (match) aiResult = JSON.parse(match[0]);
-            else throw new Error('Invalid JSON structure');
+            console.warn(`[Gold Resilience] Standard JSON parse failed for ${candidateId}. Attempting repair.`);
+            try {
+                const match = textResult.match(/\{[\s\S]*\}/);
+                if (match) {
+                    let cleaned = match[0];
+                    // Common AI JSON fix: remove trailing commas before closing braces/brackets
+                    cleaned = cleaned.replace(/,\s*([\}\]])/g, '$1');
+                    aiResult = JSON.parse(cleaned);
+                } else {
+                    throw new Error('No JSON object found in response');
+                }
+            } catch (repairErr) {
+                console.error(`[Gold Resilience] FATAL JSON failure for ${candidateId}:`, repairErr.message);
+                throw new Error('AI Response structure is non-recoverable');
+            }
         }
         let responseTextVal = aiResult.response_text || '';
         responseTextVal = responseTextVal.replace(/\*/g, '');
