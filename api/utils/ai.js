@@ -414,11 +414,22 @@ export async function cleanDateWithAI(dateStr) {
         const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
 
         const prompt = `Analiza la siguiente fecha proporcionada por un usuario: "${dateStr}".
+
+CONTEXTO: Estamos en MÉXICO. El formato estándar es Día/Mes/Año (DD/MM/YYYY).
+
 REGLAS:
 1. Devuelve la fecha en formato estandarizado: "DD/MM/YYYY".
-2. Si el usuario solo dice el año (ej: "de 1990"), o es ambiguo, intenta inferir el formato más probable.
-3. Si el texto NO contiene una fecha válida o es un texto basura, responde únicamente con "INVALID".
-4. Escribe únicamente la fecha formateada, sin puntos ni explicaciones.
+2. Si el usuario solo dice el año o es ambiguo (ej: "06/05/90"), asume el formato de MÉXICO (Día/Mes/Año).
+3. Si el usuario solo da el año, intenta inferir o pide el dato completo.
+4. Si el texto NO contiene una fecha válida o es basura, responde únicamente con "INVALID".
+5. Escribe únicamente la fecha formateada, sin puntos ni explicaciones.
+
+Ejemplos:
+- "9 de mayo del 83" -> "09/05/1983"
+- "06/12/1990" -> "06/12/1990"
+- "83" -> "INVALID" (falta día y mes)
+- "mayo 19" -> "INVALID" (falta año)
+
 Respuesta:`;
 
         let cleaned = dateStr;
