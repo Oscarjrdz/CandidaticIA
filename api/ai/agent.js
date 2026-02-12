@@ -508,6 +508,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const cleanPhone = candidateData.whatsapp ? candidateData.whatsapp.replace(/\D/g, '') : '';
         const isBetaTester = cleanPhone.endsWith('8116038195');
 
+        console.log(`[DEBUG GPT HOST] Phone: ${candidateData.whatsapp} | Clean: ${cleanPhone} | IsBeta: ${isBetaTester} | Enabled: ${currentAiConfig.gptHostEnabled} | Key: ${!!currentAiConfig.openaiApiKey}`);
+
         if ((isNowComplete || isBetaTester) && isBetaTester && currentAiConfig.gptHostEnabled && currentAiConfig.openaiApiKey) {
             console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
             try {
