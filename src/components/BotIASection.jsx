@@ -238,9 +238,12 @@ const BotIASection = ({ showToast }) => {
                 >
                     <div className="space-y-4">
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
-                                Maestro Brenda 📑✨
-                            </label>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
+                                    PROMPT BRENDA EXTRACCIÓN 📑✨
+                                </label>
+                                <span className="text-[8px] font-bold text-gray-400 uppercase">Gemini Powered</span>
+                            </div>
                             <textarea
                                 className="w-full h-80 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
                                 value={systemPrompt}
@@ -285,9 +288,12 @@ const BotIASection = ({ showToast }) => {
                     <div className="space-y-3">
                         {/* 1. Hook */}
                         <div className="bg-gray-50/50 dark:bg-gray-900/20 p-2.5 rounded-2xl border border-gray-100/50 dark:border-gray-800/30">
-                            <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5 block">
-                                Hook de Brenda 🎯
-                            </label>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest block">
+                                    PROMPT DE SEGUIMIENTO 🎯
+                                </label>
+                                <span className="text-[8px] font-bold text-gray-400 uppercase">Gemini Powered</span>
+                            </div>
                             <textarea
                                 className="w-full h-20 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-[10px] resize-none font-medium transition-all"
                                 value={proactivePrompt}
@@ -422,7 +428,7 @@ const BotIASection = ({ showToast }) => {
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between mb-1.5">
                                 <label className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
-                                    Personalidad Host ✨
+                                    PROMPT SALA DE ESPERA ✨
                                 </label>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase">OpenAI Powered</span>
                             </div>
