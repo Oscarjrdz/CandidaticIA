@@ -518,24 +518,38 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         ];
         const isBetaTester = possibleFormats.some(p => p.endsWith('8116038195'));
 
+        // 🛡️ [ADMIN OVERRIDE]: If Admin, force-fetch config to bypass stale cache
+        let activeAiConfig = currentAiConfig;
+        if (isBetaTester && (!activeAiConfig.gptHostEnabled || !activeAiConfig.openaiApiKey)) {
+            try {
+                const freshConfig = await redis.get('ai_config');
+                if (freshConfig) {
+                    activeAiConfig = JSON.parse(freshConfig);
+                    console.log(`[GPT Host] 🛡️ Forced fresh config fetch for Admin.`);
+                }
+            } catch (e) {
+                console.error('[GPT Host] Fresh fetch failed:', e);
+            }
+        }
+
         const gptConditions = {
             isNowComplete,
             isBetaTester,
-            enabled: currentAiConfig.gptHostEnabled,
-            hasKey: !!currentAiConfig.openaiApiKey
+            enabled: activeAiConfig.gptHostEnabled,
+            hasKey: !!activeAiConfig.openaiApiKey
         };
 
         console.log(`[DEBUG GPT HOST] Phone: ${rawPhone} | IsBeta: ${isBetaTester} | Conditions: ${JSON.stringify(gptConditions)}`);
 
-        if ((isNowComplete || isBetaTester) && isBetaTester && currentAiConfig.gptHostEnabled && currentAiConfig.openaiApiKey) {
+        if ((isNowComplete || isBetaTester) && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
             console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
             try {
-                const hostPrompt = currentAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic. Sé amable.';
+                const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic. Sé amable.';
                 const adnContext = `\n[REFERENCIA DEL CANDIDATO (ADN)]: ${JSON.stringify(candidateData)}`;
                 const fullSystemPrompt = `${hostPrompt}\n\n${adnContext}`;
 
                 console.log(`[GPT Host Pilot] 🚀 Executing User Prompt: ${hostPrompt.substring(0, 50)}...`);
-                const gptResponse = await getOpenAIResponse(allMessages, fullSystemPrompt, currentAiConfig.openaiModel || 'gpt-4o-mini');
+                const gptResponse = await getOpenAIResponse(allMessages, fullSystemPrompt, activeAiConfig.openaiModel || 'gpt-4o-mini');
                 if (gptResponse && gptResponse.content) {
                     console.log(`[GPT Host Pilot] ✨ Response acquired. Latency optimization active.`);
                     responseTextVal = gptResponse.content.replace(/\*/g, ''); // Clean formatting
