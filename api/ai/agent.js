@@ -251,38 +251,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // Use Nitro Cached Config
         const aiConfigJson = batchConfig.ai_config;
 
-        // 🔍 DEBUG COMMAND (MOVED HERE FOR SAFETY)
-        if (incomingMessage === 'DEBUG' || (typeof incomingMessage === 'string' && incomingMessage.includes('DEBUG'))) {
-            const rawPhone = candidateData ? candidateData.whatsapp : 'NULL';
-
-            // Re-calculate Beta Tester logic exactly as used later
-            const possibleFormats = [
-                rawPhone || '',
-                (rawPhone || '').replace(/\D/g, ''),
-                `52${(rawPhone || '').replace(/\D/g, '')}`,
-                `521${(rawPhone || '').replace(/\D/g, '')}`
-            ];
-            const isBetaCalc = possibleFormats.some(p => p.endsWith('8116038195'));
-
-            let parsedConfig = {};
-            try {
-                parsedConfig = typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : (aiConfigJson || {});
-            } catch (e) { parsedConfig = { error: 'PARSE_FAIL' }; }
-
-            const debugMsg = `🔍 DEEP DIAGNOSTIC:
-Phone=${rawPhone}
-IsBeta=${isBetaCalc}
-GPT_Enabled=${parsedConfig.gptHostEnabled} (${typeof parsedConfig.gptHostEnabled})
-HasKey=${!!parsedConfig.openaiApiKey}
-Model=${parsedConfig.openaiModel}
-Audit=${audit.paso1Status}`;
-
-            if (config) {
-                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, debugMsg);
-            }
-            return debugMsg;
-        }
-
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
@@ -580,10 +548,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         if ((isNowComplete || isBetaTester) && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
             console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
 
-            // 🚨 DEBUG BEACON: Confirm Entry
-            if (config) {
-                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, "🚀 [DEBUG] Entering GPT Block...");
-            }
+
 
             try {
                 const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic. Sé amable.';
