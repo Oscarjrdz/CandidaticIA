@@ -174,8 +174,8 @@ const AISettings = ({ showToast }) => {
                                 </label>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
+                            <div className="flex flex-col md:flex-row gap-4">
+                                <div className="flex-[2]">
                                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">API Key</label>
                                     <input
                                         type="password"
@@ -185,7 +185,7 @@ const AISettings = ({ showToast }) => {
                                         onChange={(e) => setConfig({ ...config, openaiApiKey: e.target.value })}
                                     />
                                 </div>
-                                <div>
+                                <div className="flex-1">
                                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Modelo GPT</label>
                                     <select
                                         className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none cursor-pointer dark:text-gray-100"

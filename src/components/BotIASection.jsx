@@ -282,31 +282,118 @@ const BotIASection = ({ showToast }) => {
                         </button>
                     }
                 >
-                    <div className="space-y-4">
-                        <div className="bg-gray-50/50 dark:bg-gray-900/20 p-3 rounded-2xl border border-gray-100/50 dark:border-gray-800/30">
-                            <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5 block">
+                    <div className="space-y-3">
+                        {/* 1. Hook */}
+                        <div className="bg-gray-50/50 dark:bg-gray-900/20 p-2.5 rounded-2xl border border-gray-100/50 dark:border-gray-800/30">
+                            <label className="text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5 block">
                                 Hook de Brenda 🎯
                             </label>
                             <textarea
-                                className="w-full h-40 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none font-medium leading-relaxed transition-all"
+                                className="w-full h-20 p-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/60 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-[10px] resize-none font-medium transition-all"
                                 value={proactivePrompt}
                                 onChange={(e) => setProactivePrompt(e.target.value)}
-                                placeholder="Mensaje inicial de contacto..."
+                                placeholder="Mensaje inicial..."
                             />
                         </div>
 
-                        <div className="flex items-center justify-between gap-2 px-1">
+                        {/* 2. Flight Plan (Compact) */}
+                        <div className="bg-indigo-50/30 dark:bg-indigo-900/10 border border-indigo-100/30 dark:border-indigo-900/20 p-2.5 rounded-2xl">
+                            <div className="flex items-center justify-between mb-1.5">
+                                <div className="text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                                    <Send className="w-3 h-3" />
+                                    <p className="text-[9px] font-black uppercase tracking-widest">Plan de Vuelo ✈️</p>
+                                </div>
+                                <span className="text-[8px] font-black text-indigo-500 bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded-full border border-indigo-100/50">
+                                    Total: {stats.flightPlan?.summary?.totalItems || 0}
+                                </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                                {stats.flightPlan && Object.keys(stats.flightPlan).filter(k => k !== 'summary').slice(0, 4).map((h, i) => {
+                                    const p = stats.flightPlan[h];
+                                    return (
+                                        <div key={i} className="flex flex-col gap-0.5">
+                                            <div className="flex justify-between text-[8px] font-bold">
+                                                <span className="text-gray-500 opacity-70 uppercase">{h}h</span>
+                                                <span className="text-indigo-600">{p.percentage}%</span>
+                                            </div>
+                                            <div className="w-full h-1 bg-white dark:bg-gray-800 rounded-full overflow-hidden">
+                                                <div className="h-full bg-indigo-500/80 rounded-full" style={{ width: `${p.percentage}%` }} />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* 3. Reactivation Protocols */}
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between px-1">
+                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Protocolos 📑</label>
+                                <button onClick={addStage} className="text-blue-600 hover:text-blue-700 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                                    <Sparkles className="w-2.5 h-2.5" />
+                                    <span>Añadir</span>
+                                </button>
+                            </div>
+                            <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                                {inactiveStages.map((stage, idx) => (
+                                    <div key={idx} className="group relative flex-shrink-0 w-32 bg-blue-50/40 dark:bg-blue-900/20 p-2 rounded-xl border border-blue-100/30 dark:border-blue-800/30 flex flex-col items-center">
+                                        <div className="flex items-center justify-between w-full mb-1">
+                                            <input
+                                                type="text"
+                                                value={stage.label || ''}
+                                                onChange={(e) => updateStage(idx, 'label', e.target.value)}
+                                                className="w-16 bg-transparent text-[8px] font-black uppercase text-blue-600 focus:outline-none"
+                                                placeholder={`P${idx + 1}`}
+                                            />
+                                            <input
+                                                type="number"
+                                                value={stage.hours}
+                                                onChange={(e) => updateStage(idx, 'hours', parseInt(e.target.value))}
+                                                className="w-6 bg-white dark:bg-gray-800 rounded text-center text-[8px] font-black text-gray-700 focus:outline-none"
+                                            />
+                                        </div>
+                                        <textarea
+                                            value={stage.message}
+                                            onChange={(e) => updateStage(idx, 'message', e.target.value)}
+                                            className="w-full bg-transparent text-[8px] text-gray-600 focus:outline-none placeholder-gray-300 resize-none h-6 leading-tight"
+                                            placeholder="Mensaje..."
+                                        />
+                                        <button onClick={() => removeStage(idx)} className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 bg-red-500 text-white rounded-full p-0.5"><Trash2 className="w-2 h-2" /></button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 px-1 pt-1 opacity-80">
                             <div className="flex flex-col">
-                                <span className="text-[8px] font-black uppercase text-gray-400">Horario</span>
+                                <span className="text-[7px] font-black uppercase text-gray-400">Rango Horario</span>
                                 <div className="flex items-center gap-1">
-                                    <input type="text" value={operativeConfig.startHour} className="w-4 bg-transparent text-[10px] font-bold text-blue-600" readOnly />
-                                    <span className="text-[8px] text-gray-400">-</span>
-                                    <input type="text" value={operativeConfig.endHour} className="w-4 bg-transparent text-[10px] font-bold text-blue-600" readOnly />
+                                    <input
+                                        type="number"
+                                        value={operativeConfig.startHour}
+                                        onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) || 0 })}
+                                        className="w-4 bg-transparent text-[9px] font-black text-blue-600 focus:outline-none"
+                                    />
+                                    <span className="text-[7px] text-gray-400">-</span>
+                                    <input
+                                        type="number"
+                                        value={operativeConfig.endHour}
+                                        onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) || 0 })}
+                                        className="w-4 bg-transparent text-[9px] font-black text-blue-600 focus:outline-none"
+                                    />
                                 </div>
                             </div>
                             <div className="flex flex-col items-end">
-                                <span className="text-[8px] font-black uppercase text-red-400">Límite Diario</span>
-                                <span className="text-[10px] font-black text-red-600">{operativeConfig.dailyLimit} msg</span>
+                                <span className="text-[7px] font-black uppercase text-red-400">Límite Diario</span>
+                                <div className="flex items-center gap-1">
+                                    <input
+                                        type="number"
+                                        value={operativeConfig.dailyLimit}
+                                        onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) || 0 })}
+                                        className="w-8 bg-transparent text-[9px] font-black text-red-600 focus:outline-none text-right"
+                                    />
+                                    <span className="text-[7px] text-gray-400 uppercase font-black">msg</span>
+                                </div>
                             </div>
                         </div>
                     </div>
