@@ -315,17 +315,31 @@ MEMORIA DE TUS ÚLTIMOS MENSAJES:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno antes)'}
 
 [FORMATO DE RESPUESTA - OBLIGATORIO JSON]:
-Tu salida DEBE ser un JSON válido.
+Tu salida DEBE ser un JSON válido y completo.
 Esquema:
 {
-    "extracted_data": { "nombreReal": "string", "municipio": "string", ... },
+    "extracted_data": {
+        "nombreReal": "string | null",
+        "genero": "string | null",
+        "fechaNacimiento": "string | null",
+        "municipio": "string | null",
+        "categoria": "string | null",
+        "tieneEmpleo": "string | null",
+        "escolaridad": "string | null"
+    },
     "thought_process": "Razonamiento interno.",
     "reaction": "emoji_char | null",
     "trigger_media": "string | null",
     "response_text": "Tu respuesta humana como Brenda.",
     "gratitude_reached": "boolean",
     "close_conversation": "boolean"
-}`;
+}
+
+[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
+${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno antes)'}
+
+[REGLA SUPREMA]: NO repitas frases. Si response_text es null, el sistema no enviará nada. Asegúrate de SIEMPRE responder con texto si la conversación sigue activa.
+`;
 
         // 5. Resilience Loop (Inference)
         const genAI = new GoogleGenerativeAI(apiKey);
@@ -474,13 +488,28 @@ Esquema:
             }
         }
 
-        // Final Persistence
+        // Final Persistence & Safety Shield
         let deliveryPromise = Promise.resolve();
 
-        if (responseTextVal && responseTextVal !== 'null') {
+        // 🛡️ [SILENCE SHIELD]: If AI fails to provide text but conversation is NOT closed, use fallback
+        if (!responseTextVal || responseTextVal === 'null') {
+            if (aiResult.close_conversation === true || aiResult.close_conversation === 'true' || currentIsSilenced) {
+                console.log(`[Grace & Silence] silence confirmed for ${candidateId}.`);
+                responseTextVal = null;
+            } else {
+                console.warn(`[Stability Shield] AI tried to remain silent during active chat. Injecting safety response.`);
+                const fallbacks = [
+                    "¡Entendido! ✨ Cuéntame un poco más para avanzar.",
+                    "¡Anotado! 📍 ¿Qué más me puedes decir?",
+                    "¡Perfecto! sigo atenta a lo que me digas. 😊"
+                ];
+                responseTextVal = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+            }
+        }
+
+        if (responseTextVal) {
+            console.log(`[Message Delivery] Sending to ${candidateData.whatsapp}: ${responseTextVal.substring(0, 30)}...`);
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
-        } else {
-            console.log(`[Grace & Silence] Text suppressed for ${candidateId}(Only reaction or silence).`);
         }
 
         // --- STICKER CELEBRATION (AI DRIVEN + AUDIT SHIELD) ---
