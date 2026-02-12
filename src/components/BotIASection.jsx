@@ -229,10 +229,10 @@ const BotIASection = ({ showToast }) => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* 1. Assistant Brain (Cerebro) */}
+                {/* 1. Prompt Extracción (Gemini) */}
                 <Card
-                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Cerebro del Asistente</span>}
-                    icon={SettingsIcon}
+                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt Extracción</span>}
+                    icon={Sparkles}
                     className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
                     headerClassName="h-16"
                 >
@@ -263,9 +263,9 @@ const BotIASection = ({ showToast }) => {
                     </div>
                 </Card>
 
-                {/* 2. Automated Follow-up (Seguimiento) */}
+                {/* 2. Prompt de Seguimiento (Gemini) */}
                 <Card
-                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Seguimiento</span>}
+                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt de Seguimiento</span>}
                     icon={Sparkles}
                     className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
                     headerClassName="h-16"
@@ -399,9 +399,9 @@ const BotIASection = ({ showToast }) => {
                     </div>
                 </Card>
 
-                {/* 3. GPT Host (Social Mode) */}
+                {/* 3. Prompt de Sala de Espera (GPT Host) */}
                 <Card
-                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">GPT: The Host 🤖</span>}
+                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt de Sala de Espera</span>}
                     icon={Bot}
                     className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
                     headerClassName="h-16"
@@ -419,7 +419,7 @@ const BotIASection = ({ showToast }) => {
                     }
                 >
                     <div className="space-y-4">
-                        <div className="bg-purple-50/30 dark:bg-purple-900/10 p-3 rounded-2xl border border-purple-100/30 dark:border-purple-800/20">
+                        <div className="space-y-1.5">
                             <div className="flex items-center justify-between mb-1.5">
                                 <label className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
                                     Personalidad Host ✨
@@ -432,6 +432,19 @@ const BotIASection = ({ showToast }) => {
                                 onChange={(e) => setGptConfig({ ...gptConfig, gptHostPrompt: e.target.value })}
                                 placeholder="Define la actitud social del Host..."
                             />
+                        </div>
+
+                        {/* GPT Model Selector */}
+                        <div className="pt-1">
+                            <select
+                                value={gptConfig.openaiModel}
+                                onChange={(e) => setGptConfig({ ...gptConfig, openaiModel: e.target.value })}
+                                className="w-full p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold shadow-sm"
+                            >
+                                <option value="gpt-4o-mini">🚀 GPT-4o Mini (Recomendado)</option>
+                                <option value="gpt-4o">⚡ GPT-4o (Premium)</option>
+                                <option value="gpt-4-turbo">🧠 GPT-4 Turbo</option>
+                            </select>
                         </div>
                     </div>
                 </Card>
