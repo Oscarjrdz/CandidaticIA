@@ -505,9 +505,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // --- 🤖 GPT HOST PILOT (Filtro Beta Tester: 8116038195) ---
         // Reutilizamos aiConfigJson que ya viene del batchConfig al inicio de la función
         const currentAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
-        const isBetaTester = candidateData.whatsapp === '8116038195' || candidateData.whatsapp === '528116038195' || candidateData.whatsapp === '5218116038195';
+        const cleanPhone = candidateData.whatsapp ? candidateData.whatsapp.replace(/\D/g, '') : '';
+        const isBetaTester = cleanPhone.endsWith('8116038195');
 
-        if (isNowComplete && isBetaTester && currentAiConfig.gptHostEnabled && currentAiConfig.openaiApiKey) {
+        if ((isNowComplete || isBetaTester) && isBetaTester && currentAiConfig.gptHostEnabled && currentAiConfig.openaiApiKey) {
             console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
             try {
                 const hostPrompt = currentAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic. Sé amable.';
