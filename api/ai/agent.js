@@ -105,6 +105,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             getMessages(candidateId, 40)
         ]);
 
+        console.log(`[DEBUG AGENT ENTRY] Candidate: ${candidateId} | Data: ${!!candidateData} | Config: ${!!config} | Messages: ${allMessages.length}`);
+
         if (!candidateData) return 'ERROR: No se encontró al candidato';
 
         // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
