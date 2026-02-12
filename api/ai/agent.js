@@ -128,16 +128,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         console.log(`[DEBUG AGENT ENTRY] Candidate: ${candidateId} | Messages: ${allMessages.length}`);
 
-        if (incomingMessage === 'DEBUG' || (typeof incomingMessage === 'string' && incomingMessage.includes('DEBUG'))) {
-            const rawPhone = candidateData ? candidateData.whatsapp : 'NULL';
-            const configKeys = config ? Object.keys(config) : 'NULL';
-            const aiKeys = aiConfigJson ? Object.keys(aiConfigJson) : 'NULL';
-            const debugMsg = `🔍 DIAGNOSTIC: CanID=${candidateId} | Phone=${rawPhone} | AI_Config_Keys=${aiKeys}`;
-            if (config) {
-                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, debugMsg);
-            }
-            return debugMsg;
-        }
 
         for (const msg of messagesToProcess) {
             let parsed = msg;
@@ -258,11 +248,26 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 - Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
 \n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
 
+        // Use Nitro Cached Config
+        const aiConfigJson = batchConfig.ai_config;
+
+        // 🔍 DEBUG COMMAND (MOVED HERE FOR SAFETY)
+        if (incomingMessage === 'DEBUG' || (typeof incomingMessage === 'string' && incomingMessage.includes('DEBUG'))) {
+            const rawPhone = candidateData ? candidateData.whatsapp : 'NULL';
+            const configKeys = config ? Object.keys(config) : 'NULL'; // config from start
+            const aiKeys = aiConfigJson ? Object.keys(typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : 'NULL';
+            const debugMsg = `🔍 DIAGNOSTIC: CanID=${candidateId} | Phone=${rawPhone} | AI_Config_Keys=${aiKeys}`;
+            if (config) {
+                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, debugMsg);
+            }
+            return debugMsg;
+        }
+
+
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
-        // Use Nitro Cached Config
-        const aiConfigJson = batchConfig.ai_config;
+
 
         let apiKey = process.env.GEMINI_API_KEY;
         let ignoreVacanciesGate = false;
