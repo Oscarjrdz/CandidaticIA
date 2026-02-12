@@ -7,9 +7,9 @@ import { getRedisClient } from './storage.js';
 export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gpt-4o-mini') {
     try {
         const redis = getRedisClient();
-        let apiKey = process.env.OPENAI_API_KEY;
+        let apiKey = explicitApiKey ? explicitApiKey.trim() : process.env.OPENAI_API_KEY;
 
-        // Try to get from Redis settings (ai_config) if not in process.env
+        // Try to get from Redis settings (ai_config) if not explicitly provided and not in process.env
         if (!apiKey && redis) {
             const aiConfigJson = await redis.get('ai_config');
             if (aiConfigJson) {

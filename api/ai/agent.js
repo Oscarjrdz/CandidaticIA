@@ -585,7 +585,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 const fullSystemPrompt = `${hostPrompt}\n\n${adnContext}`;
 
                 console.log(`[GPT Host Pilot] 🚀 Executing User Prompt: ${hostPrompt.substring(0, 50)}...`);
-                const gptResponse = await getOpenAIResponse(allMessages, fullSystemPrompt, activeAiConfig.openaiModel || 'gpt-4o-mini');
+                // 🔐 [FIX]: Explicitly pass the key we know is valid, bypassing internal Redis lookup
+                const gptResponse = await getOpenAIResponse(
+                    allMessages,
+                    fullSystemPrompt,
+                    activeAiConfig.openaiModel || 'gpt-4o-mini',
+                    activeAiConfig.openaiApiKey
+                );
                 if (gptResponse && gptResponse.content) {
                     console.log(`[GPT Host Pilot] ✨ Response acquired. Latency optimization active.`);
                     responseTextVal = gptResponse.content.replace(/\*/g, ''); // Clean formatting
