@@ -251,6 +251,23 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // Use Nitro Cached Config
         const aiConfigJson = batchConfig.ai_config;
 
+        // 🧨 RESET COMMAND (TEMPORARY FOR TESTING)
+        if (incomingMessage === 'RESET') {
+            if (candidateData && candidateData.whatsapp) {
+                const phone = candidateData.whatsapp;
+                const id = candidateId;
+                await redis.del(`candidatic:candidate:${id}`);
+                await redis.hdel('candidatic:phone_index', phone);
+                // Optional: Delete message history if needed
+                // await redis.del(`candidatic:messages:${id}`);
+
+                if (config) {
+                    await sendUltraMsgMessage(config.instanceId, config.token, phone, "🧨 DATOS BORRADOS. Eres un usuario nuevo. Di 'Hola' para empezar.");
+                }
+                return 'RESET_DONE';
+            }
+        }
+
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
