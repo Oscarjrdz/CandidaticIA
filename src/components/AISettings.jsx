@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Brain, Save, Loader2, Key, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
+import { Brain, Save, Loader2, Key, CheckCircle, XCircle, RefreshCw, Sparkles } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 
@@ -178,6 +178,67 @@ const AISettings = ({ showToast }) => {
                                 <Save className="w-4 h-4" />
                                 <span>Guardar Configuración IA</span>
                             </Button>
+                        </div>
+
+                        {/* 🤖 OpenAI / GPT Configuration (The Host) */}
+                        <div className="pt-6 mt-6 border-t border-gray-100 dark:border-gray-700">
+                            <div className="flex items-center space-x-2 mb-4 text-purple-600">
+                                <Sparkles className="w-5 h-5" />
+                                <h4 className="text-sm font-bold uppercase tracking-wider text-gray-900 dark:text-white">GPT: The Host (Pilot Mode)</h4>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">OpenAI API Key (Host)</label>
+                                    <input
+                                        type="password"
+                                        placeholder="sk-..."
+                                        className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-gray-100"
+                                        value={config.openaiApiKey || ''}
+                                        onChange={(e) => setConfig({ ...config, openaiApiKey: e.target.value })}
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Modelo GPT</label>
+                                        <select
+                                            className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none cursor-pointer dark:text-gray-100"
+                                            value={config.openaiModel || 'gpt-4o-mini'}
+                                            onChange={(e) => setConfig({ ...config, openaiModel: e.target.value })}
+                                        >
+                                            <option value="gpt-4o-mini">GPT-4o Mini (Veloz)</option>
+                                            <option value="gpt-4o">GPT-4o Pro (Inteligente)</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex items-center pt-4">
+                                        <label className="flex items-center gap-3 cursor-pointer group">
+                                            <div className="relative">
+                                                <input
+                                                    type="checkbox"
+                                                    className="sr-only"
+                                                    checked={config.gptHostEnabled === true}
+                                                    onChange={(e) => setConfig({ ...config, gptHostEnabled: e.target.checked })}
+                                                />
+                                                <div className={`w-10 h-5 rounded-full transition-colors ${config.gptHostEnabled ? 'bg-purple-600' : 'bg-gray-300 dark:bg-gray-600'}`}></div>
+                                                <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${config.gptHostEnabled ? 'translate-x-5' : ''}`}></div>
+                                            </div>
+                                            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase group-hover:text-purple-500 transition-colors">Activar Host Pilot</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Prompt Maestro de Personalidad</label>
+                                    <textarea
+                                        className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-purple-500/20 h-28 custom-scrollbar dark:text-gray-200"
+                                        placeholder="Eres la Lic. Brenda en modo Host. Se amable, informal y carismática..."
+                                        value={config.gptHostPrompt || ''}
+                                        onChange={(e) => setConfig({ ...config, gptHostPrompt: e.target.value })}
+                                    />
+                                    <p className="mt-1 text-[9px] text-gray-400">Define la actitud social post-extracción.</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

@@ -16,6 +16,7 @@ import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltra
 import { getSchemaByField } from '../utils/schema-registry.js';
 import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { FEATURES } from '../utils/feature-flags.js';
+import { getOpenAIResponse } from '../utils/openai.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
 [REGLAS DE EXTRACCIÓN (ADN)]:
@@ -500,6 +501,29 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const finalMerged = { ...candidateData, ...candidateUpdates };
         const finalAudit = auditProfile(finalMerged, customFields);
         const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
+
+        // --- 🤖 GPT HOST PILOT (Filtro Beta Tester: 8116038195) ---
+        // Reutilizamos aiConfigJson que ya viene del batchConfig al inicio de la función
+        const currentAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
+        const isBetaTester = candidateData.whatsapp === '8116038195' || candidateData.whatsapp === '528116038195';
+
+        if (isNowComplete && isBetaTester && currentAiConfig.gptHostEnabled && currentAiConfig.openaiApiKey) {
+            console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
+            try {
+                const hostPrompt = currentAiConfig.gptHostPrompt || 'Eres la Lic. Brenda en modo Host. Se amable e informal.';
+                const adnContext = `\n[ESTADO DEL CANDIDATO (ADN)]: ${JSON.stringify(finalAudit.data)}`;
+                const fullSystemPrompt = `${hostPrompt}\n\n${adnContext}`;
+
+                const gptResponse = await getOpenAIResponse(allMessages, fullSystemPrompt, currentAiConfig.openaiModel || 'gpt-4o-mini');
+                if (gptResponse && gptResponse.content) {
+                    console.log(`[GPT Host Pilot] ✨ Response acquired. Latency optimization active.`);
+                    responseTextVal = gptResponse.content.replace(/\*/g, ''); // Clean formatting
+                }
+            } catch (gptErr) {
+                console.error(`[GPT Host Pilot] ❌ Failure:`, gptErr.message);
+                // Fallback to Gemini (already in responseTextVal)
+            }
+        }
 
         const shouldSendSticker = (aiResult.trigger_media === 'success_sticker' || (initialStatus === 'INCOMPLETO' && isNowComplete))
             && isNowComplete
