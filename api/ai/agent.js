@@ -25,6 +25,7 @@ export const DEFAULT_EXTRACTION_RULES = `
 3. REGLA DE FECHA: Formato DD/MM/YYYY.
 4. REGLA DE ESCOLARIDAD (GOLD): "Kinder", "Primaria trunca" o "Ninguna" son INVÁLIDOS. Solo acepta Primaria terminada en adelante.
 5. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
+6. REGLA TELEFONO: JAMÁS preguntes el número de teléfono/celular. Ya lo tienes (campo 'whatsapp').
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
@@ -525,6 +526,42 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const finalAudit = auditProfile(finalMerged, customFields);
         const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
 
+        // 🌉 BRIDGE INITIALIZATION: Start counter when profile is freshly complete
+        if (isNowComplete && (!candidateData.bridge_counter && candidateData.bridge_counter !== 0)) {
+            candidateUpdates.bridge_counter = 0;
+            // Also ensure we save this initialization immediately to memory for current execution
+            candidateData.bridge_counter = 0;
+        }
+
+        // 🌉 BRIDGE CHECK: Cooling Period (2 messages)
+        // If profile is complete, but bridge_counter < 2, we just react and do NOT call GPT.
+        const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? candidateData.bridge_counter : 0;
+
+        // EXCEPTION: If user asks a specific question (length > 15 chars), bypass bridge? 
+        // No, user wants strict 2 messages. We stick to the plan.
+
+        let isBridgeActive = false;
+        if (isNowComplete && bridgeCounter < 2) {
+            isBridgeActive = true;
+            console.log(`[BRIDGE] 🌉 Active. Counter: ${bridgeCounter}/2. Suppressing GPT.`);
+
+            // Increment for NEXT time (will be saved in finalMerged/candidateUpdates)
+            candidateUpdates.bridge_counter = bridgeCounter + 1;
+
+            // REACTION STRATEGY:
+            // Msg 1: ❤️ (Love)
+            // Msg 2: 👍 (Like)
+            const reactionChar = bridgeCounter === 0 ? '❤️' : '👍';
+
+            // Response: Just reaction + maybe a very short silence text
+            aiResult.reaction = reactionChar;
+            aiResult.response_text = null; // Silence text
+            aiResult.close_conversation = true; // Mark as closed
+
+            // OVERRIDE AI RESULTS to prevent Gemini from talking too
+            responseTextVal = '';
+        }
+
         // --- 🤖 GPT HOST PILOT (Filtro Beta Tester: 8116038195) ---
         // Reutilizamos aiConfigJson que ya viene del batchConfig al inicio de la función
         const currentAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
@@ -557,12 +594,14 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             isNowComplete,
             isBetaTester,
             enabled: activeAiConfig.gptHostEnabled,
-            hasKey: !!activeAiConfig.openaiApiKey
+            hasKey: !!activeAiConfig.openaiApiKey,
+            bridgeActive: isBridgeActive
         };
 
         console.log(`[DEBUG GPT HOST] Phone: ${rawPhone} | IsBeta: ${isBetaTester} | Conditions: ${JSON.stringify(gptConditions)}`);
 
-        if (isNowComplete && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
+        // 🧠 GPT HOST PILOT: Only if Bridge is NOT active
+        if (!isBridgeActive && isNowComplete && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
             console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
 
 
