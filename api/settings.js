@@ -126,11 +126,13 @@ export default async function handler(req, res) {
                     return res.status(400).json({ error: 'Invalid AI config format' });
                 }
 
-                await redis.set('ai_config', JSON.stringify(data));
+                const existing = await redis.get('ai_config');
+                const merged = existing ? { ...JSON.parse(existing), ...data } : data;
+                await redis.set('ai_config', JSON.stringify(merged));
 
                 return res.status(200).json({
                     success: true,
-                    message: 'AI config saved'
+                    message: 'AI config saved and merged'
                 });
             }
 

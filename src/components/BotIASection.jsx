@@ -18,6 +18,12 @@ const BotIASection = ({ showToast }) => {
     const [stats, setStats] = useState({ today: 0, totalSent: 0, totalRecovered: 0 });
     const [operativeConfig, setOperativeConfig] = useState({ startHour: 7, endHour: 23, dailyLimit: 300 });
     const [inactiveStages, setInactiveStages] = useState([]);
+    const [gptConfig, setGptConfig] = useState({
+        openaiApiKey: '',
+        openaiModel: 'gpt-4o-mini',
+        gptHostEnabled: false,
+        gptHostPrompt: ''
+    });
 
     // Advanced Internal Protocols
     const [extractionRules, setExtractionRules] = useState('');
@@ -58,7 +64,27 @@ const BotIASection = ({ showToast }) => {
             }
         };
 
+        const loadGptConfig = async () => {
+            try {
+                const res = await fetch('/api/settings?type=ai_config');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && data.data) {
+                        setGptConfig({
+                            openaiApiKey: data.data.openaiApiKey || '',
+                            openaiModel: data.data.openaiModel || 'gpt-4o-mini',
+                            gptHostEnabled: data.data.gptHostEnabled === true,
+                            gptHostPrompt: data.data.gptHostPrompt || ''
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading GPT config:', error);
+            }
+        };
+
         loadSettings();
+        loadGptConfig();
 
         // SSE for Live Stats & Flight Plan
         const eventSource = new EventSource('/api/bot-ia/stats-stream');
@@ -98,16 +124,16 @@ const BotIASection = ({ showToast }) => {
                 })
             });
 
-            const resAdvanced = await fetch('/api/bot-ia/settings', {
+            const resGpt = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    extractionRules,
-                    cerebro1Rules
+                    type: 'ai_config',
+                    data: gptConfig
                 })
             });
 
-            if (resConfig.ok && resPrompt.ok && resAdvanced.ok) {
+            if (resConfig.ok && resPrompt.ok && resAdvanced.ok && resGpt.ok) {
                 showToast('Configuraciones guardadas correctamente', 'success');
             } else {
                 showToast('Error guardando configuración', 'error');
@@ -284,6 +310,67 @@ const BotIASection = ({ showToast }) => {
                                 <option value="gemini-1.5-flash">⚡ Gemini 1.5 Flash</option>
                                 <option value="gemini-1.5-pro">🧠 Gemini 1.5 Pro</option>
                             </select>
+                        </div>
+                    </div>
+                </Card>
+
+                {/* 🤖 OpenAI / GPT Configuration (The Host) - NEW LOCATION */}
+                <Card
+                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">GPT: The Host (Pilot Test)</span>}
+                    icon={Sparkles}
+                    className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
+                    headerClassName="h-20"
+                >
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">OpenAI API Key (Host)</label>
+                            <input
+                                type="password"
+                                placeholder="sk-..."
+                                className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500/20 dark:text-gray-100"
+                                value={gptConfig.openaiApiKey || ''}
+                                onChange={(e) => setGptConfig({ ...gptConfig, openaiApiKey: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Modelo GPT</label>
+                                <select
+                                    className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm outline-none cursor-pointer dark:text-gray-100"
+                                    value={gptConfig.openaiModel || 'gpt-4o-mini'}
+                                    onChange={(e) => setGptConfig({ ...gptConfig, openaiModel: e.target.value })}
+                                >
+                                    <option value="gpt-4o-mini">GPT-4o Mini (Veloz)</option>
+                                    <option value="gpt-4o">GPT-4o Pro (Inteligente)</option>
+                                </select>
+                            </div>
+                            <div className="flex items-center pt-4">
+                                <label className="flex items-center gap-3 cursor-pointer group">
+                                    <div className="relative">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only"
+                                            checked={gptConfig.gptHostEnabled === true}
+                                            onChange={(e) => setGptConfig({ ...gptConfig, gptHostEnabled: e.target.checked })}
+                                        />
+                                        <div className={`w-10 h-5 rounded-full transition-colors ${gptConfig.gptHostEnabled ? 'bg-purple-600' : 'bg-gray-300 dark:bg-gray-600'}`}></div>
+                                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${gptConfig.gptHostEnabled ? 'translate-x-5' : ''}`}></div>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase group-hover:text-purple-500 transition-colors">Activar Host Pilot</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Prompt Maestro de Personalidad (Host)</label>
+                            <textarea
+                                className="w-full p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs outline-none focus:ring-2 focus:ring-purple-500/20 h-28 custom-scrollbar dark:text-gray-200"
+                                placeholder="Eres la Lic. Brenda en modo Host. Se amable, informal y carismática..."
+                                value={gptConfig.gptHostPrompt || ''}
+                                onChange={(e) => setGptConfig({ ...gptConfig, gptHostPrompt: e.target.value })}
+                            />
+                            <p className="mt-1 text-[9px] text-gray-400">Define la actitud social post-extracción.</p>
                         </div>
                     </div>
                 </Card>
