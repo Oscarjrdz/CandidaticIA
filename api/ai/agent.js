@@ -358,22 +358,24 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             console.log(`🌸 [Waiting Room Mode] Activado para ${candidateData.nombreReal || candidateData.whatsapp}`);
             console.log(`🎯 [Intent Detected]: ${intent}`);
 
-            [SALA DE ESPERA - ASISTENTE 2.0]:
-            1. TOTAL DISPONIBILIDAD: El usuario ya completó su registro.Es momento de ser Brenda la persona.Responde a TODO con carisma, humor y calidez.
-2. NO REPETIR ÉXITO: Ya felicitaste al usuario por su registro.Está PROHIBIDO volver a decir "¡Listo! Perfil completo" o frases similares de éxito.
-3. CONVERSACIÓN FLUIDA: Si el usuario te saluda, te llama("Lic", "Oiga") o bromea, síguele la plática de forma natural y profesional.
-4. VARIACIÓN: Nunca digas lo mismo dos veces.Cambia tus saludos y despedidas constantemente. ✨🌸
+            systemInstruction += `
+[SALA DE ESPERA - ASISTENTE 2.0]:
+1. TOTAL DISPONIBILIDAD: El usuario ya completó su registro. Es momento de ser Brenda la persona. Responde a TODO con carisma, humor y calidez.
+2. NO REPETIR ÉXITO: Ya felicitaste al usuario por su registro. Está PROHIBIDO volver a decir "¡Listo! Perfil completo" o frases similares de éxito.
+3. CONVERSACIÓN FLUIDA: Si el usuario te saluda, te llama ("Lic", "Oiga") o bromea, síguele la plática de forma natural y profesional.
+4. VARIACIÓN: Nunca digas lo mismo dos veces. Cambia tus saludos y despedidas constantemente. ✨🌸
+`;
 
-            [MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
-${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)' } \n`;
+            systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
+${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
         } else if (!isNameBoilerplate) {
             // --- CEREBRO 3: ASSISTANT 2.0 (Con proyecto asignado) ---
             let originalInstruction = (assistantCustomPrompt || DEFAULT_ASSISTANT_PROMPT);
 
-            systemInstruction += `\n${ originalInstruction } \n`;
+            systemInstruction += `\n${originalInstruction} \n`;
 
             systemInstruction += `\n[MEMORIA DEL HILO - ¡NO REPETIR ESTO!]:
-${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)' } \n`;
+${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
         } else {
             // CASO ESPECIAL: Perfil completo pero nombre incorrecto.
             systemInstruction += `\n[ALERTA]: El perfil está completo pero el NOMBRE es incorrecto(boilerplate).Pregúntalo amablemente antes de avanzar.\n`;
@@ -455,7 +457,7 @@ ${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') 
                 }
             } catch (e) {
                 lastError = e.message;
-                console.error(`🤖 fallback model trigger: ${ mName } failed.Error: `, lastError);
+                console.error(`🤖 fallback model trigger: ${mName} failed.Error: `, lastError);
             }
         }
 
@@ -492,7 +494,7 @@ ${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') 
                         try {
                             const cleaned = await schema.cleaner(val);
                             finalVal = cleaned || val;
-                        } catch (e) { console.warn(`Error cleaning ${ key }: `, e); }
+                        } catch (e) { console.warn(`Error cleaning ${key}: `, e); }
                     }
 
                     candidateUpdates[key] = finalVal;
@@ -501,7 +503,7 @@ ${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') 
                     if (schema && schema.onSuccess) {
                         try {
                             await schema.onSuccess(finalVal, candidateUpdates);
-                        } catch (e) { console.warn(`Error trigger for ${ key }: `, e); }
+                        } catch (e) { console.warn(`Error trigger for ${key}: `, e); }
                     }
                 }
             }
@@ -512,7 +514,7 @@ ${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') 
         if (yearMatch) {
             const yearValue = parseInt(yearMatch[0]);
             if (yearValue < 1940) {
-                console.log(`[Sanity Check] Killing year zombie: ${ yearValue } `);
+                console.log(`[Sanity Check] Killing year zombie: ${yearValue} `);
                 candidateUpdates.fechaNacimiento = null;
             }
         }
@@ -523,7 +525,7 @@ ${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') 
             candidateUpdates.congratulated = true;
         }
 
-        console.log(`[Consolidated Sync] Candidate ${ candidateId }: `, candidateUpdates);
+        console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
         // --- MESSAGE REACTIONS (AI DRIVEN) ---
@@ -531,7 +533,7 @@ ${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') 
         const aiReaction = aiResult.reaction;
 
         if (msgId && config && aiReaction) {
-            console.log(`[AI Reaction] 🧠 Brenda chose: ${ aiReaction } for ${ candidateId }`);
+            console.log(`[AI Reaction] 🧠 Brenda chose: ${aiReaction} for ${candidateId}`);
             reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiReaction);
         }
 
@@ -563,7 +565,7 @@ ${ lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') 
         if (shouldSendSticker) {
             const stickerUrl = await redis?.get('bot_celebration_sticker');
             if (stickerUrl) {
-                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${ candidateData.whatsapp }: ${ stickerUrl } `);
+                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${candidateData.whatsapp}: ${stickerUrl} `);
                 stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
                 candidateUpdates.congratulated = true;
             }
