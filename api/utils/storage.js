@@ -52,8 +52,6 @@ const KEYS = {
     // Distributed Style (ZSET + Keys)
     CANDIDATES_LIST: 'candidates:list',
     CANDIDATE_PREFIX: 'candidate:',
-    BULKS_LIST: 'bulks:list',
-    BULK_PREFIX: 'bulk:',
     EVENTS_LIST: 'webhook:events',
     PHONE_INDEX: 'candidatic:phone_index',
     DEDUPE_PREFIX: 'webhook:processed:',
@@ -714,27 +712,6 @@ export const getCandidatesStats = async () => {
         pending
     };
 };
-
-/**
- * ==========================================
- * BULKS (Distributed)
- * ==========================================
- */
-export const getBulks = async () => {
-    return await getDistributedItems(KEYS.BULKS_LIST, KEYS.BULK_PREFIX);
-};
-
-export const saveBulk = async (bulk) => {
-    if (!bulk.id) {
-        bulk.id = `bulk_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    }
-    return await saveDistributedItem(KEYS.BULKS_LIST, KEYS.BULK_PREFIX, bulk, bulk.id);
-};
-
-export const deleteBulk = async (id) => {
-    return await deleteDistributedItem(KEYS.BULKS_LIST, KEYS.BULK_PREFIX, id);
-};
-
 
 /**
  * ==========================================

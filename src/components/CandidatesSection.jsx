@@ -200,17 +200,6 @@ const CandidatesSection = ({ showToast }) => {
                         setAiFilteredCandidates(result.candidates);
                         setAiExplanation(result.ai?.explanation || 'Refinado por IA');
                     }
-                } else if (intent === 'BULK_MESSAGE') {
-                    showToast(explanation || 'Preparando envío masivo...', 'success');
-                    if (window.confirm(`IA Sugiere enviar este mensaje:\n\n"${message}"\n\n¿Ir a la sección de Envíos Masivos (Bulks)?`)) {
-                        localStorage.setItem('draft_bulk_message', message);
-
-                        // Save the currently filtered IDs to context
-                        const currentIds = displayedCandidates.map(c => c.id);
-                        localStorage.setItem('draft_bulk_ids', JSON.stringify(currentIds));
-
-                        showToast('Mensaje y destinatarios copiados a borrador', 'success');
-                    }
                 } else {
                     showToast('No entendí la acción. Intenta de nuevo.', 'warning');
                 }

@@ -8,7 +8,6 @@ import CandidatesSection from './components/CandidatesSection';
 import SettingsSection from './components/SettingsSection';
 import AutomationsSection from './components/AutomationsSection';
 import VacanciesSection from './components/VacanciesSection';
-import BulksSection from './components/BulksSection';
 import UsersSection from './components/UsersSection';
 import PostMakerSection from './components/PostMakerSection';
 import BotIASection from './components/BotIASection';
@@ -115,26 +114,24 @@ function App() {
                       : activeSection === 'automations' ? 'Automatizaciones'
                         : activeSection === 'vacancies' ? 'Vacantes'
                           : activeSection === 'history' ? 'Historial'
-                            : activeSection === 'bulks' ? 'Bulks'
-                              : activeSection === 'users' ? 'Usuarios'
-                                : activeSection === 'post-maker' ? 'Post Maker'
-                                  : activeSection === 'media-library' ? 'Biblioteca Multimedia'
-                                    : activeSection === 'projects' ? 'Proyectos'
-                                      : activeSection === 'adn' ? 'ADN del Bot'
-                                        : activeSection === 'bypass' ? 'Sistema ByPass'
-                                          : 'Configuración'}
+                            : activeSection === 'users' ? 'Usuarios'
+                              : activeSection === 'post-maker' ? 'Post Maker'
+                                : activeSection === 'media-library' ? 'Biblioteca Multimedia'
+                                  : activeSection === 'projects' ? 'Proyectos'
+                                    : activeSection === 'adn' ? 'ADN del Bot'
+                                      : activeSection === 'bypass' ? 'Sistema ByPass'
+                                        : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
                     : activeSection === 'bot-ia' ? 'Configuración de Comportamiento del Bot'
-                      : activeSection === 'bulks' ? 'Envío Masivo de Mensajes'
-                        : activeSection === 'users' ? 'Gestión de equipo y permisos'
-                          : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
-                            : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
-                              : activeSection === 'projects' ? 'Gestión y organización de proyectos'
-                                : activeSection === 'adn' ? 'Arquitectura y lógica interna del Cerebro IA'
-                                  : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos a proyectos'
-                                    : 'Configuración del Sistema'
+                      : activeSection === 'users' ? 'Gestión de equipo y permisos'
+                        : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
+                          : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
+                            : activeSection === 'projects' ? 'Gestión y organización de proyectos'
+                              : activeSection === 'adn' ? 'Arquitectura y lógica interna del Cerebro IA'
+                                : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos a proyectos'
+                                  : 'Configuración del Sistema'
                   }
                 </p>
               </div>
@@ -186,8 +183,6 @@ function App() {
             <AutomationsSection showToast={showToast} />
           ) : activeSection === 'vacancies' ? (
             <VacanciesSection showToast={showToast} />
-          ) : activeSection === 'bulks' ? (
-            <BulksSection showToast={showToast} />
           ) : activeSection === 'users' ? (
             <UsersSection showToast={showToast} />
           ) : activeSection === 'post-maker' ? (

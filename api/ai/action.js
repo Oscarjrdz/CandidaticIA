@@ -63,24 +63,19 @@ export default async function handler(req, res) {
         const systemPrompt = `
 Eres un asistente de acción para un CRM de reclutamiento.
 El usuario acaba de ver una lista de candidatos y te está pidiendo qué hacer con ellos.
-Tu tarea es clasificar su intención en una de dos categorías y extraer la información relevante.
+Tu tarea es clasificar su intención y extraer la información relevante.
 
 CATEGORÍAS DE ACCIÓN:
 1. "REFINE_FILTER": El usuario quiere filtrar más la lista actual.
    - Ejemplos: "que sepan ingles", "solo los de monterrey", "filtrar por edad > 30".
    - Salida esperada: Un objeto de filtros igual que en la búsqueda normal.
 
-2. "BULK_MESSAGE": El usuario quiere enviar un mensaje a estos candidatos.
-   - Ejemplos: "mandales un saludo", "invitalos a entrevista", "diles hola".
-   - Salida esperada: Un string con el mensaje sugerido (o null si es genérico).
-
 REGLAS:
 - Devuelve SIEMPRE un JSON válido.
 - Estructura:
 {
-  "intent": "REFINE_FILTER" | "BULK_MESSAGE" | "UNKNOWN",
+  "intent": "REFINE_FILTER" | "UNKNOWN",
   "filters": { ... }, // Solo si intent es REFINE_FILTER
-  "message": "Hola {{nombre}}, ... " // Solo si intent es BULK_MESSAGE. Usa variables como {{nombre}}.
   "explanation": "..." // Breve explicación de lo que harás.
 }
 
