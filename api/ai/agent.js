@@ -10,7 +10,6 @@ import {
     getProjectById,
     getVacancyById,
     recordAITelemetry,
-    recordAITelemetry,
     moveCandidateStep,
     addCandidateToProject
 } from '../utils/storage.js';
