@@ -226,16 +226,29 @@ const VacanciesSection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-                    <Briefcase className="w-6 h-6 text-blue-600" />
-                    Gestión de Vacantes
-                </h2>
-                <div className="flex gap-2">
+        <div className="space-y-6 w-full pb-8 animate-in fade-in duration-700">
+            {/* Command Bar: Homologated with Bot IA Style */}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-600 shadow-lg shadow-blue-500/20 flex items-center justify-center transition-all">
+                        <Briefcase className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">GESTIÓN DE VACANTES</h2>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                            <p className="text-[10px] font-black tracking-widest uppercase text-blue-600 dark:text-blue-400">
+                                SISTEMA ACTIVO
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
                     <Button
                         onClick={handleOpenCreate}
                         icon={Plus}
+                        className="rounded-2xl shadow-lg shadow-blue-500/20 hover:scale-105 transition-all duration-300"
                     >
                         Nueva Vacante
                     </Button>
