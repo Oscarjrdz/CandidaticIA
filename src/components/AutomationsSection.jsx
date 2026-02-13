@@ -30,31 +30,55 @@ const AutomationsSection = ({ showToast }) => {
 
     // --- LOADERS ---
     const loadFields = async () => {
-        const f = await getFields();
-        setFields(f);
+        const result = await getFields();
+        if (result.success && Array.isArray(result.fields)) {
+            setFields(result.fields);
+        } else {
+            console.error('Failed to load fields:', result);
+            setFields([]);
+        }
     };
 
     const handleCreateField = async () => {
         const label = prompt("Nombre del nuevo campo:");
         if (!label) return;
-        const value = label.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+        // Simple slugify
+        const value = label.toLowerCase()
+            .replace(/[^\w\s-]/g, '') // Remove non-word chars
+            .replace(/\s+/g, '_');    // Replace spaces with _
 
         // Optimistic update
         const newField = { label, value, type: 'text' };
         setFields(prev => [...prev, newField]);
 
-        await createField(newField);
-        showToast('Campo creado', 'success');
+        const result = await createField(label);
+        if (result.success) {
+            showToast('Campo creado', 'success');
+            // Reload to get potential server-side adjustments
+            loadFields();
+        } else {
+            showToast('Error al crear campo', 'error');
+            // Revert optimistic update if needed, but for now just reload
+            loadFields();
+        }
     };
 
     const loadRules = async () => {
         setLoading(true);
         try {
-            const data = await getAutomationRules();
-            setRules(data);
+            const result = await getAutomationRules();
+            if (result.success && Array.isArray(result.rules)) {
+                setRules(result.rules);
+            } else {
+                console.error('Failed to load rules:', result);
+                setRules([]); // Prevent crash
+                showToast('Error cargando reglas', 'error');
+            }
         } catch (error) {
             console.error('Error loading rules:', error);
             showToast('Error cargando reglas', 'error');
+            setRules([]);
         } finally {
             setLoading(false);
         }
