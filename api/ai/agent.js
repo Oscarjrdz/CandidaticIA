@@ -245,7 +245,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
-- ¿Es Primer Contacto?: ${isNewFlag ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
+- ¿Es Primer Contacto?: ${isNewFlag && !isProfileComplete ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
 - Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
 - Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
 - Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
@@ -545,7 +545,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             console.log(`[BRIDGE] 🌉 Active. Counter: ${bridgeCounter}/2.`);
 
             // [PRIORITY CHECK]: Rule 1 (Gratitude) takes precedence over Rule 2 (Sticker)
-            // If the AI detects gratitude, we let the normal flow handle the Like and skip the sticker for this msg.
+            const isGoodbye = /bye|adios|chao|hasta luego|nos vemos/i.test(aggregatedText);
+
             if (aiResult.gratitude_reached === true) {
                 console.log(`[BRIDGE] Gratitude detected. Prioritizing Like (👍) over Sticker.`);
             } else {
@@ -557,7 +558,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
 
             // Increment for NEXT time
-            candidateUpdates.bridge_counter = bridgeCounter + 1;
+            // If it was a goodbye, we jump straight to 2 to finish the bridge
+            candidateUpdates.bridge_counter = isGoodbye ? 2 : bridgeCounter + 1;
+
+            if (isGoodbye) console.log(`[BRIDGE] Goodbye detected. Closing bridge early.`);
 
             // Suppress AI response text during bridge
             aiResult.response_text = null;
@@ -671,6 +675,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         } else {
             // No forced reactions and definitely NO reactions after bridge is over (Handover Lock)
             aiResult.reaction = null;
+        }
+
+        // --- esNuevo AUTO-OFF ---
+        if (isProfileComplete && candidateData.esNuevo === 'SI') {
+            candidateUpdates.esNuevo = 'NO';
         }
 
         if (!responseTextVal || responseTextVal === '[SILENCIO]') {
