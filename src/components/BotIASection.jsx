@@ -217,13 +217,13 @@ const BotIASection = ({ showToast }) => {
     return (
         <div className="space-y-4 w-full pb-8 animate-in fade-in duration-700">
             {/* Master Bot Controller: Compact Native */}
-            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
                 <div className="flex items-center space-x-4">
                     <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${isActive ? 'bg-green-500 shadow-lg shadow-green-500/20' : 'bg-gray-100 dark:bg-gray-700'}`}>
                         <Bot className={`w-5 h-5 ${isActive ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">BOT IA</h2>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">BOT IA</h2>
                         <div className="flex items-center gap-2 mt-0.5">
                             <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
                             <p className={`text-[10px] font-black tracking-widest uppercase ${isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
