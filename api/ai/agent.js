@@ -544,29 +544,23 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             isBridgeActive = true;
             console.log(`[BRIDGE] 🌉 Active. Counter: ${bridgeCounter}/2.`);
 
-            // [PRIORITY CHECK]: Rule 1 (Gratitude) takes precedence over Rule 2 (Sticker)
-            const isGoodbye = /bye|adios|chao|hasta luego|nos vemos/i.test(aggregatedText);
-
+            // Rule 2.3: Pure Reactions (No stickers, no text)
             if (aiResult.gratitude_reached === true) {
-                console.log(`[BRIDGE] Gratitude detected. Prioritizing Like (👍) over Sticker.`);
+                console.log(`[BRIDGE] Gratitude detected. Reaction: 👍`);
+                aiResult.reaction = '👍';
             } else {
-                console.log(`[BRIDGE] No gratitude. Sending Triumph Sticker.`);
-                const triumphStickerUrl = await redis?.get('bot_triumph_sticker') || await redis?.get('bot_celebration_sticker');
-                if (triumphStickerUrl) {
-                    stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, triumphStickerUrl, 'sticker');
-                }
+                console.log(`[BRIDGE] No gratitude. Reaction: ❤️`);
+                aiResult.reaction = '❤️';
             }
 
-            // Increment for NEXT time
-            // If it was a goodbye, we jump straight to 2 to finish the bridge
-            candidateUpdates.bridge_counter = isGoodbye ? 2 : bridgeCounter + 1;
+            // Increment for NEXT time (Strict 2 messages)
+            candidateUpdates.bridge_counter = bridgeCounter + 1;
 
-            if (isGoodbye) console.log(`[BRIDGE] Goodbye detected. Closing bridge early.`);
-
-            // Suppress AI response text during bridge
+            // Suppress AI response text and stickers during bridge
             aiResult.response_text = null;
             aiResult.close_conversation = true;
             responseTextVal = '';
+            stickerPromise = Promise.resolve(); // BLOCK all stickers during bridge
         }
 
         // --- 🤖 GPT HOST PILOT (Filtro Beta Tester: 8116038195) ---
