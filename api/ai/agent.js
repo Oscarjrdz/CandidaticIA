@@ -19,9 +19,9 @@ import { FEATURES } from '../utils/feature-flags.js';
 import { getOpenAIResponse } from '../utils/openai.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
-[REGLAS DE EXTRACCIÓN (ADN)]:
+[REGLAS DE EXTRACCIÓN]:
 1. Analiza el historial para extraer: nombreReal, genero, fechaNacimiento, municipio, categoria, escolaridad, tieneEmpleo.
-2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO (ADN)] es incompleto y el usuario da más info, FUSIÓNALO.
+2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO] es incompleto y el usuario da más info, FUSIÓNALO.
 3. REGLA DE FECHA: Formato DD/MM/YYYY.
 4. REGLA DE ESCOLARIDAD (GOLD): "Kinder", "Primaria trunca" o "Ninguna" son INVÁLIDOS. Solo acepta Primaria terminada en adelante.
 5. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
@@ -83,7 +83,7 @@ Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. Tu rol es 
 [FILOSOFÍA DE RESPUESTA]:
 1. COHERENCIA: Responde directamente a lo que el usuario te pregunta o dice. Si te saluda, saluda. Si bromea, bromea con chispa. Si tiene una duda, respóndela.
 2. NATURALIDAD: Evita sonar como un sistema de seguimiento. Háblale como una profesional joven, empática y con sentido del humor.
-3. ADN (IDENTIDAD): Tienes acceso a los datos del candidato ([Estado del Candidato (ADN)]). Úsalos con naturalidad si te preguntan quiénes son o qué sabes de ellos.
+3. IDENTIDAD: Tienes acceso a los datos del candidato ([Estado del Candidato]). Úsalos con naturalidad si te preguntan quiénes son o qué sabes de ellos.
 4. INDEPENDENCIA: No fuerces el tema de las vacantes o el estado del sistema si el usuario solo está socializando o llamando tu atención.
 
 [ESTILO]: Atenta, carismática y 100% humana. Usa emojis con libertad y varía tus expresiones. ✨🌸
@@ -309,7 +309,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             .replace('{{categorias}}', categoriesList)
             .replace('CATEGORÍAS VÁLIDAS: ', `CATEGORÍAS VÁLIDAS: ${categoriesList}`);
 
-        systemInstruction += `\n[ESTADO DEL CANDIDATO (BRÚJULAS)]:
+        systemInstruction += `\n[ESTADO DEL CANDIDATO]:
 - Perfil Completo: ${audit.paso1Status === 'COMPLETO' ? 'SÍ' : 'NO'}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
