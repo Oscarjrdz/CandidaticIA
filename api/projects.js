@@ -102,6 +102,13 @@ export default async function handler(req, res) {
                     console.error('[API] Missing PID or Steps:', { pid, stepsCount: steps?.length });
                     return res.status(400).json({ success: false, error: 'PID and Steps required' });
                 }
+                // --- IMMUTABLE STEP VALIDATION ---
+                // Ensure 'step_default' is present and first (or at least present)
+                const hasDefault = steps.some(s => s.id === 'step_default');
+                if (!hasDefault) {
+                    return res.status(400).json({ success: false, error: 'Cannot remove the default step (step_default).' });
+                }
+
                 const success = await updateProjectSteps(pid, steps);
                 return res.status(200).json({ success, message: success ? 'Steps updated' : 'Project not found' });
             }
@@ -113,7 +120,19 @@ export default async function handler(req, res) {
             }
 
             if (!name) return res.status(400).json({ success: false, error: 'Project name is required' });
+
+            // --- IMMUTABLE STEP CREATION ---
+            // If creating new project (no ID), allow empty steps but force default
+            // If updating, saveProject handles it, but let's ensure structure.
+
             const project = await saveProject({ id, name, description, assignedUsers, vacancyId });
+
+            // Post-creation guarantee: excessive but safe
+            if (!id && project && (!project.steps || project.steps.length === 0)) {
+                await updateProjectSteps(project.id, [{ id: 'step_default', name: 'Inicio', locked: true }]);
+                project.steps = [{ id: 'step_default', name: 'Inicio', locked: true }];
+            }
+
             return res.status(200).json({ success: true, project });
         }
 

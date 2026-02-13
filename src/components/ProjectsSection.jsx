@@ -200,16 +200,18 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch }) => {
                     >
                         <Pencil className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault(); e.stopPropagation();
-                            onEdit(step.id, 'delete');
-                        }}
-                        className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors relative z-10"
-                        title="Eliminar paso"
-                    >
-                        <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {!step.locked && step.id !== 'step_default' && (
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation();
+                                onEdit(step.id, 'delete');
+                            }}
+                            className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors relative z-10"
+                            title="Eliminar paso"
+                        >
+                            <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                 </div>
             </div>
 

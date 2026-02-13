@@ -611,8 +611,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
                         if (isMatch) {
                             console.log(`[BYPASS] ⚡ Candidate ${candidateId} matches rule "${rule.name}". Routing to Project ${projectId}.`);
+
+                            // IMMUTABLE ARCHITECTURE: Always route to 'step_default'
+                            // This step is now guaranteed to exist and be locked.
+                            const targetStepId = 'step_default';
+
                             candidateUpdates.projectId = projectId;
-                            candidateUpdates.stepId = 'step_new'; // Force start at first step
+                            candidateUpdates.stepId = targetStepId;
                             candidateUpdates.bypass_rule = rule.name;
                             debugTrace.finalResult = 'MATCH';
                             break; // Stop at first match
