@@ -1,122 +1,121 @@
 
-import { getRedisClient, getProjects, updateProjectSteps } from '../utils/storage.js';
-import fs from 'fs';
-import path from 'path';
+import { getRedisClient, updateProjectSteps, getProjects } from '../projects/utils/storage.js';
 
-// Force load envs
-try {
-    const envPath = path.resolve(process.cwd(), '.env.local');
-    if (fs.existsSync(envPath)) {
-        const envConfig = fs.readFileSync(envPath, 'utf8');
-        envConfig.split('\n').forEach(line => {
-            const [key, val] = line.split('=');
-            if (key && val) {
-                process.env[key.trim()] = val.trim();
-            }
-        });
-
-        // Polyfill REDIS_URL if missing but others present
-        if (!process.env.REDIS_URL) {
-            if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-                console.log('Using Vercel KV credentials...');
-                // The storage.js utility handles this internally usually, but let's confirm envs are set
-            } else if (process.env.UPSTASH_REDIS_REST_URL) {
-                process.env.REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
-            }
-        }
-
-        console.log('✅ Loaded .env.local');
-    } else {
-        console.log('⚠️ .env.local not found');
+/**
+ * API Handler for Migrating Project Steps to Immutable Default Step
+ * Access: /api/admin/migrate-default-steps
+ */
+export default async function handler(req, res) {
+    if (req.method !== 'GET' && req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
     }
-} catch (e) {
-    console.error('Error loading env:', e);
-}
 
-async function migrateDefaultSteps() {
-    console.log('--- 🛡️ STARTING MIGRATION: IMMUTABLE DEFAULT STEPS ---');
+    // Optional: Add a simple secret check if needed, or rely on admin role.
+    // const { secret } = req.query;
+
+    console.log('--- 🛡️ STARTING MIGRATION (API): IMMUTABLE DEFAULT STEPS ---');
+    const logs = [];
+    const log = (msg) => {
+        console.log(msg);
+        logs.push(msg);
+    };
+
     const client = getRedisClient();
     if (!client) {
-        console.error('❌ Redis client not initialized.');
-        process.exit(1);
+        return res.status(500).json({ error: 'Redis client not initialized' });
     }
 
     try {
         const projects = await getProjects();
-        console.log(`📋 Found ${projects.length} projects.`);
+        log(`📋 Found ${projects.length} projects.`);
+
+        let stats = { processed: 0, migrated: 0, candidatesMoved: 0, errors: 0 };
 
         for (const p of projects) {
-            console.log(`\n🔹 Processing Project: "${p.name}" (${p.id})`);
+            try {
+                log(`\n🔹 Processing Project: "${p.name}" (${p.id})`);
 
-            if (!p.steps || p.steps.length === 0) {
-                console.log('   ⚠️ No steps found. Creating default step...');
-                const newSteps = [{ id: 'step_default', name: 'Inicio', locked: true }];
-                await updateProjectSteps(p.id, newSteps);
-                console.log('   ✅ Created default step.');
-                continue;
-            }
-
-            // Check if already migrated
-            if (p.steps.some(s => s.id === 'step_default')) {
-                console.log('   ✅ Already has "step_default". skipping structure update.');
-
-                // Ensure it is locked though
-                const defaultStep = p.steps.find(s => s.id === 'step_default');
-                if (defaultStep && !defaultStep.locked) {
-                    defaultStep.locked = true;
-                    await updateProjectSteps(p.id, p.steps);
-                    console.log('   🔒 Locked existing "step_default".');
+                // 1. Create Default if missing
+                if (!p.steps || p.steps.length === 0) {
+                    log('   ⚠️ No steps found. Creating default step...');
+                    const newSteps = [{ id: 'step_default', name: 'Inicio', locked: true }];
+                    await updateProjectSteps(p.id, newSteps);
+                    log('   ✅ Created default step.');
+                    stats.processed++;
+                    continue;
                 }
-                continue;
-            }
 
-            // MIGRATION LOGIC
-            // 1. Identify first step
-            const firstStep = p.steps[0];
-            const oldId = firstStep.id;
-            console.log(`   🔄 Migrating first step "${firstStep.name}" (ID: ${oldId}) -> "step_default"`);
+                // 2. Check overlap
+                if (p.steps.some(s => s.id === 'step_default')) {
+                    log('   ✅ Already has "step_default". Keeping structure.');
+                    // Ensure locked
+                    const defaultStep = p.steps.find(s => s.id === 'step_default');
+                    if (!defaultStep.locked) {
+                        defaultStep.locked = true;
+                        // Build full updated steps array preserving others
+                        const updatedSteps = p.steps.map(s => s.id === 'step_default' ? { ...s, locked: true } : s);
+                        await updateProjectSteps(p.id, updatedSteps);
+                        log('   🔒 Locked existing "step_default".');
+                    }
+                    stats.processed++;
+                    continue;
+                }
 
-            // 2. Update Step Structure
-            firstStep.id = 'step_default';
-            firstStep.locked = true;
-            await updateProjectSteps(p.id, p.steps);
-            console.log('   ✅ Project steps updated.');
+                // 3. ACTUAL MIGRATION
+                const firstStep = p.steps[0];
+                const oldId = firstStep.id;
+                log(`   🔄 Migrating first step "${firstStep.name}" (ID: ${oldId}) -> "step_default"`);
 
-            // 3. Migrate Candidates in that Step
-            // We need to find all candidates in this project that are in 'oldId' and move them to 'step_default'
-            // scan/search is expensive, so we iterate known project candidates if possible, 
-            // but `projects.js` doesn't expose a cheap list of IDs.
-            // We'll rely on a global search for this migration script or iterate all candidates.
-            // For safety and speed in this specific environment, let's iterate ALL candidates.
+                // Update Step Definition
+                const updatedSteps = p.steps.map((s, idx) => {
+                    if (idx === 0) return { ...s, id: 'step_default', locked: true };
+                    return s;
+                });
 
-            let movedCount = 0;
-            const candidateKeys = await client.keys('candidatic:candidate:*');
+                await updateProjectSteps(p.id, updatedSteps);
+                log('   ✅ Project steps updated.');
 
-            for (const key of candidateKeys) {
-                try {
+                // 4. Migrate Candidates (Heavy Scan)
+                // In API route, we must be careful with timeout (Vercel has 10s limit on free).
+                // We will iterate candidates using the storage utility logic if possible? 
+                // No, storage.js doesn't expose a "getAllCandidates".
+                // We'll use the raw client scan for now, assuming dataset fits in memory/time.
+
+                const candidateKeys = await client.keys('candidatic:candidate:*');
+                let movedInProject = 0;
+
+                for (const key of candidateKeys) {
                     const cData = await client.get(key);
+                    if (!cData) continue;
                     const c = JSON.parse(cData);
 
                     if (c.projectId === p.id && (c.stepId === oldId || c.projectMetadata?.stepId === oldId)) {
-                        c.stepId = 'step_default';
-                        if (c.projectMetadata) c.projectMetadata.stepId = 'step_default';
+                        let changed = false;
+                        if (c.stepId === oldId) { c.stepId = 'step_default'; changed = true; }
+                        if (c.projectMetadata?.stepId === oldId) { c.projectMetadata.stepId = 'step_default'; changed = true; }
 
-                        // Save back
-                        await client.set(key, JSON.stringify(c));
-                        movedCount++;
+                        if (changed) {
+                            await client.set(key, JSON.stringify(c));
+                            movedInProject++;
+                        }
                     }
-                } catch (e) { }
+                }
+
+                log(`   📦 Moved ${movedInProject} candidates from "${oldId}" to "step_default".`);
+                stats.candidatesMoved += movedInProject;
+                stats.migrated++;
+
+            } catch (err) {
+                log(`   ❌ Error processing project ${p.id}: ${err.message}`);
+                stats.errors++;
             }
-            console.log(`   📦 Moved ${movedCount} candidates from "${oldId}" to "step_default".`);
         }
 
-        console.log('\n--- 🎉 MIGRATION COMPLETE ---');
-        process.exit(0);
+        log('\n--- 🎉 MIGRATION COMPLETE ---');
+        return res.status(200).json({ success: true, stats, logs });
 
     } catch (error) {
         console.error('❌ Migration Fatal Error:', error);
-        process.exit(1);
+        return res.status(500).json({ success: false, error: error.message, logs });
     }
 }
-
-migrateDefaultSteps();
