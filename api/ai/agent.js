@@ -10,7 +10,9 @@ import {
     getProjectById,
     getVacancyById,
     recordAITelemetry,
-    moveCandidateStep
+    recordAITelemetry,
+    moveCandidateStep,
+    addCandidateToProject
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
@@ -616,9 +618,20 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                             // This step is now guaranteed to exist and be locked.
                             const targetStepId = 'step_default';
 
+                            // 1. Update Candidate Blob (Memory)
                             candidateUpdates.projectId = projectId;
                             candidateUpdates.stepId = targetStepId;
                             candidateUpdates.bypass_rule = rule.name;
+
+                            // 2. PHYSICAL LINKING (Distributed Index)
+                            // This is critical for the candidate to appear in the Project Board
+                            await addCandidateToProject(projectId, candidateId, {
+                                origin: 'bypass_rule',
+                                method: 'auto',
+                                ruleName: rule.name,
+                                stepId: targetStepId
+                            });
+
                             debugTrace.finalResult = 'MATCH';
                             break; // Stop at first match
                         } else {
