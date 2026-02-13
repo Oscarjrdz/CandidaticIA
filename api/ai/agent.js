@@ -544,12 +544,16 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             isBridgeActive = true;
             console.log(`[BRIDGE] 🌉 Active. Counter: ${bridgeCounter}/2.`);
 
-            // Rule 2.3: Pure Reactions (No stickers, no text)
-            if (aiResult.gratitude_reached === true) {
-                console.log(`[BRIDGE] Gratitude detected. Reaction: 👍`);
+            // Rule 2.5: Strict Keyword-Based Gratitude (v2.5)
+            const lowerText = aggregatedText.toLowerCase();
+            const gratitudeKeywords = ['gracias', 'grx', 'thx', 'thank', 'agradecid', 'amable', 'bendicion'];
+            const hasRealGratitude = gratitudeKeywords.some(kw => lowerText.includes(kw));
+
+            if (hasRealGratitude) {
+                console.log(`[BRIDGE] Gratitude confirmed via keyword. Reaction: 👍`);
                 aiResult.reaction = '👍';
             } else {
-                console.log(`[BRIDGE] No gratitude. Reaction: ❤️`);
+                console.log(`[BRIDGE] No gratitude keywords found. Forcing Reaction: ❤️`);
                 aiResult.reaction = '❤️';
             }
 
