@@ -66,7 +66,9 @@ export const DEFAULT_SYSTEM_PROMPT = `
 
 [REGLA DE REACCIONES]:
 - El sistema pondrá un 👍 automático si detectas gratitud (gratitude_reached: true).
-- NO intentes usar reacciones manuales en "reaction", el sistema las ignora para evitar ruidos. Concentrate en "gratitude_reached".
+- GRATITUD (ESTRICTO): Solo si dicen "Gracias", "Agradecido", "Muchas gracias".
+- NO ES GRATITUD: "Bye", "Adios", "Ok", "Enterado", "Sale". NO pongas Like en estos.
+- NO intentes usar reacciones manuales en "reaction", el sistema las ignora.
 
 [ESTRATEGIA DE CONVERSACIÓN]:
 1. RE-SALUDO: Si Inactividad es "Regreso fresco", inicia con un saludo breve y cálido (ej. "¡Hola de nuevo! ✨") antes de retomar el hilo.
@@ -660,13 +662,14 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
-        // --- CONDITIONAL LIKE (Gratitude Shield) ---
-        // Rule 1 Priority: Always allow Like if gratitude is reached, even during bridge.
-        if (isNowComplete && aiResult.gratitude_reached === true) {
+        // --- CONDITIONAL LIKE (Gratitude Shield v2.1) ---
+        // Rule 1 Priority: Always allow Like if gratitude is reached, BUT ONLY BEFORE GPT TAKES OVER.
+        const isHandoverActive = bridgeCounter >= 2;
+        if (!isHandoverActive && isNowComplete && aiResult.gratitude_reached === true) {
             console.log(`[Gratitude Shield] Detected thanks from ${candidateId}. Sending 👍.`);
             aiResult.reaction = '👍';
-        } else if (!aiResult.gratitude_reached) {
-            // No forced reactions
+        } else {
+            // No forced reactions and definitely NO reactions after bridge is over (Handover Lock)
             aiResult.reaction = null;
         }
 
