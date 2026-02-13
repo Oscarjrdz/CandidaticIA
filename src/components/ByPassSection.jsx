@@ -138,7 +138,7 @@ const ByPassSection = ({ showToast }) => {
     });
 
     const MUNICIPIOS = [
-        "Abasolo", "Allende", "Apodaca", "Cadereyta Jiménez", "Carmen", "China", "Ciénega de Flores", "Doctor Arroyo", "García", "General Bravo", "General Escobedo", "General Terán", "General Zuazua", "Guadalupe", "Hidalgo", "Juárez", "Linares", "Marín", "Montemorelos", "Monterrey", "Pesquería", "Sabinas Hidalgo", "Salinas Victoria", "San Nicolás de los Garza", "San Pedro Garza García", "Santa Catarina", "Santiago"
+        "Abasolo", "Agualeguas", "Aldama", "Allende", "Anáhuac", "Apodaca", "Aramberri", "Bustamante", "Cadereyta", "Carmen", "Cerralvo", "China", "Ciénega", "Doctor Arroyo", "Doctor Coss", "Doctor González", "Galeana", "García", "San Pedro", "General Bravo", "General Escobedo", "General Terán", "General Treviño", "General Zaragoza", "General Zuazua", "Guadalupe", "Los Herreras", "Higueras", "Hualahuises", "Iturbide", "Juárez", "Lampazos", "Linares", "Marín", "Melchor Ocampo", "Mier y Noriega", "Mina", "Montemorelos", "Monterrey", "Parás", "Pesquería", "Los Ramones", "Rayones", "Sabinas", "Salinas", "San Nicolás", "Hidalgo", "Santa Catarina", "Santiago", "Vallecillo", "Villaldama"
     ];
 
     const ESCOLARIDADES = [
