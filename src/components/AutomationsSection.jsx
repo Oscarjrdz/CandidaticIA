@@ -150,26 +150,32 @@ const AutomationsSection = ({ showToast }) => {
 
     return (
         <div className="p-6">
-            {/* Header Extracción Inteligente */}
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center mr-3 shadow-lg shadow-blue-500/20">
-                            <Brain className="w-6 h-6 text-white" />
+            {/* Command Bar: Standardized Style */}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px] mb-6">
+                <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-500/20 flex items-center justify-center transition-all">
+                        <Brain className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">EXTRACCIÓN INTELIGENTE</h2>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                            <p className="text-[10px] font-black tracking-widest uppercase text-indigo-600 dark:text-indigo-400">
+                                MOTOR DE IA ACTIVO
+                            </p>
                         </div>
-                        Extracción Inteligente
-                    </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Captura datos de las conversaciones automáticamente a tus columnas de CRM.
-                    </p>
+                    </div>
                 </div>
-                <Button
-                    onClick={() => setShowCreateModal(true)}
-                    className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700"
-                >
-                    <Plus className="w-4 h-4" />
-                    <span>Crear Nueva</span>
-                </Button>
+
+                <div className="flex items-center gap-3">
+                    <Button
+                        onClick={() => setShowCreateModal(true)}
+                        icon={Plus}
+                        className="rounded-2xl shadow-lg shadow-indigo-500/20 hover:scale-105 transition-all duration-300 bg-indigo-600 hover:bg-indigo-700"
+                    >
+                        Nueva Regla
+                    </Button>
+                </div>
             </div>
 
             {/* Table */}
