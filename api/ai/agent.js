@@ -653,6 +653,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
                 })();
                 candidateUpdates.congratulated = true;
+
+                // 🛡️ [SILENCER]: If we are celebrating, suppress ANY other text response from Gemini
+                // This avoids the "duplicate message" issue where Brenda asks one more thing.
+                responseTextVal = null;
+                aiResult.response_text = null;
             }
         }
 
@@ -660,15 +665,21 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
-        // --- CONDITIONAL LIKE (Gratitude Shield v2.1) ---
-        // Rule 1 Priority: Always allow Like if gratitude is reached, BUT ONLY BEFORE GPT TAKES OVER.
+        // --- CONDITIONAL LIKE (Gratitude Shield v2.4) ---
         const isHandoverActive = bridgeCounter >= 2;
-        if (!isHandoverActive && isNowComplete && aiResult.gratitude_reached === true) {
-            console.log(`[Gratitude Shield] Detected thanks from ${candidateId}. Sending 👍.`);
-            aiResult.reaction = '👍';
+
+        // 🛡️ [BRIDGE PROTECTION]: If bridge is active, we ALREADY set the reaction (👍 or ❤️). 
+        // We only apply this block if bridge is NOT active.
+        if (!isBridgeActive) {
+            if (!isHandoverActive && isNowComplete && aiResult.gratitude_reached === true) {
+                console.log(`[Gratitude Shield] Detected thanks from ${candidateId}. Sending 👍.`);
+                aiResult.reaction = '👍';
+            } else {
+                // No forced reactions outside bridge/handover
+                aiResult.reaction = null;
+            }
         } else {
-            // No forced reactions and definitely NO reactions after bridge is over (Handover Lock)
-            aiResult.reaction = null;
+            console.log(`[BRIDGE] Keeping reaction set in bridge block: ${aiResult.reaction}`);
         }
 
         // --- esNuevo AUTO-OFF ---
