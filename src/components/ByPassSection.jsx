@@ -473,10 +473,14 @@ const ByPassSection = ({ showToast }) => {
                         <RibbonSelect
                             label="Proyecto Destino"
                             options={projects}
-                            selected={projects.find(p => p.id === formData.projectId)?.name.toUpperCase() || ''}
+                            selected={projects.find(p => p.id === formData.projectId)?.name || ''}
                             onToggle={(name) => {
-                                const proj = projects.find(p => p.name.toUpperCase() === name);
-                                if (proj) setFormData({ ...formData, projectId: proj.id });
+                                const proj = projects.find(p => p.name === name);
+                                if (proj) {
+                                    setFormData({ ...formData, projectId: proj.id });
+                                } else {
+                                    console.error('Project not found by name:', name);
+                                }
                             }}
                             placeholder="SELECCIONAR PROYECTO"
                             iconSource={GitMerge}
