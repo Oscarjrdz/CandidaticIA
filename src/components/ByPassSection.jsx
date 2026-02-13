@@ -393,7 +393,7 @@ const ByPassSection = ({ showToast }) => {
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title={editingId ? "Ajuste de Inteligencia ByPass" : "Entrenamiento de Nuevo Radar ByPass"}
+                title={editingId ? "Ajuste de ByPass" : "Configuración de ByPass"}
                 maxWidth="max-w-[95vw]"
             >
                 <div className="p-8 space-y-12">
@@ -405,7 +405,7 @@ const ByPassSection = ({ showToast }) => {
                         <div className="w-full 2xl:w-[280px] space-y-3">
                             <div className="flex items-center gap-2 px-1">
                                 <Tag className="w-3.5 h-3.5 text-blue-500" />
-                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Identificador Radar</label>
+                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Nombre de By Pass</label>
                             </div>
                             <Input
                                 placeholder="Ej. Sniper MTY Centro"
@@ -419,7 +419,7 @@ const ByPassSection = ({ showToast }) => {
 
                         {/* 2. TARGET PROJECT (Single RibbonSelect) */}
                         <RibbonSelect
-                            label="Silo Destino"
+                            label="Proyecto Destino"
                             options={projects}
                             selected={projects.find(p => p.id === formData.projectId)?.name.toUpperCase() || ''}
                             onToggle={(name) => {
@@ -444,7 +444,7 @@ const ByPassSection = ({ showToast }) => {
 
                         {/* 4. CATEGORIES (Multi RibbonSelect) */}
                         <RibbonSelect
-                            label="Categorías ADN"
+                            label="Categorías"
                             options={categories}
                             selected={formData.categories}
                             onToggle={(v) => toggleArrayItem('categories', v)}
@@ -454,7 +454,7 @@ const ByPassSection = ({ showToast }) => {
 
                         {/* 5. MUNICIPIOS (Multi RibbonSelect) - NUEVO LEÓN */}
                         <RibbonSelect
-                            label="Geografía (NL)"
+                            label="Municipio"
                             options={MUNICIPIOS}
                             selected={formData.municipios}
                             onToggle={(v) => toggleArrayItem('municipios', v)}
@@ -464,7 +464,7 @@ const ByPassSection = ({ showToast }) => {
 
                         {/* 6. ESCOLARIDAD (Multi RibbonSelect) */}
                         <RibbonSelect
-                            label="Formación"
+                            label="Escolaridad"
                             options={ESCOLARIDADES}
                             selected={formData.escolaridades}
                             onToggle={(v) => toggleArrayItem('escolaridades', v)}
@@ -511,20 +511,12 @@ const ByPassSection = ({ showToast }) => {
 
                         <div className="flex items-center gap-6 w-full md:w-auto">
                             <Button
-                                variant="ghost"
-                                onClick={() => setIsModalOpen(false)}
-                                disabled={saving}
-                                className="flex-1 md:flex-none rounded-3xl px-12 py-5 h-16 text-[11px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-                            >
-                                Abortar
-                            </Button>
-                            <Button
                                 onClick={handleSave}
                                 disabled={saving}
                                 icon={saving ? Loader2 : Save}
-                                className={`flex-[2] md:flex-none rounded-3xl px-16 py-5 h-16 text-base font-black bg-blue-600 hover:bg-blue-700 shadow-2xl shadow-blue-600/30 transform hover:-translate-y-1 active:scale-[0.98] transition-all flex items-center justify-center gap-4 ${saving ? 'opacity-80' : ''}`}
+                                className={`flex-1 md:flex-none rounded-3xl px-16 py-5 h-16 text-base font-black bg-blue-600 hover:bg-blue-700 shadow-2xl shadow-blue-600/30 transform hover:-translate-y-1 active:scale-[0.98] transition-all flex items-center justify-center gap-4 ${saving ? 'opacity-80' : ''}`}
                             >
-                                {saving ? 'SINCRONIZANDO...' : (editingId ? 'ACTUALIZAR RADAR 🚀' : 'IMPLEMENTAR RADAR 🚀')}
+                                {saving ? 'GUARDANDO...' : 'GUARDAR 🚀'}
                             </Button>
                         </div>
                     </div>
