@@ -35,12 +35,12 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
             <div className="relative">
                 <div
                     onClick={() => setIsOpen(!isOpen)}
-                    className={`min-h-[52px] w-full pl-4 pr-12 py-3 border-2 rounded-2xl bg-white dark:bg-gray-900 cursor-pointer flex flex-wrap gap-2 items-center transition-all duration-300 shadow-sm ${isOpen
-                            ? 'border-blue-500 ring-4 ring-blue-500/10 shadow-lg'
-                            : 'border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700'
+                    className={`min-h-[46px] w-full pl-4 pr-12 py-2 border-2 rounded-2xl bg-white dark:bg-gray-900 cursor-pointer flex flex-wrap gap-2 items-center transition-all duration-300 shadow-sm ${isOpen
+                        ? 'border-blue-500 ring-4 ring-blue-500/10 shadow-lg'
+                        : 'border-gray-100 dark:border-gray-800 hover:border-blue-300 dark:hover:border-blue-700'
                         }`}
                 >
-                    {Icon && <Icon className={`w-5 h-5 transition-colors ${selected.length > 0 ? 'text-blue-500' : 'text-gray-400'}`} />}
+                    {Icon && <Icon className={`w-4 h-4 transition-colors ${selected.length > 0 ? 'text-blue-500' : 'text-gray-400'}`} />}
                     {selected.length === 0 ? (
                         <span className="text-sm font-medium text-gray-400">{placeholder}</span>
                     ) : (
@@ -433,16 +433,16 @@ const ByPassSection = ({ showToast }) => {
                 title={editingId ? "Editar Inteligencia de ByPass" : "Entrenar Nueva Regla de ByPass"}
                 maxWidth="7xl"
             >
-                <div className="px-4 py-6 space-y-12">
+                <div className="px-4 py-4 space-y-8">
                     {/* TOP SECTION: Identity and Destination */}
-                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-10">
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
                         <div className="xl:col-span-5 space-y-3">
                             <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Identificador de la Regla</label>
                             <Input
                                 placeholder="Ej. Filtro Sniper CDMX - Logística"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="text-lg font-bold py-4 rounded-[24px] border-2 focus:ring-8 focus:ring-blue-100/20"
+                                className="text-base font-bold py-3 rounded-[20px] border-2 focus:ring-8 focus:ring-blue-100/20"
                                 autoFocus
                             />
                             <p className="text-[10px] text-slate-400 px-2 leading-relaxed">Este nombre es sólo para organización interna. Ejemplo: "Choferes Senior Norte".</p>
@@ -453,7 +453,7 @@ const ByPassSection = ({ showToast }) => {
                             <div className="relative group">
                                 <GitMerge className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-500 z-10 transition-transform group-hover:scale-110" />
                                 <select
-                                    className="w-full pl-12 pr-12 py-4.5 border-2 border-slate-100 dark:border-slate-800 rounded-[24px] focus:ring-8 focus:ring-blue-100/20 outline-none bg-white dark:bg-gray-900 text-slate-900 dark:text-white text-sm font-bold appearance-none cursor-pointer hover:border-blue-400 transition-all shadow-sm"
+                                    className="w-full pl-12 pr-12 py-3.5 border-2 border-slate-100 dark:border-slate-800 rounded-[20px] focus:ring-8 focus:ring-blue-100/20 outline-none bg-white dark:bg-gray-900 text-slate-900 dark:text-white text-sm font-bold appearance-none cursor-pointer hover:border-blue-400 transition-all shadow-sm"
                                     value={formData.projectId}
                                     onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
                                 >
@@ -475,7 +475,7 @@ const ByPassSection = ({ showToast }) => {
                                         key={g}
                                         type="button"
                                         onClick={() => setFormData({ ...formData, gender: g })}
-                                        className={`flex-1 py-3 text-xs font-black rounded-2xl transition-all duration-300 ${formData.gender === g
+                                        className={`flex-1 py-2 text-xs font-black rounded-xl transition-all duration-300 ${formData.gender === g
                                             ? 'bg-white dark:bg-slate-700 text-blue-600 shadow-xl shadow-blue-500/10'
                                             : 'text-slate-400 hover:text-slate-600'}`}
                                     >
@@ -486,35 +486,35 @@ const ByPassSection = ({ showToast }) => {
                         </div>
                     </div>
 
-                    <div className="h-0.5 bg-gradient-to-r from-transparent via-slate-100 dark:via-slate-800 to-transparent" />
+                    <div className="h-0.5 bg-gradient-to-r from-transparent via-slate-100 dark:via-slate-800 to-transparent my-2" />
 
                     {/* FILTERS SECTION: ADN Data */}
-                    <div className="space-y-12">
+                    <div className="space-y-8">
                         {/* Row 1: Age and Categories */}
-                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-12">
+                        <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
                             <div className="xl:col-span-4 space-y-3">
                                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 px-1">Configuración de Edad</label>
-                                <div className="bg-slate-50/50 dark:bg-slate-800/40 p-8 rounded-[32px] border-2 border-slate-100 dark:border-slate-700/50 space-y-6">
-                                    <div className="flex items-center gap-6">
-                                        <div className="flex-1 space-y-2">
+                                <div className="bg-slate-50/50 dark:bg-slate-800/40 p-6 rounded-[24px] border-2 border-slate-100 dark:border-slate-700/50 space-y-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex-1 space-y-1">
                                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-2">Mín</span>
                                             <input
                                                 type="number"
                                                 placeholder="18"
                                                 value={formData.minAge}
                                                 onChange={(e) => setFormData({ ...formData, minAge: e.target.value })}
-                                                className="w-full text-2xl font-black p-4 text-center bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
+                                                className="w-full text-xl font-black p-3 text-center bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
                                             />
                                         </div>
-                                        <div className="text-2xl font-black text-slate-200 pt-6">/</div>
-                                        <div className="flex-1 space-y-2">
+                                        <div className="text-xl font-black text-slate-200 pt-6">/</div>
+                                        <div className="flex-1 space-y-1">
                                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-2">Máx</span>
                                             <input
                                                 type="number"
                                                 placeholder="55"
                                                 value={formData.maxAge}
                                                 onChange={(e) => setFormData({ ...formData, maxAge: e.target.value })}
-                                                className="w-full text-2xl font-black p-4 text-center bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
+                                                className="w-full text-xl font-black p-3 text-center bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none"
                                             />
                                         </div>
                                     </div>
@@ -541,7 +541,7 @@ const ByPassSection = ({ showToast }) => {
                         </div>
 
                         {/* Row 2: Location and Education */}
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-12">
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                             <MultiSelect
                                 label="Filtro Geográfico (Municipios)"
                                 options={MUNICIPIOS}
@@ -562,12 +562,12 @@ const ByPassSection = ({ showToast }) => {
                     </div>
 
                     {/* ACTION BUTTONS */}
-                    <div className="flex flex-col sm:flex-row justify-end gap-6 pt-12 border-t-2 border-slate-50 dark:border-slate-800/50">
+                    <div className="flex flex-col sm:flex-row justify-end gap-6 pt-8 border-t-2 border-slate-50 dark:border-slate-800/50">
                         <Button
                             variant="ghost"
                             onClick={() => setIsModalOpen(false)}
                             disabled={saving}
-                            className="rounded-[28px] px-12 py-4 h-16 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 font-black uppercase tracking-widest text-xs transition-all"
+                            className="rounded-[28px] px-12 py-3 h-14 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 font-black uppercase tracking-widest text-xs transition-all"
                         >
                             Abortar
                         </Button>
@@ -575,9 +575,9 @@ const ByPassSection = ({ showToast }) => {
                             onClick={handleSave}
                             disabled={saving}
                             icon={saving ? Loader2 : Save}
-                            className={`rounded-[28px] px-16 py-4 h-16 text-lg font-black bg-blue-600 hover:bg-blue-700 shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] transform hover:-translate-y-1 transition-all flex items-center gap-3 ${saving ? 'opacity-80' : ''}`}
+                            className={`rounded-[28px] px-16 py-3 h-14 text-base font-black bg-blue-600 hover:bg-blue-700 shadow-[0_20px_40px_-10px_rgba(37,99,235,0.4)] transform hover:-translate-y-1 transition-all flex items-center gap-3 ${saving ? 'opacity-80' : ''}`}
                         >
-                            {saving ? 'PROCESANDO...' : (editingId ? 'ACTUALIZAR INTELIGENCIA' : 'GUARDAR CONFIGURACIÓN')}
+                            {saving ? 'PROCESANDO...' : (editingId ? 'ACTUALIZAR' : 'GUARDAR')}
                         </Button>
                     </div>
                 </div>
