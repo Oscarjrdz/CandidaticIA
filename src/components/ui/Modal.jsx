@@ -23,7 +23,7 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
             <div
-                className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${maxWidth} overflow-hidden transform transition-all animate-slide-up border border-gray-200 dark:border-gray-700`}
+                className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${maxWidth} transform transition-all animate-slide-up border border-gray-200 dark:border-gray-700`}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}

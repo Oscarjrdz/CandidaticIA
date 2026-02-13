@@ -35,8 +35,8 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
                 <div
                     onClick={() => setIsOpen(!isOpen)}
                     className={`h-[48px] w-full px-4 border-2 rounded-xl bg-white dark:bg-slate-900/50 cursor-pointer flex items-center gap-3 transition-all duration-300 shadow-sm ${isOpen
-                            ? 'border-blue-500 ring-4 ring-blue-500/10 shadow-lg'
-                            : 'border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
+                        ? 'border-blue-500 ring-4 ring-blue-500/10 shadow-lg'
+                        : 'border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
                         }`}
                 >
                     {Icon && <Icon className={`w-4 h-4 ${selected.length > 0 ? 'text-blue-500' : 'text-slate-400'}`} />}
@@ -125,7 +125,7 @@ const ByPassSection = ({ showToast }) => {
     ];
 
     const ESCOLARIDADES = [
-        "Primaria", "Secundaria", "Preparatoria", "Técnica", "Licenciatura", "Maestría"
+        "Sin estudios", "Primaria", "Secundaria", "Preparatoria", "Técnica", "Licenciatura"
     ];
 
     const GENDERS = ["Cualquiera", "Hombre", "Mujer"];
@@ -452,7 +452,7 @@ const ByPassSection = ({ showToast }) => {
                             <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1" />
                         </div>
 
-                        <div className="flex flex-col xl:flex-row items-stretch gap-10 bg-white dark:bg-slate-950/20 p-10 rounded-[50px] border-2 border-slate-100 dark:border-slate-800/20 shadow-sm relative overflow-hidden">
+                        <div className="flex flex-col xl:flex-row items-stretch gap-10 bg-white dark:bg-slate-950/20 p-10 rounded-[50px] border-2 border-slate-100 dark:border-slate-800/20 shadow-sm relative group/ribbon">
                             <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
 
                             {/* AGE GROUP */}
