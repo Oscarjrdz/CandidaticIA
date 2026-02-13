@@ -20,7 +20,7 @@ import { getOpenAIResponse } from '../utils/openai.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
 [REGLAS DE EXTRACCIÓN]:
-1. Analiza el historial para extraer: nombreReal, genero, fechaNacimiento, municipio, categoria, escolaridad, tieneEmpleo.
+1. Analiza el historial para extraer: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad, tieneEmpleo.
 2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO] es incompleto y el usuario da más info, FUSIÓNALO.
 3. REGLA DE FECHA: Formato DD/MM/YYYY.
 4. REGLA DE ESCOLARIDAD (GOLD): "Kinder", "Primaria trunca" o "Ninguna" son INVÁLIDOS. Solo acepta Primaria terminada en adelante.
@@ -384,7 +384,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         "municipio": "string | null",
         "categoria": "string | null",
         "tieneEmpleo": "string | null",
-        "escolaridad": "string | null"
+        "escolaridad": "string | null",
+        "edad": "string | number | null"
     },
     "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
     "reaction": "null (Ignorado, el sistema lo maneja)",
@@ -520,7 +521,28 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         candidateUpdates.silencioActivo = aiResult.close_conversation === true;
 
         if (candidateUpdates.gratitudAlcanzada) console.log(`[Grace & Silence] Gratitude active for ${candidateId}.`);
+        if (candidateUpdates.gratitudAlcanzada) console.log(`[Grace & Silence] Gratitude active for ${candidateId}.`);
         if (candidateUpdates.silencioActivo) console.log(`[Grace & Silence] Silence active for ${candidateId}.`);
+
+        // --- AGE CALCULATION (Hybrid) ---
+        // If we have DOB but no Age, calculate it.
+        const dobStr = candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento;
+        if (!candidateUpdates.edad && !candidateData.edad && dobStr) {
+            // Try DD/MM/YYYY
+            const parts = dobStr.split('/');
+            if (parts.length === 3) {
+                const dob = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                if (!isNaN(dob.getTime())) {
+                    const diff = Date.now() - dob.getTime();
+                    const ageDate = new Date(diff);
+                    const calculatedAge = Math.abs(ageDate.getUTCFullYear() - 1970);
+                    if (calculatedAge > 15 && calculatedAge < 100) {
+                        console.log(`[AGE CALC] Calculated age ${calculatedAge} from DOB ${dobStr}`);
+                        candidateUpdates.edad = calculatedAge;
+                    }
+                }
+            }
+        }
 
         // --- STICKER CELEBRATION (Lock / Candado) ---
         const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
