@@ -124,6 +124,7 @@ const ByPassSection = ({ showToast }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const [systemActive, setSystemActive] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -151,7 +152,20 @@ const ByPassSection = ({ showToast }) => {
         loadRules();
         loadProjects();
         loadCategories();
+        loadSystemStatus();
     }, []);
+
+    const loadSystemStatus = async () => {
+        try {
+            const res = await fetch('/api/settings?type=bypass_enabled');
+            const data = await res.json();
+            if (data.success) {
+                setSystemActive(data.data);
+            }
+        } catch (error) {
+            console.error('Error loading system status:', error);
+        }
+    };
 
     const loadRules = async () => {
         try {
@@ -255,6 +269,23 @@ const ByPassSection = ({ showToast }) => {
         }
     };
 
+    const handleToggleSystem = async () => {
+        const newValue = !systemActive;
+        setSystemActive(newValue);
+        try {
+            await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'bypass_enabled', data: newValue })
+            });
+            showToast(newValue ? 'Sistema ByPass Activado' : 'Sistema ByPass Desactivado', 'success');
+        } catch (error) {
+            console.error('Error toggling system:', error);
+            showToast('Error al cambiar estado del sistema', 'error');
+            setSystemActive(!newValue);
+        }
+    };
+
     const handleToggleActive = async (rule) => {
         try {
             const res = await fetch('/api/bypass', {
@@ -302,30 +333,43 @@ const ByPassSection = ({ showToast }) => {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Horizontal Command Bar */}
-            <div className="flex flex-col xl:flex-row justify-between items-center gap-6 bg-white dark:bg-slate-900 px-8 py-6 rounded-[32px] shadow-2xl shadow-blue-500/5 border border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-5">
-                    <div className="p-4 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl shadow-xl shadow-blue-500/20">
-                        <Zap className="w-8 h-8 text-white fill-white" />
+            {/* Master ByPass Controller: Matched to Bot IA style */}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center space-x-4">
+                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${systemActive ? 'bg-blue-600 shadow-lg shadow-blue-600/20' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                        <Zap className={`w-5 h-5 ${systemActive ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                     <div>
-                        <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">ByPass Intelligence ⚡</h2>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">ByPass Intelligence ⚡</h2>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Enrutamiento Automático Sniper</span>
+                            <span className={`w-1.5 h-1.5 rounded-full ${systemActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
+                            <p className={`text-[10px] font-black tracking-widest uppercase ${systemActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
+                                {systemActive ? 'ESCANEANDO CANDIDATOS' : 'STANDBY'}
+                            </p>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <div className="hidden md:flex flex-col items-end px-4 border-r border-slate-100 dark:border-slate-800">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado del Radar</span>
-                        <div className="flex items-center gap-1.5">
-                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Escaneando Candidatos...</span>
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm">
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Global</span>
+                            <span className={`text-[10px] font-bold ${systemActive ? 'text-blue-600' : 'text-gray-400'}`}>
+                                {systemActive ? 'ACTIVADO' : 'DESACTIVADO'}
+                            </span>
                         </div>
+                        <button
+                            onClick={handleToggleSystem}
+                            className={`
+                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
+                                ${systemActive ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
+                            `}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${systemActive ? 'translate-x-6' : 'translate-x-1'}`} />
+                        </button>
                     </div>
-                    <Button onClick={handleOpenCreate} icon={Plus} className="rounded-2xl px-10 py-5 text-base font-black bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-500/30 transform hover:-translate-y-1 active:scale-95 transition-all">
+
+                    <Button onClick={handleOpenCreate} icon={Plus} className="bg-blue-600 hover:bg-blue-700 text-white h-12 px-10 rounded-2xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-blue-500/20 transition-all hover:scale-[1.02]">
                         Nuevo ByPass
                     </Button>
                 </div>
@@ -362,10 +406,18 @@ const ByPassSection = ({ showToast }) => {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex gap-1 xl:opacity-0 group-hover:opacity-100 transition-opacity translate-x-3 group-hover:translate-x-0">
-                                        <button onClick={() => handleToggleActive(rule)} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl hover:text-blue-600 transition-all"><Power className="w-4 h-4" /></button>
-                                        <button onClick={() => handleEdit(rule)} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl hover:text-blue-600 transition-all"><Pencil className="w-4 h-4" /></button>
-                                        <button onClick={() => handleDelete(rule.id)} className="p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl hover:text-red-500 transition-all"><Trash2 className="w-4 h-4" /></button>
+                                    <div className="flex items-center gap-1 xl:opacity-0 group-hover:opacity-100 transition-all translate-x-3 group-hover:translate-x-0">
+                                        <button
+                                            onClick={() => handleToggleActive(rule)}
+                                            className={`
+                                                relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none mr-2
+                                                ${rule.active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-700'}
+                                            `}
+                                        >
+                                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${rule.active ? 'translate-x-5' : 'translate-x-1'}`} />
+                                        </button>
+                                        <button onClick={() => handleEdit(rule)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl hover:text-blue-600 transition-all"><Pencil className="w-4 h-4" /></button>
+                                        <button onClick={() => handleDelete(rule.id)} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl hover:text-red-500 transition-all"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
                                 <div className="space-y-4">

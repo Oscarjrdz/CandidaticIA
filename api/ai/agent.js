@@ -207,7 +207,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             'ai_config',
             'candidatic_categories',
             'bot_extraction_rules',
-            'bot_cerebro1_rules'
+            'bot_cerebro1_rules',
+            'bypass_enabled'
         ];
 
         const batchConfig = FEATURES.USE_BACKEND_CACHE
@@ -530,7 +531,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         // --- ⚡ BYPASS SYSTEM (v2.6) ---
         // Automatic routing to projects upon completion
-        if (isNowComplete && !candidateData.projectId) {
+        const isBypassEnabled = batchConfig.bypass_enabled === 'true';
+        if (isNowComplete && !candidateData.projectId && isBypassEnabled) {
             try {
                 const bypassIds = await redis.zrange('bypass:list', 0, -1);
                 if (bypassIds.length > 0) {

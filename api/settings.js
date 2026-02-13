@@ -80,6 +80,14 @@ export default async function handler(req, res) {
                 });
             }
 
+            if (type === 'bypass_enabled') {
+                value = await redis.get('bypass_enabled');
+                return res.status(200).json({
+                    success: true,
+                    data: value === 'true'
+                });
+            }
+
             return res.status(400).json({ error: 'Invalid type' });
         }
 
@@ -168,6 +176,14 @@ export default async function handler(req, res) {
                 return res.status(200).json({
                     success: true,
                     message: 'Proactive status saved'
+                });
+            }
+
+            if (type === 'bypass_enabled') {
+                await redis.set('bypass_enabled', data ? 'true' : 'false');
+                return res.status(200).json({
+                    success: true,
+                    message: 'ByPass system status saved'
                 });
             }
 
