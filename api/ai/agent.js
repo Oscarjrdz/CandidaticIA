@@ -529,11 +529,28 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const finalAudit = auditProfile(finalMerged, customFields);
         const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
 
-        // --- ⚡ BYPASS SYSTEM (v2.6) ---
+        // --- ⚡ BYPASS SYSTEM (v2.6) - INSTRUMENTED ---
         // Automatic routing to projects upon completion
         const isBypassEnabled = batchConfig.bypass_enabled === 'true';
         if (isNowComplete && !candidateData.projectId && isBypassEnabled) {
             console.log(`[BYPASS] 🔍 Starting evaluation for ${candidateId}. Profile is COMPLETE.`);
+
+            // 🕵️‍♂️ DEBUG TRACE OBJECT
+            const debugTrace = {
+                timestamp: new Date().toISOString(),
+                candidateId: candidateId,
+                candidateData: {
+                    edad: finalMerged.edad,
+                    municipio: finalMerged.municipio,
+                    categoria: finalMerged.categoria,
+                    escolaridad: finalMerged.escolaridad,
+                    genero: finalMerged.genero,
+                    nombreReal: finalMerged.nombreReal
+                },
+                rules: [],
+                finalResult: 'NO_MATCH'
+            };
+
             try {
                 const bypassIds = await redis.zrange('bypass:list', 0, -1);
                 if (bypassIds.length > 0) {
@@ -560,14 +577,25 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         const ruleCatsLow = (categories || []).map(c => String(c).toLowerCase().trim());
                         const catMatch = (ruleCatsLow.length === 0 || cCats.some(c => ruleCatsLow.includes(c)));
 
-                        if (ageMatch && genderMatch && munMatch && escMatch && catMatch) {
+                        const isMatch = ageMatch && genderMatch && munMatch && escMatch && catMatch;
+
+                        // Add to Debug Trace
+                        debugTrace.rules.push({
+                            ruleName: rule.name,
+                            criteria: { minAge, maxAge, municipios: municipios.join(','), categories: categories.join(','), gender },
+                            checks: { age: ageMatch, municipio: munMatch, categoria: catMatch, escolaridad: escMatch, genero: genderMatch },
+                            isMatch
+                        });
+
+                        if (isMatch) {
                             console.log(`[BYPASS] ⚡ Candidate ${candidateId} matches rule "${rule.name}". Routing to Project ${projectId}.`);
                             candidateUpdates.projectId = projectId;
                             candidateUpdates.stepId = 'step_new'; // Force start at first step
                             candidateUpdates.bypass_rule = rule.name;
+                            debugTrace.finalResult = 'MATCH';
                             break; // Stop at first match
                         } else {
-                            console.log(`[BYPASS] ❌ No match for rule "${rule.name}". (Age: ${ageMatch}, Gender: ${genderMatch}, Mun: ${munMatch}, Esc: ${escMatch}, Cat: ${catMatch})`);
+                            console.log(`[BYPASS] ❌ No match for rule "${rule.name}".`);
                         }
                     }
                 } else {
@@ -575,6 +603,17 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 }
             } catch (err) {
                 console.error('[BYPASS] Error evaluating rules:', err);
+                debugTrace.error = err.message;
+            }
+
+            // 💾 SAVE TRACE TO REDIS (Expire 24h)
+            try {
+                const traceKey = 'debug:bypass:traces';
+                await redis.lpush(traceKey, JSON.stringify(debugTrace));
+                await redis.ltrim(traceKey, 0, 49); // Keep last 50
+                await redis.expire(traceKey, 86400);
+            } catch (e) {
+                console.error('Error saving bypass trace', e);
             }
         }
 
