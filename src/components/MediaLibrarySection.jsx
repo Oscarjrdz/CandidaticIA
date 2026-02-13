@@ -68,36 +68,31 @@ const MediaLibrarySection = ({ showToast }) => {
 
     return (
         <div className="h-[calc(100vh-theme(spacing.24))] flex flex-col space-y-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-lg">
-                            <Folder className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-                                Biblioteca Multimedia
-                            </h2>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                Gestiona los archivos que Brenda e Inmobiliaria comparten
-                            </p>
-                        </div>
+            {/* Header: Command Bar Style */}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
+                <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center transition-all bg-gray-100 dark:bg-gray-700">
+                        <Folder className="w-5 h-5 text-gray-500" />
                     </div>
-                    <div className="flex items-center space-x-2">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Buscar archivos..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none w-64"
-                            />
-                        </div>
-                        <Button icon={Plus} variant="primary">
-                            Subir
-                        </Button>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">BIBLIOTECA</h2>
+                        <p className="text-[10px] font-black tracking-widest uppercase text-gray-500">RECURSOS COMPARTIDOS</p>
                     </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                        <input
+                            type="text"
+                            placeholder="Buscar..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="pl-9 pr-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 outline-none w-48 transition-all"
+                        />
+                    </div>
+                    <Button icon={Plus} variant="primary" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest h-9 px-4">
+                        Subir
+                    </Button>
                 </div>
             </div>
 

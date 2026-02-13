@@ -113,24 +113,39 @@ const UsersSection = ({ showToast }) => {
 
     return (
         <div className="space-y-6">
+            {/* Header: Command Bar Style */}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
+                <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center transition-all bg-gray-100 dark:bg-gray-700">
+                        <User className="w-5 h-5 text-gray-500" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">USUARIOS</h2>
+                        <p className="text-[10px] font-black tracking-widest uppercase text-gray-500">GESTIÓN DE EQUIPO</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button onClick={loadUsers} icon={RefreshCw} variant="outline" size="sm" disabled={loading} />
+                    <Button onClick={() => handleOpenModal()} icon={UserPlus} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
+                        Nuevo Usuario
+                    </Button>
+                </div>
+            </div>
+
             <Card>
                 <div className="p-4 border-b border-gray-100 dark:border-gray-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">Usuarios</h2>
-                    <div className="flex flex-col md:flex-row gap-4">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <input
-                                type="search"
-                                placeholder="Buscar usuarios..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none dark:text-white text-sm"
-                            />
-                        </div>
-                        <div className="flex items-center space-x-2">
-                            <Button onClick={loadUsers} icon={RefreshCw} variant="outline" size="sm" disabled={loading} />
-                            <Button onClick={() => handleOpenModal()} icon={UserPlus}>Nuevo Usuario</Button>
-                        </div>
+                    <div className="relative w-full md:w-96">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                            type="search"
+                            placeholder="Buscar por nombre o teléfono..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none dark:text-white text-xs font-medium"
+                        />
+                    </div>
+                    <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                        Total: {users.length}
                     </div>
                 </div>
                 <div className="overflow-x-auto">

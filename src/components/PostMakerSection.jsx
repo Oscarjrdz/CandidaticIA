@@ -259,6 +259,24 @@ const PostMakerSection = () => {
     return (
         <div className="h-[calc(100vh-2rem)] flex flex-col gap-6 p-4 overflow-y-auto">
 
+            {/* Header: Command Bar Style */}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
+                <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 rounded-2xl flex items-center justify-center transition-all bg-gray-100 dark:bg-gray-700">
+                        <Share2 className="w-5 h-5 text-gray-500" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">POST MAKER</h2>
+                        <p className="text-[10px] font-black tracking-widest uppercase text-gray-500">MARKETING AUTOMATIZADO</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button onClick={handleCancelEdit} variant="outline" size="sm" icon={Edit2} className="opacity-50 hover:opacity-100">
+                        Nuevo / Reset
+                    </Button>
+                </div>
+            </div>
+
             {/* TOP AREA: EDITOR & PREVIEW */}
             <div className="flex flex-col lg:flex-row gap-8 mb-4">
 
@@ -266,7 +284,7 @@ const PostMakerSection = () => {
                 <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 self-start">
                     <div className="flex justify-between items-center mb-6">
                         <h2 className="text-xl font-bold text-gray-800">
-                            {editingId ? 'Editando Publicación' : 'Crea un post'}
+                            {editingId ? 'Editando Publicación' : 'Editor de Contenido'}
                         </h2>
                         {editingId && (
                             <button onClick={handleCancelEdit} className="text-xs text-red-500 font-medium hover:underline">
