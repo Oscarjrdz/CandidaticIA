@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Zap, Plus, GitMerge, Tag, Calendar, Loader2, Save, Trash2, Pencil, Power, MapPin, GraduationCap, Users, Check, ChevronDown, X, Layers, Target, ArrowRight } from 'lucide-react';
+import { Zap, Plus, GitMerge, Tag, Calendar, Loader2, Save, Trash2, Pencil, Power, MapPin, GraduationCap, Users, Check, ChevronDown, X, Layers, Target, ArrowRight, ShieldCheck, ZapOff } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
 
 /**
- * Componente de Multiselección Horizontal Ultra-Compacto (v3.0)
+ * Componente de Multiselección Ribbon (v4.0)
+ * Diseñado para vivir en una tira horizontal ultra-ancha.
  */
 const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Seleccionar...", iconSource: Icon }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -23,12 +24,9 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
     }, []);
 
     return (
-        <div className="flex-1 min-w-[200px] flex flex-col gap-2" ref={containerRef}>
-            <div className="flex items-center gap-2 px-1">
-                <div className="p-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                    {Icon && <Icon className="w-3.5 h-3.5 text-slate-400" />}
-                </div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">
+        <div className="flex-1 min-w-[180px] group" ref={containerRef}>
+            <div className="flex items-center gap-2 mb-1.5 px-1">
+                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-blue-500 transition-colors">
                     {label}
                 </label>
             </div>
@@ -36,25 +34,30 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
             <div className="relative">
                 <div
                     onClick={() => setIsOpen(!isOpen)}
-                    className={`min-h-[44px] w-full px-3 py-2 border-2 rounded-xl bg-white dark:bg-gray-950 cursor-pointer flex items-center transition-all duration-300 shadow-sm ${isOpen
-                            ? 'border-blue-500 ring-2 ring-blue-500/10 shadow-lg'
-                            : 'border-slate-100 dark:border-slate-800/50 hover:border-blue-300 dark:hover:border-blue-700'
+                    className={`h-[48px] w-full px-4 border-2 rounded-xl bg-white dark:bg-slate-900/50 cursor-pointer flex items-center gap-3 transition-all duration-300 shadow-sm ${isOpen
+                            ? 'border-blue-500 ring-4 ring-blue-500/10 shadow-lg'
+                            : 'border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
                         }`}
                 >
+                    {Icon && <Icon className={`w-4 h-4 ${selected.length > 0 ? 'text-blue-500' : 'text-slate-400'}`} />}
                     <div className="flex-1 truncate">
                         {selected.length === 0 ? (
-                            <span className="text-xs font-semibold text-slate-400">{placeholder}</span>
+                            <span className="text-[11px] font-bold text-slate-400">{placeholder}</span>
                         ) : (
-                            <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                                {selected.length} {selected.length === 1 ? 'seleccionado' : 'seleccionados'}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-black text-blue-600 dark:text-blue-400">{selected.length}</span>
+                                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">items</span>
+                            </div>
                         )}
                     </div>
-                    <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180 text-blue-500' : ''}`} />
+                    <ChevronDown className={`w-4 h-4 text-slate-300 transition-transform duration-300 ${isOpen ? 'rotate-180 text-blue-500' : ''}`} />
                 </div>
 
                 {isOpen && (
-                    <div className="absolute z-[110] mt-2 w-full max-h-60 overflow-y-auto bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl p-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="absolute z-[120] mt-2 w-[240px] max-h-72 overflow-y-auto bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] p-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="p-2 border-b border-slate-50 dark:border-slate-800 mb-2">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Opciones Disponibles</span>
+                        </div>
                         {options.map(option => {
                             const name = typeof option === 'string' ? option : option.name;
                             const isSelected = selected.includes(name);
@@ -62,13 +65,13 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
                                 <div
                                     key={name}
                                     onClick={() => onToggle(name)}
-                                    className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-all mb-0.5 ${isSelected
-                                        ? 'bg-blue-600 text-white'
+                                    className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all mb-1 group/item ${isSelected
+                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                                         : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
                                         }`}
                                 >
                                     <span className="text-xs font-bold">{name}</span>
-                                    {isSelected && <Check className="w-3.5 h-3.5 stroke-[3px]" />}
+                                    {isSelected ? <Check className="w-4 h-4 stroke-[3px]" /> : <Plus className="w-3.5 h-3.5 opacity-0 group-hover/item:opacity-100" />}
                                 </div>
                             );
                         })}
@@ -76,15 +79,16 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
                 )}
             </div>
 
+            {/* Micro Tags Below */}
             {selected.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                    {selected.slice(0, 2).map(item => (
-                        <span key={item} className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-600 dark:text-blue-400 rounded-lg border border-blue-100 dark:border-blue-800/40 truncate max-w-[80px]">
+                <div className="flex flex-wrap gap-1 mt-2 min-h-[16px]">
+                    {selected.slice(0, 3).map(item => (
+                        <span key={item} className="inline-flex items-center px-2 py-0.5 bg-blue-50/50 dark:bg-blue-900/10 text-[9px] font-bold text-blue-600 dark:text-blue-400 rounded-lg border border-blue-100/30 dark:border-blue-800/20 truncate max-w-[80px]">
                             {item}
                         </span>
                     ))}
-                    {selected.length > 2 && (
-                        <span className="text-[9px] font-black text-slate-400 pl-1">+{selected.length - 2}</span>
+                    {selected.length > 3 && (
+                        <span className="text-[9px] font-black text-slate-400 flex items-center">+ {selected.length - 3}</span>
                     )}
                 </div>
             )}
@@ -280,67 +284,87 @@ const ByPassSection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-8 p-4">
-            {/* Main Header */}
-            <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-6 rounded-[24px] shadow-sm border border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-blue-600 rounded-2xl shadow-lg shadow-blue-500/30">
-                        <Zap className="w-7 h-7 text-white fill-white" />
+        <div className="space-y-8 animate-in fade-in duration-500">
+            {/* Horizontal Command Bar */}
+            <div className="flex flex-col xl:flex-row justify-between items-center gap-6 bg-white dark:bg-slate-900 px-8 py-6 rounded-[32px] shadow-2xl shadow-blue-500/5 border border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-5">
+                    <div className="p-4 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl shadow-xl shadow-blue-500/20">
+                        <Zap className="w-8 h-8 text-white fill-white" />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">ByPass Intelligence ⚡</h2>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Enrutamiento Automático de ADN</p>
+                        <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">ByPass Intelligence ⚡</h2>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Enrutamiento Automático Sniper</span>
+                        </div>
                     </div>
                 </div>
-                <Button onClick={handleOpenCreate} icon={Plus} className="rounded-2xl px-8 py-4 font-black bg-blue-600 hover:bg-blue-700 active:scale-95 transition-all">
-                    Nuevo ByPass
-                </Button>
+
+                <div className="flex items-center gap-4">
+                    <div className="hidden md:flex flex-col items-end px-4 border-r border-slate-100 dark:border-slate-800">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estado del Radar</span>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                            <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Escaneando Candidatos...</span>
+                        </div>
+                    </div>
+                    <Button onClick={handleOpenCreate} icon={Plus} className="rounded-2xl px-10 py-5 text-base font-black bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-500/30 transform hover:-translate-y-1 active:scale-95 transition-all">
+                        Nuevo ByPass
+                    </Button>
+                </div>
             </div>
 
             {loading ? (
                 <div className="flex justify-center py-24">
-                    <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+                    <Loader2 className="w-16 h-16 animate-spin text-blue-500/20" />
                 </div>
             ) : rules.length === 0 ? (
-                <div className="py-24 text-center bg-slate-50 dark:bg-slate-900/50 rounded-[40px] border-4 border-dashed border-slate-100 dark:border-slate-800">
-                    <Layers className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-                    <h3 className="text-xl font-black text-slate-400">Sin reglas configuradas</h3>
+                <div className="py-32 text-center bg-slate-50/50 dark:bg-slate-950/20 rounded-[48px] border-4 border-dashed border-slate-100 dark:border-slate-800/50">
+                    <ZapOff className="w-20 h-20 text-slate-200 mx-auto mb-6" />
+                    <h3 className="text-2xl font-black text-slate-300">Sin Inteligencia de ByPass</h3>
+                    <p className="text-slate-400 mt-2 font-bold italic">Configura tu primer radar para automatizar tu flujo.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
                     {rules.map((rule) => {
                         const targetProject = projects.find(p => p.id === rule.projectId);
                         return (
-                            <Card key={rule.id} className="group relative overflow-hidden rounded-[32px] border-2 border-slate-50 dark:border-slate-800/50 bg-white dark:bg-slate-900 hover:border-blue-500 transition-all duration-300 p-6">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${rule.active ? 'bg-blue-600 shadow-md shadow-blue-500/20' : 'bg-slate-100 dark:bg-slate-800'} transition-all`}>
+                            <Card key={rule.id} className="group relative overflow-hidden rounded-[32px] border-2 border-slate-50 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-xl hover:border-blue-500/50 transition-all duration-300 p-6">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`p-3.5 rounded-2xl flex items-center justify-center transition-all duration-500 ${rule.active ? 'bg-blue-600 shadow-lg shadow-blue-500/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
                                             <Target className={`w-5 h-5 ${rule.active ? 'text-white' : 'text-slate-400'}`} />
                                         </div>
                                         <div>
-                                            <h4 className="text-sm font-black text-slate-900 dark:text-white truncate max-w-[150px]">{rule.name}</h4>
-                                            <span className={`text-[9px] font-black uppercase tracking-tighter ${rule.active ? 'text-blue-500' : 'text-slate-400'}`}>
-                                                {rule.active ? 'Activo' : 'Pausado'}
-                                            </span>
+                                            <h4 className="text-base font-black text-slate-900 dark:text-white truncate max-w-[140px] tracking-tight">{rule.name}</h4>
+                                            <div className="flex items-center gap-1.5 mt-0.5">
+                                                <div className={`w-1.5 h-1.5 rounded-full ${rule.active ? 'bg-blue-500' : 'bg-slate-400'}`} />
+                                                <span className={`text-[9px] font-black uppercase tracking-widest ${rule.active ? 'text-blue-500' : 'text-slate-400'}`}>
+                                                    {rule.active ? 'Online' : 'Pausado'}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleToggleActive(rule)} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg hover:text-blue-600 transition-colors"><Power className="w-3.5 h-3.5" /></button>
-                                        <button onClick={() => handleEdit(rule)} className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg hover:text-blue-600 transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                                        <button onClick={() => handleDelete(rule.id)} className="p-2 bg-red-50 dark:bg-red-900/10 rounded-lg hover:text-red-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                    <div className="flex gap-1 xl:opacity-0 group-hover:opacity-100 transition-opacity translate-x-3 group-hover:translate-x-0">
+                                        <button onClick={() => handleToggleActive(rule)} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl hover:text-blue-600 transition-all"><Power className="w-4 h-4" /></button>
+                                        <button onClick={() => handleEdit(rule)} className="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl hover:text-blue-600 transition-all"><Pencil className="w-4 h-4" /></button>
+                                        <button onClick={() => handleDelete(rule.id)} className="p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl hover:text-red-500 transition-all"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 mb-4 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-700/50">
-                                    <GitMerge className="w-4 h-4 text-blue-500" />
-                                    <span className="text-[11px] font-black text-slate-700 dark:text-slate-300 truncate">
-                                        {targetProject ? targetProject.name : 'Desconocido'}
-                                    </span>
-                                </div>
-                                <div className="flex flex-wrap gap-1.5">
-                                    <span className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-[9px] font-black text-slate-500 rounded-lg italic border border-slate-100">
-                                        {rule.minAge || 0}-{rule.maxAge || 99} años
-                                    </span>
-                                    {rule.categories?.map(c => <span key={c} className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-[9px] font-black text-blue-600 rounded-lg">{c}</span>)}
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/50">
+                                        <div className="p-2 bg-white dark:bg-slate-900 rounded-lg shadow-sm">
+                                            <GitMerge className="w-4 h-4 text-blue-500" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Destino</span>
+                                            <p className="text-xs font-black text-slate-800 dark:text-slate-200 truncate">{targetProject ? targetProject.name : 'No Asignado'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {rule.categories?.map(c => <span key={c} className="px-2.5 py-1 bg-blue-50/50 dark:bg-blue-900/10 text-[9px] font-black text-blue-600 dark:text-blue-400 rounded-lg border border-blue-100/50 dark:border-blue-800/10">{c.toUpperCase()}</span>)}
+                                        <span className="px-2.5 py-1 bg-slate-50 dark:bg-slate-800 text-[9px] font-black text-slate-500 rounded-lg border border-slate-100 dark:border-slate-700 shadow-sm">{rule.minAge || 0}-{rule.maxAge || 99} AÑOS</span>
+                                    </div>
                                 </div>
                             </Card>
                         )
@@ -348,54 +372,70 @@ const ByPassSection = ({ showToast }) => {
                 </div>
             )}
 
-            {/* CINEMA WIDE MODAL - STRICTLY HORIZONTAL */}
+            {/* TRUE HORIZONTAL RIBBON MODAL */}
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                title={editingId ? "Editar Inteligencia" : "Nuevo Enrutamiento"}
-                maxWidth="screen-2xl"
+                title={editingId ? "Ajuste de Inteligencia ByPass" : "Entrenamiento de Nuevo Radar ByPass"}
+                maxWidth="max-w-[95vw]"
             >
-                <div className="p-6 space-y-10">
-                    {/* Identity Bar */}
-                    <div className="flex flex-col xl:flex-row items-center gap-8 bg-slate-50/50 dark:bg-slate-800/30 p-6 rounded-[32px] border-2 border-slate-100 dark:border-slate-800/50">
-                        <div className="flex-1 w-full space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-2">Identificador</label>
+                <div className="p-8 space-y-12">
+                    {/* TOP DASHBOARD: Main Identity Ribbon */}
+                    <div className="flex flex-col 2xl:flex-row items-center gap-10 bg-slate-50 dark:bg-slate-900/50 p-8 rounded-[40px] border-2 border-slate-100 dark:border-slate-800/50 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32 transition-transform duration-1000 group-hover:scale-110" />
+
+                        {/* IDENTIFIER */}
+                        <div className="flex-[1.5] w-full min-w-0 space-y-3">
+                            <div className="flex items-center gap-2 px-1">
+                                <Tag className="w-3.5 h-3.5 text-blue-500" />
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Identificador Radar</label>
+                            </div>
                             <Input
-                                placeholder="Ej. Sniper Operadores CDMX"
+                                placeholder="Ej. Sniper Operadores Norte"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="text-base font-black py-4 rounded-2xl border-2 focus:ring-4 focus:ring-blue-500/10"
+                                className="text-lg font-black py-5 px-6 rounded-[24px] border-2 focus:ring-8 focus:ring-blue-100/20 active:scale-[0.99] transition-all"
                             />
                         </div>
 
-                        <ArrowRight className="hidden xl:block w-6 h-6 text-slate-200" />
+                        <ArrowRight className="hidden 2xl:block w-8 h-8 text-slate-200 animate-pulse" />
 
-                        <div className="flex-1 w-full space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-2">Silo (Proyecto) Destino</label>
-                            <div className="relative">
-                                <GitMerge className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-blue-500 z-10" />
+                        {/* TARGET SILO */}
+                        <div className="flex-1 w-full min-w-0 space-y-3">
+                            <div className="flex items-center gap-2 px-1">
+                                <GitMerge className="w-3.5 h-3.5 text-blue-500" />
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Silo Destino</label>
+                            </div>
+                            <div className="relative group/select">
                                 <select
-                                    className="w-full pl-12 pr-12 py-4 border-2 border-slate-200 dark:border-slate-800 rounded-2xl outline-none bg-white dark:bg-gray-950 text-sm font-black appearance-none focus:ring-4 focus:ring-blue-500/10 transition-all"
+                                    className="w-full pl-6 pr-12 py-5 border-2 border-slate-100 dark:border-slate-800 rounded-[24px] bg-white dark:bg-slate-950 text-sm font-black appearance-none focus:ring-8 focus:ring-blue-100/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
                                     value={formData.projectId}
                                     onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
                                 >
-                                    <option value="">-- SELECCIONAR DESTINO --</option>
+                                    <option value="">-- SELECCIONAR PROYECTO --</option>
                                     {projects.map(p => (
                                         <option key={p.id} value={p.id}>{p.name.toUpperCase()}</option>
                                     ))}
                                 </select>
-                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                                <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 pointer-events-none group-hover/select:text-blue-500 transition-colors" />
                             </div>
                         </div>
 
-                        <div className="w-full xl:w-72 space-y-2">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 pl-2">Género</label>
-                            <div className="flex bg-white dark:bg-gray-950 p-1.5 rounded-2xl border-2 border-slate-200 dark:border-slate-800">
+                        {/* GENDER - Optimized wide segmented control */}
+                        <div className="flex-1 w-full min-w-[320px] space-y-3">
+                            <div className="flex items-center gap-2 px-1">
+                                <Users className="w-3.5 h-3.5 text-blue-500" />
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Preferencia Género</label>
+                            </div>
+                            <div className="flex bg-white dark:bg-slate-950 p-2 rounded-[24px] border-2 border-slate-100 dark:border-slate-800 shadow-inner">
                                 {GENDERS.map(g => (
                                     <button
                                         key={g}
+                                        type="button"
                                         onClick={() => setFormData({ ...formData, gender: g })}
-                                        className={`flex-1 py-2 text-[10px] font-black rounded-xl transition-all ${formData.gender === g ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+                                        className={`flex-1 py-3 text-[11px] font-black rounded-[18px] transition-all duration-300 ${formData.gender === g
+                                            ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30 ring-2 ring-white/10'
+                                            : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
                                     >
                                         {g.toUpperCase()}
                                     </button>
@@ -404,88 +444,111 @@ const ByPassSection = ({ showToast }) => {
                         </div>
                     </div>
 
-                    {/* FILTERS DASHBOARD - HORIZONTAL ROW */}
-                    <div className="space-y-4">
-                        <h4 className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-[0.2em] border-l-4 border-blue-500 pl-3">DNA Sniper Filters 🎯</h4>
-                        <div className="flex flex-col lg:flex-row items-start gap-8 bg-white dark:bg-slate-950/20 p-8 rounded-[40px] border-2 border-slate-50 dark:border-slate-800/10 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/5 rounded-full blur-[100px] -mr-48 -mt-48" />
+                    {/* ADN SNIPER FILTERS RIBBON - Horizontal Row */}
+                    <div className="space-y-6">
+                        <div className="flex items-center gap-4">
+                            <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1" />
+                            <h4 className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-[0.3em] bg-blue-50 dark:bg-blue-900/20 px-6 py-2 rounded-full border border-blue-100 dark:border-blue-800/50">DNA Sniper Filters 🎯</h4>
+                            <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1" />
+                        </div>
 
-                            {/* Age Column (Manual) */}
-                            <div className="w-full lg:w-48 space-y-3 relative z-10">
+                        <div className="flex flex-col xl:flex-row items-stretch gap-10 bg-white dark:bg-slate-950/20 p-10 rounded-[50px] border-2 border-slate-100 dark:border-slate-800/20 shadow-sm relative overflow-hidden">
+                            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
+
+                            {/* AGE GROUP */}
+                            <div className="w-full xl:w-[240px] space-y-4">
                                 <div className="flex items-center gap-2 px-1">
-                                    <div className="p-1.5 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                                    </div>
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Rango Edad</label>
+                                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rango de Edad</label>
                                 </div>
-                                <div className="flex items-center gap-2 bg-slate-50/50 dark:bg-slate-800 p-2 rounded-xl">
-                                    <input
-                                        type="number"
-                                        placeholder="Min"
-                                        value={formData.minAge}
-                                        onChange={(e) => setFormData({ ...formData, minAge: e.target.value })}
-                                        className="w-full bg-white dark:bg-gray-900 border border-slate-100 dark:border-slate-700 rounded-lg p-2 text-xs font-black text-center outline-none focus:ring-2 focus:ring-blue-500/20"
-                                    />
-                                    <span className="text-slate-300 font-bold">/</span>
-                                    <input
-                                        type="number"
-                                        placeholder="Max"
-                                        value={formData.maxAge}
-                                        onChange={(e) => setFormData({ ...formData, maxAge: e.target.value })}
-                                        className="w-full bg-white dark:bg-gray-900 border border-slate-100 dark:border-slate-700 rounded-lg p-2 text-xs font-black text-center outline-none focus:ring-2 focus:ring-blue-500/20"
-                                    />
+                                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/80 p-3 rounded-[24px] border-2 border-slate-100 dark:border-slate-800">
+                                    <div className="space-y-1 flex-1">
+                                        <input
+                                            type="number"
+                                            placeholder="18"
+                                            value={formData.minAge}
+                                            onChange={(e) => setFormData({ ...formData, minAge: e.target.value })}
+                                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-3 text-center text-sm font-black focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                                        />
+                                        <span className="text-[8px] font-black text-slate-400 uppercase block text-center">Min</span>
+                                    </div>
+                                    <span className="text-xl font-black text-slate-200">/</span>
+                                    <div className="space-y-1 flex-1">
+                                        <input
+                                            type="number"
+                                            placeholder="55"
+                                            value={formData.maxAge}
+                                            onChange={(e) => setFormData({ ...formData, maxAge: e.target.value })}
+                                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-3 text-center text-sm font-black focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
+                                        />
+                                        <span className="text-[8px] font-black text-slate-400 uppercase block text-center">Max</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Separator */}
-                            <div className="hidden lg:block w-px h-24 bg-slate-100 dark:bg-slate-800" />
+                            <div className="hidden xl:block w-px bg-slate-100 dark:bg-slate-800 mx-2" />
 
-                            <MultiSelect
-                                label="Categorías"
-                                options={categories}
-                                selected={formData.categories}
-                                onToggle={(v) => toggleArrayItem('categories', v)}
-                                placeholder="TODAS"
-                                iconSource={Tag}
-                            />
+                            {/* MULTI-SELECTS RIBBON */}
+                            <div className="flex-1 flex flex-col md:flex-row gap-10">
+                                <MultiSelect
+                                    label="Categorías ADN"
+                                    options={categories}
+                                    selected={formData.categories}
+                                    onToggle={(v) => toggleArrayItem('categories', v)}
+                                    placeholder="TODAS LAS CATEGORÍAS"
+                                    iconSource={Tag}
+                                />
 
-                            <div className="hidden lg:block w-px h-24 bg-slate-100 dark:bg-slate-800" />
+                                <MultiSelect
+                                    label="Geografía (Municipios)"
+                                    options={MUNICIPIOS}
+                                    selected={formData.municipios}
+                                    onToggle={(v) => toggleArrayItem('municipios', v)}
+                                    placeholder="CUALQUIER UBICACIÓN"
+                                    iconSource={MapPin}
+                                />
 
-                            <MultiSelect
-                                label="Municipios"
-                                options={MUNICIPIOS}
-                                selected={formData.municipios}
-                                onToggle={(v) => toggleArrayItem('municipios', v)}
-                                placeholder="TODOS"
-                                iconSource={MapPin}
-                            />
-
-                            <div className="hidden lg:block w-px h-24 bg-slate-100 dark:bg-slate-800" />
-
-                            <MultiSelect
-                                label="Escolaridad"
-                                options={ESCOLARIDADES}
-                                selected={formData.escolaridades}
-                                onToggle={(v) => toggleArrayItem('escolaridades', v)}
-                                placeholder="CUALQUIERA"
-                                iconSource={GraduationCap}
-                            />
+                                <MultiSelect
+                                    label="Formación (Escolaridad)"
+                                    options={ESCOLARIDADES}
+                                    selected={formData.escolaridades}
+                                    onToggle={(v) => toggleArrayItem('escolaridades', v)}
+                                    placeholder="CUALQUIER GRADO"
+                                    iconSource={GraduationCap}
+                                />
+                            </div>
                         </div>
                     </div>
 
-                    {/* Bottom Controls */}
-                    <div className="flex justify-end gap-4 pt-4">
-                        <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={saving} className="rounded-2xl px-12 py-4 h-14 text-[11px] font-black uppercase tracking-widest opacity-60 hover:opacity-100 transition-opacity">
-                            Cancelar
-                        </Button>
-                        <Button
-                            onClick={handleSave}
-                            disabled={saving}
-                            icon={saving ? Loader2 : Save}
-                            className="rounded-2xl px-16 py-4 h-14 text-sm font-black bg-blue-600 hover:bg-blue-700 shadow-xl shadow-blue-500/30 transform hover:-translate-y-1 transition-all"
-                        >
-                            {saving ? 'GUARDANDO...' : 'FIRE BYPASS RELOAD 🚀'}
-                        </Button>
+                    {/* ACTION DOCK */}
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-6 pt-10 border-t-4 border-slate-50 dark:border-slate-900">
+                        <div className="flex items-center gap-3 text-slate-400 group cursor-help">
+                            <div className="p-2 bg-slate-50 dark:bg-slate-900 rounded-full group-hover:bg-blue-50 transition-colors">
+                                <ShieldCheck className="w-5 h-5 group-hover:text-blue-500" />
+                            </div>
+                            <p className="text-[10px] font-bold italic leading-tight">
+                                Al guardar, Brenda aplicará esta inteligencia en tiempo real <br /> cada vez que un candidato califique en el ADN seleccionado.
+                            </p>
+                        </div>
+
+                        <div className="flex items-center gap-6 w-full md:w-auto">
+                            <Button
+                                variant="ghost"
+                                onClick={() => setIsModalOpen(false)}
+                                disabled={saving}
+                                className="flex-1 md:flex-none rounded-3xl px-12 py-5 h-16 text-[11px] font-black uppercase tracking-widest opacity-40 hover:opacity-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                            >
+                                Abortar
+                            </Button>
+                            <Button
+                                onClick={handleSave}
+                                disabled={saving}
+                                icon={saving ? Loader2 : Save}
+                                className={`flex-[2] md:flex-none rounded-3xl px-16 py-5 h-16 text-base font-black bg-blue-600 hover:bg-blue-700 shadow-2xl shadow-blue-600/30 transform hover:-translate-y-1 active:scale-[0.98] transition-all flex items-center justify-center gap-4 ${saving ? 'opacity-80' : ''}`}
+                            >
+                                {saving ? 'SINCRONIZANDO...' : (editingId ? 'ACTUALIZAR RADAR 🚀' : 'IMPLEMENTAR RADAR 🚀')}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </Modal>
