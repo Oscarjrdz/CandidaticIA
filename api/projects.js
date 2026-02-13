@@ -53,8 +53,8 @@ export default async function handler(req, res) {
                 const pid = bodyProjectId || id;
                 const cid = bodyCandId || candidateId;
                 if (!pid || !cid) return res.status(400).json({ success: false, error: 'Project ID and Candidate ID required' });
-                await addCandidateToProject(pid, cid, { origin, stepId });
-                return res.status(200).json({ success: true, message: 'Candidate linked to project' });
+                const result = await addCandidateToProject(pid, cid, { origin, stepId });
+                return res.status(200).json({ success: true, message: result.migrated ? 'Candidate migrated to this project' : 'Candidate linked to project', migrated: result.migrated });
             }
 
             if (action === 'moveCandidate') {
@@ -72,10 +72,12 @@ export default async function handler(req, res) {
                     return res.status(400).json({ success: false, error: 'PID and candidateIds array required' });
                 }
                 const origin = body.origin || 'ai_search';
+                let migratedCount = 0;
                 for (const cid of candidateIds) {
-                    await addCandidateToProject(pid, cid, { origin, stepId: targetStepId });
+                    const result = await addCandidateToProject(pid, cid, { origin, stepId: targetStepId });
+                    if (result.migrated) migratedCount++;
                 }
-                return res.status(200).json({ success: true, count: candidateIds.length });
+                return res.status(200).json({ success: true, count: candidateIds.length, migratedCount });
             }
 
             if (action === 'launchStep') {

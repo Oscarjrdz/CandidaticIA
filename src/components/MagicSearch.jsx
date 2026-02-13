@@ -15,7 +15,7 @@ const STATUS_STEPS = [
 /**
  * Buscador Inteligente - Diseño iOS / Minimalista (Totalmente Neutro)
  */
-const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle, customPlaceholder, onAction, isOpenProp, onClose }) => {
+const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle, customPlaceholder, onAction, isOpenProp, onClose, excludeLinked = false }) => {
     const [statusText, setStatusText] = useState('');
     const [statusInterval, setStatusInterval] = useState(null);
     const [internalOpen, setInternalOpen] = useState(false);
@@ -90,7 +90,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
             if (mode === 'action' && onAction) {
                 await onAction(finalQuery);
             } else {
-                const result = await aiQuery(finalQuery);
+                const result = await aiQuery(finalQuery, excludeLinked);
                 if (result.success) {
                     onResults(result.candidates, result.ai, finalQuery);
                     handleClose();

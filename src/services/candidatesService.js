@@ -169,14 +169,14 @@ export class CandidatesSubscription {
 /**
  * Realiza una búsqueda inteligente usando IA
  */
-export const aiQuery = async (query) => {
+export const aiQuery = async (query, excludeLinked = false) => {
     try {
         const response = await fetch(`${API_BASE}/api/ai/query`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ query })
+            body: JSON.stringify({ query, excludeLinked })
         });
 
         const data = await response.json();

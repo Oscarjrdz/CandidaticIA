@@ -891,7 +891,11 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
 
             const data = await res.json();
             if (data.success) {
-                showToast(`${candidatesToLink.length} candidatos importados`, 'success');
+                if (data.migratedCount > 0) {
+                    showToast(`${candidatesToLink.length} candidatos importados (${data.migratedCount} movidos de otro proyecto)`, 'success');
+                } else {
+                    showToast(`${candidatesToLink.length} candidatos importados`, 'success');
+                }
                 // Remove imported candidates from preview
                 const linkedIds = candidatesToLink.map(c => c.id);
                 setSearchPreview(prev => prev.filter(c => !linkedIds.includes(c.id)));
@@ -968,6 +972,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                     showToast={showToast}
                     customTitle="Buscador Inteligente"
                     customPlaceholder="¿A quién buscamos para este búnker?"
+                    excludeLinked={true}
                 />
 
                 {selectedCandidate && (

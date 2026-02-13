@@ -321,12 +321,15 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
 
-    // Get linked candidates set if exclusion is requested
-    let linkedIds = new Set();
-    if (excludeLinked) {
-        const idsArray = await client.hkeys(KEYS.CANDIDATE_PROJECT_LINK);
-        linkedIds = new Set(idsArray);
-    }
+    // Get linked candidates set for hydration and exclusion
+    const idsArray = await client.hkeys(KEYS.CANDIDATE_PROJECT_LINK);
+    const linkedIds = new Set(idsArray);
+
+    // Helper to hydrate candidates with the 'proyecto' virtual field
+    const hydrate = (c) => ({
+        ...c,
+        proyecto: linkedIds.has(c.id) ? 1 : 0
+    });
 
     // If searching, we currently have to do a scan (unless we index names too)
     // For now, if search is empty, we use the ultra-fast F1 Steering.
@@ -342,7 +345,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
         const results = await pipeline.exec();
 
         const candidates = results
-            .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
+            .map(([err, res]) => (err || !res) ? null : hydrate(JSON.parse(res)))
             .filter(Boolean);
 
         const total = await sumCount();
@@ -379,6 +382,9 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
         });
     }
 
+    // Hydrate all with 'proyecto'
+    filtered = filtered.map(hydrate);
+
     // Filter out Linked Candidates
     if (excludeLinked) {
         // [IRON-CLAD QUALITY SHIELD] Only show 100% complete profiles when adding to projects
@@ -386,7 +392,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
         const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
 
         filtered = filtered.filter(c => {
-            const isNotLinked = linkedIds.size > 0 ? !linkedIds.has(c.id) : true;
+            const isNotLinked = c.proyecto === 0;
             return isNotLinked && isProfileComplete(c, customFields);
         });
     }
@@ -1344,12 +1350,15 @@ export const getProjectSearches = async (projectId) => {
  */
 export const addCandidateToProject = async (projectId, candidateId, metadata = null) => {
     const client = getRedisClient();
-    if (!client) return false;
+    if (!client) return { success: false };
 
     const pipeline = client.pipeline();
+    let migratedFrom = null;
+
     // Exclusivity: Check if candidate is already in another project
     const currentProjectId = await client.hget(KEYS.CANDIDATE_PROJECT_LINK, candidateId);
     if (currentProjectId && currentProjectId !== projectId) {
+        migratedFrom = currentProjectId;
         // Atomic removal from current project
         pipeline.srem(`${KEYS.PROJECT_CANDIDATES_PREFIX}${currentProjectId}`, candidateId);
         pipeline.hdel(`${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${currentProjectId}`, candidateId);

@@ -88,7 +88,7 @@ export default async function handler(req, res) {
             try { body = JSON.parse(body); } catch (e) { }
         }
 
-        const { query } = body || {};
+        const { query, excludeLinked = false } = body || {};
 
         if (!query) {
             return res.status(400).json({ error: 'Falta el parámetro "query"' });
@@ -142,7 +142,8 @@ export default async function handler(req, res) {
             { value: 'tieneEmpleo', label: 'Tiene empleo' },
             { value: 'nombre', label: 'Nombre de WhatsApp' },
             { value: 'whatsapp', label: 'Teléfono/WhatsApp' },
-            { value: 'statusAudit', label: 'Estado del registro (completos/pendientes)' }
+            { value: 'statusAudit', label: 'Estado del registro (completos/pendientes)' },
+            { value: 'proyecto', label: 'Está en un proyecto (1=Si, 0=No)' }
         ];
 
         let allFields = [...DEFAULT_FIELDS];
@@ -178,6 +179,7 @@ Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es conv
 4. ESCOLARIDAD (CRÍTICO):
    - Si mencionan nivel de estudios (prepa, secundaria, carrera, universidad, etc.), ASÍGNALO SIEMPRE al campo "escolaridad".
    - "prepa", "preparatoria", "bachillerato" -> {"escolaridad": "preparatoria"}.
+- "proyecto": 1 si ya está en un proyecto, 0 si está libre. Usa {"proyecto": 0} para buscar gente disponible.
    - "secundaria" -> {"escolaridad": "secundaria"}.
 5. MUNICIPIOS (CRÍTICO): 
    - Si mencionan un lugar (Monterrey, Apodaca, Guadalupe, etc.), ASÍGNALO SIEMPRE al campo "municipio".
@@ -246,7 +248,7 @@ Consulta del usuario: "${query}"
         const aiResponse = { filters: aiRaw.filters || {}, keywords: aiRaw.keywords || [] };
 
         // 1. Flatten top-level fields into filters
-        const primaryFields = ['edad', 'genero', 'municipio', 'escolaridad', 'statusAudit', 'categoria'];
+        const primaryFields = ['edad', 'genero', 'municipio', 'escolaridad', 'statusAudit', 'categoria', 'proyecto'];
         primaryFields.forEach(field => {
             if (aiRaw[field] !== undefined && aiResponse.filters[field] === undefined) {
                 aiResponse.filters[field] = aiRaw[field];
