@@ -68,10 +68,6 @@ const KEYS = {
     PROJECT_CANDIDATE_METADATA_PREFIX: 'project:cand_meta:',
     CANDIDATE_PROJECT_LINK: 'index:cand_project', // Reverse index: candidateId -> projectId
 
-    // AI Automations
-    AI_AUTOMATIONS: 'ai:automations:list',
-    SCHEDULED_RULES: 'scheduled_message_rules',
-
     // Telemetry & Observability (Titan Standard)
     TELEMETRY_AI_LOGS: 'telemetry:ai:events', // List of recent AI events
     CANDIDATE_LOCK_PREFIX: 'lock:candidate:', // Per-candidate processing lock
@@ -845,73 +841,7 @@ export const deleteVacancy = async (id) => {
     await client.set(KEYS.VACANCIES, JSON.stringify(newVacancies));
     return true;
 };
-// --- AI Automations Helpers ---
-export const getAIAutomations = async () => {
-    const client = getClient();
-    if (!client) return [];
-    const list = await client.get(KEYS.AI_AUTOMATIONS);
-    return list ? JSON.parse(list) : [];
-};
 
-export const saveAIAutomation = async (automation) => {
-    const client = getRedisClient();
-    if (!client) return null;
-
-    let list = await getAIAutomations();
-    const existingIndex = list.findIndex(a => a.id === automation.id);
-
-    if (existingIndex >= 0) {
-        list[existingIndex] = { ...list[existingIndex], ...automation };
-    } else {
-        list.push({ ...automation, createdAt: new Date().toISOString(), active: true });
-    }
-
-    await client.set(KEYS.AI_AUTOMATIONS, JSON.stringify(list));
-    return automation;
-};
-
-export const deleteAIAutomation = async (id) => {
-    const client = getRedisClient();
-    if (!client) return false;
-
-    let list = await getAIAutomations();
-    const newList = list.filter(a => a.id !== id);
-
-    await client.set(KEYS.AI_AUTOMATIONS, JSON.stringify(newList));
-    return true;
-};
-
-export const incrementAIAutomationSentCount = async (id) => {
-    const client = getRedisClient();
-    if (!client) return false;
-
-    let list = await getAIAutomations();
-    const index = list.findIndex(a => a.id === id);
-
-    if (index >= 0) {
-        list[index].sentCount = (list[index].sentCount || 0) + 1;
-        await client.set(KEYS.AI_AUTOMATIONS, JSON.stringify(list));
-        return true;
-    }
-    return false;
-};
-
-export const incrementScheduledRuleSentCount = async (id) => {
-    const client = getRedisClient();
-    if (!client) return false;
-
-    const data = await client.get(KEYS.SCHEDULED_RULES);
-    let list = data ? JSON.parse(data) : [];
-
-    const index = list.findIndex(r => r.id === id);
-
-    if (index >= 0) {
-        list[index].sentCount = (list[index].sentCount || 0) + 1;
-        await client.set(KEYS.SCHEDULED_RULES, JSON.stringify(list));
-        return true;
-    }
-    return false;
-};
 
 /**
  * ==========================================

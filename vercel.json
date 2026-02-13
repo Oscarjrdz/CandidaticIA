@@ -52,14 +52,6 @@
         {
             "path": "/api/cron/export-chats",
             "schedule": "* * * * *"
-        },
-        {
-            "path": "/api/cron/check-scheduled-messages",
-            "schedule": "* * * * *"
-        },
-        {
-            "path": "/api/cron/process-ai-automations",
-            "schedule": "* * * * *"
         }
     ]
 }
