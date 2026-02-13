@@ -18,6 +18,7 @@ import { getSchemaByField } from '../utils/schema-registry.js';
 import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { getOpenAIResponse } from '../utils/openai.js';
+import { processRecruiterMessage } from './recruiter-agent.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
 [REGLAS DE EXTRACCIÓN]:
@@ -320,23 +321,29 @@ ${audit.dnaLines}
 - Temas recientes: ${themes || 'Nuevo contacto'}
 \n${extractionRules}`;
 
-        // c. Project/Kanban Layer
+        // c. Project/Kanban Layer - BRANCH TO RECRUITER BRAIN
         if (candidateData.projectMetadata?.projectId) {
             const project = await getProjectById(candidateData.projectMetadata.projectId);
             if (project) {
                 const stepId = candidateData.projectMetadata.stepId || 'step_new';
                 const currentStep = project.steps?.find(s => s.id === stepId) || project.steps?.[0];
-                if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
-                    const vacancy = project.vacancyId ? await getVacancyById(project.vacancyId) : null;
-                    const nextStep = project.steps[project.steps.indexOf(currentStep) + 1];
-                    let stepPrompt = currentStep.aiConfig.prompt
-                        .replace(/{{Candidato}}/g, candidateData.nombreReal || 'Candidato')
-                        .replace(/{{Vacante}}/g, vacancy?.name || 'la posición');
 
-                    systemInstruction += `\n[CONTEXTO KANBAN - PASO: ${currentStep.name}]:
-${stepPrompt}
-REGLA: Si se cumple el objetivo, incluye "{ move }" en tu thought_process.
-    TRANSICIÓN: Si incluyes { move }, di un emoji y salta al siguiente tema: "${nextStep?.aiConfig?.prompt || 'Continúa'}"\n`;
+                if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
+                    console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
+
+                    const recruiterResult = await processRecruiterMessage(
+                        candidateData,
+                        project,
+                        currentStep,
+                        recentHistory,
+                        config
+                    );
+
+                    if (recruiterResult && recruiterResult.response_text) {
+                        return recruiterResult.response_text;
+                    } else if (recruiterResult && recruiterResult.close_conversation) {
+                        return null; // Silent closure
+                    }
                 }
             }
         }
