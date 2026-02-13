@@ -533,6 +533,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // Automatic routing to projects upon completion
         const isBypassEnabled = batchConfig.bypass_enabled === 'true';
         if (isNowComplete && !candidateData.projectId && isBypassEnabled) {
+            console.log(`[BYPASS] 🔍 Starting evaluation for ${candidateId}. Profile is COMPLETE.`);
             try {
                 const bypassIds = await redis.zrange('bypass:list', 0, -1);
                 if (bypassIds.length > 0) {
@@ -542,23 +543,35 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     for (const rule of activeRules) {
                         const { minAge, maxAge, municipios, escolaridades, categories, gender, projectId } = rule;
 
-                        // Match logic
-                        const candidateAge = parseInt(finalMerged.edad);
+                        // Match logic (Case Insensitive & trimmed)
+                        const candidateAge = parseInt(finalMerged.edad || 0);
+                        const cMun = String(finalMerged.municipio || '').toLowerCase().trim();
+                        const cEsc = String(finalMerged.escolaridad || '').toLowerCase().trim();
+                        const cGen = String(finalMerged.genero || '').toLowerCase().trim();
+                        const cCats = (finalMerged.categoria || '').split(',').map(c => c.toLowerCase().trim());
+
                         const ageMatch = (!minAge || candidateAge >= parseInt(minAge)) && (!maxAge || candidateAge <= parseInt(maxAge));
-                        const genderMatch = (gender === 'Cualquiera' || finalMerged.genero === gender);
-                        const munMatch = (municipios.length === 0 || municipios.includes(finalMerged.municipio));
-                        const escMatch = (escolaridades.length === 0 || escolaridades.includes(finalMerged.escolaridad));
-                        const catMatch = (categories.length === 0 || categories.includes(finalMerged.categoria));
+                        const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
+
+                        const munMatch = (municipios.length === 0 || municipios.some(m => String(m).toLowerCase().trim() === cMun));
+                        const escMatch = (escolaridades.length === 0 || escolaridades.some(e => String(e).toLowerCase().trim() === cEsc));
+
+                        // Categories match if ANY of the candidate's cats are in the rule ones
+                        const ruleCatsLow = (categories || []).map(c => String(c).toLowerCase().trim());
+                        const catMatch = (ruleCatsLow.length === 0 || cCats.some(c => ruleCatsLow.includes(c)));
 
                         if (ageMatch && genderMatch && munMatch && escMatch && catMatch) {
                             console.log(`[BYPASS] ⚡ Candidate ${candidateId} matches rule "${rule.name}". Routing to Project ${projectId}.`);
                             candidateUpdates.projectId = projectId;
+                            candidateUpdates.stepId = 'step_new'; // Force start at first step
                             candidateUpdates.bypass_rule = rule.name;
-                            // Optionally move to first step of project
-                            // candidateUpdates.stepId = 'step_0'; 
                             break; // Stop at first match
+                        } else {
+                            console.log(`[BYPASS] ❌ No match for rule "${rule.name}". (Age: ${ageMatch}, Gender: ${genderMatch}, Mun: ${munMatch}, Esc: ${escMatch}, Cat: ${catMatch})`);
                         }
                     }
+                } else {
+                    console.log(`[BYPASS] ⚠️ No active rules found in 'bypass:list'.`);
                 }
             } catch (err) {
                 console.error('[BYPASS] Error evaluating rules:', err);
