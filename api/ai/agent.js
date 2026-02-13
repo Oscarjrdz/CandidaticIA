@@ -321,12 +321,25 @@ ${audit.dnaLines}
 - Temas recientes: ${themes || 'Nuevo contacto'}
 \n${extractionRules}`;
 
-        // c. Project/Kanban Layer - BRANCH TO RECRUITER BRAIN
-        if (candidateData.projectMetadata?.projectId) {
-            const project = await getProjectById(candidateData.projectMetadata.projectId);
+        // c. Project/Kanban Layer - BRANCH TO RECRUITER BRAIN (ROBUST LOOKUP)
+        let activeProjectId = candidateData.projectId || candidateData.projectMetadata?.projectId;
+        let activeStepId = candidateData.stepId || candidateData.projectMetadata?.stepId || 'step_new';
+
+        // 🛡️ REVERSE LOOKUP (Titan Shield): If not in blob, check index
+        if (!activeProjectId) {
+            const client = getRedisClient();
+            activeProjectId = await client.hget('index:cand_project', candidateId);
+            if (activeProjectId) {
+                const rawMeta = await client.hget(`project:cand_meta:${activeProjectId}`, candidateId);
+                const meta = rawMeta ? JSON.parse(rawMeta) : {};
+                activeStepId = meta.stepId || 'step_new';
+            }
+        }
+
+        if (activeProjectId) {
+            const project = await getProjectById(activeProjectId);
             if (project) {
-                const stepId = candidateData.projectMetadata.stepId || 'step_new';
-                const currentStep = project.steps?.find(s => s.id === stepId) || project.steps?.[0];
+                const currentStep = project.steps?.find(s => s.id === activeStepId) || project.steps?.[0];
 
                 if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
                     console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
