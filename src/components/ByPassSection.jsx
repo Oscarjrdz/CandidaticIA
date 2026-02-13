@@ -6,10 +6,10 @@ import Input from './ui/Input';
 import Modal from './ui/Modal';
 
 /**
- * Componente de Multiselección Ribbon (v4.0)
- * Diseñado para vivir en una tira horizontal ultra-ancha.
+ * Componente de Selección Ribbon (v4.5)
+ * Soporta selección única y múltiple con estética consistente.
  */
-const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Seleccionar...", iconSource: Icon }) => {
+const RibbonSelect = ({ label, options, selected, onToggle, placeholder = "Seleccionar...", iconSource: Icon, multiple = true }) => {
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef(null);
 
@@ -23,6 +23,30 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const handleSelect = (name) => {
+        onToggle(name);
+        if (!multiple) setIsOpen(false);
+    };
+
+    const isItemSelected = (name) => {
+        return multiple ? selected.includes(name) : selected === name;
+    };
+
+    const getDisplayValue = () => {
+        if (multiple) {
+            if (selected.length === 0) return <span className="text-[11px] font-bold text-slate-400">{placeholder}</span>;
+            return (
+                <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black text-blue-600 dark:text-blue-400">{selected.length}</span>
+                    <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">items</span>
+                </div>
+            );
+        } else {
+            if (!selected) return <span className="text-[11px] font-bold text-slate-400">{placeholder}</span>;
+            return <span className="text-[11px] font-black text-blue-600 dark:text-blue-400 uppercase truncate">{selected}</span>;
+        }
+    };
+
     return (
         <div className="flex-1 min-w-[180px] group" ref={containerRef}>
             <div className="flex items-center gap-2 mb-1.5 px-1">
@@ -35,20 +59,13 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
                 <div
                     onClick={() => setIsOpen(!isOpen)}
                     className={`h-[48px] w-full px-4 border-2 rounded-xl bg-white dark:bg-slate-900/50 cursor-pointer flex items-center gap-3 transition-all duration-300 shadow-sm ${isOpen
-                        ? 'border-blue-500 ring-4 ring-blue-500/10 shadow-lg'
+                        ? 'border-blue-500 ring-4 ring-500/10 shadow-lg'
                         : 'border-slate-100 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700'
                         }`}
                 >
-                    {Icon && <Icon className={`w-4 h-4 ${selected.length > 0 ? 'text-blue-500' : 'text-slate-400'}`} />}
+                    {Icon && <Icon className={`w-4 h-4 ${(multiple ? selected.length > 0 : selected) ? 'text-blue-500' : 'text-slate-400'}`} />}
                     <div className="flex-1 truncate">
-                        {selected.length === 0 ? (
-                            <span className="text-[11px] font-bold text-slate-400">{placeholder}</span>
-                        ) : (
-                            <div className="flex items-center gap-1.5">
-                                <span className="text-xs font-black text-blue-600 dark:text-blue-400">{selected.length}</span>
-                                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300">items</span>
-                            </div>
-                        )}
+                        {getDisplayValue()}
                     </div>
                     <ChevronDown className={`w-4 h-4 text-slate-300 transition-transform duration-300 ${isOpen ? 'rotate-180 text-blue-500' : ''}`} />
                 </div>
@@ -60,11 +77,11 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
                         </div>
                         {options.map(option => {
                             const name = typeof option === 'string' ? option : option.name;
-                            const isSelected = selected.includes(name);
+                            const isSelected = isItemSelected(name);
                             return (
                                 <div
                                     key={name}
-                                    onClick={() => onToggle(name)}
+                                    onClick={() => handleSelect(name)}
                                     className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all mb-1 group/item ${isSelected
                                         ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                                         : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'
@@ -79,16 +96,16 @@ const MultiSelect = ({ label, options, selected, onToggle, placeholder = "Selecc
                 )}
             </div>
 
-            {/* Micro Tags Below */}
-            {selected.length > 0 && (
+            {/* Micro Tags Below (Only for multi) */}
+            {multiple && selected.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2 min-h-[16px]">
                     {selected.slice(0, 3).map(item => (
-                        <span key={item} className="inline-flex items-center px-2 py-0.5 bg-blue-50/50 dark:bg-blue-900/10 text-[9px] font-bold text-blue-600 dark:text-blue-400 rounded-lg border border-blue-100/30 dark:border-blue-800/20 truncate max-w-[80px]">
+                        <span key={item} className="inline-flex items-center px-1.5 py-0.5 bg-blue-50/50 dark:bg-blue-900/10 text-[8px] font-bold text-blue-600 dark:text-blue-400 rounded border border-blue-100/30 dark:border-blue-800/20 truncate max-w-[70px]">
                             {item}
                         </span>
                     ))}
                     {selected.length > 3 && (
-                        <span className="text-[9px] font-black text-slate-400 flex items-center">+ {selected.length - 3}</span>
+                        <span className="text-[8px] font-black text-slate-400 flex items-center">+ {selected.length - 3}</span>
                     )}
                 </div>
             )}
@@ -121,7 +138,7 @@ const ByPassSection = ({ showToast }) => {
     });
 
     const MUNICIPIOS = [
-        "Aguascalientes", "Asientos", "Calvillo", "Cosío", "Jesús María", "Pabellón de Arteaga", "Rincón de Romos", "San José de Gracia", "Tepezalá", "El Llano", "San Francisco de los Romo"
+        "Abasolo", "Allende", "Apodaca", "Cadereyta Jiménez", "Carmen", "China", "Ciénega de Flores", "Doctor Arroyo", "García", "General Bravo", "General Escobedo", "General Terán", "General Zuazua", "Guadalupe", "Hidalgo", "Juárez", "Linares", "Marín", "Montemorelos", "Monterrey", "Pesquería", "Sabinas Hidalgo", "Salinas Victoria", "San Nicolás de los Garza", "San Pedro Garza García", "Santa Catarina", "Santiago"
     ];
 
     const ESCOLARIDADES = [
@@ -380,141 +397,102 @@ const ByPassSection = ({ showToast }) => {
                 maxWidth="max-w-[95vw]"
             >
                 <div className="p-8 space-y-12">
-                    {/* TOP DASHBOARD: Main Identity Ribbon */}
-                    <div className="flex flex-col 2xl:flex-row items-center gap-10 bg-slate-50 dark:bg-slate-900/50 p-8 rounded-[40px] border-2 border-slate-100 dark:border-slate-800/50 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32 transition-transform duration-1000 group-hover:scale-110" />
+                    {/* UNIFIED HORIZONTAL RIBBON v5.0 */}
+                    <div className="flex flex-col 2xl:flex-row items-stretch gap-8 bg-white dark:bg-slate-900/80 p-8 rounded-[48px] border-2 border-slate-100 dark:border-slate-800/50 shadow-2xl relative overflow-visible">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none" />
 
-                        {/* IDENTIFIER */}
-                        <div className="flex-[1.5] w-full min-w-0 space-y-3">
+                        {/* 1. IDENTIFIER (Always Input) */}
+                        <div className="w-full 2xl:w-[280px] space-y-3">
                             <div className="flex items-center gap-2 px-1">
                                 <Tag className="w-3.5 h-3.5 text-blue-500" />
-                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Identificador Radar</label>
+                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Identificador Radar</label>
                             </div>
                             <Input
-                                placeholder="Ej. Sniper Operadores Norte"
+                                placeholder="Ej. Sniper MTY Centro"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                className="text-lg font-black py-5 px-6 rounded-[24px] border-2 focus:ring-8 focus:ring-blue-100/20 active:scale-[0.99] transition-all"
+                                className="text-sm font-black py-4 px-5 rounded-xl border-2 focus:ring-8 focus:ring-blue-100/20 transition-all uppercase"
                             />
                         </div>
 
-                        <ArrowRight className="hidden 2xl:block w-8 h-8 text-slate-200 animate-pulse" />
+                        <div className="hidden 2xl:block w-px bg-slate-100 dark:bg-slate-800 my-4" />
 
-                        {/* TARGET SILO */}
-                        <div className="flex-1 w-full min-w-0 space-y-3">
+                        {/* 2. TARGET PROJECT (Single RibbonSelect) */}
+                        <RibbonSelect
+                            label="Silo Destino"
+                            options={projects}
+                            selected={projects.find(p => p.id === formData.projectId)?.name.toUpperCase() || ''}
+                            onToggle={(name) => {
+                                const proj = projects.find(p => p.name.toUpperCase() === name);
+                                if (proj) setFormData({ ...formData, projectId: proj.id });
+                            }}
+                            placeholder="SELECCIONAR PROYECTO"
+                            iconSource={GitMerge}
+                            multiple={false}
+                        />
+
+                        {/* 3. GENDER (Single RibbonSelect) */}
+                        <RibbonSelect
+                            label="Género"
+                            options={GENDERS}
+                            selected={formData.gender.toUpperCase()}
+                            onToggle={(v) => setFormData({ ...formData, gender: v.charAt(0).toUpperCase() + v.slice(1).toLowerCase() })}
+                            placeholder="CUALQUIERA"
+                            iconSource={Users}
+                            multiple={false}
+                        />
+
+                        {/* 4. CATEGORIES (Multi RibbonSelect) */}
+                        <RibbonSelect
+                            label="Categorías ADN"
+                            options={categories}
+                            selected={formData.categories}
+                            onToggle={(v) => toggleArrayItem('categories', v)}
+                            placeholder="TODAS LAS CATEGORÍAS"
+                            iconSource={Layers}
+                        />
+
+                        {/* 5. MUNICIPIOS (Multi RibbonSelect) - NUEVO LEÓN */}
+                        <RibbonSelect
+                            label="Geografía (NL)"
+                            options={MUNICIPIOS}
+                            selected={formData.municipios}
+                            onToggle={(v) => toggleArrayItem('municipios', v)}
+                            placeholder="CUALQUIER MUNICIPIO"
+                            iconSource={MapPin}
+                        />
+
+                        {/* 6. ESCOLARIDAD (Multi RibbonSelect) */}
+                        <RibbonSelect
+                            label="Formación"
+                            options={ESCOLARIDADES}
+                            selected={formData.escolaridades}
+                            onToggle={(v) => toggleArrayItem('escolaridades', v)}
+                            placeholder="CUALQUIER GRADO"
+                            iconSource={GraduationCap}
+                        />
+
+                        {/* 7. AGE GROUP (Compact) */}
+                        <div className="w-full 2xl:w-[150px] space-y-3">
                             <div className="flex items-center gap-2 px-1">
-                                <GitMerge className="w-3.5 h-3.5 text-blue-500" />
-                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Silo Destino</label>
+                                <Calendar className="w-3.5 h-3.5 text-blue-500" />
+                                <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Edad</label>
                             </div>
-                            <div className="relative group/select">
-                                <select
-                                    className="w-full pl-6 pr-12 py-5 border-2 border-slate-100 dark:border-slate-800 rounded-[24px] bg-white dark:bg-slate-950 text-sm font-black appearance-none focus:ring-8 focus:ring-blue-100/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                                    value={formData.projectId}
-                                    onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-                                >
-                                    <option value="">-- SELECCIONAR PROYECTO --</option>
-                                    {projects.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name.toUpperCase()}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 pointer-events-none group-hover/select:text-blue-500 transition-colors" />
-                            </div>
-                        </div>
-
-                        {/* GENDER - Optimized wide segmented control */}
-                        <div className="flex-1 w-full min-w-[320px] space-y-3">
-                            <div className="flex items-center gap-2 px-1">
-                                <Users className="w-3.5 h-3.5 text-blue-500" />
-                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Preferencia Género</label>
-                            </div>
-                            <div className="flex bg-white dark:bg-slate-950 p-2 rounded-[24px] border-2 border-slate-100 dark:border-slate-800 shadow-inner">
-                                {GENDERS.map(g => (
-                                    <button
-                                        key={g}
-                                        type="button"
-                                        onClick={() => setFormData({ ...formData, gender: g })}
-                                        className={`flex-1 py-3 text-[11px] font-black rounded-[18px] transition-all duration-300 ${formData.gender === g
-                                            ? 'bg-blue-600 text-white shadow-xl shadow-blue-500/30 ring-2 ring-white/10'
-                                            : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
-                                    >
-                                        {g.toUpperCase()}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ADN SNIPER FILTERS RIBBON - Horizontal Row */}
-                    <div className="space-y-6">
-                        <div className="flex items-center gap-4">
-                            <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1" />
-                            <h4 className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-[0.3em] bg-blue-50 dark:bg-blue-900/20 px-6 py-2 rounded-full border border-blue-100 dark:border-blue-800/50">DNA Sniper Filters 🎯</h4>
-                            <div className="h-px bg-slate-100 dark:bg-slate-800 flex-1" />
-                        </div>
-
-                        <div className="flex flex-col xl:flex-row items-stretch gap-10 bg-white dark:bg-slate-950/20 p-10 rounded-[50px] border-2 border-slate-100 dark:border-slate-800/20 shadow-sm relative group/ribbon">
-                            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
-
-                            {/* AGE GROUP */}
-                            <div className="w-full xl:w-[240px] space-y-4">
-                                <div className="flex items-center gap-2 px-1">
-                                    <Calendar className="w-3.5 h-3.5 text-blue-500" />
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rango de Edad</label>
-                                </div>
-                                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/80 p-3 rounded-[24px] border-2 border-slate-100 dark:border-slate-800">
-                                    <div className="space-y-1 flex-1">
-                                        <input
-                                            type="number"
-                                            placeholder="18"
-                                            value={formData.minAge}
-                                            onChange={(e) => setFormData({ ...formData, minAge: e.target.value })}
-                                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-3 text-center text-sm font-black focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
-                                        />
-                                        <span className="text-[8px] font-black text-slate-400 uppercase block text-center">Min</span>
-                                    </div>
-                                    <span className="text-xl font-black text-slate-200">/</span>
-                                    <div className="space-y-1 flex-1">
-                                        <input
-                                            type="number"
-                                            placeholder="55"
-                                            value={formData.maxAge}
-                                            onChange={(e) => setFormData({ ...formData, maxAge: e.target.value })}
-                                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl p-3 text-center text-sm font-black focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all"
-                                        />
-                                        <span className="text-[8px] font-black text-slate-400 uppercase block text-center">Max</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="hidden xl:block w-px bg-slate-100 dark:bg-slate-800 mx-2" />
-
-                            {/* MULTI-SELECTS RIBBON */}
-                            <div className="flex-1 flex flex-col md:flex-row gap-10">
-                                <MultiSelect
-                                    label="Categorías ADN"
-                                    options={categories}
-                                    selected={formData.categories}
-                                    onToggle={(v) => toggleArrayItem('categories', v)}
-                                    placeholder="TODAS LAS CATEGORÍAS"
-                                    iconSource={Tag}
+                            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl border border-slate-100 dark:border-slate-700">
+                                <input
+                                    type="number"
+                                    placeholder="18"
+                                    value={formData.minAge}
+                                    onChange={(e) => setFormData({ ...formData, minAge: e.target.value })}
+                                    className="w-10 bg-transparent text-center text-[11px] font-black outline-none"
                                 />
-
-                                <MultiSelect
-                                    label="Geografía (Municipios)"
-                                    options={MUNICIPIOS}
-                                    selected={formData.municipios}
-                                    onToggle={(v) => toggleArrayItem('municipios', v)}
-                                    placeholder="CUALQUIER UBICACIÓN"
-                                    iconSource={MapPin}
-                                />
-
-                                <MultiSelect
-                                    label="Formación (Escolaridad)"
-                                    options={ESCOLARIDADES}
-                                    selected={formData.escolaridades}
-                                    onToggle={(v) => toggleArrayItem('escolaridades', v)}
-                                    placeholder="CUALQUIER GRADO"
-                                    iconSource={GraduationCap}
+                                <span className="text-slate-300">/</span>
+                                <input
+                                    type="number"
+                                    placeholder="55"
+                                    value={formData.maxAge}
+                                    onChange={(e) => setFormData({ ...formData, maxAge: e.target.value })}
+                                    className="w-10 bg-transparent text-center text-[11px] font-black outline-none"
                                 />
                             </div>
                         </div>
