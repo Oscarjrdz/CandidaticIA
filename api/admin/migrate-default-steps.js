@@ -1,5 +1,5 @@
 
-import { getRedisClient, updateProjectSteps, getProjects } from '../projects/utils/storage.js';
+import { getRedisClient, updateProjectSteps, getProjects } from '../../utils/storage.js';
 
 /**
  * API Handler for Migrating Project Steps to Immutable Default Step
