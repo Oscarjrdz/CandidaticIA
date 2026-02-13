@@ -373,6 +373,10 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             if (data.success) {
                 console.log('[Projects] Loaded projects:', data.projects.length);
                 setProjects(data.projects);
+                // Auto-select first project if none is active
+                if (data.projects.length > 0 && !activeProject) {
+                    setActiveProject(data.projects[0]);
+                }
             }
         } catch (e) { console.error('Error fetching projects:', e); }
     };
@@ -1344,14 +1348,21 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full flex flex-col items-center justify-center">
-                                <Button
-                                    onClick={() => { resetForm(); setShowCreateModal(true); }}
-                                    className="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-xl shadow-blue-500/20 py-4 px-10 h-auto text-[14px] font-black uppercase tracking-widest rounded-2xl transform hover:scale-105 transition-all"
-                                >
-                                    <Plus className="w-6 h-6" />
-                                    Crear nuevo proyecto
-                                </Button>
+                            <div className="h-full flex flex-col items-center justify-center space-y-4">
+                                {projects.length > 0 ? (
+                                    <>
+                                        <Loader2 className="w-12 h-12 text-blue-500 animate-spin opacity-20" />
+                                        <p className="text-slate-400 font-black uppercase tracking-widest text-[10px]">Cargando tablero...</p>
+                                    </>
+                                ) : (
+                                    <Button
+                                        onClick={() => { resetForm(); setShowCreateModal(true); }}
+                                        className="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-xl shadow-blue-500/20 py-4 px-10 h-auto text-[14px] font-black uppercase tracking-widest rounded-2xl transform hover:scale-105 transition-all"
+                                    >
+                                        <Plus className="w-6 h-6" />
+                                        Crear nuevo proyecto
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </div>
