@@ -65,8 +65,8 @@ export const DEFAULT_SYSTEM_PROMPT = `
 6. ANTI-REPETICIÓN (PENALIDAD FATAL): Está PROHIBIDO usar las mismas frases o estructuras de [MEMORIA DEL HILO]. Si te repites, fallas en tu misión humana. Cambia palabras, orden y estilo.
 
 [REGLA DE REACCIONES]:
-- 👍: Úsalo ÚNICAMENTE cuando decidas cerrar la conversación (close_conversation: true). 
-- PROHIBIDAS todas las demás reacciones (🙏, ❤️, etc.) durante la captura de datos para evitar ruidos en las pruebas.
+- El sistema pondrá un 👍 automático si detectas gratitud (gratitude_reached: true).
+- NO intentes usar reacciones manuales en "reaction", el sistema las ignora para evitar ruidos. Concentrate en "gratitude_reached".
 
 [ESTRATEGIA DE CONVERSACIÓN]:
 1. RE-SALUDO: Si Inactividad es "Regreso fresco", inicia con un saludo breve y cálido (ej. "¡Hola de nuevo! ✨") antes de retomar el hilo.
@@ -384,7 +384,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         "escolaridad": "string | null"
     },
     "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
-    "reaction": "emoji_char | null (Usa 👍 SOLO cuando cierres la conversación)",
+    "reaction": "null (Ignorado, el sistema lo maneja)",
     "trigger_media": "string | null (Usa 'success_sticker' SOLO cuando el perfil se complete en este mensaje exacto)",
     "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos). Si decides solo reaccionar, deja esto null.",
     "gratitude_reached": "boolean (Activa true si el usuario te dio las gracias en este mensaje)",
@@ -533,32 +533,28 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             candidateData.bridge_counter = 0;
         }
 
-        // 🌉 BRIDGE CHECK: Cooling Period (2 messages)
-        // If profile is complete, but bridge_counter < 2, we just react and do NOT call GPT.
+        // 🌉 BRIDGE CHECK: Cooling Period (2 messages post-festejo)
         const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? candidateData.bridge_counter : 0;
-
-        // EXCEPTION: If user asks a specific question (length > 15 chars), bypass bridge? 
-        // No, user wants strict 2 messages. We stick to the plan.
-
         let isBridgeActive = false;
-        if (isNowComplete && bridgeCounter < 2) {
-            isBridgeActive = true;
-            console.log(`[BRIDGE] 🌉 Active. Counter: ${bridgeCounter}/2. Suppressing GPT.`);
 
-            // Increment for NEXT time (will be saved in finalMerged/candidateUpdates)
+        // Bridge activates ONLY AFTER the first congratulation sticker has been sent
+        if (isNowComplete && hasBeenCongratulated && bridgeCounter < 2) {
+            isBridgeActive = true;
+            console.log(`[BRIDGE] 🌉 Active. Counter: ${bridgeCounter}/2. Sending Triumph Sticker.`);
+
+            // Increment for NEXT time
             candidateUpdates.bridge_counter = bridgeCounter + 1;
 
-            // REACTION STRATEGY:
-            // Msg 1: ❤️ (Love)
-            // Msg 2: 👍 (Like)
-            const reactionChar = bridgeCounter === 0 ? '❤️' : '👍';
+            // Rule 2: Send Triumph Sticker (no text, no reactions)
+            const triumphStickerUrl = await redis?.get('bot_triumph_sticker') || await redis?.get('bot_celebration_sticker');
+            if (triumphStickerUrl) {
+                stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, triumphStickerUrl, 'sticker');
+            }
 
-            // Response: Just reaction + maybe a very short silence text
-            aiResult.reaction = reactionChar;
-            aiResult.response_text = null; // Silence text
-            aiResult.close_conversation = true; // Mark as closed
-
-            // OVERRIDE AI RESULTS to prevent Gemini from talking too
+            // Suppress AI response and reactions during bridge
+            aiResult.reaction = null;
+            aiResult.response_text = null;
+            aiResult.close_conversation = true;
             responseTextVal = '';
         }
 
@@ -638,8 +634,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
-        const shouldSendSticker = (aiResult.trigger_media === 'success_sticker' || (initialStatus === 'INCOMPLETO' && isNowComplete))
-            && isNowComplete
+        const shouldSendSticker = (initialStatus === 'INCOMPLETO' && isNowComplete)
             && !hasBeenCongratulated;
 
         if (shouldSendSticker) {
@@ -660,13 +655,16 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
-        // --- PRESENCIA CONSTANTE (Minimum Feedback Logic) ---
-        // We do this BEFORE creating promises to ensure fallback reactions are captured.
+        // --- CONDITIONAL LIKE (Gratitude Shield) ---
+        if (!isBridgeActive && isNowComplete && aiResult.gratitude_reached === true) {
+            console.log(`[Gratitude Shield] Detected thanks from ${candidateId}. Sending 👍.`);
+            aiResult.reaction = '👍';
+        } else if (!aiResult.gratitude_reached) {
+            // No forced reactions
+            aiResult.reaction = null;
+        }
+
         if (!responseTextVal || responseTextVal === '[SILENCIO]') {
-            if (!aiResult.reaction) {
-                console.log(`[Always Present] No text and no reaction from AI. Forcing fallback reaction for ${candidateId}.`);
-                aiResult.reaction = '👍'; // Baseline presence
-            }
             responseTextVal = null; // Clean up for internal logic
         }
 
