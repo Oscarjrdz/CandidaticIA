@@ -540,19 +540,24 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         // Bridge activates ONLY AFTER the first congratulation sticker has been sent
         if (isNowComplete && hasBeenCongratulated && bridgeCounter < 2) {
             isBridgeActive = true;
-            console.log(`[BRIDGE] 🌉 Active. Counter: ${bridgeCounter}/2. Sending Triumph Sticker.`);
+            console.log(`[BRIDGE] 🌉 Active. Counter: ${bridgeCounter}/2.`);
+
+            // [PRIORITY CHECK]: Rule 1 (Gratitude) takes precedence over Rule 2 (Sticker)
+            // If the AI detects gratitude, we let the normal flow handle the Like and skip the sticker for this msg.
+            if (aiResult.gratitude_reached === true) {
+                console.log(`[BRIDGE] Gratitude detected. Prioritizing Like (👍) over Sticker.`);
+            } else {
+                console.log(`[BRIDGE] No gratitude. Sending Triumph Sticker.`);
+                const triumphStickerUrl = await redis?.get('bot_triumph_sticker') || await redis?.get('bot_celebration_sticker');
+                if (triumphStickerUrl) {
+                    stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, triumphStickerUrl, 'sticker');
+                }
+            }
 
             // Increment for NEXT time
             candidateUpdates.bridge_counter = bridgeCounter + 1;
 
-            // Rule 2: Send Triumph Sticker (no text, no reactions)
-            const triumphStickerUrl = await redis?.get('bot_triumph_sticker') || await redis?.get('bot_celebration_sticker');
-            if (triumphStickerUrl) {
-                stickerPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, triumphStickerUrl, 'sticker');
-            }
-
-            // Suppress AI response and reactions during bridge
-            aiResult.reaction = null;
+            // Suppress AI response text during bridge
             aiResult.response_text = null;
             aiResult.close_conversation = true;
             responseTextVal = '';
@@ -656,7 +661,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
         // --- CONDITIONAL LIKE (Gratitude Shield) ---
-        if (!isBridgeActive && isNowComplete && aiResult.gratitude_reached === true) {
+        // Rule 1 Priority: Always allow Like if gratitude is reached, even during bridge.
+        if (isNowComplete && aiResult.gratitude_reached === true) {
             console.log(`[Gratitude Shield] Detected thanks from ${candidateId}. Sending 👍.`);
             aiResult.reaction = '👍';
         } else if (!aiResult.gratitude_reached) {
