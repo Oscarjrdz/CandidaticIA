@@ -528,6 +528,41 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const finalAudit = auditProfile(finalMerged, customFields);
         const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
 
+        // --- ⚡ BYPASS SYSTEM (v2.6) ---
+        // Automatic routing to projects upon completion
+        if (isNowComplete && !candidateData.projectId) {
+            try {
+                const bypassIds = await redis.zrange('bypass:list', 0, -1);
+                if (bypassIds.length > 0) {
+                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id}`));
+                    const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
+
+                    for (const rule of activeRules) {
+                        const { minAge, maxAge, municipios, escolaridades, categories, gender, projectId } = rule;
+
+                        // Match logic
+                        const candidateAge = parseInt(finalMerged.edad);
+                        const ageMatch = (!minAge || candidateAge >= parseInt(minAge)) && (!maxAge || candidateAge <= parseInt(maxAge));
+                        const genderMatch = (gender === 'Cualquiera' || finalMerged.genero === gender);
+                        const munMatch = (municipios.length === 0 || municipios.includes(finalMerged.municipio));
+                        const escMatch = (escolaridades.length === 0 || escolaridades.includes(finalMerged.escolaridad));
+                        const catMatch = (categories.length === 0 || categories.includes(finalMerged.categoria));
+
+                        if (ageMatch && genderMatch && munMatch && escMatch && catMatch) {
+                            console.log(`[BYPASS] ⚡ Candidate ${candidateId} matches rule "${rule.name}". Routing to Project ${projectId}.`);
+                            candidateUpdates.projectId = projectId;
+                            candidateUpdates.bypass_rule = rule.name;
+                            // Optionally move to first step of project
+                            // candidateUpdates.stepId = 'step_0'; 
+                            break; // Stop at first match
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('[BYPASS] Error evaluating rules:', err);
+            }
+        }
+
         // 🌉 BRIDGE INITIALIZATION: Start counter when profile is freshly complete
         if (isNowComplete && (!candidateData.bridge_counter && candidateData.bridge_counter !== 0)) {
             candidateUpdates.bridge_counter = 0;

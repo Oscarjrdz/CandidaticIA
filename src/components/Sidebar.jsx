@@ -33,6 +33,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
     { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
     { id: 'bulks', label: 'Bulks', icon: Send, position: 'top' },
+    { id: 'bypass', label: 'ByPass', icon: Zap, position: 'top' },
     { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
     { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
     { id: 'post-maker', label: 'Post Maker', icon: Layout, position: 'top' },

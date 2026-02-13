@@ -81,7 +81,11 @@ const KEYS = {
 
     // Optimized Statistics Sets (O(1) scard)
     LIST_COMPLETE: 'stats:list:complete',
-    LIST_PENDING: 'stats:list:pending'
+    LIST_PENDING: 'stats:list:pending',
+
+    // ByPass Rules (New)
+    BYPASS_LIST: 'bypass:list',
+    BYPASS_PREFIX: 'bypass:'
 };
 
 export const DEFAULT_PROJECT_STEPS = [

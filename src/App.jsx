@@ -15,6 +15,7 @@ import BotIASection from './components/BotIASection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import ProjectsSection from './components/ProjectsSection';
 import ADNSection from './components/ADNSection';
+import ByPassSection from './components/ByPassSection';
 import LoginPage from './components/LoginPage'; // LOGIN ENABLED
 import { getTheme, saveTheme } from './utils/storage';
 
@@ -120,7 +121,8 @@ function App() {
                                   : activeSection === 'media-library' ? 'Biblioteca Multimedia'
                                     : activeSection === 'projects' ? 'Proyectos'
                                       : activeSection === 'adn' ? 'ADN del Bot'
-                                        : 'Configuración'}
+                                        : activeSection === 'bypass' ? 'Sistema ByPass'
+                                          : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
@@ -131,7 +133,8 @@ function App() {
                             : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                               : activeSection === 'projects' ? 'Gestión y organización de proyectos'
                                 : activeSection === 'adn' ? 'Arquitectura y lógica interna del Cerebro IA'
-                                  : 'Configuración del Sistema'
+                                  : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos a proyectos'
+                                    : 'Configuración del Sistema'
                   }
                 </p>
               </div>
@@ -195,6 +198,8 @@ function App() {
             <ProjectsSection showToast={showToast} />
           ) : activeSection === 'adn' ? (
             <ADNSection showToast={showToast} />
+          ) : activeSection === 'bypass' ? (
+            <ByPassSection showToast={showToast} />
           ) : (
             <SettingsSection
               instanceId={instanceId}
