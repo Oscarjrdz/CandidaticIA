@@ -390,7 +390,7 @@ ${audit.dnaLines}
                     aiResult = {
                         response_text: textContent,
                         thought_process: "GPT Host Response",
-                        reaction: (textContent.toLowerCase().includes('gracias') || textContent.toLowerCase().includes('ti')) ? '👍' : null,
+                        reaction: (/\b(gracias|ti)\b/i.test(textContent)) ? '👍' : null,
                         gratitude_reached: false,
                         close_conversation: false
                     };
