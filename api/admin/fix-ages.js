@@ -1,10 +1,9 @@
 import { getRedisClient } from '../utils/storage.js';
 
 /**
- * 🛠️ AGE FIX API (Admin Only) - ROBUST MODE v3
- * - Supports 2-digit years (83 -> 1983)
- * - Supports search (?search=Oscar)
- * - Detailed logs for specific targets
+ * 🛠️ AGE FIX API (Admin Only) - TARGET DEBUG MODE
+ * - Auto-detects 'Oscar' for deep logging.
+ * - Handles Spanish text dates ("19 de mayo de 1983").
  */
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
@@ -17,13 +16,21 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Redis client not initialized' });
     }
 
+    // Map Spanish months
+    const MONTHS = {
+        'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+        'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+        'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6,
+        'jul': 7, 'ago': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dic': 12
+    };
+
     try {
         let cursor = '0';
         let totalScanned = 0;
         let totalFixed = 0;
         let ignoredReasons = {};
         let details = [];
-        let specificLogs = [];
+        let oscarLogs = [];
 
         // Scan for all candidate keys
         do {
@@ -44,26 +51,41 @@ export default async function handler(req, res) {
 
                     try {
                         const candidate = JSON.parse(data);
-                        const dob = candidate.fechaNacimiento;
-                        const name = candidate.nombreReal || '';
+                        let dob = candidate.fechaNacimiento;
+                        const name = candidate.nombreReal || 'Desconocido';
 
-                        // Search Filter Logic
-                        const isTarget = search ? name.toLowerCase().includes(search.toLowerCase()) : false;
+                        // Force debug for likely user
+                        const isOscar = name.toLowerCase().includes('oscar');
 
                         if (!dob) {
                             ignoredReasons['No DOB'] = (ignoredReasons['No DOB'] || 0) + 1;
-                            if (isTarget) specificLogs.push(`[${name}] Skipped: No DOB found.`);
+                            if (isOscar) oscarLogs.push(`[${name}] FAIL: No DOB field present. Age in DB: ${candidate.edad}`);
                             continue;
                         }
 
-                        // Loose Regex v3: 
-                        // Matches: 19/05/1983, 19/5/83, 19-05-83
-                        const match = dob.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+                        // Normalize Spanish Date
+                        // "19 de mayo de 1983" -> "19/05/1983"
+                        let normalizedDob = dob.toLowerCase()
+                            .replace(/ de /g, '/')
+                            .replace(/ /g, '/')
+                            .replace(/-/g, '/'); // 19/mayo/1983
+
+                        // Regex v4: Supports text months
+                        const textMatch = normalizedDob.match(/^(\d{1,2})\/([a-z]+)\/(\d{2,4})$/);
+                        if (textMatch) {
+                            const [_, d, mStr, y] = textMatch;
+                            if (MONTHS[mStr]) {
+                                normalizedDob = `${d}/${MONTHS[mStr]}/${y}`;
+                            }
+                        }
+
+                        // Final Standard Check
+                        const match = normalizedDob.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
 
                         if (!match) {
                             ignoredReasons['Invalid Check'] = (ignoredReasons['Invalid Check'] || 0) + 1;
-                            if (isTarget) specificLogs.push(`[${name}] Skipped: Invalid Format (${dob})`);
-                            // Log strictly invalid ones to global details if few
+                            if (isOscar) oscarLogs.push(`[${name}] FAIL: Invalid DOB format: "${dob}" (norm: ${normalizedDob})`);
+
                             if ((ignoredReasons['Invalid Check'] || 0) < 10) {
                                 details.push(`IGNORED (Format): ${name} -> ${dob}`);
                             }
@@ -76,11 +98,8 @@ export default async function handler(req, res) {
                         let m = parseInt(mStr, 10);
                         let y = parseInt(yStr, 10);
 
-                        // Handle 2-digit year (83 -> 1983, 05 -> 2005)
-                        if (y < 100) {
-                            // Pivot year: 30. If < 30 -> 20xx, Else -> 19xx
-                            y += (y < 30) ? 2000 : 1900;
-                        }
+                        // Smart Year
+                        if (y < 100) y += (y < 30) ? 2000 : 1900;
 
                         const birthDate = new Date(y, m - 1, d);
                         const today = new Date();
@@ -90,25 +109,24 @@ export default async function handler(req, res) {
                             age--;
                         }
 
-                        // Convert both to numbers for comparison
                         const currentAge = parseInt(candidate.edad, 10);
 
                         // Update if different
                         if (currentAge !== age) {
                             const oldAge = candidate.edad;
                             candidate.edad = age;
-                            // Update DOB to standardized format (YYYY is safer but let's keep DD/MM/YYYY)
-                            // candidate.fechaNacimiento = `${d.toString().padStart(2,'0')}/${m.toString().padStart(2,'0')}/${y}`;
+                            // normalize stored date for future consistency
+                            candidate.fechaNacimiento = `${d.toString().padStart(2, '0')}/${m.toString().padStart(2, '0')}/${y}`;
 
                             await redis.set(key, JSON.stringify(candidate));
 
                             const logMsg = `✅ FIXED: ${name} (${dob}) | ${oldAge} -> ${age}`;
                             details.push(logMsg);
-                            if (isTarget) specificLogs.push(logMsg);
+                            if (isOscar) oscarLogs.push(logMsg);
                             totalFixed++;
                         } else {
                             ignoredReasons['Age Correct'] = (ignoredReasons['Age Correct'] || 0) + 1;
-                            if (isTarget) specificLogs.push(`[${name}] Match: DB=${currentAge} Calc=${age} (DOB: ${dob})`);
+                            if (isOscar) oscarLogs.push(`[${name}] PASS: Age ${currentAge} is correct for ${dob} (Calc: ${age})`);
                         }
                     } catch (innerErr) {
                         ignoredReasons['Parse Error'] = (ignoredReasons['Parse Error'] || 0) + 1;
@@ -125,8 +143,7 @@ export default async function handler(req, res) {
                 totalFixed,
                 ignoredReasons
             },
-            searchTarget: search || null,
-            specificLogs,
+            oscarLogs, // Special section for the user
             details
         });
 
