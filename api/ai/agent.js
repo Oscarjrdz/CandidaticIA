@@ -346,12 +346,17 @@ ${audit.dnaLines}
             if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
                 console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
                 isRecruiterMode = true;
+
+                // Nitro: Get API key if present in dynamic config
+                const activeAiConfig = batchConfig.ai_config ? (typeof batchConfig.ai_config === 'string' ? JSON.parse(batchConfig.ai_config) : batchConfig.ai_config) : {};
+
                 aiResult = await processRecruiterMessage(
                     candidateData,
                     project,
                     currentStep,
                     recentHistory,
-                    config
+                    config,
+                    activeAiConfig.openaiApiKey // Passing the key
                 );
             }
         }
@@ -456,6 +461,9 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 }
             }
 
+            if (!result) {
+                throw new Error('All AI models failed to respond.');
+            }
             const textResult = result.response.text();
 
             // --- GOLD JSON RESILIENCE (Titan Grade) ---
@@ -477,6 +485,16 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     throw new Error('AI Response structure is non-recoverable');
                 }
             }
+        }
+
+        // --- FINAL PROTECTION: Ensure aiResult is never null ---
+        if (!aiResult) {
+            aiResult = {
+                response_text: "¡Ay! Mi sistema se distrajo un segundo. 😅 ¿Qué me decías? 😊",
+                thought_process: "Fallback: aiResult was null.",
+                gratitude_reached: false,
+                close_conversation: false
+            };
         }
 
         // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---

@@ -14,7 +14,7 @@ export const RECRUITER_IDENTITY = `
 [REGLA DE ORO]: No uses asteriscos (*). Mantén respuestas breves y humanas.
 `;
 
-export const processRecruiterMessage = async (candidateData, project, currentStep, recentHistory, config) => {
+export const processRecruiterMessage = async (candidateData, project, currentStep, recentHistory, config, customApiKey = null) => {
     const startTime = Date.now();
     const candidateId = candidateData.id;
 
@@ -60,7 +60,7 @@ ${stepPrompt}
             recentHistory,
             systemPrompt,
             'gpt-4o',
-            null
+            customApiKey
         );
 
         if (!gptResponse || !gptResponse.content) {
@@ -82,10 +82,9 @@ ${stepPrompt}
             };
         }
 
-        // 5. Lógica de Movimiento { move }
+        // 5. Lógica de Movimiento { move } - Handle in agent.js for consistency
         if (aiResult.thought_process?.includes('{ move }')) {
-            console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished! Moving candidate ${candidateId}.`);
-            await moveCandidateStep(project.id, candidateId, 'auto_next'); // Updated to use the correct signature if possible or handle internally
+            console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished detected for candidate ${candidateId}.`);
         }
 
         // 6. Telemetría
