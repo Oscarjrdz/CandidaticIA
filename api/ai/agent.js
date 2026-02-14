@@ -435,7 +435,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
     "response_text": "Tu respuesta.",
     "gratitude_reached": "boolean",
     "close_conversation": "boolean"
-} `;
+} 
+\n[REGLA ANTI-SILENCIO]: Si el usuario responde con simples confirmaciones ("Si", "Claro", "Ok") a una pregunta de datos, TU RESPUESTA DEBE SER: 
+1. Agradecer/Confirmar ("¡Perfecto!", "¡Excelente!").
+2. VOLVER A PEDIR EL DATO FALTANTE EXPLICÍTAMENTE.
+3. JAMÁS DEJES "response_text" VACÍO si faltan datos.
+`;
 
             const genAI = new GoogleGenerativeAI(apiKey);
             const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction });
@@ -446,9 +451,26 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 const sanitized = textResult.replace(/```json|```/g, '').trim();
                 aiResult = JSON.parse(sanitized);
                 responseTextVal = aiResult.response_text;
+
+                // 🚨 SILENCE SAFEGUARD 🚨
+                // If AI returns empty text but we are NOT closing the conversation and profile is NOT complete
+                if ((!responseTextVal || responseTextVal.trim() === '') && !aiResult.close_conversation && !isProfileComplete) {
+                    console.warn(`[SILENCE SAFEGUARD] API returned empty text for incomplete profile. Injecting fallback.`);
+
+                    // Fallback strategy: Determine what we were likely asking based on missing fields
+                    const nextMissing = audit.missingLabels.length > 0 ? audit.missingLabels[0] : 'datos';
+
+                    aiResult.response_text = `¡Entendido! ✨ ¿Me podrías decir tu ${nextMissing}, por favor? 😊`;
+                    aiResult.thought_process = "SAFEGUARD: Recuperación de silencio accidental.";
+                    responseTextVal = aiResult.response_text;
+                }
+
             } catch (e) {
                 console.error(`[Gemini JSON fail]`, e);
-                throw e;
+                // Fallback for JSON parse error
+                if (!isProfileComplete) {
+                    responseTextVal = "¡Uy! Algo interfirió con mi señal. 😅 ¿Me lo podrías repetir, por favor?";
+                }
             }
         }
 
