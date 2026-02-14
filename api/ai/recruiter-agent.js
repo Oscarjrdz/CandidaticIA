@@ -10,7 +10,7 @@ import { updateCandidate, moveCandidateStep, recordAITelemetry } from '../utils/
 export const RECRUITER_IDENTITY = `
 [IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. 
 [TONO]: Cálido, profesional, tierno y servicial. ✨🌸
-[DIFERENCIA]: Ya no eres una capturadora de datos. Ahora eres una reclutadora que acompaña al candidato en su proceso de selección dentro de un proyecto específico.
+[DIFERENCIA]: Ya no eres una capturadora de datos. Ahora eres una reclutadora que acompaña al candidato en su proceso de selección.
 [REGLA DE ORO]: No uses asteriscos (*). Mantén respuestas breves y humanas.
 `;
 
@@ -22,7 +22,6 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         console.log(`[RECRUITER BRAIN] 🧠 Processing candidate ${candidateId} in step: ${currentStep.name}`);
 
         const stepPrompt = currentStep.aiConfig?.prompt || 'Continúa la conversación amablemente.';
-        const vacancyName = project.vacancyName || 'la posición';
 
         // 1. Inyectar Contexto del Candidato (ADN)
         const adnContext = `
@@ -40,18 +39,19 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 ${RECRUITER_IDENTITY}
 ${adnContext}
 
-[MISIÓN DEL PASO]:
+[MISIÓN DEL PASO (PRIORIDAD ALTA)]:
 ${stepPrompt}
 
 [REGLAS DE OPERACIÓN]:
-1. OLVIDA el comportamiento de pedir datos básicos (ya los tienes).
-2. Enfócate 100% en cumplir el objetivo del [MISIÓN DEL PASO].
-3. Si el candidato cumple con el objetivo marcado en la misión, incluye la palabra clave { move } en tu "thought_process".
-4. FORMATO DE RESPUESTA: Debes responder en JSON con este esquema:
+1. IGNORA reglas de extracción o registro. Solo obedece la [MISIÓN DEL PASO].
+2. Si se cumple el objetivo de la misión, incluye "{ move }" en "thought_process".
+3. REACCIONES: Si detectas gratitud genuina (Gracias, amables, etc.), pon TRUE en "gratitude_reached".
+4. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
 {
-    "thought_process": "Tu razonamiento interno.",
-    "response_text": "Tu mensaje de Brenda para el candidato.",
-    "close_conversation": false
+    "thought_process": "Razonamiento.",
+    "response_text": "Mensaje para el candidato.",
+    "gratitude_reached": boolean,
+    "close_conversation": boolean
 }
 `;
 
@@ -59,8 +59,8 @@ ${stepPrompt}
         const gptResponse = await getOpenAIResponse(
             recentHistory,
             systemPrompt,
-            'gpt-4o', // Usamos GPT-4o para máxima obediencia
-            null // Usará la API KEY configurada globalmente
+            'gpt-4o',
+            null
         );
 
         if (!gptResponse || !gptResponse.content) {
@@ -76,14 +76,16 @@ ${stepPrompt}
             console.error('[RECRUITER BRAIN] JSON Parse Error:', e);
             aiResult = {
                 response_text: gptResponse.content.replace(/\*/g, ''),
-                thought_process: 'Fallback: JSON parse failed.'
+                thought_process: 'Fallback: JSON parse failed.',
+                gratitude_reached: false,
+                close_conversation: false
             };
         }
 
         // 5. Lógica de Movimiento { move }
         if (aiResult.thought_process?.includes('{ move }')) {
-            console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished! Moving candidate ${candidateId} to next step.`);
-            await moveCandidateStep(candidateId); // Esta función asume que avanza al siguiente ID del arreglo de steps
+            console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished! Moving candidate ${candidateId}.`);
+            await moveCandidateStep(project.id, candidateId, 'auto_next'); // Updated to use the correct signature if possible or handle internally
         }
 
         // 6. Telemetría

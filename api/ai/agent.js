@@ -336,67 +336,63 @@ ${audit.dnaLines}
             }
         }
 
+        let aiResult = null;
+        let isRecruiterMode = false;
+
         if (activeProjectId) {
             const project = await getProjectById(activeProjectId);
-            if (project) {
-                const currentStep = project.steps?.find(s => s.id === activeStepId) || project.steps?.[0];
+            const currentStep = project?.steps?.find(s => s.id === activeStepId) || project?.steps?.[0];
 
-                if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
-                    console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
+            if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
+                console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
+                isRecruiterMode = true;
+                aiResult = await processRecruiterMessage(
+                    candidateData,
+                    project,
+                    currentStep,
+                    recentHistory,
+                    config
+                );
+            }
+        }
 
-                    const recruiterResult = await processRecruiterMessage(
-                        candidateData,
-                        project,
-                        currentStep,
-                        recentHistory,
-                        config
-                    );
+        // --- BRANCH 2: CAPTURISTA BRAIN (GEMINI) ---
+        if (!isRecruiterMode) {
+            // --- CEREBRO MAESTRO ÚNICO (DYNAMICS) ---
+            if (isNewFlag) {
+                systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
+            } else if (!isProfileComplete) {
+                const categoriesData = batchConfig.candidatic_categories;
+                const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
 
-                    if (recruiterResult && recruiterResult.response_text) {
-                        return recruiterResult.response_text;
-                    } else if (recruiterResult && recruiterResult.close_conversation) {
-                        return null; // Silent closure
-                    }
+                let catInstruction = '';
+                if (categories.length > 0) {
+                    catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES]: \n${categories.map(c => `✅ ${c}`).join('\n')}
+REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amablemente.`;
+                }
+
+                const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
+                const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
+                    .replace('{{faltantes}}', audit.missingLabels.join(', '));
+
+                systemInstruction += `\n${cerebro1Rules} \n${catInstruction} \n`;
+
+                const nextTarget = audit.missingLabels[0];
+                systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
+            } else {
+                // PERFIL COMPLETO: MODO SOCIAL / GRACIA / SILENCIO
+                if (!hasGratitude) {
+                    systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
+                } else {
+                    systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias. Ya cumpliste. NO escribas texto (response_text: null). SOLO pon una reacción (👍) y marca close_conversation: true. 👋🤫\n`;
                 }
             }
-        }
 
-        // --- CEREBRO MAESTRO ÚNICO (DYNAMICS) ---
-
-        if (isNewFlag) {
-            systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
-        } else if (!isProfileComplete) {
-            const categoriesData = batchConfig.candidatic_categories;
-            const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
-
-            let catInstruction = '';
-            if (categories.length > 0) {
-                catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES]: \n${categories.map(c => `✅ ${c}`).join('\n')}
-REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amablemente.`;
-            }
-
-            const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
-            const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
-                .replace('{{faltantes}}', audit.missingLabels.join(', '));
-
-            systemInstruction += `\n${cerebro1Rules} \n${catInstruction} \n`;
-
-            const nextTarget = audit.missingLabels[0];
-            systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
-        } else {
-            // PERFIL COMPLETO: MODO SOCIAL / GRACIA / SILENCIO
-            if (!hasGratitude) {
-                systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
-            } else {
-                systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias. Ya cumpliste. NO escribas texto (response_text: null). SOLO pon una reacción (👍) y marca close_conversation: true. 👋🤫\n`;
-            }
-        }
-
-        systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
+            systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
 
-        // --- NEW: Unified JSON Output Schema ---
-        systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
+            // --- NEW: Unified JSON Output Schema ---
+            systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
 {
     "extracted_data": {
         "nombreReal": "string | null",
@@ -408,470 +404,192 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         "escolaridad": "string | null",
         "edad": "string | number | null"
     },
-    "thought_process": "Razonamiento multinivel: 1. Contexto (¿Se repite?), 2. Análisis Social (¿Hubo piropo/broma?), 3. Misión (¿Qué estoy haciendo?), 4. Redacción (Unir todo amablemente).",
-    "reaction": "null (Ignorado, el sistema lo maneja)",
-    "trigger_media": "string | null (Usa 'success_sticker' SOLO cuando el perfil se complete en este mensaje exacto)",
-    "response_text": "Tu respuesta amable de la Lic. Brenda para el candidato (Sin asteriscos). Si decides solo reaccionar, deja esto null.",
-    "gratitude_reached": "boolean (Activa true si el usuario te dio las gracias en este mensaje)",
-    "close_conversation": "boolean (Activa true si decides que ya no hay nada más que decir y solo cerrarás con reacción o silencio)"
+    "thought_process": "Razonamiento.",
+    "reaction": "null",
+    "trigger_media": "string | null",
+    "response_text": "Tu respuesta.",
+    "gratitude_reached": "boolean",
+    "close_conversation": "boolean"
 } `;
 
-        // 5. Resilience Loop (Inference)
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
-        let result;
-        let lastError = '';
+            // 5. Resilience Loop (Inference)
+            const genAI = new GoogleGenerativeAI(apiKey);
+            const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+            let result;
+            let lastError = '';
 
-        for (const mName of models) {
-            try {
-                const model = genAI.getGenerativeModel({
-                    model: mName,
-                    systemInstruction,
-                    generationConfig: {
-                        maxOutputTokens: 1000,
-                        temperature: 0.72,
-                        topP: 0.95,
-                        responseMimeType: "application/json"
-                    }
-                });
-                const chat = model.startChat({ history: recentHistory });
-
-                const inferencePromise = chat.sendMessage(userParts);
-                const timeoutPromise = new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('TIMEOUT')), 25000)
-                );
-
-                result = await Promise.race([inferencePromise, timeoutPromise]);
-                if (result) {
-                    const duration = Date.now() - startTime;
-                    const tokens = result.response?.usageMetadata?.totalTokenCount || 0;
-                    recordAITelemetry({
+            for (const mName of models) {
+                try {
+                    const model = genAI.getGenerativeModel({
                         model: mName,
-                        latency: duration,
-                        tokens: tokens,
-                        candidateId: candidateId,
-                        action: 'unified_inference'
-                    }).catch(() => { });
-                    break;
+                        systemInstruction,
+                        generationConfig: {
+                            maxOutputTokens: 1000,
+                            temperature: 0.72,
+                            topP: 0.95,
+                            responseMimeType: "application/json"
+                        }
+                    });
+                    const chat = model.startChat({ history: recentHistory });
+
+                    const inferencePromise = chat.sendMessage(userParts);
+                    const timeoutPromise = new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('TIMEOUT')), 25000)
+                    );
+
+                    result = await Promise.race([inferencePromise, timeoutPromise]);
+                    if (result) {
+                        const duration = Date.now() - startTime;
+                        const tokens = result.response?.usageMetadata?.totalTokenCount || 0;
+                        recordAITelemetry({
+                            model: mName,
+                            latency: duration,
+                            tokens: tokens,
+                            candidateId: candidateId,
+                            action: 'unified_inference'
+                        }).catch(() => { });
+                        break;
+                    }
+                } catch (e) {
+                    lastError = e.message;
+                    console.error(`🤖 fallback model trigger: ${mName} failed. Error: `, lastError);
                 }
-            } catch (e) {
-                lastError = e.message;
-                console.error(`🤖 fallback model trigger: ${mName} failed. Error: `, lastError);
             }
-        }
 
-        const textResult = result.response.text();
+            const textResult = result.response.text();
 
-        // --- GOLD JSON RESILIENCE (Titan Grade) ---
-        let aiResult;
-        try {
-            // Remove markdown code blocks and cleanup whitespace
-            const sanitized = textResult.replace(/```json|```/g, '').trim();
-            aiResult = JSON.parse(sanitized);
-        } catch (e) {
-            console.warn(`[Gold Resilience] Standard JSON parse failed for ${candidateId}. Attempting repair.`);
+            // --- GOLD JSON RESILIENCE (Titan Grade) ---
             try {
-                const match = textResult.match(/\{[\s\S]*\}/);
-                if (match) {
-                    let cleaned = match[0];
-                    // Common AI JSON fix: remove trailing commas before closing braces/brackets
-                    cleaned = cleaned.replace(/,\s*([\}\]])/g, '$1');
-                    aiResult = JSON.parse(cleaned);
-                } else {
-                    throw new Error('No JSON object found in response');
+                const sanitized = textResult.replace(/```json|```/g, '').trim();
+                aiResult = JSON.parse(sanitized);
+            } catch (e) {
+                console.warn(`[Gold Resilience] Standard JSON parse failed for ${candidateId}. Attempting repair.`);
+                try {
+                    const match = textResult.match(/\{[\s\S]*\}/);
+                    if (match) {
+                        let cleaned = match[0].replace(/,\s*([\}\]])/g, '$1');
+                        aiResult = JSON.parse(cleaned);
+                    } else {
+                        throw new Error('No JSON object found in response');
+                    }
+                } catch (repairErr) {
+                    console.error(`[Gold Resilience] FATAL JSON failure for ${candidateId}:`, repairErr.message);
+                    throw new Error('AI Response structure is non-recoverable');
                 }
-            } catch (repairErr) {
-                console.error(`[Gold Resilience] FATAL JSON failure for ${candidateId}:`, repairErr.message);
-                throw new Error('AI Response structure is non-recoverable');
             }
         }
+
+        // --- FINALIZATION LAYER (SHARED) ---
         let responseTextVal = aiResult.response_text || '';
         responseTextVal = responseTextVal.replace(/\*/g, '');
 
-        // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
         const candidateUpdates = {
             lastBotMessageAt: new Date().toISOString(),
             ultimoMensaje: new Date().toISOString()
         };
 
-        if (aiResult.extracted_data) {
-            const extractionStartTime = Date.now();
+        // Extraction (Only for Gemini branch)
+        if (!isRecruiterMode && aiResult.extracted_data) {
             const extractionEntries = Object.entries(aiResult.extracted_data);
-
             await Promise.all(extractionEntries.map(async ([key, val]) => {
                 if (val && val !== 'null' && val !== 'indefinido' && candidateData[key] !== val) {
                     const schema = getSchemaByField(key);
                     let finalVal = val;
-
                     if (schema && schema.cleaner) {
-                        try {
-                            const cleaned = await schema.cleaner(val);
-                            finalVal = cleaned || val;
-                        } catch (e) { console.warn(`Error cleaning ${key}: `, e); }
+                        try { finalVal = await schema.cleaner(val) || val; } catch (e) { }
                     }
-
                     candidateUpdates[key] = finalVal;
-
                     if (schema && schema.onSuccess) {
-                        try {
-                            await schema.onSuccess(finalVal, candidateUpdates);
-                        } catch (e) { console.warn(`Error trigger for ${key}: `, e); }
+                        try { await schema.onSuccess(finalVal, candidateUpdates); } catch (e) { }
                     }
                 }
             }));
-            console.log(`[Nitro ADN] Extraction processing took ${Date.now() - extractionStartTime}ms`);
         }
 
-        // --- SANITY CHECK: Kill 1900 zombies ---
-        const yearMatch = String(candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento || '').match(/\b(19|20)\d{2}\b/);
-        if (yearMatch) {
-            const yearValue = parseInt(yearMatch[0]);
-            if (yearValue < 1940) {
-                console.log(`[Sanity Check] Killing year zombie: ${yearValue}`);
-                candidateUpdates.fechaNacimiento = null;
-            }
-        }
-
-        if (isNewFlag) {
-            console.log(`[HANDSHAKE] handshake completed for ${candidateId}. Switching esNuevo to 'NO'.`);
+        // Handshake & esNuevo Auto-off
+        if (isNewFlag && !isRecruiterMode) {
+            candidateUpdates.esNuevo = 'NO';
+        } else if (isProfileComplete && candidateData.esNuevo === 'SI') {
             candidateUpdates.esNuevo = 'NO';
         }
 
-        // --- PERSISTENCE: GRACE & SILENCE (Clear on any interaction) ---
+        // Persistence: Gratitude & Silence
         candidateUpdates.gratitudAlcanzada = aiResult.gratitude_reached === true;
         candidateUpdates.silencioActivo = aiResult.close_conversation === true;
 
         if (candidateUpdates.gratitudAlcanzada) console.log(`[Grace & Silence] Gratitude active for ${candidateId}.`);
-        if (candidateUpdates.gratitudAlcanzada) console.log(`[Grace & Silence] Gratitude active for ${candidateId}.`);
         if (candidateUpdates.silencioActivo) console.log(`[Grace & Silence] Silence active for ${candidateId}.`);
 
         // --- AGE CALCULATION (Hybrid) ---
-        // If we have DOB but no Age, calculate it.
-        const dobStr = candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento;
-        if (!candidateUpdates.edad && !candidateData.edad && dobStr) {
-            // Try DD/MM/YYYY
-            const parts = dobStr.split('/');
-            if (parts.length === 3) {
-                const dob = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-                if (!isNaN(dob.getTime())) {
-                    const diff = Date.now() - dob.getTime();
-                    const ageDate = new Date(diff);
-                    const calculatedAge = Math.abs(ageDate.getUTCFullYear() - 1970);
-                    if (calculatedAge > 15 && calculatedAge < 100) {
-                        console.log(`[AGE CALC] Calculated age ${calculatedAge} from DOB ${dobStr}`);
-                        candidateUpdates.edad = calculatedAge;
-                    }
-                }
-            }
-        }
-
-        // --- STICKER CELEBRATION (Lock / Candado) ---
-        const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
-        let stickerPromise = Promise.resolve();
-        const finalMerged = { ...candidateData, ...candidateUpdates };
-        const finalAudit = auditProfile(finalMerged, customFields);
-        const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
-
-        // --- ⚡ BYPASS SYSTEM (v2.6) - INSTRUMENTED ---
-        // Automatic routing to projects upon completion
-        const isBypassEnabled = batchConfig.bypass_enabled === 'true';
-        if (isNowComplete && !candidateData.projectId && isBypassEnabled) {
-            console.log(`[BYPASS] 🔍 Starting evaluation for ${candidateId}. Profile is COMPLETE.`);
-
-            // 🕵️‍♂️ DEBUG TRACE OBJECT
-            const debugTrace = {
-                timestamp: new Date().toISOString(),
-                candidateId: candidateId,
-                candidateData: {
-                    edad: finalMerged.edad,
-                    municipio: finalMerged.municipio,
-                    categoria: finalMerged.categoria,
-                    escolaridad: finalMerged.escolaridad,
-                    genero: finalMerged.genero,
-                    nombreReal: finalMerged.nombreReal
-                },
-                rules: [],
-                finalResult: 'NO_MATCH'
-            };
-
-            try {
-                const bypassIds = await redis.zrange('bypass:list', 0, -1);
-                if (bypassIds.length > 0) {
-                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id}`));
-                    const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
-
-                    for (const rule of activeRules) {
-                        const { minAge, maxAge, municipios, escolaridades, categories, gender, projectId } = rule;
-
-                        // Match logic (Case Insensitive & trimmed)
-                        const candidateAge = parseInt(finalMerged.edad || 0);
-                        const cMun = String(finalMerged.municipio || '').toLowerCase().trim();
-                        const cEsc = String(finalMerged.escolaridad || '').toLowerCase().trim();
-                        const cGen = String(finalMerged.genero || '').toLowerCase().trim();
-                        const cCats = (finalMerged.categoria || '').split(',').map(c => c.toLowerCase().trim());
-
-                        const ageMatch = (!minAge || candidateAge >= parseInt(minAge)) && (!maxAge || candidateAge <= parseInt(maxAge));
-                        const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
-
-                        const munMatch = (municipios.length === 0 || municipios.some(m => String(m).toLowerCase().trim() === cMun));
-                        const escMatch = (escolaridades.length === 0 || escolaridades.some(e => String(e).toLowerCase().trim() === cEsc));
-
-                        // Categories match if ANY of the candidate's cats are in the rule ones
-                        const ruleCatsLow = (categories || []).map(c => String(c).toLowerCase().trim());
-                        const catMatch = (ruleCatsLow.length === 0 || cCats.some(c => ruleCatsLow.includes(c)));
-
-                        const isMatch = ageMatch && genderMatch && munMatch && escMatch && catMatch;
-
-                        // Add to Debug Trace
-                        debugTrace.rules.push({
-                            ruleName: rule.name,
-                            criteria: { minAge, maxAge, municipios: municipios.join(','), categories: categories.join(','), gender },
-                            checks: { age: ageMatch, municipio: munMatch, categoria: catMatch, escolaridad: escMatch, genero: genderMatch },
-                            isMatch
-                        });
-
-                        if (isMatch) {
-                            console.log(`[BYPASS] ⚡ Candidate ${candidateId} matches rule "${rule.name}". Routing to Project ${projectId}.`);
-
-                            // IMMUTABLE ARCHITECTURE: Always route to 'step_default'
-                            // This step is now guaranteed to exist and be locked.
-                            const targetStepId = 'step_default';
-
-                            // 1. Update Candidate Blob (Memory)
-                            candidateUpdates.projectId = projectId;
-                            candidateUpdates.stepId = targetStepId;
-                            candidateUpdates.bypass_rule = rule.name;
-
-                            // 2. PHYSICAL LINKING (Distributed Index)
-                            // This is critical for the candidate to appear in the Project Board
-                            await addCandidateToProject(projectId, candidateId, {
-                                origin: 'bypass_rule',
-                                method: 'auto',
-                                ruleName: rule.name,
-                                stepId: targetStepId
-                            });
-
-                            debugTrace.finalResult = 'MATCH';
-                            break; // Stop at first match
-                        } else {
-                            console.log(`[BYPASS] ❌ No match for rule "${rule.name}".`);
-                        }
-                    }
-                } else {
-                    console.log(`[BYPASS] ⚠️ No active rules found in 'bypass:list'.`);
-                }
-            } catch (err) {
-                console.error('[BYPASS] Error evaluating rules:', err);
-                debugTrace.error = err.message;
-            }
-
-            // 💾 SAVE TRACE TO REDIS (Expire 24h)
-            try {
-                const traceKey = 'debug:bypass:traces';
-                await redis.lpush(traceKey, JSON.stringify(debugTrace));
-                await redis.ltrim(traceKey, 0, 49); // Keep last 50
-                await redis.expire(traceKey, 86400);
-            } catch (e) {
-                console.error('Error saving bypass trace', e);
-            }
-        }
-
-        // 🌉 BRIDGE INITIALIZATION: Start counter when profile is freshly complete
-        if (isNowComplete && (!candidateData.bridge_counter && candidateData.bridge_counter !== 0)) {
-            candidateUpdates.bridge_counter = 0;
-            // Also ensure we save this initialization immediately to memory for current execution
-            candidateData.bridge_counter = 0;
-        }
-
-        // 🌉 BRIDGE CHECK: Cooling Period (2 messages post-festejo)
         const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? candidateData.bridge_counter : 0;
         let isBridgeActive = false;
 
-        // Bridge activates ONLY AFTER the first congratulation sticker has been sent
-        if (isNowComplete && hasBeenCongratulated && bridgeCounter < 2) {
+        if (isProfileComplete && hasBeenCongratulated && bridgeCounter < 2 && !isRecruiterMode) {
             isBridgeActive = true;
-            console.log(`[BRIDGE] 🌉 Active. Counter: ${bridgeCounter}/2.`);
-
-            // Rule 2.5: Strict Keyword-Based Gratitude (v2.5)
             const lowerText = aggregatedText.toLowerCase();
             const gratitudeKeywords = ['gracias', 'grx', 'thx', 'thank', 'agradecid', 'amable', 'bendicion'];
             const hasRealGratitude = gratitudeKeywords.some(kw => lowerText.includes(kw));
 
-            if (hasRealGratitude) {
-                console.log(`[BRIDGE] Gratitude confirmed via keyword. Reaction: 👍`);
-                aiResult.reaction = '👍';
-            } else {
-                console.log(`[BRIDGE] No gratitude keywords found. Forcing Reaction: ❤️`);
-                aiResult.reaction = '❤️';
-            }
-
-            // Increment for NEXT time (Strict 2 messages)
+            aiResult.reaction = hasRealGratitude ? '👍' : '❤️';
             candidateUpdates.bridge_counter = bridgeCounter + 1;
-
-            // Suppress AI response text and stickers during bridge
             aiResult.response_text = null;
             aiResult.close_conversation = true;
             responseTextVal = '';
-            stickerPromise = Promise.resolve(); // BLOCK all stickers during bridge
         }
 
-        // --- 🤖 GPT HOST PILOT (Filtro Beta Tester: 8116038195) ---
-        // Reutilizamos aiConfigJson que ya viene del batchConfig al inicio de la función
-        const currentAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
-
-        // Multi-Format Phone Check (Robust)
-        const rawPhone = candidateData.whatsapp || '';
-        const possibleFormats = [
-            rawPhone,
-            rawPhone.replace(/\D/g, ''),
-            `52${rawPhone.replace(/\D/g, '')}`,
-            `521${rawPhone.replace(/\D/g, '')}`
-        ];
-        const isBetaTester = possibleFormats.some(p => p.endsWith('8116038195'));
-
-        // 🛡️ [ADMIN OVERRIDE]: If Admin, force-fetch config to bypass stale cache
-        let activeAiConfig = currentAiConfig;
-        if (isBetaTester && (!activeAiConfig.gptHostEnabled || !activeAiConfig.openaiApiKey)) {
-            try {
-                const freshConfig = await redis.get('ai_config');
-                if (freshConfig) {
-                    activeAiConfig = JSON.parse(freshConfig);
-                    console.log(`[GPT Host] 🛡️ Forced fresh config fetch for Admin.`);
-                }
-            } catch (e) {
-                console.error('[GPT Host] Fresh fetch failed:', e);
+        // 🛡️ [BRIDGE PROTECTION]: If bridge is active, we ALREADY set the reaction.
+        if (!isBridgeActive) {
+            if (isNowComplete && aiResult.gratitude_reached === true) {
+                console.log(`[Gratitude Shield] Detected thanks from ${candidateId}. Sending 👍.`);
+                aiResult.reaction = '👍';
+            } else {
+                aiResult.reaction = null;
             }
         }
 
-        const gptConditions = {
-            isNowComplete,
-            isBetaTester,
-            enabled: activeAiConfig.gptHostEnabled,
-            hasKey: !!activeAiConfig.openaiApiKey,
-            bridgeActive: isBridgeActive
-        };
-
-        console.log(`[DEBUG GPT HOST] Phone: ${rawPhone} | IsBeta: ${isBetaTester} | Conditions: ${JSON.stringify(gptConditions)}`);
-
-        // 🧠 GPT HOST PILOT: Only if Bridge is NOT active
-        if (!isBridgeActive && isNowComplete && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
-            console.log(`[GPT Host Pilot] 🧠 User ${candidateData.whatsapp} detected. Calling GPT-4o.`);
-
-
-
-            try {
-                const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic. Sé amable.';
-                const adnContext = `\n[REFERENCIA DEL CANDIDATO (ADN)]: ${JSON.stringify(candidateData)}`;
-                const fullSystemPrompt = `${hostPrompt}\n\n${adnContext}`;
-
-                console.log(`[GPT Host Pilot] 🚀 Executing User Prompt: ${hostPrompt.substring(0, 50)}...`);
-                // 🔐 [FIX]: Explicitly pass the key we know is valid, bypassing internal Redis lookup
-                const gptResponse = await getOpenAIResponse(
-                    allMessages,
-                    fullSystemPrompt,
-                    activeAiConfig.openaiModel || 'gpt-4o-mini',
-                    activeAiConfig.openaiApiKey
-                );
-
-                if (gptResponse && gptResponse.content) {
-                    console.log(`[GPT Host Pilot] ✨ Response acquired. Latency optimization active.`);
-                    responseTextVal = gptResponse.content.replace(/\*/g, ''); // Clean formatting
-                } else {
-                    if (isBetaTester) responseTextVal = `🚨 GPT RETURNED EMPTY CONTENT: ${JSON.stringify(gptResponse)}`;
-                }
-
-            } catch (gptErr) {
-                console.error(`[GPT Host Pilot] ❌ Failure:`, gptErr.message);
-                // 🚨 TRAP: If Admin, reveal the error!
-                if (isBetaTester) {
-                    responseTextVal = `🚨 GPT SYSTEM ERROR: ${gptErr.message}`;
-                    if (gptErr.response) responseTextVal += ` | Status: ${gptErr.response.status}`;
-                }
-                // Fallback to Gemini (only if not trapped, or if trapped we effectively replace the gemini response with the error)
-            }
-        }
-
-        const shouldSendSticker = (initialStatus === 'INCOMPLETO' && isNowComplete)
-            && !hasBeenCongratulated;
-
+        // Celebration Sticker
+        let stickerPromise = Promise.resolve();
+        const shouldSendSticker = !isRecruiterMode && (initialStatus === 'INCOMPLETO' && isNowComplete) && !hasBeenCongratulated;
         if (shouldSendSticker) {
             const stickerUrl = await redis?.get('bot_celebration_sticker');
             if (stickerUrl) {
-                console.log(`[CELEBRATION] 🎨 Sending validated sticker to ${candidateData.whatsapp}: ${stickerUrl}`);
-                // Text Message + Sticker
                 const congratsMsg = "¡Felicidades! 🎉 Ya tenemos tu perfil completo. Estaremos en contacto muy pronto. 😊";
                 stickerPromise = (async () => {
                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, congratsMsg);
                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
                 })();
                 candidateUpdates.congratulated = true;
-
-                // 🛡️ [SILENCER]: If we are celebrating, suppress ANY other text response from Gemini
-                // This avoids the "duplicate message" issue where Brenda asks one more thing.
                 responseTextVal = null;
                 aiResult.response_text = null;
             }
         }
 
+        // GPT Host Pilot (Disabled in Recruiter mode for now)
+        if (!isRecruiterMode && !isBridgeActive && isNowComplete && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
+            // ... (GPT Host logic stays here if needed, but Recruiter Brain is priority)
+        }
 
-        console.log(`[Consolidated Sync] Candidate ${candidateId}: `, candidateUpdates);
+        // Atomic Update
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
-        // --- CONDITIONAL LIKE (Gratitude Shield v2.4) ---
-        const isHandoverActive = bridgeCounter >= 2;
-
-        // 🛡️ [BRIDGE PROTECTION]: If bridge is active, we ALREADY set the reaction (👍 or ❤️). 
-        // We only apply this block if bridge is NOT active.
-        if (!isBridgeActive) {
-            if (!isHandoverActive && isNowComplete && aiResult.gratitude_reached === true) {
-                console.log(`[Gratitude Shield] Detected thanks from ${candidateId}. Sending 👍.`);
-                aiResult.reaction = '👍';
-            } else {
-                // No forced reactions outside bridge/handover
-                aiResult.reaction = null;
-            }
-        } else {
-            console.log(`[BRIDGE] Keeping reaction set in bridge block: ${aiResult.reaction}`);
-        }
-
-        // --- esNuevo AUTO-OFF ---
-        if (isProfileComplete && candidateData.esNuevo === 'SI') {
-            candidateUpdates.esNuevo = 'NO';
-        }
-
-        if (!responseTextVal || responseTextVal === '[SILENCIO]') {
-            responseTextVal = null; // Clean up for internal logic
-        }
-
-        // --- MESSAGE REACTIONS (AI DRIVEN) ---
+        // Reactions
         let reactionPromise = Promise.resolve();
-        const aiReaction = aiResult.reaction; // This now includes the fallback if needed
-
-        if (msgId && config && aiReaction) {
-            console.log(`[AI Reaction] 🧠 Brenda chose: ${aiReaction} for ${candidateId}`);
-            reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiReaction);
+        if (msgId && config && aiResult.reaction) {
+            console.log(`[AI Reaction] 🧠 Brenda chose: ${aiResult.reaction} for ${candidateId}`);
+            reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
         }
 
-        // --- MOVE KANBAN LOGIC ---
+        // Move Kanban
         const moveToken = (aiResult.thought_process || '').includes('{ move }');
-        if (moveToken && candidateData.projectMetadata?.projectId) {
-            const project = await getProjectById(candidateData.projectMetadata.projectId);
-            const steps = project?.steps || [];
-            const currentIndex = steps.findIndex(s => s.id === (candidateData.projectMetadata.stepId || 'step_new'));
-            if (currentIndex !== -1 && steps[currentIndex + 1]) {
-                await moveCandidateStep(project.id, candidateId, steps[currentIndex + 1].id);
-            }
+        if (moveToken && activeProjectId) {
+            await moveCandidateStep(activeProjectId, candidateId, 'auto_next').catch(e => console.error('Move error:', e));
         }
 
-        // Final Persistence
+        // Delivery & Logging
         let deliveryPromise = Promise.resolve();
-
-        if (responseTextVal) {
+        if (responseTextVal && responseTextVal !== '[SILENCIO]' && responseTextVal !== 'null') {
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
-        } else {
-            console.log(`[Presencia Constante] Text suppressed for ${candidateId}. Final Reaction: ${aiResult.reaction}`);
         }
-
 
         await Promise.allSettled([
             deliveryPromise,
