@@ -291,6 +291,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // --- PRE-PROCESS: User Voice/Text Aggregation ---
         const userText = aggregatedText;
 
+        // Current message in role format for GPT
+        const currentMessageForGpt = {
+            role: 'user',
+            parts: [{ text: userText }]
+        };
+
         const lastBotMessages = validMessages
             .filter(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel)
             .slice(-20) // Extended unique history
@@ -339,6 +345,8 @@ ${audit.dnaLines}
         let aiResult = null;
         let isRecruiterMode = false;
 
+        const historyForGpt = [...recentHistory, currentMessageForGpt];
+
         if (activeProjectId) {
             const project = await getProjectById(activeProjectId);
             const currentStep = project?.steps?.find(s => s.id === activeStepId) || project?.steps?.[0];
@@ -347,57 +355,68 @@ ${audit.dnaLines}
                 console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
                 isRecruiterMode = true;
 
-                // Nitro: Get API key if present in dynamic config
                 const activeAiConfig = batchConfig.ai_config ? (typeof batchConfig.ai_config === 'string' ? JSON.parse(batchConfig.ai_config) : batchConfig.ai_config) : {};
 
                 aiResult = await processRecruiterMessage(
                     candidateData,
                     project,
                     currentStep,
-                    recentHistory,
+                    historyForGpt,
                     config,
-                    activeAiConfig.openaiApiKey // Passing the key
+                    activeAiConfig.openaiApiKey
                 );
             }
         }
 
         // --- BRANCH 2: CAPTURISTA BRAIN (GEMINI) ---
         if (!isRecruiterMode) {
-            // --- CEREBRO MAESTRO ÚNICO (DYNAMICS) ---
-            if (isNewFlag) {
-                systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
-            } else if (!isProfileComplete) {
-                const categoriesData = batchConfig.candidatic_categories;
-                const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
+            // Check if profile JUST completed in this turn to silence text response
+            const isNowNewlyComplete = initialStatus === 'INCOMPLETO' && isProfileComplete;
 
-                let catInstruction = '';
-                if (categories.length > 0) {
-                    catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES]: \n${categories.map(c => `✅ ${c}`).join('\n')}
-REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amablemente.`;
-                }
-
-                const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
-                const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
-                    .replace('{{faltantes}}', audit.missingLabels.join(', '));
-
-                systemInstruction += `\n${cerebro1Rules} \n${catInstruction} \n`;
-
-                const nextTarget = audit.missingLabels[0];
-                systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
+            if (isNowNewlyComplete) {
+                console.log(`[Handover] Silencing Gemini text response for ${candidateId} as profile is now complete.`);
+                aiResult = {
+                    response_text: null,
+                    thought_process: "Handover to Sticker/Recruiter.",
+                    gratitude_reached: false,
+                    close_conversation: false
+                };
             } else {
-                // PERFIL COMPLETO: MODO SOCIAL / GRACIA / SILENCIO
-                if (!hasGratitude) {
-                    systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
-                } else {
-                    systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias. Ya cumpliste. NO escribas texto (response_text: null). SOLO pon una reacción (👍) y marca close_conversation: true. 👋🤫\n`;
-                }
-            }
+                // --- CEREBRO MAESTRO ÚNICO (DYNAMICS) ---
+                if (isNewFlag) {
+                    systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
+                } else if (!isProfileComplete) {
+                    const categoriesData = batchConfig.candidatic_categories;
+                    const categories = categoriesData ? JSON.parse(categoriesData).map(c => c.name) : [];
 
-            systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
+                    let catInstruction = '';
+                    if (categories.length > 0) {
+                        catInstruction = `\n[LISTADO DE CATEGORÍAS OFICIALES]: \n${categories.map(c => `✅ ${c}`).join('\n')}
+REGLA: Usa estas categorías. Si el usuario pide otra cosa, redirígelo amablemente.`;
+                    }
+
+                    const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
+                    const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
+                        .replace('{{faltantes}}', audit.missingLabels.join(', '));
+
+                    systemInstruction += `\n${cerebro1Rules} \n${catInstruction} \n`;
+
+                    const nextTarget = audit.missingLabels[0];
+                    systemInstruction += `\n[REGLA DE AVANCE]: Faltan datos. Prioridad actual: "${nextTarget}". Pide solo este dato amablemente.\n`;
+                } else {
+                    // PERFIL COMPLETO: MODO SOCIAL / GRACIA / SILENCIO
+                    if (!hasGratitude) {
+                        systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
+                    } else {
+                        systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias. Ya cumpliste. NO escribas texto (response_text: null). SOLO pon una reacción (👍) y marca close_conversation: true. 👋🤫\n`;
+                    }
+                }
+
+                systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
 
-            // --- NEW: Unified JSON Output Schema ---
-            systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
+                // --- NEW: Unified JSON Output Schema ---
+                systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
 {
     "extracted_data": {
         "nombreReal": "string | null",
@@ -417,283 +436,291 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
     "close_conversation": "boolean"
 } `;
 
-            // 5. Resilience Loop (Inference)
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
-            let result;
-            let lastError = '';
+                // 5. Resilience Loop (Inference)
+                const genAI = new GoogleGenerativeAI(apiKey);
+                const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+                let result;
+                let lastError = '';
 
-            for (const mName of models) {
-                try {
-                    const model = genAI.getGenerativeModel({
-                        model: mName,
-                        systemInstruction,
-                        generationConfig: {
-                            maxOutputTokens: 1000,
-                            temperature: 0.72,
-                            topP: 0.95,
-                            responseMimeType: "application/json"
-                        }
-                    });
-                    const chat = model.startChat({ history: recentHistory });
-
-                    const inferencePromise = chat.sendMessage(userParts);
-                    const timeoutPromise = new Promise((_, reject) =>
-                        setTimeout(() => reject(new Error('TIMEOUT')), 25000)
-                    );
-
-                    result = await Promise.race([inferencePromise, timeoutPromise]);
-                    if (result) {
-                        const duration = Date.now() - startTime;
-                        const tokens = result.response?.usageMetadata?.totalTokenCount || 0;
-                        recordAITelemetry({
+                for (const mName of models) {
+                    try {
+                        const model = genAI.getGenerativeModel({
                             model: mName,
-                            latency: duration,
-                            tokens: tokens,
-                            candidateId: candidateId,
-                            action: 'unified_inference'
-                        }).catch(() => { });
-                        break;
-                    }
-                } catch (e) {
-                    lastError = e.message;
-                    console.error(`🤖 fallback model trigger: ${mName} failed. Error: `, lastError);
-                }
-            }
+                            systemInstruction,
+                            generationConfig: {
+                                maxOutputTokens: 1000,
+                                temperature: 0.72,
+                                topP: 0.95,
+                                responseMimeType: "application/json"
+                            }
+                        });
+                        const chat = model.startChat({ history: recentHistory });
 
-            if (!result) {
-                throw new Error('All AI models failed to respond.');
-            }
-            const textResult = result.response.text();
+                        const inferencePromise = chat.sendMessage(userParts);
+                        const timeoutPromise = new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('TIMEOUT')), 25000)
+                        );
 
-            // --- GOLD JSON RESILIENCE (Titan Grade) ---
-            try {
-                const sanitized = textResult.replace(/```json|```/g, '').trim();
-                aiResult = JSON.parse(sanitized);
-            } catch (e) {
-                console.warn(`[Gold Resilience] Standard JSON parse failed for ${candidateId}. Attempting repair.`);
-                try {
-                    const match = textResult.match(/\{[\s\S]*\}/);
-                    if (match) {
-                        let cleaned = match[0].replace(/,\s*([\}\]])/g, '$1');
-                        aiResult = JSON.parse(cleaned);
-                    } else {
-                        throw new Error('No JSON object found in response');
-                    }
-                } catch (repairErr) {
-                    console.error(`[Gold Resilience] FATAL JSON failure for ${candidateId}:`, repairErr.message);
-                    throw new Error('AI Response structure is non-recoverable');
-                }
-            }
-        }
-
-        // --- FINAL PROTECTION: Ensure aiResult is never null ---
-        if (!aiResult) {
-            aiResult = {
-                response_text: "¡Ay! Mi sistema se distrajo un segundo. 😅 ¿Qué me decías? 😊",
-                thought_process: "Fallback: aiResult was null.",
-                gratitude_reached: false,
-                close_conversation: false
-            };
-        }
-
-        // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
-        let responseTextVal = aiResult.response_text || '';
-        responseTextVal = (responseTextVal || '').replace(/\*/g, '');
-        const candidateUpdates = {
-            lastBotMessageAt: new Date().toISOString(),
-            ultimoMensaje: new Date().toISOString()
-        };
-
-        // Extraction (Only for Gemini branch)
-        if (!isRecruiterMode && aiResult.extracted_data) {
-            const extractionEntries = Object.entries(aiResult.extracted_data);
-            await Promise.all(extractionEntries.map(async ([key, val]) => {
-                if (val && val !== 'null' && val !== 'indefinido' && candidateData[key] !== val) {
-                    const schema = getSchemaByField(key);
-                    let finalVal = val;
-                    if (schema && schema.cleaner) {
-                        try { finalVal = await schema.cleaner(val) || val; } catch (e) { }
-                    }
-                    candidateUpdates[key] = finalVal;
-                    if (schema && schema.onSuccess) {
-                        try { await schema.onSuccess(finalVal, candidateUpdates); } catch (e) { }
-                    }
-                }
-            }));
-        }
-
-        // --- SANITY CHECK: Kill 1900 zombies ---
-        const yearMatch = String(candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento || '').match(/\b(19|20)\d{2}\b/);
-        if (yearMatch) {
-            const yearValue = parseInt(yearMatch[0]);
-            if (yearValue < 1940) {
-                candidateUpdates.fechaNacimiento = null;
-            }
-        }
-
-        // Handshake & esNuevo Auto-off
-        if (isNewFlag && !isRecruiterMode) {
-            candidateUpdates.esNuevo = 'NO';
-        } else if (isProfileComplete && candidateData.esNuevo === 'SI') {
-            candidateUpdates.esNuevo = 'NO';
-        }
-
-        // Persistence: Gratitude & Silence
-        candidateUpdates.gratitudAlcanzada = aiResult.gratitude_reached === true;
-        candidateUpdates.silencioActivo = aiResult.close_conversation === true;
-
-        // --- AGE CALCULATION (Hybrid) ---
-        const dobStr = candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento;
-        if (!candidateUpdates.edad && !candidateData.edad && dobStr) {
-            const parts = dobStr.split('/');
-            if (parts.length === 3) {
-                const dob = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-                if (!isNaN(dob.getTime())) {
-                    const diff = Date.now() - dob.getTime();
-                    const ageDate = new Date(diff);
-                    const calculatedAge = Math.abs(ageDate.getUTCFullYear() - 1970);
-                    if (calculatedAge > 15 && calculatedAge < 100) {
-                        candidateUpdates.edad = calculatedAge;
-                    }
-                }
-            }
-        }
-
-        // --- STICKER CELEBRATION (Lock / Candado) ---
-        const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
-        const finalMerged = { ...candidateData, ...candidateUpdates };
-        const finalAudit = auditProfile(finalMerged, customFields);
-        const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
-
-        // --- ⚡ BYPASS SYSTEM ---
-        const isBypassEnabled = batchConfig.bypass_enabled === 'true';
-        if (isNowComplete && !candidateData.projectId && isBypassEnabled) {
-            try {
-                const bypassIds = await redis.zrange('bypass:list', 0, -1);
-                if (bypassIds.length > 0) {
-                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id}`));
-                    const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
-
-                    for (const rule of activeRules) {
-                        const { minAge, maxAge, municipios, escolaridades, categories, gender, projectId } = rule;
-                        const candidateAge = parseInt(finalMerged.edad || 0);
-                        const cMun = String(finalMerged.municipio || '').toLowerCase().trim();
-                        const cEsc = String(finalMerged.escolaridad || '').toLowerCase().trim();
-                        const cGen = String(finalMerged.genero || '').toLowerCase().trim();
-                        const cCats = (finalMerged.categoria || '').split(',').map(c => c.toLowerCase().trim());
-
-                        const ageMatch = (!minAge || candidateAge >= parseInt(minAge)) && (!maxAge || candidateAge <= parseInt(maxAge));
-                        const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
-                        const munMatch = (municipios.length === 0 || municipios.some(m => String(m).toLowerCase().trim() === cMun));
-                        const escMatch = (escolaridades.length === 0 || escolaridades.some(e => String(e).toLowerCase().trim() === cEsc));
-                        const ruleCatsLow = (categories || []).map(c => String(c).toLowerCase().trim());
-                        const catMatch = (ruleCatsLow.length === 0 || cCats.some(c => ruleCatsLow.includes(c)));
-
-                        if (ageMatch && genderMatch && munMatch && escMatch && catMatch) {
-                            candidateUpdates.projectId = projectId;
-                            candidateUpdates.stepId = 'step_default';
-                            await addCandidateToProject(projectId, candidateId, { origin: 'bypass_rule', method: 'auto', ruleName: rule.name, stepId: 'step_default' });
+                        result = await Promise.race([inferencePromise, timeoutPromise]);
+                        if (result) {
+                            const duration = Date.now() - startTime;
+                            const tokens = result.response?.usageMetadata?.totalTokenCount || 0;
+                            recordAITelemetry({
+                                model: mName,
+                                latency: duration,
+                                tokens: tokens,
+                                candidateId: candidateId,
+                                action: 'unified_inference'
+                            }).catch(() => { });
                             break;
                         }
+                    } catch (e) {
+                        lastError = e.message;
+                        console.error(`🤖 fallback model trigger: ${mName} failed. Error: `, lastError);
                     }
                 }
-            } catch (err) { console.error('[BYPASS] Error:', err); }
-        }
 
-        // --- BRIDGE & REACTIONS ---
-        const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? candidateData.bridge_counter : 0;
-        let isBridgeActive = false;
+                if (!result) {
+                    throw new Error('All AI models failed to respond.');
+                }
+                const textResult = result.response.text();
 
-        if (isProfileComplete && hasBeenCongratulated && bridgeCounter < 2 && !isRecruiterMode) {
-            isBridgeActive = true;
-            const lowerText = aggregatedText.toLowerCase();
-            const gratitudeKeywords = ['gracias', 'grx', 'thx', 'thank', 'agradecid', 'amable', 'bendicion'];
-            const hasRealGratitude = gratitudeKeywords.some(kw => lowerText.includes(kw));
-            aiResult.reaction = hasRealGratitude ? '👍' : '❤️';
-            candidateUpdates.bridge_counter = bridgeCounter + 1;
-            aiResult.response_text = null;
-            aiResult.close_conversation = true;
-            responseTextVal = '';
-        }
-
-        if (!isBridgeActive) {
-            if (isNowComplete && aiResult.gratitude_reached === true) {
-                aiResult.reaction = '👍';
-            } else {
-                aiResult.reaction = null;
+                // --- GOLD JSON RESILIENCE (Titan Grade) ---
+                try {
+                    const sanitized = textResult.replace(/```json|```/g, '').trim();
+                    aiResult = JSON.parse(sanitized);
+                } catch (e) {
+                    console.warn(`[Gold Resilience] Standard JSON parse failed for ${candidateId}. Attempting repair.`);
+                    try {
+                        const match = textResult.match(/\{[\s\S]*\}/);
+                        if (match) {
+                            let cleaned = match[0].replace(/,\s*([\}\]])/g, '$1');
+                            aiResult = JSON.parse(cleaned);
+                        } else {
+                            throw new Error('No JSON object found in response');
+                        }
+                    } catch (repairErr) {
+                        console.error(`[Gold Resilience] FATAL JSON failure for ${candidateId}:`, repairErr.message);
+                        throw new Error('AI Response structure is non-recoverable');
+                    }
+                }
             }
-        }
 
-        // Celebration Sticker
-        let stickerPromise = Promise.resolve();
-        const shouldSendSticker = !isRecruiterMode && (initialStatus === 'INCOMPLETO' && isNowComplete) && !hasBeenCongratulated;
-        if (shouldSendSticker) {
-            const stickerUrl = await redis?.get('bot_celebration_sticker');
-            if (stickerUrl) {
-                const congratsMsg = "¡Felicidades! 🎉 Ya tenemos tu perfil completo. Estaremos en contacto muy pronto. 😊";
+            // --- FINAL PROTECTION: Ensure aiResult is never null ---
+            if (!aiResult) {
+                aiResult = {
+                    response_text: "¡Ay! Mi sistema se distrajo un segundo. 😅 ¿Qué me decías? 😊",
+                    thought_process: "Fallback: aiResult was null.",
+                    gratitude_reached: false,
+                    close_conversation: false
+                };
+            }
+
+            // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
+            let responseTextVal = aiResult.response_text || '';
+            responseTextVal = (responseTextVal || '').replace(/\*/g, '');
+            const candidateUpdates = {
+                lastBotMessageAt: new Date().toISOString(),
+                ultimoMensaje: new Date().toISOString()
+            };
+
+            // Extraction (Only for Gemini branch)
+            if (!isRecruiterMode && aiResult.extracted_data) {
+                const extractionEntries = Object.entries(aiResult.extracted_data);
+                await Promise.all(extractionEntries.map(async ([key, val]) => {
+                    if (val && val !== 'null' && val !== 'indefinido' && candidateData[key] !== val) {
+                        const schema = getSchemaByField(key);
+                        let finalVal = val;
+                        if (schema && schema.cleaner) {
+                            try { finalVal = await schema.cleaner(val) || val; } catch (e) { }
+                        }
+                        candidateUpdates[key] = finalVal;
+                        if (schema && schema.onSuccess) {
+                            try { await schema.onSuccess(finalVal, candidateUpdates); } catch (e) { }
+                        }
+                    }
+                }));
+            }
+
+            // --- SANITY CHECK: Kill 1900 zombies ---
+            const yearMatch = String(candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento || '').match(/\b(19|20)\d{2}\b/);
+            if (yearMatch) {
+                const yearValue = parseInt(yearMatch[0]);
+                if (yearValue < 1940) {
+                    candidateUpdates.fechaNacimiento = null;
+                }
+            }
+
+            // Handshake & esNuevo Auto-off
+            if (isNewFlag && !isRecruiterMode) {
+                candidateUpdates.esNuevo = 'NO';
+            } else if (isProfileComplete && candidateData.esNuevo === 'SI') {
+                candidateUpdates.esNuevo = 'NO';
+            }
+
+            // Persistence: Gratitude & Silence
+            candidateUpdates.gratitudAlcanzada = aiResult.gratitude_reached === true;
+            candidateUpdates.silencioActivo = aiResult.close_conversation === true;
+
+            // --- AGE CALCULATION (Hybrid) ---
+            const dobStr = candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento;
+            if (!candidateUpdates.edad && !candidateData.edad && dobStr) {
+                const parts = dobStr.split('/');
+                if (parts.length === 3) {
+                    const dob = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                    if (!isNaN(dob.getTime())) {
+                        const diff = Date.now() - dob.getTime();
+                        const ageDate = new Date(diff);
+                        const calculatedAge = Math.abs(ageDate.getUTCFullYear() - 1970);
+                        if (calculatedAge > 15 && calculatedAge < 100) {
+                            candidateUpdates.edad = calculatedAge;
+                        }
+                    }
+                }
+            }
+
+            // --- STICKER CELEBRATION (Lock / Candado) ---
+            const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
+            const finalMerged = { ...candidateData, ...candidateUpdates };
+            const finalAudit = auditProfile(finalMerged, customFields);
+            const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
+
+            // --- ⚡ BYPASS SYSTEM ---
+            const isBypassEnabled = batchConfig.bypass_enabled === 'true';
+            if (isNowComplete && !candidateData.projectId && isBypassEnabled) {
+                try {
+                    const bypassIds = await redis.zrange('bypass:list', 0, -1);
+                    if (bypassIds.length > 0) {
+                        const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id}`));
+                        const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
+
+                        for (const rule of activeRules) {
+                            const { minAge, maxAge, municipios, escolaridades, categories, gender, projectId } = rule;
+                            const candidateAge = parseInt(finalMerged.edad || 0);
+                            const cMun = String(finalMerged.municipio || '').toLowerCase().trim();
+                            const cEsc = String(finalMerged.escolaridad || '').toLowerCase().trim();
+                            const cGen = String(finalMerged.genero || '').toLowerCase().trim();
+                            const cCats = (finalMerged.categoria || '').split(',').map(c => c.toLowerCase().trim());
+
+                            const ageMatch = (!minAge || candidateAge >= parseInt(minAge)) && (!maxAge || candidateAge <= parseInt(maxAge));
+                            const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
+                            const munMatch = (municipios.length === 0 || municipios.some(m => String(m).toLowerCase().trim() === cMun));
+                            const escMatch = (escolaridades.length === 0 || escolaridades.some(e => String(e).toLowerCase().trim() === cEsc));
+                            const ruleCatsLow = (categories || []).map(c => String(c).toLowerCase().trim());
+                            const catMatch = (ruleCatsLow.length === 0 || cCats.some(c => ruleCatsLow.includes(c)));
+
+                            if (ageMatch && genderMatch && munMatch && escMatch && catMatch) {
+                                candidateUpdates.projectId = projectId;
+                                candidateUpdates.stepId = 'step_default';
+                                await addCandidateToProject(projectId, candidateId, { origin: 'bypass_rule', method: 'auto', ruleName: rule.name, stepId: 'step_default' });
+                                break;
+                            }
+                        }
+                    }
+                } catch (err) { console.error('[BYPASS] Error:', err); }
+            }
+
+            // --- BRIDGE & REACTIONS (SILENCE SHIELD) ---
+            const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? parseInt(candidateData.bridge_counter || 0) : 0;
+            let isBridgeActive = false;
+
+            // Silence Shield: 2 messages of reactions after completion if NO PROJECT
+            if (isProfileComplete && hasBeenCongratulated && bridgeCounter < 2 && !isRecruiterMode) {
+                isBridgeActive = true;
+                console.log(`[Silence Shield] Active for ${candidateId}. Count: ${bridgeCounter}`);
+
+                const lowerText = aggregatedText.toLowerCase();
+                const gratitudeKeywords = ['gracias', 'grx', 'thx', 'thank', 'agradecid', 'amable', 'bendicion'];
+                const hasRealGratitude = gratitudeKeywords.some(kw => lowerText.includes(kw));
+
+                aiResult.reaction = hasRealGratitude ? '👍' : '❤️';
+                candidateUpdates.bridge_counter = bridgeCounter + 1;
+                aiResult.response_text = null;
+                aiResult.close_conversation = true;
+                responseTextVal = '';
+            }
+
+            if (!isBridgeActive) {
+                if (isNowComplete && aiResult.gratitude_reached === true) {
+                    aiResult.reaction = '👍';
+                } else {
+                    aiResult.reaction = null;
+                }
+            }
+
+            // --- STICKER CELEBRATION (THE BOUNDARY) ---
+            let stickerPromise = Promise.resolve();
+            const shouldSendSticker = !isRecruiterMode && (initialStatus === 'INCOMPLETO' && isNowComplete) && !hasBeenCongratulated;
+
+            if (shouldSendSticker) {
+                const stickerUrl = await redis?.get('bot_celebration_sticker');
+                console.log(`[Handover] Sending Celebration Sticker to ${candidateId}`);
+
+                const congratsMsg = "¡Felicidades por haber completado tu perfil! 🎉";
                 stickerPromise = (async () => {
                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, congratsMsg);
-                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
+                    if (stickerUrl) {
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
+                    }
                 })();
                 candidateUpdates.congratulated = true;
+                candidateUpdates.bridge_counter = 0; // Reset bridge for a fresh silence cycle
                 responseTextVal = null;
                 aiResult.response_text = null;
             }
+
+            const rawPhone = candidateData.whatsapp || '';
+            const isBetaTester = rawPhone.endsWith('8116038195');
+            const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
+
+            if (!isRecruiterMode && !isBridgeActive && isNowComplete && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
+                try {
+                    const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
+                    const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt}\n[ADN]: ${JSON.stringify(finalMerged)}`, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
+                    if (gptResponse?.content) responseTextVal = gptResponse.content.replace(/\*/g, '');
+                } catch (e) { console.error('[GPT Host] pilot error:', e); }
+            }
+
+            const updatePromise = updateCandidate(candidateId, candidateUpdates);
+
+            let reactionPromise = Promise.resolve();
+            if (msgId && config && aiResult.reaction) {
+                reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
+            }
+
+            const moveToken = (aiResult.thought_process || '').includes('{ move }');
+            if (moveToken && (candidateUpdates.projectId || candidateData.projectId)) {
+                const projId = candidateUpdates.projectId || candidateData.projectId;
+                await moveCandidateStep(projId, candidateId, 'auto_next').catch(() => { });
+            }
+
+            let deliveryPromise = Promise.resolve();
+            if (responseTextVal && responseTextVal !== '[SILENCIO]' && responseTextVal !== 'null') {
+                deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
+            }
+
+            await Promise.allSettled([
+                deliveryPromise,
+                stickerPromise,
+                reactionPromise,
+                saveMessage(candidateId, { from: 'bot', content: responseTextVal || '[REACCIÓN/SILENCIO]', timestamp: new Date().toISOString() }),
+                updatePromise
+            ]);
+
+            return responseTextVal || '[SILENCIO]';
+
+        } catch (error) {
+            console.error('❌ [AI Agent] Fatal Error:', error);
+            const fallbackMsg = "¡Ay, perdona! Me hablaron de otra oficina y me distraje un segundo. 😅 ¿Me repites lo último? 😊";
+            await sendFallback(candidateData, fallbackMsg).catch(() => { });
+            return fallbackMsg;
         }
+    };
 
-        const rawPhone = candidateData.whatsapp || '';
-        const isBetaTester = rawPhone.endsWith('8116038195');
-        const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
-
-        if (!isRecruiterMode && !isBridgeActive && isNowComplete && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
-            try {
-                const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
-                const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt}\n[ADN]: ${JSON.stringify(finalMerged)}`, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
-                if (gptResponse?.content) responseTextVal = gptResponse.content.replace(/\*/g, '');
-            } catch (e) { console.error('[GPT Host] pilot error:', e); }
+    async function sendFallback(cand, text) {
+        const config = await getUltraMsgConfig();
+        if (config && cand.whatsapp) {
+            await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, text);
         }
-
-        const updatePromise = updateCandidate(candidateId, candidateUpdates);
-
-        let reactionPromise = Promise.resolve();
-        if (msgId && config && aiResult.reaction) {
-            reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
-        }
-
-        const moveToken = (aiResult.thought_process || '').includes('{ move }');
-        if (moveToken && (candidateUpdates.projectId || candidateData.projectId)) {
-            const projId = candidateUpdates.projectId || candidateData.projectId;
-            await moveCandidateStep(projId, candidateId, 'auto_next').catch(() => { });
-        }
-
-        let deliveryPromise = Promise.resolve();
-        if (responseTextVal && responseTextVal !== '[SILENCIO]' && responseTextVal !== 'null') {
-            deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
-        }
-
-        await Promise.allSettled([
-            deliveryPromise,
-            stickerPromise,
-            reactionPromise,
-            saveMessage(candidateId, { from: 'bot', content: responseTextVal || '[REACCIÓN/SILENCIO]', timestamp: new Date().toISOString() }),
-            updatePromise
-        ]);
-
-        return responseTextVal || '[SILENCIO]';
-
-    } catch (error) {
-        console.error('❌ [AI Agent] Fatal Error:', error);
-        const fallbackMsg = "¡Ay, perdona! Me hablaron de otra oficina y me distraje un segundo. 😅 ¿Me repites lo último? 😊";
-        await sendFallback(candidateData, fallbackMsg).catch(() => { });
-        return fallbackMsg;
     }
-};
-
-async function sendFallback(cand, text) {
-    const config = await getUltraMsgConfig();
-    if (config && cand.whatsapp) {
-        await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, text);
-    }
-}
 // [Vercel Deployment Ping: f678976 Stable Version Restored]

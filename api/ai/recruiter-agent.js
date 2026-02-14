@@ -27,6 +27,9 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         const adnContext = `
 [CONTEXTO DEL CANDIDATO (ADN)]:
 - Nombre: ${candidateData.nombreReal || 'Candidato'}
+- WhatsApp: ${candidateData.whatsapp || 'N/A'}
+- Edad: ${candidateData.edad || 'N/A'}
+- Género: ${candidateData.genero || 'N/A'}
 - Categoría: ${candidateData.categoria || 'N/A'}
 - Municipio: ${candidateData.municipio || 'N/A'}
 - Escolaridad: ${candidateData.escolaridad || 'N/A'}
@@ -34,10 +37,24 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 - Paso Actual: ${currentStep.name}
 `;
 
-        // 2. Construir Instruction Maestra
+        // 2. Historial en orden inverso (Nuevo -> Viejo)
+        const reverseHistoryText = recentHistory
+            .slice()
+            .reverse()
+            .map(m => {
+                const role = m.role === 'model' ? 'Brenda' : 'Candidato';
+                const text = m.parts?.[0]?.text || '';
+                return `[${role}]: ${text}`;
+            })
+            .join('\n');
+
+        // 3. Construir Instruction Maestra
         const systemPrompt = `
 ${RECRUITER_IDENTITY}
 ${adnContext}
+
+[HISTORIAL DE CHAT (NUEVO -> VIEJO)]:
+${reverseHistoryText || '(Sin historial previo)'}
 
 [MISIÓN DEL PASO (PRIORIDAD ALTA)]:
 ${stepPrompt}
@@ -55,9 +72,11 @@ ${stepPrompt}
 }
 `;
 
-        // 3. Obtener respuesta de GPT-4o
+        // 4. Obtener respuesta de GPT-4o
+        // NOTA: Pasamos historial vacío a la API porque ya lo inyectamos en el systemPrompt 
+        // para asegurar el orden pedido por el usuario y evitar duplicados.
         const gptResponse = await getOpenAIResponse(
-            recentHistory,
+            [],
             systemPrompt,
             'gpt-4o',
             customApiKey
