@@ -1,7 +1,7 @@
 import React from 'react';
 import { Loader2, Sparkles } from 'lucide-react';
 
-const LoadingOverlay = ({ message = 'Cargando Brenda...' }) => {
+const LoadingOverlay = ({ message = 'Cargando...' }) => {
     return (
         <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white/70 dark:bg-gray-900/80 backdrop-blur-xl animate-in fade-in duration-500">
             <div className="relative">
