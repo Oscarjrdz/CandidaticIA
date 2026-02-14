@@ -1,103 +1,73 @@
 import { processMessage } from '../ai/agent.js';
-import { getCandidateById } from '../utils/storage.js';
+import { getCandidateById, getWaitlist, markMessageAsDone, unlockCandidate, isCandidateLocked } from '../utils/storage.js';
 
 /**
- * Async Worker for Message Processing
- * Processes WhatsApp messages in background without blocking webhook
- * Implements retry logic with exponential backoff
+ * 🚀 SERVERLESS TURBO ENGINE
+ * Processes candidate messages in bursts to handle high-frequency WhatsApp traffic.
  */
 
-/**
- * Process message with automatic retry
- * @param {string} candidateId - Candidate ID
- * @param {string} message - Message content
- * @param {string} messageId - Message ID for reactions
- * @param {number} attempt - Current attempt number
- * @returns {Promise<Object>}
- */
-async function processWithRetry(candidateId, message, messageId = null, attempt = 1) {
-    const MAX_RETRIES = 3;
-    const BASE_DELAY = 2000; // 2 seconds
+async function drainWaitlist(candidateId) {
+    let loopSafety = 0;
+    while (loopSafety < 10) {
+        const rawPendingMsgs = await getWaitlist(candidateId);
+        if (!rawPendingMsgs || rawPendingMsgs.length === 0) break;
 
-    try {
-        // Verify candidate exists
-        const candidate = await getCandidateById(candidateId);
-        if (!candidate) {
-            throw new Error(`Candidate ${candidateId} not found`);
+        const pendingMsgs = rawPendingMsgs.map(m => {
+            try { return typeof m === 'string' ? JSON.parse(m) : m; }
+            catch (e) { return { text: m }; }
+        });
+
+        const aggregatedText = pendingMsgs.map(m => {
+            const val = m.text?.url || m.text || m;
+            return (typeof val === 'object') ? JSON.stringify(val) : val;
+        }).join(' | ');
+
+        const msgIds = pendingMsgs.map(m => m.msgId).filter(id => id);
+
+        console.log(`[Serverless Engine] 🌪️ Draining burst for ${candidateId}. Count: ${pendingMsgs.length}`);
+
+        try {
+            await processMessage(candidateId, aggregatedText, msgIds[0] || null);
+            await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));
+            console.log(`[Serverless Engine] ✅ Completed burst of ${pendingMsgs.length} messages.`);
+        } catch (procErr) {
+            console.error(`[Serverless Engine] ❌ Error in burst processing:`, procErr.message);
+            break;
         }
 
-        // 🛡️ [BLOCK SHIELD]: Force early exit if candidate is blocked
-        if (candidate.blocked === true) {
-            console.log(`[BLOCK SHIELD] Skipping worker processing for blocked candidate: ${candidateId}`);
-            return { success: true, message: 'Candidate is blocked', blocked: true };
-        }
-
-        // Process message with Brenda
-        await processMessage(candidateId, message, messageId);
-
-        return {
-            success: true,
-            attempt,
-            candidateId
-        };
-    } catch (error) {
-        console.error(`❌ Worker error (attempt ${attempt}/${MAX_RETRIES}):`, error.message);
-
-        // Retry if we haven't exceeded max attempts
-        if (attempt < MAX_RETRIES) {
-            const delay = BASE_DELAY * Math.pow(2, attempt - 1); // 2s, 4s, 8s
-            console.log(`⏳ Retrying in ${delay}ms...`);
-
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return processWithRetry(candidateId, message, messageId, attempt + 1);
-        }
-
-        // Max retries exceeded
-        console.error(`❌ FAILED after ${MAX_RETRIES} attempts:`, error);
-        throw error;
+        loopSafety++;
+        const more = await getWaitlist(candidateId);
+        if (!more || more.length === 0) break;
     }
 }
 
 export default async function handler(req, res) {
-    // Only accept POST
-    if (req.method !== 'POST') {
-        return res.status(405).json({
-            error: 'Method not allowed',
-            allowedMethods: ['POST']
-        });
-    }
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-    const { candidateId, message, messageId, from } = req.body;
+    const { candidateId, from } = req.body;
+    if (!candidateId) return res.status(400).json({ error: 'Missing candidateId' });
 
-    // Validate required fields
-    if (!candidateId || !message) {
-        return res.status(400).json({
-            error: 'Missing required fields',
-            required: ['candidateId', 'message']
-        });
-    }
+    console.log(`🔄 Worker triggered for ${candidateId} from ${from}`);
 
     try {
-        console.log(`🔄 Worker processing message ${messageId} from ${from}`);
+        // 🔒 1. ACQUIRE LOCK
+        const isLocked = await isCandidateLocked(candidateId);
+        if (isLocked) {
+            console.log(`[Serverless Engine] ⏳ ${candidateId} busy. Another instance is processing.`);
+            return res.status(202).json({ success: true, status: 'locked' });
+        }
 
-        const result = await processWithRetry(candidateId, message, messageId);
-
-        console.log(`✅ Worker completed:`, result);
-
-        return res.status(200).json({
-            success: true,
-            messageId,
-            attempts: result.attempt,
-            candidateId: result.candidateId
-        });
+        try {
+            // 🚀 2. DRAIN WAITLIST
+            await drainWaitlist(candidateId);
+            return res.status(200).json({ success: true, candidateId });
+        } finally {
+            // 🔓 3. UNLOCK
+            await unlockCandidate(candidateId);
+            console.log(`[Serverless Engine] 🔓 ${candidateId} unlocked.`);
+        }
     } catch (error) {
-        console.error('❌ Worker final error:', error);
-
-        return res.status(500).json({
-            success: false,
-            error: error.message,
-            messageId,
-            candidateId
-        });
+        console.error('❌ Worker Critical Error:', error);
+        return res.status(500).json({ success: false, error: error.message });
     }
 }

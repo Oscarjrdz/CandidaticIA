@@ -192,14 +192,20 @@ export default async function handler(req, res) {
                         // 🏁 1. ADD TO WAITLIST (Safe persistence)
                         await addToWaitlist(candidateId, { text: agentInput, msgId });
 
-                        // 🏁 2. SIGNAL TURBO ENGINE (Always push to ensure a worker wakes up)
-                        const task = {
-                            candidateId,
-                            msgId,
-                            timestamp: Date.now()
-                        };
-                        await redis.lpush('queue:messages', JSON.stringify(task));
-                        console.log(`[Turbo Queue] 🚀 Task queued for candidate ${candidateId}`);
+                        // 🏁 2. SIGNAL TURBO ENGINE (Serverless Trigger)
+                        const protocol = req.headers['x-forwarded-proto'] || 'https';
+                        const host = req.headers.host;
+                        const workerUrl = `${protocol}://${host}/api/workers/process-message`;
+
+                        console.log(`[Vercel Turbo] 🚀 Triggering engine for candidate ${candidateId}`);
+
+                        // Fire-and-forget trigger (don't await)
+                        fetch(workerUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ candidateId, from: phone })
+                        }).catch(err => console.error('[Vercel Turbo] Trigger Fail:', err.message));
+
                     } catch (error) {
                         console.error('❌ AI Queueing Error:', error);
                     }
