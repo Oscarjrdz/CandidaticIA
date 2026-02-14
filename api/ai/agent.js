@@ -25,7 +25,10 @@ export const DEFAULT_EXTRACTION_RULES = `
 1. Analiza el historial para extraer: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad, tieneEmpleo.
 2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO] es incompleto y el usuario da más info, FUSIÓNALO.
 3. REGLA DE FECHA: Formato DD/MM/YYYY.
-4. REGLA DE ESCOLARIDAD (GOLD): "Kinder", "Primaria trunca" o "Ninguna" son INVÁLIDOS. Solo acepta Primaria terminada en adelante.
+4. REGLA DE ESCOLARIDAD (GOLD):
+   - "Kinder", "Primaria trunca" o "Ninguna" son INVÁLIDOS.
+   - SOLO ACEPTA: Primaria, Secundaria, Preparatoria/Bachillerato, Universidad/Licenciatura, Maestría.
+   - EXPANDE ABREVIACIONES: "Prepa" -> "Preparatoria", "Secu" -> "Secundaria", "Uni" -> "Universidad".
 5. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
 6. REGLA TELEFONO: JAMÁS preguntes el número de teléfono/celular. Ya lo tienes (campo 'whatsapp').
 7. REGLA DE CATEGORÍA: Solo acepta categorías válidas: {{categorias}}.
