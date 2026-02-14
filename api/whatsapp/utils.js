@@ -60,6 +60,13 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 payload.sticker = body;
                 break;
             default:
+                const isTechnical = ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(String(body).trim()) ||
+                    String(body).trim().startsWith('[REACCIÓN:');
+
+                if (isTechnical) {
+                    console.log(`[ULTRAMSG FILTER] Blocking technical message send: "${body}"`);
+                    return { success: true, data: { status: 'filtered_internal_tag' } };
+                }
                 payload.body = body;
         }
 

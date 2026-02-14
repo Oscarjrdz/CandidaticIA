@@ -373,6 +373,7 @@ ${audit.dnaLines}
                 extracted_data: {}
             };
             candidateData.bridge_counter = bridgeCounter + 1;
+            candidateData.esNuevo = 'NO'; // Activity breaks "New" status
             responseTextVal = null;
         }
 
@@ -453,7 +454,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const candidateUpdates = {
             lastBotMessageAt: new Date().toISOString(),
             ultimoMensaje: new Date().toISOString(),
-            bridge_counter: candidateData.bridge_counter
+            bridge_counter: candidateData.bridge_counter,
+            esNuevo: 'NO'
         };
 
         if (aiResult?.extracted_data) {
@@ -490,6 +492,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             await saveMessage(candidateId, { from: 'bot', content: congratsMsg, timestamp: new Date().toISOString() });
             candidateUpdates.congratulated = true;
             candidateUpdates.bridge_counter = 0;
+            candidateUpdates.esNuevo = 'NO';
             responseTextVal = null;
 
             const finalProjectId = candidateUpdates.projectId || candidateData.projectId;
