@@ -6,6 +6,7 @@ import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
 import ChatHistoryModal from './ChatHistoryModal';
 import MagicSearch from './MagicSearch';
+import Skeleton, { CardSkeleton, TableRowSkeleton } from './ui/Skeleton';
 import { getCandidates, deleteCandidate, blockCandidate, CandidatesSubscription } from '../services/candidatesService';
 import { getFields } from '../services/automationsService';
 import { getExportSettings, saveExportSettings, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
@@ -20,6 +21,7 @@ const CandidatesSection = ({ showToast }) => {
     const [candidates, setCandidates] = useState([]);
     const [stats, setStats] = useState(null); // Live dashboard stats
     const [loading, setLoading] = useState(false);
+    const [isInitialLoading, setIsInitialLoading] = useState(true); // NEW: Prevent ghosting
     const [fields, setFields] = useState([]); // Dynamic fields
     const [search, setSearch] = useState('');
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
@@ -212,6 +214,7 @@ const CandidatesSection = ({ showToast }) => {
 
     const loadCandidates = async (page = 1) => {
         setLoading(true);
+        if (candidates.length === 0) setIsInitialLoading(true);
         const offset = (page - 1) * LIMIT;
 
         try {
@@ -229,6 +232,7 @@ const CandidatesSection = ({ showToast }) => {
             showToast('Error de conexión', 'error');
         } finally {
             setLoading(false);
+            setIsInitialLoading(false);
         }
     };
 
@@ -373,71 +377,79 @@ const CandidatesSection = ({ showToast }) => {
 
                 {/* 📊 Live Dashboard - Zuckerberg Style */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-                    {/* Card 1: Candidates */}
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Users className="w-16 h-16 text-blue-500 transform rotate-12" />
-                        </div>
-                        <div className="flex flex-col relative z-10">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
-                            <div className="flex items-center flex-wrap gap-2">
-                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none">{totalItems}</h3>
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-[10px] text-emerald-500 font-bold flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/50">
-                                        <CheckCircle className="w-3 h-3 mr-1" /> {stats?.complete || 0} Completos
-                                    </span>
-                                    <span className="text-[10px] text-amber-500 font-bold flex items-center bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full border border-amber-100 dark:border-amber-800/50">
-                                        <Clock className="w-3 h-3 mr-1" /> {stats?.pending || 0} Incompletos
-                                    </span>
-                                    <span className="text-[10px] text-blue-500 font-bold flex items-center bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-800/50">
-                                        <Zap className="w-3 h-3 mr-1" /> Activos
-                                    </span>
+                    {isInitialLoading ? (
+                        <>
+                            <CardSkeleton />
+                            <CardSkeleton />
+                            <CardSkeleton />
+                        </>
+                    ) : (
+                        <>
+                            {/* Card 1: Candidates */}
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Users className="w-16 h-16 text-blue-500 transform rotate-12" />
+                                </div>
+                                <div className="flex flex-col relative z-10">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Total Candidatos</span>
+                                    <div className="flex items-center flex-wrap gap-2">
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white leading-none">{totalItems}</h3>
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-[10px] text-emerald-500 font-bold flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-800/50">
+                                                <CheckCircle className="w-3 h-3 mr-1" /> {stats?.complete || 0} Completos
+                                            </span>
+                                            <span className="text-[10px] text-amber-500 font-bold flex items-center bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full border border-amber-100 dark:border-amber-800/50">
+                                                <Clock className="w-3 h-3 mr-1" /> {stats?.pending || 0} Incompletos
+                                            </span>
+                                            <span className="text-[10px] text-blue-500 font-bold flex items-center bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full border border-blue-100 dark:border-blue-800/50">
+                                                <Zap className="w-3 h-3 mr-1" /> Activos
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    {/* Card 2: Incoming Messages (Live) */}
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <MessageCircle className="w-16 h-16 text-green-500 opacity-20 transform -rotate-12" />
-                        </div>
-                        <div className="flex flex-col relative z-10">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
-                            <div className="flex items-baseline space-x-2">
-                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {stats?.incoming || 0}
-                                </h3>
-                                <div className="flex items-center space-x-1">
-                                    <span className="relative flex h-2.5 w-2.5">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-                                    </span>
-                                    <span className="text-[10px] text-green-500 font-medium ml-1">En vivo</span>
+                            {/* Card 2: Incoming Messages (Live) */}
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <MessageCircle className="w-16 h-16 text-green-500 opacity-20 transform -rotate-12" />
+                                </div>
+                                <div className="flex flex-col relative z-10">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Entrantes</span>
+                                    <div className="flex items-baseline space-x-2">
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                            {stats?.incoming || 0}
+                                        </h3>
+                                        <div className="flex items-center space-x-1">
+                                            <span className="relative flex h-2.5 w-2.5">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                                            </span>
+                                            <span className="text-[10px] text-green-500 font-medium ml-1">En vivo</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </div>
 
-                    {/* Card 3: Outgoing Messages */}
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Send className="w-16 h-16 text-purple-500 transform rotate-6" />
-                        </div>
-                        <div className="flex flex-col relative z-10">
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Enviados</span>
-                            <div className="flex items-baseline space-x-2">
-                                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                                    {stats?.outgoing || 0}
-                                </h3>
-                                <span className="text-[10px] text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full">
-                                    <Sparkles className="w-3 h-3 mr-0.5" /> AI & Manual
-                                </span>
+                            {/* Card 3: Outgoing Messages */}
+                            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                                    <Send className="w-16 h-16 text-purple-500 transform rotate-6" />
+                                </div>
+                                <div className="flex flex-col relative z-10">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1">Mensajes Enviados</span>
+                                    <div className="flex items-baseline space-x-2">
+                                        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                                            {stats?.outgoing || 0}
+                                        </h3>
+                                        <span className="text-[10px] text-purple-500 font-medium flex items-center bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded-full">
+                                            <Sparkles className="w-3 h-3 mr-0.5" /> AI & Manual
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-
+                        </>
+                    )}
                 </div>
 
                 {/* Búsqueda */}
@@ -599,171 +611,178 @@ const CandidatesSection = ({ showToast }) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {displayedCandidates.map((candidate) => (
-                                    <tr
-                                        key={candidate.id}
-                                        className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
-                                    >
-                                        <td className="py-0.5 px-1 text-center">
-                                            <div className="flex items-center justify-center">
-                                                {isProfileComplete(candidate) ? (
-                                                    <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
-                                                ) : (
-                                                    <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="py-0.5 px-2.5">
-                                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
-                                                <img
-                                                    src={candidate.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.nombre || 'User')}&background=random&color=fff&size=128`}
-                                                    alt="Avatar"
-                                                    className="w-full h-full object-cover"
-                                                    onError={(e) => {
-                                                        e.target.onerror = null;
-                                                        e.target.src = 'https://ui-avatars.com/api/?name=User&background=gray&color=fff';
-                                                    }}
-                                                />
-                                            </div>
-                                        </td>
-                                        <td className="py-0.5 px-2.5">
-                                            <div className="text-[10px] text-gray-900 dark:text-white font-mono font-medium">
-                                                {formatPhone(candidate.whatsapp)}
-                                            </div>
-                                            <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
-                                                Desde {formatRelativeDate(candidate.primerContacto)}
-                                            </div>
-                                        </td>
-                                        <td className="py-0.5 px-2.5">
-                                            <div className="text-[10px] text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
-                                                {candidate.nombre && candidate.nombre.length > 8
-                                                    ? `${candidate.nombre.substring(0, 8)}...`
-                                                    : (candidate.nombre || '-')}
-                                            </div>
-                                        </td>
-
-                                        {/* Dynamic Cells */}
-                                        {fields.filter(f => f.value !== 'foto').map(field => (
-                                            <React.Fragment key={field.value}>
-                                                <td className="py-0.5 px-2.5">
-                                                    {['escolaridad', 'categoria', 'nombreReal', 'municipio'].includes(field.value) ? (
-                                                        <div
-                                                            onClick={() => handleMagicFix(candidate.id, field.value, candidate[field.value])}
-                                                            className={`
-                                                                inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium
-                                                                ${magicLoading[`${candidate.id}-${field.value}`]
-                                                                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse'
-                                                                    : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}
-                                                            `}
-                                                            title="Clic para Magia IA ✨"
-                                                        >
-                                                            {magicLoading[`${candidate.id}-${field.value}`] && (
-                                                                <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
-                                                            )}
-                                                            {formatValue(candidate[field.value])}
-                                                            <Sparkles className={`w-2.5 h-2.5 ml-1.5 opacity-0 group-hover:opacity-100 ${magicLoading[`${candidate.id}-${field.value}`] ? 'hidden' : ''} text-blue-400`} />
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-[10px] text-gray-900 dark:text-white font-medium">
-                                                            {field.value === 'edad'
-                                                                ? calculateAge(candidate.fechaNacimiento, candidate.edad)
-                                                                : formatValue(candidate[field.value])}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            </React.Fragment>
+                                {isInitialLoading ? (
+                                    <>
+                                        {[...Array(8)].map((_, i) => (
+                                            <TableRowSkeleton key={i} columns={fields.filter(f => f.value !== 'foto').length + 3} />
                                         ))}
-
-                                        <td className="py-0.5 px-2.5">
-                                            <div className="text-[10px] text-gray-700 dark:text-gray-300 font-medium">
-                                                {formatDateTime(candidate.ultimoMensaje)}
-                                            </div>
-                                            <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
-                                                {formatRelativeDate(candidate.ultimoMensaje)}
-                                            </div>
-                                        </td>
-
-                                        <td className="py-0.5 px-2.5 text-center">
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleOpenChat(candidate);
-                                                }}
-                                                className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center"
-                                                title="Abrir chat"
-                                            >
-                                                <div className="relative">
-                                                    <MessageCircle className="w-4 h-4" />
-                                                    {candidate.ultimoMensaje && (
-                                                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
+                                    </>
+                                ) :
+                                    displayedCandidates.map((candidate) => (
+                                        <tr
+                                            key={candidate.id}
+                                            className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
+                                        >
+                                            <td className="py-0.5 px-1 text-center">
+                                                <div className="flex items-center justify-center">
+                                                    {isProfileComplete(candidate) ? (
+                                                        <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
+                                                    ) : (
+                                                        <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
                                                     )}
                                                 </div>
-                                            </button>
-                                        </td>
-                                        <td className="py-0.5 px-2 text-center">
-                                            <div className="flex justify-center items-center">
+                                            </td>
+                                            <td className="py-0.5 px-2.5">
+                                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                                                    <img
+                                                        src={candidate.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.nombre || 'User')}&background=random&color=fff&size=128`}
+                                                        alt="Avatar"
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            e.target.onerror = null;
+                                                            e.target.src = 'https://ui-avatars.com/api/?name=User&background=gray&color=fff';
+                                                        }}
+                                                    />
+                                                </div>
+                                            </td>
+                                            <td className="py-0.5 px-2.5">
+                                                <div className="text-[10px] text-gray-900 dark:text-white font-mono font-medium">
+                                                    {formatPhone(candidate.whatsapp)}
+                                                </div>
+                                                <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
+                                                    Desde {formatRelativeDate(candidate.primerContacto)}
+                                                </div>
+                                            </td>
+                                            <td className="py-0.5 px-2.5">
+                                                <div className="text-[10px] text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
+                                                    {candidate.nombre && candidate.nombre.length > 8
+                                                        ? `${candidate.nombre.substring(0, 8)}...`
+                                                        : (candidate.nombre || '-')}
+                                                </div>
+                                            </td>
+
+                                            {/* Dynamic Cells */}
+                                            {fields.filter(f => f.value !== 'foto').map(field => (
+                                                <React.Fragment key={field.value}>
+                                                    <td className="py-0.5 px-2.5">
+                                                        {['escolaridad', 'categoria', 'nombreReal', 'municipio'].includes(field.value) ? (
+                                                            <div
+                                                                onClick={() => handleMagicFix(candidate.id, field.value, candidate[field.value])}
+                                                                className={`
+                                                                inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium
+                                                                ${magicLoading[`${candidate.id}-${field.value}`]
+                                                                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse'
+                                                                        : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}
+                                                            `}
+                                                                title="Clic para Magia IA ✨"
+                                                            >
+                                                                {magicLoading[`${candidate.id}-${field.value}`] && (
+                                                                    <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
+                                                                )}
+                                                                {formatValue(candidate[field.value])}
+                                                                <Sparkles className={`w-2.5 h-2.5 ml-1.5 opacity-0 group-hover:opacity-100 ${magicLoading[`${candidate.id}-${field.value}`] ? 'hidden' : ''} text-blue-400`} />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-[10px] text-gray-900 dark:text-white font-medium">
+                                                                {field.value === 'edad'
+                                                                    ? calculateAge(candidate.fechaNacimiento, candidate.edad)
+                                                                    : formatValue(candidate[field.value])}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </React.Fragment>
+                                            ))}
+
+                                            <td className="py-0.5 px-2.5">
+                                                <div className="text-[10px] text-gray-700 dark:text-gray-300 font-medium">
+                                                    {formatDateTime(candidate.ultimoMensaje)}
+                                                </div>
+                                                <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
+                                                    {formatRelativeDate(candidate.ultimoMensaje)}
+                                                </div>
+                                            </td>
+
+                                            <td className="py-0.5 px-2.5 text-center">
                                                 <button
                                                     type="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        handleBlockToggle(candidate);
+                                                        handleOpenChat(candidate);
                                                     }}
-                                                    disabled={blockLoading[candidate.id]}
-                                                    className={`w-6 h-3 rounded-full relative transition-colors duration-200 focus:outline-none ${candidate.blocked ? 'bg-red-500' : 'bg-gray-200 dark:bg-gray-700'
-                                                        }`}
-                                                    title={candidate.blocked ? 'Desbloquear candidato' : 'Bloquear candidato'}
+                                                    className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center"
+                                                    title="Abrir chat"
                                                 >
-                                                    <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white shadow-sm transition-transform duration-200 ${candidate.blocked ? 'left-3.5' : 'left-0.5'
-                                                        }`}>
-                                                        {blockLoading[candidate.id] && (
-                                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                                <Loader2 className="w-2 h-2 text-red-500 animate-spin" />
-                                                            </div>
+                                                    <div className="relative">
+                                                        <MessageCircle className="w-4 h-4" />
+                                                        {candidate.ultimoMensaje && (
+                                                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
                                                         )}
                                                     </div>
                                                 </button>
-                                            </div>
-                                        </td>
-                                        <td className="py-0.5 px-2.5 text-center">
-                                            {/* Rainbow Checkmarks (Separate Column) - Infinite Cycle 50% size */}
-                                            {candidate.followUps > 0 && (
-                                                <div
-                                                    className="flex items-center justify-center -space-x-1 cursor-default select-none pointer-events-none flex-wrap max-w-[60px] mx-auto"
-                                                    title={`${candidate.followUps} seguimientos enviados`}
-                                                >
-                                                    {[...Array(Number(candidate.followUps))].map((_, i) => {
-                                                        const colors = [
-                                                            'text-blue-500', 'text-purple-500', 'text-orange-500',
-                                                            'text-pink-500', 'text-emerald-500', 'text-rose-500',
-                                                            'text-amber-500', 'text-indigo-500', 'text-cyan-500',
-                                                            'text-violet-500'
-                                                        ];
-                                                        const colorClass = colors[i % colors.length];
-
-                                                        return (
-                                                            <Check
-                                                                key={i}
-                                                                className={`w-2 h-2 ${colorClass} -ml-1 first:ml-0`}
-                                                                strokeWidth={8}
-                                                            />
-                                                        );
-                                                    })}
+                                            </td>
+                                            <td className="py-0.5 px-2 text-center">
+                                                <div className="flex justify-center items-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleBlockToggle(candidate);
+                                                        }}
+                                                        disabled={blockLoading[candidate.id]}
+                                                        className={`w-6 h-3 rounded-full relative transition-colors duration-200 focus:outline-none ${candidate.blocked ? 'bg-red-500' : 'bg-gray-200 dark:bg-gray-700'
+                                                            }`}
+                                                        title={candidate.blocked ? 'Desbloquear candidato' : 'Bloquear candidato'}
+                                                    >
+                                                        <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white shadow-sm transition-transform duration-200 ${candidate.blocked ? 'left-3.5' : 'left-0.5'
+                                                            }`}>
+                                                            {blockLoading[candidate.id] && (
+                                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                                    <Loader2 className="w-2 h-2 text-red-500 animate-spin" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </button>
                                                 </div>
-                                            )}
-                                        </td>
-                                        <td className="py-0.5 px-2.5 text-center">
-                                            <button
-                                                type="button"
-                                                onClick={(e) => handleDelete(e, candidate.id, candidate.nombre)}
-                                                className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
-                                                title="Eliminar permanentemente"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                            </td>
+                                            <td className="py-0.5 px-2.5 text-center">
+                                                {/* Rainbow Checkmarks (Separate Column) - Infinite Cycle 50% size */}
+                                                {candidate.followUps > 0 && (
+                                                    <div
+                                                        className="flex items-center justify-center -space-x-1 cursor-default select-none pointer-events-none flex-wrap max-w-[60px] mx-auto"
+                                                        title={`${candidate.followUps} seguimientos enviados`}
+                                                    >
+                                                        {[...Array(Number(candidate.followUps))].map((_, i) => {
+                                                            const colors = [
+                                                                'text-blue-500', 'text-purple-500', 'text-orange-500',
+                                                                'text-pink-500', 'text-emerald-500', 'text-rose-500',
+                                                                'text-amber-500', 'text-indigo-500', 'text-cyan-500',
+                                                                'text-violet-500'
+                                                            ];
+                                                            const colorClass = colors[i % colors.length];
+
+                                                            return (
+                                                                <Check
+                                                                    key={i}
+                                                                    className={`w-2 h-2 ${colorClass} -ml-1 first:ml-0`}
+                                                                    strokeWidth={8}
+                                                                />
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="py-0.5 px-2.5 text-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => handleDelete(e, candidate.id, candidate.nombre)}
+                                                    className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
+                                                    title="Eliminar permanentemente"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
                             </tbody>
                         </table>
                     )}

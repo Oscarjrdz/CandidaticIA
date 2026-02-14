@@ -3,12 +3,14 @@ import { Bot, Save, Power, Settings as SettingsIcon, MessageSquare, Smartphone, 
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import Skeleton from './ui/Skeleton';
 import { useToast } from '../hooks/useToast';
 
 const BotIASection = ({ showToast }) => {
     // Bot Status & Config
     const [isActive, setIsActive] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [isInitialLoading, setIsInitialLoading] = useState(true); // NEW: Prevent ghosting
 
     // AI Settings
     const [systemPrompt, setSystemPrompt] = useState('');
@@ -83,8 +85,12 @@ const BotIASection = ({ showToast }) => {
             }
         };
 
-        loadSettings();
-        loadGptConfig();
+        const init = async () => {
+            setIsInitialLoading(true);
+            await Promise.all([loadSettings(), loadGptConfig()]);
+            setIsInitialLoading(false);
+        };
+        init();
 
         // SSE for Live Stats & Flight Plan
         const eventSource = new EventSource('/api/bot-ia/stats-stream');
@@ -268,12 +274,16 @@ const BotIASection = ({ showToast }) => {
                                 </label>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase">Gemini Powered</span>
                             </div>
-                            <textarea
-                                className="w-full h-80 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
-                                value={systemPrompt}
-                                onChange={(e) => setSystemPrompt(e.target.value)}
-                                placeholder="Escribe aquí las directivas maestras..."
-                            />
+                            {isInitialLoading ? (
+                                <Skeleton className="w-full h-80 rounded-2xl" />
+                            ) : (
+                                <textarea
+                                    className="w-full h-80 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
+                                    value={systemPrompt}
+                                    onChange={(e) => setSystemPrompt(e.target.value)}
+                                    placeholder="Escribe aquí las directivas maestras..."
+                                />
+                            )}
                         </div>
 
                         <div className="pt-1">
@@ -318,12 +328,16 @@ const BotIASection = ({ showToast }) => {
                                 </label>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase">Gemini Powered</span>
                             </div>
-                            <textarea
-                                className="w-full h-24 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
-                                value={proactivePrompt}
-                                onChange={(e) => setProactivePrompt(e.target.value)}
-                                placeholder="Mensaje inicial..."
-                            />
+                            {isInitialLoading ? (
+                                <Skeleton className="w-full h-24 rounded-2xl" />
+                            ) : (
+                                <textarea
+                                    className="w-full h-24 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
+                                    value={proactivePrompt}
+                                    onChange={(e) => setProactivePrompt(e.target.value)}
+                                    placeholder="Mensaje inicial..."
+                                />
+                            )}
                         </div>
 
                         {/* 2. Flight Plan (Compact) */}
@@ -456,12 +470,16 @@ const BotIASection = ({ showToast }) => {
                                 </label>
                                 <span className="text-[8px] font-bold text-gray-400 uppercase">OpenAI Powered</span>
                             </div>
-                            <textarea
-                                className="w-full h-80 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
-                                value={gptConfig.gptHostPrompt}
-                                onChange={(e) => setGptConfig({ ...gptConfig, gptHostPrompt: e.target.value })}
-                                placeholder="Define la actitud social del Host..."
-                            />
+                            {isInitialLoading ? (
+                                <Skeleton className="w-full h-80 rounded-2xl" />
+                            ) : (
+                                <textarea
+                                    className="w-full h-80 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
+                                    value={gptConfig.gptHostPrompt}
+                                    onChange={(e) => setGptConfig({ ...gptConfig, gptHostPrompt: e.target.value })}
+                                    placeholder="Define la actitud social del Host..."
+                                />
+                            )}
                         </div>
 
                         {/* GPT Model Selector */}

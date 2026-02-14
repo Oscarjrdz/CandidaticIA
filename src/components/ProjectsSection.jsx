@@ -9,6 +9,7 @@ import {
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
+import Skeleton, { ProjectSkeleton } from './ui/Skeleton';
 import MagicSearch from './MagicSearch';
 import ChatWindow from './ChatWindow';
 import { formatPhone, formatRelativeDate, calculateAge, formatValue } from '../utils/formatters';
@@ -312,6 +313,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [projectCandidates, setProjectCandidates] = useState([]);
     const [projectSearches, setProjectSearches] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [isInitialLoading, setIsInitialLoading] = useState(true); // NEW: Prevent ghosting
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
     const [newProjectDesc, setNewProjectDesc] = useState('');
@@ -369,6 +371,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     }, [activeProject]);
 
     const fetchProjects = async () => {
+        setIsInitialLoading(true);
         try {
             const res = await fetch('/api/projects');
             const data = await res.json();
@@ -381,6 +384,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 }
             }
         } catch (e) { console.error('Error fetching projects:', e); }
+        finally { setIsInitialLoading(false); }
     };
 
     const fetchUsers = async () => {
@@ -1226,7 +1230,13 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                     {/* Projects List sidebar */}
                     <div className="col-span-12 lg:col-span-2 flex flex-col min-h-0 space-y-2 overflow-hidden">
                         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
-                            {projects.length === 0 ? null : (
+                            {isInitialLoading ? (
+                                <>
+                                    <ProjectSkeleton />
+                                    <ProjectSkeleton />
+                                    <ProjectSkeleton />
+                                </>
+                            ) : projects.length === 0 ? null : (
                                 <SortableContext items={projects.map(p => p.id)} strategy={verticalListSortingStrategy}>
                                     {projects.map(project => (
                                         <SortableProjectItem
@@ -1351,7 +1361,12 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                             </div>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center space-y-4">
-                                {projects.length > 0 ? (
+                                {isInitialLoading ? (
+                                    <div className="flex flex-col items-center gap-3 animate-pulse">
+                                        <Loader2 className="w-10 h-10 text-blue-500 animate-spin opacity-20" />
+                                        <p className="text-slate-400 font-black uppercase tracking-widest text-[10px]">Sincronizando Proyectos...</p>
+                                    </div>
+                                ) : projects.length > 0 ? (
                                     <>
                                         <Loader2 className="w-12 h-12 text-blue-500 animate-spin opacity-20" />
                                         <p className="text-slate-400 font-black uppercase tracking-widest text-[10px]">Cargando tablero...</p>

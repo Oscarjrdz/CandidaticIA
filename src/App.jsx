@@ -14,13 +14,14 @@ import BotIASection from './components/BotIASection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import ProjectsSection from './components/ProjectsSection';
 import ByPassSection from './components/ByPassSection';
-import LoginPage from './components/LoginPage'; // LOGIN ENABLED
+import LoadingOverlay from './components/ui/LoadingOverlay';
+import LoginPage from './components/LoginPage';
+import LandingPage from './components/LandingPage';
 import { getTheme, saveTheme } from './utils/storage';
-
-import LandingPage from './components/LandingPage'; // NEW
 
 function App() {
   const [user, setUser] = useState(null); // AUTH STATE RESTORED
+  const [isAuthChecking, setIsAuthChecking] = useState(true); // NEW: Prevent Landing Ghost
   const [showLogin, setShowLogin] = useState(false); // NEW: Toggle between Landing and Login
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
@@ -36,8 +37,13 @@ function App() {
         setUser(JSON.parse(savedUser));
       } catch (e) {
         console.error('Invalid session', e);
+        localStorage.removeItem('candidatic_user_session');
       }
     }
+    // Small delay to make it feel professional and ensure state is set
+    setTimeout(() => {
+      setIsAuthChecking(false);
+    }, 600);
   }, []);
 
   // Cargar tema al iniciar
@@ -79,6 +85,10 @@ function App() {
 
 
   // AUTH GUARD
+  if (isAuthChecking) {
+    return <LoadingOverlay />;
+  }
+
   if (!user) {
     return (
       <LandingPage onLoginSuccess={(userData) => {
