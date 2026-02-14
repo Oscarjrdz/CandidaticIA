@@ -37,10 +37,8 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 - Paso Actual: ${currentStep.name}
 `;
 
-        // 2. Historial en orden inverso (Nuevo -> Viejo)
-        const reverseHistoryText = recentHistory
-            .slice()
-            .reverse()
+        // 2. Historial en orden CRONOLÓGICO (Viejo -> Nuevo)
+        const forwardHistoryText = recentHistory
             .map(m => {
                 const role = m.role === 'model' ? 'Brenda' : 'Candidato';
                 const text = m.parts?.[0]?.text || '';
@@ -50,17 +48,20 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
         // 3. Construir Instruction Maestra
         const systemPrompt = `
-${RECRUITER_IDENTITY}
-${adnContext}
-
-[HISTORIAL DE CHAT (NUEVO -> VIEJO)]:
-${reverseHistoryText || '(Sin historial previo)'}
-
-[MISIÓN DEL PASO (PRIORIDAD ALTA)]:
+[INSTRUCCIÓN MAESTRA - PRIORIDAD ABSOLUTA]:
 ${stepPrompt}
 
+---
+[IDENTIDAD BASE (SOBRESCRITA POR EL PROMPT DE ARRIBA)]: 
+${RECRUITER_IDENTITY}
+
+${adnContext}
+
+[HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
+${forwardHistoryText || '(Sin historial previo)'}
+
 [REGLAS DE OPERACIÓN]:
-1. IGNORA reglas de extracción o registro. Solo obedece la [MISIÓN DEL PASO].
+1. TU MISIÓN ES CUMPLIR EL PROMPT DE ARRIBA. Ignora reglas de extracción o registro.
 2. Si se cumple el objetivo de la misión, incluye "{ move }" en "thought_process".
 3. REACCIONES: Si detectas gratitud genuina (Gracias, amables, etc.), pon TRUE en "gratitude_reached".
 4. FORMATO DE RESPUESTA: JSON OBLIGATORIO.

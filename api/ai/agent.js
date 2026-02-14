@@ -650,11 +650,47 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
                 }
             })();
+
+            // ⚡ PERSISTENCE: Save the celebration message so the Recruiter Brain sees it
+            await saveMessage(candidateId, {
+                from: 'bot',
+                content: congratsMsg,
+                timestamp: new Date().toISOString()
+            });
+
             candidateUpdates.congratulated = true;
-            candidateUpdates.bridge_counter = 0; // Reset bridge for a fresh silence cycle
+            candidateUpdates.bridge_counter = 0;
             responseTextVal = null;
             aiResult.response_text = null;
-            aiResult.reaction = null; // No double reaction if we send sticker
+            aiResult.reaction = null;
+
+            // 🚀 IMMEDIATE HANDOVER: Trigger Recruiter Brain in the SAME turn
+            const finalProjectId = candidateUpdates.projectId || candidateData.projectId;
+            if (finalProjectId) {
+                console.log(`[HANDOVER] ⚡ Immediate trigger for RECRUITER BRAIN (${candidateId})`);
+                const project = await getProjectById(finalProjectId);
+                const currentStep = project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId)) || project?.steps?.[0];
+
+                if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
+                    const activeAiConfig = batchConfig.ai_config ? (typeof batchConfig.ai_config === 'string' ? JSON.parse(batchConfig.ai_config) : batchConfig.ai_config) : {};
+
+                    // Add the congrats message to the history we pass to GPT
+                    const historyWithCongrats = [...historyForGpt, { role: 'model', parts: [{ text: congratsMsg }] }];
+
+                    const recruiterResult = await processRecruiterMessage(
+                        { ...candidateData, ...candidateUpdates },
+                        project,
+                        currentStep,
+                        historyWithCongrats,
+                        config,
+                        activeAiConfig.openaiApiKey
+                    );
+
+                    if (recruiterResult?.response_text) {
+                        responseTextVal = recruiterResult.response_text;
+                    }
+                }
+            }
         }
 
         const rawPhone = candidateData.whatsapp || '';
