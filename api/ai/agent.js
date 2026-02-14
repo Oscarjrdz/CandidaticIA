@@ -58,6 +58,7 @@ export const DEFAULT_SYSTEM_PROMPT = `
 [REGLAS GENERALES]:
 1. BREVEDAD: Sigue las instrucciones de longitud del mensaje que el administrador haya configurado en tu identidad. Prohibido usar asteriscos (*).
 2. ANCLA Y PUENTE (ELIMINAR SI < 2 HORAS): 
+   - SI PERFIL COMPLETO: JAMÁS te vuelvas a presentar. Saluda brevemente ("¡Hola de nuevo!").
    - SI PASARON > 2 HORAS: Valida lo que dijo el usuario antes de pedir algo (Variedad: "¡Excelente! ✨", "¡Anotado! 📍").
    - SI PASARON < 2 HORAS: Sigue siendo directa, pero TIENES PERMISO de usar puentes sociales si el usuario socializa o bromea. No seas un robot.
 3. LISTAS: Usa emoji de check ✅ SOLO para cuando listes vacantes o categorías disponibles.
@@ -405,7 +406,8 @@ ${audit.dnaLines}
 
         // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
-            if (isNewFlag) {
+            // 🛡️ CONTEXT GUARD: Never re-introduce if profile is complete, even if 'new' flag persisted.
+            if (isNewFlag && !isProfileComplete) {
                 systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
             } else if (!isProfileComplete) {
                 const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
@@ -462,6 +464,22 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             Object.entries(aiResult.extracted_data).forEach(([key, val]) => {
                 if (val && val !== 'null' && candidateData[key] !== val) candidateUpdates[key] = val;
             });
+        }
+
+        // 🧠 AGE CALCULATOR (Deterministic Math > AI Hallucination)
+        const dobToUse = candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento;
+        if (dobToUse && /^\d{2}\/\d{2}\/\d{4}$/.test(dobToUse)) {
+            try {
+                const [d, m, y] = dobToUse.split('/').map(Number);
+                const birthDate = new Date(y, m - 1, d);
+                const today = new Date();
+                let age = today.getFullYear() - birthDate.getFullYear();
+                const mo = today.getMonth() - birthDate.getMonth();
+                if (mo < 0 || (mo === 0 && today.getDate() < birthDate.getDate())) {
+                    age--;
+                }
+                if (age > 10 && age < 100) candidateUpdates.edad = age; // Sanity check
+            } catch (e) { }
         }
 
         const finalMerged = { ...candidateData, ...candidateUpdates };
