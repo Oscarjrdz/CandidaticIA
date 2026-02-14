@@ -182,82 +182,33 @@ export default async function handler(req, res) {
                     }
                 })();
 
-                // --- AI PROCESSING (Industrial Waitlist) ---
+                // --- AI PROCESSING (Turbo Mode - Async Queue) ---
                 const aiPromise = (async () => {
                     try {
                         const redis = getRedisClient();
                         const isActive = await redis?.get('bot_ia_active');
                         if (isActive === 'false' || candidate?.blocked === true) return;
 
-                        // 🏁 1. ADD TO WAITLIST
+                        // 🏁 1. ADD TO WAITLIST (Safe persistence)
                         await addToWaitlist(candidateId, { text: agentInput, msgId });
 
-                        // 🏁 2. WORKER LOCK
+                        // 🏁 2. SIGNAL TURBO ENGINE
+                        // Only signal if not already processing to avoid redundant worker wakes
                         const isLocked = await isCandidateLocked(candidateId);
-                        if (isLocked) {
-                            console.log(`[Industrial Queue] Candidate ${candidateId} is busy. Queued.`);
-                            return;
-                        }
-
-                        try {
-                            // 🏁 3. DRAIN LOOP
-                            let loopSafety = 0;
-                            while (loopSafety < 10) {
-                                const rawPendingMsgs = await getWaitlist(candidateId);
-                                if (!rawPendingMsgs || rawPendingMsgs.length === 0) break;
-
-                                const pendingMsgs = rawPendingMsgs.map(m => {
-                                    try { return typeof m === 'string' ? JSON.parse(m) : m; }
-                                    catch (e) { return { text: m }; }
-                                });
-
-                                const aggregatedText = pendingMsgs.map(m => {
-                                    const val = m.text?.url || m.text || m;
-                                    return (typeof val === 'object') ? JSON.stringify(val) : val;
-                                }).join(' | ');
-                                const msgIds = pendingMsgs.map(m => m.msgId).filter(id => id);
-                                if (msgId && !msgIds.includes(msgId)) msgIds.push(msgId);
-
-                                console.log(`[Industrial Queue] Processing burst for ${candidateId}. Count: ${pendingMsgs.length}`);
-
-                                let processingError = null;
-                                try {
-                                    if (FEATURES.USE_MESSAGE_QUEUE) {
-                                        const protocol = req.headers['x-forwarded-proto'] || 'https';
-                                        const host = req.headers.host;
-                                        const workerUrl = `${protocol}://${host}/api/workers/process-message`;
-
-                                        const workerRes = await fetch(workerUrl, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ candidateId, message: aggregatedText, messageId: msgId, from: phone })
-                                        });
-                                        if (!workerRes.ok) throw new Error('Worker HTTP fail');
-                                    } else {
-                                        await processMessage(candidateId, aggregatedText, msgId);
-                                    }
-                                } catch (e) {
-                                    processingError = e;
-                                    console.error('❌ AI Processing Failed:', e.message);
-                                }
-
-                                // 🏁 4. DEDUPLICATION COMMIT
-                                if (!processingError) {
-                                    await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));
-                                } else {
-                                    await Promise.all(msgIds.map(id => unlockMessage(id).catch(() => { })));
-                                    throw processingError;
-                                }
-
-                                loopSafety++;
-                                const more = await getWaitlist(candidateId);
-                                if (!more || more.length === 0) break;
-                            }
-                        } finally {
-                            await unlockCandidate(candidateId);
+                        if (!isLocked) {
+                            const task = {
+                                candidateId,
+                                aggregatedText: agentInput, // Initial trigger text
+                                msgId,
+                                timestamp: Date.now()
+                            };
+                            await redis.lpush('queue:messages', JSON.stringify(task));
+                            console.log(`[Turbo Queue] 🚀 Task queued for candidate ${candidateId}`);
+                        } else {
+                            console.log(`[Turbo Queue] ⏳ Candidate ${candidateId} busy. Message added to waitlist.`);
                         }
                     } catch (error) {
-                        console.error('❌ AI Pipeline Error:', error);
+                        console.error('❌ AI Queueing Error:', error);
                     }
                 })();
 
@@ -273,7 +224,9 @@ export default async function handler(req, res) {
                     } catch (e) { }
                 })();
 
-                await Promise.allSettled([aiPromise, miscPromise, presenceUpdate]);
+                // 🔥 CRITICAL: We respond IMMEDIATELY. We don't await the AI processing.
+                // We only await the fast side-effects that need to happen before ACK.
+                await Promise.allSettled([miscPromise, presenceUpdate, aiPromise]);
                 return res.status(200).send('success');
 
             } catch (err) {

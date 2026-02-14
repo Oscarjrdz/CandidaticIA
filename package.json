@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "ai:live": "node scripts/live-engine.js"
+    "ai:live": "node scripts/live-engine.js",
+    "ai:turbo": "node api/workers/turbo-consumer.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",
