@@ -643,7 +643,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             const stickerUrl = await redis?.get('bot_celebration_sticker');
             console.log(`[Handover] Sending Celebration Sticker to ${candidateId}`);
 
-            const congratsMsg = "¡Felicidades por haber completado tu perfil! 🎉";
+            const congratsMsg = "¡Súper! 🌟 Ya tengo tu perfil 100% completo. 📝✅";
             stickerPromise = (async () => {
                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, congratsMsg);
                 if (stickerUrl) {
@@ -654,13 +654,14 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             candidateUpdates.bridge_counter = 0; // Reset bridge for a fresh silence cycle
             responseTextVal = null;
             aiResult.response_text = null;
+            aiResult.reaction = null; // No double reaction if we send sticker
         }
 
         const rawPhone = candidateData.whatsapp || '';
         const isBetaTester = rawPhone.endsWith('8116038195');
         const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
 
-        if (!isRecruiterMode && !isBridgeActive && isNowComplete && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
+        if (!isRecruiterMode && !isBridgeActive && isNowComplete && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey && !shouldSendSticker) {
             try {
                 const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
                 const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt}\n[ADN]: ${JSON.stringify(finalMerged)}`, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
