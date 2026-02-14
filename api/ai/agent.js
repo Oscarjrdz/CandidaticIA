@@ -511,8 +511,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         let deliveryPromise = Promise.resolve();
-        const isTechnicalString = ['[SILENCIO]', '[REACCIÓN/SILENCIO]', 'null', 'undefined'].includes(String(responseTextVal).trim());
-        if (responseTextVal && !isTechnicalString) {
+        const resText = String(responseTextVal || '').trim();
+        const isTechnical = !resText ||
+            ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) ||
+            resText.startsWith('[REACCIÓN:');
+
+        if (responseTextVal && !isTechnical) {
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
         }
 
