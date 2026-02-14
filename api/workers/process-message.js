@@ -29,6 +29,11 @@ async function drainWaitlist(candidateId) {
         try {
             await processMessage(candidateId, aggregatedText, msgIds[0] || null);
             await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));
+
+            // 🧹 CLEANUP: Only clear waitlist after success (Safety Net)
+            const { clearWaitlist } = await import('../utils/storage.js');
+            await clearWaitlist(candidateId);
+
             console.log(`[Serverless Engine] ✅ Completed burst of ${pendingMsgs.length} messages.`);
         } catch (procErr) {
             console.error(`[Serverless Engine] ❌ Error in burst processing:`, procErr.message);

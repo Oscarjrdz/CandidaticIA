@@ -645,22 +645,30 @@ export const addToWaitlist = async (candidateId, text) => {
     await client.expire(key, 60); // 1-minute safety TTL
 };
 
+// 🛡️ SAFETY NET: Just PEEK at the messages. Do NOT delete them yet.
 export const getWaitlist = async (candidateId) => {
     const client = getRedisClient();
     if (!client || !candidateId) return [];
     const key = `${KEYS.CANDIDATE_WAITLIST_PREFIX}${candidateId}`;
     try {
-        const results = await client.multi()
-            .lrange(key, 0, -1)
-            .del(key)
-            .exec();
-
-        // ioredis results format: [[null, [msg1, msg2]], [null, 1]]
-        const messages = results && results[0] && results[0][1] ? results[0][1] : [];
-        return messages;
+        // Just get the range. Don't delete.
+        const messages = await client.lrange(key, 0, -1);
+        return messages || [];
     } catch (e) {
-        console.error('❌ [Storage] getWaitlist Atomic Error:', e);
+        console.error('❌ [Storage] getWaitlist Error:', e);
         return [];
+    }
+};
+
+// 🧹 CLEANUP: Only call this AFTER successful processing
+export const clearWaitlist = async (candidateId) => {
+    const client = getRedisClient();
+    if (!client || !candidateId) return;
+    const key = `${KEYS.CANDIDATE_WAITLIST_PREFIX}${candidateId}`;
+    try {
+        await client.del(key);
+    } catch (e) {
+        console.error('❌ [Storage] clearWaitlist Error:', e);
     }
 };
 
