@@ -1,72 +1,74 @@
-import { createClient } from 'redis';
+import { getRedisClient } from '../utils/storage.js';
 
 /**
  * 🛠️ AGE FIX API (Admin Only)
  * Recalculates candidate ages deterministically based on birthdate.
+ * Uses shared ioredis client.
  */
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const redis = createClient({
-        url: process.env.REDIS_URL
-    });
-
-    redis.on('error', (err) => console.error('Redis Client Error', err));
+    const redis = getRedisClient();
+    if (!redis) {
+        return res.status(500).json({ error: 'Redis client not initialized' });
+    }
 
     try {
-        await redis.connect();
-
-        let cursor = 0;
+        let cursor = '0'; // ioredis uses string cursor
         let totalFixed = 0;
         let details = [];
 
         // Scan for all candidate keys
         do {
-            const reply = await redis.scan(cursor, {
-                MATCH: 'candidatic:candidate:*',
-                COUNT: 100
-            });
+            // ioredis scan syntax: scan(cursor, "MATCH", pattern, "COUNT", count)
+            const result = await redis.scan(cursor, 'MATCH', 'candidatic:candidate:*', 'COUNT', 100);
 
-            cursor = reply.cursor;
-            const keys = reply.keys;
+            cursor = result[0];
+            const keys = result[1];
 
-            for (const key of keys) {
-                try {
-                    const data = await redis.get(key);
+            if (keys.length > 0) {
+                // Fetch all keys in this batch
+                const values = await redis.mget(keys);
+
+                for (let i = 0; i < keys.length; i++) {
+                    const key = keys[i];
+                    const data = values[i];
+
                     if (!data) continue;
 
-                    const candidate = JSON.parse(data);
-                    if (candidate.fechaNacimiento && /^\d{2}\/\d{2}\/\d{4}$/.test(candidate.fechaNacimiento)) {
+                    try {
+                        const candidate = JSON.parse(data);
+                        if (candidate.fechaNacimiento && /^\d{2}\/\d{2}\/\d{4}$/.test(candidate.fechaNacimiento)) {
 
-                        // Deterministic Math
-                        const [d, m, y] = candidate.fechaNacimiento.split('/').map(Number);
-                        const birthDate = new Date(y, m - 1, d);
-                        const today = new Date();
-                        let age = today.getFullYear() - birthDate.getFullYear();
-                        const mo = today.getMonth() - birthDate.getMonth();
-                        if (mo < 0 || (mo === 0 && today.getDate() < birthDate.getDate())) {
-                            age--;
-                        }
+                            // Deterministic Math
+                            const [d, m, y] = candidate.fechaNacimiento.split('/').map(Number);
+                            const birthDate = new Date(y, m - 1, d);
+                            const today = new Date();
+                            let age = today.getFullYear() - birthDate.getFullYear();
+                            const mo = today.getMonth() - birthDate.getMonth();
+                            if (mo < 0 || (mo === 0 && today.getDate() < birthDate.getDate())) {
+                                age--;
+                            }
 
-                        // Update if different
-                        if (candidate.edad !== age) {
-                            const oldAge = candidate.edad;
-                            candidate.edad = age;
-                            await redis.set(key, JSON.stringify(candidate));
-                            details.push(`Fixed: ${candidate.nombreReal} | ${oldAge} -> ${age}`);
-                            totalFixed++;
+                            // Update if different
+                            if (candidate.edad !== age) {
+                                const oldAge = candidate.edad;
+                                candidate.edad = age;
+                                // Save back
+                                await redis.set(key, JSON.stringify(candidate));
+                                details.push(`Fixed: ${candidate.nombreReal || 'Unknown'} | ${oldAge} -> ${age}`);
+                                totalFixed++;
+                            }
                         }
+                    } catch (innerErr) {
+                        console.error(`Skipping bad data for key ${key}`);
                     }
-                } catch (e) {
-                    console.error(`Error processing key ${key}:`, e.message);
                 }
             }
 
-        } while (cursor !== 0);
-
-        await redis.disconnect();
+        } while (cursor !== '0');
 
         return res.status(200).json({
             success: true,
