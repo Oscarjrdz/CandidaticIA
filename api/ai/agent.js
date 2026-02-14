@@ -479,10 +479,9 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
-        // --- FINALIZATION LAYER (SHARED) ---
+        // --- CONSOLIDATED SYNC: Update all candidate data in one atomic call ---
         let responseTextVal = aiResult.response_text || '';
-        responseTextVal = responseTextVal.replace(/\*/g, '');
-
+        responseTextVal = (responseTextVal || '').replace(/\*/g, '');
         const candidateUpdates = {
             lastBotMessageAt: new Date().toISOString(),
             ultimoMensaje: new Date().toISOString()
@@ -506,6 +505,15 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }));
         }
 
+        // --- SANITY CHECK: Kill 1900 zombies ---
+        const yearMatch = String(candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento || '').match(/\b(19|20)\d{2}\b/);
+        if (yearMatch) {
+            const yearValue = parseInt(yearMatch[0]);
+            if (yearValue < 1940) {
+                candidateUpdates.fechaNacimiento = null;
+            }
+        }
+
         // Handshake & esNuevo Auto-off
         if (isNewFlag && !isRecruiterMode) {
             candidateUpdates.esNuevo = 'NO';
@@ -517,10 +525,65 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         candidateUpdates.gratitudAlcanzada = aiResult.gratitude_reached === true;
         candidateUpdates.silencioActivo = aiResult.close_conversation === true;
 
-        if (candidateUpdates.gratitudAlcanzada) console.log(`[Grace & Silence] Gratitude active for ${candidateId}.`);
-        if (candidateUpdates.silencioActivo) console.log(`[Grace & Silence] Silence active for ${candidateId}.`);
-
         // --- AGE CALCULATION (Hybrid) ---
+        const dobStr = candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento;
+        if (!candidateUpdates.edad && !candidateData.edad && dobStr) {
+            const parts = dobStr.split('/');
+            if (parts.length === 3) {
+                const dob = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                if (!isNaN(dob.getTime())) {
+                    const diff = Date.now() - dob.getTime();
+                    const ageDate = new Date(diff);
+                    const calculatedAge = Math.abs(ageDate.getUTCFullYear() - 1970);
+                    if (calculatedAge > 15 && calculatedAge < 100) {
+                        candidateUpdates.edad = calculatedAge;
+                    }
+                }
+            }
+        }
+
+        // --- STICKER CELEBRATION (Lock / Candado) ---
+        const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
+        const finalMerged = { ...candidateData, ...candidateUpdates };
+        const finalAudit = auditProfile(finalMerged, customFields);
+        const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
+
+        // --- ⚡ BYPASS SYSTEM ---
+        const isBypassEnabled = batchConfig.bypass_enabled === 'true';
+        if (isNowComplete && !candidateData.projectId && isBypassEnabled) {
+            try {
+                const bypassIds = await redis.zrange('bypass:list', 0, -1);
+                if (bypassIds.length > 0) {
+                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id}`));
+                    const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
+
+                    for (const rule of activeRules) {
+                        const { minAge, maxAge, municipios, escolaridades, categories, gender, projectId } = rule;
+                        const candidateAge = parseInt(finalMerged.edad || 0);
+                        const cMun = String(finalMerged.municipio || '').toLowerCase().trim();
+                        const cEsc = String(finalMerged.escolaridad || '').toLowerCase().trim();
+                        const cGen = String(finalMerged.genero || '').toLowerCase().trim();
+                        const cCats = (finalMerged.categoria || '').split(',').map(c => c.toLowerCase().trim());
+
+                        const ageMatch = (!minAge || candidateAge >= parseInt(minAge)) && (!maxAge || candidateAge <= parseInt(maxAge));
+                        const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
+                        const munMatch = (municipios.length === 0 || municipios.some(m => String(m).toLowerCase().trim() === cMun));
+                        const escMatch = (escolaridades.length === 0 || escolaridades.some(e => String(e).toLowerCase().trim() === cEsc));
+                        const ruleCatsLow = (categories || []).map(c => String(c).toLowerCase().trim());
+                        const catMatch = (ruleCatsLow.length === 0 || cCats.some(c => ruleCatsLow.includes(c)));
+
+                        if (ageMatch && genderMatch && munMatch && escMatch && catMatch) {
+                            candidateUpdates.projectId = projectId;
+                            candidateUpdates.stepId = 'step_default';
+                            await addCandidateToProject(projectId, candidateId, { origin: 'bypass_rule', method: 'auto', ruleName: rule.name, stepId: 'step_default' });
+                            break;
+                        }
+                    }
+                }
+            } catch (err) { console.error('[BYPASS] Error:', err); }
+        }
+
+        // --- BRIDGE & REACTIONS ---
         const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? candidateData.bridge_counter : 0;
         let isBridgeActive = false;
 
@@ -529,7 +592,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             const lowerText = aggregatedText.toLowerCase();
             const gratitudeKeywords = ['gracias', 'grx', 'thx', 'thank', 'agradecid', 'amable', 'bendicion'];
             const hasRealGratitude = gratitudeKeywords.some(kw => lowerText.includes(kw));
-
             aiResult.reaction = hasRealGratitude ? '👍' : '❤️';
             candidateUpdates.bridge_counter = bridgeCounter + 1;
             aiResult.response_text = null;
@@ -537,10 +599,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             responseTextVal = '';
         }
 
-        // 🛡️ [BRIDGE PROTECTION]: If bridge is active, we ALREADY set the reaction.
         if (!isBridgeActive) {
             if (isNowComplete && aiResult.gratitude_reached === true) {
-                console.log(`[Gratitude Shield] Detected thanks from ${candidateId}. Sending 👍.`);
                 aiResult.reaction = '👍';
             } else {
                 aiResult.reaction = null;
@@ -564,28 +624,31 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
-        // GPT Host Pilot (Disabled in Recruiter mode for now)
+        const rawPhone = candidateData.whatsapp || '';
+        const isBetaTester = rawPhone.endsWith('8116038195');
+        const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
+
         if (!isRecruiterMode && !isBridgeActive && isNowComplete && isBetaTester && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
-            // ... (GPT Host logic stays here if needed, but Recruiter Brain is priority)
+            try {
+                const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
+                const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt}\n[ADN]: ${JSON.stringify(finalMerged)}`, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
+                if (gptResponse?.content) responseTextVal = gptResponse.content.replace(/\*/g, '');
+            } catch (e) { console.error('[GPT Host] pilot error:', e); }
         }
 
-        // Atomic Update
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
-        // Reactions
         let reactionPromise = Promise.resolve();
         if (msgId && config && aiResult.reaction) {
-            console.log(`[AI Reaction] 🧠 Brenda chose: ${aiResult.reaction} for ${candidateId}`);
             reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
         }
 
-        // Move Kanban
         const moveToken = (aiResult.thought_process || '').includes('{ move }');
-        if (moveToken && activeProjectId) {
-            await moveCandidateStep(activeProjectId, candidateId, 'auto_next').catch(e => console.error('Move error:', e));
+        if (moveToken && (candidateUpdates.projectId || candidateData.projectId)) {
+            const projId = candidateUpdates.projectId || candidateData.projectId;
+            await moveCandidateStep(projId, candidateId, 'auto_next').catch(() => { });
         }
 
-        // Delivery & Logging
         let deliveryPromise = Promise.resolve();
         if (responseTextVal && responseTextVal !== '[SILENCIO]' && responseTextVal !== 'null') {
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
