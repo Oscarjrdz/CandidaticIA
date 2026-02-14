@@ -620,11 +620,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             const gratitudeKeywords = ['gracias', 'grx', 'thx', 'thank', 'agradecid', 'amable', 'bendicion'];
             const hasRealGratitude = gratitudeKeywords.some(kw => lowerText.includes(kw));
 
-            aiResult.reaction = hasRealGratitude ? '👍' : '❤️';
+            // Titan Rule: Like only for real gratitude. Others get ✨ for accompaniment.
+            aiResult.reaction = hasRealGratitude ? '👍' : '✨';
             candidateUpdates.bridge_counter = bridgeCounter + 1;
+
             aiResult.response_text = null;
             aiResult.close_conversation = true;
-            responseTextVal = '';
+            responseTextVal = null; // STRICT SILENCE
         }
 
         if (!isBridgeActive) {
@@ -719,7 +721,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         let deliveryPromise = Promise.resolve();
-        if (responseTextVal && responseTextVal !== '[SILENCIO]' && responseTextVal !== 'null') {
+        const isTechnicalString = ['[SILENCIO]', '[REACCIÓN/SILENCIO]', 'null', 'undefined'].includes(String(responseTextVal).trim());
+        if (responseTextVal && !isTechnicalString) {
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
         }
 
@@ -727,7 +730,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             deliveryPromise,
             stickerPromise,
             reactionPromise,
-            saveMessage(candidateId, { from: 'bot', content: responseTextVal || '[REACCIÓN/SILENCIO]', timestamp: new Date().toISOString() }),
+            saveMessage(candidateId, {
+                from: 'bot',
+                content: responseTextVal || (aiResult.reaction ? `[REACCIÓN: ${aiResult.reaction}]` : '[SILENCIO]'),
+                timestamp: new Date().toISOString()
+            }),
             updatePromise
         ]);
 
