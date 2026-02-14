@@ -28,6 +28,7 @@ export const DEFAULT_EXTRACTION_RULES = `
 4. REGLA DE ESCOLARIDAD (GOLD): "Kinder", "Primaria trunca" o "Ninguna" son INVÁLIDOS. Solo acepta Primaria terminada en adelante.
 5. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
 6. REGLA TELEFONO: JAMÁS preguntes el número de teléfono/celular. Ya lo tienes (campo 'whatsapp').
+7. REGLA DE CATEGORÍA: Solo acepta categorías válidas: {{categorias}}.
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
@@ -38,6 +39,7 @@ export const DEFAULT_CEREBRO1_RULES = `
 4. VARIACIÓN: Si el usuario insista con el mismo tema social, VARÍA tu respuesta. Nunca digas lo mismo dos veces. ✨
 5. GUARDIA ADN (ESTRICTO): PROHIBIDO saltar de un dato a otro sin haber obtenido el anterior. Si el usuario bromea o evade, responde con gracia pero vuelve siempre al dato faltante exacto: {{faltantes}}. No digas que el perfil está listo si falta algo.
 6. NO COMPLACIENTE: No aceptes datos basura (como Kinder) solo por ser amable. Detén el flujo hasta tener un dato real.
+7. CATEGORÍAS DISPONIBLES: {{categorias}}. Usa esta lista para guiar al usuario si pregunta qué vacantes hay.
 `;
 
 export const DEFAULT_CEREBRO2_CONTEXT = `
@@ -309,6 +311,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 - Categoría: ${candidateData.categoria || 'No proporcionado'}
 ${audit.dnaLines}
 - Temas recientes: ${themes || 'Nuevo contacto'}
+\n[CATEGORÍAS VÁLIDAS EN EL SISTEMA]: ${categoriesList}\n
 \n${extractionRules}`;
 
         let activeProjectId = candidateData.projectId || candidateData.projectMetadata?.projectId;
@@ -406,7 +409,8 @@ ${audit.dnaLines}
             } else if (!isProfileComplete) {
                 const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
                 const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
-                    .replace('{{faltantes}}', audit.missingLabels.join(', '));
+                    .replace('{{faltantes}}', audit.missingLabels.join(', '))
+                    .replace(/{{categorias}}/g, categoriesList);
                 systemInstruction += `\n${cerebro1Rules} \n`;
             } else {
                 if (!hasGratitude) {
