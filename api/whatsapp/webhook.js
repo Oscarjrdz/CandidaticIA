@@ -192,21 +192,14 @@ export default async function handler(req, res) {
                         // 🏁 1. ADD TO WAITLIST (Safe persistence)
                         await addToWaitlist(candidateId, { text: agentInput, msgId });
 
-                        // 🏁 2. SIGNAL TURBO ENGINE
-                        // Only signal if not already processing to avoid redundant worker wakes
-                        const isLocked = await isCandidateLocked(candidateId);
-                        if (!isLocked) {
-                            const task = {
-                                candidateId,
-                                aggregatedText: agentInput, // Initial trigger text
-                                msgId,
-                                timestamp: Date.now()
-                            };
-                            await redis.lpush('queue:messages', JSON.stringify(task));
-                            console.log(`[Turbo Queue] 🚀 Task queued for candidate ${candidateId}`);
-                        } else {
-                            console.log(`[Turbo Queue] ⏳ Candidate ${candidateId} busy. Message added to waitlist.`);
-                        }
+                        // 🏁 2. SIGNAL TURBO ENGINE (Always push to ensure a worker wakes up)
+                        const task = {
+                            candidateId,
+                            msgId,
+                            timestamp: Date.now()
+                        };
+                        await redis.lpush('queue:messages', JSON.stringify(task));
+                        console.log(`[Turbo Queue] 🚀 Task queued for candidate ${candidateId}`);
                     } catch (error) {
                         console.error('❌ AI Queueing Error:', error);
                     }

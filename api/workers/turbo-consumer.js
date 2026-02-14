@@ -31,10 +31,17 @@ async function startConsumer() {
             const data = JSON.parse(rawData);
             const { candidateId } = data;
 
-            console.log(`[Turbo Engine] ⚡ Processing candidate ${candidateId}...`);
+            // 🏁 1. ACQUIRE LOCK (If already locked, another worker is handling this candidate)
+            const { isCandidateLocked, getWaitlist, markMessageAsDone, unlockCandidate } = await import('../utils/storage.js');
+            const alreadyLocked = await isCandidateLocked(candidateId);
+            if (alreadyLocked) {
+                console.log(`[Turbo Engine] ⏳ Candidate ${candidateId} is busy. Skipping task.`);
+                continue;
+            }
 
             try {
-                // 🏁 0. WORKER DRAIN LOOP (Burst Aggregation)
+                console.log(`[Turbo Engine] ⚡ Processing candidate ${candidateId}...`);
+                // 🏁 2. WORKER DRAIN LOOP (Burst Aggregation)
                 let loopSafety = 0;
                 while (loopSafety < 10) {
                     const { getWaitlist, markMessageAsDone } = await import('../utils/storage.js');
