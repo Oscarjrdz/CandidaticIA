@@ -573,11 +573,29 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     // Category-specific fallback with list
                     if (nextMissing === 'Categoría' && categoriesList) {
                         const categoryArray = categoriesList.split(', ').map(c => `✅ ${c}`).join('\n');
-                        aiResult.response_text = `¡Perfecto! ✨ ¿En qué área te gustaría trabajar? Estas son las opciones:\n${categoryArray}\n¿Cuál eliges? 😊`;
+
+                        // Varied human-like intros
+                        const intros = [
+                            '¡Ay! Me distraje un momento. 😅',
+                            '¡Ups! Se me fue el hilo. 🙈',
+                            'Perdón, me perdí un segundo. 😊',
+                            '¡Uy! Me despiste. 😅',
+                            'Disculpa, me desconcentré. 🙈'
+                        ];
+                        const randomIntro = intros[Math.floor(Math.random() * intros.length)];
+
+                        aiResult.response_text = `${randomIntro} ¿En qué área te gustaría trabajar? Estas son las opciones:\n${categoryArray}\n¿Cuál eliges? 😊`;
                         aiResult.thought_process = "SAFEGUARD: Categoría no capturada, re-listando opciones.";
                     } else {
-                        // Generic fallback for other fields
-                        aiResult.response_text = `¡Entendido! ✨ ¿Me podrías decir tu ${nextMissing}, por favor? 😊`;
+                        // Generic fallback for other fields with varied phrases
+                        const phrases = [
+                            `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`,
+                            `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
+                            `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor?`,
+                            `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
+                            `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
+                        ];
+                        aiResult.response_text = phrases[Math.floor(Math.random() * phrases.length)];
                         aiResult.thought_process = `SAFEGUARD: ${nextMissing} no capturado.`;
                     }
 
