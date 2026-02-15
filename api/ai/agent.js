@@ -530,11 +530,48 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     console.warn(`[SILENCE SAFEGUARD V2] User input: "${aggregatedText}"`);
                     console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation}`);
 
-                    // Determine what we were asking for
-                    const nextMissing = audit.missingLabels.length > 0 ? audit.missingLabels[0] : 'datos';
+                    // 🧠 INTELLIGENT FIELD SELECTION
+                    // Determine what field we were asking for based on conversation context
+                    let nextMissing = 'datos';
+
+                    if (audit.missingLabels.length > 0) {
+                        // Strategy: Look at the last bot message to see what we were asking for
+                        const lastBotMsg = validMessages.filter(m => m.from === 'bot').slice(-1)[0];
+                        const lastBotText = lastBotMsg?.content?.toLowerCase() || '';
+
+                        // Field detection patterns
+                        const fieldPatterns = {
+                            'Nombre Real': ['nombre completo', 'apellidos', 'apellido', 'nombre real'],
+                            'Género': ['género', 'genero', 'hombre o mujer', 'masculino o femenino'],
+                            'Municipio': ['municipio', 'dónde vives', 'donde vives', 'ciudad'],
+                            'Fecha de Nacimiento': ['fecha de nacimiento', 'fecha nacimiento', 'cuándo naciste', 'cuando naciste', 'edad', 'años tienes'],
+                            'Categoría': ['categoría', 'categoria', 'área', 'area', 'puesto', 'trabajo', 'opciones'],
+                            'Empleo': ['empleo', 'trabajas', 'trabajo actual', 'tienes empleo'],
+                            'Escolaridad': ['escolaridad', 'estudios', 'nivel de estudios', 'educación']
+                        };
+
+                        // Try to detect what we were asking for
+                        let detectedField = null;
+                        for (const [fieldLabel, patterns] of Object.entries(fieldPatterns)) {
+                            if (patterns.some(pattern => lastBotText.includes(pattern))) {
+                                detectedField = fieldLabel;
+                                break;
+                            }
+                        }
+
+                        // If detected field is still missing, use it
+                        if (detectedField && audit.missingLabels.includes(detectedField)) {
+                            nextMissing = detectedField;
+                            console.log(`[SILENCE SAFEGUARD V2] 🎯 Detected we were asking for: ${nextMissing}`);
+                        } else {
+                            // Fallback: Use first missing field in sequential order
+                            nextMissing = audit.missingLabels[0];
+                            console.log(`[SILENCE SAFEGUARD V2] 📋 Using first missing field: ${nextMissing}`);
+                        }
+                    }
 
                     // Category-specific fallback with list
-                    if (nextMissing === 'categoría' && categoriesList) {
+                    if (nextMissing === 'Categoría' && categoriesList) {
                         const categoryArray = categoriesList.split(', ').map(c => `✅ ${c}`).join('\n');
                         aiResult.response_text = `¡Perfecto! ✨ ¿En qué área te gustaría trabajar? Estas son las opciones:\n${categoryArray}\n¿Cuál eliges? 😊`;
                         aiResult.thought_process = "SAFEGUARD: Categoría no capturada, re-listando opciones.";
