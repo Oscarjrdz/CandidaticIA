@@ -1,3 +1,4 @@
+import { processMessage } from '../ai/agent.js';
 import { getCandidateById, getWaitlist, markMessageAsDone, unlockCandidate, isCandidateLocked } from '../utils/storage.js';
 import { logTelemetry } from '../utils/telemetry.js';
 
