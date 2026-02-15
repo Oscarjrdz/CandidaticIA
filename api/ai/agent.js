@@ -100,6 +100,64 @@ REGLA DE ORO #2: PROHIBIDO repetir frases de los mensajes anteriores del histori
 REGLA DE ORO #3: Si el usuario socializa, responde con chispa y coherencia, respetando tu estilo configurado.
 `;
 
+/**
+ * 📅 DATE NORMALIZATION UTILITY
+ * Normalizes various birth date formats to DD/MM/YYYY
+ * Handles: 10/2/88, 19/5/83, 19/05/1983, etc.
+ */
+function normalizeBirthDate(input) {
+    if (!input || typeof input !== 'string') {
+        return { isValid: false, date: null };
+    }
+
+    const cleaned = input.trim();
+
+    // Try to parse various formats
+    const patterns = [
+        // DD/MM/YYYY (already correct)
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+        // DD/MM/YY (2-digit year)
+        /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/,
+    ];
+
+    for (const pattern of patterns) {
+        const match = cleaned.match(pattern);
+        if (match) {
+            let [, day, month, year] = match;
+
+            // Convert 2-digit year to 4-digit
+            if (year.length === 2) {
+                const yy = parseInt(year);
+                // Assume 1900s for years 50-99, 2000s for 00-49
+                year = yy >= 50 ? `19${year}` : `20${year}`;
+            }
+
+            // Pad day and month with leading zeros
+            day = day.padStart(2, '0');
+            month = month.padStart(2, '0');
+
+            // Validate ranges
+            const d = parseInt(day);
+            const m = parseInt(month);
+            const y = parseInt(year);
+
+            if (d < 1 || d > 31 || m < 1 || m > 12 || y < 1900 || y > new Date().getFullYear()) {
+                return { isValid: false, date: null };
+            }
+
+            // Check if date is actually valid (e.g., not Feb 30)
+            const testDate = new Date(y, m - 1, d);
+            if (testDate.getDate() !== d || testDate.getMonth() !== m - 1) {
+                return { isValid: false, date: null };
+            }
+
+            return { isValid: true, date: `${day}/${month}/${year}` };
+        }
+    }
+
+    return { isValid: false, date: null };
+}
+
 const getIdentityLayer = (customPrompt = null) => {
     return customPrompt || DEFAULT_SYSTEM_PROMPT;
 };
@@ -532,6 +590,30 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             Object.entries(aiResult.extracted_data).forEach(([key, val]) => {
                 if (val && val !== 'null' && candidateData[key] !== val) candidateUpdates[key] = val;
             });
+        }
+
+        // 📅 DATE NORMALIZATION & VALIDATION
+        // Normalize and validate birth date before saving
+        if (aiResult?.extracted_data?.fechaNacimiento) {
+            const rawDate = aiResult.extracted_data.fechaNacimiento;
+            const normalized = normalizeBirthDate(rawDate);
+
+            if (normalized.isValid) {
+                candidateUpdates.fechaNacimiento = normalized.date;
+                console.log(`[Date Normalization] ✅ "${rawDate}" → "${normalized.date}"`);
+            } else {
+                // Invalid date format - trigger specific safeguard
+                console.warn(`[Date Validation] ❌ Invalid format: "${rawDate}"`);
+                delete candidateUpdates.fechaNacimiento; // Don't save invalid date
+
+                // Override response to ask for correct format
+                if (!isProfileComplete && audit.missingLabels.includes('Fecha de Nacimiento')) {
+                    responseTextVal = `¡Uy! Necesito la fecha en formato completo, por ejemplo: 19/05/1988 (día/mes/año completo) 😊`;
+                    aiResult.response_text = responseTextVal;
+                    aiResult.thought_process = "SAFEGUARD: Invalid date format detected.";
+                    console.log(`[Date Validation] ✅ Injected format correction message`);
+                }
+            }
         }
 
         // 🧠 AGE CALCULATOR (Deterministic Math > AI Hallucination)
