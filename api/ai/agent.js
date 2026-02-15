@@ -613,9 +613,27 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
                     if (nextMissing === 'categoría' && categoriesList) {
                         const categoryArray = categoriesList.split(', ').map(c => `✅ ${c}`).join('\n');
-                        responseTextVal = `¡Uy! Algo interfirió con mi señal. 😅 ¿En qué área te gustaría trabajar?\n${categoryArray}`;
+
+                        // Varied human-like intros (same as main safeguard)
+                        const intros = [
+                            '¡Ay! Me distraje un momento. 😅',
+                            '¡Ups! Se me fue el hilo. 🙈',
+                            'Perdón, me perdí un segundo. 😊',
+                            '¡Uy! Me despiste. 😅',
+                            'Disculpa, me desconcentré. 🙈'
+                        ];
+                        const randomIntro = intros[Math.floor(Math.random() * intros.length)];
+                        responseTextVal = `${randomIntro} ¿En qué área te gustaría trabajar?\n${categoryArray}`;
                     } else {
-                        responseTextVal = `¡Uy! Algo interfirió con mi señal. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`;
+                        // Varied phrases (same as main safeguard)
+                        const phrases = [
+                            `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`,
+                            `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
+                            `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor?`,
+                            `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
+                            `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
+                        ];
+                        responseTextVal = phrases[Math.floor(Math.random() * phrases.length)];
                     }
 
                     // Create minimal aiResult for downstream processing
