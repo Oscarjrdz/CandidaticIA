@@ -757,6 +757,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
             const finalProjectId = candidateUpdates.projectId || candidateData.projectId;
             if (finalProjectId) {
+                // 🎯 BYPASS MATCH: Enter project's first step
                 const project = await getProjectById(finalProjectId);
                 const currentStep = project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId)) || project?.steps?.[0];
                 if (currentStep?.aiConfig?.enabled) {
@@ -764,6 +765,18 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, activeAiConfig.openaiApiKey);
                     if (recruiterResult?.response_text) responseTextVal = recruiterResult.response_text;
                 }
+            } else {
+                // 🏠 NO PROJECT: Enter GPT Host waiting room (after silence shield)
+                // Silence Shield: 2 reactions, then activate GPT Host on 3rd message
+                console.log(`[GPT Host] Candidate ${candidateId} completed profile without project. Entering waiting room mode.`);
+
+                // Mark for GPT Host activation (will trigger on next user message after silence shield)
+                candidateUpdates.gratitudAlcanzada = false; // Reset to allow GPT Host
+                candidateUpdates.silencioActivo = false; // Ensure not silenced
+
+                // First message after completion: silence (reaction only)
+                // This allows the silence shield to activate naturally
+                responseTextVal = null;
             }
         }
 
