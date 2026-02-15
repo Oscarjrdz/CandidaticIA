@@ -636,8 +636,100 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const finalAudit = auditProfile(finalMerged, customFields);
         const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
 
-        if (isNowComplete && !candidateData.projectId && batchConfig.bypass_enabled === 'true') {
-            // Bypass logic can be simplified but let's keep it robust if possible
+        // 🔀 BYPASS SYSTEM - Automatic Project Routing
+        const isBypassEnabled = batchConfig.bypass_enabled === 'true';
+        if (isNowComplete && !candidateData.projectId && isBypassEnabled) {
+            console.log(`[BYPASS] 🔍 Starting evaluation for ${candidateId}. Profile is COMPLETE.`);
+
+            // 🕵️‍♂️ DEBUG TRACE OBJECT
+            const debugTrace = {
+                timestamp: new Date().toISOString(),
+                candidateId: candidateId,
+                candidateData: {
+                    edad: finalMerged.edad,
+                    municipio: finalMerged.municipio,
+                    categoria: finalMerged.categoria,
+                    escolaridad: finalMerged.escolaridad,
+                    genero: finalMerged.genero,
+                    nombreReal: finalMerged.nombreReal
+                },
+                rules: [],
+                finalResult: 'NO_MATCH'
+            };
+
+            try {
+                const bypassIds = await redis.zrange('bypass:list', 0, -1);
+                if (bypassIds.length > 0) {
+                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id}`));
+                    const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
+
+                    for (const rule of activeRules) {
+                        const { minAge, maxAge, municipios, escolaridades, categories, gender, projectId } = rule;
+
+                        // Match logic (Case Insensitive & trimmed)
+                        const candidateAge = parseInt(finalMerged.edad || 0);
+                        const cMun = String(finalMerged.municipio || '').toLowerCase().trim();
+                        const cEsc = String(finalMerged.escolaridad || '').toLowerCase().trim();
+                        const cGen = String(finalMerged.genero || '').toLowerCase().trim();
+                        const cCats = (finalMerged.categoria || '').split(',').map(c => c.toLowerCase().trim());
+
+                        const ageMatch = (!minAge || candidateAge >= parseInt(minAge)) && (!maxAge || candidateAge <= parseInt(maxAge));
+                        const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
+
+                        const munMatch = (municipios.length === 0 || municipios.some(m => String(m).toLowerCase().trim() === cMun));
+                        const escMatch = (escolaridades.length === 0 || escolaridades.some(e => String(e).toLowerCase().trim() === cEsc));
+
+                        // Categories match if ANY of the candidate's cats are in the rule ones
+                        const ruleCatsLow = (categories || []).map(c => String(c).toLowerCase().trim());
+                        const catMatch = (ruleCatsLow.length === 0 || cCats.some(c => ruleCatsLow.includes(c)));
+
+                        const isMatch = ageMatch && genderMatch && munMatch && escMatch && catMatch;
+
+                        // Add to Debug Trace
+                        debugTrace.rules.push({
+                            ruleName: rule.name,
+                            criteria: { minAge, maxAge, municipios, escolaridades, categories, gender },
+                            checks: {
+                                age: ageMatch,
+                                municipio: munMatch,
+                                categoria: catMatch,
+                                escolaridad: escMatch,
+                                genero: genderMatch
+                            },
+                            isMatch
+                        });
+
+                        if (isMatch) {
+                            console.log(`[BYPASS] ✅ MATCH FOUND: Rule "${rule.name}" → Project ${projectId}`);
+
+                            // Assign candidate to project
+                            const { addCandidateToProject } = await import('../utils/storage.js');
+                            await addCandidateToProject(projectId, candidateId);
+
+                            candidateUpdates.projectId = projectId;
+                            debugTrace.finalResult = 'MATCH';
+                            debugTrace.matchedRule = rule.name;
+                            debugTrace.assignedProject = projectId;
+
+                            console.log(`[BYPASS] 🎯 Candidate ${candidateId} routed to project ${projectId}`);
+                            break; // Stop at first match
+                        }
+                    }
+
+                    if (debugTrace.finalResult === 'NO_MATCH') {
+                        console.log(`[BYPASS] ❌ No matching rules found for ${candidateId}`);
+                    }
+                } else {
+                    console.log(`[BYPASS] ⚠️ No bypass rules configured`);
+                }
+
+                // Save debug trace
+                await redis.lpush('debug:bypass:traces', JSON.stringify(debugTrace));
+                await redis.ltrim('debug:bypass:traces', 0, 49); // Keep last 50 traces
+
+            } catch (bypassError) {
+                console.error(`[BYPASS] ❌ Error during evaluation:`, bypassError);
+            }
         }
 
         if (!isBridgeActive && !isHostMode) {
