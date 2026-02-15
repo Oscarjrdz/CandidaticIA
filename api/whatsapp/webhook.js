@@ -22,6 +22,7 @@ import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead, sendUltraMsg
 import { FEATURES } from '../utils/feature-flags.js';
 import { sendMessage } from '../utils/messenger.js';
 import { notifyNewCandidate } from '../utils/sse-notify.js';
+import { logTelemetry } from '../utils/telemetry.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -55,15 +56,23 @@ export default async function handler(req, res) {
             const msgId = messageData.id;
             const phone = from.replace(/\D/g, '');
 
-            // 🏎️ DEDUPLICATION: Atomic Lock (Two-Phase Commit)
             if (await isMessageProcessed(msgId)) {
+                await logTelemetry('ingress_duplicate', { msgId, from });
                 return res.status(200).send('duplicate_ignored');
             }
 
             // IGNORE OUTGOING MESSAGES
             if (messageData.fromMe || messageData.from_me) {
+                await logTelemetry('ingress_ignored_outgoing', { msgId, from });
                 return res.status(200).send('from_me_ignored');
             }
+
+            await logTelemetry('ingress', {
+                msgId,
+                from,
+                type: messageData.type,
+                text: body?.substring(0, 50)
+            });
 
             try {
                 // --- ADMIN COMMANDS ---
@@ -238,6 +247,7 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('❌ [Webhook] Fatal Error:', error);
+        await logTelemetry('ingress_fatal', { error: error.message });
         return res.status(200).send('fatal_error');
     }
 }

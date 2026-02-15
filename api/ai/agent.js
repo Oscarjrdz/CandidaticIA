@@ -164,7 +164,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         if (userParts.length === 0) userParts.push({ text: 'Hola' });
 
-        const recentHistory = validMessages
+        let recentHistory = validMessages
             .slice(-21, -1) // Memory Boost: 20 messages of history
             .filter(m => {
                 const ghostKeywords = ['preguntón', 'focusada', 'procesa su perfil'];
@@ -188,6 +188,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                     parts: [{ text: content }]
                 };
             });
+
+        // CRITICAL FIX: Gemini requires first message to be from 'user'
+        // If history starts with 'model', remove leading model messages
+        while (recentHistory.length > 0 && recentHistory[0].role === 'model') {
+            recentHistory.shift();
+        }
 
         const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-5).map(m => m.content);
         const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Nuevo contacto';

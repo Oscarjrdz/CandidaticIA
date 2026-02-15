@@ -1,5 +1,5 @@
-import { processMessage } from '../ai/agent.js';
 import { getCandidateById, getWaitlist, markMessageAsDone, unlockCandidate, isCandidateLocked } from '../utils/storage.js';
+import { logTelemetry } from '../utils/telemetry.js';
 
 /**
  * 🚀 SERVERLESS TURBO ENGINE
@@ -20,14 +20,16 @@ async function drainWaitlist(candidateId) {
         const aggregatedText = pendingMsgs.map(m => {
             const val = m.text?.url || m.text || m;
             return (typeof val === 'object') ? JSON.stringify(val) : val;
-        }).join(' | ');
+        }).join('\n'); // Change separator to newline for better AI reading
 
         const msgIds = pendingMsgs.map(m => m.msgId).filter(id => id);
 
         console.log(`[Serverless Engine] 🌪️ Draining burst for ${candidateId}. Count: ${pendingMsgs.length}`);
 
         try {
+            await logTelemetry('processing_start', { candidateId, count: pendingMsgs.length });
             await processMessage(candidateId, aggregatedText, msgIds[0] || null);
+            await logTelemetry('ai_complete', { candidateId });
             await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));
 
             // 🧹 CLEANUP: Only clear waitlist after success (Safety Net)
