@@ -2,6 +2,7 @@
   "name": "candidatic_ia",
   "private": true,
   "version": "1.0.1",
+  "description": "Stable deployment - 2026-02-15",
   "type": "module",
   "scripts": {
     "dev": "vite",

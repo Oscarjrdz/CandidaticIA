@@ -461,24 +461,61 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 aiResult = JSON.parse(sanitized);
                 responseTextVal = aiResult.response_text;
 
-                // 🚨 SILENCE SAFEGUARD 🚨
-                // If AI returns empty text but we are NOT closing the conversation and profile is NOT complete
-                if ((!responseTextVal || responseTextVal.trim() === '') && !aiResult.close_conversation && !isProfileComplete) {
-                    console.warn(`[SILENCE SAFEGUARD] API returned empty text for incomplete profile. Injecting fallback.`);
+                // 🚨 ENHANCED SILENCE SAFEGUARD V2 🚨
+                // Prevents Brenda from going silent under ANY circumstance when profile is incomplete
+                const hasEmptyResponse = !responseTextVal || responseTextVal.trim() === '' || responseTextVal === 'null' || responseTextVal === 'undefined';
 
-                    // Fallback strategy: Determine what we were likely asking based on missing fields
+                // CRITICAL: Activate safeguard if profile incomplete, regardless of close_conversation flag
+                if (hasEmptyResponse && !isProfileComplete) {
+                    console.warn(`[SILENCE SAFEGUARD V2] 🚨 Empty response detected for incomplete profile.`);
+                    console.warn(`[SILENCE SAFEGUARD V2] Missing fields: ${audit.missingLabels.join(', ')}`);
+                    console.warn(`[SILENCE SAFEGUARD V2] User input: "${aggregatedText}"`);
+                    console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation}`);
+
+                    // Determine what we were asking for
                     const nextMissing = audit.missingLabels.length > 0 ? audit.missingLabels[0] : 'datos';
 
-                    aiResult.response_text = `¡Entendido! ✨ ¿Me podrías decir tu ${nextMissing}, por favor? 😊`;
-                    aiResult.thought_process = "SAFEGUARD: Recuperación de silencio accidental.";
+                    // Category-specific fallback with list
+                    if (nextMissing === 'categoría' && categoriesList) {
+                        const categoryArray = categoriesList.split(', ').map(c => `✅ ${c}`).join('\n');
+                        aiResult.response_text = `¡Perfecto! ✨ ¿En qué área te gustaría trabajar? Estas son las opciones:\n${categoryArray}\n¿Cuál eliges? 😊`;
+                        aiResult.thought_process = "SAFEGUARD: Categoría no capturada, re-listando opciones.";
+                    } else {
+                        // Generic fallback for other fields
+                        aiResult.response_text = `¡Entendido! ✨ ¿Me podrías decir tu ${nextMissing}, por favor? 😊`;
+                        aiResult.thought_process = `SAFEGUARD: ${nextMissing} no capturado.`;
+                    }
+
                     responseTextVal = aiResult.response_text;
+                    console.log(`[SILENCE SAFEGUARD V2] ✅ Injected fallback: "${responseTextVal.substring(0, 50)}..."`);
                 }
 
             } catch (e) {
-                console.error(`[Gemini JSON fail]`, e);
-                // Fallback for JSON parse error
+                console.error(`[Gemini JSON Parse Error] ❌`, e);
+                console.error(`[Gemini JSON Parse Error] Raw response: ${textResult?.substring(0, 200)}`);
+
+                // Enhanced fallback for JSON parse error
                 if (!isProfileComplete) {
-                    responseTextVal = "¡Uy! Algo interfirió con mi señal. 😅 ¿Me lo podrías repetir, por favor?";
+                    const nextMissing = audit.missingLabels.length > 0 ? audit.missingLabels[0] : 'datos';
+
+                    if (nextMissing === 'categoría' && categoriesList) {
+                        const categoryArray = categoriesList.split(', ').map(c => `✅ ${c}`).join('\n');
+                        responseTextVal = `¡Uy! Algo interfirió con mi señal. 😅 ¿En qué área te gustaría trabajar?\n${categoryArray}`;
+                    } else {
+                        responseTextVal = `¡Uy! Algo interfirió con mi señal. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`;
+                    }
+
+                    // Create minimal aiResult for downstream processing
+                    aiResult = {
+                        response_text: responseTextVal,
+                        thought_process: "SAFEGUARD: JSON parse error recovery",
+                        extracted_data: {},
+                        reaction: null,
+                        close_conversation: false,
+                        gratitude_reached: false
+                    };
+
+                    console.log(`[Gemini JSON Parse Error] ✅ Fallback injected: "${responseTextVal.substring(0, 50)}..."`);
                 }
             }
         }
