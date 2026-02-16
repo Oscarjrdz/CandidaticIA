@@ -837,6 +837,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
                         const isMatch = ageMatch && genderMatch && munMatch && escMatch && catMatch;
 
+                        console.log(`[BYPASS] Rule Check: "${rule.name}" | Match: ${isMatch} | Checks: age:${ageMatch}, mun:${munMatch}, cat:${catMatch}, esc:${escMatch}, gen:${genderMatch}`);
+
                         // Add to Debug Trace
                         debugTrace.rules.push({
                             ruleName: rule.name,
@@ -859,6 +861,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                             await addCandidateToProject(projectId, candidateId);
 
                             candidateUpdates.projectId = projectId;
+                            candidateUpdates.stepId = 'step_default';
+
                             debugTrace.finalResult = 'MATCH';
                             debugTrace.matchedRule = rule.name;
                             debugTrace.assignedProject = projectId;
@@ -867,23 +871,22 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                             break; // Stop at first match
                         }
                     }
+                }
 
-                    if (debugTrace.finalResult === 'NO_MATCH') {
-                        console.log(`[BYPASS] ❌ No matching rules found for ${candidateId}`);
-                    }
-                } else {
-                    console.log(`[BYPASS] ⚠️ No bypass rules configured`);
+                if (debugTrace.finalResult === 'NO_MATCH') {
+                    console.log(`[BYPASS] ❌ No matching rules found for ${candidateId}`);
                 }
 
                 // Save debug trace
                 await redis.lpush('debug:bypass:traces', JSON.stringify(debugTrace));
-                await redis.ltrim('debug:bypass:traces', 0, 49); // Keep last 50 traces
+                await redis.ltrim('debug:bypass:traces', 0, 49);
 
             } catch (bypassError) {
                 console.error(`[BYPASS] ❌ Error during evaluation:`, bypassError);
             }
         }
 
+        // --- COMPLETION & CELEBRATION LOGIC ---
         if (!isBridgeActive && !isHostMode) {
             if (isNowComplete && aiResult?.gratitude_reached === true) {
                 aiResult.reaction = '👍';
@@ -894,6 +897,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         let stickerPromise = Promise.resolve();
         const shouldSendSticker = !isRecruiterMode && (initialStatus === 'INCOMPLETO' && isNowComplete) && !hasBeenCongratulated;
+
         if (shouldSendSticker) {
             const stickerUrl = await redis?.get('bot_celebration_sticker');
             const congratsMsg = "¡Súper! 🌟 Ya tengo tu perfil 100% completo. 📝✅";
@@ -913,21 +917,16 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 const project = await getProjectById(finalProjectId);
                 const currentStep = project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId)) || project?.steps?.[0];
                 if (currentStep?.aiConfig?.enabled) {
+                    const { processRecruiterMessage } = await import('./recruiter-agent.js');
                     const historyWithCongrats = [...historyForGpt, { role: 'model', parts: [{ text: congratsMsg }] }];
                     const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, activeAiConfig.openaiApiKey);
                     if (recruiterResult?.response_text) responseTextVal = recruiterResult.response_text;
                 }
             } else {
-                // 🏠 NO PROJECT: Enter GPT Host waiting room (after silence shield)
-                // Silence Shield: 2 reactions, then activate GPT Host on 3rd message
-                console.log(`[GPT Host] Candidate ${candidateId} completed profile without project. Entering waiting room mode.`);
-
-                // Mark for GPT Host activation (will trigger on next user message after silence shield)
-                candidateUpdates.gratitudAlcanzada = false; // Reset to allow GPT Host
-                candidateUpdates.silencioActivo = false; // Ensure not silenced
-
-                // First message after completion: silence (reaction only)
-                // This allows the silence shield to activate naturally
+                // 🏠 NO PROJECT: Enter waiting room
+                console.log(`[GPT Host] Candidate ${candidateId} completed profile without project.`);
+                candidateUpdates.gratitudAlcanzada = false;
+                candidateUpdates.silencioActivo = false;
                 responseTextVal = null;
             }
         }
@@ -940,9 +939,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         let deliveryPromise = Promise.resolve();
         const resText = String(responseTextVal || '').trim();
-        const isTechnical = !resText ||
-            ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) ||
-            resText.startsWith('[REACCIÓN:');
+        const isTechnical = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
 
         if (responseTextVal && !isTechnical) {
             deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);

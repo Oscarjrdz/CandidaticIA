@@ -608,7 +608,7 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
                     .replace(/{{Vacante\.Sueldo}}/gi, vacancyContext.salary || 'N/A')
                     .replace(/{{Vacante\.Horario}}/gi, vacancyContext.schedule || 'N/A');
 
-                const systemInstruction = `
+                const systemInstructionText = `
 [ROL]: Eres Brenda, reclutadora experta de Candidatic.
 [OBJETIVO]: Ejecutar la siguiente instrucción paso a paso con el candidato de forma natural pero DISCIPLINADA.
 [CONTEXTO DEL PROYECTO]: ${proj.description || ''}
@@ -624,13 +624,22 @@ REGLAS DE ORO:
 6. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso (ej. aceptó la entrevista), incluye el tag [MOVE] en tu respuesta.
 `;
                 try {
-                    const chat = model.startChat({
+                    // Use systemInstruction parameter for better compliance
+                    const modelWithInstruction = genAI.getGenerativeModel({
+                        model: "gemini-1.5-flash",
+                        systemInstruction: systemInstructionText
+                    });
+
+                    const chat = modelWithInstruction.startChat({
                         history: [
-                            { role: "user", parts: [{ text: "Genera el mensaje para el candidato ahora. No des información de la vacante que no haya solicitado el paso." }] }
+                            {
+                                role: "user",
+                                parts: [{ text: "Hola Brenda, ya terminé mi perfil. ¿Qué sigue?" }]
+                            }
                         ]
                     });
 
-                    const result = await chat.sendMessage(systemInstruction);
+                    const result = await chat.sendMessage("Genera el mensaje para el candidato ahora basado en tu instrucción maestra.");
                     let response = result.response.text();
 
                     // TRATAMIENTO DE LA RESPUESTA (FILTROS)
