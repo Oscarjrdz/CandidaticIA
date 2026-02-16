@@ -635,30 +635,83 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
                 // Enhanced fallback for JSON parse error
                 if (!isProfileComplete) {
-                    const nextMissing = audit.missingLabels.length > 0 ? audit.missingLabels[0] : 'datos';
 
-                    if (nextMissing === 'categoría' && categoriesList) {
+                    // 🧠 INTELLIGENT FIELD SELECTION (Copy of main safeguard)
+                    let nextMissing = 'datos';
+                    if (audit.missingLabels.length > 0) {
+                        // Strategy: Look at the last bot message to see what we were asking for
+                        const lastBotMsg = validMessages.filter(m => m.from === 'bot').slice(-1)[0];
+                        const lastBotText = lastBotMsg?.content?.toLowerCase() || '';
+
+                        // Field detection patterns
+                        const fieldPatterns = {
+                            'Nombre Real': ['nombre completo', 'apellidos', 'apellido', 'nombre real', 'cómo te llamas'],
+                            'Género': ['género', 'genero', 'hombre o mujer', 'masculino o femenino', 'sexo'],
+                            'Municipio': ['municipio', 'dónde vives', 'donde vives', 'ciudad', 'resides', 'ubicación', 'de donde eres'],
+                            'Fecha de Nacimiento': ['fecha de nacimiento', 'fecha nacimiento', 'cuándo naciste', 'cuando naciste', 'edad', 'años tienes', 'cumpleaños'],
+                            'Categoría': ['categoría', 'categoria', 'área', 'area', 'puesto', 'trabajo', 'opciones', 'vacantes', 'te interesa'],
+                            'Empleo': ['empleo', 'trabajas', 'trabajo actual', 'tienes empleo', 'actualmente tienes empleo', 'laborando'],
+                            'Escolaridad': ['escolaridad', 'estudios', 'nivel de estudios', 'nivel de escolaridad', 'educación', 'grado escolar']
+                        };
+
+                        let detectedField = null;
+                        for (const [fieldLabel, patterns] of Object.entries(fieldPatterns)) {
+                            if (patterns.some(pattern => lastBotText.includes(pattern))) {
+                                detectedField = fieldLabel;
+                                break;
+                            }
+                        }
+
+                        // If detected field is still missing, use it
+                        if (detectedField && audit.missingLabels.includes(detectedField)) {
+                            nextMissing = detectedField;
+                        } else {
+                            nextMissing = audit.missingLabels[0];
+                        }
+                    }
+
+                    // 🕵️ INTERRUPTION DETECTION
+                    const interruptionKeywords = ['cuanto', 'cuánto', 'donde', 'dónde', 'que', 'qué', 'como', 'cómo', 'pagan', 'sueldo', 'ubicacion', 'ubicación', 'horario', 'prestaciones'];
+                    const isInterruption = interruptionKeywords.some(kw => aggregatedText.toLowerCase().includes(kw));
+
+                    if (nextMissing === 'Categoría' && categoriesList) {
                         const categoryArray = categoriesList.split(', ').map(c => `✅ ${c}`).join('\n');
 
-                        // Varied human-like intros (same as main safeguard)
-                        const intros = [
-                            '¡Ay! Me distraje un momento. 😅',
-                            '¡Ups! Se me fue el hilo. 🙈',
-                            'Perdón, me perdí un segundo. 😊',
-                            '¡Uy! Me despiste. 😅',
-                            'Disculpa, me desconcentré. 🙈'
-                        ];
+                        let intros = [];
+                        if (isInterruption) {
+                            intros = [
+                                '¡Esa es una excelente pregunta! 💡 En un momento te doy todos los detalles, pero primero',
+                                '¡Entiendo tu duda! 😉 Ahorita te cuento todo, solo ayúdame primero',
+                                '¡Claro! Enseguida te digo, pero antes necesito que elijas una opción'
+                            ];
+                        } else {
+                            intros = [
+                                '¡Ay! Me distraje un momento. 😅',
+                                '¡Ups! Se me fue el hilo. 🙈',
+                                'Perdón, me perdí un segundo. 😊',
+                                '¡Uy! Me despiste. 😅',
+                                'Disculpa, me desconcentré. 🙈'
+                            ];
+                        }
                         const randomIntro = intros[Math.floor(Math.random() * intros.length)];
                         responseTextVal = `${randomIntro} ¿En qué área te gustaría trabajar?\n${categoryArray}`;
                     } else {
-                        // Varied phrases (same as main safeguard)
-                        const phrases = [
-                            `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`,
-                            `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
-                            `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor?`,
-                            `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
-                            `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
-                        ];
+                        let phrases = [];
+                        if (isInterruption) {
+                            phrases = [
+                                `¡Buena pregunta! 💡 En un segundito te digo, pero antes ayúdame con tu ${nextMissing} para ver qué opciones te tocan. 😉`,
+                                `¡Entendido! 👌 Ahorita revisamos eso, pero primero necesito tu ${nextMissing} para registrarte. 😊`,
+                                `¡Claro! En un momento te comparto esa info. 😉 ¿Me podrías decir tu ${nextMissing} mientras?`
+                            ];
+                        } else {
+                            phrases = [
+                                `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`,
+                                `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
+                                `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor?`,
+                                `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
+                                `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
+                            ];
+                        }
                         responseTextVal = phrases[Math.floor(Math.random() * phrases.length)];
                     }
 
