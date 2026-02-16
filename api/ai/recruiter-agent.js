@@ -37,7 +37,39 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 - Paso Actual: ${currentStep.name}
 `;
 
-        // 2. Historial en orden CRONOLÓGICO (Viejo -> Nuevo)
+        // 2. VACANCY DATA (HALLUCINATION SHIELD)
+        let vacancyContext = {
+            name: '[SIN_VACANTE_LIGADA]',
+            description: '[EXTINTO/FALTANTE]',
+            messageDescription: '[INDETERMINADO]',
+            salary: 'N/A',
+            schedule: 'N/A'
+        };
+
+        if (project.vacancyId) {
+            const { getVacancyById } = await import('../utils/storage.js');
+            const vac = await getVacancyById(project.vacancyId);
+            if (vac) {
+                vacancyContext = {
+                    name: vac.name || '[SIN_NOMBRE]',
+                    description: vac.description || '[SIN_DESCRIPCION]',
+                    messageDescription: vac.messageDescription || vac.description || '[SIN_RESEÑA]',
+                    salary: vac.salary || 'N/A',
+                    schedule: vac.schedule || 'N/A'
+                };
+            }
+        }
+
+        // 3. Template Tag Replacement
+        let finalPrompt = stepPrompt
+            .replace(/{{Candidato}}/gi, candidateData.nombreReal || candidateData.nombre || 'Candidato')
+            .replace(/{{Vacante}}/gi, vacancyContext.name)
+            .replace(/{{Vacante\.MessageDescription}}/gi, vacancyContext.messageDescription || '[ERROR: VACANTE_PARA_MENSAJE_VACIO]')
+            .replace(/{{Vacante\.Descripcion}}/gi, vacancyContext.description || '[ERROR: DESCRIPCION_VACANTE_VACIA]')
+            .replace(/{{Vacante\.Sueldo}}/gi, vacancyContext.salary || 'N/A')
+            .replace(/{{Vacante\.Horario}}/gi, vacancyContext.schedule || 'N/A');
+
+        // 4. Historial en orden CRONOLÓGICO (Viejo -> Nuevo)
         const forwardHistoryText = recentHistory
             .map(m => {
                 const role = m.role === 'model' ? 'Brenda' : 'Candidato';
@@ -46,16 +78,23 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             })
             .join('\n');
 
-        // 3. Construir Instruction Maestra
+        // 5. Construir Instruction Maestra
         const systemPrompt = `
 [INSTRUCCIÓN MAESTRA - PRIORIDAD ABSOLUTA]:
-${stepPrompt}
+"${finalPrompt}"
 
 ---
 [IDENTIDAD BASE (SOBRESCRITA POR EL PROMPT DE ARRIBA)]: 
 ${RECRUITER_IDENTITY}
 
 ${adnContext}
+
+[DATOS REALES DE LA VACANTE]:
+${JSON.stringify(vacancyContext)}
+
+REGLAS DE ORO ANTI-ALUCINACIÓN:
+1. NO INVENTES detalles de la vacante (Sueldo, Ubicación, Empresa) si no están en los [DATOS REALES DE LA VACANTE].
+2. Si la [INSTRUCCIÓN MAESTRA] contiene un [ERROR: ...], no lo menciones directamente. Dile amablemente que estás validando los detalles del puesto.
 
 [HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
 ${forwardHistoryText || '(Sin historial previo)'}
