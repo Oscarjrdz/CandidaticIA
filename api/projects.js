@@ -125,7 +125,21 @@ export default async function handler(req, res) {
             // If creating new project (no ID), allow empty steps but force default
             // If updating, saveProject handles it, but let's ensure structure.
 
-            const project = await saveProject({ id, name, description, assignedUsers, vacancyId });
+            const { startDate, endDate } = body;
+            const existing = id ? await getProjectById(id) : {};
+
+            const projectData = {
+                ...existing,
+                id: id || existing.id,
+                name: name || existing.name,
+                description: description !== undefined ? description : existing.description,
+                assignedUsers: assignedUsers || existing.assignedUsers,
+                vacancyId: vacancyId !== undefined ? vacancyId : existing.vacancyId,
+                startDate: startDate || existing.startDate,
+                endDate: endDate !== undefined ? endDate : existing.endDate
+            };
+
+            const project = await saveProject(projectData);
 
             // Post-creation guarantee: excessive but safe
             if (!id && project && (!project.steps || project.steps.length === 0)) {

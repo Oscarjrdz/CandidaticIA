@@ -519,15 +519,22 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
         if (activeSteps.length === 0) continue;
 
         // Load project context (Vacancy)
-        let vacancyContext = { name: 'Vacante General', salary: 'Competitivo', schedule: 'Flexible', description: '', messageDescription: '' };
+        let vacancyContext = {
+            name: '[SIN_VACANTE_LIGADA]',
+            salary: '[SIN_SUELDO_ESPECIFICADO]',
+            schedule: '[SIN_HORARIO_ESPECIFICADO]',
+            description: '[DESCRIPCION_NO_DISPONIBLE]',
+            messageDescription: '[VACANTE_PARA_MENSAJE_NO_DISPONIBLE]'
+        };
+
         if (proj.vacancyId) {
             const v = await getVacancyById(proj.vacancyId);
             if (v) vacancyContext = {
-                name: v.name,
-                salary: v.salary_range,
-                description: v.description || '',
-                messageDescription: v.messageDescription || '',
-                schedule: v.schedule
+                name: v.name || '[NOMBRE_VACANTE_FALTANTE]',
+                salary: v.salary_range || '[SUELDO_NO_DISPONIBLE]',
+                description: v.description || '[DESCRIPCION_VACANTE_FALTANTE]',
+                messageDescription: v.messageDescription || '[VACANTE_PARA_MENSAJE_FALTANTE]',
+                schedule: v.schedule || '[HORARIO_NO_DISPONIBLE]'
             };
         }
 
