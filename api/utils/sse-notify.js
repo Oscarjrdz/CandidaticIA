@@ -10,18 +10,35 @@ export async function notifyNewCandidate(candidate) {
         const redis = getRedisClient();
         if (!redis) return;
 
-        // Store latest candidate with timestamp for SSE endpoint to pick up
         const notification = {
+            type: 'candidate:new',
             ...candidate,
             timestamp: new Date().toISOString()
         };
 
-        // Set with 10 second expiry (SSE polls every 2s, so 10s is safe)
         await redis.set('sse_new_candidate', JSON.stringify(notification), 'EX', 10);
-
-        console.log('✅ SSE notification sent for candidate:', candidate.id);
+        console.log('✅ SSE notification sent for NEW candidate:', candidate.id);
     } catch (error) {
         console.error('❌ SSE notification error:', error);
-        // Don't throw - this is non-critical
+    }
+}
+
+export async function notifyCandidateUpdate(candidateId, updates = {}) {
+    try {
+        const redis = getRedisClient();
+        if (!redis) return;
+
+        const notification = {
+            type: 'candidate:update',
+            candidateId,
+            updates,
+            timestamp: new Date().toISOString()
+        };
+
+        // Use a separate key for updates to avoid collisions with new candidate signals
+        await redis.set('sse_candidate_update', JSON.stringify(notification), 'EX', 10);
+        console.log('✅ SSE notification sent for UPDATED candidate:', candidateId);
+    } catch (error) {
+        console.error('❌ SSE candidate update notification error:', error);
     }
 }

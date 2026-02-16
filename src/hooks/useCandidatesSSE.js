@@ -6,6 +6,7 @@ import { useState, useEffect, useRef } from 'react';
  */
 export function useCandidatesSSE() {
     const [newCandidate, setNewCandidate] = useState(null);
+    const [updatedCandidate, setUpdatedCandidate] = useState(null);
     const [globalStats, setGlobalStats] = useState(null);
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState(null);
@@ -40,6 +41,9 @@ export function useCandidatesSSE() {
                         } else if (data.type === 'candidate:new') {
                             console.log('🆕 New candidate via SSE:', data.data);
                             setNewCandidate(data.data);
+                        } else if (data.type === 'candidate:update') {
+                            console.log('🔄 Candidate update via SSE:', data.data);
+                            setUpdatedCandidate(data.data);
                         } else if (data.type === 'stats:global') {
                             setGlobalStats(data.data);
                         }
@@ -93,6 +97,7 @@ export function useCandidatesSSE() {
 
     return {
         newCandidate,
+        updatedCandidate,
         globalStats,
         connected,
         error

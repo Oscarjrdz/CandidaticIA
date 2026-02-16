@@ -13,6 +13,7 @@ import Skeleton, { ProjectSkeleton } from './ui/Skeleton';
 import MagicSearch from './MagicSearch';
 import ChatWindow from './ChatWindow';
 import { formatPhone, formatRelativeDate, calculateAge, formatValue } from '../utils/formatters';
+import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 
 // Drag & Drop Imports
 import {
@@ -313,7 +314,9 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [projectCandidates, setProjectCandidates] = useState([]);
     const [projectSearches, setProjectSearches] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [isInitialLoading, setIsInitialLoading] = useState(true); // NEW: Prevent ghosting
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    // 📡 Real-time Updates (SSE)
+    const { updatedCandidate, newCandidate, sseConnected } = useCandidatesSSE();
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
     const [newProjectDesc, setNewProjectDesc] = useState('');
@@ -450,10 +453,31 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 resetForm();
             }
         } catch (e) {
-            console.error('Error saving project:', e);
-            showToast('Error al guardar proyecto', 'error');
+            console.error('Error creating project:', e);
+            showToast('Error al crear proyecto', 'error');
         }
     };
+
+    // ⚡ Listen for Real-time Updates
+    useEffect(() => {
+        if (updatedCandidate) {
+            console.log('🔄 Real-time Update Received:', updatedCandidate);
+            // If the updated candidate belongs to the active project, refresh the list
+            if (activeProject && updatedCandidate.updates?.projectId === activeProject.id) {
+                console.log('✨ Refreshing active project candidates...');
+                fetchProjectCandidates(activeProject.id);
+            }
+        }
+    }, [updatedCandidate]);
+
+    useEffect(() => {
+        if (newCandidate) {
+            // If a new candidate is added to the active project, refresh
+            if (activeProject && newCandidate.projectId === activeProject.id) {
+                fetchProjectCandidates(activeProject.id);
+            }
+        }
+    }, [newCandidate]);
 
     const resetForm = () => {
         setNewProjectName('');

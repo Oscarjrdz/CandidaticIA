@@ -34,7 +34,8 @@ export default async function handler(req, res) {
     }, 30000);
 
     const redis = getRedisClient();
-    let lastCheck = Date.now();
+    let lastNewCheck = Date.now() - 5000; // Look back 5s initially
+    let lastUpdateCheck = Date.now() - 5000;
 
     const pollInterval = setInterval(async () => {
         try {
@@ -45,9 +46,20 @@ export default async function handler(req, res) {
             if (latestCandidate) {
                 const candidate = JSON.parse(latestCandidate);
                 const candidateTime = new Date(candidate.timestamp || 0).getTime();
-                if (candidateTime > lastCheck) {
+                if (candidateTime > lastNewCheck) {
                     sendEvent({ type: 'candidate:new', data: candidate });
-                    lastCheck = Date.now();
+                    lastNewCheck = candidateTime;
+                }
+            }
+
+            // 2. Candidate Update Signal
+            const latestUpdate = await redis.get('sse_candidate_update');
+            if (latestUpdate) {
+                const update = JSON.parse(latestUpdate);
+                const updateTime = new Date(update.timestamp || 0).getTime();
+                if (updateTime > lastUpdateCheck) {
+                    sendEvent({ type: 'candidate:update', data: update });
+                    lastUpdateCheck = updateTime;
                 }
             }
 

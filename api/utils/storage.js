@@ -1105,6 +1105,13 @@ export const moveCandidateStep = async (projectId, candidateId, stepId) => {
     metadata.updatedAt = new Date().toISOString();
 
     await client.hset(metadataKey, candidateId, JSON.stringify(metadata));
+
+    // ⚡ REAL-TIME NOTIFICATION
+    try {
+        const { notifyCandidateUpdate } = await import('./sse-notify.js');
+        notifyCandidateUpdate(candidateId, { stepId, projectId }).catch(() => { });
+    } catch (e) { }
+
     return true;
 };
 
@@ -1300,6 +1307,13 @@ export const addCandidateToProject = async (projectId, candidateId, metadata = n
     );
 
     await pipeline.exec();
+
+    // ⚡ REAL-TIME NOTIFICATION
+    try {
+        const { notifyCandidateUpdate } = await import('./sse-notify.js');
+        notifyCandidateUpdate(candidateId, { projectId, stepId: finalMetadata.stepId }).catch(() => { });
+    } catch (e) { }
+
     return true;
 };
 
