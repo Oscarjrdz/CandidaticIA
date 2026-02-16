@@ -432,6 +432,13 @@ ${audit.dnaLines}
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
                         candidateUpdates.stepId = nextStep.id;
 
+                        // ⚡ VISUAL BRIDGE (Optional Sticker)
+                        const bridgeSticker = await redis.get('bot_step_move_sticker');
+                        if (bridgeSticker) {
+                            console.log(`[RECRUITER BRAIN] 🎨 Sending Visual Bridge sticker to ${candidateId}`);
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
+                        }
+
                         // 2. Chained Execution: Get response from the NEW step immediately!
                         if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
                             console.log(`[RECRUITER BRAIN] 🔗 Chaining execution for next step: ${nextStep.name}`);

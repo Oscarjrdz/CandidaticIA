@@ -77,8 +77,18 @@ export default async function handler(req, res) {
             try {
                 // --- ADMIN COMMANDS ---
                 const adminNumber = '5218116038195';
+                const redis = getRedisClient();
+
                 if (phone === adminNumber) {
                     const lowerBody = body.toLowerCase().trim();
+
+                    // Command: Aprender puente
+                    if (lowerBody.includes('aprender puente')) {
+                        await redis.set(`admin_state:${phone}`, 'waiting_bridge_sticker');
+                        await sendMessage(adminNumber, `¡Claro! 🌸 Mándame el STICKER que quieres usar como *puente visual* (el que sale cuando aceptan la vacante). ✨`);
+                        return res.status(200).send('bridge_mode_active');
+                    }
+
                     if (lowerBody.startsWith('simon')) {
                         const targetPhone = lowerBody.replace('simon', '').replace(/\D/g, '');
                         if (targetPhone) {
@@ -139,15 +149,24 @@ export default async function handler(req, res) {
 
                 console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}...`);
 
-                // --- ADMIN STICKER ---
+                // --- ADMIN STICKER CAPTURE ---
                 const messageType = messageData.type || 'text';
                 if (phone === adminNumber && (messageType === 'sticker' || messageType === 'stickerMessage')) {
                     const stickerUrl = messageData.media || messageData.body || messageData.file;
                     if (stickerUrl?.startsWith('http')) {
-                        const redis = getRedisClient();
-                        await redis.set('bot_celebration_sticker', stickerUrl);
-                        await sendMessage(adminNumber, `✅ ¡Sticker de festejo guardado!✨🎉`);
-                        return res.status(200).send('sticker_captured');
+                        const adminState = await redis.get(`admin_state:${phone}`);
+
+                        if (adminState === 'waiting_bridge_sticker') {
+                            await redis.set('bot_step_move_sticker', stickerUrl);
+                            await redis.del(`admin_state:${phone}`);
+                            await sendMessage(adminNumber, `✅ ¡Puente visual guardado con éxito! 🚀✨\nAhora usaré este sticker cuando los candidatos acepten la vacante.`);
+                            return res.status(200).send('bridge_sticker_captured');
+                        } else {
+                            // Default: Celebration sticker
+                            await redis.set('bot_celebration_sticker', stickerUrl);
+                            await sendMessage(adminNumber, `✅ ¡Sticker de festejo (fin de perfil) guardado! ✨🎉`);
+                            return res.status(200).send('celebration_sticker_captured');
+                        }
                     }
                 }
 
