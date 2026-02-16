@@ -19,6 +19,7 @@ import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { getOpenAIResponse } from '../utils/openai.js';
 import { processRecruiterMessage } from './recruiter-agent.js';
+import { inferGender } from '../utils/gender-helper.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
 [REGLAS DE EXTRACCIÓN]:
@@ -801,6 +802,19 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             Object.entries(aiResult.extracted_data).forEach(([key, val]) => {
                 if (val && val !== 'null' && candidateData[key] !== val) candidateUpdates[key] = val;
             });
+        }
+
+        // 🧠 INTELLIGENT GENDER INFERENCE (FALLBACK)
+        const currentGender = candidateUpdates.genero || candidateData.genero;
+        if (!currentGender || currentGender === 'desconocido' || currentGender === 'null') {
+            const nameToUse = candidateUpdates.nombreReal || candidateData.nombreReal || candidateData.nombre;
+            if (nameToUse && nameToUse !== 'Desconocido') {
+                const inferred = inferGender(nameToUse);
+                if (inferred) {
+                    candidateUpdates.genero = inferred;
+                    console.log(`[Gender Inference] ✅ Inferred "${inferred}" from name "${nameToUse}"`);
+                }
+            }
         }
 
         // 📅 DATE NORMALIZATION & VALIDATION
