@@ -52,15 +52,17 @@ export default async function handler(req, res) {
                 }
             }
 
-            // 2. Candidate Update Signal
-            const latestUpdate = await redis.get('sse_candidate_update');
-            if (latestUpdate) {
-                const update = JSON.parse(latestUpdate);
-                const updateTime = new Date(update.timestamp || 0).getTime();
-                if (updateTime > lastUpdateCheck) {
-                    sendEvent({ type: 'candidate:update', data: update });
-                    lastUpdateCheck = updateTime;
-                }
+            // 2. Candidate Update Signal (Draining the list)
+            const updates = [];
+            let nextUpdate = await redis.lpop('sse:updates');
+            while (nextUpdate) {
+                updates.push(JSON.parse(nextUpdate));
+                if (updates.length > 15) break; // Limit per poll cycle
+                nextUpdate = await redis.lpop('sse:updates');
+            }
+
+            for (const update of updates) {
+                sendEvent({ type: 'candidate:update', data: update });
             }
 
             // 2. [SIN TANTO ROLLO] Instant Stats Signal

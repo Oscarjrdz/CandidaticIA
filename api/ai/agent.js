@@ -437,11 +437,14 @@ ${audit.dnaLines}
                     const currentIndex = project.steps.findIndex(s => s.id === activeStepId);
                     const nextStep = project.steps[currentIndex + 1];
 
+                    console.log(`[RECRUITER BRAIN] 🧩 Move condition. Current idx: ${currentIndex}, Next step: ${nextStep?.name || 'NONE'}`);
+
                     if (nextStep) {
                         console.log(`[RECRUITER BRAIN] 🚀 Auto-moving candidate ${candidateId} to next step: ${nextStep.name}`);
 
                         // 1. Send Step 1 Response immediately to preserve order
                         if (responseTextVal) {
+                            console.log(`[RECRUITER BRAIN] 💬 Sending Step 1 text...`);
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
                             responseTextVal = null; // Clear so it doesn't double-send at the end
                         }
@@ -453,8 +456,11 @@ ${audit.dnaLines}
                         // 3. VISUAL BRIDGE (Optional Sticker) - SENT AFTER Step 1 Text
                         const bridgeSticker = await redis.get('bot_step_move_sticker');
                         if (bridgeSticker) {
-                            console.log(`[RECRUITER BRAIN] 🎨 Sending Visual Bridge sticker to ${candidateId}`);
+                            console.log(`[RECRUITER BRAIN] 🎨 Sending Visual Bridge sticker...`);
+                            await new Promise(r => setTimeout(r, 800)); // Delay for sequence
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
+                        } else {
+                            console.log(`[RECRUITER BRAIN] ⚠️ No bridge sticker found in Redis (bot_step_move_sticker)`);
                         }
 
                         // 4. Chained Execution: Get response from the NEW step immediately!
@@ -477,13 +483,20 @@ ${audit.dnaLines}
                             );
 
                             if (nextAiResult?.response_text) {
-                                // Set responseTextVal for the FINAL output of the handler
-                                responseTextVal = nextAiResult.response_text;
+                                console.log(`[RECRUITER BRAIN] 💬 Sending Chained Response...`);
+                                // IMPORTANT: Small delay to ensure second text arrives AFTER sticker
+                                await new Promise(r => setTimeout(r, 1000));
+                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
+                                responseTextVal = null; // Prevent double send
                                 aiResult.thought_process += ` | Chained: ${nextAiResult.thought_process}`;
+                            } else {
+                                console.log(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text`);
                             }
+                        } else {
+                            console.log(`[RECRUITER BRAIN] ℹ️ Next step (${nextStep.name}) has no AI prompt enabled. Chain stops.`);
                         }
                     } else {
-                        console.log(`[RECRUITER BRAIN] 🏁 Candidate ${candidateId} reached the LAST step.`);
+                        console.log(`[RECRUITER BRAIN] 🏁 Candidate ${candidateId} reached the LAST step. No next step to move to.`);
                     }
                 }
             }

@@ -463,7 +463,11 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         if (updatedCandidate) {
             console.log('🔄 Real-time Update Received:', updatedCandidate);
             // If the updated candidate belongs to the active project, refresh the list
-            if (activeProject && updatedCandidate.updates?.projectId === activeProject.id) {
+            // Use String() cast to ensure comparison works even if types differ (string vs int)
+            const updateProjId = String(updatedCandidate.updates?.projectId || '');
+            const activeProjId = String(activeProject?.id || '');
+
+            if (activeProject && updateProjId === activeProjId) {
                 console.log('✨ Refreshing active project candidates...');
                 fetchProjectCandidates(activeProject.id);
             }
