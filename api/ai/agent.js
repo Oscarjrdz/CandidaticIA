@@ -25,15 +25,10 @@ export const DEFAULT_EXTRACTION_RULES = `
 1. Analiza el historial para extraer: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad, tieneEmpleo.
 2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO] es incompleto y el usuario da más info, FUSIÓNALO.
 3. REGLA DE FECHA: Formato DD/MM/YYYY.
-4. REGLA DE ESCOLARIDAD (NORMALIZACIÓN INTELIGENTE):
-   - NORMALIZA CUALQUIER VARIANTE a los valores estándar:
-     • Si mencionan "primaria" (ej: "2 de primaria", "primaria trunca", "4to de primaria") → Extrae "Primaria"
-     • Si mencionan "secundaria" (ej: "secu", "1ro de secundaria", "secundaria trunca") → Extrae "Secundaria"
-     • Si mencionan "preparatoria" o "bachillerato" (ej: "prepa", "2do de prepa", "bachiller") → Extrae "Preparatoria"
-     • Si mencionan "universidad" o "licenciatura" (ej: "uni", "3ro de carrera", "lic") → Extrae "Universidad"
-     • Si mencionan "maestría" o "posgrado" → Extrae "Maestría"
-   - CASOS ESPECIALES: Si dicen "kinder", "sin estudios", "ninguna" → Extrae "Primaria" (mínimo aceptable)
-   - VALORES FINALES PERMITIDOS: Primaria, Secundaria, Preparatoria, Universidad, Maestría
+4. REGLA DE ESCOLARIDAD (GOLD):
+   - "Kinder", "Primaria trunca" o "Ninguna" son INVÁLIDOS.
+   - SOLO ACEPTA: Primaria, Secundaria, Preparatoria/Bachillerato, Universidad/Licenciatura, Maestría.
+   - EXPANDE ABREVIACIONES: "Prepa" -> "Preparatoria", "Secu" -> "Secundaria", "Uni" -> "Universidad".
 5. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
 6. REGLA TELEFONO: JAMÁS preguntes el número de teléfono/celular. Ya lo tienes (campo 'whatsapp').
 7. REGLA DE CATEGORÍA: Solo acepta categorías válidas: {{categorias}}.
