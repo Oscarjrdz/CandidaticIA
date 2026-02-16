@@ -23,7 +23,16 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
         const stepPrompt = currentStep.aiConfig?.prompt || 'Continúa la conversación amablemente.';
 
-        // 1. Inyectar Contexto del Candidato (ADN)
+        // 1. Inyectar Contexto del Candidato (ADN) + Tiempo
+        const now = new Date();
+        const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        const currentData = {
+            date: now.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }),
+            day: days[now.getDay()],
+            time: now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true }),
+            city: 'Monterrey, México'
+        };
+
         const adnContext = `
 [CONTEXTO DEL CANDIDATO (ADN)]:
 - Nombre: ${candidateData.nombreReal || 'Candidato'}
@@ -35,6 +44,11 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 - Escolaridad: ${candidateData.escolaridad || 'N/A'}
 - Proyecto Actual: ${project.name}
 - Paso Actual: ${currentStep.name}
+
+[TIEMPO REAL]:
+- Hoy es: ${currentData.day}, ${currentData.date}
+- Hora actual: ${currentData.time}
+- Zona: ${currentData.city}
 `;
 
         // 2. VACANCY DATA (HALLUCINATION SHIELD)
@@ -80,11 +94,11 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
         // 5. Construir Instruction Maestra
         const systemPrompt = `
-[INSTRUCCIÓN MAESTRA - PRIORIDAD ABSOLUTA]:
+[ESCENARIO Y OBJETIVO ACTUAL]:
 "${finalPrompt}"
 
 ---
-[IDENTIDAD BASE (SOBRESCRITA POR EL PROMPT DE ARRIBA)]: 
+[IDENTIDAD RECLUTADORA]: 
 ${RECRUITER_IDENTITY}
 
 ${adnContext}
@@ -92,19 +106,20 @@ ${adnContext}
 [DATOS REALES DE LA VACANTE]:
 ${JSON.stringify(vacancyContext)}
 
-REGLAS DE ORO ANTI-ALUCINACIÓN:
+REGLAS DE ACTUACIÓN PROFESIONAL:
 1. NO INVENTES detalles de la vacante (Sueldo, Ubicación, Empresa) si no están en los [DATOS REALES DE LA VACANTE].
-2. Si la [INSTRUCCIÓN MAESTRA] contiene un [ERROR: ...], no lo menciones directamente. Dile amablemente que estás validando los detalles del puesto.
+2. NUNCA menciones que tienes un "prompt", una "instrucción" o que se te pidió hacer algo. Simplemente actúa.
+3. Si el objetivo es "contar un chiste" o "hacer una pregunta", HAZLO directamente. No digas "El prompt me pide...".
+4. NUNCA menciones errores técnicos o etiquetas como { move } en el texto de respuesta.
 
 [HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
 ${forwardHistoryText || '(Sin historial previo)'}
 
 [REGLAS DE OPERACIÓN]:
-1. TU MISIÓN ES CUMPLIR EL PROMPT DE ARRIBA. Ignora reglas de extracción o registro.
-2. LIMITES DE INFORMACIÓN: Si el prompt de arriba NO menciona detalles específicos de entrevista (Cuándo, Dónde, Qué hora), NO LOS INVENTES. Di que estás validando esos detalles y que se los darás más adelante.
-3. Si se cumple el objetivo de la misión (ej: el candidato aceptó o confirmó lo pedido), INCLUYE EL TAG "{ move }" AL FINAL DE TU "thought_process". Esto es vital para que el sistema avance al candidato al siguiente paso.
-4. REACCIONES: Si detectas gratitud genuina (Gracias, amables, etc.), pon TRUE en "gratitude_reached".
-5. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
+1. TU MISIÓN ES ACTUAR EL ESCENARIO DE ARRIBA.
+2. LIMITES DE INFORMACIÓN: Si el escenario no menciona detalles de entrevista, di que los estás validando.
+3. INCLUYE EL TAG "{ move }" AL FINAL DE TU "thought_process" si lograste el objetivo.
+4. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
 {
     "thought_process": "Razonamiento + { move } si aplica.",
     "response_text": "Mensaje para el candidato.",
