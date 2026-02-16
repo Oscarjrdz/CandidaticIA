@@ -11,19 +11,18 @@ let redis;
 
 const getClient = () => {
     if (!redis) {
-        if (process.env.REDIS_URL) {
-            try {
-                const isTLS = process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss://');
-                redis = new Redis(process.env.REDIS_URL, {
-                    retryStrategy: (times) => Math.min(times * 50, 2000),
-                    tls: isTLS ? { rejectUnauthorized: false } : undefined
-                });
-                redis.on('error', (err) => console.error('❌ Redis Connection Error:', err));
-            } catch (e) {
-                console.error('❌ Failed to create Redis client:', e);
-            }
-        } else {
-            console.warn('⚠️ REDIS_URL not found in environment variables.');
+        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+        const isTLS = redisUrl.startsWith('rediss://');
+
+        try {
+            console.log(`🔌 Connecting to Redis: ${redisUrl.split('@').pop()} (TLS: ${isTLS})`);
+            redis = new Redis(redisUrl, {
+                retryStrategy: (times) => Math.min(times * 50, 2000),
+                tls: isTLS ? { rejectUnauthorized: false } : undefined
+            });
+            redis.on('error', (err) => console.error('❌ Redis Connection Error:', err));
+        } catch (e) {
+            console.error('❌ Failed to create Redis client:', e);
         }
     }
     return redis;

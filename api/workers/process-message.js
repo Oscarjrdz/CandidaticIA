@@ -66,7 +66,11 @@ export default async function handler(req, res) {
         }
 
         try {
-            // 🚀 2. DRAIN WAITLIST
+            // 🚀 2. BURST DE-BOUNCE: Wait 600ms for rapid-fire messages to accumulate
+            console.log(`[Serverless Engine] ⏳ De-bouncing burst for ${candidateId}...`);
+            await new Promise(r => setTimeout(r, 600));
+
+            // 🚀 3. DRAIN WAITLIST
             await drainWaitlist(candidateId);
             return res.status(200).json({ success: true, candidateId });
         } finally {
