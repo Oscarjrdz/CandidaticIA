@@ -592,28 +592,29 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
                 // Prepare Prompt
                 let promptText = step.aiConfig.prompt || '';
 
-                // Context Injection
+                // Context Injection (Case Insensitive)
                 promptText = promptText
-                    .replace(/{{Candidato}}/g, cand.nombreReal || cand.nombre || 'Candidato')
-                    .replace(/{{Vacante}}/g, vacancyContext.name)
-                    .replace(/{{Vacante\.MessageDescription}}/g, vacancyContext.messageDescription || 'No disponible')
-                    .replace(/{{Vacante\.Descripcion}}/g, vacancyContext.description || 'No disponible')
-                    .replace(/{{Vacante\.Sueldo}}/g, vacancyContext.salary || 'N/A')
-                    .replace(/{{Vacante\.Horario}}/g, vacancyContext.schedule || 'N/A');
+                    .replace(/{{Candidato}}/gi, cand.nombreReal || cand.nombre || 'Candidato')
+                    .replace(/{{Vacante}}/gi, vacancyContext.name)
+                    .replace(/{{Vacante\.MessageDescription}}/gi, vacancyContext.messageDescription || '[ERROR: VACANTE_PARA_MENSAJE_VACIO]')
+                    .replace(/{{Vacante\.Descripcion}}/gi, vacancyContext.description || '[ERROR: DESCRIPCION_VACANTE_VACIA]')
+                    .replace(/{{Vacante\.Sueldo}}/gi, vacancyContext.salary || 'N/A')
+                    .replace(/{{Vacante\.Horario}}/gi, vacancyContext.schedule || 'N/A');
 
                 const systemInstruction = `
 [ROL]: Eres Brenda, reclutadora experta de Candidatic.
 [OBJETIVO]: Ejecutar la siguiente instrucción paso a paso con el candidato de forma natural pero DISCIPLINADA.
 [CONTEXTO DEL PROYECTO]: ${proj.description || ''}
-[DATOS VACANTE]: ${JSON.stringify(vacancyContext)}
+[DATOS REALES DE LA VACANTE]: ${JSON.stringify(vacancyContext)}
 [INSTRUCCIÓN MAESTRA]: "${promptText}"
 
 REGLAS DE ORO:
-1. Sigue ESTRICTAMENTE la[INSTRUCCIÓN MAESTRA].
-2. NO menciones sueldos, horarios, ubicación ni detalles de la empresa A MENOS que la[INSTRUCCIÓN MAESTRA] lo pida explícitamente.
-3. Si la instrucción es solo preguntar algo, LIMITATE A PREGUNTAR eso.No intentes "vender" la vacante si no es el momento.
-4. Tu respuesta debe ser natural, sonar humana y respetar la brevedad/longitud configurada en tu instrucción.
-5. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso, incluye el tag[MOVE] en tu respuesta(esto es para el sistema, NO lo verá el candidato).
+1. Sigue ESTRICTAMENTE la [INSTRUCCIÓN MAESTRA].
+2. NO INVENTES detalles de la vacante (Sueldo, Ubicación, Empresa) si no están en los [DATOS REALES DE LA VACANTE] o en la [INSTRUCCIÓN MAESTRA].
+3. Si la [INSTRUCCIÓN MAESTRA] contiene un [ERROR: ...], no lo menciones directamente al candidato. En su lugar, dile amablemente que estás validando los detalles del puesto y que en un momento se los compartes.
+4. Si la instrucción es solo preguntar algo, LIMITATE A PREGUNTAR eso. No intentes "vender" la vacante si no es el momento.
+5. Tu respuesta debe ser natural, sonar humana y respetar la brevedad/longitud configurada en tu instrucción.
+6. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso (ej. aceptó la entrevista), incluye el tag [MOVE] en tu respuesta.
 `;
                 try {
                     const chat = model.startChat({
