@@ -541,13 +541,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
                         // Field detection patterns
                         const fieldPatterns = {
-                            'Nombre Real': ['nombre completo', 'apellidos', 'apellido', 'nombre real'],
-                            'Género': ['género', 'genero', 'hombre o mujer', 'masculino o femenino'],
-                            'Municipio': ['municipio', 'dónde vives', 'donde vives', 'ciudad'],
-                            'Fecha de Nacimiento': ['fecha de nacimiento', 'fecha nacimiento', 'cuándo naciste', 'cuando naciste', 'edad', 'años tienes'],
-                            'Categoría': ['categoría', 'categoria', 'área', 'area', 'puesto', 'trabajo', 'opciones'],
-                            'Empleo': ['empleo', 'trabajas', 'trabajo actual', 'tienes empleo'],
-                            'Escolaridad': ['escolaridad', 'estudios', 'nivel de estudios', 'educación']
+                            'Nombre Real': ['nombre completo', 'apellidos', 'apellido', 'nombre real', 'cómo te llamas'],
+                            'Género': ['género', 'genero', 'hombre o mujer', 'masculino o femenino', 'sexo'],
+                            'Municipio': ['municipio', 'dónde vives', 'donde vives', 'ciudad', 'resides', 'ubicación', 'de donde eres'],
+                            'Fecha de Nacimiento': ['fecha de nacimiento', 'fecha nacimiento', 'cuándo naciste', 'cuando naciste', 'edad', 'años tienes', 'cumpleaños'],
+                            'Categoría': ['categoría', 'categoria', 'área', 'area', 'puesto', 'trabajo', 'opciones', 'vacantes', 'te interesa'],
+                            'Empleo': ['empleo', 'trabajas', 'trabajo actual', 'tienes empleo', 'actualmente tienes empleo', 'laborando'],
+                            'Escolaridad': ['escolaridad', 'estudios', 'nivel de estudios', 'nivel de escolaridad', 'educación', 'grado escolar']
                         };
 
                         // Try to detect what we were asking for
