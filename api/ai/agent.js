@@ -416,6 +416,9 @@ ${audit.dnaLines}
                     config,
                     activeAiConfig.openaiApiKey
                 );
+                if (aiResult?.response_text) {
+                    responseTextVal = aiResult.response_text;
+                }
             }
         }
 
