@@ -425,25 +425,32 @@ ${audit.dnaLines}
                 if (aiResult?.thought_process?.includes('{ move }')) {
                     const currentIndex = project.steps.findIndex(s => s.id === activeStepId);
                     const nextStep = project.steps[currentIndex + 1];
+
                     if (nextStep) {
                         console.log(`[RECRUITER BRAIN] 🚀 Auto-moving candidate ${candidateId} to next step: ${nextStep.name}`);
 
-                        // 1. Database Update
+                        // 1. Send Step 1 Response immediately to preserve order
+                        if (responseTextVal) {
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
+                            responseTextVal = null; // Clear so it doesn't double-send at the end
+                        }
+
+                        // 2. Database Update
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
                         candidateUpdates.stepId = nextStep.id;
 
-                        // ⚡ VISUAL BRIDGE (Optional Sticker)
+                        // 3. VISUAL BRIDGE (Optional Sticker) - SENT AFTER Step 1 Text
                         const bridgeSticker = await redis.get('bot_step_move_sticker');
                         if (bridgeSticker) {
                             console.log(`[RECRUITER BRAIN] 🎨 Sending Visual Bridge sticker to ${candidateId}`);
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
                         }
 
-                        // 2. Chained Execution: Get response from the NEW step immediately!
+                        // 4. Chained Execution: Get response from the NEW step immediately!
                         if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
                             console.log(`[RECRUITER BRAIN] 🔗 Chaining execution for next step: ${nextStep.name}`);
 
-                            // Propagate history including Brenda's first response
+                            // Propagate history
                             const historyWithFirstResponse = [...historyForGpt];
                             if (aiResult.response_text) {
                                 historyWithFirstResponse.push({ role: 'model', parts: [{ text: aiResult.response_text }] });
@@ -459,13 +466,8 @@ ${audit.dnaLines}
                             );
 
                             if (nextAiResult?.response_text) {
-                                // Combine both responses for a fluid experience
-                                responseTextVal = aiResult.response_text
-                                    ? `${aiResult.response_text}\n\n${nextAiResult.response_text}`
-                                    : nextAiResult.response_text;
-
-                                // Update aiResult to reflect the final state
-                                aiResult.response_text = responseTextVal;
+                                // Set responseTextVal for the FINAL output of the handler
+                                responseTextVal = nextAiResult.response_text;
                                 aiResult.thought_process += ` | Chained: ${nextAiResult.thought_process}`;
                             }
                         }

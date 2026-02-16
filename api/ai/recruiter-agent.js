@@ -101,9 +101,10 @@ ${forwardHistoryText || '(Sin historial previo)'}
 
 [REGLAS DE OPERACIÓN]:
 1. TU MISIÓN ES CUMPLIR EL PROMPT DE ARRIBA. Ignora reglas de extracción o registro.
-2. Si se cumple el objetivo de la misión (ej: el candidato aceptó o confirmó lo pedido), INCLUYE EL TAG "{ move }" AL FINAL DE TU "thought_process". Esto es vital para que el sistema avance al candidato al siguiente paso.
-3. REACCIONES: Si detectas gratitud genuina (Gracias, amables, etc.), pon TRUE en "gratitude_reached".
-4. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
+2. LIMITES DE INFORMACIÓN: Si el prompt de arriba NO menciona detalles específicos de entrevista (Cuándo, Dónde, Qué hora), NO LOS INVENTES. Di que estás validando esos detalles y que se los darás más adelante.
+3. Si se cumple el objetivo de la misión (ej: el candidato aceptó o confirmó lo pedido), INCLUYE EL TAG "{ move }" AL FINAL DE TU "thought_process". Esto es vital para que el sistema avance al candidato al siguiente paso.
+4. REACCIONES: Si detectas gratitud genuina (Gracias, amables, etc.), pon TRUE en "gratitude_reached".
+5. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
 {
     "thought_process": "Razonamiento + { move } si aplica.",
     "response_text": "Mensaje para el candidato.",
