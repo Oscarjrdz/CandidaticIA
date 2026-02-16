@@ -422,8 +422,18 @@ ${audit.dnaLines}
                     responseTextVal = aiResult.response_text;
                 }
 
+                // ⚡ ROBUST MOVE TAG DETECTION & CLEANING
+                // Detects: { move }, [move], {move}, [move] in both thought_process and response_text
+                const moveRegex = /[\{\[]\s*move\s*[\}\]]/i;
+                const hasMoveTag = moveRegex.test(aiResult?.thought_process || '') || moveRegex.test(aiResult?.response_text || '');
+
+                // CRITICAL: Always clean the tag from the user-facing message
+                if (responseTextVal) {
+                    responseTextVal = responseTextVal.replace(moveRegex, '').trim();
+                }
+
                 // ⚡ AUTOMATIC STEP MOVEMENT & CHAINED EXECUTION
-                if (aiResult?.thought_process?.includes('{ move }')) {
+                if (hasMoveTag) {
                     const currentIndex = project.steps.findIndex(s => s.id === activeStepId);
                     const nextStep = project.steps[currentIndex + 1];
 
