@@ -416,8 +416,22 @@ ${audit.dnaLines}
                     config,
                     activeAiConfig.openaiApiKey
                 );
+
                 if (aiResult?.response_text) {
                     responseTextVal = aiResult.response_text;
+                }
+
+                // ⚡ AUTOMATIC STEP MOVEMENT
+                if (aiResult?.thought_process?.includes('{ move }')) {
+                    const currentIndex = project.steps.findIndex(s => s.id === activeStepId);
+                    const nextStep = project.steps[currentIndex + 1];
+                    if (nextStep) {
+                        console.log(`[RECRUITER BRAIN] 🚀 Auto-moving candidate ${candidateId} to next step: ${nextStep.name}`);
+                        await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
+                        candidateUpdates.stepId = nextStep.id;
+                    } else {
+                        console.log(`[RECRUITER BRAIN] 🏁 Candidate ${candidateId} reached the LAST step.`);
+                    }
                 }
             }
         }
