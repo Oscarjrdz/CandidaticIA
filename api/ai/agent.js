@@ -570,33 +570,59 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         }
                     }
 
+                    // 🕵️ INTERRUPTION DETECTION
+                    // Check if user asked a question instead of answering
+                    const interruptionKeywords = ['cuanto', 'cuánto', 'donde', 'dónde', 'que', 'qué', 'como', 'cómo', 'pagan', 'sueldo', 'ubicacion', 'ubicación', 'horario', 'prestaciones'];
+                    const isInterruption = interruptionKeywords.some(kw => aggregatedText.toLowerCase().includes(kw));
+
                     // Category-specific fallback with list
                     if (nextMissing === 'Categoría' && categoriesList) {
                         const categoryArray = categoriesList.split(', ').map(c => `✅ ${c}`).join('\n');
 
-                        // Varied human-like intros
-                        const intros = [
-                            '¡Ay! Me distraje un momento. 😅',
-                            '¡Ups! Se me fue el hilo. 🙈',
-                            'Perdón, me perdí un segundo. 😊',
-                            '¡Uy! Me despiste. 😅',
-                            'Disculpa, me desconcentré. 🙈'
-                        ];
+                        let intros = [];
+                        if (isInterruption) {
+                            intros = [
+                                '¡Esa es una excelente pregunta! 💡 En un momento te doy todos los detalles, pero primero',
+                                '¡Entiendo tu duda! 😉 Ahorita te cuento todo, solo ayúdame primero',
+                                '¡Claro! Enseguida te digo, pero antes necesito que elijas una opción'
+                            ];
+                        } else {
+                            // Standard "Distracted" intros
+                            intros = [
+                                '¡Ay! Me distraje un momento. 😅',
+                                '¡Ups! Se me fue el hilo. 🙈',
+                                'Perdón, me perdí un segundo. 😊',
+                                '¡Uy! Me despiste. 😅',
+                                'Disculpa, me desconcentré. 🙈'
+                            ];
+                        }
                         const randomIntro = intros[Math.floor(Math.random() * intros.length)];
 
                         aiResult.response_text = `${randomIntro} ¿En qué área te gustaría trabajar? Estas son las opciones:\n${categoryArray}\n¿Cuál eliges? 😊`;
-                        aiResult.thought_process = "SAFEGUARD: Categoría no capturada, re-listando opciones.";
+                        aiResult.thought_process = isInterruption ? "SAFEGUARD: Interruption detected (Category phase)" : "SAFEGUARD: Categoría no capturada, re-listando opciones.";
                     } else {
-                        // Generic fallback for other fields with varied phrases
-                        const phrases = [
-                            `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`,
-                            `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
-                            `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor?`,
-                            `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
-                            `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
-                        ];
+                        // Generic fallback for other fields
+                        let phrases = [];
+
+                        if (isInterruption) {
+                            phrases = [
+                                `¡Buena pregunta! 💡 En un segundito te digo, pero antes ayúdame con tu ${nextMissing} para ver qué opciones te tocan. 😉`,
+                                `¡Entendido! 👌 Ahorita revisamos eso, pero primero necesito tu ${nextMissing} para registrarte. 😊`,
+                                `¡Claro! En un momento te comparto esa info. 😉 ¿Me podrías decir tu ${nextMissing} mientras?`
+                            ];
+                        } else {
+                            // Standard "Distracted" phrases
+                            phrases = [
+                                `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`,
+                                `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
+                                `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor?`,
+                                `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
+                                `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
+                            ];
+                        }
+
                         aiResult.response_text = phrases[Math.floor(Math.random() * phrases.length)];
-                        aiResult.thought_process = `SAFEGUARD: ${nextMissing} no capturado.`;
+                        aiResult.thought_process = isInterruption ? `SAFEGUARD: Interruption detected (${nextMissing})` : `SAFEGUARD: ${nextMissing} no capturado.`;
                     }
 
                     responseTextVal = aiResult.response_text;
