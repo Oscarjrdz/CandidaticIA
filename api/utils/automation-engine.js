@@ -519,10 +519,16 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
         if (activeSteps.length === 0) continue;
 
         // Load project context (Vacancy)
-        let vacancyContext = { name: 'Vacante General', salary: 'Competitivo', schedule: 'Flexible' };
+        let vacancyContext = { name: 'Vacante General', salary: 'Competitivo', schedule: 'Flexible', description: '', messageDescription: '' };
         if (proj.vacancyId) {
             const v = await getVacancyById(proj.vacancyId);
-            if (v) vacancyContext = { name: v.name, salary: v.salary_range, description: v.description, schedule: v.schedule };
+            if (v) vacancyContext = {
+                name: v.name,
+                salary: v.salary_range,
+                description: v.description || '',
+                messageDescription: v.messageDescription || '',
+                schedule: v.schedule
+            };
         }
 
         // iterate active steps
@@ -590,8 +596,10 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
                 promptText = promptText
                     .replace(/{{Candidato}}/g, cand.nombreReal || cand.nombre || 'Candidato')
                     .replace(/{{Vacante}}/g, vacancyContext.name)
-                    .replace(/{{Vacante.Sueldo}}/g, vacancyContext.salary || 'N/A')
-                    .replace(/{{Vacante.Horario}}/g, vacancyContext.schedule || 'N/A');
+                    .replace(/{{Vacante\.MessageDescription}}/g, vacancyContext.messageDescription || 'No disponible')
+                    .replace(/{{Vacante\.Descripcion}}/g, vacancyContext.description || 'No disponible')
+                    .replace(/{{Vacante\.Sueldo}}/g, vacancyContext.salary || 'N/A')
+                    .replace(/{{Vacante\.Horario}}/g, vacancyContext.schedule || 'N/A');
 
                 const systemInstruction = `
 [ROL]: Eres Brenda, reclutadora experta de Candidatic.
