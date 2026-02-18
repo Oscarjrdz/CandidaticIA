@@ -506,6 +506,14 @@ ${audit.dnaLines}
                                         // Wait slightly for sticker to land first if it exists
                                         await new Promise(r => setTimeout(r, 1200));
                                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
+
+                                        // 💾 PERSISTENCE: Save the chained message to history
+                                        await saveMessage(candidateId, {
+                                            from: 'bot',
+                                            content: nextAiResult.response_text,
+                                            timestamp: new Date().toISOString()
+                                        });
+
                                         aiResult.thought_process += ` | Chained: ${nextAiResult.thought_process}`;
                                     }
                                 } catch (e) {
