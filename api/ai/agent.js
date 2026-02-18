@@ -434,7 +434,14 @@ ${audit.dnaLines}
 
                 // ⚡ AUTOMATIC STEP MOVEMENT & CHAINED EXECUTION
                 if (hasMoveTag) {
-                    const currentIndex = project.steps.findIndex(s => s.id === activeStepId);
+                    let currentIndex = project.steps.findIndex(s => s.id === activeStepId);
+
+                    // Safeguard: If current step index is invalid, assume first step as anchor
+                    if (currentIndex === -1) {
+                        console.log(`[RECRUITER BRAIN] ⚠️ Candidate step ${activeStepId} not found in project steps. Re-anchoring to step 0.`);
+                        currentIndex = 0;
+                    }
+
                     const nextStep = project.steps[currentIndex + 1];
 
                     console.log(`[RECRUITER BRAIN] 🧩 Move condition. Current idx: ${currentIndex}, Next step: ${nextStep?.name || 'NONE'}`);
