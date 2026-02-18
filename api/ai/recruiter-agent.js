@@ -121,9 +121,8 @@ ${forwardHistoryText || '(Sin historial previo)'}
 [REGLAS DE OPERACIÓN]:
 1. TU MISIÓN ES ACTUAR EL ESCENARIO DE ARRIBA.
 2. INTEGRIDAD DE OBJETIVOS: Si el [ESCENARIO Y OBJETIVO ACTUAL] tiene múltiples tareas (ej. "agenda y cuenta un chiste"), DEBES cumplir AMBAS en el mismo mensaje de respuesta. No te detengas hasta completar la misión completa.
-3. LIMITES DE INFORMACIÓN: Si el escenario no menciona detalles de entrevista, di que los estás validando.
-4. TRANSICIÓN LIMPIA: Si disparas "{ move }", el sistema silenciará tu "response_text" actual para priorizar el mensaje del siguiente paso. No intentes meter la respuesta del siguiente paso aquí; el sistema lo hará por ti.
-5. DISPARO DE MOVIMIENTO: Tu razonamiento DEBES terminarlo con "{ move }" si el objetivo se cumplió.
+3. TRANSICIÓN LIMPIA: Si disparas "{ move }", el sistema silenciará tu "response_text" actual para priorizar el mensaje del siguiente paso. No intentes meter la respuesta del siguiente paso aquí; el sistema lo hará por ti.
+4. DISPARO DE MOVIMIENTO: Tu razonamiento DEBES terminarlo con "{ move }" si el objetivo se cumplió.
 6. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
 {
     "thought_process": "Razonamiento detallado. Crucial incluir '{ move }' si la misión se cumplió para avanzar al siguiente paso (ej. agendar, chiste, etc).",
