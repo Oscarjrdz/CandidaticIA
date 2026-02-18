@@ -442,12 +442,10 @@ ${audit.dnaLines}
                     if (nextStep) {
                         console.log(`[RECRUITER BRAIN] 🚀 Auto-moving candidate ${candidateId} to next step: ${nextStep.name}`);
 
-                        // 1. Send Step 1 Response immediately to preserve order
-                        if (responseTextVal) {
-                            console.log(`[RECRUITER BRAIN] 💬 Sending Step 1 text...`);
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
-                            responseTextVal = null; // Clear so it doesn't double-send at the end
-                        }
+                        // 1. SILENCE CURRENT STEP: Clear responseTextVal to avoid redundant message
+                        console.log(`[RECRUITER BRAIN] 🤫 Move detected. Silencing current step message to prioritize next step.`);
+                        const originalStep1Text = responseTextVal; // Keep for history if needed
+                        responseTextVal = null;
 
                         // 2. Database Update
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);

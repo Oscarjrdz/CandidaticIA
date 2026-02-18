@@ -119,8 +119,9 @@ ${forwardHistoryText || '(Sin historial previo)'}
 1. TU MISIÓN ES ACTUAR EL ESCENARIO DE ARRIBA.
 2. INTEGRIDAD DE OBJETIVOS: Si el [ESCENARIO Y OBJETIVO ACTUAL] tiene múltiples tareas (ej. "agenda y cuenta un chiste"), DEBES cumplir AMBAS en el mismo mensaje de respuesta. No te detengas hasta completar la misión completa.
 3. LIMITES DE INFORMACIÓN: Si el escenario no menciona detalles de entrevista, di que los estás validando.
-4. INCLUYE EL TAG "{ move }" AL FINAL DE TU "thought_process" si lograste el objetivo.
-5. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
+4. TRANSICIÓN LIMPIA: Si logras el objetivo y disparas "{ move }", mantén tu "response_text" lo más limpio y enfocado posible. Evita repeticiones de información que el sistema ya conoce.
+5. INCLUYE EL TAG "{ move }" AL FINAL DE TU "thought_process" si lograste el objetivo.
+6. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
 {
     "thought_process": "Razonamiento + { move } si aplica.",
     "response_text": "Mensaje para el candidato.",
