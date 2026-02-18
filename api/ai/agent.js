@@ -197,8 +197,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         let aggregatedText = "";
 
         // 🧪 TELEMETRY & AGGREGATION
-        const messagesToProcess = (typeof incomingMessage === 'string' && incomingMessage.includes(' | '))
-            ? incomingMessage.split(' | ')
+        const messagesToProcess = (typeof incomingMessage === 'string' && (incomingMessage.includes(' | ') || incomingMessage.includes('\n')))
+            ? incomingMessage.split(/ \| |\n/)
             : [incomingMessage];
 
         console.log(`[DEBUG AGENT ENTRY] Candidate: ${candidateId} | Messages: ${allMessages.length}`);
@@ -630,18 +630,26 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 // Prevents Brenda from going silent under ANY circumstance when profile is incomplete
                 const hasEmptyResponse = !responseTextVal || responseTextVal.trim() === '' || responseTextVal === 'null' || responseTextVal === 'undefined';
 
-                // CRITICAL: Activate safeguard if profile incomplete, regardless of close_conversation flag
-                if (hasEmptyResponse && !isProfileComplete) {
+                // Merge extracted data to check current status
+                const mergedStatus = { ...candidateData, ...aiResult.extracted_data };
+                const currentAudit = auditProfile(mergedStatus, customFields);
+                const isNowComplete = currentAudit.paso1Status === 'COMPLETO';
+
+                // CRITICAL: Activate safeguard if response is empty AND profile is still incomplete
+                if (hasEmptyResponse && !isNowComplete) {
                     console.warn(`[SILENCE SAFEGUARD V2] 🚨 Empty response detected for incomplete profile.`);
                     console.warn(`[SILENCE SAFEGUARD V2] Missing fields: ${audit.missingLabels.join(', ')}`);
                     console.warn(`[SILENCE SAFEGUARD V2] User input: "${aggregatedText}"`);
                     console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation}`);
 
                     // 🧠 INTELLIGENT FIELD SELECTION
-                    // Determine what field we were asking for based on conversation context
+                    // Re-audit WITH the extracted data to see what is REALLY still missing
+                    const mergedForSafeguard = { ...candidateData, ...aiResult.extracted_data };
+                    const freshAudit = auditProfile(mergedForSafeguard, customFields);
+
                     let nextMissing = 'datos';
 
-                    if (audit.missingLabels.length > 0) {
+                    if (freshAudit.missingLabels.length > 0) {
                         // Strategy: Look at the last bot message to see what we were asking for
                         const lastBotMsg = validMessages.filter(m => m.from === 'bot').slice(-1)[0];
                         const lastBotText = lastBotMsg?.content?.toLowerCase() || '';
@@ -731,11 +739,16 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         aiResult.response_text = phrases[Math.floor(Math.random() * phrases.length)];
                         aiResult.thought_process = isInterruption ? `SAFEGUARD: Interruption detected (${nextMissing})` : `SAFEGUARD: ${nextMissing} no capturado.`;
                     }
-
-                    responseTextVal = aiResult.response_text;
-                    console.log(`[SILENCE SAFEGUARD V2] ✅ Injected fallback: "${responseTextVal.substring(0, 50)}..."`);
+                } else if (hasEmptyResponse && isNowComplete) {
+                    // Profile is complete but AI went silent - send transition message
+                    console.log(`[SILENCE SAFEGUARD V2] 🏁 Profile completed but AI silent. Injecting transition.`);
+                    aiResult.response_text = "¡Perfecto! ✨ Ya tengo todos tus datos. En un momento te cuento más. 😉";
+                    aiResult.thought_process = "SAFEGUARD: Profile complete but AI went silent.";
+                    aiResult.close_conversation = false;
                 }
 
+                responseTextVal = aiResult.response_text;
+                console.log(`[SILENCE SAFEGUARD V2] ✅ Injected fallback: "${responseTextVal.substring(0, 50)}..."`);
             } catch (e) {
                 console.error(`[Gemini JSON Parse Error] ❌`, e);
                 console.error(`[Gemini JSON Parse Error] Raw response: ${textResult?.substring(0, 200)}`);
