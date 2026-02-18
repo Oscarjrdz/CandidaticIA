@@ -175,9 +175,14 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             getMessages(candidateId, 40)
         ]);
 
-        console.log(`[DEBUG AGENT ENTRY] Candidate: ${candidateId} | Data: ${!!candidateData} | Config: ${!!config} | Messages: ${allMessages.length}`);
-
         if (!candidateData) return 'ERROR: No se encontró al candidato';
+
+        // 0. Initialize Candidate Updates accumulator
+        const candidateUpdates = {
+            lastBotMessageAt: new Date().toISOString(),
+            ultimoMensaje: new Date().toISOString(),
+            esNuevo: 'NO'
+        };
 
         // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
         if (candidateData.blocked === true) {
@@ -457,6 +462,7 @@ ${audit.dnaLines}
                         // 2. Database Update
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
                         candidateUpdates.stepId = nextStep.id;
+                        candidateUpdates.projectId = activeProjectId; // Ensure persistence
 
                         // 3. ROBUST CHAINED EXECUTION (Zuckerberg Standard)
                         // Fire sticker and next AI concurrently to minimize latency, but with controlled sequence
@@ -507,8 +513,7 @@ ${audit.dnaLines}
                                 }
                             })();
 
-                            // We don't necessarily need to block the return of processMessage for these,
-                            // but awaiting them here ensures they complete before the worker finishes its task.
+                            // 4. Await both for completion within this tick
                             await Promise.allSettled([bridgePromise, chainedAiPromise]);
                         } else {
                             console.log(`[RECRUITER BRAIN] ℹ️ Next step (${nextStep.name}) has no AI prompt enabled. Only bridge sent.`);
@@ -832,13 +837,9 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
-        // --- FINAL CONSOLIDATION ---
-        const candidateUpdates = {
-            lastBotMessageAt: new Date().toISOString(),
-            ultimoMensaje: new Date().toISOString(),
-            bridge_counter: candidateData.bridge_counter,
-            esNuevo: 'NO'
-        };
+        // --- FINAL CONSOLIDATION (Merged with initial candidateUpdates) ---
+        // Fields like lastBotMessageAt are already there
+        candidateUpdates.bridge_counter = (typeof candidateData.bridge_counter === 'number') ? candidateData.bridge_counter : 0;
 
         if (aiResult?.extracted_data) {
             Object.entries(aiResult.extracted_data).forEach(([key, val]) => {
