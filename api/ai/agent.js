@@ -451,47 +451,61 @@ ${audit.dnaLines}
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
                         candidateUpdates.stepId = nextStep.id;
 
-                        // 3. VISUAL BRIDGE (Optional Sticker) - SENT AFTER Step 1 Text
-                        const bridgeSticker = await redis.get('bot_step_move_sticker');
-                        if (bridgeSticker) {
-                            console.log(`[RECRUITER BRAIN] 🎨 Sending Visual Bridge sticker...`);
-                            await new Promise(r => setTimeout(r, 800)); // Delay for sequence
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
-                        } else {
-                            console.log(`[RECRUITER BRAIN] ⚠️ No bridge sticker found in Redis (bot_step_move_sticker)`);
-                        }
+                        // 3. ROBUST CHAINED EXECUTION (Zuckerberg Standard)
+                        // Fire sticker and next AI concurrently to minimize latency, but with controlled sequence
+                        const bridgePromise = (async () => {
+                            try {
+                                const bridgeSticker = await redis?.get('bot_step_move_sticker');
+                                if (bridgeSticker) {
+                                    console.log(`[RECRUITER BRAIN] 🎨 Sending Visual Bridge sticker...`);
+                                    await new Promise(r => setTimeout(r, 500)); // Precise delay
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
+                                } else {
+                                    console.log(`[RECRUITER BRAIN] ⚠️ No bridge sticker found in Redis (bot_step_move_sticker)`);
+                                }
+                            } catch (e) {
+                                console.error(`[RECRUITER BRAIN] ❌ Bridge Sticker Fail:`, e.message);
+                            }
+                        })();
 
-                        // 4. Chained Execution: Get response from the NEW step immediately!
                         if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
                             console.log(`[RECRUITER BRAIN] 🔗 Chaining execution for next step: ${nextStep.name}`);
 
-                            // Propagate history
-                            const historyWithFirstResponse = [...historyForGpt];
-                            if (aiResult.response_text) {
-                                historyWithFirstResponse.push({ role: 'model', parts: [{ text: aiResult.response_text }] });
-                            }
+                            const chainedAiPromise = (async () => {
+                                try {
+                                    // Propagate history
+                                    const historyWithFirstResponse = [...historyForGpt];
+                                    if (aiResult.response_text) {
+                                        historyWithFirstResponse.push({ role: 'model', parts: [{ text: aiResult.response_text }] });
+                                    }
 
-                            const nextAiResult = await processRecruiterMessage(
-                                { ...candidateData, ...candidateUpdates },
-                                project,
-                                nextStep,
-                                historyWithFirstResponse,
-                                config,
-                                activeAiConfig.openaiApiKey
-                            );
+                                    const nextAiResult = await processRecruiterMessage(
+                                        { ...candidateData, ...candidateUpdates },
+                                        project,
+                                        nextStep,
+                                        historyWithFirstResponse,
+                                        config,
+                                        activeAiConfig.openaiApiKey
+                                    );
 
-                            if (nextAiResult?.response_text) {
-                                console.log(`[RECRUITER BRAIN] 💬 Sending Chained Response...`);
-                                // IMPORTANT: Small delay to ensure second text arrives AFTER sticker
-                                await new Promise(r => setTimeout(r, 1000));
-                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
-                                responseTextVal = null; // Prevent double send
-                                aiResult.thought_process += ` | Chained: ${nextAiResult.thought_process}`;
-                            } else {
-                                console.log(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text`);
-                            }
+                                    if (nextAiResult?.response_text) {
+                                        console.log(`[RECRUITER BRAIN] 💬 Sending Chained Response...`);
+                                        // Wait slightly for sticker to land first if it exists
+                                        await new Promise(r => setTimeout(r, 1200));
+                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
+                                        aiResult.thought_process += ` | Chained: ${nextAiResult.thought_process}`;
+                                    }
+                                } catch (e) {
+                                    console.error(`[RECRUITER BRAIN] ❌ Chained Execution Fail:`, e.message);
+                                }
+                            })();
+
+                            // We don't necessarily need to block the return of processMessage for these,
+                            // but awaiting them here ensures they complete before the worker finishes its task.
+                            await Promise.allSettled([bridgePromise, chainedAiPromise]);
                         } else {
-                            console.log(`[RECRUITER BRAIN] ℹ️ Next step (${nextStep.name}) has no AI prompt enabled. Chain stops.`);
+                            console.log(`[RECRUITER BRAIN] ℹ️ Next step (${nextStep.name}) has no AI prompt enabled. Only bridge sent.`);
+                            await bridgePromise;
                         }
                     } else {
                         console.log(`[RECRUITER BRAIN] 🏁 Candidate ${candidateId} reached the LAST step. No next step to move to.`);
