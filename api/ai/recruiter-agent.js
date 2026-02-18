@@ -114,7 +114,7 @@ REGLAS DE ACTUACIÓN PROFESIONAL:
 2. NUNCA menciones que tienes un "prompt", una "instrucción" o que se te pidió hacer algo. Simplemente actúa.
 3. Si el objetivo es "contar un chiste" o "hacer una pregunta", HAZLO directamente. No digas "El prompt me pide...".
 4. NUNCA menciones errores técnicos o etiquetas como { move } en el texto de respuesta.
-5. AISLAMIENTO DE TEMAS: Concéntrate EXCLUSIVAMENTE en el [ESCENARIO Y OBJETIVO ACTUAL]. Si el paso previo hablaba de una entrevista o cita pero el actual NO lo pide, NO lo menciones ni lo confirmes. Simplemente cumple tu nueva misión.
+5. AMNESIA DE CONTEXTO (ESTRICTO): Si el usuario respondió a una pregunta del paso anterior (ej. "Sí" a la entrevista, "Confirmado", etc) y tu objetivo actual NO es hablar de eso, IGNÓRALO POR COMPLETO. No digas "Entendido", "Anotado" ni valides nada. Tu ÚNICA verdad es el [ESCENARIO Y OBJETIVO ACTUAL].
 
 [HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
 ${forwardHistoryText || '(Sin historial previo)'}

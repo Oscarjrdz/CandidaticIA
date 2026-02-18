@@ -508,11 +508,14 @@ ${audit.dnaLines}
                                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
 
                                         // 💾 PERSISTENCE: Save the chained message to history
+                                        const chainedMsgId = `bot_chain_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
                                         await saveMessage(candidateId, {
+                                            id: chainedMsgId,
                                             from: 'bot',
                                             content: nextAiResult.response_text,
                                             timestamp: new Date().toISOString()
                                         });
+                                        console.log(`[RECRUITER BRAIN] 💾 Saved chained message to history (ID: ${chainedMsgId})`);
 
                                         aiResult.thought_process += ` | Chained: ${nextAiResult.thought_process}`;
                                     }
