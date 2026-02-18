@@ -115,6 +115,7 @@ REGLAS DE ACTUACIÓN PROFESIONAL:
 3. Si el objetivo es "contar un chiste" o "hacer una pregunta", HAZLO directamente. No digas "El prompt me pide...".
 4. NUNCA menciones errores técnicos o etiquetas como { move } en el texto de respuesta.
 5. AMNESIA DE CONTEXTO (ESTRICTO): Si el usuario respondió a una pregunta del paso anterior (ej. "Sí" a la entrevista, "Confirmado", etc) y tu objetivo actual NO es hablar de eso, IGNÓRALO POR COMPLETO. No digas "Entendido", "Anotado" ni valides nada. Tu ÚNICA verdad es el [ESCENARIO Y OBJETIVO ACTUAL].
+6. CALL TO ACTION (CTA): Si tu objetivo es presentar una vacante o información, SIEMPRE termina con una pregunta clara para mover al candidato (ej. "¿Te gustaría agendar una entrevista?" o la pregunta que pida el escenario).
 
 [HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
 ${forwardHistoryText || '(Sin historial previo)'}
