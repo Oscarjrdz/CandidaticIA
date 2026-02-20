@@ -375,6 +375,17 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         }
     }, [activeProject]);
 
+    // Close Create Modal on ESC
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && showCreateModal) {
+                setShowCreateModal(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showCreateModal]);
+
     const fetchProjects = async () => {
         setIsInitialLoading(true);
         try {
@@ -1435,7 +1446,12 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
 
             {/* Create Modal */}
             {showCreateModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in duration-300">
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in duration-300"
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget) setShowCreateModal(false);
+                    }}
+                >
                     <Card className="max-w-xl w-full p-10 space-y-8 shadow-[0_30px_70px_rgba(0,0,0,0.4)] border-none rounded-[50px] dark:bg-slate-900 overflow-hidden relative">
                         <div className="absolute -top-20 -right-20 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
 
@@ -1468,9 +1484,8 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                             <div>
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-3 block flex justify-between items-center">
                                     <span>Vincular Vacante (Orden de Prioridad)</span>
-                                    <span className="text-[10px] font-bold text-blue-500 uppercase flex flex-col items-end leading-none">
-                                        <span>{selectedVacancyIds.length} opciones</span>
-                                        <span>ligadas</span>
+                                    <span className="text-[10px] font-bold text-blue-500 uppercase flex flex-col items-end leading-none whitespace-nowrap">
+                                        <span>{selectedVacancyIds.length} opciones ligadas</span>
                                     </span>
                                 </label>
 
