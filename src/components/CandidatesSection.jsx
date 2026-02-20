@@ -26,10 +26,18 @@ const CandidatesSection = ({ showToast }) => {
     const [search, setSearch] = useState('');
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
-    const [lastUpdate, setLastUpdate] = useState(null);
     const [proactiveEnabled, setProactiveEnabled] = useState(false);
     const [proactiveLoading, setProactiveLoading] = useState(false);
-    const [hideIncomplete, setHideIncomplete] = useState(false);
+    const [hideIncomplete, setHideIncomplete] = useState(() => {
+        // Load initial state from localStorage if available
+        const saved = localStorage.getItem('hideIncompleteCandidates');
+        return saved === 'true';
+    });
+
+    // Save to localStorage when it changes
+    useEffect(() => {
+        localStorage.setItem('hideIncompleteCandidates', hideIncomplete);
+    }, [hideIncomplete]);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
