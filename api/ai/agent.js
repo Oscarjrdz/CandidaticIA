@@ -20,6 +20,7 @@ import { getOpenAIResponse } from '../utils/openai.js';
 import { processRecruiterMessage } from './recruiter-agent.js';
 import { inferGender } from '../utils/gender-helper.js';
 import { classifyIntent } from './intent-classifier.js';
+import { FEATURES } from '../utils/feature-flags.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
 [REGLAS DE EXTRACCIÓN]:
