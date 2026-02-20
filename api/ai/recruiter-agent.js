@@ -14,7 +14,8 @@ export const RECRUITER_IDENTITY = `
 [REGLA DE ORO]: No uses asteriscos (*). Mantén respuestas breves y humanas.
 [REGLAS DE TRANSICIÓN]:
 1. Si el candidato confirma interés, acepta una propuesta o el objetivo del paso se cumple, DEBES incluir el tag "{ move }" en tu "thought_process".
-2. No esperes confirmaciones redundantes. Si el candiato dice "Sí", "Cerca", "Me interesa", "Dale", "Va", es momento de MOVER.
+2. No esperes confirmaciones redundantes. Si el candidato dice "Sí", "Cerca", "Me interesa", "Dale", "Va", es momento de MOVER.
+3. 🚨 ANTI-MOVIMIENTO PREMATURO (CRÍTICO): JAMÁS dispares "{ move }" si tú misma no has presentado PRIMERO la información o pregunta de este paso en el historial. Si el candidato apenas dice "ok" o "gracias" por haber completado su perfil, NO ASUMAS que aceptó la vacante. TU PRIMER MENSAJE DEBE SER PRESENTAR EL ESCENARIO, SIN MOVER.
 `;
 
 export const processRecruiterMessage = async (candidateData, project, currentStep, recentHistory, config, customApiKey = null) => {
@@ -136,9 +137,9 @@ ${forwardHistoryText || '(Sin historial previo)'}
 [REGLAS DE OPERACIÓN]:
 1. TU MISIÓN ES ACTUAR EL ESCENARIO DE ARRIBA.
 2. INTEGRIDAD DE OBJETIVOS: Si el [ESCENARIO Y OBJETIVO ACTUAL] tiene múltiples tareas (ej. "agenda y cuenta un chiste"), DEBES cumplir AMBAS en el mismo mensaje de respuesta. No te detengas hasta completar la misión completa.
-3. TRANSICIÓN LIMPIA: Si disparas "{ move }", el sistema silenciará tu "response_text" actual para priorizar el mensaje del siguiente paso. No intentes meter la respuesta del siguiente paso aquí; el sistema lo hará por ti.
-4. DISPARO DE MOVIMIENTO: Tu razonamiento DEBES terminarlo con "{ move }" si el objetivo se cumplió.
-6. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
+3. TRANSICIÓN LIMPIA: Si disparas "{ move }", el sistema silenciará tu "response_text" actual para priorizar el mensaje del siguiente paso. NO dispares "{ move }" si necesitas que el candidato lea tu texto (ej. si apenas estás presentando la vacante).
+4. DISPARO DE MOVIMIENTO: Tu razonamiento DEBES terminarlo con "{ move }" SOLO si el objetivo ya se cumplió Y el candidato ya había sido informado previamente.
+5. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
 {
     "thought_process": "Razonamiento detallado. Crucial incluir '{ move }' si la misión se cumplió para avanzar al siguiente paso (ej. agendar, chiste, etc).",
     "response_text": "Mensaje natural para el candidato. (Será silenciado si hay { move }).",
