@@ -1,38 +1,27 @@
-import { getRedisClient, getCandidateByPhone, getProjectById } from '../utils/storage.js';
+import { getProjectById, getCandidateById } from '../utils/storage.js';
+import { processRecruiterMessage } from '../ai/recruiter-agent.js';
 
 export default async function handler(req, res) {
     try {
-        const redis = getRedisClient();
-        if (!redis) return res.status(500).json({ error: 'No Redis client' });
+        const cid = 'cand_1771620713159_q1rcr0ngk';
+        const pid = 'proj_1771225156891_10ez5k';
+        const cand = await getCandidateById(cid);
+        const project = await getProjectById(pid);
+        const currentStep = project.steps[0];
 
-        const phone = '5218116038195'; // Oscar's phone
-        const candidate = await getCandidateByPhone(phone);
+        const config = { instanceId: 'test', token: 'test' };
+        const hist = [
+            { role: 'user', parts: [{ text: 'Preparatoria' }] },
+            { role: 'model', parts: [{ text: '¡Súper! 🌟 Ya tengo tu perfil 100% completo. 📝✅' }] }
+        ];
 
-        let project = null;
-        if (candidate?.projectMetadata?.projectId) {
-            project = await getProjectById(candidate.projectMetadata.projectId);
-        }
+        console.log('Invoking recruiter just like agent.js line 1118...');
+        // Mock API Key or let it pull from redis
+        const recruiterResult = await processRecruiterMessage(cand, project, currentStep, hist, config, null);
 
-        // Also scan for any other project that might have the string
-        const allKeys = await redis.keys('project:*');
-        const suspiciousProjects = [];
-        for (const key of allKeys) {
-            const data = await redis.get(key);
-            if (data && (data.includes('Santiago') || data.includes('Ayudante'))) {
-                suspiciousProjects.push({ key, data: JSON.parse(data) });
-            }
-        }
-
-        return res.status(200).json({
-            success: true,
-            candidate: {
-                id: candidate?.id,
-                projectMetadata: candidate?.projectMetadata
-            },
-            projectAttached: project,
-            suspiciousProjectsFound: suspiciousProjects
-        });
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
+        res.status(200).json({ success: true, recruiterResult });
+    } catch (e) {
+        console.error('CRASH:', e.message);
+        res.status(500).json({ success: false, error: e.stack });
     }
 }

@@ -1113,7 +1113,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 const project = await getProjectById(finalProjectId);
                 const currentStep = project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId)) || project?.steps?.[0];
                 if (currentStep?.aiConfig?.enabled) {
-                    const { processRecruiterMessage } = await import('./recruiter-agent.js');
                     const historyWithCongrats = [...historyForGpt, { role: 'model', parts: [{ text: congratsMsg }] }];
                     const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, activeAiConfig.openaiApiKey);
                     if (recruiterResult?.response_text) responseTextVal = recruiterResult.response_text;
