@@ -29,6 +29,7 @@ const CandidatesSection = ({ showToast }) => {
     const [lastUpdate, setLastUpdate] = useState(null);
     const [proactiveEnabled, setProactiveEnabled] = useState(false);
     const [proactiveLoading, setProactiveLoading] = useState(false);
+    const [hideIncomplete, setHideIncomplete] = useState(false);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -353,11 +354,6 @@ const CandidatesSection = ({ showToast }) => {
         }
     };
 
-    // Displayed candidates is just 'candidates' (current page) or AI filtered
-    const displayedCandidates = aiFilteredCandidates || candidates;
-
-    const totalPages = Math.ceil(totalItems / LIMIT);
-
     // --- 🚩 PASO 1 LOGIC ---
     const isProfileComplete = (c) => {
         // Red dot if ANY field is missing, Green dot if ALL fields are present
@@ -369,6 +365,15 @@ const CandidatesSection = ({ showToast }) => {
         const hasAgeData = !!(c.edad || c.fechaNacimiento) && formatValue(c.edad || c.fechaNacimiento) !== '-';
         return hasCoreData && hasAgeData;
     };
+
+    // Displayed candidates is just 'candidates' (current page) or AI filtered
+    let displayedCandidates = aiFilteredCandidates || candidates;
+
+    if (hideIncomplete) {
+        displayedCandidates = displayedCandidates.filter(c => isProfileComplete(c));
+    }
+
+    const totalPages = Math.ceil(totalItems / LIMIT);
 
     return (
         <div className="flex-1 min-h-0 flex flex-col space-y-4">
@@ -489,7 +494,30 @@ const CandidatesSection = ({ showToast }) => {
                         </button>
                     </div>
 
-
+                    {/* Hide Incomplete Master Switch */}
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm cursor-pointer" onClick={() => setHideIncomplete(!hideIncomplete)}>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Incompletos</span>
+                            <span className={`text-[10px] font-bold ${!hideIncomplete ? 'text-blue-600' : 'text-gray-400'}`}>
+                                {!hideIncomplete ? 'VISIBLES' : 'OCULTOS'}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            className={`
+                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
+                                ${!hideIncomplete ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
+                            `}
+                            title="Mostrar u ocultar candidatos con perfil incompleto"
+                        >
+                            <span
+                                className={`
+                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                                    ${!hideIncomplete ? 'translate-x-6' : 'translate-x-1'}
+                                `}
+                            />
+                        </button>
+                    </div>
 
                     {/* AI Action Modal (Follow-up) */}
                     {aiActionOpen && (
