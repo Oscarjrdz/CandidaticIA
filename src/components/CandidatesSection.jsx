@@ -139,7 +139,7 @@ const CandidatesSection = ({ showToast }) => {
         subscription.start();
 
         return () => subscription.stop();
-    }, [currentPage, search, aiFilteredCandidates]); // Restart/Update subscription when context changes
+    }, [aiFilteredCandidates]); // Restart/Update subscription when context changes
 
     const toggleProactive = async () => {
         setProactiveLoading(true);
@@ -253,13 +253,15 @@ const CandidatesSection = ({ showToast }) => {
         }
     };
 
-    // Trigger load on Search or Page Change
+    // Trigger load on Search or Page Change ONLY when changing, not on mount
+    const isFirstRun = useRef(true);
     useEffect(() => {
+        if (isFirstRun.current) {
+            isFirstRun.current = false;
+            return;
+        }
         loadCandidates(currentPage);
-    }, [currentPage, search]); // Reload when page or search changes
-
-
-
+    }, [currentPage, search]);
 
     const handleSearch = (e) => {
         setSearch(e.target.value);
