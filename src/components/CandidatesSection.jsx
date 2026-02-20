@@ -27,6 +27,7 @@ const CandidatesSection = ({ showToast }) => {
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
     const [proactiveEnabled, setProactiveEnabled] = useState(false);
+    const [lastUpdate, setLastUpdate] = useState(null);
     const [proactiveLoading, setProactiveLoading] = useState(false);
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
