@@ -30,13 +30,21 @@ const CandidatesSection = ({ showToast }) => {
     const [proactiveLoading, setProactiveLoading] = useState(false);
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
-        const saved = localStorage.getItem('hideIncompleteCandidates');
-        return saved === 'true';
+        try {
+            const saved = localStorage.getItem('hideIncompleteCandidates');
+            return saved === 'true'; // will be false for 'false' or null
+        } catch {
+            return false;
+        }
     });
 
     // Save to localStorage when it changes
     useEffect(() => {
-        localStorage.setItem('hideIncompleteCandidates', hideIncomplete);
+        try {
+            localStorage.setItem('hideIncompleteCandidates', hideIncomplete.toString());
+        } catch (e) {
+            console.warn('Could not save preference to localStorage', e);
+        }
     }, [hideIncomplete]);
 
     // Pagination State
