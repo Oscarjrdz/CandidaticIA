@@ -684,7 +684,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 `;
 
             const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash", systemInstruction });
+            const model = genAI.getGenerativeModel({
+                model: "gemini-2.0-flash",
+                systemInstruction,
+                generationConfig: { responseMimeType: "application/json" }
+            });
             const chat = model.startChat({ history: recentHistory });
             const result = await chat.sendMessage(userParts);
             const textResult = result.response.text();
