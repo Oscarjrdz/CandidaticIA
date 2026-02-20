@@ -1464,61 +1464,68 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                 />
                             </div>
 
-                            {/* Vacancy Linking (Orden de Prioridad) */}
+                            {/* Vacancy Linking (Orden de Prioridad) - Rediseñado */}
                             <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block flex justify-between">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-3 block flex justify-between items-center">
                                     <span>Vincular Vacante (Orden de Prioridad)</span>
-                                    <span className="text-blue-500">{selectedVacancyIds.length} opciones ligadas</span>
+                                    <span className="text-[10px] font-bold text-blue-500 uppercase flex flex-col items-end leading-none">
+                                        <span>{selectedVacancyIds.length} opciones</span>
+                                        <span>ligadas</span>
+                                    </span>
                                 </label>
 
-                                <div className="space-y-2 mb-3">
-                                    {/* Muestra las vacantes actuales seleccionadas como lista numerada */}
+                                <div className="space-y-3 mb-4">
+                                    {/* Muestra las vacantes actuales seleccionadas */}
                                     {selectedVacancyIds.map((vId, idx) => {
                                         const vac = vacancies.find(v => v.id === vId);
                                         return (
-                                            <div key={vId} className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-900/50">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 flex items-center justify-center font-black text-xs">
+                                            <div key={vId} className="flex items-center justify-between px-4 py-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/50 transition-all hover:border-blue-200">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 flex items-center justify-center font-black text-[11px] font-mono">
                                                         {idx + 1}
                                                     </div>
-                                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase truncate max-w-[200px]">
+                                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase truncate max-w-[220px] md:max-w-[300px]">
                                                         {vac?.name || 'Vacante Desconocida'}
                                                     </span>
                                                 </div>
                                                 <button
                                                     onClick={() => setSelectedVacancyIds(prev => prev.filter(id => id !== vId))}
-                                                    className="p-1 rounded bg-white dark:bg-slate-800 text-red-400 hover:text-red-500 shadow-sm"
+                                                    className="w-6 h-6 rounded bg-white dark:bg-slate-800 border border-red-100 dark:border-red-900/50 text-red-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 flex items-center justify-center transition-all shadow-sm"
                                                     title="Quitar"
                                                 >
-                                                    <X className="w-4 h-4" />
+                                                    <X className="w-3.5 h-3.5" />
                                                 </button>
                                             </div>
                                         );
                                     })}
-                                </div>
 
-                                <div className="relative">
-                                    <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                                    <select
-                                        className="w-full pl-12 pr-4 h-16 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold rounded-3xl focus:ring-2 focus:ring-blue-500 outline-none appearance-none uppercase text-slate-700 dark:text-white"
-                                        value="" // Select temporal para agregar, siempre reinicia
-                                        onChange={(e) => {
-                                            const v = e.target.value;
-                                            if (v && !selectedVacancyIds.includes(v)) {
-                                                setSelectedVacancyIds(prev => [...prev, v]);
-                                            }
-                                        }}
-                                    >
-                                        <option value="">{selectedVacancyIds.length === 0 ? '-- Elige la opción principal (A) --' : '-- Añadir otra opción de respaldo --'}</option>
-                                        {vacancies.filter(v => !selectedVacancyIds.includes(v.id)).map(v => (
-                                            <option key={v.id} value={v.id}>{v.name} ({v.company})</option>
-                                        ))}
-                                    </select>
-                                    <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                                        <ChevronRight className="w-5 h-5 rotate-90" />
+                                    {/* Selector tipo botón inverso */}
+                                    <div className="relative group">
+                                        <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                                            <Briefcase className="w-5 h-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                                        </div>
+                                        <select
+                                            className="w-full pl-12 pr-4 h-14 bg-white dark:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-700 text-sm font-bold rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none appearance-none uppercase text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-all cursor-pointer text-center md:text-left"
+                                            value=""
+                                            onChange={(e) => {
+                                                const v = e.target.value;
+                                                if (v && !selectedVacancyIds.includes(v)) {
+                                                    setSelectedVacancyIds(prev => [...prev, v]);
+                                                }
+                                            }}
+                                        >
+                                            <option value="" className="text-center font-bold">
+                                                {selectedVacancyIds.length === 0 ? '-- Elige la Opción Principal --' : '-- Añadir otra opción de respaldo --'}
+                                            </option>
+                                            {vacancies.filter(v => !selectedVacancyIds.includes(v.id)).map(v => (
+                                                <option key={v.id} value={v.id}>{v.name} ({v.company})</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
-                                <p className="text-[8px] text-slate-400 uppercase tracking-widest mt-2 ml-2 italic">Brenda ofrecerá la Opción 1 primero. Si el candidato rechaza, avanzará automáticamente a la 2, y así sucesivamente.</p>
+                                <p className="text-[8px] text-slate-400 uppercase tracking-widest leading-relaxed mt-2 italic px-2">
+                                    Brenda ofrecerá la Opción 1 primero. Si el candidato rechaza, avanzará automáticamente a la 2, y así sucesivamente.
+                                </p>
                             </div>
 
                             {/* Fechas de Vigencia (OCULTAS VISUALMENTE) */}
