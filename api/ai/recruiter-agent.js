@@ -54,7 +54,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 - Zona: ${currentData.city}
 `;
 
-        // 2. VACANCY DATA (HALLUCINATION SHIELD)
+        // 2. VACANCY DATA (HALLUCINATION SHIELD) & MULTI-VACANCY SUPPORT
         let vacancyContext = {
             name: '[SIN_VACANTE_LIGADA]',
             description: '[EXTINTO/FALTANTE]',
@@ -63,9 +63,21 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             schedule: 'N/A'
         };
 
-        if (project.vacancyId) {
+        const currentVacancyIndex = candidateData.projectMetadata?.currentVacancyIndex || 0;
+        let activeVacancyId = null;
+
+        // Migración hacia atrás (soporta project.vacancyId o project.vacancyIds)
+        if (project.vacancyIds && project.vacancyIds.length > 0) {
+            // Asegurar que el índice no desborde si sacaron vacantes recientemente
+            const safeIndex = Math.min(currentVacancyIndex, project.vacancyIds.length - 1);
+            activeVacancyId = project.vacancyIds[safeIndex];
+        } else if (project.vacancyId) {
+            activeVacancyId = project.vacancyId;
+        }
+
+        if (activeVacancyId) {
             const { getVacancyById } = await import('../utils/storage.js');
-            const vac = await getVacancyById(project.vacancyId);
+            const vac = await getVacancyById(activeVacancyId);
             if (vac) {
                 vacancyContext = {
                     name: vac.name || '[SIN_NOMBRE]',
@@ -116,6 +128,7 @@ REGLAS DE ACTUACIÓN PROFESIONAL:
 4. NUNCA menciones errores técnicos o etiquetas como { move } en el texto de respuesta.
 5. AMNESIA DE CONTEXTO (ESTRICTO): Si el usuario respondió a una pregunta del paso anterior (ej. "Sí" a la entrevista, "Confirmado", etc) y tu objetivo actual NO es hablar de eso, IGNÓRALO POR COMPLETO. No digas "Entendido", "Anotado" ni valides nada. Tu ÚNICA verdad es el [ESCENARIO Y OBJETIVO ACTUAL].
 6. CALL TO ACTION (CTA): Si tu objetivo es presentar una vacante o información, SIEMPRE termina con una pregunta clara para mover al candidato (ej. "¿Te gustaría agendar una entrevista?" o la pregunta que pida el escenario).
+7. MULTI-VACANTES (RECHAZO): Si el historial reciente muestra que el candidato rechazó una oferta y tu objetivo actual es presentar una nueva, DEBES empatizar rápidamente con su motivo de rechazo ("Entiendo que la distancia es un problema...") y luego introducir amablemente los datos de la nueva vacante como alternativa.
 
 [HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
 ${forwardHistoryText || '(Sin historial previo)'}

@@ -38,7 +38,7 @@ export default async function handler(req, res) {
             const {
                 action, name, description, projectId: bodyProjectId,
                 candidateId: bodyCandId, assignedUsers,
-                query, resultsCount, origin, vacancyId,
+                query, resultsCount, origin, vacancyId, vacancyIds,
                 stepId, steps, projectIds
             } = body;
 
@@ -133,8 +133,8 @@ export default async function handler(req, res) {
                 id: id || existing.id,
                 name: name || existing.name,
                 description: description !== undefined ? description : existing.description,
-                assignedUsers: assignedUsers || existing.assignedUsers,
-                vacancyId: vacancyId !== undefined ? vacancyId : existing.vacancyId,
+                assignedUsers: Array.isArray(assignedUsers) ? assignedUsers : existing.assignedUsers || [],
+                vacancyIds: Array.isArray(vacancyIds) ? vacancyIds : (vacancyId ? [vacancyId] : (existing.vacancyIds || [])),
                 startDate: startDate || existing.startDate,
                 endDate: endDate !== undefined ? endDate : existing.endDate
             };

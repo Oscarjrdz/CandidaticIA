@@ -46,7 +46,9 @@ CATEGORÍAS:
    - Ejemplos: "Vivo en Mty", "Me llamo Juan", "Tengo 20 años".
 4. QUERY: Preguntas sobre vacantes, sueldos, procesos o dudas técnicas por texto.
    - Ejemplos: "¿Hay vacantes?", "¿Cuánto pagan?", "¿Cómo va mi proceso?".
-5. CLOSURE: Despedidas, agradecimientos finales, confirmaciones de cierre o frases de cortesía mutua.
+5. REJECTION: El candidato rechaza explícitamente la vacante o propuesta actual, o indica que no le conviene.
+   - Ejemplos: "No me interesa", "Me queda muy lejos", "Pagan muy poco", "No, gracias", "Paso de esa", "Tienen otra cosa?".
+6. CLOSURE: Despedidas, agradecimientos finales, confirmaciones de cierre o frases de cortesía mutua.
    - Ejemplos: "Gracias", "Ok", "Muy bien", "Adiós", "Hasta luego", "Bye", "Nos vemos", "Chao", "Bueno gracias", "Vale", "Perfecto", "Entendido", "Hasta pronto", "Cuídate", "Saludos", "Igualmente", "Sale", "Enterado", "Anotado", "Excelente", "Listo", "Que tengas buen día".
 
 DATOS DE ENTRADA:
@@ -67,6 +69,7 @@ Respuesta:`;
         if (text.includes('SMALL_TALK')) return 'SMALL_TALK';
         if (text.includes('DATA_GIVE')) return 'DATA_GIVE';
         if (text.includes('QUERY')) return 'QUERY';
+        if (text.includes('REJECTION')) return 'REJECTION';
         if (text.includes('CLOSURE')) return 'CLOSURE';
 
         return 'UNKNOWN';

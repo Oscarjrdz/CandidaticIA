@@ -1296,7 +1296,9 @@ export const addCandidateToProject = async (projectId, candidateId, metadata = n
     const finalMetadata = {
         ...(metadata || {}),
         linkedAt: new Date().toISOString(),
-        stepId: metadata?.stepId || 'step_new' // Default to first step
+        stepId: metadata?.stepId || 'step_new', // Default to first step
+        currentVacancyIndex: 0, // Índice inicial para la cola de vacantes
+        historialRechazos: []   // Historial de motivos de rechazo
     };
 
     pipeline.hset(

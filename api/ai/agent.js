@@ -16,10 +16,10 @@ import {
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
 import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
-import { FEATURES } from '../utils/feature-flags.js';
 import { getOpenAIResponse } from '../utils/openai.js';
 import { processRecruiterMessage } from './recruiter-agent.js';
 import { inferGender } from '../utils/gender-helper.js';
+import { classifyIntent } from './intent-classifier.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
 [REGLAS DE EXTRACCIÓN]:
@@ -414,17 +414,72 @@ ${audit.dnaLines}
                 console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
                 isRecruiterMode = true;
                 const activeAiConfig = batchConfig.ai_config ? (typeof batchConfig.ai_config === 'string' ? JSON.parse(batchConfig.ai_config) : batchConfig.ai_config) : {};
-                aiResult = await processRecruiterMessage(
-                    candidateData,
-                    project,
-                    currentStep,
-                    historyForGpt,
-                    config,
-                    activeAiConfig.openaiApiKey
-                );
 
-                if (aiResult?.response_text) {
-                    responseTextVal = aiResult.response_text;
+                // --- MULTI-VACANCY REJECTION SHIELD ---
+                let skipRecruiterInference = false;
+                const intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.parts[0].text).join('\n'));
+
+                if (intent === 'REJECTION' && project.vacancyIds && project.vacancyIds.length > 0) {
+                    console.log(`[RECRUITER BRAIN] 🛡️ Rejection intent detected for candidate ${candidateId}`);
+                    // 1. Get current index
+                    const currentIdx = candidateData.projectMetadata?.currentVacancyIndex || 0;
+
+                    // 2. Extract reason (lightweight LLM call)
+                    let reason = "Motivo no especificado";
+                    try {
+                        const reasonPrompt = `El candidato ha rechazado una vacante. Extrae el motivo principal en máximo 3-4 palabras a partir de este mensaje: "${aggregatedText}". Si no hay motivo claro, responde "No le interesó". Responde solo con el motivo.`;
+                        const gptReason = await getOpenAIResponse([], reasonPrompt, 'gpt-4o-mini', activeAiConfig.openaiApiKey);
+                        if (gptReason?.content) reason = gptReason.content.replace(/\*/g, '').trim();
+                    } catch (e) {
+                        console.error("[RECRUITER BRAIN] Could not extract rejection reason:", e);
+                    }
+
+                    // 3. Save to history
+                    const currentHist = candidateData.projectMetadata?.historialRechazos || [];
+                    const activeVacId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
+                    currentHist.push({ vacancyId: activeVacId, timestamp: new Date().toISOString(), motivo: reason });
+                    candidateUpdates.historialRechazos = currentHist;
+                    candidateUpdates.currentVacancyIndex = currentIdx + 1;
+
+                    // 4. Decide next action
+                    if (currentIdx + 1 >= project.vacancyIds.length) {
+                        // Exhausted all vacancies
+                        console.log(`[RECRUITER BRAIN] 🏁 All vacancies rejected. Closing project interaction.`);
+                        responseTextVal = "Entiendo perfectamente. Por ahora no tengo otra opción que se ajuste a lo que buscas en este proyecto, pero guardaré tu perfil y te avisaré en cuanto surja algo ideal para ti. ¡Seguimos en contacto! ✨";
+                        skipRecruiterInference = true;
+
+                        // Action: Move candidate to an imaginary 'Rejected' state or remove them. 
+                        // For now we will keep them in the project but close the conversation.
+                        aiResult = {
+                            response_text: responseTextVal,
+                            thought_process: "ALL_VACANCIES_REJECTED",
+                            close_conversation: true,
+                            reaction: '👍'
+                        };
+                        // Note: you can add `removeCandidateFromProject` here if you prefer a strict clean-up.
+                    } else {
+                        console.log(`[RECRUITER BRAIN] 🚦 Moving to next vacancy (Index: ${currentIdx + 1}/${project.vacancyIds.length})`);
+                        // We do NOT skip inference. The agent will run with the newly bumped index, 
+                        // effectively generating a pitch for the *next* vacancy.
+                    }
+                }
+
+                if (!skipRecruiterInference) {
+                    // Update data to reflect any bumps before inference
+                    const updatedDataForAgent = { ...candidateData, ...candidateUpdates, projectMetadata: { ...candidateData.projectMetadata, currentVacancyIndex: candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : candidateData.projectMetadata?.currentVacancyIndex } };
+
+                    aiResult = await processRecruiterMessage(
+                        updatedDataForAgent,
+                        project,
+                        currentStep,
+                        historyForGpt,
+                        config,
+                        activeAiConfig.openaiApiKey
+                    );
+
+                    if (aiResult?.response_text) {
+                        responseTextVal = aiResult.response_text;
+                    }
                 }
 
                 // ⚡ ROBUST MOVE TAG DETECTION & CLEANING
