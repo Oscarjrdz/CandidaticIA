@@ -1,9 +1,142 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power } from 'lucide-react';
+import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
+
+// DND Kit imports
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+    useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+/**
+ * Sortable Vacancy Card Component
+ */
+const SortableVacancyCard = ({ vacancy, handleToggleActive, handleEdit, handleClone, handleDelete }) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id: vacancy.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+        zIndex: isDragging ? 50 : 1,
+        position: 'relative'
+    };
+
+    return (
+        <div ref={setNodeRef} style={style}>
+            <Card className="group hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 border-l-4 border-l-transparent hover:border-l-blue-500 overflow-hidden relative">
+                {/* Decorative Background Element */}
+                <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
+
+                    {/* Contenedor Izquierdo: Grip handle + Contenido */}
+                    <div className="flex-1 flex gap-3">
+                        <div
+                            {...attributes}
+                            {...listeners}
+                            className="flex items-center justify-center p-1.5 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors self-start md:self-center bg-gray-50/50 dark:bg-gray-800/30 rounded-lg"
+                        >
+                            <GripVertical className="w-5 h-5" />
+                        </div>
+
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">
+                                    {vacancy.name}
+                                </h3>
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest ${vacancy.active
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                    : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500'}`}>
+                                    {vacancy.active ? 'Activa' : 'Inactiva'}
+                                </span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
+                                <span className="flex items-center gap-1.5 font-medium">
+                                    <Building2 className="w-3.5 h-3.5 text-blue-500" />
+                                    {vacancy.company}
+                                </span>
+                                <span className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/50 rounded-lg shadow-sm font-bold text-blue-600 dark:text-blue-400">
+                                    <Tag className="w-3.5 h-3.5" />
+                                    {vacancy.category}
+                                </span>
+                                <span className="flex items-center gap-1.5 opacity-70 italic">
+                                    <FileText className="w-3.5 h-3.5" />
+                                    Creada {new Date(vacancy.createdAt).toLocaleDateString()}
+                                </span>
+                            </div>
+
+                            {vacancy.description && (
+                                <p className="mt-3 text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed bg-gray-50/50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-100/50 dark:border-gray-700/30">
+                                    {vacancy.description}
+                                </p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Botones de acción */}
+                    <div className="flex items-center gap-3 self-end md:self-center">
+                        <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-1 shadow-inner border border-gray-200/50 dark:border-gray-700/50">
+                            <button
+                                onClick={() => handleToggleActive(vacancy)}
+                                className={`p-1.5 rounded-lg transition-all ${vacancy.active
+                                    ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm'
+                                    : 'text-gray-400 hover:text-gray-600'}`}
+                                title={vacancy.active ? "Pausar vacante" : "Activar vacante"}
+                            >
+                                <Power className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => handleClone(vacancy)}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all"
+                                title="Clonar Vacante"
+                            >
+                                <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => handleEdit(vacancy)}
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all"
+                                title="Editar"
+                            >
+                                <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={() => handleDelete(vacancy.id)}
+                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"
+                                title="Eliminar"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </Card>
+        </div>
+    );
+};
 
 /**
  * Sección de Gestión de Vacantes
@@ -15,7 +148,11 @@ const VacanciesSection = ({ showToast }) => {
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
 
-    // Categories State
+    // DND Sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
     const [categories, setCategories] = useState([]);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [addingCategory, setAddingCategory] = useState(false);
@@ -186,7 +323,65 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
-    // Sync to Candidatic logic removed
+    const handleClone = async (vacancy) => {
+        try {
+            const cloneData = {
+                name: `${vacancy.name} (Copia)`,
+                company: vacancy.company,
+                category: vacancy.category,
+                description: vacancy.description || '',
+                messageDescription: vacancy.messageDescription || ''
+            };
+
+            const res = await fetch('/api/vacancies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cloneData)
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                showToast('Vacante clonada', 'success');
+                loadVacancies();
+            } else {
+                showToast(data.error || 'Error al clonar vacante', 'error');
+            }
+        } catch (error) {
+            console.error('Error cloning vacancy:', error);
+            showToast('Error de conexión al clonar', 'error');
+        }
+    };
+
+    const handleDragEnd = async (event) => {
+        const { active, over } = event;
+
+        if (active.id !== over.id) {
+            setVacancies((items) => {
+                const oldIndex = items.findIndex(item => item.id === active.id);
+                const newIndex = items.findIndex(item => item.id === over.id);
+
+                const newArray = arrayMove(items, oldIndex, newIndex);
+
+                // Fire async update to backend
+                saveNewOrder(newArray.map(v => v.id));
+
+                return newArray;
+            });
+        }
+    };
+
+    const saveNewOrder = async (orderedIds) => {
+        try {
+            await fetch('/api/vacancies', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'reorder', orderedIds })
+            });
+        } catch (error) {
+            console.error('Error saving reordered list:', error);
+            showToast('Error al guardar el nuevo orden', 'error');
+        }
+    };
 
     const handleAddCategory = async () => {
         if (!newCategoryName.trim()) return;
@@ -215,7 +410,7 @@ const VacanciesSection = ({ showToast }) => {
     const handleDeleteCategory = async (id) => {
         if (!confirm('¿Seguro que deseas eliminar esta categoría?')) return;
         try {
-            const res = await fetch(`/api/categories?id=${id}`, { method: 'DELETE' });
+            const res = await fetch(`/ api / categories ? id = ${id}`, { method: 'DELETE' });
             if (res.ok) {
                 showToast('Categoría eliminada', 'success');
                 loadCategories();
@@ -334,78 +529,29 @@ const VacanciesSection = ({ showToast }) => {
                     </div>
                 </Card>
             ) : (
-                <div className="grid gap-4">
-                    {vacancies.map((vacancy) => (
-                        <Card key={vacancy.id} className="group hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 border-l-4 border-l-transparent hover:border-l-blue-500 overflow-hidden relative">
-                            {/* Decorative Background Element */}
-                            <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
-
-                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <h3 className="text-lg font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">
-                                            {vacancy.name}
-                                        </h3>
-                                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-widest ${vacancy.active
-                                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-500'}`}>
-                                            {vacancy.active ? 'Activa' : 'Inactiva'}
-                                        </span>
-                                    </div>
-
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
-                                        <span className="flex items-center gap-1.5 font-medium">
-                                            <Building2 className="w-3.5 h-3.5 text-blue-500" />
-                                            {vacancy.company}
-                                        </span>
-                                        <span className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700/50 rounded-lg shadow-sm font-bold text-blue-600 dark:text-blue-400">
-                                            <Tag className="w-3.5 h-3.5" />
-                                            {vacancy.category}
-                                        </span>
-                                        <span className="flex items-center gap-1.5 opacity-70 italic">
-                                            <FileText className="w-3.5 h-3.5" />
-                                            Creada {new Date(vacancy.createdAt).toLocaleDateString()}
-                                        </span>
-                                    </div>
-
-                                    {vacancy.description && (
-                                        <p className="mt-3 text-xs text-gray-600 dark:text-gray-400 line-clamp-2 leading-relaxed bg-gray-50/50 dark:bg-gray-900/50 p-2 rounded-lg border border-gray-100/50 dark:border-gray-700/30">
-                                            {vacancy.description}
-                                        </p>
-                                    )}
-                                </div>
-
-                                <div className="flex items-center gap-3 self-end md:self-center">
-                                    <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-xl p-1 shadow-inner border border-gray-200/50 dark:border-gray-700/50">
-                                        <button
-                                            onClick={() => handleToggleActive(vacancy)}
-                                            className={`p-1.5 rounded-lg transition-all ${vacancy.active
-                                                ? 'bg-white dark:bg-gray-700 text-blue-600 shadow-sm'
-                                                : 'text-gray-400 hover:text-gray-600'}`}
-                                            title={vacancy.active ? "Pausar vacante" : "Activar vacante"}
-                                        >
-                                            <Power className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleEdit(vacancy)}
-                                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all"
-                                            title="Editar"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDelete(vacancy.id)}
-                                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all"
-                                            title="Eliminar"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </Card>
-                    ))}
-                </div>
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                >
+                    <SortableContext
+                        items={vacancies.map(v => v.id)}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        <div className="grid gap-4">
+                            {vacancies.map((vacancy) => (
+                                <SortableVacancyCard
+                                    key={vacancy.id}
+                                    vacancy={vacancy}
+                                    handleToggleActive={handleToggleActive}
+                                    handleEdit={handleEdit}
+                                    handleClone={handleClone}
+                                    handleDelete={handleDelete}
+                                />
+                            ))}
+                        </div>
+                    </SortableContext>
+                </DndContext>
             )}
 
             {/* Create/Edit Modal */}

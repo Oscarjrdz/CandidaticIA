@@ -92,6 +92,37 @@ export default async function handler(req, res) {
         // PUT - Update vacancy
         if (req.method === 'PUT') {
             const body = req.body;
+
+            // Acción: Reordenar
+            if (body.action === 'reorder') {
+                const { orderedIds } = body;
+                if (!Array.isArray(orderedIds)) {
+                    return res.status(400).json({ error: 'orderedIds debe ser un arreglo' });
+                }
+
+                const data = await redis.get(KEY);
+                let vacancies = data ? JSON.parse(data) : [];
+
+                // Re-armamos el arreglo basándonos en el orden de los IDs recibidos
+                const reordered = [];
+                const remaining = [...vacancies];
+
+                orderedIds.forEach(id => {
+                    const idx = remaining.findIndex(v => v.id === id);
+                    if (idx !== -1) {
+                        reordered.push(remaining[idx]);
+                        remaining.splice(idx, 1);
+                    }
+                });
+
+                // Añadimos al final cualquier vacante que no haya venido en la lista (por seguridad)
+                const finalVacancies = [...reordered, ...remaining];
+
+                await redis.set(KEY, JSON.stringify(finalVacancies));
+                return res.status(200).json({ success: true, data: finalVacancies });
+            }
+
+            // Acción Normal: Actualizar datos
             const { id, ...updates } = body;
 
             if (!id) return res.status(400).json({ error: 'Missing id' });
@@ -105,7 +136,6 @@ export default async function handler(req, res) {
             vacancies[index] = { ...vacancies[index], ...updates };
 
             await redis.set(KEY, JSON.stringify(vacancies));
-
 
             return res.status(200).json({ success: true, data: vacancies[index] });
         }
