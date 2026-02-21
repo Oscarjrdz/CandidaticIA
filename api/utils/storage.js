@@ -1399,7 +1399,7 @@ export const addCandidateToProject = async (projectId, candidateId, metadata = n
  * recordAITelemetry
  * Professional tracking of AI performance, latency and token usage.
  */
-export const recordAITelemetry = async (data = {}) => {
+export const recordAITelemetry = async (candidateId, action, extra = {}) => {
     const client = getClient();
     if (!client) return;
 
@@ -1408,13 +1408,14 @@ export const recordAITelemetry = async (data = {}) => {
         const event = {
             id: Math.random().toString(36).substring(7),
             timestamp,
-            model: data.model || 'unknown',
-            latency: data.latency || 0,
-            tokens: data.tokens || 0,
-            success: data.success !== false,
-            action: data.action || 'inference',
-            error: data.error || null,
-            candidateId: data.candidateId || null
+            model: extra.model || 'unknown',
+            latency: extra.latency || 0,
+            tokens: extra.tokens || 0,
+            success: extra.success !== false,
+            action: action || 'inference',
+            error: extra.error || null,
+            candidateId: candidateId || null,
+            extra: extra // Store full metadata
         };
 
         const pipeline = client.pipeline();

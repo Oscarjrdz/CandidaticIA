@@ -155,12 +155,10 @@ ${JSON.stringify(schema, null, 2)}
                 jsonText = response.text();
 
                 // Telemetry
-                recordAITelemetry({
+                recordAITelemetry(candidateId, 'extraction', {
                     model: mName,
                     latency: Date.now() - startTime,
-                    tokens: response.usageMetadata?.totalTokenCount || 0,
-                    candidateId: candidateId,
-                    action: 'extraction'
+                    tokens: response.usageMetadata?.totalTokenCount || 0
                 });
 
                 if (jsonText && jsonText.includes('{')) break;

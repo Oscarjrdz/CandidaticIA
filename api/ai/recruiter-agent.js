@@ -232,11 +232,9 @@ Ejemplo cuando hace una pregunta desconocida:
 
         // 6. Telemetría
         const duration = Date.now() - startTime;
-        recordAITelemetry({
+        recordAITelemetry(candidateId, 'recruiter_inference', {
             model: 'gpt-4o-recruiter',
-            latency: duration,
-            candidateId: candidateId,
-            action: 'recruiter_inference'
+            latency: duration
         }).catch(() => { });
 
         return aiResult;

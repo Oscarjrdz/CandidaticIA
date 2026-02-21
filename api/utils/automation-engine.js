@@ -423,12 +423,10 @@ Responde ÚNICAMENTE con el mensaje de texto para WhatsApp (máximo 150 caracter
             let text = res.response.text().trim();
 
             // Record Telemetry
-            recordAITelemetry({
+            recordAITelemetry(cand.id, 'proactive_inference', {
                 model: 'gemini-2.0-flash',
                 latency: Date.now() - startInference,
-                tokens: res.response?.usageMetadata?.totalTokenCount || 0,
-                candidateId: cand.id,
-                action: 'proactive_inference'
+                tokens: res.response?.usageMetadata?.totalTokenCount || 0
             });
 
             // Nivel 9/10: Salida Automática
