@@ -407,6 +407,7 @@ ${audit.dnaLines}
         let aiResult = null;
         let isRecruiterMode = false;
         let responseTextVal = null;
+        let hasMoveTag = false; // 🔧 FIX: Declared in outer scope so it's accessible after the if(activeProjectId) block
         const historyForGpt = [...recentHistory, currentMessageForGpt];
 
         if (activeProjectId) {
@@ -496,7 +497,7 @@ ${audit.dnaLines}
                 // ⚡ ROBUST MOVE TAG DETECTION & CLEANING
                 // Detects: { move }, [move], {move}, [move] in both thought_process and response_text
                 const moveRegex = /[\{\[]\s*move\s*[\}\]]/i;
-                const hasMoveTag = moveRegex.test(aiResult?.thought_process || '') || moveRegex.test(aiResult?.response_text || '');
+                hasMoveTag = moveRegex.test(aiResult?.thought_process || '') || moveRegex.test(aiResult?.response_text || '');
 
                 // CRITICAL: Always clean the tag from the user-facing message
                 if (responseTextVal) {
