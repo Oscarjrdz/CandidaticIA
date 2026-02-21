@@ -277,11 +277,12 @@ export const auditProfile = (c, customFields = []) => {
             val.length < 2 ||
             val.includes('luego') ||
             val.includes('después') ||
-            val.includes('no lo se') ||
-            val.includes('no se') ||
+            val === 'no lo se' ||
+            val === 'no se' ||
+            val === 'nose' ||
             val.includes('para que') ||
             val.includes('porque quieres') ||
-            val.includes('no te') ||
+            val.includes('no te importa') ||
             val.includes('privado') ||
             val === 'hola' ||
             val === 'buenas' ||
