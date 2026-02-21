@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Loader2, MessageCircle, Move, Copy, Tag, Mic, Trash, Check, Paperclip } from 'lucide-react';
 import Button from './ui/Button';
+import VacancyHistoryCard from './VacancyHistoryCard';
 
 /**
  * Ventana de chat flotante y arrastrable
@@ -406,6 +407,9 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                         </button>
                     </div>
                 </div>
+
+                {/* Scalable Vacancy History Timeline */}
+                <VacancyHistoryCard candidateId={candidate?.id} />
 
                 {/* Messages Area */}
                 <div className="h-96 overflow-y-auto p-4 space-y-3 bg-[#efe7dd] dark:bg-gray-900 text-sm">

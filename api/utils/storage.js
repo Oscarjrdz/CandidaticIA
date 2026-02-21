@@ -140,6 +140,48 @@ const saveDistributedItem = async (listKey, itemPrefix, item, id, customScore = 
     }
 };
 
+/**
+ * ==========================================
+ * VACANCY INTERACTION HISTORY
+ * ==========================================
+ * Records actions like SHOWN, ACCEPTED, REJECTED for candidates.
+ */
+export const recordVacancyInteraction = async (candidateId, projectId, vacancyId, action, reason = null) => {
+    const client = getClient();
+    if (!client || !candidateId || !vacancyId) return;
+
+    try {
+        const historyKey = `vacancy_history:${candidateId}`;
+        const event = {
+            id: `interaction_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            timestamp: new Date().toISOString(),
+            projectId,
+            vacancyId,
+            action: action.toUpperCase(), // 'SHOWN', 'ACCEPTED', 'REJECTED'
+            reason: reason || null
+        };
+        // Use a Sorted Set scored by timestamp to keep history ordered and fast to query
+        await client.zadd(historyKey, Date.now(), JSON.stringify(event));
+    } catch (e) {
+        console.error(`[Storage] Error recording vacancy interaction for ${candidateId}:`, e);
+    }
+};
+
+export const getVacancyHistory = async (candidateId) => {
+    const client = getClient();
+    if (!client || !candidateId) return [];
+
+    try {
+        const historyKey = `vacancy_history:${candidateId}`;
+        // Fetch all interactions, oldest to newest
+        const rawItems = await client.zrange(historyKey, 0, -1);
+        return rawItems.map(item => JSON.parse(item)).reverse(); // Reverse for newest first
+    } catch (e) {
+        console.error(`[Storage] Error fetching vacancy history for ${candidateId}:`, e);
+        return [];
+    }
+};
+
 const deleteDistributedItem = async (listKey, itemPrefix, id) => {
     const client = getClient();
     if (!client) return false;

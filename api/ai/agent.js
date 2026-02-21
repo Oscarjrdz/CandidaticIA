@@ -11,7 +11,8 @@ import {
     getVacancyById,
     recordAITelemetry,
     moveCandidateStep,
-    addCandidateToProject
+    addCandidateToProject,
+    recordVacancyInteraction
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
@@ -435,12 +436,17 @@ ${audit.dnaLines}
                         console.error("[RECRUITER BRAIN] Could not extract rejection reason:", e);
                     }
 
-                    // 3. Save to history
+                    // 3. Save to scalable history data layer
                     const currentHist = candidateData.projectMetadata?.historialRechazos || [];
                     const activeVacId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
+
+                    // Legacy array save
                     currentHist.push({ vacancyId: activeVacId, timestamp: new Date().toISOString(), motivo: reason });
                     candidateUpdates.historialRechazos = currentHist;
                     candidateUpdates.currentVacancyIndex = currentIdx + 1;
+
+                    // Scalable Event Log save
+                    await recordVacancyInteraction(candidateId, project.id, activeVacId, 'REJECTED', reason);
 
                     // 4. Decide next action
                     if (currentIdx + 1 >= project.vacancyIds.length) {

@@ -177,9 +177,21 @@ ${forwardHistoryText || '(Sin historial previo)'}
             };
         }
 
-        // 5. Lógica de Movimiento { move } - Handle in agent.js for consistency
-        if (aiResult.thought_process?.includes('{ move }')) {
-            console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished detected for candidate ${candidateId}.`);
+        // 5. Lógica de Movimiento { move } y Rastreo de Vacantes
+        // Importación dinámica para romper bloqueos de ciclo
+        const { recordVacancyInteraction } = await import('../utils/storage.js');
+
+        if (activeVacancyId) {
+            if (aiResult.thought_process?.includes('{ move }')) {
+                console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished detected for candidate ${candidateId}. Recording ACCEPTED.`);
+                // El candidato aceptó la propuesta/cita de la vacante actual
+                await recordVacancyInteraction(candidateId, project.id, activeVacancyId, 'ACCEPTED', 'Progreso de etapa');
+            } else {
+                // Si no se movió, significa que la vacante está siendo DISCUTIDA o MOSTRADA
+                // Registramos SHOWN solo si es el primer acercamiento (esto puede afinarse revisando el history, 
+                // pero por robustez, un zadd con mismo ID/score sobreescribe limpiamente sin duplicar infinitamente)
+                await recordVacancyInteraction(candidateId, project.id, activeVacancyId, 'SHOWN', 'Presentación/Resolución de dudas');
+            }
         }
 
         // 6. Telemetría
