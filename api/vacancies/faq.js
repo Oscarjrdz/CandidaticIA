@@ -1,4 +1,6 @@
 import { getRedisClient } from '../utils/storage.js';
+import { reclusterVacancyFaqs } from '../ai/faq-engine.js';
+import { getCachedConfig } from '../utils/cache.js';
 
 export default async function handler(req, res) {
     const { method } = req;
@@ -34,8 +36,8 @@ export default async function handler(req, res) {
         }
 
         if (method === 'POST') {
-            // Update officialAnswer for a specific FAQ
-            const { faqId, officialAnswer } = body;
+            // Update officialAnswer or topic for a specific FAQ
+            const { faqId, officialAnswer, topic } = body;
 
             if (!faqId) {
                 return res.status(400).json({ error: 'faqId is required for update' });
@@ -53,7 +55,8 @@ export default async function handler(req, res) {
                 return res.status(404).json({ error: 'FAQ not found' });
             }
 
-            faqs[index].officialAnswer = officialAnswer;
+            if (topic) faqs[index].topic = topic;
+            if (officialAnswer !== undefined) faqs[index].officialAnswer = officialAnswer;
 
             await client.set(key, JSON.stringify(faqs));
 
@@ -119,6 +122,18 @@ export default async function handler(req, res) {
 
                 await client.set(key, JSON.stringify(faqs));
                 return res.status(200).json({ success: true, faqs });
+            }
+
+            if (action === 'recluster') {
+                const config = await getCachedConfig();
+                const apiKey = config.geminiApiKey || process.env.GEMINI_API_KEY;
+
+                const result = await reclusterVacancyFaqs(vacancyId, apiKey);
+                if (result.success) {
+                    return res.status(200).json({ success: true, faqs: result.faqs });
+                } else {
+                    return res.status(500).json({ error: result.error || 'Recluster failed' });
+                }
             }
         }
 

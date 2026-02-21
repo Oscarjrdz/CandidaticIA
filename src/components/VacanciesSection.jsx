@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical } from 'lucide-react';
+import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical, Sparkles, RefreshCw } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -263,6 +263,47 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
+    const handleUpdateTopic = async (faqId, newTopic) => {
+        if (!newTopic?.trim()) return;
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ faqId, topic: newTopic })
+            });
+            if (res.ok) {
+                showToast('Tema actualizado', 'success');
+                loadFaqs(editingId);
+            }
+        } catch (error) {
+            console.error('Error updating topic:', error);
+            showToast('Error al actualizar tema', 'error');
+        }
+    };
+
+    const handleReclusterFaqs = async () => {
+        if (!confirm('Brenda volverá a analizar todas las preguntas para agruparlas mejor según los nombres de los temas actuales. ¿Deseas continuar?')) return;
+
+        setIsLoadingFaqs(true);
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'recluster' })
+            });
+            if (res.ok) {
+                showToast('Dudas re-agrupadas con éxito ✨', 'success');
+                loadFaqs(editingId);
+            } else {
+                showToast('Error al re-agrupar', 'error');
+            }
+        } catch (error) {
+            console.error('Error reclustering FAQs:', error);
+            showToast('Error de conexión', 'error');
+        } finally {
+            setIsLoadingFaqs(false);
+        }
+    };
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
         { label: 'WhatsApp', value: '{{whatsapp}}' },
@@ -760,15 +801,24 @@ const VacanciesSection = ({ showToast }) => {
                                         Dudas frecuentes de candidatos sobre esta vacante. Dales respuesta y la IA lo aprenderá al instante.
                                     </p>
                                 </div>
-                                <button
-                                    onClick={() => loadFaqs(editingId)}
-                                    className="p-1.5 text-gray-500 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors flex-shrink-0"
-                                    title="Consultar radar de dudas a Vercel"
-                                >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleReclusterFaqs}
+                                        disabled={loadingFaqs || faqs.length === 0}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-indigo-100 dark:border-indigo-800 disabled:opacity-50"
+                                        title="Brenda re-analizará todas las dudas basándose en los nombres de los temas actuales"
+                                    >
+                                        <Sparkles className={`w-3 h-3 ${loadingFaqs ? 'animate-pulse' : ''}`} />
+                                        {loadingFaqs ? 'Re-agrupando...' : 'Re-agrupar con IA'}
+                                    </button>
+                                    <button
+                                        onClick={() => loadFaqs(editingId)}
+                                        className="p-1.5 text-gray-500 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors flex-shrink-0"
+                                        title="Consultar radar de dudas a Vercel"
+                                    >
+                                        <RefreshCw className={`w-4 h-4 ${loadingFaqs ? 'animate-spin' : ''}`} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar h-full">
@@ -793,9 +843,17 @@ const VacanciesSection = ({ showToast }) => {
                                                     <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600">
                                                         <FileText className="w-4 h-4" />
                                                     </div>
-                                                    <div>
-                                                        <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1">
+                                                    <div
+                                                        className="cursor-pointer group/title"
+                                                        onClick={() => {
+                                                            const n = prompt('Nuevo nombre del tema FAQ:', faq.topic);
+                                                            if (n && n !== faq.topic) handleUpdateTopic(faq.id, n);
+                                                        }}
+                                                        title="Haz clic para editar el nombre del tema"
+                                                    >
+                                                        <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1 group-hover/title:text-indigo-600 dark:group-hover/title:text-indigo-400 transition-colors flex items-center gap-2">
                                                             {faq.topic}
+                                                            <Pencil className="w-3 h-3 opacity-0 group-hover/title:opacity-100 transition-all text-gray-400" />
                                                         </h4>
                                                         <div className="flex items-center gap-2">
                                                             <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 text-[9px] font-black rounded-md uppercase tracking-widest">
