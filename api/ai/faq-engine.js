@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getRedisClient } from "../utils/storage.js";
+import { getRedisClient, recordAITelemetry } from "../utils/storage.js";
 
 /**
  * 🚀 LIVE AI FAQ ENGINE
@@ -96,8 +96,10 @@ IMPORTANTE: Responde ÚNICAMENTE en JSON con el siguiente formato:
         // Save back to Redis
         await client.set(key, JSON.stringify(faqs));
         console.log(`[FAQ Engine] ✅ Processed question for vacancy ${vacancyId}: "${question}"`);
+        await recordAITelemetry('SYSTEM', 'faq_processed', { vacancyId, question, status: 'success' });
 
     } catch (e) {
         console.error('❌ FAQ Engine Error:', e);
+        await recordAITelemetry('SYSTEM', 'faq_error', { vacancyId, question, error: e.message });
     }
 };

@@ -509,10 +509,11 @@ ${audit.dnaLines}
                     if (aiResult?.unanswered_question && activeVacancyId) {
                         const geminiKey = activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
                         console.log(`[FAQ Engine] 📡 Question detected: "${aiResult.unanswered_question}" for Vacancy: ${activeVacancyId}`);
-                        console.log(`[FAQ Engine] 🔑 API Key status: ${geminiKey ? 'PRESENT' : 'MISSING'}`);
+                        await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: aiResult.unanswered_question });
                         processUnansweredQuestion(activeVacancyId, aiResult.unanswered_question, geminiKey).catch(e => console.error('[FAQ Engine] ❌ Cluster Error:', e));
                     } else if (aiResult?.unanswered_question) {
                         console.log(`[FAQ Engine] ⚠️ Question detected but activeVacancyId is NULL.`);
+                        await recordAITelemetry(candidateId, 'faq_orphan', { question: aiResult.unanswered_question });
                     }
                 }
 
