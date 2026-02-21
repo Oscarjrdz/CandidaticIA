@@ -643,8 +643,9 @@ ${audit.dnaLines}
                                     }
 
                                     if (nextAiResult?.unanswered_question && activeVacancyId) {
+                                        const geminiKey = activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
                                         console.log(`[FAQ Engine] 📡 Dispatching chained unanswered question: "${nextAiResult.unanswered_question}"`);
-                                        processUnansweredQuestion(activeVacancyId, nextAiResult.unanswered_question, activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY).catch(console.error);
+                                        processUnansweredQuestion(activeVacancyId, nextAiResult.unanswered_question, nextAiResult.response_text, geminiKey).catch(console.error);
                                     }
                                 } catch (e) {
                                     console.error(`[RECRUITER BRAIN] ❌ Chained Execution Fail:`, e.message);
