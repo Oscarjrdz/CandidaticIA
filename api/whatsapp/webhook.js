@@ -225,19 +225,12 @@ export default async function handler(req, res) {
                         // 🏁 1. ADD TO WAITLIST (Safe persistence)
                         await addToWaitlist(candidateId, { text: agentInput, msgId });
 
-                        // 🏁 2. SIGNAL TURBO ENGINE (Serverless Trigger)
-                        const protocol = req.headers['x-forwarded-proto'] || 'https';
-                        const host = req.headers.host;
-                        const workerUrl = `${protocol}://${host}/api/workers/process-message`;
+                        // 🏁 2. SIGNAL TURBO ENGINE DIRECTLY (Keep container alive)
+                        console.log(`[Vercel Turbo] 🚀 Triggering internal engine for candidate ${candidateId}`);
 
-                        console.log(`[Vercel Turbo] 🚀 Triggering engine for candidate ${candidateId}`);
-
-                        // Fire-and-forget trigger (don't await)
-                        fetch(workerUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ candidateId, from: phone })
-                        }).catch(err => console.error('[Vercel Turbo] Trigger Fail:', err.message));
+                        // Import dynamically to avoid circular dependencies and load only when needed
+                        const { runTurboEngine } = await import('../workers/process-message.js');
+                        await runTurboEngine(candidateId, phone);
 
                     } catch (error) {
                         console.error('❌ AI Queueing Error:', error);

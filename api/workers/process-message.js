@@ -49,12 +49,7 @@ async function drainWaitlist(candidateId) {
     }
 }
 
-export default async function handler(req, res) {
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-    const { candidateId, from } = req.body;
-    if (!candidateId) return res.status(400).json({ error: 'Missing candidateId' });
-
+export async function runTurboEngine(candidateId, from) {
     console.log(`🔄 Worker triggered for ${candidateId} from ${from}`);
 
     try {
@@ -62,7 +57,7 @@ export default async function handler(req, res) {
         const isLocked = await isCandidateLocked(candidateId);
         if (isLocked) {
             console.log(`[Serverless Engine] ⏳ ${candidateId} busy. Another instance is processing.`);
-            return res.status(202).json({ success: true, status: 'locked' });
+            return { success: true, status: 'locked' };
         }
 
         try {
@@ -72,7 +67,7 @@ export default async function handler(req, res) {
 
             // 🚀 3. DRAIN WAITLIST
             await drainWaitlist(candidateId);
-            return res.status(200).json({ success: true, candidateId });
+            return { success: true, candidateId };
         } finally {
             // 🔓 3. UNLOCK
             await unlockCandidate(candidateId);
@@ -80,6 +75,19 @@ export default async function handler(req, res) {
         }
     } catch (error) {
         console.error('❌ Worker Critical Error:', error);
-        return res.status(500).json({ success: false, error: error.message });
+        return { success: false, error: error.message };
     }
+}
+
+export default async function handler(req, res) {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+    const { candidateId, from } = req.body;
+    if (!candidateId) return res.status(400).json({ error: 'Missing candidateId' });
+
+    const result = await runTurboEngine(candidateId, from);
+
+    if (result.status === 'locked') return res.status(202).json(result);
+    if (result.error) return res.status(500).json(result);
+    return res.status(200).json(result);
 }
