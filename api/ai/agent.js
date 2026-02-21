@@ -1076,7 +1076,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         const ageMatch = (!minAge || candidateAge >= parseInt(minAge)) && (!maxAge || candidateAge <= parseInt(maxAge));
                         const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
 
-                        const munMatch = (municipios.length === 0 || municipios.some(m => String(m).toLowerCase().trim() === cMun));
+                        // Municipality match (ALLOW PARTIAL MATCH e.g. "Escobedo" matches "General Escobedo")
+                        const munMatch = (municipios.length === 0 || municipios.some(m => {
+                            const rm = String(m).toLowerCase().trim();
+                            return rm.includes(cMun) || cMun.includes(rm);
+                        }));
+
                         // Schooling match (ALLOW PARTIAL MATCH e.g. "Secu" matches "Secundaria")
                         const escMatch = (escolaridades.length === 0 || escolaridades.some(e => {
                             const re = String(e).toLowerCase().trim();
