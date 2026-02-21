@@ -200,7 +200,7 @@ Ejemplo cuando hace una pregunta desconocida:
 
         console.log(`[RECRUITER BRAIN] 🤖 GPT Response for ${candidateId}:`, gptResponse.content);
 
-        let cleanContent = gptResponse.content.trim(); a
+        let cleanContent = gptResponse.content.trim();
         // 4. Parsear respuesta
         let aiResult;
         try {
