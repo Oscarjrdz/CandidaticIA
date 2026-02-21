@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Loader2, MessageCircle, Move, Copy, Tag, Mic, Trash, Check, Paperclip } from 'lucide-react';
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
+import CandidateADNCard from './CandidateADNCard';
 
 /**
  * Ventana de chat flotante y arrastrable
@@ -407,6 +408,9 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                         </button>
                     </div>
                 </div>
+
+                {/* 🏷️ CV CARD / ADN SUMMARY */}
+                <CandidateADNCard candidate={candidate} />
 
                 {/* Scalable Vacancy History Timeline */}
                 <VacancyHistoryCard candidateId={candidate?.id} />
