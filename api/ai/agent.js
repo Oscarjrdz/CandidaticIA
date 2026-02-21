@@ -1004,7 +1004,15 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         if (aiResult?.extracted_data) {
             Object.entries(aiResult.extracted_data).forEach(([key, val]) => {
-                if (val && val !== 'null' && candidateData[key] !== val) candidateUpdates[key] = val;
+                if (val && val !== 'null' && candidateData[key] !== val) {
+                    let cleanedVal = val;
+                    if (key === 'tieneEmpleo' && typeof val === 'string') {
+                        const low = val.toLowerCase().trim();
+                        if (low === 'si' || low === 'sí') cleanedVal = 'Sí';
+                        else if (low === 'no') cleanedVal = 'No';
+                    }
+                    candidateUpdates[key] = cleanedVal;
+                }
             });
         }
 
@@ -1095,6 +1103,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     for (const rule of activeRules) {
                         const { minAge, maxAge, municipios, escolaridades, categories, gender, projectId } = rule;
 
+                        // 🛡️ SAFEQUARD: Ensure criteria are arrays even if missing in Redis keys
+                        const safeMun = Array.isArray(municipios) ? municipios : [];
+                        const safeEsc = Array.isArray(escolaridades) ? escolaridades : [];
+                        const safeCat = Array.isArray(categories) ? categories : [];
+
                         // Match logic (Case Insensitive & trimmed)
                         const candidateAge = parseInt(finalMerged.edad || 0);
                         const cMun = String(finalMerged.municipio || '').toLowerCase().trim();
@@ -1106,20 +1119,20 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
 
                         // Municipality match (ALLOW PARTIAL MATCH e.g. "Escobedo" matches "General Escobedo")
-                        const munMatch = (municipios.length === 0 || municipios.some(m => {
+                        const munMatch = (safeMun.length === 0 || safeMun.some(m => {
                             const rm = String(m).toLowerCase().trim();
                             return rm.includes(cMun) || cMun.includes(rm);
                         }));
 
                         // Schooling match (ALLOW PARTIAL MATCH e.g. "Secu" matches "Secundaria")
-                        const escMatch = (escolaridades.length === 0 || escolaridades.some(e => {
+                        const escMatch = (safeEsc.length === 0 || safeEsc.some(e => {
                             const re = String(e).toLowerCase().trim();
                             return re.includes(cEsc) || cEsc.includes(re);
                         }));
 
                         // Categories match if ANY of the candidate's cats are in the rule ones
                         // ALLOW PARTIAL MATCH (e.g. "Ayudante" matches "Ayudante General")
-                        const ruleCatsLow = (categories || []).map(c => String(c).toLowerCase().trim());
+                        const ruleCatsLow = safeCat.map(c => String(c).toLowerCase().trim());
                         const catMatch = (ruleCatsLow.length === 0 || cCats.some(c =>
                             ruleCatsLow.some(rc => rc.includes(c) || c.includes(rc))
                         ));

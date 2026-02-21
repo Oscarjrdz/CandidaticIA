@@ -149,5 +149,6 @@ export const formatValue = (val) => {
         return '-';
     }
 
-    return str;
+    const normalized = lower === 'si' || lower === 'sí' ? 'Sí' : (lower === 'no' ? 'No' : str);
+    return normalized;
 };
