@@ -33,7 +33,7 @@ const getClient = () => {
 };
 
 // Initialize on load
-getClient();
+// getClient(); // Commented to avoid import hangs during static load
 
 // Export wrapper that always ensures client is returned (or tries to init again)
 export const getRedisClient = () => {
