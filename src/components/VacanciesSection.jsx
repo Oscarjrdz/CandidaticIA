@@ -617,7 +617,7 @@ const VacanciesSection = ({ showToast }) => {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 title={editingId ? "Editar Vacante" : "Nueva Vacante"}
-                maxWidth={editingId ? "max-w-6xl" : "max-w-xl"}
+                maxWidth={editingId ? "max-w-7xl" : "max-w-xl"}
             >
                 <div className={`grid gap-8 ${editingId ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
                     {/* COLUMNA 1: FORMULARIO VACANTE */}
@@ -744,59 +744,89 @@ const VacanciesSection = ({ showToast }) => {
                                     </div>
                                 ) : (
                                     faqs.map(faq => (
-                                        <div key={faq.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 shadow-sm hover:border-indigo-200 transition-colors relative group">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                                                        {faq.topic}
-                                                    </span>
-                                                    <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-[10px] font-bold rounded-md">
-                                                        {faq.frequency} veces
-                                                    </span>
+                                        <div key={faq.id} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-500/30 transition-all duration-300 relative group overflow-hidden">
+                                            {/* Decoration */}
+                                            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full -mr-12 -mt-12 blur-2xl group-hover:bg-indigo-500/10 transition-colors"></div>
+
+                                            {/* Header: Titulo y Frecuencia */}
+                                            <div className="flex justify-between items-center mb-3 relative z-10">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600">
+                                                        <FileText className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-tight leading-none mb-1">
+                                                            {faq.topic}
+                                                        </h4>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="px-2 py-0.5 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-400 text-[9px] font-black rounded-md uppercase tracking-widest">
+                                                                {faq.frequency} detecciones
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <button
-                                                    className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-500 transition-opacity"
+                                                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
                                                     onClick={() => handleDeleteFaq(faq.id)}
                                                     title="Eliminar duda"
                                                 >
-                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                    <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
 
-                                            <div className="mb-3">
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 italic mb-1">Ej. de preguntas reales recabadas:</p>
-                                                <ul className="text-[11px] text-gray-600 dark:text-gray-300 list-disc list-inside space-y-0.5 pl-1 opacity-80">
-                                                    {(faq.originalQuestions || []).slice(0, 3).map((q, idx) => (
-                                                        <li key={idx} className="truncate" title={q}>{q}</li>
-                                                    ))}
-                                                </ul>
+                                            {/* Body: Grid de 2 columnas para Ejemplos y Auditoría */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 relative z-10">
+                                                <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800/50">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5 font-sans">
+                                                        🔍 Dudas Realmente Recabadas
+                                                    </p>
+                                                    <ul className="space-y-1.5 list-none">
+                                                        {(faq.originalQuestions || []).slice(0, 2).map((q, idx) => (
+                                                            <li key={idx} className="text-[11px] text-gray-600 dark:text-gray-400 italic pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 line-clamp-1" title={q}>
+                                                                "{q}"
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+
+                                                <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/20">
+                                                    <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                        🤖 Auditoría: Brenda Respondió
+                                                    </p>
+                                                    <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium leading-relaxed line-clamp-2">
+                                                        {faq.lastAiResponse || 'Consultando base de datos oficial...'}
+                                                    </p>
+                                                </div>
                                             </div>
 
-                                            <div className="mt-2 bg-indigo-50/50 dark:bg-indigo-900/10 p-2 rounded-lg border border-indigo-100/50 dark:border-indigo-800/30">
-                                                <label className="block text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mb-1.5">
-                                                    Respóndele a Brenda (IA):
-                                                </label>
-                                                <div className="flex items-stretch gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={faq.officialAnswer || ''}
-                                                        onChange={(e) => {
-                                                            const newFaqs = [...faqs];
-                                                            const idx = newFaqs.findIndex(f => f.id === faq.id);
-                                                            if (idx > -1) {
-                                                                newFaqs[idx].officialAnswer = e.target.value;
-                                                                setFaqs(newFaqs);
-                                                            }
-                                                        }}
-                                                        placeholder="Ej. El camión sí pasa por ahí..."
-                                                        className="flex-1 px-2.5 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-inner rounded focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow"
-                                                    />
+                                            {/* Footer: Input de entrenamiento (Horizontal) */}
+                                            <div className="bg-indigo-50/30 dark:bg-indigo-900/10 p-2 rounded-2xl border border-indigo-100/50 dark:border-indigo-800/30 relative z-10">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 relative group/input">
+                                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400 group-focus-within/input:text-indigo-600 transition-colors">
+                                                            <Plus className="w-3.5 h-3.5" />
+                                                        </div>
+                                                        <input
+                                                            type="text"
+                                                            value={faq.officialAnswer || ''}
+                                                            onChange={(e) => {
+                                                                const newFaqs = [...faqs];
+                                                                const idx = newFaqs.findIndex(f => f.id === faq.id);
+                                                                if (idx > -1) {
+                                                                    newFaqs[idx].officialAnswer = e.target.value;
+                                                                    setFaqs(newFaqs);
+                                                                }
+                                                            }}
+                                                            placeholder="Entrena a Brenda para que sepa responder exactamente esto..."
+                                                            className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-inner"
+                                                        />
+                                                    </div>
                                                     <button
                                                         onClick={() => handleSaveFaq(faq.id, faq.officialAnswer)}
-                                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded shadow-sm transition-all focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 flex-shrink-0"
+                                                        className="px-5 py-2 bg-indigo-600 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-indigo-500/20 hover:shadow-none translate-y-0 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
                                                         disabled={!faq.officialAnswer?.trim()}
                                                     >
-                                                        Guardar
+                                                        Enseñar
                                                     </button>
                                                 </div>
                                             </div>
