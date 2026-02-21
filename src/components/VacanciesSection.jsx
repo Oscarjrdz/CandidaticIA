@@ -412,10 +412,13 @@ const VacanciesSection = ({ showToast }) => {
 
             if (data.success) {
                 showToast(editingId ? 'Vacante actualizada' : 'Vacante creada exitosamente', 'success');
-                setIsModalOpen(false);
-                setFormData({ name: '', company: '', category: '', description: '', messageDescription: '' });
-                setEditingId(null);
                 loadVacancies(); // Reload list
+
+                // Si es modo creación, cerramos modal. Si es edición, mantenemos abierto.
+                if (!editingId) {
+                    setIsModalOpen(false);
+                    setFormData({ name: '', company: '', category: '', description: '', messageDescription: '' });
+                }
             } else {
                 showToast(data.error || 'Error al guardar', 'error');
             }
@@ -871,11 +874,11 @@ const VacanciesSection = ({ showToast }) => {
                                                 </button>
                                             </div>
 
-                                            {/* Body: Grid de 2 columnas para Ejemplos y Auditoría */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4 relative z-10">
+                                            {/* Body: Grid asimétrico para dar más espacio a Auditoría */}
+                                            <div className="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-3 mb-4 relative z-10">
                                                 <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800/50">
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5 font-sans">
-                                                        🔍 Dudas Realmente Recabadas
+                                                        🔍 Dudas Recabadas
                                                     </p>
                                                     <ul className="space-y-1.5 list-none">
                                                         {(faq.originalQuestions || []).slice(0, 3).map((q, idx) => (
@@ -906,7 +909,7 @@ const VacanciesSection = ({ showToast }) => {
                                                     <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                                                         🤖 Auditoría: Brenda Respondió
                                                     </p>
-                                                    <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium leading-relaxed">
+                                                    <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium leading-relaxed max-w-full">
                                                         {faq.lastAiResponse || 'Consultando base de datos oficial...'}
                                                     </p>
                                                 </div>
