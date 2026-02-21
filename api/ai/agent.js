@@ -499,6 +499,25 @@ ${audit.dnaLines}
                 const moveRegex = /[\{\[]\s*move\s*[\}\]]/i;
                 hasMoveTag = moveRegex.test(aiResult?.thought_process || '') || moveRegex.test(aiResult?.response_text || '');
 
+                // 🛡️ ACCEPTANCE FALLBACK: If GPT didn't fire { move } but candidate clearly accepted,
+                // detect it via keyword matching as a safety net
+                if (!hasMoveTag && currentStep?.aiConfig?.enabled) {
+                    const userMsgLower = aggregatedText.toLowerCase().trim();
+                    const thoughtLower = (aiResult?.thought_process || '').toLowerCase();
+
+                    // Affirmative keywords from candidate
+                    const isAffirmative = /^(si|sí|dale|ok|de acuerdo|claro|bueno|va|listo|quiero|me interesa|agendar|mañana|hoy|esta bien|perfecto|sale)[\s!.]*$/.test(userMsgLower)
+                        || /\b(si quiero|si me interesa|si dale|sí quiero|está bien|de acuerdo)\b/.test(userMsgLower);
+
+                    // GPT acknowledged the acceptance in thought_process
+                    const thoughtAcknowledgesAcceptance = /acepta|confirm|cumpli|logr|agend|interes|propuesta.*acept|misi.n.*complet/i.test(thoughtLower);
+
+                    if (isAffirmative && thoughtAcknowledgesAcceptance) {
+                        console.log(`[RECRUITER BRAIN] 🧠 Acceptance Fallback triggered for ${candidateId}. User: "${userMsgLower}" | Thought acknowledges acceptance.`);
+                        hasMoveTag = true;
+                    }
+                }
+
                 // CRITICAL: Always clean the tag from the user-facing message
                 if (responseTextVal) {
                     responseTextVal = responseTextVal.replace(moveRegex, '').trim();
