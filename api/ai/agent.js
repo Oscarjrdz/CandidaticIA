@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { processUnansweredQuestion } from './faq-engine.js';
 import axios from "axios";
 import {
     getRedisClient,
@@ -492,6 +493,11 @@ ${audit.dnaLines}
                     if (aiResult?.response_text) {
                         responseTextVal = aiResult.response_text;
                     }
+
+                    if (aiResult?.unanswered_question && activeVacancyId) {
+                        console.log(`[FAQ Engine] 📡 Dispatching unanswered question to cluster: "${aiResult.unanswered_question}"`);
+                        processUnansweredQuestion(activeVacancyId, aiResult.unanswered_question, activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY).catch(console.error);
+                    }
                 }
 
                 // ⚡ ROBUST MOVE TAG DETECTION & CLEANING
@@ -617,6 +623,11 @@ ${audit.dnaLines}
                                         console.log(`[RECRUITER BRAIN] 💾 Saved chained message to history (ID: ${chainedMsgId})`);
 
                                         aiResult.thought_process += ` | Chained: ${nextAiResult.thought_process}`;
+                                    }
+
+                                    if (nextAiResult?.unanswered_question && activeVacancyId) {
+                                        console.log(`[FAQ Engine] 📡 Dispatching chained unanswered question: "${nextAiResult.unanswered_question}"`);
+                                        processUnansweredQuestion(activeVacancyId, nextAiResult.unanswered_question, activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY).catch(console.error);
                                     }
                                 } catch (e) {
                                     console.error(`[RECRUITER BRAIN] ❌ Chained Execution Fail:`, e.message);

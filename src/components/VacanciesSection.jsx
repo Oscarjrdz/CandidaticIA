@@ -148,6 +148,10 @@ const VacanciesSection = ({ showToast }) => {
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
 
+    // FAQ Radar State
+    const [faqs, setFaqs] = useState([]);
+    const [loadingFaqs, setLoadingFaqs] = useState(false);
+
     // DND Sensors
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -167,6 +171,58 @@ const VacanciesSection = ({ showToast }) => {
     });
 
     const [availableFields, setAvailableFields] = useState([]);
+
+    const loadFaqs = async (vacancyId) => {
+        setLoadingFaqs(true);
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${vacancyId}`);
+            const data = await res.json();
+            if (data.success) {
+                setFaqs(data.faqs || []);
+            }
+        } catch (error) {
+            console.error('Error loading FAQs:', error);
+        } finally {
+            setLoadingFaqs(false);
+        }
+    };
+
+    const handleSaveFaq = async (faqId, officialAnswer) => {
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ faqId, officialAnswer })
+            });
+            if (res.ok) {
+                showToast('Respuesta oficial guardada e inyectada a la IA', 'success');
+                loadFaqs(editingId);
+            } else {
+                showToast('Error al guardar respuesta', 'error');
+            }
+        } catch (error) {
+            console.error('Error saving FAQ:', error);
+            showToast('Error de conexión', 'error');
+        }
+    };
+
+    const handleDeleteFaq = async (faqId) => {
+        if (!confirm('¿Seguro que deseas eliminar esta pregunta del radar?')) return;
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ faqId })
+            });
+            if (res.ok) {
+                showToast('Pregunta descartada', 'success');
+                loadFaqs(editingId);
+            }
+        } catch (error) {
+            console.error('Error deleting FAQ:', error);
+            showToast('Error al eliminar duda', 'error');
+        }
+    };
 
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
@@ -238,6 +294,7 @@ const VacanciesSection = ({ showToast }) => {
     const handleOpenCreate = () => {
         setEditingId(null);
         setFormData({ name: '', company: '', category: '', description: '', messageDescription: '' });
+        setFaqs([]);
         setIsModalOpen(true);
     };
 
@@ -251,6 +308,7 @@ const VacanciesSection = ({ showToast }) => {
             messageDescription: vacancy.messageDescription || ''
         });
         setIsModalOpen(true);
+        loadFaqs(vacancy.id);
     };
 
     const handleSave = async () => {
@@ -559,92 +617,195 @@ const VacanciesSection = ({ showToast }) => {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 title={editingId ? "Editar Vacante" : "Nueva Vacante"}
+                maxWidth={editingId ? "max-w-6xl" : "max-w-xl"}
             >
-                <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input
-                            label="Nombre de la Vacante"
-                            placeholder="Ej. Desarrollador Senior"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            autoFocus
-                        />
+                <div className={`grid gap-8 ${editingId ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+                    {/* COLUMNA 1: FORMULARIO VACANTE */}
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Input
+                                label="Nombre de la Vacante"
+                                placeholder="Ej. Desarrollador Senior"
+                                value={formData.name}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                autoFocus
+                            />
 
-                        <Input
-                            label="Empresa"
-                            placeholder="Ej. Tech Corp"
-                            icon={Building2}
-                            value={formData.company}
-                            onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                        />
-                    </div>
+                            <Input
+                                label="Empresa"
+                                placeholder="Ej. Tech Corp"
+                                icon={Building2}
+                                value={formData.company}
+                                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                            />
+                        </div>
 
-                    <div className="space-y-1">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Categoría
-                        </label>
-                        <div className="relative">
-                            <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <select
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm appearance-none"
-                                value={formData.category}
-                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                            >
-                                <option value="">Selecciona una categoría...</option>
-                                {categories.map(cat => (
-                                    <option key={cat.id} value={cat.name}>{cat.name}</option>
-                                ))}
-                            </select>
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                </svg>
+                        <div className="space-y-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Categoría
+                            </label>
+                            <div className="relative">
+                                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <select
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm appearance-none"
+                                    value={formData.category}
+                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                >
+                                    <option value="">Selecciona una categoría...</option>
+                                    {categories.map(cat => (
+                                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                    ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
                             </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                Descripción
+                            </label>
+                            <textarea
+                                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm"
+                                rows={12}
+                                placeholder="Detalles sobre el puesto..."
+                                value={formData.description}
+                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="block text-[10px] font-black tracking-widest text-blue-600 dark:text-blue-400 uppercase">
+                                Vacante para Mensaje (Info para el Bot)
+                            </label>
+                            <textarea
+                                className="w-full px-4 py-2 border border-blue-100 dark:border-blue-900/50 rounded-lg focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800/20 focus:border-blue-300 bg-blue-50/30 dark:bg-blue-900/10 text-gray-900 dark:text-white text-sm italic"
+                                rows={6}
+                                placeholder="Escribe aquí la información simplificada que el bot mandará por WhatsApp..."
+                                value={formData.messageDescription}
+                                onChange={(e) => setFormData({ ...formData, messageDescription: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-4">
+                            <Button
+                                variant="ghost"
+                                onClick={() => setIsModalOpen(false)}
+                                disabled={saving}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={handleSave}
+                                disabled={saving}
+                                icon={saving ? Loader2 : Save}
+                            >
+                                {saving ? (editingId ? 'Guardando...' : 'Creando...') : (editingId ? 'Actualizar Vacante' : 'Guardar Vacante')}
+                            </Button>
                         </div>
                     </div>
 
-                    <div className="space-y-1">
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Descripción
-                        </label>
-                        <textarea
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-transparent bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm"
-                            rows={12}
-                            placeholder="Detalles sobre el puesto..."
-                            value={formData.description}
-                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        />
-                    </div>
+                    {/* COLUMNA 2: RADAR DE DUDAS (SOLO EN EDICION) */}
+                    {editingId && (
+                        <div className="space-y-4 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 pt-6 lg:pt-0 lg:pl-8 flex flex-col h-[calc(100vh-12rem)] max-h-[600px]">
+                            <div className="flex items-center justify-between mb-2">
+                                <div>
+                                    <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+                                        Radar de Dudas (IA)
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                        Dudas frecuentes de candidatos sobre esta vacante. Dales respuesta y la IA lo aprenderá al instante.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => loadFaqs(editingId)}
+                                    className="p-1.5 text-gray-500 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 rounded-lg transition-colors flex-shrink-0"
+                                    title="Consultar radar de dudas a Vercel"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                </button>
+                            </div>
 
-                    <div className="space-y-1">
-                        <label className="block text-[10px] font-black tracking-widest text-blue-600 dark:text-blue-400 uppercase">
-                            Vacante para Mensaje (Info para el Bot)
-                        </label>
-                        <textarea
-                            className="w-full px-4 py-2 border border-blue-100 dark:border-blue-900/50 rounded-lg focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800/20 focus:border-blue-300 bg-blue-50/30 dark:bg-blue-900/10 text-gray-900 dark:text-white text-sm italic"
-                            rows={6}
-                            placeholder="Escribe aquí la información simplificada que el bot mandará por WhatsApp..."
-                            value={formData.messageDescription}
-                            onChange={(e) => setFormData({ ...formData, messageDescription: e.target.value })}
-                        />
-                    </div>
+                            <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar h-full">
+                                {loadingFaqs ? (
+                                    <div className="flex justify-center py-8">
+                                        <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                                    </div>
+                                ) : faqs.length === 0 ? (
+                                    <div className="text-center py-10 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
+                                        <span className="text-2xl mb-2 block">🎧</span>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium tracking-tight">Candidatic analizando llamadas y chats en vivo...</p>
+                                    </div>
+                                ) : (
+                                    faqs.map(faq => (
+                                        <div key={faq.id} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 shadow-sm hover:border-indigo-200 transition-colors relative group">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                                                        {faq.topic}
+                                                    </span>
+                                                    <span className="px-1.5 py-0.5 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 text-[10px] font-bold rounded-md">
+                                                        {faq.frequency} veces
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-500 transition-opacity"
+                                                    onClick={() => handleDeleteFaq(faq.id)}
+                                                    title="Eliminar duda"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
 
-                    <div className="flex justify-end gap-3 pt-4">
-                        <Button
-                            variant="ghost"
-                            onClick={() => setIsModalOpen(false)}
-                            disabled={saving}
-                        >
-                            Cancelar
-                        </Button>
-                        <Button
-                            onClick={handleSave}
-                            disabled={saving}
-                            icon={saving ? Loader2 : Save}
-                        >
-                            {saving ? (editingId ? 'Guardando...' : 'Creando...') : (editingId ? 'Actualizar Vacante' : 'Guardar Vacante')}
-                        </Button>
-                    </div>
+                                            <div className="mb-3">
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 italic mb-1">Ej. de preguntas reales recabadas:</p>
+                                                <ul className="text-[11px] text-gray-600 dark:text-gray-300 list-disc list-inside space-y-0.5 pl-1 opacity-80">
+                                                    {(faq.originalQuestions || []).slice(0, 3).map((q, idx) => (
+                                                        <li key={idx} className="truncate" title={q}>{q}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+
+                                            <div className="mt-2 bg-indigo-50/50 dark:bg-indigo-900/10 p-2 rounded-lg border border-indigo-100/50 dark:border-indigo-800/30">
+                                                <label className="block text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mb-1.5">
+                                                    Respóndele a Brenda (IA):
+                                                </label>
+                                                <div className="flex items-stretch gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={faq.officialAnswer || ''}
+                                                        onChange={(e) => {
+                                                            const newFaqs = [...faqs];
+                                                            const idx = newFaqs.findIndex(f => f.id === faq.id);
+                                                            if (idx > -1) {
+                                                                newFaqs[idx].officialAnswer = e.target.value;
+                                                                setFaqs(newFaqs);
+                                                            }
+                                                        }}
+                                                        placeholder="Ej. El camión sí pasa por ahí..."
+                                                        className="flex-1 px-2.5 py-1.5 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-inner rounded focus:ring-1 focus:ring-indigo-500 outline-none transition-shadow"
+                                                    />
+                                                    <button
+                                                        onClick={() => handleSaveFaq(faq.id, faq.officialAnswer)}
+                                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded shadow-sm transition-all focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 flex-shrink-0"
+                                                        disabled={!faq.officialAnswer?.trim()}
+                                                    >
+                                                        Guardar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </Modal>
         </div>

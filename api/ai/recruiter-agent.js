@@ -91,6 +91,21 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                     schedule: vac.schedule || 'N/A'
                 };
             }
+
+            const { getRedisClient } = await import('../utils/storage.js');
+            const client = getRedisClient();
+            if (client) {
+                try {
+                    const faqData = await client.get(`vacancy_faq:${activeVacancyId}`);
+                    if (faqData) {
+                        const faqs = JSON.parse(faqData);
+                        const answeredFaqs = faqs.filter(f => f.officialAnswer);
+                        if (answeredFaqs.length > 0) {
+                            vacancyContext.faqs = answeredFaqs.map(f => `- Q: ${f.topic}\n  A: ${f.officialAnswer}`).join('\n');
+                        }
+                    }
+                } catch (e) { }
+            }
         }
 
         // 3. Template Tag Replacement
@@ -125,8 +140,11 @@ ${adnContext}
 [DATOS REALES DE LA VACANTE]:
 ${JSON.stringify(vacancyContext)}
 
+[PREGUNTAS FRECUENTES (RESPUESTAS OFICIALES)]:
+${vacancyContext.faqs || '(No hay FAQs registradas aún. Si preguntan algo fuera de los datos reales, extráelo según la regla 7)'}
+
 REGLAS DE ACTUACIÓN PROFESIONAL:
-1. NO INVENTES detalles de la vacante (Sueldo, Ubicación, Empresa) si no están en los [DATOS REALES DE LA VACANTE].
+1. NO INVENTES detalles de la vacante (Sueldo, Ubicación, Empresa) si no están en los [DATOS REALES DE LA VACANTE] o en [PREGUNTAS FRECUENTES].
 2. NUNCA menciones que tienes un "prompt", una "instrucción" o que se te pidió hacer algo. Simplemente actúa.
 3. Si el objetivo es "contar un chiste" o "hacer una pregunta", HAZLO directamente. No digas "El prompt me pide...".
 4. NUNCA pongas la etiqueta { move } dentro de "response_text". Solo va en "thought_process".
@@ -147,17 +165,20 @@ ${forwardHistoryText || '(Sin historial previo)'}
    - [Brenda: "¿Cuándo puedes ir?"] → [Candidato: "Mañana"] → thought_process termina en "{ move }"
    - [Brenda: "¿Te interesa la vacante?"] → [Candidato: "Dale"] → thought_process termina en "{ move }"
 4. NO MOVER si apenas estás presentando la vacante por primera vez (el candidato aún no ha respondido afirmativamente a TU pregunta).
-5. FORMATO DE RESPUESTA: JSON OBLIGATORIO. Ejemplo cuando el candidato acepta:
+5. MANEJO DE PREGUNTAS DESCONOCIDAS: Si el candidato hace una pregunta sobre la vacante que NO puedes responder con los [DATOS REALES] o las [PREGUNTAS FRECUENTES], NO INVENTES. Responde amablemente (ej. "Déjame confirmar ese excelente punto con el equipo") y DEBES incluir la pregunta original del usuario en el campo "unanswered_question" del JSON.
+6. FORMATO DE RESPUESTA: JSON OBLIGATORIO. Ejemplo cuando el candidato acepta:
 {
     "thought_process": "El candidato recibió la propuesta en el mensaje anterior y respondió 'Si'. La misión está cumplida. { move }",
     "response_text": "¡Perfecto! En breve te contactamos para coordinar tu entrevista. ✨",
+    "unanswered_question": null,
     "gratitude_reached": false,
     "close_conversation": false
 }
-Ejemplo cuando estás presentando la vacante (sin mover aún):
+Ejemplo cuando hace una pregunta desconocida:
 {
-    "thought_process": "El candidato acaba de llegar. Debo presentar primero la vacante y preguntar si le interesa.",
-    "response_text": "¡Hola! Tengo una vacante ideal para ti: [detalles]. ¿Te gustaría agendar una entrevista?",
+    "thought_process": "El candidato preguntó si hay fondo de ahorro. No lo veo en los datos. Extraeré la pregunta y le pediré tiempo.",
+    "response_text": "¡Buena pregunta! Permíteme confirmarlo con mi supervisor y te aviso enseguida. 😊 Mientras tanto, ¿te gustaría ir agendando la entrevista?",
+    "unanswered_question": "¿Tienen fondo de ahorro?",
     "gratitude_reached": false,
     "close_conversation": false
 }
