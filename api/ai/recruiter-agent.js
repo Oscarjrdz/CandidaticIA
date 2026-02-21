@@ -190,7 +190,7 @@ Ejemplo cuando hace una pregunta desconocida:
         const gptResponse = await getOpenAIResponse(
             [],
             systemPrompt,
-            'gpt-4o',
+            'gpt-4o-mini',
             customApiKey
         );
 
@@ -233,7 +233,7 @@ Ejemplo cuando hace una pregunta desconocida:
         // 6. Telemetría
         const duration = Date.now() - startTime;
         recordAITelemetry(candidateId, 'recruiter_inference', {
-            model: 'gpt-4o-recruiter',
+            model: 'gpt-4o-mini-recruiter',
             latency: duration
         }).catch(() => { });
 
