@@ -193,26 +193,8 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
-    // Auto-refresh (silent poll) para FAQ radar
-    useEffect(() => {
-        let interval;
-        // Solo refrescar si la modal está abierta, hay editingId, Y el usuario NO está interactuando con las FAQs.
-        if (isModalOpen && editingId && !isEditingFaq) {
-            interval = setInterval(() => {
-                fetch(`/api/vacancies/faq?vacancyId=${editingId}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) {
-                            // Merge updates without losing local state? 
-                            // Simplest approach: We just overwrite if not editing.
-                            setFaqs(data.faqs || []);
-                        }
-                    })
-                    .catch(e => console.error('Silent FAQ poll error:', e));
-            }, 10000);
-        }
-        return () => clearInterval(interval);
-    }, [isModalOpen, editingId, isEditingFaq]);
+    // Auto-refresh (silent poll) para FAQ radar - REMOVIDO POR PETICIÓN DEL USUARIO
+    // useEffect(() => { ... }, [isModalOpen, editingId, isEditingFaq]);
 
     const handleFileUpload = (e, faqId) => {
         const file = e.target.files[0];

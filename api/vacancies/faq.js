@@ -2,6 +2,14 @@ import { getRedisClient } from '../utils/storage.js';
 import { reclusterVacancyFaqs } from '../ai/faq-engine.js';
 import { getCachedConfig } from '../utils/cache.js';
 
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '10mb',
+        },
+    },
+};
+
 export default async function handler(req, res) {
     const { method } = req;
     const { vacancyId } = req.query;

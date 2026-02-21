@@ -10,6 +10,14 @@ import { randomUUID } from 'crypto';
 
 // Sync to Candidatic removed as per UltraMsg migration
 
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '10mb',
+        },
+    },
+};
+
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
