@@ -224,6 +224,25 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
+    const handleSplitFaq = async (faqId, questionText) => {
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'split', faqId, questionText })
+            });
+            if (res.ok) {
+                showToast('Duda separada en un nuevo tema', 'success');
+                loadFaqs(editingId);
+            } else {
+                showToast('Error al separar duda', 'error');
+            }
+        } catch (error) {
+            console.error('Error splitting FAQ:', error);
+            showToast('Error de conexión', 'error');
+        }
+    };
+
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
         { label: 'WhatsApp', value: '{{whatsapp}}' },
@@ -781,9 +800,16 @@ const VacanciesSection = ({ showToast }) => {
                                                         🔍 Dudas Realmente Recabadas
                                                     </p>
                                                     <ul className="space-y-1.5 list-none">
-                                                        {(faq.originalQuestions || []).slice(0, 2).map((q, idx) => (
-                                                            <li key={idx} className="text-[11px] text-gray-600 dark:text-gray-400 italic pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 line-clamp-1" title={q}>
-                                                                "{q}"
+                                                        {(faq.originalQuestions || []).slice(0, 3).map((q, idx) => (
+                                                            <li key={idx} className="flex items-center justify-between group/q text-[11px] text-gray-600 dark:text-gray-400 italic pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 transition-all hover:bg-gray-100/50 dark:hover:bg-gray-800/50 rounded-r-lg py-0.5">
+                                                                <span className="truncate flex-1" title={q}>"{q}"</span>
+                                                                <button
+                                                                    onClick={() => handleSplitFaq(faq.id, q)}
+                                                                    className="opacity-0 group-hover/q:opacity-100 p-1 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-900 rounded-md transition-all ml-1 flex-shrink-0"
+                                                                    title="Separar esta duda en un nuevo tema"
+                                                                >
+                                                                    <Plus className="w-3 h-3" />
+                                                                </button>
                                                             </li>
                                                         ))}
                                                     </ul>
