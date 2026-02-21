@@ -249,14 +249,11 @@ export default async function handler(req, res) {
                     } catch (e) { }
                 })();
 
-                // 🔥 CRITICAL META-OPTIMIZATION: Respond to UltraMsg IMMEDIATELY.
-                // This ensures <100ms latency on the webhook acknowledgment.
-                res.status(200).send('success');
-
-                // We await the side-effects *after* sending the response to keep the Vercel 
-                // serverless function alive until all tasks (presence, queueing) finish.
+                // 🔥 Keep Vercel container alive by awaiting all side-effects BEFORE responding.
+                // UltraMsg may retry if this takes >5s, but our Redis deduplication lock will catch and ignore it.
                 await Promise.allSettled([miscPromise, presenceUpdate, aiPromise]);
-                return;
+
+                return res.status(200).send('success');
 
             } catch (err) {
                 console.error(`⚠️ Webhook logic error for ${msgId}:`, err);
