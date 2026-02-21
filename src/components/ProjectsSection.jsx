@@ -1490,22 +1490,51 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                 </label>
 
                                 <div className="space-y-3 mb-4">
-                                    {/* Muestra las vacantes actuales seleccionadas */}
+                                    {/* Muestra las vacantes actuales seleccionadas — con Drag & Drop para reordenar */}
                                     {selectedVacancyIds.map((vId, idx) => {
                                         const vac = vacancies.find(v => v.id === vId);
                                         return (
-                                            <div key={vId} className="flex items-center justify-between px-4 py-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/50 transition-all hover:border-blue-200">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 flex items-center justify-center font-black text-[11px] font-mono">
+                                            <div
+                                                key={vId}
+                                                draggable
+                                                onDragStart={(e) => {
+                                                    e.dataTransfer.effectAllowed = 'move';
+                                                    e.dataTransfer.setData('text/plain', String(idx));
+                                                }}
+                                                onDragOver={(e) => {
+                                                    e.preventDefault();
+                                                    e.dataTransfer.dropEffect = 'move';
+                                                }}
+                                                onDrop={(e) => {
+                                                    e.preventDefault();
+                                                    const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                                                    if (fromIdx === idx) return;
+                                                    setSelectedVacancyIds(prev => {
+                                                        const next = [...prev];
+                                                        const [removed] = next.splice(fromIdx, 1);
+                                                        next.splice(idx, 0, removed);
+                                                        return next;
+                                                    });
+                                                }}
+                                                className="flex items-center justify-between px-4 py-3 bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-blue-900/50 transition-all hover:border-blue-300 cursor-grab active:cursor-grabbing active:scale-[0.98] active:shadow-lg active:bg-blue-50 dark:active:bg-blue-900/20 select-none"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {/* Drag handle visual */}
+                                                    <div className="flex flex-col gap-[3px] opacity-30 hover:opacity-60 transition-opacity shrink-0">
+                                                        <div className="w-3.5 h-0.5 bg-slate-500 rounded-full" />
+                                                        <div className="w-3.5 h-0.5 bg-slate-500 rounded-full" />
+                                                        <div className="w-3.5 h-0.5 bg-slate-500 rounded-full" />
+                                                    </div>
+                                                    <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300 flex items-center justify-center font-black text-[11px] font-mono shrink-0">
                                                         {idx + 1}
                                                     </div>
-                                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase truncate max-w-[220px] md:max-w-[300px]">
+                                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase truncate max-w-[200px] md:max-w-[280px]">
                                                         {vac?.name || 'Vacante Desconocida'}
                                                     </span>
                                                 </div>
                                                 <button
                                                     onClick={() => setSelectedVacancyIds(prev => prev.filter(id => id !== vId))}
-                                                    className="w-6 h-6 rounded bg-white dark:bg-slate-800 border border-red-100 dark:border-red-900/50 text-red-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 flex items-center justify-center transition-all shadow-sm"
+                                                    className="w-6 h-6 rounded bg-white dark:bg-slate-800 border border-red-100 dark:border-red-900/50 text-red-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 flex items-center justify-center transition-all shadow-sm shrink-0 ml-2"
                                                     title="Quitar"
                                                 >
                                                     <X className="w-3.5 h-3.5" />
