@@ -722,12 +722,13 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             systemInstruction += `\n[REGLAS DE EXTRACCIÓN ESTRICTA PARA JSON]:
 - escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería". Si dice "secu", pon "Secundaria". Si dice "prepa", pon "Preparatoria".
 - categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato. Si dice "Ayudante", pon "Ayudante General".
-- tieneEmpleo: Si el usuario responde "no", "no tengo", "desempleado", "buscando", etc., DEBES poner el string exacto "No". Si dice que sí trabaja, pon el string exacto "Sí". JAMÁS uses valores booleanos (false/true) ni null.
+- tieneEmpleo: Extrae literalmente lo que responda el usuario (ej. "no", "si", "estoy pidiendo informes", "nop").
+
 `;
 
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
 {
-    "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Sí | No | null", "escolaridad": "string | null", "edad": "number | null" },
+    "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "string | null", "escolaridad": "string | null", "edad": "number | null" },
     "thought_process": "Razonamiento.",
     "reaction": "null",
     "trigger_media": "string | null",
