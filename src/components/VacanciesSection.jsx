@@ -187,6 +187,24 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
+    // Auto-refresh (silent poll) para FAQ radar
+    useEffect(() => {
+        let interval;
+        if (isModalOpen && editingId) {
+            interval = setInterval(() => {
+                fetch(`/api/vacancies/faq?vacancyId=${editingId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            setFaqs(data.faqs || []);
+                        }
+                    })
+                    .catch(e => console.error('Silent FAQ poll error:', e));
+            }, 10000);
+        }
+        return () => clearInterval(interval);
+    }, [isModalOpen, editingId]);
+
     const handleSaveFaq = async (faqId, officialAnswer) => {
         try {
             const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
@@ -700,7 +718,7 @@ const VacanciesSection = ({ showToast }) => {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 title={editingId ? "Editar Vacante" : "Nueva Vacante"}
-                maxWidth={editingId ? "max-w-7xl" : "max-w-xl"}
+                maxWidth={editingId ? "max-w-[1400px] w-[95vw]" : "max-w-xl"}
             >
                 <div className={`grid gap-8 ${editingId ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
                     {/* COLUMNA 1: FORMULARIO VACANTE */}
@@ -808,7 +826,7 @@ const VacanciesSection = ({ showToast }) => {
                                     <button
                                         onClick={handleReclusterFaqs}
                                         disabled={loadingFaqs || faqs.length === 0}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-indigo-100 dark:border-indigo-800 disabled:opacity-50"
+                                        className="flex justify-center items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all border border-indigo-100 dark:border-indigo-800 disabled:opacity-50 whitespace-nowrap"
                                         title="Brenda re-analizará todas las dudas basándose en los nombres de los temas actuales"
                                     >
                                         <Sparkles className={`w-3 h-3 ${loadingFaqs ? 'animate-pulse' : ''}`} />
@@ -836,12 +854,12 @@ const VacanciesSection = ({ showToast }) => {
                                     </div>
                                 ) : (
                                     faqs.map(faq => (
-                                        <div key={faq.id} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-500/30 transition-all duration-300 relative group overflow-hidden">
+                                        <div key={faq.id} className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-800 rounded-2xl p-3 shadow-sm hover:shadow-md hover:border-indigo-200 dark:hover:border-indigo-500/30 transition-all duration-300 relative group overflow-hidden">
                                             {/* Decoration */}
                                             <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full -mr-12 -mt-12 blur-2xl group-hover:bg-indigo-500/10 transition-colors"></div>
 
                                             {/* Header: Titulo y Frecuencia */}
-                                            <div className="flex justify-between items-center mb-3 relative z-10">
+                                            <div className="flex justify-between items-center mb-2 relative z-10">
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600">
                                                         <FileText className="w-4 h-4" />
@@ -875,14 +893,14 @@ const VacanciesSection = ({ showToast }) => {
                                             </div>
 
                                             {/* Body: Grid asimétrico para dar más espacio a Auditoría */}
-                                            <div className="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-3 mb-4 relative z-10">
-                                                <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800/50">
-                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5 font-sans">
+                                            <div className="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-2 mb-3 relative z-10">
+                                                <div className="bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800/50">
+                                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 font-sans leading-none">
                                                         🔍 Dudas Recabadas
                                                     </p>
-                                                    <ul className="space-y-1.5 list-none">
+                                                    <ul className="space-y-1 list-none">
                                                         {(faq.originalQuestions || []).slice(0, 3).map((q, idx) => (
-                                                            <li key={idx} className="flex items-center justify-between group/q text-[11px] text-gray-600 dark:text-gray-400 italic pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 transition-all hover:bg-gray-100/50 dark:hover:bg-gray-800/50 rounded-r-lg py-0.5">
+                                                            <li key={idx} className="flex items-center justify-between group/q text-[11px] text-gray-600 dark:text-gray-400 italic pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 transition-all hover:bg-gray-100/50 dark:hover:bg-gray-800/50 rounded-r-lg py-0.5 leading-snug">
                                                                 <span className="truncate flex-1" title={q}>"{q}"</span>
                                                                 <div className="flex items-center opacity-0 group-hover/q:opacity-100 transition-all ml-1 flex-shrink-0">
                                                                     <button
@@ -905,11 +923,11 @@ const VacanciesSection = ({ showToast }) => {
                                                     </ul>
                                                 </div>
 
-                                                <div className="bg-blue-50/50 dark:bg-blue-900/10 p-3 rounded-xl border border-blue-100 dark:border-blue-900/20">
-                                                    <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                                <div className="bg-blue-50/50 dark:bg-blue-900/10 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900/20">
+                                                    <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 leading-none">
                                                         🤖 Auditoría: Brenda Respondió
                                                     </p>
-                                                    <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium leading-relaxed max-w-full">
+                                                    <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium leading-snug max-w-full">
                                                         {faq.lastAiResponse || 'Consultando base de datos oficial...'}
                                                     </p>
                                                 </div>
