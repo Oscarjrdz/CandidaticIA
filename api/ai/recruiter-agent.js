@@ -165,7 +165,7 @@ ${forwardHistoryText || '(Sin historial previo)'}
    - [Brenda: "¿Cuándo puedes ir?"] → [Candidato: "Mañana"] → thought_process termina en "{ move }"
    - [Brenda: "¿Te interesa la vacante?"] → [Candidato: "Dale"] → thought_process termina en "{ move }"
 4. NO MOVER si apenas estás presentando la vacante por primera vez (el candidato aún no ha respondido afirmativamente a TU pregunta).
-5. MANEJO DE PREGUNTAS DESCONOCIDAS: Si el candidato hace una pregunta sobre la vacante que NO puedes responder con los [DATOS REALES] o las [PREGUNTAS FRECUENTES], NO INVENTES. Responde amablemente (ej. "Déjame confirmar ese excelente punto con el equipo") y DEBES incluir la pregunta original del usuario en el campo "unanswered_question" del JSON.
+5. DETECCIÓN DE PREGUNTAS: Si el candidato hace una pregunta sobre la vacante (sueldo, horario, ubicación, etc.), DEBES incluir la pregunta original del usuario en el campo "unanswered_question", incluso si la respondes con éxito. Esto nos ayuda a mejorar.
 6. FORMATO DE RESPUESTA: JSON OBLIGATORIO. Ejemplo cuando el candidato acepta:
 {
     "thought_process": "El candidato recibió la propuesta en el mensaje anterior y respondió 'Si'. La misión está cumplida. { move }",
@@ -174,11 +174,11 @@ ${forwardHistoryText || '(Sin historial previo)'}
     "gratitude_reached": false,
     "close_conversation": false
 }
-Ejemplo cuando hace una pregunta desconocida:
+Ejemplo cuando hace una pregunta (así ya la sepas contesta):
 {
-    "thought_process": "El candidato preguntó si hay fondo de ahorro. No lo veo en los datos. Extraeré la pregunta y le pediré tiempo.",
-    "response_text": "¡Buena pregunta! Permíteme confirmarlo con mi supervisor y te aviso enseguida. 😊 Mientras tanto, ¿te gustaría ir agendando la entrevista?",
-    "unanswered_question": "¿Tienen fondo de ahorro?",
+    "thought_process": "El candidato pregunta por el sueldo. Sí lo tengo en los datos (10k). Responderé y extraeré la pregunta.",
+    "response_text": "¡Claro! El sueldo es de $10,000 mensuales más prestaciones. 😊 ¿Te interesa?",
+    "unanswered_question": "¿Cuánto pagan?",
     "gratitude_reached": false,
     "close_conversation": false
 }

@@ -5,7 +5,7 @@ import { getRedisClient, recordAITelemetry } from "../utils/storage.js";
  * 🚀 LIVE AI FAQ ENGINE
  * Groups unanswered candidate questions in real-time.
  */
-export const processUnansweredQuestion = async (vacancyId, question, apiKey) => {
+export const processUnansweredQuestion = async (vacancyId, question, responseText, apiKey) => {
     if (!vacancyId || !question || !apiKey) return;
 
     try {
@@ -15,6 +15,8 @@ export const processUnansweredQuestion = async (vacancyId, question, apiKey) => 
         const key = `vacancy_faq:${vacancyId}`;
         const data = await client.get(key);
         let faqs = data ? JSON.parse(data) : [];
+
+        const genAI = new GoogleGenerativeAI(apiKey);
 
         // Fast, cheap model for clustering (v2.0 fixed 404 errors)
         const model = genAI.getGenerativeModel({
@@ -49,13 +51,13 @@ IMPORTANTE: Responde ÚNICAMENTE en JSON con el siguiente formato:
 `;
 
         const result = await model.generateContent(prompt);
-        let responseText = result.response.text().trim();
+        let responseJson = result.response.text().trim();
 
-        if (responseText.startsWith('```json')) {
-            responseText = responseText.replace(/```json\n?/, '').replace(/```\n?$/, '');
+        if (responseJson.startsWith('```json')) {
+            responseJson = responseJson.replace(/```json\n?/, '').replace(/```\n?$/, '');
         }
 
-        const parsed = JSON.parse(responseText);
+        const parsed = JSON.parse(responseJson);
 
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
@@ -68,14 +70,17 @@ IMPORTANTE: Responde ÚNICAMENTE en JSON con el siguiente formato:
                     faqs[index].originalQuestions.push(question);
                 }
                 faqs[index].lastAskedAt = new Date().toISOString();
+                // Store the last AI response for auditing
+                faqs[index].lastAiResponse = responseText;
             } else {
-                // Fallback if AI hallucinates an ID
+                // Fallback if AI hallucinations an ID
                 faqs.push({
                     id: generateId(),
                     topic: parsed.new_topic || "Preguntas Generales",
                     originalQuestions: [question],
                     frequency: 1,
                     officialAnswer: null,
+                    lastAiResponse: responseText,
                     lastAskedAt: new Date().toISOString()
                 });
             }
@@ -87,6 +92,7 @@ IMPORTANTE: Responde ÚNICAMENTE en JSON con el siguiente formato:
                 originalQuestions: [question],
                 frequency: 1,
                 officialAnswer: null,
+                lastAiResponse: responseText,
                 lastAskedAt: new Date().toISOString()
             });
         }
