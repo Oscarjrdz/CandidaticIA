@@ -710,9 +710,14 @@ ${audit.dnaLines}
             systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
 ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
 
+            systemInstruction += `\n[REGLAS DE EXTRACCIÓN ESTRICTA PARA JSON]:
+- escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería". Si dice "secu", pon "Secundaria". Si dice "prepa", pon "Preparatoria".
+- categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato. Si dice "Ayudante", pon "Ayudante General".
+`;
+
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
 {
-    "extracted_data": { "nombreReal": "string | null", "genero": "string | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "string | null", "escolaridad": "string | null", "edad": "string | number | null" },
+    "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Si | No | null", "escolaridad": "string | null", "edad": "number | null" },
     "thought_process": "Razonamiento.",
     "reaction": "null",
     "trigger_media": "string | null",
@@ -1072,11 +1077,18 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
 
                         const munMatch = (municipios.length === 0 || municipios.some(m => String(m).toLowerCase().trim() === cMun));
-                        const escMatch = (escolaridades.length === 0 || escolaridades.some(e => String(e).toLowerCase().trim() === cEsc));
+                        // Schooling match (ALLOW PARTIAL MATCH e.g. "Secu" matches "Secundaria")
+                        const escMatch = (escolaridades.length === 0 || escolaridades.some(e => {
+                            const re = String(e).toLowerCase().trim();
+                            return re.includes(cEsc) || cEsc.includes(re);
+                        }));
 
                         // Categories match if ANY of the candidate's cats are in the rule ones
+                        // ALLOW PARTIAL MATCH (e.g. "Ayudante" matches "Ayudante General")
                         const ruleCatsLow = (categories || []).map(c => String(c).toLowerCase().trim());
-                        const catMatch = (ruleCatsLow.length === 0 || cCats.some(c => ruleCatsLow.includes(c)));
+                        const catMatch = (ruleCatsLow.length === 0 || cCats.some(c =>
+                            ruleCatsLow.some(rc => rc.includes(c) || c.includes(rc))
+                        ));
 
                         const isMatch = ageMatch && genderMatch && munMatch && escMatch && catMatch;
 
