@@ -1,5 +1,5 @@
 import { getOpenAIResponse } from '../utils/openai.js';
-import { updateCandidate, moveCandidateStep, recordAITelemetry } from '../utils/storage.js';
+import { updateCandidate, moveCandidateStep, recordAITelemetry, recordVacancyInteraction } from '../utils/storage.js';
 
 /**
  * BRENDA RECLUTADORA (Cerebro Reclutador)
@@ -178,9 +178,6 @@ ${forwardHistoryText || '(Sin historial previo)'}
         }
 
         // 5. Lógica de Movimiento { move } y Rastreo de Vacantes
-        // Importación dinámica para romper bloqueos de ciclo
-        const { recordVacancyInteraction } = await import('../utils/storage.js');
-
         if (activeVacancyId) {
             if (aiResult.thought_process?.includes('{ move }')) {
                 console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished detected for candidate ${candidateId}. Recording ACCEPTED.`);
