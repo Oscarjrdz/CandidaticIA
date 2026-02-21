@@ -43,7 +43,8 @@ Tu tarea es:
 1. Si la nueva pregunta significa lo mismo o pertenece claramente a uno de los temas existentes, devuelve el "id" de ese tema.
 2. Si es una pregunta sobre un tema totalmente nuevo, devuelve "id": null, y sugiere un titulo corto y representativo en "new_topic" (máximo 4 palabras).
 
-IMPORTANTE: Responde ÚNICAMENTE en JSON con el siguiente formato:
+IMPORTANTE: El campo "new_topic" DEBE estar siempre en ESPAÑOL.
+Responde ÚNICAMENTE en JSON con el siguiente formato:
 {
   "id": "el-id-existente-o-null",
   "new_topic": "El Nuevo Tema o null"

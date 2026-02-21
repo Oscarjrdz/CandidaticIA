@@ -793,7 +793,7 @@ const VacanciesSection = ({ showToast }) => {
                                                     <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                                                         🤖 Auditoría: Brenda Respondió
                                                     </p>
-                                                    <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium leading-relaxed line-clamp-2">
+                                                    <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium leading-relaxed">
                                                         {faq.lastAiResponse || 'Consultando base de datos oficial...'}
                                                     </p>
                                                 </div>
