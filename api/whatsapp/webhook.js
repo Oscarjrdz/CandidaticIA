@@ -1,3 +1,8 @@
+/**
+ * WhatsApp Webhook Handler
+ * Restauración estable a commit aee08cc
+ * Timestamp: 2026-02-20T22:00:00
+ */
 import {
     saveMessage,
     getCandidateIdByPhone,
