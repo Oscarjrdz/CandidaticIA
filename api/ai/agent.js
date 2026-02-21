@@ -1241,6 +1241,19 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         console.log(`[AGENT MULTIMEDIA] 📍 Sending FAQ Location...`);
                         await sendUltraMsgLocation(config.instanceId, config.token, candidateData.whatsapp, faq.locationAddress || 'Ubicación', faq.locationLat, faq.locationLng);
                     }
+                } else if (aiResult?.matched_vacancy_media_object) {
+                    // Check if the AI decided to send the GLOBAL Vacancy Media (e.g., during the pitch)
+                    const vMedia = aiResult.matched_vacancy_media_object;
+                    if (vMedia.mediaType === 'image' && vMedia.mediaUrl) {
+                        console.log(`[AGENT MULTIMEDIA] 🖼️ Sending Global Vacancy Image...`);
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, vMedia.mediaUrl, 'image');
+                    } else if (vMedia.mediaType === 'document' && vMedia.mediaUrl) {
+                        console.log(`[AGENT MULTIMEDIA] 📄 Sending Global Vacancy Document...`);
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, vMedia.mediaUrl, 'document', { filename: 'Vacante' });
+                    } else if (vMedia.mediaType === 'location' && vMedia.locationLat && vMedia.locationLng) {
+                        console.log(`[AGENT MULTIMEDIA] 📍 Sending Global Vacancy Location...`);
+                        await sendUltraMsgLocation(config.instanceId, config.token, candidateData.whatsapp, vMedia.locationAddress || 'Ubicación', vMedia.locationLat, vMedia.locationLng);
+                    }
                 }
             })();
         }

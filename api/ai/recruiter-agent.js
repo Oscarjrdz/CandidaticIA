@@ -160,6 +160,7 @@ REGLAS DE ACTUACIÓN PROFESIONAL:
 5. PRIORIDAD A DUDAS: Responde dudas de forma breve y humana. NO uses el momento de una duda para repetir todo el pitch.
 6. CALL TO ACTION (CTA) OBLIGATORIO: Siempre termina con una invitación (ej. "¿Te interesa agendar?").
 7. ANTI-BOT: Varía tus saludos. Sé creativa.
+8. ADJUNTO DE VACANTE: Si en tu mensaje estás presentando la vacante por primera vez, o si el usuario pide información general de ella, y observas en [DATOS REALES] que tiene \`mediaType\` configurado, DEBES incluir "send_vacancy_media": true en tu JSON. De lo contrario, pon false.
 
 [HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
 ${forwardHistoryText || '(Sin historial previo)'}
@@ -177,6 +178,7 @@ Si preguntan por el sueldo y está en FAQs con ID "xt31":
     "response_text": "¡Claro! El sueldo es de $10,000 mensuales más prestaciones. 😊 ¿Te interesa agendar entrevista?",
     "unanswered_question": "¿Cuánto pagan?",
     "matched_faq_id": "xt31",
+    "send_vacancy_media": false,
     "gratitude_reached": false,
     "close_conversation": false
 }
@@ -211,6 +213,7 @@ Si preguntan por el sueldo y está en FAQs con ID "xt31":
                 response_text: gptResponse.content.replace(/\*/g, ''),
                 thought_process: 'Fallback: JSON parse failed.',
                 matched_faq_id: null,
+                send_vacancy_media: false,
                 gratitude_reached: false,
                 close_conversation: false
             };
@@ -223,6 +226,18 @@ Si preguntan por el sueldo y está en FAQs con ID "xt31":
                 aiResult.matched_faq_object = matchedFaq;
                 console.log(`[RECRUITER BRAIN] 📎 Attached FAQ Media Object from ID: ${aiResult.matched_faq_id}`);
             }
+        }
+
+        // Attach global vacancy media if requested by the AI
+        if (aiResult.send_vacancy_media && vacancyContext.mediaType && vacancyContext.mediaType !== '') {
+            aiResult.matched_vacancy_media_object = {
+                mediaType: vacancyContext.mediaType,
+                mediaUrl: vacancyContext.mediaUrl,
+                locationLat: vacancyContext.locationLat,
+                locationLng: vacancyContext.locationLng,
+                locationAddress: vacancyContext.locationAddress
+            };
+            console.log(`[RECRUITER BRAIN] 📎 Attached Global Vacancy attached Media`);
         }
 
         // 5. Lógica de Movimiento { move } y Rastreo de Vacantes
