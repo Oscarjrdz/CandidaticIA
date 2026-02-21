@@ -101,7 +101,8 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                         const faqs = JSON.parse(faqData);
                         const answeredFaqs = faqs.filter(f => f.officialAnswer);
                         if (answeredFaqs.length > 0) {
-                            vacancyContext.faqs = answeredFaqs.map(f => `- Q: ${f.topic}\n  A: ${f.officialAnswer}`).join('\n');
+                            vacancyContext.faqsList = answeredFaqs; // Keep a reference
+                            vacancyContext.faqs = answeredFaqs.map(f => `- Q: ${f.topic} (ID: ${f.id})\n  A: ${f.officialAnswer}`).join('\n');
                         }
                     }
                 } catch (e) { }
@@ -167,13 +168,15 @@ ${forwardHistoryText || '(Sin historial previo)'}
 1. TU MISIÓN ES ACTUAR EL ESCENARIO, pero la REGLA DE PRECEDENCIA DE FAQ y NO REDUNDANCIA mandan.
 2. DISPARO DE MOVIMIENTO — REGLA ABSOLUTA: Debes escribir "{ move }" al final de "thought_process" cuando el candidato aceptó explícitamente.
 3. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
+4. MATCHED FAQ ID: Si tu respuesta a una pregunta del candidato viene de la lista [PREGUNTAS FRECUENTES], DEBES incluir el campo "matched_faq_id" con el ID exacto de la FAQ usada. Si no usaste ninguna FAQ para responder, pon null.
    
 ⚡ EJEMPLO DE USO DE FAQ Y EXTRACCIÓN:
-Si preguntan por el sueldo y está en FAQs:
+Si preguntan por el sueldo y está en FAQs con ID "xt31":
 {
-    "thought_process": "El candidato pregunta por el sueldo. Consulto [PREGUNTAS FRECUENTES] y veo que son 10k. Responderé y extraeré la pregunta para el Radar.",
+    "thought_process": "El candidato pregunta por el sueldo. Consulto [PREGUNTAS FRECUENTES] y veo que son 10k. Usaré el ID xt31. Responderé y extraeré la pregunta para el Radar.",
     "response_text": "¡Claro! El sueldo es de $10,000 mensuales más prestaciones. 😊 ¿Te interesa agendar entrevista?",
     "unanswered_question": "¿Cuánto pagan?",
+    "matched_faq_id": "xt31",
     "gratitude_reached": false,
     "close_conversation": false
 }
@@ -207,9 +210,19 @@ Si preguntan por el sueldo y está en FAQs:
             aiResult = {
                 response_text: gptResponse.content.replace(/\*/g, ''),
                 thought_process: 'Fallback: JSON parse failed.',
+                matched_faq_id: null,
                 gratitude_reached: false,
                 close_conversation: false
             };
+        }
+
+        // Attach matched FAQ object to aiResult for media handling upstream
+        if (aiResult.matched_faq_id && vacancyContext.faqsList) {
+            const matchedFaq = vacancyContext.faqsList.find(f => f.id === aiResult.matched_faq_id);
+            if (matchedFaq) {
+                aiResult.matched_faq_object = matchedFaq;
+                console.log(`[RECRUITER BRAIN] 📎 Attached FAQ Media Object from ID: ${aiResult.matched_faq_id}`);
+            }
         }
 
         // 5. Lógica de Movimiento { move } y Rastreo de Vacantes

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical, Sparkles, RefreshCw } from 'lucide-react';
+import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical, Sparkles, RefreshCw, Image as ImageIcon, MapPin, Paperclip } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -205,12 +205,22 @@ const VacanciesSection = ({ showToast }) => {
         return () => clearInterval(interval);
     }, [isModalOpen, editingId]);
 
-    const handleSaveFaq = async (faqId, officialAnswer) => {
+    const handleSaveFaq = async (faq) => {
         try {
+            const bodyPayload = {
+                faqId: faq.id,
+                officialAnswer: faq.officialAnswer,
+                mediaType: faq.mediaType,
+                mediaUrl: faq.mediaUrl,
+                locationLat: faq.locationLat,
+                locationLng: faq.locationLng,
+                locationAddress: faq.locationAddress
+            };
+
             const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ faqId, officialAnswer })
+                body: JSON.stringify(bodyPayload)
             });
             if (res.ok) {
                 showToast('Respuesta oficial guardada e inyectada a la IA', 'success');
@@ -956,12 +966,118 @@ const VacanciesSection = ({ showToast }) => {
                                                         />
                                                     </div>
                                                     <button
-                                                        onClick={() => handleSaveFaq(faq.id, faq.officialAnswer)}
+                                                        onClick={() => handleSaveFaq(faq)}
                                                         className="px-5 py-2 bg-indigo-600 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-indigo-500/20 hover:shadow-none translate-y-0 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
                                                         disabled={!faq.officialAnswer?.trim()}
                                                     >
                                                         Enseñar
                                                     </button>
+                                                </div>
+
+                                                {/* Media / Attachment Setting */}
+                                                <div className="mt-3 flex flex-wrap gap-2 items-start border-t border-indigo-100/30 dark:border-indigo-800/20 pt-3">
+                                                    <div className="flex gap-1.5 items-center">
+                                                        <select
+                                                            value={faq.mediaType || ''}
+                                                            onChange={(e) => {
+                                                                const newFaqs = [...faqs];
+                                                                const idx = newFaqs.findIndex(f => f.id === faq.id);
+                                                                if (idx > -1) {
+                                                                    newFaqs[idx].mediaType = e.target.value;
+                                                                    if (!e.target.value) {
+                                                                        newFaqs[idx].mediaUrl = '';
+                                                                        newFaqs[idx].locationLat = '';
+                                                                        newFaqs[idx].locationLng = '';
+                                                                        newFaqs[idx].locationAddress = '';
+                                                                    }
+                                                                    setFaqs(newFaqs);
+                                                                }
+                                                            }}
+                                                            className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-lg outline-none border border-transparent focus:border-indigo-300 dark:focus:border-indigo-700 transition-all"
+                                                        >
+                                                            <option value="">Sin Adjunto</option>
+                                                            <option value="image">Imagen</option>
+                                                            <option value="document">Documento (PDF)</option>
+                                                            <option value="location">Ubicación (Maps)</option>
+                                                        </select>
+                                                    </div>
+
+                                                    {(faq.mediaType === 'image' || faq.mediaType === 'document') && (
+                                                        <div className="flex-1 min-w-[200px] flex gap-2">
+                                                            <div className="flex-1 relative flex items-center">
+                                                                {faq.mediaType === 'image' ? <ImageIcon className="w-3.5 h-3.5 absolute left-2 text-indigo-400" /> : <Paperclip className="w-3.5 h-3.5 absolute left-2 text-indigo-400" />}
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder={faq.mediaType === 'image' ? "URL de la imagen (JPG/PNG)" : "URL del documento (PDF)"}
+                                                                    value={faq.mediaUrl || ''}
+                                                                    onChange={(e) => {
+                                                                        const newFaqs = [...faqs];
+                                                                        const idx = newFaqs.findIndex(f => f.id === faq.id);
+                                                                        if (idx > -1) {
+                                                                            newFaqs[idx].mediaUrl = e.target.value;
+                                                                            setFaqs(newFaqs);
+                                                                        }
+                                                                    }}
+                                                                    className="w-full pl-7 pr-3 py-1.5 text-xs bg-white dark:bg-gray-800 border-none rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none placeholder:text-gray-400 shadow-sm"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {faq.mediaType === 'location' && (
+                                                        <div className="flex-1 min-w-[250px] flex flex-col gap-2">
+                                                            <div className="flex gap-2 w-full">
+                                                                <div className="relative flex-1">
+                                                                    <MapPin className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-indigo-400" />
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Latitud (ej. 25.6866)"
+                                                                        value={faq.locationLat || ''}
+                                                                        onChange={(e) => {
+                                                                            const newFaqs = [...faqs];
+                                                                            const idx = newFaqs.findIndex(f => f.id === faq.id);
+                                                                            if (idx > -1) {
+                                                                                newFaqs[idx].locationLat = e.target.value;
+                                                                                setFaqs(newFaqs);
+                                                                            }
+                                                                        }}
+                                                                        className="w-full pl-7 pr-2 py-1.5 text-xs bg-white dark:bg-gray-800 border-none rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
+                                                                    />
+                                                                </div>
+                                                                <div className="relative flex-1">
+                                                                    <MapPin className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-indigo-400" />
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Longitud (ej. -100.3161)"
+                                                                        value={faq.locationLng || ''}
+                                                                        onChange={(e) => {
+                                                                            const newFaqs = [...faqs];
+                                                                            const idx = newFaqs.findIndex(f => f.id === faq.id);
+                                                                            if (idx > -1) {
+                                                                                newFaqs[idx].locationLng = e.target.value;
+                                                                                setFaqs(newFaqs);
+                                                                            }
+                                                                        }}
+                                                                        className="w-full pl-7 pr-2 py-1.5 text-xs bg-white dark:bg-gray-800 border-none rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Dirección (ej. Oficina Principal, Monterrey)"
+                                                                value={faq.locationAddress || ''}
+                                                                onChange={(e) => {
+                                                                    const newFaqs = [...faqs];
+                                                                    const idx = newFaqs.findIndex(f => f.id === faq.id);
+                                                                    if (idx > -1) {
+                                                                        newFaqs[idx].locationAddress = e.target.value;
+                                                                        setFaqs(newFaqs);
+                                                                    }
+                                                                }}
+                                                                className="w-full px-3 py-1.5 text-xs bg-white dark:bg-gray-800 border-none rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>

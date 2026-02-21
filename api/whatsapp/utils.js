@@ -227,3 +227,32 @@ export const unblockUltraMsgContact = async (instanceId, token, chatId) => {
         return { success: res.status === 200, data: res.data };
     } catch (e) { return { success: false, error: e.message }; }
 };
+
+export const sendUltraMsgLocation = async (instanceId, token, to, address, lat, lng) => {
+    try {
+        let formattedTo = String(to).trim();
+        if (!formattedTo.includes('@')) {
+            const cleanPhone = formattedTo.replace(/\D/g, '');
+            formattedTo = `${cleanPhone}@c.us`;
+        }
+
+        const payload = {
+            token,
+            to: formattedTo,
+            address: address || 'Ubicación',
+            lat: String(lat),
+            lng: String(lng)
+        };
+
+        const url = `https://api.ultramsg.com/${instanceId}/messages/location`;
+        const response = await axios.post(url, payload, {
+            timeout: 10000,
+            validateStatus: () => true
+        });
+
+        return { success: response.status === 200, data: response.data };
+    } catch (error) {
+        console.error(`❌ UltraMSG Location Error:`, error.message);
+        return { success: false, error: error.message };
+    }
+};

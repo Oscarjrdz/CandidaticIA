@@ -16,7 +16,7 @@ import {
     recordVacancyInteraction,
     updateProjectCandidateMeta
 } from '../utils/storage.js';
-import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction, sendUltraMsgLocation } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
 import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { getOpenAIResponse } from '../utils/openai.js';
@@ -1222,8 +1222,27 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const resText = String(responseTextVal || '').trim();
         const isTechnical = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
 
+        let faqMediaPromise = Promise.resolve();
+
         if (responseTextVal && !isTechnical) {
-            deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
+            deliveryPromise = (async () => {
+                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
+
+                // AFTER sending the text, check if we need to send an FAQ attachment
+                if (aiResult?.matched_faq_object) {
+                    const faq = aiResult.matched_faq_object;
+                    if (faq.mediaType === 'image' && faq.mediaUrl) {
+                        console.log(`[AGENT MULTIMEDIA] 🖼️ Sending FAQ Image...`);
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, faq.mediaUrl, 'image');
+                    } else if (faq.mediaType === 'document' && faq.mediaUrl) {
+                        console.log(`[AGENT MULTIMEDIA] 📄 Sending FAQ Document...`);
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, faq.mediaUrl, 'document', { filename: 'Documento' });
+                    } else if (faq.mediaType === 'location' && faq.locationLat && faq.locationLng) {
+                        console.log(`[AGENT MULTIMEDIA] 📍 Sending FAQ Location...`);
+                        await sendUltraMsgLocation(config.instanceId, config.token, candidateData.whatsapp, faq.locationAddress || 'Ubicación', faq.locationLat, faq.locationLng);
+                    }
+                }
+            })();
         }
 
         await Promise.allSettled([
