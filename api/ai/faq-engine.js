@@ -16,11 +16,9 @@ export const processUnansweredQuestion = async (vacancyId, question, apiKey) => 
         const data = await client.get(key);
         let faqs = data ? JSON.parse(data) : [];
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-
-        // Fast, cheap model for clustering
+        // Fast, cheap model for clustering (v2.0 fixed 404 errors)
         const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
+            model: "gemini-2.0-flash",
             generationConfig: {
                 temperature: 0.1,
                 responseMimeType: "application/json",
