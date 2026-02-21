@@ -1191,8 +1191,6 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
-        console.log(`[BYPASS DEBUG] Final save candidateUpdates.projectId: ${candidateUpdates.projectId}, finalProjectId: ${finalProjectId}`);
-
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
         let reactionPromise = Promise.resolve();
         if (msgId && config && aiResult?.reaction) {
