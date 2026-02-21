@@ -415,6 +415,18 @@ ${audit.dnaLines}
             const project = await getProjectById(activeProjectId);
             const currentStep = project?.steps?.find(s => s.id === activeStepId) || project?.steps?.[0];
 
+            // 🎯 Determine active vacancy for FAQ engine and pitches
+            const currentIdx = candidateData.currentVacancyIndex !== undefined
+                ? candidateData.currentVacancyIndex
+                : (candidateData.projectMetadata?.currentVacancyIndex || 0);
+
+            let activeVacancyId = null;
+            if (project?.vacancyIds && project.vacancyIds.length > 0) {
+                activeVacancyId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
+            } else if (project?.vacancyId) {
+                activeVacancyId = project.vacancyId;
+            }
+
             if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
                 console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
                 isRecruiterMode = true;
@@ -427,7 +439,7 @@ ${audit.dnaLines}
                 if (intent === 'REJECTION' && project.vacancyIds && project.vacancyIds.length > 0) {
                     console.log(`[RECRUITER BRAIN] 🛡️ Rejection intent detected for candidate ${candidateId}`);
                     // 1. Get current index
-                    const currentIdx = candidateData.projectMetadata?.currentVacancyIndex || 0;
+                    const currentIdx = candidateData.currentVacancyIndex || 0;
 
                     // 2. Extract reason (lightweight LLM call)
                     let reason = "Motivo no especificado";
