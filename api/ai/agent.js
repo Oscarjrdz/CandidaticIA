@@ -716,6 +716,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             systemInstruction += `\n[REGLAS DE EXTRACCIÓN ESTRICTA PARA JSON]:
 - escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería". Si dice "secu", pon "Secundaria". Si dice "prepa", pon "Preparatoria".
 - categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato. Si dice "Ayudante", pon "Ayudante General".
+- tieneEmpleo: Si el usuario responde "no", "no tengo", "desempleado", "buscando", etc., DEBES poner obligatoriamente "No". Si dice que sí trabaja, pon "Si". Es un campo booleano, no lo dejes en null si ya respondió.
 `;
 
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
@@ -728,10 +729,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
     "gratitude_reached": "boolean",
     "close_conversation": "boolean"
 } 
-\n[REGLA ANTI-SILENCIO]: Si el usuario responde con simples confirmaciones ("Si", "Claro", "Ok") a una pregunta de datos, TU RESPUESTA DEBE SER: 
+\n[REGLA ANTI-SILENCIO]: Si el usuario responde con simples confirmaciones o vacilaciones ("Si", "Claro", "Ok") a una pregunta de datos abiertos (como sueldo o nombre), TU RESPUESTA DEBE SER: 
 1. Agradecer/Confirmar ("¡Perfecto!", "¡Excelente!").
 2. VOLVER A PEDIR EL DATO FALTANTE EXPLICÍTAMENTE.
 3. JAMÁS DEJES "response_text" VACÍO si faltan datos.
+(EXCEPCIÓN CRÍTICA: Para el campo "tieneEmpleo", las respuestas "Sí" y "No" SON COMPLETAMENTE VÁLIDAS. NO vuelvas a pedir el dato de empleo si te responde Sí o No, simplemente guárdalas en "extracted_data").
 `;
 
             const genAI = new GoogleGenerativeAI(apiKey);
