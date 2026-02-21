@@ -64,7 +64,9 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             schedule: 'N/A'
         };
 
-        const currentVacancyIndex = candidateData.projectMetadata?.currentVacancyIndex || 0;
+        const currentVacancyIndex = candidateData.currentVacancyIndex !== undefined
+            ? candidateData.currentVacancyIndex
+            : (candidateData.projectMetadata?.currentVacancyIndex || 0);
         let activeVacancyId = null;
 
         // Migración hacia atrás (soporta project.vacancyId o project.vacancyIds)

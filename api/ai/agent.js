@@ -12,7 +12,8 @@ import {
     recordAITelemetry,
     moveCandidateStep,
     addCandidateToProject,
-    recordVacancyInteraction
+    recordVacancyInteraction,
+    updateProjectCandidateMeta
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
@@ -445,6 +446,9 @@ ${audit.dnaLines}
                     candidateUpdates.historialRechazos = currentHist;
                     candidateUpdates.currentVacancyIndex = currentIdx + 1;
 
+                    // ⚡ SYNC PROJECT META (Scalable Index)
+                    await updateProjectCandidateMeta(project.id, candidateId, { currentVacancyIndex: currentIdx + 1 });
+
                     // Scalable Event Log save
                     await recordVacancyInteraction(candidateId, project.id, activeVacId, 'REJECTED', reason);
 
@@ -511,7 +515,7 @@ ${audit.dnaLines}
 
                     const nextStep = project.steps[currentIndex + 1];
 
-                    console.log(`[RECRUITER BRAIN] 🧩 Move condition. Current idx: ${currentIndex}, Next step: ${nextStep?.name || 'NONE'}`);
+                    console.log(`[RECRUITER BRAIN] 🧩 Move condition for ${candidateId}. ActiveID: ${activeStepId}, Idx: ${currentIndex}, NextStep: ${nextStep?.name} (ID: ${nextStep?.id})`);
 
                     if (nextStep) {
                         console.log(`[RECRUITER BRAIN] 🚀 Auto-moving candidate ${candidateId} to next step: ${nextStep.name}`);
@@ -530,10 +534,11 @@ ${audit.dnaLines}
                         // Fire sticker and next AI concurrently to minimize latency, but with controlled sequence
                         const bridgePromise = (async () => {
                             try {
-                                const bridgeSticker = await redis?.get('bot_step_move_sticker');
+                                const client = getRedisClient();
+                                const bridgeSticker = await client?.get('bot_step_move_sticker');
                                 if (bridgeSticker) {
                                     console.log(`[RECRUITER BRAIN] 🎨 Sending Visual Bridge sticker...`);
-                                    await new Promise(r => setTimeout(r, 500)); // Precise delay
+                                    await new Promise(r => setTimeout(r, 800)); // Slightly more delay for naturality
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
                                 } else {
                                     console.log(`[RECRUITER BRAIN] ⚠️ No bridge sticker found in Redis (bot_step_move_sticker)`);
@@ -1097,6 +1102,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             if (isNowComplete && aiResult?.gratitude_reached === true) {
                 aiResult.reaction = '👍';
             } else if (!aiResult?.reaction && !isRecruiterMode) {
+                aiResult.reaction = null;
+            }
+
+            // 🚫 MOVE SILENCE: If we moved, don't send a reaction to the old message
+            if (hasMoveTag) {
+                console.log(`[RECRUITER BRAIN] 🤫 Silencing reaction for move event.`);
                 aiResult.reaction = null;
             }
         }

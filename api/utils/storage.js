@@ -1157,6 +1157,22 @@ export const moveCandidateStep = async (projectId, candidateId, stepId) => {
 };
 
 /**
+ * Update Project Candidate Metadata fields (like currentVacancyIndex)
+ */
+export const updateProjectCandidateMeta = async (projectId, candidateId, updates) => {
+    const client = getRedisClient();
+    if (!client || !projectId || !candidateId) return false;
+
+    const metadataKey = `${KEYS.PROJECT_CANDIDATE_METADATA_PREFIX}${projectId}`;
+    const rawMetadata = await client.hget(metadataKey, candidateId);
+    const metadata = rawMetadata ? JSON.parse(rawMetadata) : {};
+
+    const updatedMetadata = { ...metadata, ...updates, updatedAt: new Date().toISOString() };
+    await client.hset(metadataKey, candidateId, JSON.stringify(updatedMetadata));
+    return true;
+};
+
+/**
  * Reorder Projects in the list
  */
 export const reorderProjects = async (projectIds) => {
