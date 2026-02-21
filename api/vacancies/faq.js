@@ -98,6 +98,28 @@ export default async function handler(req, res) {
                 await client.set(key, JSON.stringify(faqs));
                 return res.status(200).json({ success: true, faqs });
             }
+
+            if (action === 'remove_question') {
+                if (!faqId || !questionText) {
+                    return res.status(400).json({ error: 'faqId and questionText are required' });
+                }
+
+                const data = await client.get(key);
+                if (!data) return res.status(404).json({ error: 'FAQ list not found' });
+
+                let faqs = JSON.parse(data);
+                const index = faqs.findIndex(f => f.id === faqId);
+                if (index === -1) return res.status(404).json({ error: 'FAQ not found' });
+
+                faqs[index].originalQuestions = faqs[index].originalQuestions.filter(q => q !== questionText);
+                faqs[index].frequency = Math.max(1, (faqs[index].frequency || 1) - 1);
+
+                // If no questions left, we could delete the FAQ theme, but safer to just let it be or the user deletes the theme.
+                // Let's keep the theme even if empty.
+
+                await client.set(key, JSON.stringify(faqs));
+                return res.status(200).json({ success: true, faqs });
+            }
         }
 
         if (method === 'DELETE') {

@@ -243,6 +243,26 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
+    const handleRemoveQuestion = async (faqId, questionText) => {
+        if (!confirm('¿Deseas eliminar esta pregunta específica?')) return;
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'remove_question', faqId, questionText })
+            });
+            if (res.ok) {
+                showToast('Pregunta eliminada', 'success');
+                loadFaqs(editingId);
+            } else {
+                showToast('Error al eliminar pregunta', 'error');
+            }
+        } catch (error) {
+            console.error('Error removing question:', error);
+            showToast('Error de conexión', 'error');
+        }
+    };
+
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
         { label: 'WhatsApp', value: '{{whatsapp}}' },
@@ -803,13 +823,22 @@ const VacanciesSection = ({ showToast }) => {
                                                         {(faq.originalQuestions || []).slice(0, 3).map((q, idx) => (
                                                             <li key={idx} className="flex items-center justify-between group/q text-[11px] text-gray-600 dark:text-gray-400 italic pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 transition-all hover:bg-gray-100/50 dark:hover:bg-gray-800/50 rounded-r-lg py-0.5">
                                                                 <span className="truncate flex-1" title={q}>"{q}"</span>
-                                                                <button
-                                                                    onClick={() => handleSplitFaq(faq.id, q)}
-                                                                    className="opacity-0 group-hover/q:opacity-100 p-1 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-900 rounded-md transition-all ml-1 flex-shrink-0"
-                                                                    title="Separar esta duda en un nuevo tema"
-                                                                >
-                                                                    <Plus className="w-3 h-3" />
-                                                                </button>
+                                                                <div className="flex items-center opacity-0 group-hover/q:opacity-100 transition-all ml-1 flex-shrink-0">
+                                                                    <button
+                                                                        onClick={() => handleSplitFaq(faq.id, q)}
+                                                                        className="p-1 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-900 rounded-md transition-all"
+                                                                        title="Separar esta duda en un nuevo tema"
+                                                                    >
+                                                                        <Plus className="w-3 h-3" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleRemoveQuestion(faq.id, q)}
+                                                                        className="p-1 hover:text-red-500 hover:bg-white dark:hover:bg-gray-900 rounded-md transition-all"
+                                                                        title="Eliminar esta pregunta"
+                                                                    >
+                                                                        <Trash2 className="w-3 h-3" />
+                                                                    </button>
+                                                                </div>
                                                             </li>
                                                         ))}
                                                     </ul>
