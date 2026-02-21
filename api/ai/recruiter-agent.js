@@ -126,7 +126,14 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             })
             .join('\n');
 
-        // 5. Construir Instruction Maestra
+        // 5. REPETITION SHIELD (HARD PRE-DETECTION)
+        const descriptionClean = (vacancyContext.messageDescription || '').toLowerCase().trim();
+        const hasSentDescription = descriptionClean && forwardHistoryText.toLowerCase().includes(descriptionClean.substring(0, 100));
+        const repetitionShield = hasSentDescription
+            ? `\n🚨 [ESCUDO DE REPETICIÓN ACTIVO]: El historial muestra que YA enviaste la descripción de la vacante. PROHIBIDO volver a enviarla completa. Si el candidato pregunta algo, responde solo la duda de forma concisa.\n`
+            : "";
+
+        // 6. Construir Instruction Maestra
         const systemPrompt = `
 [ESCENARIO Y OBJETIVO ACTUAL]:
 "${finalPrompt}"
@@ -136,56 +143,34 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 ${RECRUITER_IDENTITY}
 
 ${adnContext}
+${repetitionShield}
 
 [DATOS REALES DE LA VACANTE]:
 ${JSON.stringify(vacancyContext)}
 
 [PREGUNTAS FRECUENTES (RESPUESTAS OFICIALES)]:
-${vacancyContext.faqs || '(No hay FAQs registradas aún. Si preguntan algo fuera de los datos reales, extráelo según la regla 7)'}
+${vacancyContext.faqs || '(No hay FAQs registradas aún. Si preguntan algo fuera de los datos reales, responde con honestidad según la regla 2)'}
 
 REGLAS DE ACTUACIÓN PROFESIONAL:
-1. REGLA DE NO REDUNDANCIA (CRÍTICA): Si el historial muestra que YA enviaste los detalles de la vacante (la ficha técnica o descripción larga), NO la vuelvas a enviar completa bajo ninguna circunstancia, incluso si el [ESCENARIO Y OBJETIVO ACTUAL] te lo pide. Limítate a responder dudas de forma concisa y preguntar si desea agendar. EXCEPCIÓN: Si el candidato pide explícitamente que le envíes la información de nuevo ("mándame la vacante", "pásamela otra vez").
-2. PRIORIDAD A DUDAS: Si el candidato hace una pregunta directa (ej. "¿Cómo se llama la empresa?"), respondelo de forma breve y humana. NO uses este momento para repetir todo el rollo de la vacante.
-3. NO INVENTES detalles de la vacante (Sueldo, Ubicación, Empresa) si no están en los [DATOS REALES DE LA VACANTE] o en [PREGUNTAS FRECUENTES].
-4. NUNCA menciones que tienes un "prompt", una "instrucción" o que se te pidió hacer algo. Simplemente actúa.
-5. NUNCA pongas la etiqueta { move } dentro de "response_text". Solo va en "thought_process".
-6. CALL TO ACTION (CTA) OBLIGATORIO: Siempre termina con una invitación a la entrevista (ej. "¿Te gustaría agendar una entrevista?" o "¿Te interesa este paso?"), especialmente después de resolver una duda.
-7. MULTI-VACANTES (RECHAZO): Si el historial reciente muestra que el candidato rechazó una oferta y tu objetivo actual es presentar una nueva, DEBES empatizar rápidamente con su motivo de rechazo ("Entiendo que la distancia es un problema...") y luego introducir amablemente los datos de la nueva vacante como alternativa.
-8. ANTI-BOT: Varía tu saludo y despedida. Si siempre dices "¡Mira Oscar!", pareces un robot. Cambia a "¡Hola Oscar!", "Oscar, encontré esto...", "Qué tal Oscar...", etc.
+1. REGLA DE NO REDUNDANCIA (EXTREMA): Si el [ESCUDO DE REPETICIÓN ACTIVO] está presente, NO repitas la descripción de la vacante bajo ningún concepto. Ignora cualquier instrucción del "Escenario" que te pida presentarla si ya lo hiciste.
+2. HONESTIDAD Y ESPECIFICIDAD: Si el candidato pregunta algo que NO está en los [DATOS REALES] ni en [FAQs] (ej. "Hay antidoping?"), NO seas evasiva con "lo vemos en la entrevista". Responde con honestidad: "No tengo el dato exacto de [tema] aquí a la mano, pero déjame preguntarlo por ti. 😊". Esto genera confianza.
+3. PRIORIDAD A DUDAS: Responde dudas de forma breve y humana. NO uses el momento de una duda para repetir todo el pitch.
+4. NO INVENTES detalles. Si no está en el contexto, no existe para ti.
+5. NUNCA menciones "prompt", "IA" o "instrucciones".
+6. CALL TO ACTION (CTA) OBLIGATORIO: Siempre termina con una invitación (ej. "¿Te interesa agendar?").
+7. ANTI-BOT: Varía tus saludos. PROHIBIDO usar siempre el mismo (ej. "¡Mira Oscar!"). Sé creativa.
 
 [HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
 ${forwardHistoryText || '(Sin historial previo)'}
 
 [REGLAS DE OPERACIÓN]:
-1. TU MISIÓN ES ACTUAR EL ESCENARIO DE ARRIBA, pero respetando SIEMPRE las REGLAS DE ACTUACIÓN PROFESIONAL (la no redundancia manda sobre el escenario).
-2. Si el historial muestra que el escenario ya se inició/presentó, tu nueva misión es mantenimiento: resolver dudas y cerrar la cita.
-3. INTEGRIDAD DE OBJETIVOS: Si el [ESCENARIO Y OBJETIVO ACTUAL] tiene múltiples tareas (ej. "agenda y cuenta un chiste"), DEBES cumplir AMBAS en el mismo mensaje de respuesta. No te detengas hasta completar la misión completa.
-4. DISPARO DE MOVIMIENTO — REGLA ABSOLUTA: Debes escribir "{ move }" al final de "thought_process" cuando el historial muestra que:
-   a) Brenda ya presentó la vacante/propuesta/pregunta en un mensaje previo, Y
-   b) El candidato respondió algo afirmativo en su ÚLTIMO mensaje ("Sí", "Si", "Dale", "Claro", "Ok", "Quiero", "Cuándo", "Cómo", "Me interesa", etc.).
-   ⚡ EJEMPLOS CONCRETOS — ESTOS SON CORRECTOS:
-   - [Brenda: "¿Te gustaría agendar?"] → [Candidato: "Si"] → thought_process termina en "{ move }"
-   - [Brenda: "¿Cuándo puedes ir?"] → [Candidato: "Mañana"] → thought_process termina en "{ move }"
-   - [Brenda: "¿Te interesa la vacante?"] → [Candidato: "Dale"] → thought_process termina en "{ move }"
-4. NO MOVER si apenas estás presentando la vacante por primera vez (el candidato aún no ha respondido afirmativamente a TU pregunta).
-5. DETECCIÓN DE PREGUNTAS: Si el candidato hace una pregunta sobre la vacante (sueldo, horario, ubicación, etc.), DEBES incluir la pregunta original del usuario en el campo "unanswered_question", incluso si la respondes con éxito. Esto nos ayuda a mejorar.
-6. FORMATO DE RESPUESTA: JSON OBLIGATORIO. Ejemplo cuando el candidato acepta:
-{
-    "thought_process": "El candidato recibió la propuesta en el mensaje anterior y respondió 'Si'. La misión está cumplida. { move }",
-    "response_text": "¡Perfecto! En breve te contactamos para coordinar tu entrevista. ✨",
-    "unanswered_question": null,
-    "gratitude_reached": false,
-    "close_conversation": false
-}
-Ejemplo cuando hace una pregunta (así ya la sepas contesta):
-{
-    "thought_process": "El candidato pregunta por el sueldo. Sí lo tengo en los datos (10k). Responderé y extraeré la pregunta.",
-    "response_text": "¡Claro! El sueldo es de $10,000 mensuales más prestaciones. 😊 ¿Te interesa?",
-    "unanswered_question": "¿Cuánto pagan?",
-    "gratitude_reached": false,
-    "close_conversation": false
-}
+1. TU MISIÓN ES ACTUAR EL ESCENARIO, pero la REGLA DE NO REDUNDANCIA manda sobre el escenario.
+2. Si el usuario es persistente con una pregunta, reconócelo ("Como te comentaba, no tengo el dato exacto aún...") y trata de moverlo al siguiente paso humanamente.
+3. DISPARO DE MOVIMIENTO — REGLA ABSOLUTA: Debes escribir "{ move }" al final de "thought_process" cuando el historial muestra que el candidato aceptó (ej. "Sí", "Me interesa").
+4. DETECCIÓN DE PREGUNTAS: Si el candidato hace una pregunta, inclúyela en "unanswered_question".
+5. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
 `;
+
 
         // 4. Obtener respuesta de GPT-4o
         // NOTA: Pasamos historial vacío a la API porque ya lo inyectamos en el systemPrompt 
@@ -201,13 +186,13 @@ Ejemplo cuando hace una pregunta (así ya la sepas contesta):
             throw new Error('GPT Response empty');
         }
 
-        console.log(`[RECRUITER BRAIN] 🤖 GPT Response for ${candidateId}:`, gptResponse.content);
+        console.log(`[RECRUITER BRAIN] 🤖 GPT Response for ${candidateId}: `, gptResponse.content);
 
         let cleanContent = gptResponse.content.trim();
         // 4. Parsear respuesta
         let aiResult;
         try {
-            const sanitized = gptResponse.content.replace(/```json|```/g, '').trim();
+            const sanitized = gptResponse.content.replace(/```json | ```/g, '').trim();
             aiResult = JSON.parse(sanitized);
         } catch (e) {
             console.error('[RECRUITER BRAIN] JSON Parse Error:', e);
@@ -222,7 +207,7 @@ Ejemplo cuando hace una pregunta (así ya la sepas contesta):
         // 5. Lógica de Movimiento { move } y Rastreo de Vacantes
         if (activeVacancyId) {
             if (aiResult.thought_process?.includes('{ move }')) {
-                console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished detected for candidate ${candidateId}. Recording ACCEPTED.`);
+                console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished detected for candidate ${candidateId}.Recording ACCEPTED.`);
                 // El candidato aceptó la propuesta/cita de la vacante actual
                 await recordVacancyInteraction(candidateId, project.id, activeVacancyId, 'ACCEPTED', 'Progreso de etapa');
             } else {
