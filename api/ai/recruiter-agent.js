@@ -198,6 +198,9 @@ Ejemplo cuando hace una pregunta desconocida:
             throw new Error('GPT Response empty');
         }
 
+        console.log(`[RECRUITER BRAIN] 🤖 GPT Response for ${candidateId}:`, gptResponse.content);
+
+        let cleanContent = gptResponse.content.trim(); a
         // 4. Parsear respuesta
         let aiResult;
         try {

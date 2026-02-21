@@ -507,8 +507,12 @@ ${audit.dnaLines}
                     }
 
                     if (aiResult?.unanswered_question && activeVacancyId) {
-                        console.log(`[FAQ Engine] 📡 Dispatching unanswered question to cluster: "${aiResult.unanswered_question}"`);
-                        processUnansweredQuestion(activeVacancyId, aiResult.unanswered_question, activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY).catch(console.error);
+                        const geminiKey = activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
+                        console.log(`[FAQ Engine] 📡 Question detected: "${aiResult.unanswered_question}" for Vacancy: ${activeVacancyId}`);
+                        console.log(`[FAQ Engine] 🔑 API Key status: ${geminiKey ? 'PRESENT' : 'MISSING'}`);
+                        processUnansweredQuestion(activeVacancyId, aiResult.unanswered_question, geminiKey).catch(e => console.error('[FAQ Engine] ❌ Cluster Error:', e));
+                    } else if (aiResult?.unanswered_question) {
+                        console.log(`[FAQ Engine] ⚠️ Question detected but activeVacancyId is NULL.`);
                     }
                 }
 
