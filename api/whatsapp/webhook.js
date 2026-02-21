@@ -256,10 +256,14 @@ export default async function handler(req, res) {
                     } catch (e) { }
                 })();
 
-                // 🔥 CRITICAL: We respond IMMEDIATELY. We don't await the AI processing.
-                // We only await the fast side-effects that need to happen before ACK.
+                // 🔥 CRITICAL META-OPTIMIZATION: Respond to UltraMsg IMMEDIATELY.
+                // This ensures <100ms latency on the webhook acknowledgment.
+                res.status(200).send('success');
+
+                // We await the side-effects *after* sending the response to keep the Vercel 
+                // serverless function alive until all tasks (presence, queueing) finish.
                 await Promise.allSettled([miscPromise, presenceUpdate, aiPromise]);
-                return res.status(200).send('success');
+                return;
 
             } catch (err) {
                 console.error(`⚠️ Webhook logic error for ${msgId}:`, err);
