@@ -1371,13 +1371,25 @@ export const addCandidateToProject = async (projectId, candidateId, metadata = n
 
     await pipeline.exec();
 
+    // 🔥 ATOMIC OVERRIDE: Ensure the candidate root JSON has this projectId.
+    // This prevents webhooks racing conditions from overwriting it with old data.
+    const candRaw = await client.get(`${KEYS.CANDIDATE_PREFIX}${candidateId}`);
+    if (candRaw) {
+        try {
+            const candJson = JSON.parse(candRaw);
+            candJson.projectId = projectId;
+            candJson.stepId = finalMetadata.stepId;
+            await client.set(`${KEYS.CANDIDATE_PREFIX}${candidateId}`, JSON.stringify(candJson));
+        } catch (e) { }
+    }
+
     // ⚡ REAL-TIME NOTIFICATION
     try {
         const { notifyCandidateUpdate } = await import('./sse-notify.js');
         notifyCandidateUpdate(candidateId, { projectId, stepId: finalMetadata.stepId }).catch(() => { });
     } catch (e) { }
 
-    return true;
+    return { success: true, migrated: !!migratedFrom, migratedFrom };
 };
 
 // ==========================================
