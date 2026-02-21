@@ -521,10 +521,19 @@ ${audit.dnaLines}
                     if (nextStep) {
                         console.log(`[RECRUITER BRAIN] 🚀 Auto-moving candidate ${candidateId} to next step: ${nextStep.name}`);
 
-                        // 1. SILENCE CURRENT STEP: Clear responseTextVal to avoid redundant message
-                        console.log(`[RECRUITER BRAIN] 🤫 Move detected. Silencing current step message to prioritize next step.`);
-                        const originalStep1Text = responseTextVal; // Keep for history if needed
-                        responseTextVal = null;
+                        // 1. SEND CONFIRMATION: Send the acceptance confirmation before silencing
+                        // This ensures the candidate gets feedback BEFORE the bridge sticker + next step
+                        if (responseTextVal) {
+                            console.log(`[RECRUITER BRAIN] 💬 Sending acceptance confirmation before move...`);
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
+                            await saveMessage(candidateId, {
+                                id: `bot_accept_${Date.now()}`,
+                                from: 'bot',
+                                content: responseTextVal,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                        responseTextVal = null; // Silence so we don't double-send at the end
 
                         // 2. Database Update
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
