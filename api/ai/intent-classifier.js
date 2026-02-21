@@ -34,7 +34,7 @@ export async function classifyIntent(candidateId, lastMessage, historyText = "")
             generationConfig: { temperature: 0.7 }
         });
 
-        const prompt = `[INTENT CLASSIFIER v2.2]
+        const prompt = `[INTENT CLASSIFIER v2.3]
 Analiza el último mensaje del usuario y el contexto para clasificarlo en una INTENCIÓN.
 
 CATEGORÍAS:
@@ -46,15 +46,20 @@ CATEGORÍAS:
    - Ejemplos: "Vivo en Mty", "Me llamo Juan", "Tengo 20 años".
 4. QUERY: Preguntas sobre vacantes, sueldos, procesos o dudas técnicas por texto.
    - Ejemplos: "¿Hay vacantes?", "¿Cuánto pagan?", "¿Cómo va mi proceso?".
-5. REJECTION: El candidato rechaza explícitamente la vacante o propuesta actual, o indica que no le conviene.
+5. ACCEPTANCE: El candidato ACEPTA la propuesta, vacante o cita que Brenda le ofreció. Puede ser explícito o implícito.
+   - Ejemplos directos: "Sí", "Si", "Dale", "Ok", "Claro", "Quiero", "Me interesa", "Perfecto", "Listo", "Sí quiero", "Cuándo sería", "A qué hora", "Cuándo me llaman", "Dónde es", "Cómo le hago", "Me late", "Ándale", "Véngale", "Va", "Bueno", "Está bien", "Me apunto", "Me anoto", "Agéndame", "Cuándo puedo ir", "Mañana puedo", "Hoy puedo", "Acepto", "Sí, ayudante".
+   - Ejemplos implícitos: Preguntar detalles logísticos ("¿A qué dirección voy?", "¿Cómo llego?", "¿Cuál es la dirección?") porque implica que ya quiso ir a la entrevista.
+6. REJECTION: El candidato rechaza explícitamente la vacante o propuesta actual, o indica que no le conviene.
    - Ejemplos: "No me interesa", "Me queda muy lejos", "Pagan muy poco", "No, gracias", "Paso de esa", "Tienen otra cosa?".
-6. CLOSURE: Despedidas, agradecimientos finales, confirmaciones de cierre o frases de cortesía mutua.
-   - Ejemplos: "Gracias", "Ok", "Muy bien", "Adiós", "Hasta luego", "Bye", "Nos vemos", "Chao", "Bueno gracias", "Vale", "Perfecto", "Entendido", "Hasta pronto", "Cuídate", "Saludos", "Igualmente", "Sale", "Enterado", "Anotado", "Excelente", "Listo", "Que tengas buen día".
+7. CLOSURE: Despedidas, agradecimientos finales, confirmaciones de cierre o frases de cortesía mutua.
+   - Ejemplos: "Gracias", "Adiós", "Hasta luego", "Bye", "Nos vemos", "Chao", "Bueno gracias", "Vale", "Hasta pronto", "Cuídate", "Saludos", "Igualmente", "Sale", "Enterado", "Que tengas buen día".
 
 DATOS DE ENTRADA:
 - ULTIMO MENSAJE (TEXTO): "${lastMessage}"
 - CONTEXTO:
 ${historyText.slice(-1000)}
+
+REGLA CRÍTICA: Si el contexto muestra que Brenda hizo una pregunta de confirmación (como "¿Te gustaría agendar?", "¿Te interesa?", "¿Cuándo puedes ir?") y el candidato responde con cualquier señal positiva o pregunta logística → clasifica como ACCEPTANCE.
 
 Responde ÚNICAMENTE con el nombre de la categoría en MAYÚSCULAS.
 Respuesta:`;
