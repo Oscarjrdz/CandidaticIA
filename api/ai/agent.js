@@ -986,13 +986,22 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         if (aiResult?.extracted_data) {
             Object.entries(aiResult.extracted_data).forEach(([key, val]) => {
-                if (val && val !== 'null' && candidateData[key] !== val) {
+                // 🛡️ JSON Falsy Shield: Allow explicitly boolean 'false' through
+                const isDefined = val !== null && val !== undefined && val !== 'null';
+
+                if (isDefined && candidateData[key] !== val) {
                     let cleanedVal = val;
-                    if (key === 'tieneEmpleo' && typeof val === 'string') {
-                        const low = val.toLowerCase().trim();
-                        if (low === 'si' || low === 'sí') cleanedVal = 'Sí';
-                        else if (low === 'no') cleanedVal = 'No';
+
+                    // Handle 'tieneEmpleo' strictly
+                    if (key === 'tieneEmpleo') {
+                        const strVal = String(val).toLowerCase().trim();
+                        if (strVal === 'si' || strVal === 'sí' || strVal === 'true') {
+                            cleanedVal = 'Sí';
+                        } else if (strVal === 'no' || strVal === 'false') {
+                            cleanedVal = 'No';
+                        }
                     }
+
                     candidateUpdates[key] = cleanedVal;
                 }
             });
