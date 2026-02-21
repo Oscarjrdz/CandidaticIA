@@ -168,7 +168,7 @@ ${forwardHistoryText || '(Sin historial previo)'}
 [REGLAS DE OPERACIÓN]:
 1. TU MISIÓN ES ACTUAR EL ESCENARIO, pero la REGLA DE PRECEDENCIA DE FAQ y NO REDUNDANCIA mandan.
 2. DISPARO DE MOVIMIENTO — REGLA ABSOLUTA: Debes escribir "{ move }" al final de "thought_process" cuando el candidato aceptó explícitamente.
-3. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
+3. FORMATO DE RESPUESTA: JSON OBLIGATORIO. PRECAUCIÓN DE EXTRACCIÓN: En "extracted_data", si preguntas por empleo y responden "no", "desempleado", etc., debes poner "No" en "tieneEmpleo". Si es "sí", pon "Si".
 4. MATCHED FAQ ID: Si tu respuesta a una pregunta del candidato viene de la lista [PREGUNTAS FRECUENTES], DEBES incluir el campo "matched_faq_id" con el ID exacto de la FAQ usada. Si no usaste ninguna FAQ para responder, pon null.
    
 ⚡ EJEMPLO DE USO DE FAQ Y EXTRACCIÓN:

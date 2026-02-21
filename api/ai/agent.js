@@ -408,7 +408,13 @@ ${audit.dnaLines}
 
                 // --- MULTI-VACANCY REJECTION SHIELD ---
                 let skipRecruiterInference = false;
-                const intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.parts[0].text).join('\n'));
+
+                // 🛡️ CRITICAL INCOMPLETE PROFILE SHIELD
+                // Do not classify intent if the profile is incomplete, because boolean 
+                // answers like "No" (to 'tieneEmpleo') will be misclassified as a REJECTION of the vacancy.
+                const intent = isProfileComplete
+                    ? await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.parts[0].text).join('\n'))
+                    : 'UNKNOWN';
 
                 if (intent === 'REJECTION' && project.vacancyIds && project.vacancyIds.length > 0) {
                     console.log(`[RECRUITER BRAIN] 🛡️ Rejection intent detected for candidate ${candidateId}`);
