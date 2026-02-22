@@ -495,7 +495,8 @@ ${audit.dnaLines}
                         currentStep,
                         historyForRecruiter,
                         config,
-                        activeAiConfig.openaiApiKey
+                        activeAiConfig.openaiApiKey,
+                        currentIdx  // ✅ authoritative index from project:cand_meta
                     );
 
                     if (aiResult?.response_text) {
@@ -632,7 +633,9 @@ ${audit.dnaLines}
 
                                 const nextAiResult = await processRecruiterMessage(
                                     { ...candidateData, ...candidateUpdates },
-                                    project, nextStep, historyWithFirstResponse, config, activeAiConfig.openaiApiKey
+                                    project, nextStep, historyWithFirstResponse, config,
+                                    activeAiConfig.openaiApiKey,
+                                    candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : currentIdx  // ✅ pass correct vacancy index to chained step
                                 );
 
                                 if (nextAiResult?.response_text) {

@@ -46,7 +46,7 @@ unanswered_question: "¿Puedo llevar el pelo largo?"
 `;
 
 
-export const processRecruiterMessage = async (candidateData, project, currentStep, recentHistory, config, customApiKey = null) => {
+export const processRecruiterMessage = async (candidateData, project, currentStep, recentHistory, config, customApiKey = null, vacancyIndexOverride = undefined) => {
     const startTime = Date.now();
     const candidateId = candidateData.id;
 
@@ -92,9 +92,14 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             schedule: 'N/A'
         };
 
-        const currentVacancyIndex = candidateData.currentVacancyIndex !== undefined
-            ? candidateData.currentVacancyIndex
-            : (candidateData.projectMetadata?.currentVacancyIndex || 0);
+        // Use authoritative index passed from agent.js (resolved from project:cand_meta)
+        // Fallback chain: override → candidateData → projectMetadata → 0
+        const currentVacancyIndex = vacancyIndexOverride !== undefined
+            ? vacancyIndexOverride
+            : (candidateData.currentVacancyIndex !== undefined
+                ? candidateData.currentVacancyIndex
+                : (candidateData.projectMetadata?.currentVacancyIndex || 0));
+        console.log(`[RECRUITER BRAIN] 📍 vacancyIndex=${currentVacancyIndex} (override=${vacancyIndexOverride})`);
         let activeVacancyId = null;
 
         // Migración hacia atrás (soporta project.vacancyId o project.vacancyIds)
