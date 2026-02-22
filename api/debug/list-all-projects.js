@@ -5,11 +5,10 @@ export default async function handler(req, res) {
     if (!redis) return res.status(500).json({ error: 'No Redis' });
 
     try {
-        const keys = await redis.keys('project:*');
+        // Use the proper ZSET if available, or more specific pattern
+        const keys = await redis.keys('project:proj_*');
         const projects = [];
         for (const key of keys) {
-            if (key.startsWith('project:cand_meta:')) continue;
-            if (key.includes(':searches:')) continue;
             const data = await redis.get(key);
             if (data) projects.push(JSON.parse(data));
         }
@@ -21,7 +20,8 @@ export default async function handler(req, res) {
                 id: p.id,
                 name: p.name,
                 vacancyIds: p.vacancyIds || [],
-                vacancyId: p.vacancyId || null
+                vacancyId: p.vacancyId || p.vacancyId_old || null,
+                stepsCount: p.steps?.length || 0
             }))
         });
     } catch (e) {
