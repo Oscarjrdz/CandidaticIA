@@ -452,11 +452,30 @@ ${audit.dnaLines}
                 if (!skipRecruiterInference) {
                     const updatedDataForAgent = { ...candidateData, ...candidateUpdates, projectMetadata: { ...candidateData.projectMetadata, currentVacancyIndex: candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : candidateData.projectMetadata?.currentVacancyIndex } };
 
+                    // 🔄 VACANCY TRANSITION CONTEXT: If we just advanced to a new vacancy due to rejection,
+                    // replace the rejection message in history with a system note so GPT doesn't
+                    // apply the rejection to the NEW vacancy before even presenting it.
+                    let historyForRecruiter = historyForGpt;
+                    const vacancyJustAdvanced = candidateUpdates.currentVacancyIndex !== undefined
+                        && candidateUpdates.currentVacancyIndex > (candidateData.currentVacancyIndex || 0);
+
+                    if (vacancyJustAdvanced) {
+                        const newIdx = candidateUpdates.currentVacancyIndex;
+                        historyForRecruiter = [
+                            ...historyForGpt.slice(0, -1), // Drop the rejection message
+                            {
+                                role: 'user',
+                                parts: [{ text: `[SISTEMA INTERNO]: El candidato rechazó la vacante anterior. Ahora preséntale la siguiente vacante disponible (índice ${newIdx}). Es la primera vez que la ve. NO asumas que la rechaza — apreséntatela con entusiasmo y espera su respuesta.` }]
+                            }
+                        ];
+                        console.log(`[RECRUITER BRAIN] 🔄 Vacancy transition context injected for index ${newIdx}`);
+                    }
+
                     aiResult = await processRecruiterMessage(
                         updatedDataForAgent,
                         project,
                         currentStep,
-                        historyForGpt,
+                        historyForRecruiter,
                         config,
                         activeAiConfig.openaiApiKey
                     );
