@@ -15,7 +15,20 @@ export const RECRUITER_IDENTITY = `
 [REGLAS DE TRANSICIÓN]:
 1. Si el candidato confirma interés, acepta una propuesta o el objetivo del paso se cumple, DEBES incluir el tag "{ move }" en tu "thought_process".
 2. 🎯 TRIGGER DE ACEPTACIÓN SEMÁNTICA: Si el historial muestra que YA presentaste la vacante/propuesta Y el candidato responde afirmativamente de cualquier forma ("Sí", "Va", "Me interesa", "Dale", "Claro", "Agendamos", "Perfecto", "Me parece bien", "Excelente") → DISPARA "{ move }" en thought_process. NO dependas de un "Sí" literal.
-3. 🤫 SILENCIO EN MOVE: Cuando dispares "{ move }", NO escribas texto en "response_text". Deja que el sistema envíe el sticker puente. Tu misión aquí ha terminado.
+3. 🚪 GATILLO DE SALIDA (NOT INTERESTED): Si el candidato rechaza explícitamente la vacante actual Y las alternativas ofrecidas, o dice claramente que no quiere nada, DEBES incluir el tag "{ move: exit }" en tu "thought_process". Esto activará el flujo de reactivación.
+4. 🤫 SILENCIO EN MOVE: Cuando dispares "{ move }" o "{ move: exit }", NO escribas texto en "response_text". Deja que el sistema envíe el sticker puente. Tu misión aquí ha terminado.
+5. 🧠 EXTRACCIÓN PERMANENTE: Si el candidato menciona un cambio en su perfil (nueva categoría, mudanza de municipio, o terminó un grado de estudios), debes extraerlo en el campo 'extracted_data'.
+6. [FORMATO DE RESPUESTA - OBLIGATORIO JSON]:
+{
+    "extracted_data": { 
+        "categoria": "string | null", 
+        "municipio": "string | null", 
+        "escolaridad": "string | null" 
+    },
+    "thought_process": "Razonamiento.",
+    "response_text": "Tu respuesta.",
+    "unanswered_question": "string | null"
+}
 `;
 
 export const processRecruiterMessage = async (candidateData, project, currentStep, recentHistory, config, customApiKey = null) => {
@@ -126,8 +139,18 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         }
 
         // 3. Template Tag Replacement
+        const { getRedisClient: redisClient } = await import('../utils/storage.js');
+        const redisObj = redisClient();
+        const catsList = (await redisObj?.get('bot_categories')) || '';
+        const formattedCats = catsList.split(',').map(c => `✅ ${c.trim()}`).join('\n');
+
         let finalPrompt = stepPrompt
             .replace(/{{Candidato}}/gi, candidateData.nombreReal || candidateData.nombre || 'Candidato')
+            .replace(/{{Candidato\.Nombre}}/gi, candidateData.nombreReal || candidateData.nombre || 'Candidato')
+            .replace(/{{Candidato\.Categoria}}/gi, candidateData.categoria || 'N/A')
+            .replace(/{{Candidato\.Municipio}}/gi, candidateData.municipio || 'N/A')
+            .replace(/{{Candidato\.Escolaridad}}/gi, candidateData.escolaridad || 'N/A')
+            .replace(/{{categorias}}/gi, formattedCats)
             .replace(/{{Vacante}}/gi, vacancyContext.name)
             .replace(/{{Vacante\.MessageDescription}}/gi, vacancyContext.messageDescription || '[ERROR: VACANTE_PARA_MENSAJE_VACIO]')
             .replace(/{{Vacante\.Descripcion}}/gi, vacancyContext.description || '[ERROR: DESCRIPCION_VACANTE_VACIA]')
@@ -210,6 +233,7 @@ ${alternatives.length > 0 ? JSON.stringify(alternatives) : "No hay más vacantes
             aiResult = {
                 response_text: gptResponse.content.replace(/\*/g, ''),
                 thought_process: 'Fallback: JSON parse failed.',
+                extracted_data: {},
                 gratitude_reached: false,
                 close_conversation: false
             };

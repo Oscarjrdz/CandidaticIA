@@ -382,11 +382,12 @@ ${audit.dnaLines}
         let aiResult = null;
         let isRecruiterMode = false;
         let responseTextVal = null;
-        let hasMoveTag = false; // 🔧 FIX: Declared in outer scope so it's accessible after the if(activeProjectId) block
+        let project = null;
+        let hasMoveTag = false;
         const historyForGpt = [...recentHistory, currentMessageForGpt];
 
         if (activeProjectId) {
-            const project = await getProjectById(activeProjectId);
+            project = await getProjectById(activeProjectId);
             const currentStep = project?.steps?.find(s => s.id === activeStepId) || project?.steps?.[0];
 
             // 🎯 Determine active vacancy for FAQ engine and pitches
@@ -412,10 +413,8 @@ ${audit.dnaLines}
 
                 if (intent === 'REJECTION' && project.vacancyIds && project.vacancyIds.length > 0) {
                     console.log(`[RECRUITER BRAIN] 🛡️ Rejection intent detected for candidate ${candidateId}`);
-                    // 1. Get current index
                     const currentIdx = candidateData.currentVacancyIndex || 0;
 
-                    // 2. Extract reason (lightweight LLM call)
                     let reason = "Motivo no especificado";
                     try {
                         const reasonPrompt = `El candidato ha rechazado una vacante. Extrae el motivo principal en máximo 3-4 palabras a partir de este mensaje: "${aggregatedText}". Si no hay motivo claro, responde "No le interesó". Responde solo con el motivo.`;
@@ -425,46 +424,32 @@ ${audit.dnaLines}
                         console.error("[RECRUITER BRAIN] Could not extract rejection reason:", e);
                     }
 
-                    // 3. Save to scalable history data layer
                     const currentHist = candidateData.projectMetadata?.historialRechazos || [];
                     const activeVacId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
 
-                    // Legacy array save
                     currentHist.push({ vacancyId: activeVacId, timestamp: new Date().toISOString(), motivo: reason });
                     candidateUpdates.historialRechazos = currentHist;
                     candidateUpdates.currentVacancyIndex = currentIdx + 1;
 
-                    // ⚡ SYNC PROJECT META (Scalable Index)
                     await updateProjectCandidateMeta(project.id, candidateId, { currentVacancyIndex: currentIdx + 1 });
-
-                    // Scalable Event Log save
                     await recordVacancyInteraction(candidateId, project.id, activeVacId, 'REJECTED', reason);
 
-                    // 4. Decide next action
                     if (currentIdx + 1 >= project.vacancyIds.length) {
-                        // Exhausted all vacancies
-                        console.log(`[RECRUITER BRAIN] 🏁 All vacancies rejected. Closing project interaction.`);
-                        responseTextVal = "Entiendo perfectamente. Por ahora no tengo otra opción que se ajuste a lo que buscas en este proyecto, pero guardaré tu perfil y te avisaré en cuanto surja algo ideal para ti. ¡Seguimos en contacto! ✨";
-                        skipRecruiterInference = true;
-
-                        // Action: Move candidate to an imaginary 'Rejected' state or remove them. 
-                        // For now we will keep them in the project but close the conversation.
+                        console.log(`[RECRUITER BRAIN] 🏁 All vacancies rejected. Moving to Exit Flow.`);
+                        // Instead of just silencing, we prepare to fire a move:exit
                         aiResult = {
-                            response_text: responseTextVal,
-                            thought_process: "ALL_VACANCIES_REJECTED",
+                            thought_process: "ALL_VACANCIES_REJECTED { move: exit }",
+                            response_text: null,
                             close_conversation: true,
                             reaction: '👍'
                         };
-                        // Note: you can add `removeCandidateFromProject` here if you prefer a strict clean-up.
+                        skipRecruiterInference = true;
                     } else {
                         console.log(`[RECRUITER BRAIN] 🚦 Moving to next vacancy (Index: ${currentIdx + 1}/${project.vacancyIds.length})`);
-                        // We do NOT skip inference. The agent will run with the newly bumped index, 
-                        // effectively generating a pitch for the *next* vacancy.
                     }
                 }
 
                 if (!skipRecruiterInference) {
-                    // Update data to reflect any bumps before inference
                     const updatedDataForAgent = { ...candidateData, ...candidateUpdates, projectMetadata: { ...candidateData.projectMetadata, currentVacancyIndex: candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : candidateData.projectMetadata?.currentVacancyIndex } };
 
                     aiResult = await processRecruiterMessage(
@@ -480,184 +465,99 @@ ${audit.dnaLines}
                         responseTextVal = aiResult.response_text;
                     }
 
+                    // 🧠 EXTRACTION SYNC (RECRUITER MODE)
+                    // If OpenAI extracted data during a project step, merge it.
+                    if (aiResult?.extracted_data) {
+                        const { categoria, municipio, escolaridad } = aiResult.extracted_data;
+                        if (categoria) candidateUpdates.categoria = categoria;
+                        if (municipio) candidateUpdates.municipio = municipio;
+                        if (escolaridad) candidateUpdates.escolaridad = escolaridad;
+                        console.log(`[RECRUITER BRAIN] 🧬 Extracted data merged:`, aiResult.extracted_data);
+                    }
+
                     if (aiResult?.unanswered_question && activeVacancyId) {
                         const geminiKey = activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
                         console.log(`[FAQ Engine] 📡 Question detected: "${aiResult.unanswered_question}" for Vacancy: ${activeVacancyId}`);
                         await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: aiResult.unanswered_question });
                         processUnansweredQuestion(activeVacancyId, aiResult.unanswered_question, responseTextVal, geminiKey).catch(e => console.error('[FAQ Engine] ❌ Cluster Error:', e));
-                    } else if (aiResult?.unanswered_question) {
-                        console.log(`[FAQ Engine] ⚠️ Question detected but activeVacancyId is NULL.`);
-                        await recordAITelemetry(candidateId, 'faq_orphan', { question: aiResult.unanswered_question });
                     }
                 }
 
-                // ⚡ ROBUST MOVE TAG DETECTION & CLEANING
-                // Detects: { move }, [move], {move}, [move] in both thought_process and response_text
+                // ⚡ ROBUST MOVE TAG DETECTION
                 const moveRegex = /[\{\[]\s*move\s*[\}\]]/i;
-                hasMoveTag = moveRegex.test(aiResult?.thought_process || '') || moveRegex.test(aiResult?.response_text || '');
+                const exitRegex = /[\{\[]\s*move:\s*(exit|no_interesa)\s*[\}\]]/i;
 
-                // 🛡️ ACCEPTANCE FALLBACK: If GPT didn't fire { move } but candidate clearly accepted,
-                // detect it via keyword matching OR the LLM Intent Classifier as a safety net
-                if (!hasMoveTag && currentStep?.aiConfig?.enabled) {
-                    const userMsgLower = aggregatedText.toLowerCase().trim();
-                    const thoughtLower = (aiResult?.thought_process || '').toLowerCase();
+                let hasMoveTag = moveRegex.test(aiResult?.thought_process || '') || moveRegex.test(aiResult?.response_text || '');
+                const hasExitTag = exitRegex.test(aiResult?.thought_process || '') || exitRegex.test(aiResult?.response_text || '');
 
-                    // Affirmative keywords from candidate
-                    const isAffirmativeRegex = /^(si|sí|dale|ok|de acuerdo|claro|bueno|va|listo|quiero|me interesa|agendar|mañana|hoy|esta bien|perfecto|sale)[\s!.]*$/.test(userMsgLower)
-                        || /\b(si quiero|si me interesa|si dale|sí quiero|está bien|de acuerdo)\b/.test(userMsgLower);
-
-                    // GPT acknowledged the acceptance in thought_process
-                    const thoughtAcknowledgesAcceptance = /acepta|confirm|cumpli|logr|agend|interes|propuesta.*acept|misi.n.*complet/i.test(thoughtLower);
-
-                    if (intent === 'ACCEPTANCE') {
-                        console.log(`[RECRUITER BRAIN] 🧠 Strong Intent Acceptance Fallback triggered for ${candidateId}. Intent: ACCEPTANCE | User: "${userMsgLower}"`);
-                        hasMoveTag = true;
-                    } else if (isAffirmativeRegex && thoughtAcknowledgesAcceptance) {
-                        console.log(`[RECRUITER BRAIN] 🧠 Regex Acceptance Fallback triggered for ${candidateId}. User: "${userMsgLower}" | Thought acknowledges acceptance.`);
-                        hasMoveTag = true;
-                    }
-                }
-
-                // CRITICAL: Always clean the tag from the user-facing message
-                if (responseTextVal) {
-                    responseTextVal = responseTextVal.replace(moveRegex, '').trim();
-                }
-
-                // ⚡ AUTOMATIC STEP MOVEMENT & CHAINED EXECUTION
-                if (hasMoveTag) {
+                if (hasMoveTag || hasExitTag) {
                     let currentIndex = project.steps.findIndex(s => s.id === activeStepId);
+                    if (currentIndex === -1) currentIndex = 0;
 
-                    // Safeguard: If current step index is invalid, assume first step as anchor
-                    if (currentIndex === -1) {
-                        console.log(`[RECRUITER BRAIN] ⚠️ Candidate step ${activeStepId} not found in project steps. Re-anchoring to step 0.`);
-                        currentIndex = 0;
+                    let nextStep = null;
+                    let isExitMove = false;
+
+                    if (hasExitTag) {
+                        nextStep = project.steps.find(s =>
+                            s.name?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('no interesa')
+                        );
+                        isExitMove = true;
+                    } else {
+                        nextStep = project.steps[currentIndex + 1];
                     }
-
-                    const nextStep = project.steps[currentIndex + 1];
-
-                    console.log(`[RECRUITER BRAIN] 🧩 Move condition for ${candidateId}. ActiveID: ${activeStepId}, Idx: ${currentIndex}, NextStep: ${nextStep?.name} (ID: ${nextStep?.id})`);
 
                     if (nextStep) {
-                        console.log(`[RECRUITER BRAIN] 🚀 Auto-moving candidate ${candidateId} to next step: ${nextStep.name}`);
-
-                        // 1. SILENCE ON MOVE: Skip sending confirmation if we are moving steps
-                        // The next step (or the visual bridge) will take over immediately.
-                        if (responseTextVal && !hasMoveTag) {
-                            console.log(`[RECRUITER BRAIN] 💬 Sending recruiter response...`);
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
-                            await saveMessage(candidateId, {
-                                from: 'bot',
-                                content: responseTextVal,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-
-                        // Keep responseTextVal for history propagation in next step IF it was generated, 
-                        // even if we didn't send it to the user.
+                        console.log(`[RECRUITER BRAIN] 🚀 Moving to step: ${nextStep.name} (Exit: ${isExitMove})`);
                         const recruiterFinalSpeech = responseTextVal;
-                        responseTextVal = null; // Mark as handled
+                        responseTextVal = null;
 
-                        // 2. Database Update
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
                         candidateUpdates.stepId = nextStep.id;
-                        candidateUpdates.projectId = activeProjectId; // Ensure persistence
+                        candidateUpdates.projectId = activeProjectId; // Keep them in project
 
-                        // 3. SMART BRIDGE SELECTION (Multi-puente)
+                        // Bridges & Chaining
                         const bridgePromise = (async () => {
                             try {
                                 const redis = getRedisClient();
-                                if (!redis) return;
-
-                                // Prioridades: 
-                                // 1. bot_bridge_{stepNameLowercase}
-                                // 2. bot_bridge_{stepId}
-                                // 3. bot_step_move_sticker (Universal)
-                                const stepNameLower = currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_');
-
+                                const stepNameLower = isExitMove ? 'exit' : (currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_'));
                                 let bridgeKey = 'bot_step_move_sticker';
                                 const specificKeys = [];
+                                if (isExitMove) specificKeys.push('bot_bridge_exit', 'bot_bridge_no_interesa');
                                 if (stepNameLower) specificKeys.push(`bot_bridge_${stepNameLower}`);
                                 specificKeys.push(`bot_bridge_${activeStepId}`);
 
                                 for (const key of specificKeys) {
-                                    const exists = await redis.exists(key);
-                                    if (exists) {
-                                        bridgeKey = key;
-                                        break;
-                                    }
+                                    if (await redis?.exists(key)) { bridgeKey = key; break; }
                                 }
 
-                                const bridgeSticker = await redis.get(bridgeKey);
-
+                                const bridgeSticker = await redis?.get(bridgeKey);
                                 if (bridgeSticker) {
-                                    console.log(`[RECRUITER BRAIN] 🎨 Sending Smart Bridge (${bridgeKey})...`);
                                     await new Promise(r => setTimeout(r, 800));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
-                                } else {
-                                    console.log(`[RECRUITER BRAIN] ⚠️ No bridge sticker found for ${bridgeKey}`);
                                 }
-                            } catch (e) {
-                                console.error(`[RECRUITER BRAIN] ❌ Bridge Sticker Fail:`, e.message);
-                            }
+                            } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail:`, e.message); }
                         })();
 
-                        if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
-                            console.log(`[RECRUITER BRAIN] 🔗 Chaining execution for next step: ${nextStep.name}`);
+                        const chainedAiPromise = (async () => {
+                            if (!nextStep.aiConfig?.enabled || !nextStep.aiConfig.prompt) return;
+                            try {
+                                const historyWithFirstResponse = [...historyForGpt];
+                                if (recruiterFinalSpeech) historyWithFirstResponse.push({ role: 'model', parts: [{ text: recruiterFinalSpeech }] });
 
-                            const chainedAiPromise = (async () => {
-                                try {
-                                    // Propagate history
-                                    const historyWithFirstResponse = [...historyForGpt];
-                                    if (recruiterFinalSpeech) {
-                                        historyWithFirstResponse.push({ role: 'model', parts: [{ text: recruiterFinalSpeech }] });
-                                    }
+                                const nextAiResult = await processRecruiterMessage(
+                                    { ...candidateData, ...candidateUpdates },
+                                    project, nextStep, historyWithFirstResponse, config, activeAiConfig.openaiApiKey
+                                );
 
-                                    const nextAiResult = await processRecruiterMessage(
-                                        { ...candidateData, ...candidateUpdates },
-                                        project,
-                                        nextStep,
-                                        historyWithFirstResponse,
-                                        config,
-                                        activeAiConfig.openaiApiKey
-                                    );
-
-                                    if (nextAiResult?.response_text) {
-                                        console.log(`[RECRUITER BRAIN] 💬 Sending Chained Response...`);
-                                        // Wait slightly for sticker to land first if it exists
-                                        await new Promise(r => setTimeout(r, 1200));
-                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
-
-                                        // 💾 PERSISTENCE: Save the chained message to history
-                                        const chainedMsgId = `bot_chain_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-                                        await saveMessage(candidateId, {
-                                            id: chainedMsgId,
-                                            from: 'bot',
-                                            content: nextAiResult.response_text,
-                                            timestamp: new Date().toISOString()
-                                        });
-                                        console.log(`[RECRUITER BRAIN] 💾 Saved chained message to history (ID: ${chainedMsgId})`);
-
-                                        aiResult.thought_process += ` | Chained: ${nextAiResult.thought_process}`;
-                                    }
-
-                                    if (nextAiResult?.unanswered_question && activeVacancyId) {
-                                        const geminiKey = activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
-                                        console.log(`[FAQ Engine] 📡 Dispatching chained unanswered question: "${nextAiResult.unanswered_question}"`);
-                                        processUnansweredQuestion(activeVacancyId, nextAiResult.unanswered_question, nextAiResult.response_text, geminiKey).catch(console.error);
-                                    }
-                                } catch (e) {
-                                    console.error(`[RECRUITER BRAIN] ❌ Chained Execution Fail:`, e.message);
+                                if (nextAiResult?.response_text) {
+                                    await new Promise(r => setTimeout(r, 1200));
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
+                                    await saveMessage(candidateId, { from: 'bot', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
                                 }
-                            })();
+                            } catch (e) { console.error(`[RECRUITER BRAIN] Chain Fail:`, e.message); }
+                        })();
 
-                            // 4. Await both for completion within this tick
-                            await Promise.allSettled([bridgePromise, chainedAiPromise]);
-                        } else {
-                            console.log(`[RECRUITER BRAIN] ℹ️ Next step (${nextStep.name}) has no AI prompt enabled. Only bridge sent.`);
-                            await bridgePromise;
-                        }
-                    } else {
-                        console.log(`[RECRUITER BRAIN] 🏁 Candidate ${candidateId} reached the LAST step. No next step to move to.`);
+                        await Promise.allSettled([bridgePromise, chainedAiPromise]);
                     }
                 }
             }
@@ -1073,7 +973,12 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         // 🔀 BYPASS SYSTEM - Automatic Project Routing
         const isBypassEnabled = batchConfig.bypass_enabled === 'true';
-        if (isNowComplete && !candidateData.projectId && isBypassEnabled) {
+        const currentStepName = (project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId))?.name || '')
+            .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const isInWaitingRoom = currentStepName.includes('no interesa');
+
+        // Trigger if: Profile complete AND (No project OR Stationed in Waiting Room)
+        if (isNowComplete && isBypassEnabled && (!candidateData.projectId || isInWaitingRoom)) {
             console.log(`[BYPASS] 🔍 Starting evaluation for ${candidateId}. Profile is COMPLETE.`);
 
             // 🕵️‍♂️ DEBUG TRACE OBJECT

@@ -4,7 +4,7 @@ import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     GraduationCap, MapPin, MessageSquare, ExternalLink, FolderKanban,
     Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase, Plus, Calendar,
-    Bot, Settings, Power, X, Loader2, Rocket // Added Rocket icon
+    Bot, Settings, Power, X, Loader2, Rocket, Copy
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -38,7 +38,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 // --- Sortable Components ---
 
-const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit, users }) => {
+const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit, onClone, users }) => {
     const {
         attributes,
         listeners,
@@ -76,6 +76,16 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
                     </p>
                 </div>
                 <div className="flex gap-1">
+                    <button
+                        onClick={onClone}
+                        className={`p-1.5 rounded-lg transition-colors ${isActive
+                            ? 'text-blue-100 hover:bg-white/20'
+                            : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 opacity-0 group-hover:opacity-100'
+                            }`}
+                        title="Clonar proyecto"
+                    >
+                        <Copy className="w-4 h-4" />
+                    </button>
                     <button
                         onClick={onEdit}
                         className={`p-1.5 rounded-lg transition-colors ${isActive
@@ -327,6 +337,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [vacancies, setVacancies] = useState([]);
     const [editingProject, setEditingProject] = useState(null);
     const [selectedVacancyIds, setSelectedVacancyIds] = useState([]); // Array de IDs de vacantes vinculadas
+    const [templateSteps, setTemplateSteps] = useState([]);
 
     // Fechas ocultadas visualmente y en estado (se pasan vacías o default si el back las requiere)
     const [startDate, setStartDate] = useState('');
@@ -437,6 +448,20 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         } catch (e) { console.error('Error fetching searches:', e); }
     };
 
+    const fetchTemplate = async () => {
+        try {
+            const res = await fetch('/api/projects?action=getTemplate');
+            const data = await res.json();
+            if (data.success) setTemplateSteps(data.steps || []);
+        } catch (e) { setTemplateSteps([]); }
+    };
+
+    const handleOpenNewProjectModal = () => {
+        resetForm();
+        fetchTemplate();
+        setShowCreateModal(true);
+    };
+
     const handleCreateProject = async () => {
         if (!newProjectName.trim()) return;
         try {
@@ -447,9 +472,11 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                     name: newProjectName,
                     description: newProjectDesc,
                     assignedUsers,
-                    vacancyIds: selectedVacancyIds, // Enviamos el array de prioridades
+                    vacancyIds: selectedVacancyIds,
                     startDate: startDate || new Date().toISOString().split('T')[0],
-                    endDate: endDate || null
+                    endDate: endDate || null,
+                    // Only pass template steps on creation, not on edit
+                    ...(editingProject ? {} : { templateSteps })
                 })
             });
             const data = await res.json();
@@ -860,6 +887,27 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             if (activeProject?.id === id) setActiveProject(null);
             if (showToast) showToast('Proyecto eliminado', 'info');
         } catch (e) { console.error('Error deleting project:', e); }
+    };
+
+    const handleCloneProject = async (projectId, e) => {
+        e.stopPropagation();
+        try {
+            const res = await fetch('/api/projects', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'clone', projectId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setProjects(prev => [data.project, ...prev]);
+                showToast('Proyecto clonado', 'success');
+            } else {
+                showToast(data.error || 'Error al clonar', 'error');
+            }
+        } catch (e) {
+            console.error('Error cloning project:', e);
+            showToast('Error al clonar proyecto', 'error');
+        }
     };
 
     const handleUnlinkCandidate = async (candId) => {
@@ -1289,6 +1337,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                             onClick={() => setActiveProject(project)}
                                             onDelete={(e) => handleDeleteProject(project.id, e)}
                                             onEdit={(e) => handleEditClick(project, e)}
+                                            onClone={(e) => handleCloneProject(project.id, e)}
                                             users={users}
                                         />
                                     ))}
@@ -1325,7 +1374,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <button
-                                            onClick={() => { resetForm(); setShowCreateModal(true); }}
+                                            onClick={handleOpenNewProjectModal}
                                             className="flex items-center gap-1.5 text-slate-400 hover:text-blue-500 transition-colors p-1"
                                             title="Nuevo Proyecto"
                                         >
@@ -1415,7 +1464,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     </>
                                 ) : (
                                     <Button
-                                        onClick={() => { resetForm(); setShowCreateModal(true); }}
+                                        onClick={handleOpenNewProjectModal}
                                         className="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white border-none shadow-xl shadow-blue-500/20 py-4 px-10 h-auto text-[14px] font-black uppercase tracking-widest rounded-2xl transform hover:scale-105 transition-all"
                                     >
                                         <Plus className="w-6 h-6" />

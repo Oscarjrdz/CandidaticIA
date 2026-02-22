@@ -25,6 +25,12 @@ export default async function handler(req, res) {
                 const searches = await getProjectSearches(id);
                 return res.status(200).json({ success: true, searches });
             }
+            if (req.query.action === 'getTemplate') {
+                const projects = await getProjects();
+                const template = projects.find(p => p.name?.toLowerCase().includes('ayudante aisin'));
+                const steps = template?.steps || [];
+                return res.status(200).json({ success: true, steps });
+            }
             if (id) {
                 const project = await getProjectById(id);
                 return res.status(200).json({ success: true, project });
@@ -119,14 +125,58 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true });
             }
 
+            if (action === 'clone') {
+                const pid = bodyProjectId || id;
+                if (!pid) return res.status(400).json({ success: false, error: 'Project ID required' });
+                const source = await getProjectById(pid);
+                if (!source) return res.status(404).json({ success: false, error: 'Proyecto no encontrado' });
+
+                // Clone steps with fresh unique IDs (preserve step_default)
+                const clonedSteps = (source.steps || []).map(s => ({
+                    ...s,
+                    id: s.id === 'step_default' ? 'step_default'
+                        : `step_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+                }));
+
+                // Create new project — no vacancies, no bypass
+                const cloned = await saveProject({
+                    name: `${source.name} (Copia)`,
+                    description: source.description || '',
+                    assignedUsers: [],
+                    vacancyIds: []
+                });
+                await updateProjectSteps(cloned.id, clonedSteps);
+                cloned.steps = clonedSteps;
+
+                return res.status(200).json({ success: true, project: cloned });
+            }
+
             if (!name) return res.status(400).json({ success: false, error: 'Project name is required' });
 
             // --- IMMUTABLE STEP CREATION ---
             // If creating new project (no ID), allow empty steps but force default
             // If updating, saveProject handles it, but let's ensure structure.
 
-            const { startDate, endDate } = body;
+            const { startDate, endDate, templateSteps } = body;
             const existing = id ? await getProjectById(id) : {};
+
+            const incomingVacancyIds = Array.isArray(vacancyIds) ? vacancyIds
+                : (vacancyId ? [vacancyId] : (existing.vacancyIds || []));
+
+            // --- VACANCY EXCLUSIVITY: free these vacancies from any other project ---
+            if (incomingVacancyIds.length > 0) {
+                const allProjects = await getProjects();
+                for (const proj of allProjects) {
+                    const currentProjId = id || existing.id;
+                    if (proj.id === currentProjId) continue;
+                    const overlap = (proj.vacancyIds || []).filter(v => incomingVacancyIds.includes(v));
+                    if (overlap.length > 0) {
+                        proj.vacancyIds = (proj.vacancyIds || []).filter(v => !incomingVacancyIds.includes(v));
+                        await saveProject(proj);
+                        console.log(`[Projects] Vacancy exclusivity: removed [${overlap}] from project ${proj.id}`);
+                    }
+                }
+            }
 
             const projectData = {
                 ...existing,
@@ -134,17 +184,27 @@ export default async function handler(req, res) {
                 name: name || existing.name,
                 description: description !== undefined ? description : existing.description,
                 assignedUsers: Array.isArray(assignedUsers) ? assignedUsers : existing.assignedUsers || [],
-                vacancyIds: Array.isArray(vacancyIds) ? vacancyIds : (vacancyId ? [vacancyId] : (existing.vacancyIds || [])),
+                vacancyIds: incomingVacancyIds,
                 startDate: startDate || existing.startDate,
                 endDate: endDate !== undefined ? endDate : existing.endDate
             };
 
             const project = await saveProject(projectData);
 
-            // Post-creation guarantee: excessive but safe
+            // Post-creation: apply template steps or default
             if (!id && project && (!project.steps || project.steps.length === 0)) {
-                await updateProjectSteps(project.id, [{ id: 'step_default', name: 'Inicio', locked: true }]);
-                project.steps = [{ id: 'step_default', name: 'Inicio', locked: true }];
+                // Clone template steps with new unique IDs to avoid collisions
+                let stepsToApply;
+                if (Array.isArray(templateSteps) && templateSteps.length > 0) {
+                    stepsToApply = templateSteps.map(s => ({
+                        ...s,
+                        id: s.id === 'step_default' ? 'step_default' : `step_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+                    }));
+                } else {
+                    stepsToApply = [{ id: 'step_default', name: 'Inicio', locked: true }];
+                }
+                await updateProjectSteps(project.id, stepsToApply);
+                project.steps = stepsToApply;
             }
 
             return res.status(200).json({ success: true, project });
