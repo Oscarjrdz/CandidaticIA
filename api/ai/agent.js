@@ -1213,42 +1213,36 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 content: responseTextVal || (aiResult?.reaction ? `[REACCIÓN: ${aiResult.reaction}]` : '[SILENCIO]'),
                 timestamp: new Date().toISOString()
             }),
-            updatePromise,
-            // 📝 DEBUG LOG: Store full trace for inspection
-            (async () => {
-                const redis = getRedisClient();
-                if (redis) {
-                    try {
-                        const trace = {
-                            timestamp: new Date().toISOString(),
-                            receivedMessage: aggregatedText,
-                            intent,
-                            apiUsed: isRecruiterMode ? `recruiter-agent (Step: ${activeStepId})` : 'capturista-brain',
-                            stepId: candidateUpdates.stepId || activeStepId,
-                            aiResult,
-                            isNowComplete
-                        };
-                        await redis.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
-                        await redis.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
-
-                        // GLOBAL LAST RUN: For identifying real ID being used
-                        await redis.set('debug:global:last_run', JSON.stringify({
-                            candidateId,
-                            timestamp: trace.timestamp,
-                            msg: aggregatedText.substring(0, 50),
-                            hasUQ: !!aiResult?.unanswered_question
-                        }), 'EX', 3600);
-
-                        console.log(`[DEBUG] Trace saved for ${candidateId}`);
-                    } catch (e) {
-                        console.error(`[DEBUG] Trace failed for ${candidateId}:`, e.message);
-                    }
-                }
-            })()
+            updatePromise
         ]);
 
-        return responseTextVal || '[SILENCIO]';
+        // 📝 [DEBUG LOG]: Store full trace (Synchronous for Vercel/Serverless reliability)
+        try {
+            const redisClient = getRedisClient();
+            if (redisClient) {
+                const trace = {
+                    v: "V_FINAL_SYNC_OK",
+                    timestamp: new Date().toISOString(),
+                    receivedMessage: aggregatedText,
+                    intent,
+                    apiUsed: isRecruiterMode ? `recruiter-agent (Step: ${activeStepId})` : 'capturista-brain',
+                    aiResult,
+                    isNowComplete
+                };
+                await redisClient.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
+                await redisClient.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
+                await redisClient.set('debug:global:last_run', JSON.stringify({
+                    candidateId,
+                    timestamp: trace.timestamp,
+                    msg: aggregatedText.substring(0, 50),
+                    hasUQ: !!aiResult?.unanswered_question
+                }), 'EX', 3600);
+            }
+        } catch (e) {
+            console.error(`[DEBUG] Trace failed:`, e.message);
+        }
 
+        return responseTextVal || '[SILENCIO]';
     } catch (error) {
         console.error('❌ [AI Agent] Fatal Error:', error);
         return "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
