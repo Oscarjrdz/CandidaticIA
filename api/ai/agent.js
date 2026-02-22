@@ -796,9 +796,9 @@ ${audit.dnaLines}
                 // CRITICAL: Activate safeguard if response is empty AND profile is still incomplete
                 if (hasEmptyResponse && !isNowComplete) {
                     console.warn(`[SILENCE SAFEGUARD V2] 🚨 Empty response detected for incomplete profile.`);
-                    console.warn(`[SILENCE SAFEGUARD V2] Missing fields: ${audit.missingLabels.join(', ')} `);
+                    console.warn(`[SILENCE SAFEGUARD V2] Missing fields: ${audit.missingLabels.join(', ')}`);
                     console.warn(`[SILENCE SAFEGUARD V2] User input: "${aggregatedText}"`);
-                    console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation} `);
+                    console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation}`);
 
                     // 🧠 INTELLIGENT FIELD SELECTION
                     // Re-audit WITH the extracted data to see what is REALLY still missing
@@ -835,11 +835,11 @@ ${audit.dnaLines}
                         // If detected field is still missing, use it
                         if (detectedField && audit.missingLabels.includes(detectedField)) {
                             nextMissing = detectedField;
-                            console.log(`[SILENCE SAFEGUARD V2] 🎯 Detected we were asking for: ${nextMissing} `);
+                            console.log(`[SILENCE SAFEGUARD V2] 🎯 Detected we were asking for: ${nextMissing}`);
                         } else {
                             // Fallback: Use first missing field in sequential order
                             nextMissing = audit.missingLabels[0];
-                            console.log(`[SILENCE SAFEGUARD V2] 📋 Using first missing field: ${nextMissing} `);
+                            console.log(`[SILENCE SAFEGUARD V2] 📋 Using first missing field: ${nextMissing}`);
                         }
                     }
 
@@ -1112,7 +1112,7 @@ ${audit.dnaLines}
             try {
                 const bypassIds = await redis.zrange('bypass:list', 0, -1);
                 if (bypassIds.length > 0) {
-                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id} `));
+                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id}`));
                     const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
 
                     for (const rule of activeRules) {
@@ -1154,7 +1154,7 @@ ${audit.dnaLines}
 
                         const isMatch = ageMatch && genderMatch && munMatch && escMatch && catMatch;
 
-                        console.log(`[BYPASS] Rule Check: "${rule.name}" | Match: ${isMatch} | Checks: age:${ageMatch}, mun:${munMatch}, cat:${catMatch}, esc:${escMatch}, gen:${genderMatch} `);
+                        console.log(`[BYPASS] Rule Check: "${rule.name}" | Match: ${isMatch} | Checks: age:${ageMatch}, mun:${munMatch}, cat:${catMatch}, esc:${escMatch}, gen:${genderMatch}`);
 
                         // Add to Debug Trace
                         debugTrace.rules.push({
@@ -1171,7 +1171,7 @@ ${audit.dnaLines}
                         });
 
                         if (isMatch) {
-                            console.log(`[BYPASS] ✅ MATCH FOUND: Rule "${rule.name}" → Project ${projectId} `);
+                            console.log(`[BYPASS] ✅ MATCH FOUND: Rule "${rule.name}" → Project ${projectId}`);
 
                             // Assign candidate to project
                             const { addCandidateToProject } = await import('../utils/storage.js');
@@ -1184,7 +1184,7 @@ ${audit.dnaLines}
                             debugTrace.matchedRule = rule.name;
                             debugTrace.assignedProject = projectId;
 
-                            console.log(`[BYPASS] 🎯 Candidate ${candidateId} routed to project ${projectId} `);
+                            console.log(`[BYPASS] 🎯 Candidate ${candidateId} routed to project ${projectId}`);
                             break; // Stop at first match
                         }
                     }
@@ -1301,8 +1301,8 @@ ${audit.dnaLines}
                     aiResult,
                     isNowComplete
                 };
-                await redisClient.lpush(`debug: agent: logs:${candidateId} `, JSON.stringify(trace));
-                await redisClient.ltrim(`debug: agent: logs:${candidateId} `, 0, 49);
+                await redisClient.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
+                await redisClient.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
                 await redisClient.set('debug:global:last_run', JSON.stringify({
                     candidateId,
                     timestamp: trace.timestamp,
