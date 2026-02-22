@@ -10,6 +10,50 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, count: keys.length, keys });
         }
 
+        if (req.query.action === 'searchByPhone') {
+            const phone = req.query.phone || '96877383037071'; // Use phone from query or default
+
+            let foundCandidate = null;
+            let candidateId = null;
+
+            const candidateKeys = await redis.keys('candidate:*');
+            for (const key of candidateKeys) {
+                const data = await redis.get(key);
+                if (data && data.includes(phone)) {
+                    foundCandidate = JSON.parse(data);
+                    candidateId = key.replace('candidate:', '');
+                    break;
+                }
+            }
+
+            if (!foundCandidate) {
+                return res.status(404).json({ error: 'Candidate not found by scanning phones', phone, totalCandidatesChecked: candidateKeys.length });
+            }
+
+            const projectId = foundCandidate.projectId || (foundCandidate.projectMetadata?.projectId);
+
+            // Fetch project details if projectId is found
+            let project = null;
+            if (projectId) {
+                const projectRaw = await redis.get(`project:${projectId}`);
+                project = projectRaw ? JSON.parse(projectRaw) : null;
+            }
+
+            return res.status(200).json({
+                success: true,
+                candidateId,
+                phone,
+                candidate: foundCandidate,
+                projectId,
+                project: project ? {
+                    id: project.id,
+                    name: project.name,
+                    vacancyIds: project.vacancyIds,
+                    vacancyId: project.vacancyId
+                } : null
+            });
+        }
+
         const candidateId = 'cand_1771740607320_w8sn1y0j9';
         const projectId = 'proj_1771225156891_10ez5k';
 
