@@ -30,13 +30,11 @@ export default async function handler(req, res) {
             activeVacancyId = vacancyIds[safeIndex] || null;
 
             if (activeVacancyId) {
-                // Try different key patterns just in case
-                let vacRaw = await redis.get(`vacancy:${activeVacancyId}`);
-                if (!vacRaw) vacRaw = await redis.get(`candidatic:vacancy:${activeVacancyId}`);
-
-                if (vacRaw) {
-                    const vac = JSON.parse(vacRaw);
-                    activeVacancyName = vac.name || vac.nombre;
+                const vacData = await redis.get('candidatic_vacancies');
+                if (vacData) {
+                    const vacancies = JSON.parse(vacData);
+                    const vac = vacancies.find(v => v.id === activeVacancyId);
+                    if (vac) activeVacancyName = vac.name || vac.nombre;
                 }
             }
         }
@@ -75,7 +73,8 @@ export default async function handler(req, res) {
             activeVacancyName,
             faqCount: faqData.length,
             faqTopics: faqData.map(f => ({ topic: f.topic, freq: f.frequency, hasAnswer: !!f.officialAnswer })),
-            traces
+            traces,
+            v: new Date().toISOString()
         });
 
     } catch (e) {
