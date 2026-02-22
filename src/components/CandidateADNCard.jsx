@@ -50,8 +50,12 @@ const CandidateADNCard = ({ candidate }) => {
                 </div>
                 <div className="flex items-center space-x-2">
                     <div className="hidden sm:flex flex-col items-end mr-2">
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Categoría</span>
-                        <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase">{candidate.categoria || 'N/A'}</span>
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
+                            {candidate.currentVacancyName ? 'Vacante Elegida' : 'Categoría'}
+                        </span>
+                        <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase">
+                            {candidate.currentVacancyName || candidate.categoria || 'N/A'}
+                        </span>
                     </div>
                     <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-500">
                         {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -110,9 +114,16 @@ const CandidateADNCard = ({ candidate }) => {
                             </span>
                         </div>
                         {candidate.projectId && (
-                            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-800/50">
-                                {candidate.projectName || 'ACTIVO'}
-                            </span>
+                            <div className="flex flex-col items-end">
+                                <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md border border-blue-100 dark:border-blue-800/50">
+                                    {candidate.projectName || 'ACTIVO'}
+                                </span>
+                                {candidate.currentVacancyName && (
+                                    <span className="text-[9px] font-bold text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-tight italic">
+                                        👉 {candidate.currentVacancyName}
+                                    </span>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>

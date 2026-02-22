@@ -450,7 +450,17 @@ ${audit.dnaLines}
                         await recordVacancyInteraction(candidateId, project.id, activeVacId, 'REJECTED', reason);
                     }
                     candidateUpdates.currentVacancyIndex = currentIdx + 1;
-                    await updateProjectCandidateMeta(project.id, candidateId, { currentVacancyIndex: currentIdx + 1 });
+
+                    // Fetch next vacancy name for real-time UI updates
+                    if (project.vacancyIds[currentIdx + 1]) {
+                        const nextVac = await getVacancyById(project.vacancyIds[currentIdx + 1]);
+                        if (nextVac) candidateUpdates.currentVacancyName = nextVac.name;
+                    }
+
+                    await updateProjectCandidateMeta(project.id, candidateId, {
+                        currentVacancyIndex: currentIdx + 1,
+                        currentVacancyName: candidateUpdates.currentVacancyName
+                    });
 
                     if (currentIdx + 1 >= project.vacancyIds.length) {
                         console.log(`[RECRUITER BRAIN] 🏁 All vacancies rejected. Moving to Exit Flow.`);
@@ -1179,6 +1189,17 @@ ${audit.dnaLines}
 
                             candidateUpdates.projectId = projectId;
                             candidateUpdates.stepId = 'step_default';
+
+                            // 🎯 BYPASS VACANCY NAME: Store first vacancy name for the ADN card
+                            try {
+                                const proj = await getProjectById(projectId);
+                                if (proj?.vacancyIds?.length > 0) {
+                                    const firstVac = await getVacancyById(proj.vacancyIds[0]);
+                                    if (firstVac) candidateUpdates.currentVacancyName = firstVac.name;
+                                }
+                            } catch (vErr) {
+                                console.error("[BYPASS] Failed to attach vacancy name:", vErr);
+                            }
 
                             debugTrace.finalResult = 'MATCH';
                             debugTrace.matchedRule = rule.name;
