@@ -5,13 +5,17 @@ export default async function handler(req, res) {
     if (!redis) return res.status(500).json({ error: 'No Redis' });
 
     try {
+        if (req.query.action === 'listKeys') {
+            const keys = await redis.keys('*');
+            return res.status(200).json({ success: true, count: keys.length, keys });
+        }
+
         const candidateId = 'cand_1771740607320_w8sn1y0j9';
         const projectId = 'proj_1771225156891_10ez5k';
 
-        // 2. Get Candidate Data
+        // Try direct key first, then look for candidate:*
         const candidateRaw = await redis.get(`candidate:${candidateId}`);
-        if (!candidateRaw) return res.status(404).json({ error: 'Candidate not found with prefix candidate:', candidateId });
-        const candidate = JSON.parse(candidateRaw);
+        const candidate = candidateRaw ? JSON.parse(candidateRaw) : null;
 
         const metaRaw = await redis.hget(`project:cand_meta:${projectId}`, candidateId);
         const meta = metaRaw ? JSON.parse(metaRaw) : {};
