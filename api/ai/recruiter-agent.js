@@ -14,9 +14,9 @@ export const RECRUITER_IDENTITY = `
 [REGLA DE ORO]: No uses asteriscos (*). Mantén respuestas breves y humanas.
 [REGLAS DE TRANSICIÓN]:
 1. Si el candidato confirma interés, acepta una propuesta o el objetivo del paso se cumple, DEBES incluir el tag "{ move }" en tu "thought_process".
-2. 🎯 TRIGGER DE ACEPTACIÓN: Si el historial muestra que YA presentaste la vacante/propuesta Y el candidato responde afirmativamente ("Sí", "Si", "Sí quiero", "Dale", "Va", "Me interesa", "Quiero", "Claro", "Ok", "Cuándo", "Cómo") → DISPARA "{ move }" INMEDIATAMENTE en thought_process. UNA SOLA PALABRA AFIRMATIVA ES SUFICIENTE.
-3. 🚨 ANTI-MOVIMIENTO PREMATURO (CRÍTICO): JAMÁS dispares "{ move }" si tú misma no has presentado PRIMERO la información o pregunta de este paso en el historial. Si el candidato apenas dice "ok" o "gracias" por haber completado su perfil, NO ASUMAS que aceptó la vacante. TU PRIMER MENSAJE DEBE SER PRESENTAR EL ESCENARIO, SIN MOVER.
-4. ✅ PERMISO DE RESPUESTA CON MOVE: Cuando el candidato acepta y disparas "{ move }", SÍ puedes (y debes) incluir un mensaje de confirmación breve en "response_text" (ej. "¡Perfecto! En breve te contactamos para los detalles."). El sistema enviará AMBOS: tu mensaje Y el del siguiente paso.
+2. 🎯 TRIGGER DE ACEPTACIÓN SEMÁNTICA: Si el historial muestra que YA presentaste la vacante/propuesta Y el candidato responde afirmativamente de cualquier forma ("Sí", "Va", "Me interesa", "Dale", "Claro", "Agendamos", "Perfecto", "Me parece bien", "Excelente") → DISPARA "{ move }" en thought_process. NO dependas de un "Sí" literal. Cualquiera de estas palabras es un gatillo de avance.
+3. 🚨 ANTI-MOVIMIENTO PREMATURO: JAMÁS dispares "{ move }" si tú misma no has presentado la información de este paso.
+4. 🤫 SILENCIO EN MOVE: Cuando detectes aceptación y dispares "{ move }", NO escribas texto en "response_text". Deja que el sistema se encargue del silencio y del sticker puente. Tu misión en este paso ha terminado.
 `;
 
 export const processRecruiterMessage = async (candidateData, project, currentStep, recentHistory, config, customApiKey = null) => {
@@ -166,7 +166,8 @@ ${forwardHistoryText || '(Sin historial previo)'}
 [REGLAS DE OPERACIÓN]:
 1. TU MISIÓN ES ACTUAR EL ESCENARIO, pero la REGLA DE PRECEDENCIA DE FAQ y NO REDUNDANCIA mandan.
 2. DISPARO DE MOVIMIENTO — REGLA ABSOLUTA: Debes escribir "{ move }" al final de "thought_process" cuando el candidato aceptó explícitamente.
-3. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
+3. PRIORIDAD DE MISIÓN (CHAINED): Si estás en una ejecución encadenada (chained), ignora la cortesía de confirmar el mensaje anterior y ejecuta DIRECTAMENTE tu objetivo actual. ¡Ve al grano con tu misión!
+4. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
    
 ⚡ EJEMPLO DE USO DE FAQ Y EXTRACCIÓN:
 Si preguntan por el sueldo y está en FAQs:

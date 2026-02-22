@@ -540,19 +540,22 @@ ${audit.dnaLines}
                     if (nextStep) {
                         console.log(`[RECRUITER BRAIN] 🚀 Auto-moving candidate ${candidateId} to next step: ${nextStep.name}`);
 
-                        // 1. SEND CONFIRMATION: Send the acceptance confirmation before silencing
-                        // This ensures the candidate gets feedback BEFORE the bridge sticker + next step
-                        if (responseTextVal) {
-                            console.log(`[RECRUITER BRAIN] 💬 Sending acceptance confirmation before move...`);
+                        // 1. SILENCE ON MOVE: Skip sending confirmation if we are moving steps
+                        // The next step (or the visual bridge) will take over immediately.
+                        if (responseTextVal && !hasMoveTag) {
+                            console.log(`[RECRUITER BRAIN] 💬 Sending recruiter response...`);
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
                             await saveMessage(candidateId, {
-                                id: `bot_accept_${Date.now()}`,
                                 from: 'bot',
                                 content: responseTextVal,
                                 timestamp: new Date().toISOString()
                             });
                         }
-                        responseTextVal = null; // Silence so we don't double-send at the end
+
+                        // Keep responseTextVal for history propagation in next step IF it was generated, 
+                        // even if we didn't send it to the user.
+                        const recruiterFinalSpeech = responseTextVal;
+                        responseTextVal = null; // Mark as handled
 
                         // 2. Database Update
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
@@ -584,8 +587,8 @@ ${audit.dnaLines}
                                 try {
                                     // Propagate history
                                     const historyWithFirstResponse = [...historyForGpt];
-                                    if (aiResult.response_text) {
-                                        historyWithFirstResponse.push({ role: 'model', parts: [{ text: aiResult.response_text }] });
+                                    if (recruiterFinalSpeech) {
+                                        historyWithFirstResponse.push({ role: 'model', parts: [{ text: recruiterFinalSpeech }] });
                                     }
 
                                     const nextAiResult = await processRecruiterMessage(
