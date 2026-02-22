@@ -628,14 +628,18 @@ ${audit.dnaLines}
                         // Now trigger next step's AI
                         if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
                             try {
-                                const historyWithFirstResponse = [...historyForGpt];
-                                if (recruiterFinalSpeech) historyWithFirstResponse.push({ role: 'model', parts: [{ text: recruiterFinalSpeech }] });
+                                // 🧹 CLEAN HISTORY for the new step to prevent acceptance leakage from previous step
+                                const historyForNextStep = [
+                                    ...historyForGpt.filter(h => h.role === 'user').slice(-3), // Keep some context but limited
+                                    { role: 'user', parts: [{ text: `[SISTEMA]: El candidato acaba de avanzar al paso "${nextStep.name}". Este es tu primer contacto en este paso. Sigue tu OBJETIVO DE PASO.` }] }
+                                ];
+                                if (recruiterFinalSpeech) historyForNextStep.splice(-1, 0, { role: 'model', parts: [{ text: recruiterFinalSpeech }] });
 
                                 const nextAiResult = await processRecruiterMessage(
                                     { ...candidateData, ...candidateUpdates },
-                                    project, nextStep, historyWithFirstResponse, config,
+                                    project, nextStep, historyForNextStep, config,
                                     activeAiConfig.openaiApiKey,
-                                    candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : currentIdx  // ✅ pass correct vacancy index to chained step
+                                    candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : currentIdx
                                 );
 
                                 if (nextAiResult?.response_text) {
