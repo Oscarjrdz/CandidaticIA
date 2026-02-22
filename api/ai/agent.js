@@ -499,10 +499,15 @@ ${audit.dnaLines}
                         ? String(rawUQ).trim() : null;
 
                     if (unansweredQ && activeVacancyId) {
-                        const geminiKey = activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
-                        console.log(`[FAQ Engine] 📡 Capturing question: "${unansweredQ}" → vacancy ${activeVacancyId}`);
-                        await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
-                        processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey).catch(e => console.error('[FAQ Engine] ❌ Cluster Error:', e));
+                        // Use apiKey already resolved at top of agent scope (from Redis ai_config or env)
+                        const geminiKey = apiKey || activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
+                        if (!geminiKey) {
+                            console.warn('[FAQ Engine] ⚠️ No Gemini key available, cannot cluster question.');
+                        } else {
+                            console.log(`[FAQ Engine] 📡 Capturing question: "${unansweredQ}" → vacancy ${activeVacancyId}`);
+                            await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
+                            processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey).catch(e => console.error('[FAQ Engine] ❌ Cluster Error:', e));
+                        }
                     } else {
                         console.log(`[FAQ Engine] ⏭️ No unanswered question to capture (raw: ${JSON.stringify(rawUQ)})`);
                     }
