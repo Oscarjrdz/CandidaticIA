@@ -520,20 +520,24 @@ ${audit.dnaLines}
                             try {
                                 const redis = getRedisClient();
                                 const stepNameLower = isExitMove ? 'exit' : (currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_'));
-                                let bridgeKey = 'bot_step_move_sticker';
+                                let bridgeKey = null; // No fallback for exit — wrong sticker is worse than no sticker
                                 const specificKeys = [];
                                 if (isExitMove) specificKeys.push('bot_bridge_exit', 'bot_bridge_no_interesa');
-                                if (stepNameLower) specificKeys.push(`bot_bridge_${stepNameLower}`);
-                                specificKeys.push(`bot_bridge_${activeStepId}`);
+                                if (stepNameLower && !isExitMove) specificKeys.push(`bot_bridge_${stepNameLower}`);
+                                if (!isExitMove) specificKeys.push(`bot_bridge_${activeStepId}`, 'bot_step_move_sticker');
 
                                 for (const key of specificKeys) {
                                     if (await redis?.exists(key)) { bridgeKey = key; break; }
                                 }
 
-                                const bridgeSticker = await redis?.get(bridgeKey);
-                                if (bridgeSticker) {
-                                    await new Promise(r => setTimeout(r, 800));
-                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
+                                if (bridgeKey) {
+                                    const bridgeSticker = await redis?.get(bridgeKey);
+                                    if (bridgeSticker) {
+                                        await new Promise(r => setTimeout(r, 800));
+                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
+                                    }
+                                } else {
+                                    console.log(`[RECRUITER BRAIN] Bridge: No specific sticker found for ${isExitMove ? 'exit' : stepNameLower}, skipping.`);
                                 }
                             } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail:`, e.message); }
                         })();
@@ -1148,7 +1152,16 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         }
 
         let deliveryPromise = Promise.resolve();
-        const resText = String(responseTextVal || '').trim();
+        let resText = String(responseTextVal || '').trim();
+
+        // 🧹 MOVE TAG SANITIZER: Strip internal move tags from outbound messages
+        const moveTagPattern = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/gi;
+        if (moveTagPattern.test(resText)) {
+            resText = resText.replace(moveTagPattern, '').trim();
+            responseTextVal = resText || null;
+            console.log('[Move Tag Sanitizer] ⚠️ Stripped move tag from outbound message.');
+        }
+
         const isTechnical = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
 
         if (responseTextVal && !isTechnical) {
