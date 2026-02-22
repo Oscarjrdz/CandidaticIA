@@ -176,12 +176,14 @@ Si preguntan por el sueldo y está en FAQs con ID "xt31":
 {
     "thought_process": "El candidato pregunta por el sueldo. Consulto [PREGUNTAS FRECUENTES] y veo que son 10k. Usaré el ID xt31. Responderé y extraeré la pregunta para el Radar.",
     "response_text": "¡Claro! El sueldo es de $10,000 mensuales más prestaciones. 😊 ¿Te interesa agendar entrevista?",
+    "extracted_data": { "tieneEmpleo": "Desempleado" },
     "unanswered_question": "¿Cuánto pagan?",
     "matched_faq_id": "xt31",
     "send_vacancy_media": false,
     "gratitude_reached": false,
     "close_conversation": false
 }
+
 `;
 
 

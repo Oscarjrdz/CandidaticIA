@@ -1029,20 +1029,32 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 if (isDefined && candidateData[key] !== val) {
                     let cleanedVal = val;
 
-                    // Handle 'tieneEmpleo' strictly
+                    // Handle 'tieneEmpleo' strictly (Normalize to Sí/No for internal audit/compatibility)
                     if (key === 'tieneEmpleo') {
                         const strVal = String(val).toLowerCase().trim();
-                        if (strVal === 'si' || strVal === 'sí' || strVal === 'true') {
+                        if (strVal === 'si' || strVal === 'sí' || strVal === 'true' || strVal === 'empleado' || strVal.includes('trabajando') || strVal.includes('laborando') || strVal.includes('trabajo')) {
                             cleanedVal = 'Sí';
-                        } else if (strVal === 'no' || strVal === 'false') {
+                        } else if (strVal === 'no' || strVal === 'false' || strVal === 'desempleado' || strVal.includes('no tengo') || strVal.includes('buscando')) {
                             cleanedVal = 'No';
                         }
                     }
+
 
                     candidateUpdates[key] = cleanedVal;
                 }
             });
         }
+
+
+        // 🛡️ RECRUITER BRAIN EXTRACTION MERGE
+        // If the recruiter agent also extracted data, merge it into candidateUpdates
+        if (aiResult?.extracted_data_external) {
+            Object.entries(aiResult.extracted_data_external).forEach(([key, val]) => {
+                const isDefined = val !== null && val !== undefined && val !== 'null';
+                if (isDefined) candidateUpdates[key] = val;
+            });
+        }
+
 
         // 🧠 INTELLIGENT GENDER INFERENCE (FALLBACK)
         const currentGender = candidateUpdates.genero || candidateData.genero;
@@ -1270,6 +1282,14 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
                     const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyToUse, config, bypassAiConfig.openaiApiKey);
                     if (recruiterResult?.response_text) responseTextVal = recruiterResult.response_text;
+
+                    // 🧠 Merge secondary extraction from recruiter match
+                    if (recruiterResult?.extracted_data) {
+                        Object.entries(recruiterResult.extracted_data).forEach(([key, val]) => {
+                            if (val !== null && val !== undefined) candidateUpdates[key] = val;
+                        });
+                    }
+
                 }
             } else if (shouldSendSticker) {
                 // 🏠 NO PROJECT: Enter waiting room (only meaningful if they just completed their profile)
