@@ -74,7 +74,8 @@ export default async function handler(req, res) {
             faqCount: faqData.length,
             faqTopics: faqData.map(f => ({ topic: f.topic, freq: f.frequency, hasAnswer: !!f.officialAnswer })),
             traces,
-            v: new Date().toISOString()
+            v: "VERSION_DEBUG_PRO_V4",
+            now: new Date().toISOString()
         });
 
     } catch (e) {
