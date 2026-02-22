@@ -9,6 +9,11 @@ export default async function handler(req, res) {
         const keys = await redis.keys('project:proj_*');
         const projects = [];
         for (const key of keys) {
+            const type = await redis.type(key);
+            if (type !== 'string') {
+                console.warn(`[Audit] Skipping key ${key} of type ${type}`);
+                continue;
+            }
             const data = await redis.get(key);
             if (data) projects.push(JSON.parse(data));
         }
