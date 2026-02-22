@@ -1320,6 +1320,17 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
 
         console.log(`[DEBUG STORAGE] 📦 Final candidateUpdates for ${candidateId}:`, JSON.stringify(candidateUpdates, null, 2));
+
+        // --- 🚀 OFF-BAND DEBUG LOGGING ---
+        await redis.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify({
+            timestamp: new Date().toISOString(),
+            aiResult,
+            candidateUpdates,
+            receivedMessage: aggregatedText
+        }));
+        await redis.ltrim(`debug:agent:logs:${candidateId}`, 0, 9); // Keep last 10
+        await redis.expire(`debug:agent:logs:${candidateId}`, 3600); // 1 hour
+
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
 
 
