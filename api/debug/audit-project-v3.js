@@ -55,10 +55,10 @@ export default async function handler(req, res) {
             });
         }
 
-        const candidateId = 'cand_1771740607320_w8sn1y0j9';
+        const candidateId = 'cand_1771772235504_hiivto169';
         const projectId = 'proj_1771225156891_10ez5k';
 
-        // Try direct key first, then look for candidate:*
+        // Try direct key first
         const candidateRaw = await redis.get(`candidate:${candidateId}`);
         const candidate = candidateRaw ? JSON.parse(candidateRaw) : null;
 
