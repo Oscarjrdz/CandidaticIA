@@ -726,12 +726,15 @@ ${audit.dnaLines}
                 }
             }
 
-            systemInstruction += `\n[MEMORIA DEL HILO - ¡PROHIBIDO REPETIR ESTO!]:
-${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') : '(Ninguno aún)'} \n`;
+            // Extract the last 3 bot messages for strict anti-repetition
+            const lastBotMsgsForPrompt = lastBotMessages.slice(-3);
+            systemInstruction += `\n[MEMORIA DEL HILO - ⛔ PROHIBIDO REPETIR ESTAS FRASES EXACTAS]:\n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Ninguno aún)'}\n⚠️ REGLA CRÍTICA: Tu respuesta NO puede comenzar con las mismas palabras que ninguna de las frases anteriores. Si tu borrador empieza igual, REESCRÍBELO completamente con otras palabras. \n`;
 
             systemInstruction += `\n[REGLAS DE EXTRACCIÓN ESTRICTA PARA JSON]:
 - escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería". Si dice "secu", pon "Secundaria". Si dice "prepa", pon "Preparatoria".
 - categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato. Si dice "Ayudante", pon "Ayudante General".
+- municipio: Si el candidato responde con UNA sola palabra que parezca ciudad o municipio (Escobedo, Apodaca, Monterrey, Guadalupe, Juárez, García, Linares, Cadereyta, etc.), EXTRÁELA como municipio directamente sin pedir más confirmación.
+- nombreReal: Si el candidato da solo su nombre de pila sin apellido (ej. solo "Oscar", solo "Juan"), NO guardes el dato todavía. Pídele explícitamente sus apellidos antes de continuar con el siguiente campo.
 `;
 
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
