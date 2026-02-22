@@ -751,6 +751,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 - categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato. Si dice "Ayudante", pon "Ayudante General".
 - tieneEmpleo: Extrae literalmente lo que responda el usuario (ej. "no", "si", "estoy pidiendo informes", "nop").
 
+[🚨 REGLA ANTI-ROBOT (CRÍTICA)]: Tu ÚLTIMO mensaje fue: "${lastBotMessages.length > 0 ? lastBotMessages[lastBotMessages.length - 1] : '(Ninguno)'}".
+¡TIENES PROHIBIDO REPETIR ESA MISMA FRASE O ESTRUCTURA! Usa sinónimos, cambia el saludo, cambia la forma de pedir el dato. Si te repites exactamente, serás apagada.
 `;
 
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
@@ -774,7 +776,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             const model = genAI.getGenerativeModel({
                 model: "gemini-2.0-flash",
                 systemInstruction,
-                generationConfig: { responseMimeType: "application/json" }
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    temperature: 0.8,
+                    topP: 0.9
+                }
             });
             const chat = model.startChat({ history: recentHistory });
             const result = await chat.sendMessage(userParts);
