@@ -538,12 +538,9 @@ ${audit.dnaLines}
                             // Question has no answer — save as unanswered
                             console.log(`[FAQ Engine] 📡 Capturing UNANSWERED: "${unansweredQ}" → vacancy ${activeVacancyId}`);
                             await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
-                            try {
-                                await processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey);
-                                console.log(`[FAQ Engine] ✅ Unanswered question saved`);
-                            } catch (e) {
-                                console.error('[FAQ Engine] ❌ Cluster Error (unanswered):', e);
-                            }
+                            processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey)
+                                .then(() => console.log(`[FAQ Engine] ✅ Unanswered question saved`))
+                                .catch(e => console.error('[FAQ Engine] ❌ Cluster Error (unanswered):', e));
                         } else {
                             // Question was answered — detect if user asked something and save it
                             const lastUserMsg = historyForGpt.filter(h => h.role === 'user').slice(-1)[0];
@@ -552,12 +549,9 @@ ${audit.dnaLines}
                             const isQuestion = questionPatterns.test(userText) && userText.length > 5;
                             if (isQuestion && responseTextVal) {
                                 console.log(`[FAQ Engine] 📝 Recording ANSWERED question: "${userText}"`);
-                                try {
-                                    await processUnansweredQuestion(activeVacancyId, userText, responseTextVal, geminiKey);
-                                    console.log(`[FAQ Engine] ✅ Answered question saved to FAQ log`);
-                                } catch (e) {
-                                    console.error('[FAQ Engine] ❌ Cluster Error (answered):', e);
-                                }
+                                processUnansweredQuestion(activeVacancyId, userText, responseTextVal, geminiKey)
+                                    .then(() => console.log(`[FAQ Engine] ✅ Answered question saved to FAQ log`))
+                                    .catch(e => console.error('[FAQ Engine] ❌ Cluster Error (answered):', e));
                             } else {
                                 console.log(`[FAQ Engine] ⏭️ Not a question or no response, skipping FAQ log`);
                             }
