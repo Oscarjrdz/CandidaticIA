@@ -188,6 +188,10 @@ export default async function handler(req, res) {
                 startDate: startDate || existing.startDate,
                 endDate: endDate !== undefined ? endDate : existing.endDate
             };
+            // 🧹 Remove legacy singular vacancyId field if vacancyIds array is present
+            if (projectData.vacancyIds && projectData.vacancyIds.length > 0) {
+                delete projectData.vacancyId;
+            }
 
             const project = await saveProject(projectData);
 
