@@ -506,7 +506,13 @@ ${audit.dnaLines}
                         } else {
                             console.log(`[FAQ Engine] 📡 Capturing question: "${unansweredQ}" → vacancy ${activeVacancyId}`);
                             await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
-                            processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey).catch(e => console.error('[FAQ Engine] ❌ Cluster Error:', e));
+                            // Force wait for question processing to ensure it's not lost
+                            try {
+                                await processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey);
+                                console.log(`[FAQ Engine] ✅ Question processed successfully`);
+                            } catch (e) {
+                                console.error('[FAQ Engine] ❌ Cluster Error:', e);
+                            }
                         }
                     } else {
                         console.log(`[FAQ Engine] ⏭️ No unanswered question to capture (raw: ${JSON.stringify(rawUQ)})`);
@@ -1229,7 +1235,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         await redis.set('debug:global:last_run', JSON.stringify({
                             candidateId,
                             timestamp: trace.timestamp,
-                            msg: aggregatedText.substring(0, 50)
+                            msg: aggregatedText.substring(0, 50),
+                            hasUQ: !!aiResult?.unanswered_question
                         }), 'EX', 3600);
 
                         console.log(`[DEBUG] Trace saved for ${candidateId}`);
