@@ -149,11 +149,14 @@ export const formatValue = (val) => {
         return '-';
     }
 
-    // Normalize negative employment statements for UI table clarity
-    if (lower === 'no' || lower === 'nop' || lower.includes('no estoy') || lower.includes('no tengo') || lower.includes('desemplead')) {
-        return 'No';
+    // Normalize negative old employment statements for UI backwards compatibility
+    if (lower === 'no' || lower === 'nop' || lower.includes('no estoy') || lower.includes('no tengo') || lower.includes('desemplead') || lower === 'desempleado') {
+        return 'Desempleado';
     }
 
-    const normalized = lower === 'si' || lower === 'sí' ? 'Sí' : str;
-    return normalized;
+    if (lower === 'si' || lower === 'sí' || lower.includes('trabajando') || lower === 'empleado') {
+        return 'Empleado';
+    }
+
+    return str;
 };

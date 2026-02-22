@@ -90,7 +90,7 @@ const CandidateADNCard = ({ candidate }) => {
                         <ProfileItem
                             icon={Briefcase}
                             label="¿Empleo actual?"
-                            value={String(candidate.tieneEmpleo || '').toLowerCase().trim().includes('si') ? 'Trabajando' : (candidate.tieneEmpleo === 'No' ? 'Desempleado' : '-')}
+                            value={candidate.tieneEmpleo}
                             colorClass="text-rose-600"
                         />
                         <ProfileItem

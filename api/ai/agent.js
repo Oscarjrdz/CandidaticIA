@@ -34,9 +34,9 @@ export const DEFAULT_EXTRACTION_RULES = `
    - FECHA: Formato exacto DD/MM/YYYY.
    - ESCOLARIDAD: SOLO acepta: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado. (Ej: "Prepa" -> "Preparatoria"). "Kinder" o "Ninguna" son inválidos.
    - CATEGORÍA: Solo acepta categorías de la lista: {{categorias}}. Si dice "Ayudante", guarda "Ayudante General".
-   - EMPLEO: DEBE ser estrictamente "Sí" o "No". 
-     * Si dice "no estoy trabajando", "no tengo empleo", "estoy desempleado", "apenas ando buscando", guarda: "No".
-     * Si dice "estoy jalando", "tengo chamba", "sí trabajo", guarda: "Sí".
+   - EMPLEO: DEBE ser estrictamente "Empleado" o "Desempleado". 
+     * Si dice "no estoy trabajando", "no tengo empleo", "estoy desempleado", "apenas ando buscando", guarda: "Desempleado".
+     * Si dice "estoy jalando", "tengo chamba", "sí trabajo", guarda: "Empleado".
 4. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
 5. REGLA TELEFONO: JAMÁS preguntes el número de teléfono/celular. Ya lo tienes (campo 'whatsapp').
 `;
@@ -751,10 +751,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             systemInstruction += `\n[REGLAS DE EXTRACCIÓN ESTRICTA PARA JSON]:
 - escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería". Si dice "secu", pon "Secundaria". Si dice "prepa", pon "Preparatoria".
 - categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato. Si dice "Ayudante", pon "Ayudante General".
-- tieneEmpleo: Extrae literalmente lo que responda el usuario (ej. "no", "si", "estoy pidiendo informes", "nop").
+- tieneEmpleo: Extrae literalmente el estatus que responda el usuario (ej. "Desempleado", "Empleado", "estoy pidiendo informes").
+- municipio: Extrae el nombre del municipio (ej. "Monterrey", "San Nicolás", "Escobedo", "Juárez").
 
 [🚨 REGLA ANTI-ROBOT (CRÍTICA)]: Tu ÚLTIMO mensaje fue: "${lastBotMessages.length > 0 ? lastBotMessages[lastBotMessages.length - 1] : '(Ninguno)'}".
-¡TIENES PROHIBIDO REPETIR ESA MISMA FRASE O ESTRUCTURA! Usa sinónimos, cambia el saludo, cambia la forma de pedir el dato. Si te repites exactamente, serás apagada.
+¡TIENES PROHIBIDO REPETIR ESA MISMA FRASE O ESTRUCTURA! Usa sinónimos, cambia la forma de pedir el dato. Si te repites exactamente, serás apagada.
 `;
 
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
@@ -771,7 +772,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 1. Agradecer/Confirmar ("¡Perfecto!", "¡Excelente!").
 2. VOLVER A PEDIR EL DATO FALTANTE EXPLICÍTAMENTE.
 3. JAMÁS DEJES "response_text" VACÍO si faltan datos.
-(EXCEPCIÓN CRÍTICA: Para el campo "tieneEmpleo", las respuestas "Sí" y "No" SON COMPLETAMENTE VÁLIDAS. NO vuelvas a pedir el dato de empleo si te responde Sí o No, simplemente guárdalas en "extracted_data").
+(EXCEPCIÓN CRÍTICA: Para el campo "tieneEmpleo", las respuestas "Empleado" y "Desempleado" SON COMPLETAMENTE VÁLIDAS. NO vuelvas a pedir el dato de empleo si te responde indicando si tiene o no trabajo, simplemente infiérelo y guárdalo en "extracted_data").
 `;
 
             const genAI = new GoogleGenerativeAI(apiKey);
