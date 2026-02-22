@@ -109,7 +109,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         }
 
         // 3. Template Tag Replacement
-        let finalPrompt = stepPrompt
+        let finalPrompt = `[NUEVA MISIÓN]: ${stepPrompt}`
             .replace(/{{Candidato}}/gi, candidateData.nombreReal || candidateData.nombre || 'Candidato')
             .replace(/{{Vacante}}/gi, vacancyContext.name)
             .replace(/{{Vacante\.MessageDescription}}/gi, vacancyContext.messageDescription || '[ERROR: VACANTE_PARA_MENSAJE_VACIO]')
@@ -135,11 +135,11 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
         // 6. Construir Instruction Maestra
         const systemPrompt = `
-[PREGUNTAS FRECUENTES (RESPUESTAS OFICIALES)]:
-${vacancyContext.faqs || '(No hay FAQs registradas aún. Si preguntan algo fuera de los datos reales, responde con honestidad según la regla 3)'}
+[DATOS REALES DE LA VACANTE]:
+${JSON.stringify(vacancyContext)}
 
-[ESCENARIO Y OBJETIVO ACTUAL]:
-"${finalPrompt}"
+[PREGUNTAS FRECUENTES (RESPUESTAS OFICIALES)]:
+${vacancyContext.faqs || '(No hay FAQs registradas aún)'}
 
 ---
 [IDENTIDAD RECLUTADORA]: 
@@ -151,23 +151,24 @@ ${repetitionShield}
 [DATOS REALES DE LA VACANTE]:
 ${JSON.stringify(vacancyContext)}
 
-REGLAS DE ACTUACIÓN PROFESIONAL:
-1. PRIORIDAD QUIRÚRGICA DE FAQ (CRÍTICA): Las respuestas en [PREGUNTAS FRECUENTES] sobreescriben CUALQUIER otra información. Si hay una contradicción entre la ficha técnica ([DATOS REALES DE LA VACANTE]) y lo que dice el Radar ([PREGUNTAS FRECUENTES]), el Radar SIEMPRE tiene la razón. Ignora la descripción técnica si contradice a una FAQ oficial.
-2. EXTRACCIÓN OBLIGATORIA (RADAR): DEBES extraer CUALQUIER duda, pregunta, "No entendí" o consulta al campo "unanswered_question". Hazlo incluso si ya respondiste la duda. Si el candidato parece confundido, extrae el motivo de su confusión.
-3. HONESTIDAD Y ESPECIFICIDAD: Si el candidato pregunta algo que NO está en el contexto, NO seas evasiva. Responde: "No tengo el dato exacto de [tema] aquí a la mano, pero déjame preguntarlo por ti. 😊".
-4. REGLA DE NO REDUNDANCIA: Si el [ESCUDO DE REPETICIÓN ACTIVO] está presente, NO repitas la descripción masiva de la vacante.
-5. PRIORIDAD A DUDAS: Responde dudas de forma breve y humana. NO uses el momento de una duda para repetir todo el pitch.
-6. CALL TO ACTION (CTA) OBLIGATORIO: Siempre termina con una invitación (ej. "¿Te interesa agendar?").
-7. ANTI-BOT: Varía tus saludos. Sé creativa.
-
-[HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
-${forwardHistoryText || '(Sin historial previo)'}
-
 [REGLAS DE OPERACIÓN]:
-1. TU MISIÓN ES ACTUAR EL ESCENARIO, pero la REGLA DE PRECEDENCIA DE FAQ y NO REDUNDANCIA mandan.
-2. DISPARO DE MOVIMIENTO — REGLA ABSOLUTA: Debes escribir "{ move }" al final de "thought_process" cuando el candidato aceptó explícitamente.
-3. PRIORIDAD DE MISIÓN (CHAINED): Si estás en una ejecución encadenada (chained), ignora la cortesía de confirmar el mensaje anterior y ejecuta DIRECTAMENTE tu objetivo actual. ¡Ve al grano con tu misión!
-4. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
+1. PRIORIDAD ABSOLUTA DE MISIÓN (CRÍTICO): Tu objetivo principal es cumplir con el [ESCENARIO Y OBJETIVO ACTUAL]. Todo lo demás es secundario. Si el objetivo es "contar un chiste", HAZLO inmediatamente, sin importar si la conversación anterior era seria.
+2. PRIORIDAD QUIRÚRGICA DE FAQ: Las respuestas en [PREGUNTAS FRECUENTES] sobreescriben CUALQUIER otra información técnica.
+3. EXTRACCIÓN OBLIGATORIA (RADAR): DEBES extraer CUALQUIER duda al campo "unanswered_question".
+4. HONESTIDAD Y ESPECIFICIDAD: Si no tienes un dato, sé honesta ("No lo tengo a la mano...").
+5. REGLA DE NO REDUNDANCIA: Si el [ESCUDO DE REPETICIÓN ACTIVO] está presente, NO repitas la descripción masiva de la vacante.
+6. CALL TO ACTION (CTA): Termina con una invitación breve (ej. "¿Te interesa?"). Si tu misión ya incluye una pregunta, no agregues otra.
+7. ANTI-BOT: Varía tus saludos y sé creativa. No repitas frases del historial.
+8. DISPARO DE MOVIMIENTO: Escribe "{ move }" en "thought_process" cuando el objetivo del paso se cumpla.
+
+[HISTORIAL DE CHAT PARA MEMORIA]:
+(Ver mensajes del sistema para el flujo real)
+
+---
+[ESCENARIO Y OBJETIVO ACTUAL - ¡TU MISIÓN PRIORITARIA!]:
+"${finalPrompt}"
+---
+[FORMATO DE RESPUESTA]: JSON OBLIGATORIO.
    
 ⚡ EJEMPLO DE USO DE FAQ Y EXTRACCIÓN:
 Si preguntan por el sueldo y está en FAQs:
@@ -182,10 +183,14 @@ Si preguntan por el sueldo y está en FAQs:
 
 
         // 4. Obtener respuesta de GPT-4o
-        // NOTA: Pasamos historial vacío a la API porque ya lo inyectamos en el systemPrompt 
-        // para asegurar el orden pedido por el usuario y evitar duplicados.
+        // Pasamos el historial estructurado para que GPT entienda los roles
+        const messagesForOpenAI = recentHistory.map(m => ({
+            from: m.role === 'model' ? 'bot' : 'user',
+            content: m.parts?.[0]?.text || ''
+        }));
+
         const gptResponse = await getOpenAIResponse(
-            [],
+            messagesForOpenAI,
             systemPrompt,
             'gpt-4o-mini',
             customApiKey
