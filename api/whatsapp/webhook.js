@@ -116,6 +116,28 @@ export default async function handler(req, res) {
                         return res.status(200).send('bridge_mode_active');
                     }
 
+                    // ---- MOSTRAR PUENTES ----
+                    if (lowerBody.includes('mostrar puentes')) {
+                        const ALL_BRIDGES = [
+                            { key: 'bot_celebration_sticker', label: '1️⃣ Extracción Completa', desc: 'Se manda cuando el perfil del candidato queda 100% listo.' },
+                            { key: 'bot_step_move_sticker', label: '2️⃣ Paso Inicio', desc: 'Se manda al avanzar de un paso al siguiente (puente genérico).' },
+                            { key: 'bot_bridge_cita', label: '3️⃣ Cita', desc: 'Se manda cuando el candidato acepta agendar entrevista.' },
+                            { key: 'bot_bridge_exit', label: '4️⃣ No Interesa', desc: 'Se manda cuando el candidato rechaza todas las vacantes.' }
+                        ];
+
+                        let anyFound = false;
+                        for (const bridge of ALL_BRIDGES) {
+                            const stickerUrl = await redis.get(bridge.key);
+                            await sendMessage(adminNumber, `${bridge.label}\n📌 ${bridge.desc}\n${stickerUrl ? '✅ Configurado' : '❌ Sin configurar aún'}`);
+                            if (stickerUrl?.startsWith('http')) {
+                                await sendMessage(adminNumber, stickerUrl, 'sticker');
+                                anyFound = true;
+                            }
+                        }
+                        if (!anyFound) await sendMessage(adminNumber, '⚠️ Ningún puente configurado todavía. Usa los comandos *APRENDER PUENTE...* para enseñarle a Brenda.');
+                        return res.status(200).send('bridges_shown');
+                    }
+
                     if (lowerBody.startsWith('simon')) {
                         const targetPhone = lowerBody.replace('simon', '').replace(/\D/g, '');
                         if (targetPhone) {
