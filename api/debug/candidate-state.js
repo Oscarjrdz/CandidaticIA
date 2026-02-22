@@ -45,6 +45,20 @@ export default async function handler(req, res) {
             if (faqRaw) faqData = JSON.parse(faqRaw);
         }
 
+        // Last 3 agent traces to inspect GPT output
+        const traceKeys = await redis.lrange(`debug:agent:logs:${candidateId}`, 0, 2);
+        const traces = traceKeys.map(t => {
+            try {
+                const p = JSON.parse(t);
+                return {
+                    msg: p.receivedMessage?.substring(0, 60),
+                    unanswered_question: p.aiResult?.unanswered_question,
+                    thought_process: p.aiResult?.thought_process?.substring(0, 100),
+                    response_text: p.aiResult?.response_text?.substring(0, 80)
+                };
+            } catch { return t; }
+        });
+
         return res.status(200).json({
             success: true,
             candidateId,
