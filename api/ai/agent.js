@@ -481,7 +481,12 @@ ${audit.dnaLines}
                     );
 
                     if (aiResult?.response_text) {
-                        responseTextVal = aiResult.response_text;
+                        // 🧹 Strip any leaked unanswered_question text the AI may have appended to response_text
+                        responseTextVal = aiResult.response_text
+                            .replace(/\n?unanswered_question:\s*.+/gi, '')
+                            .replace(/\n?\"unanswered_question\":\s*\".+\"/gi, '')
+                            .trim();
+                        aiResult.response_text = responseTextVal;
                     }
 
                     // 🧠 EXTRACTION SYNC (RECRUITER MODE)
@@ -498,24 +503,39 @@ ${audit.dnaLines}
                     const unansweredQ = rawUQ && rawUQ !== 'null' && rawUQ !== 'undefined' && String(rawUQ).trim().length > 3
                         ? String(rawUQ).trim() : null;
 
-                    if (unansweredQ && activeVacancyId) {
-                        // Use apiKey already resolved at top of agent scope (from Redis ai_config or env)
-                        const geminiKey = apiKey || activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
-                        if (!geminiKey) {
-                            console.warn('[FAQ Engine] ⚠️ No Gemini key available, cannot cluster question.');
-                        } else {
-                            console.log(`[FAQ Engine] 📡 Capturing question: "${unansweredQ}" → vacancy ${activeVacancyId}`);
+                    // 🎯 FAQ RADAR: Save to FAQ engine regardless — unanswered OR answered
+                    const geminiKey = apiKey || activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
+                    if (activeVacancyId && geminiKey) {
+                        if (unansweredQ) {
+                            // Question has no answer — save as unanswered
+                            console.log(`[FAQ Engine] 📡 Capturing UNANSWERED: "${unansweredQ}" → vacancy ${activeVacancyId}`);
                             await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
-                            // Force wait for question processing to ensure it's not lost
                             try {
                                 await processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey);
-                                console.log(`[FAQ Engine] ✅ Question processed successfully`);
+                                console.log(`[FAQ Engine] ✅ Unanswered question saved`);
                             } catch (e) {
-                                console.error('[FAQ Engine] ❌ Cluster Error:', e);
+                                console.error('[FAQ Engine] ❌ Cluster Error (unanswered):', e);
+                            }
+                        } else {
+                            // Question was answered — detect if user asked something and save it
+                            const lastUserMsg = historyForGpt.filter(h => h.role === 'user').slice(-1)[0];
+                            const userText = lastUserMsg?.parts?.[0]?.text || '';
+                            const questionPatterns = /[?¿]|cuál|cómo|cuánto|cuándo|dónde|qué|quién|hacen|tienen|hay|incluye|es|son|dan|pagan|trabaj|horario|sueldo|salario|uniforme|transporte|beneficio|requisito|antidop/i;
+                            const isQuestion = questionPatterns.test(userText) && userText.length > 5;
+                            if (isQuestion && responseTextVal) {
+                                console.log(`[FAQ Engine] 📝 Recording ANSWERED question: "${userText}"`);
+                                try {
+                                    await processUnansweredQuestion(activeVacancyId, userText, responseTextVal, geminiKey);
+                                    console.log(`[FAQ Engine] ✅ Answered question saved to FAQ log`);
+                                } catch (e) {
+                                    console.error('[FAQ Engine] ❌ Cluster Error (answered):', e);
+                                }
+                            } else {
+                                console.log(`[FAQ Engine] ⏭️ Not a question or no response, skipping FAQ log`);
                             }
                         }
                     } else {
-                        console.log(`[FAQ Engine] ⏭️ No unanswered question to capture (raw: ${JSON.stringify(rawUQ)})`);
+                        console.warn(`[FAQ Engine] ⚠️ Skipped — missing vacancyId(${activeVacancyId}) or geminiKey`);
                     }
                 }
 

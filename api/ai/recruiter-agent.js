@@ -218,6 +218,7 @@ ${faqsForPrompt
 4. REGLA DE PIVOTEO: Si el candidato dice que NO le interesa la vacante actual, NO cierres la conversación. Ofrece una de las [VACANTES ALTERNATIVAS].
 5. ESPECIFICIDAD: Si no tienes un dato en [DATOS REALES DE LA VACANTE], dilo honestamente. No inventes.
 6. JSON OBLIGATORIO.
+7. 🎯 OFERTA DE ENTREVISTA SIEMPRE: Después de responder cualquier duda del candidato (sueldo, horario, beneficios, etc.), SIEMPRE termina tu mensaje ofreciendo agendar la entrevista. Ejemplo: "¿Te gustaría agendar tu entrevista? 💖". NUNCA dejes la conversación sin esta invitación después de resolver una pregunta.
 
 [VACANTES ALTERNATIVAS (PARA PIVOTEO - AÚN NO VISTAS)]:
 ${alternatives.length > 0
