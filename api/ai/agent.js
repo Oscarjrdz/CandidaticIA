@@ -595,35 +595,34 @@ ${audit.dnaLines}
                         candidateUpdates.stepId = nextStep.id;
                         candidateUpdates.projectId = activeProjectId; // Keep them in project
 
-                        // Bridges & Chaining
-                        const bridgePromise = (async () => {
-                            try {
-                                const redis = getRedisClient();
-                                const stepNameLower = isExitMove ? 'exit' : (currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_'));
-                                let bridgeKey = null; // No fallback for exit — wrong sticker is worse than no sticker
-                                const specificKeys = [];
-                                if (isExitMove) specificKeys.push('bot_bridge_exit', 'bot_bridge_no_interesa');
-                                if (stepNameLower && !isExitMove) specificKeys.push(`bot_bridge_${stepNameLower}`);
-                                if (!isExitMove) specificKeys.push(`bot_bridge_${activeStepId}`, 'bot_step_move_sticker');
+                        // 🔄 SEQUENTIAL: sticker first, then chained AI
+                        // Running in parallel risks Vercel serverless killing chainedAI before OpenAI responds
+                        try {
+                            const redis = getRedisClient();
+                            const stepNameLower = isExitMove ? 'exit' : (currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_'));
+                            const specificKeys = [];
+                            if (isExitMove) specificKeys.push('bot_bridge_exit', 'bot_bridge_no_interesa');
+                            if (stepNameLower && !isExitMove) specificKeys.push(`bot_bridge_${stepNameLower}`);
+                            if (!isExitMove) specificKeys.push(`bot_bridge_${activeStepId}`, 'bot_step_move_sticker');
 
-                                for (const key of specificKeys) {
-                                    if (await redis?.exists(key)) { bridgeKey = key; break; }
+                            let bridgeKey = null;
+                            for (const key of specificKeys) {
+                                if (await redis?.exists(key)) { bridgeKey = key; break; }
+                            }
+
+                            if (bridgeKey) {
+                                const bridgeSticker = await redis?.get(bridgeKey);
+                                if (bridgeSticker) {
+                                    await new Promise(r => setTimeout(r, 800));
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
                                 }
+                            } else {
+                                console.log(`[RECRUITER BRAIN] Bridge: No sticker for ${isExitMove ? 'exit' : stepNameLower}, skipping.`);
+                            }
+                        } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail:`, e.message); }
 
-                                if (bridgeKey) {
-                                    const bridgeSticker = await redis?.get(bridgeKey);
-                                    if (bridgeSticker) {
-                                        await new Promise(r => setTimeout(r, 800));
-                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
-                                    }
-                                } else {
-                                    console.log(`[RECRUITER BRAIN] Bridge: No specific sticker found for ${isExitMove ? 'exit' : stepNameLower}, skipping.`);
-                                }
-                            } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail:`, e.message); }
-                        })();
-
-                        const chainedAiPromise = (async () => {
-                            if (!nextStep.aiConfig?.enabled || !nextStep.aiConfig.prompt) return;
+                        // Now trigger next step's AI
+                        if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
                             try {
                                 const historyWithFirstResponse = [...historyForGpt];
                                 if (recruiterFinalSpeech) historyWithFirstResponse.push({ role: 'model', parts: [{ text: recruiterFinalSpeech }] });
@@ -634,14 +633,17 @@ ${audit.dnaLines}
                                 );
 
                                 if (nextAiResult?.response_text) {
-                                    await new Promise(r => setTimeout(r, 1200));
+                                    await new Promise(r => setTimeout(r, 800));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
                                     await saveMessage(candidateId, { from: 'bot', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
+                                    console.log(`[RECRUITER BRAIN] ✅ Chained AI sent for step: ${nextStep.name}`);
+                                } else {
+                                    console.warn(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text for step: ${nextStep.name}`);
                                 }
                             } catch (e) { console.error(`[RECRUITER BRAIN] Chain Fail:`, e.message); }
-                        })();
-
-                        await Promise.allSettled([bridgePromise, chainedAiPromise]);
+                        } else {
+                            console.log(`[RECRUITER BRAIN] Next step '${nextStep.name}' has no aiConfig enabled — skipping chained AI.`);
+                        }
                     }
                 }
             }
