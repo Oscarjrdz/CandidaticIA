@@ -34,7 +34,9 @@ export const DEFAULT_EXTRACTION_RULES = `
    - FECHA: Formato exacto DD/MM/YYYY.
    - ESCOLARIDAD: SOLO acepta: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado. (Ej: "Prepa" -> "Preparatoria"). "Kinder" o "Ninguna" son inválidos.
    - CATEGORÍA: Solo acepta categorías de la lista: {{categorias}}. Si dice "Ayudante", guarda "Ayudante General".
-   - EMPLEO: Solo guarda "Sí" o "No" explícitamente. (Ej: "estoy jalando" -> "Sí", "buscando" -> "No").
+   - EMPLEO: DEBE ser estrictamente "Sí" o "No". 
+     * Si dice "no estoy trabajando", "no tengo empleo", "estoy desempleado", "apenas ando buscando", guarda: "No".
+     * Si dice "estoy jalando", "tengo chamba", "sí trabajo", guarda: "Sí".
 4. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
 5. REGLA TELEFONO: JAMÁS preguntes el número de teléfono/celular. Ya lo tienes (campo 'whatsapp').
 `;
@@ -1242,23 +1244,34 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             candidateUpdates.congratulated = true;
             candidateUpdates.bridge_counter = 0;
             candidateUpdates.esNuevo = 'NO';
-            responseTextVal = null;
+            responseTextVal = null; // Clear out default to let recruiter handle it if mapped, else silence.
+        }
 
+        // --- BYPASS / PROJECT DISPATCH LOGIC ---
+        // 🚀 CRITICAL FIX: Decoupled from `shouldSendSticker`. Bypasses MUST trigger the Recruiter pitch immediately
+        // upon a MATCH even if the user already had a complete profile or was not owed a sticker.
+        const bypassJustMatched = (candidateUpdates.projectId && candidateUpdates.projectId !== candidateData.projectId);
+
+        if (shouldSendSticker || bypassJustMatched) {
             const finalProjectId = candidateUpdates.projectId || candidateData.projectId;
             if (finalProjectId) {
-                // 🎯 BYPASS MATCH: Enter project's first step
+                // 🎯 BYPASS MATCH OR NEW PROJECT START: Enter project's first step
                 const project = await getProjectById(finalProjectId);
                 const currentStep = project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId)) || project?.steps?.[0];
                 if (currentStep?.aiConfig?.enabled) {
                     // 🛡️ Fix: Fetch ai_config safely because bypass might have skipped the earlier recruiter block
                     const bypassAiConfig = batchConfig.ai_config ? (typeof batchConfig.ai_config === 'string' ? JSON.parse(batchConfig.ai_config) : batchConfig.ai_config) : {};
 
-                    const historyWithCongrats = [...historyForGpt, { role: 'model', parts: [{ text: congratsMsg }] }];
-                    const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, bypassAiConfig.openaiApiKey);
+                    // If we just sent congrats, add it to GPT history so it doesn't double-congratulate
+                    const historyToUse = shouldSendSticker
+                        ? [...historyForGpt, { role: 'model', parts: [{ text: "¡Súper! 🌟 Ya tengo tu perfil 100% completo. 📝✅" }] }]
+                        : historyForGpt;
+
+                    const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyToUse, config, bypassAiConfig.openaiApiKey);
                     if (recruiterResult?.response_text) responseTextVal = recruiterResult.response_text;
                 }
-            } else {
-                // 🏠 NO PROJECT: Enter waiting room
+            } else if (shouldSendSticker) {
+                // 🏠 NO PROJECT: Enter waiting room (only meaningful if they just completed their profile)
                 console.log(`[GPT Host] Candidate ${candidateId} completed profile without project.`);
                 candidateUpdates.gratitudAlcanzada = false;
                 candidateUpdates.silencioActivo = false;
