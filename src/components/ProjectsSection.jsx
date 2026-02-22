@@ -1610,7 +1610,16 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                             <option value="" className="text-center font-bold">
                                                 {selectedVacancyIds.length === 0 ? '-- Elige la Opción Principal --' : '-- Añadir otra opción de respaldo --'}
                                             </option>
-                                            {vacancies.filter(v => !selectedVacancyIds.includes(v.id)).map(v => (
+                                            {vacancies.filter(v => {
+                                                // Exclude already selected in this project
+                                                if (selectedVacancyIds.includes(v.id)) return false;
+                                                // Exclude vacancies used in other projects
+                                                const usedInOther = projects.some(p => {
+                                                    if (editingProject && p.id === editingProject.id) return false;
+                                                    return (p.vacancyIds || []).includes(v.id);
+                                                });
+                                                return !usedInOther;
+                                            }).map(v => (
                                                 <option key={v.id} value={v.id}>{v.name} ({v.company})</option>
                                             ))}
                                         </select>

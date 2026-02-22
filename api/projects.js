@@ -140,7 +140,7 @@ export default async function handler(req, res) {
 
                 // Create new project — no vacancies, no bypass
                 const cloned = await saveProject({
-                    name: `${source.name} (Copia)`,
+                    name: `Copia - ${source.name}`,
                     description: source.description || '',
                     assignedUsers: [],
                     vacancyIds: []
