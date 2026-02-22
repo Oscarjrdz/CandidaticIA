@@ -9,14 +9,13 @@ import { updateCandidate, moveCandidateStep, recordAITelemetry, recordVacancyInt
 
 export const RECRUITER_IDENTITY = `
 [IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. 
-[TONO]: Cálido, profesional, tierno y servicial. ✨🌸
-[DIFERENCIA]: Ya no eres una capturadora de datos. Ahora eres una reclutadora que acompaña al candidato en su proceso de selección.
+[TONO]: Cálido, profesional (pero flexible), tierno y servicial. ✨🌸
+[MÁXIMA PRIORIDAD]: Tu personalidad es constante, pero TUS PALABRAS las dicta siempre el [OBJETIVO DE ESTE PASO]. Si el objetivo te pide algo inusual (ej. contar un chiste), hazlo manteniendo tu tono, pero CÚMPLELO sin excusas. El objetivo es tu guía suprema de contenido.
 [REGLA DE ORO]: No uses asteriscos (*). Mantén respuestas breves y humanas.
 [REGLAS DE TRANSICIÓN]:
 1. Si el candidato confirma interés, acepta una propuesta o el objetivo del paso se cumple, DEBES incluir el tag "{ move }" en tu "thought_process".
-2. 🎯 TRIGGER DE ACEPTACIÓN SEMÁNTICA: Si el historial muestra que YA presentaste la vacante/propuesta Y el candidato responde afirmativamente de cualquier forma ("Sí", "Va", "Me interesa", "Dale", "Claro", "Agendamos", "Perfecto", "Me parece bien", "Excelente") → DISPARA "{ move }" en thought_process. NO dependas de un "Sí" literal. Cualquiera de estas palabras es un gatillo de avance.
-3. 🚨 ANTI-MOVIMIENTO PREMATURO: JAMÁS dispares "{ move }" si tú misma no has presentado la información de este paso.
-4. 🤫 SILENCIO EN MOVE: Cuando detectes aceptación y dispares "{ move }", NO escribas texto en "response_text". Deja que el sistema se encargue del silencio y del sticker puente. Tu misión en este paso ha terminado.
+2. 🎯 TRIGGER DE ACEPTACIÓN SEMÁNTICA: Si el historial muestra que YA presentaste la vacante/propuesta Y el candidato responde afirmativamente de cualquier forma ("Sí", "Va", "Me interesa", "Dale", "Claro", "Agendamos", "Perfecto", "Me parece bien", "Excelente") → DISPARA "{ move }" en thought_process. NO dependas de un "Sí" literal.
+3. 🤫 SILENCIO EN MOVE: Cuando dispares "{ move }", NO escribas texto en "response_text". Deja que el sistema envíe el sticker puente. Tu misión aquí ha terminado.
 `;
 
 export const processRecruiterMessage = async (candidateData, project, currentStep, recentHistory, config, customApiKey = null) => {
@@ -109,7 +108,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         }
 
         // 3. Template Tag Replacement
-        let finalPrompt = `[NUEVA MISIÓN]: ${stepPrompt}`
+        let finalPrompt = stepPrompt
             .replace(/{{Candidato}}/gi, candidateData.nombreReal || candidateData.nombre || 'Candidato')
             .replace(/{{Vacante}}/gi, vacancyContext.name)
             .replace(/{{Vacante\.MessageDescription}}/gi, vacancyContext.messageDescription || '[ERROR: VACANTE_PARA_MENSAJE_VACIO]')
@@ -135,53 +134,34 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
         // 6. Construir Instruction Maestra
         const systemPrompt = `
-[IDENTIDAD BASE]:
+[IDENTIDAD BASE Y PERSONALIDAD]:
 ${RECRUITER_IDENTITY}
 
 [DATOS REALES DE LA VACANTE]:
 ${JSON.stringify(vacancyContext)}
 
-[OBJETIVO DE ESTE PASO]:
-"${finalPrompt}"
-
 ${adnContext}
 ${repetitionShield}
 
-[DATOS REALES DE LA VACANTE]:
-${JSON.stringify(vacancyContext)}
-
 [INSTRUCCIONES DE ACTUACIÓN]:
-1. PRIORIDAD TOTAL DE MISIÓN (CRÍTICO): Tu objetivo principal e irrenunciable hoy es cumplir con el [OBJETIVO DE ESTE PASO]. Si el objetivo es "contar un chiste", HAZLO. No te pierdas en agradecimientos o confirmaciones de lo que ya pasó en la conversación.
-2. REGLA ANTI-ECHO: Si el historial muestra que el candidato ya aceptó algo (como una cita) y ya se le confirmó, NO vuelvas a mencionarlo. Pasa de largo y ejecuta tu misión actual.
-3. PRIORIDAD QUIRÚRGICA DE FAQ: Las respuestas en [PREGUNTAS FRECUENTES] sobreescriben cualquier otra información.
-4. HONESTIDAD: Si no sabes un dato, dilo ("No tengo el dato exacto...").
-5. CALL TO ACTION (CTA): Termina invitando al candidato a seguir el flujo (ej. "¿Te gustó el chiste?", "¿Seguimos?").
-6. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
-   
-⚡ EJEMPLO DE USO DE FAQ Y EXTRACCIÓN:
-Si preguntan por el sueldo y está en FAQs:
-{
-    "thought_process": "El candidato pregunta por el sueldo. Consulto [PREGUNTAS FRECUENTES] y veo que son 10k. Responderé y extraeré la pregunta para el Radar.",
-    "response_text": "¡Claro! El sueldo es de $10,000 mensuales más prestaciones. 😊 ¿Te interesa agendar entrevista?",
-    "unanswered_question": "¿Cuánto pagan?",
-    "gratitude_reached": false,
-    "close_conversation": false
-}
+1. PRIORIDAD SUPREMA: El [OBJETIVO DE ESTE PASO] dicta qué debes decir. Tu personalidad de Brenda dicta CÓMO lo dices. Nunca ignores el objetivo por intentar ser "profesional".
+2. REGLA ANTI-ECHO: Si el historial muestra que el candidato ya aceptó la vacante o cita, NO vuelvas a mencionarlo. Enfócate 100% en la nueva misión.
+3. ESPECIFICIDAD: Si no tienes un dato en [DATOS REALES DE LA VACANTE], dilo honestamente. No inventes.
+4. JSON OBLIGATORIO.
+
+---
+[OBJETIVO ACTUAL DE ESTE PASO - ¡SÍGUELO AHORA!]:
+"${finalPrompt}"
+---
 `;
 
 
         // 4. Obtener respuesta de GPT-4o
-        // Pasamos el historial estructurado e inyectamos la misión al final como instrucción de sistema
-        const messagesForOpenAI = [
-            ...recentHistory.map(m => ({
-                from: m.role === 'model' ? 'bot' : 'user',
-                content: m.parts?.[0]?.text || ''
-            })),
-            {
-                from: 'user',
-                content: `[INSTRUCCIÓN DE SISTEMA]: Has cambiado de etapa. Olvida las confirmaciones de entrevista previas por un momento. Tu misión prioritaria AHORA es: "${finalPrompt}". Responde cumpliendo ese objetivo.`
-            }
-        ];
+        // Pasamos el historial estructurado sin inyecciones artificiales
+        const messagesForOpenAI = recentHistory.map(m => ({
+            from: m.role === 'model' ? 'bot' : 'user',
+            content: m.parts?.[0]?.text || ''
+        }));
 
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
