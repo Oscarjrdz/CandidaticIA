@@ -66,16 +66,18 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
                 : 'bg-white border-slate-100 dark:bg-slate-800 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
                 }`}
         >
-            <div className="flex justify-between items-start">
-                <div className="flex-1 min-w-0" {...listeners}>
-                    <h3 className={`font-bold truncate ${isActive ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
-                        {project.name}
-                    </h3>
-                    <p className={`text-xs mt-1 line-clamp-1 ${isActive ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                        {project.description || 'Sin descripción'}
-                    </p>
-                </div>
-                <div className="flex gap-1">
+            {/* Name row — full width, no icons competing */}
+            <div className="flex-1 min-w-0 w-full" {...listeners}>
+                <h3 className={`font-bold truncate ${isActive ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
+                    {project.name}
+                </h3>
+                <p className={`text-xs mt-1 line-clamp-1 ${isActive ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                    {project.description || 'Sin descripción'}
+                </p>
+            </div>
+            {/* Bottom row: icons left, date right */}
+            <div className="mt-3 flex items-center justify-between">
+                <div className="flex items-center gap-1">
                     <button
                         onClick={onClone}
                         className={`p-1.5 rounded-lg transition-colors ${isActive
@@ -84,7 +86,7 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
                             }`}
                         title="Clonar proyecto"
                     >
-                        <Copy className="w-4 h-4" />
+                        <Copy className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={onEdit}
@@ -94,7 +96,7 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
                             }`}
                         title="Editar proyecto"
                     >
-                        <Pencil className="w-4 h-4" />
+                        <Pencil className="w-3.5 h-3.5" />
                     </button>
                     <button
                         onClick={onDelete}
@@ -104,19 +106,10 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
                             }`}
                         title="Eliminar proyecto"
                     >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                     </button>
                 </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between" {...listeners}>
-                <div className="flex -space-x-2">
-                    {(project.assignedUsers || []).slice(0, 3).map((uId, idx) => (
-                        <div key={idx} className="w-5 h-5 rounded-full border border-white bg-blue-400 dark:bg-blue-500 flex items-center justify-center text-[8px] font-bold text-white shadow-sm">
-                            {users.find(u => u.id === uId)?.name?.charAt(0) || 'U'}
-                        </div>
-                    ))}
-                </div>
-                <span className={`text-[10px] font-medium ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
+                <span className={`text-[10px] font-medium ${isActive ? 'text-blue-100' : 'text-slate-400'}`} {...listeners}>
                     {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Sin fecha'}
                 </span>
             </div>
