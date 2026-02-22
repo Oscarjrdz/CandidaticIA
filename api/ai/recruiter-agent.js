@@ -122,11 +122,13 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         }
 
         // --- ALTERNATIVE VACANCIES (PIVOT) ---
+        // Only show vacancies AFTER the current index (not yet seen, not already rejected)
         let alternatives = [];
         if (project.vacancyIds?.length > 1) {
             const { getVacancyById } = await import('../utils/storage.js');
-            const otherIds = project.vacancyIds.filter(id => id !== activeVacancyId);
-            for (const id of otherIds) {
+            // Future vacancies only: index > currentVacancyIndex
+            const futureIds = project.vacancyIds.slice(currentVacancyIndex + 1);
+            for (const id of futureIds) {
                 const alt = await getVacancyById(id);
                 if (alt) {
                     alternatives.push({
@@ -192,8 +194,10 @@ ${repetitionShield}
 5. ESPECIFICIDAD: Si no tienes un dato en [DATOS REALES DE LA VACANTE], dilo honestamente. No inventes.
 6. JSON OBLIGATORIO.
 
-[VACANTES ALTERNATIVAS (PARA PIVOTEO)]:
-${alternatives.length > 0 ? JSON.stringify(alternatives) : "No hay más vacantes en este proyecto."}
+[VACANTES ALTERNATIVAS (PARA PIVOTEO - AÚN NO VISTAS)]:
+${alternatives.length > 0
+                ? `Las siguientes vacantes están disponibles si el candidato rechaza la actual. Preséntala como opción SOLO si rechaza explícitamente.\n${JSON.stringify(alternatives)}`
+                : "No hay más vacantes disponibles. Si el candidato rechaza esta, dispara { move: exit }."}
 
 ---
 [OBJETIVO ACTUAL DE ESTE PASO - ¡SÍGUELO AHORA!]:
