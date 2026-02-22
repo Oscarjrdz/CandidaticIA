@@ -1258,7 +1258,9 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             candidateUpdates.congratulated = true;
             candidateUpdates.bridge_counter = 0;
             candidateUpdates.esNuevo = 'NO';
-            responseTextVal = null; // Clear out default to let recruiter handle it if mapped, else silence.
+
+            // 🛡️ Guard: Only clear if not already set by Recruiter Brain bifurcation or if we plan to re-call it
+            if (!isRecruiterMode) responseTextVal = null;
         }
 
         // --- BYPASS / PROJECT DISPATCH LOGIC ---
@@ -1281,7 +1283,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         ? [...historyForGpt, { role: 'model', parts: [{ text: "¡Súper! 🌟 Ya tengo tu perfil 100% completo. 📝✅" }] }]
                         : historyForGpt;
 
-                    const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyToUse, config, bypassAiConfig.openaiApiKey);
+                    const recruiterResult = (!isRecruiterMode || bypassJustMatched)
+                        ? await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyToUse, config, bypassAiConfig.openaiApiKey)
+                        : null;
+
                     if (recruiterResult?.response_text) responseTextVal = recruiterResult.response_text;
 
                     // 🧠 Merge secondary extraction from recruiter match
