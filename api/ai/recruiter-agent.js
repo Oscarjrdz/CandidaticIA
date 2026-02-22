@@ -91,6 +91,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                 };
             }
 
+            // --- FAQs ---
             const { getRedisClient } = await import('../utils/storage.js');
             const client = getRedisClient();
             if (client) {
@@ -104,6 +105,23 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                         }
                     }
                 } catch (e) { }
+            }
+        }
+
+        // --- ALTERNATIVE VACANCIES (PIVOT) ---
+        let alternatives = [];
+        if (project.vacancyIds?.length > 1) {
+            const { getVacancyById } = await import('../utils/storage.js');
+            const otherIds = project.vacancyIds.filter(id => id !== activeVacancyId);
+            for (const id of otherIds) {
+                const alt = await getVacancyById(id);
+                if (alt) {
+                    alternatives.push({
+                        name: alt.name,
+                        description: alt.messageDescription || alt.description,
+                        salary: alt.salary || 'N/A'
+                    });
+                }
             }
         }
 
@@ -145,9 +163,14 @@ ${repetitionShield}
 
 [INSTRUCCIONES DE ACTUACIÓN]:
 1. PRIORIDAD SUPREMA: El [OBJETIVO DE ESTE PASO] dicta qué debes decir. Tu personalidad de Brenda dicta CÓMO lo dices. Nunca ignores el objetivo por intentar ser "profesional".
-2. REGLA ANTI-ECHO: Si el historial muestra que el candidato ya aceptó la vacante o cita, NO vuelvas a mencionarlo. Enfócate 100% en la nueva misión.
-3. ESPECIFICIDAD: Si no tienes un dato en [DATOS REALES DE LA VACANTE], dilo honestamente. No inventes.
-4. JSON OBLIGATORIO.
+2. REGLA DE PIVOTEO: Si el candidato dice que NO le interesa la vacante actual, NO cierres la conversación. Ofrece una de las [VACANTES ALTERNATIVAS] y trata de redirigir hacia la cita para esa nueva opción.
+3. RADAR DE DUDAS: Si el candidato tiene dudas, resuélvelas usando [PREGUNTAS FRECUENTES]. Si no tienes la respuesta, extráela fielmente al campo "unanswered_question".
+4. REGLA ANTI-ECHO: Si el historial muestra que el candidato ya aceptó la vacante o cita, NO vuelvas a mencionarlo. Enfócate 100% en la nueva misión.
+5. ESPECIFICIDAD: Si no tienes un dato en [DATOS REALES DE LA VACANTE], dilo honestamente. No inventes.
+6. JSON OBLIGATORIO.
+
+[VACANTES ALTERNATIVAS (PARA PIVOTEO)]:
+${alternatives.length > 0 ? JSON.stringify(alternatives) : "No hay más vacantes en este proyecto."}
 
 ---
 [OBJETIVO ACTUAL DE ESTE PASO - ¡SÍGUELO AHORA!]:

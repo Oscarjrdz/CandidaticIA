@@ -562,18 +562,39 @@ ${audit.dnaLines}
                         candidateUpdates.stepId = nextStep.id;
                         candidateUpdates.projectId = activeProjectId; // Ensure persistence
 
-                        // 3. ROBUST CHAINED EXECUTION (Zuckerberg Standard)
-                        // Fire sticker and next AI concurrently to minimize latency, but with controlled sequence
+                        // 3. SMART BRIDGE SELECTION (Multi-puente)
                         const bridgePromise = (async () => {
                             try {
-                                const client = getRedisClient();
-                                const bridgeSticker = await client?.get('bot_step_move_sticker');
+                                const redis = getRedisClient();
+                                if (!redis) return;
+
+                                // Prioridades: 
+                                // 1. bot_bridge_{stepNameLowercase}
+                                // 2. bot_bridge_{stepId}
+                                // 3. bot_step_move_sticker (Universal)
+                                const stepNameLower = currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_');
+
+                                let bridgeKey = 'bot_step_move_sticker';
+                                const specificKeys = [];
+                                if (stepNameLower) specificKeys.push(`bot_bridge_${stepNameLower}`);
+                                specificKeys.push(`bot_bridge_${activeStepId}`);
+
+                                for (const key of specificKeys) {
+                                    const exists = await redis.exists(key);
+                                    if (exists) {
+                                        bridgeKey = key;
+                                        break;
+                                    }
+                                }
+
+                                const bridgeSticker = await redis.get(bridgeKey);
+
                                 if (bridgeSticker) {
-                                    console.log(`[RECRUITER BRAIN] 🎨 Sending Visual Bridge sticker...`);
-                                    await new Promise(r => setTimeout(r, 800)); // Slightly more delay for naturality
+                                    console.log(`[RECRUITER BRAIN] 🎨 Sending Smart Bridge (${bridgeKey})...`);
+                                    await new Promise(r => setTimeout(r, 800));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
                                 } else {
-                                    console.log(`[RECRUITER BRAIN] ⚠️ No bridge sticker found in Redis (bot_step_move_sticker)`);
+                                    console.log(`[RECRUITER BRAIN] ⚠️ No bridge sticker found for ${bridgeKey}`);
                                 }
                             } catch (e) {
                                 console.error(`[RECRUITER BRAIN] ❌ Bridge Sticker Fail:`, e.message);
