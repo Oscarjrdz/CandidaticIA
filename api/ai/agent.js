@@ -494,11 +494,17 @@ ${audit.dnaLines}
                         console.log(`[RECRUITER BRAIN] 🧬 Extracted data merged:`, aiResult.extracted_data);
                     }
 
-                    if (aiResult?.unanswered_question && activeVacancyId) {
+                    const rawUQ = aiResult?.unanswered_question;
+                    const unansweredQ = rawUQ && rawUQ !== 'null' && rawUQ !== 'undefined' && String(rawUQ).trim().length > 3
+                        ? String(rawUQ).trim() : null;
+
+                    if (unansweredQ && activeVacancyId) {
                         const geminiKey = activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
-                        console.log(`[FAQ Engine] 📡 Question detected: "${aiResult.unanswered_question}" for Vacancy: ${activeVacancyId}`);
-                        await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: aiResult.unanswered_question });
-                        processUnansweredQuestion(activeVacancyId, aiResult.unanswered_question, responseTextVal, geminiKey).catch(e => console.error('[FAQ Engine] ❌ Cluster Error:', e));
+                        console.log(`[FAQ Engine] 📡 Capturing question: "${unansweredQ}" → vacancy ${activeVacancyId}`);
+                        await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
+                        processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey).catch(e => console.error('[FAQ Engine] ❌ Cluster Error:', e));
+                    } else {
+                        console.log(`[FAQ Engine] ⏭️ No unanswered question to capture (raw: ${JSON.stringify(rawUQ)})`);
                     }
                 }
 

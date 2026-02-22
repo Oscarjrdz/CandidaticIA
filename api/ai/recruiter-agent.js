@@ -244,7 +244,11 @@ ${alternatives.length > 0
         // 4. Parsear respuesta
         let aiResult;
         try {
-            const sanitized = gptResponse.content.replace(/```json | ```/g, '').trim();
+            const sanitized = gptResponse.content
+                .replace(/^```json\s*/i, '')  // Remove opening ```json
+                .replace(/^```\s*/i, '')       // Remove opening ```
+                .replace(/```\s*$/i, '')       // Remove closing ```
+                .trim();
             aiResult = JSON.parse(sanitized);
         } catch (e) {
             console.error('[RECRUITER BRAIN] JSON Parse Error:', e);
@@ -253,8 +257,16 @@ ${alternatives.length > 0
                 thought_process: 'Fallback: JSON parse failed.',
                 extracted_data: {},
                 gratitude_reached: false,
-                close_conversation: false
+                close_conversation: false,
+                unanswered_question: null
             };
+        }
+
+        // Diagnostic: log unanswered_question result
+        if (aiResult.unanswered_question && aiResult.unanswered_question !== 'null') {
+            console.log(`[FAQ Engine] 📡 unanswered_question captured: "${aiResult.unanswered_question}"`);
+        } else {
+            console.log(`[FAQ Engine] ✅ No unanswered question. Values: ${JSON.stringify(aiResult.unanswered_question)}`);
         }
 
         // 5. Lógica de Movimiento { move } y Rastreo de Vacantes
