@@ -757,7 +757,10 @@ ${audit.dnaLines}
             const model = genAI.getGenerativeModel({
                 model: "gemini-2.0-flash",
                 systemInstruction,
-                generationConfig: { responseMimeType: "application/json" }
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    temperature: 0.3  // Low temp = consistent extraction, no hallucinations
+                }
             });
             const chat = model.startChat({ history: recentHistory });
             const result = await chat.sendMessage(userParts);
