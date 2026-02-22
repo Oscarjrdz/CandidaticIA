@@ -237,6 +237,33 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             recentHistory.shift();
         }
 
+        // 🛡️ GEMINI FORMAT SHIELD: Strictly Consolidate Alternate Roles (user -> model -> user)
+        let consolidatedHistory = [];
+        for (const item of recentHistory) {
+            if (consolidatedHistory.length === 0) {
+                consolidatedHistory.push(item);
+            } else {
+                const lastIdx = consolidatedHistory.length - 1;
+                if (consolidatedHistory[lastIdx].role === item.role) {
+                    consolidatedHistory[lastIdx].parts[0].text += `\n${item.parts[0].text}`;
+                } else {
+                    consolidatedHistory.push(item);
+                }
+            }
+        }
+        recentHistory = consolidatedHistory;
+
+        // CRITICAL: Since `chat.sendMessage(userParts)` ALWAYS appends a 'user' message,
+        // the last item in `recentHistory` MUST be 'model' to maintain alternate roles.
+        // If the last item is 'user', we pop it out and prepend it to the incoming `userParts`.
+        if (recentHistory.length > 0 && recentHistory[recentHistory.length - 1].role === 'user') {
+            const poppedUserMsg = recentHistory.pop();
+            // Append this missing text directly to the aggregated extraction text
+            aggregatedText = poppedUserMsg.parts[0].text + " | " + aggregatedText;
+            // Also update userParts so it's sent to Gemini!
+            userParts.unshift({ text: poppedUserMsg.parts[0].text });
+        }
+
         const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-5).map(m => m.content);
         const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Nuevo contacto';
 
