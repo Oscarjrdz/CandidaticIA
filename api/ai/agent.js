@@ -1286,12 +1286,29 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                     // 🧠 Merge secondary extraction from recruiter match
                     if (recruiterResult?.extracted_data) {
                         Object.entries(recruiterResult.extracted_data).forEach(([key, val]) => {
-                            if (val !== null && val !== undefined) candidateUpdates[key] = val;
+                            if (val !== null && val !== undefined) {
+                                // Apply same normalization as Capturista
+                                let cleanedVal = val;
+                                if (key === 'tieneEmpleo') {
+                                    const strVal = String(val).toLowerCase().trim();
+                                    if (strVal === 'si' || strVal === 'sí' || strVal === 'true' || strVal === 'empleado' || strVal.includes('trabajando') || strVal.includes('laborando') || strVal.includes('trabajo')) {
+                                        cleanedVal = 'Sí';
+                                    } else if (strVal === 'no' || strVal === 'false' || strVal === 'desempleado' || strVal.includes('no tengo') || strVal.includes('buscando')) {
+                                        cleanedVal = 'No';
+                                    }
+                                }
+                                candidateUpdates[key] = cleanedVal;
+                            }
                         });
                     }
 
+                    // 📎 Merge media objects from recruiter
+                    if (recruiterResult?.matched_faq_object) aiResult.matched_faq_object = recruiterResult.matched_faq_object;
+                    if (recruiterResult?.matched_vacancy_media_object) aiResult.matched_vacancy_media_object = recruiterResult.matched_vacancy_media_object;
+
                 }
             } else if (shouldSendSticker) {
+
                 // 🏠 NO PROJECT: Enter waiting room (only meaningful if they just completed their profile)
                 console.log(`[GPT Host] Candidate ${candidateId} completed profile without project.`);
                 candidateUpdates.gratitudAlcanzada = false;
@@ -1300,7 +1317,9 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
+        console.log(`[Storage] 📦 Final candidateUpdates for ${candidateId}:`, JSON.stringify(candidateUpdates));
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
+
         let reactionPromise = Promise.resolve();
         if (msgId && config && aiResult?.reaction) {
             reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);

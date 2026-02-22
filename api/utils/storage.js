@@ -1372,17 +1372,12 @@ export const addCandidateToProject = async (projectId, candidateId, metadata = n
 
     await pipeline.exec();
 
-    // 🔥 ATOMIC OVERRIDE: Ensure the candidate root JSON has this projectId.
-    // This prevents webhooks racing conditions from overwriting it with old data.
-    const candRaw = await client.get(`${KEYS.CANDIDATE_PREFIX}${candidateId}`);
-    if (candRaw) {
-        try {
-            const candJson = JSON.parse(candRaw);
-            candJson.projectId = projectId;
-            candJson.stepId = finalMetadata.stepId;
-            await client.set(`${KEYS.CANDIDATE_PREFIX}${candidateId}`, JSON.stringify(candJson));
-        } catch (e) { }
-    }
+    // 🔥 SURGICAL OVERRIDE: Use updateCandidate to ensure we merge instead of overwrite
+    await updateCandidate(candidateId, {
+        projectId,
+        stepId: finalMetadata.stepId
+    });
+
 
     // ⚡ REAL-TIME NOTIFICATION
     try {
