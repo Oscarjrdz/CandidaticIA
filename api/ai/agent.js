@@ -759,7 +759,7 @@ ${audit.dnaLines}
                 systemInstruction,
                 generationConfig: {
                     responseMimeType: "application/json",
-                    temperature: 0.3  // Low temp = consistent extraction, no hallucinations
+                    temperature: 0.8  // Balanced creativity for natural conversation during extraction
                 }
             });
             const chat = model.startChat({ history: recentHistory });
