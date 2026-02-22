@@ -568,6 +568,22 @@ ${audit.dnaLines}
                 let hasMoveTag = moveRegex.test(aiResult?.thought_process || '') || moveRegex.test(aiResult?.response_text || '');
                 const hasExitTag = exitRegex.test(aiResult?.thought_process || '') || exitRegex.test(aiResult?.response_text || '');
 
+                // 🛡️ CONTEXTUAL SAFETY TRIGGER (MARK STYLE)
+                // If Brenda forgets the tag but the developer-certified intent is ACCEPTANCE 
+                // AND the bot just asked to schedule, we force the move.
+                if (!hasMoveTag && intent === 'ACCEPTANCE') {
+                    const lastBotMsg = historyForGpt.filter(h => h.role === 'model').slice(-1)[0];
+                    const botText = (lastBotMsg?.parts?.[0]?.text || '').toLowerCase();
+                    const isInterviewInvite = botText.includes('agendar tu entrevista') ||
+                        botText.includes('agendamos tu entrevista') ||
+                        botText.includes('te queda bien');
+
+                    if (isInterviewInvite) {
+                        console.log(`[RECRUITER BRAIN] 🛡️ Contextual Acceptance detected (Bot invited, User said Yes)! Forcing { move }.`);
+                        hasMoveTag = true;
+                    }
+                }
+
                 if (hasMoveTag || hasExitTag) {
                     let currentIndex = project.steps.findIndex(s => s.id === activeStepId);
                     if (currentIndex === -1) currentIndex = 0;
@@ -736,17 +752,17 @@ ${audit.dnaLines}
 `;
 
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
-{
-    "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Si | No | null", "escolaridad": "string | null", "edad": "number | null" },
-    "thought_process": "Razonamiento.",
-    "reaction": "null",
-    "trigger_media": "string | null",
-    "response_text": "Tu respuesta.",
-    "gratitude_reached": "boolean",
-    "close_conversation": "boolean"
-} 
-\n[REGLA ANTI-SILENCIO]: Si el usuario responde con simples confirmaciones ("Si", "Claro", "Ok") a una pregunta de datos, TU RESPUESTA DEBE SER: 
-1. Agradecer/Confirmar ("¡Perfecto!", "¡Excelente!").
+            {
+                "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Si | No | null", "escolaridad": "string | null", "edad": "number | null" },
+                "thought_process": "Razonamiento.",
+                    "reaction": "null",
+                        "trigger_media": "string | null",
+                            "response_text": "Tu respuesta.",
+                                "gratitude_reached": "boolean",
+                                    "close_conversation": "boolean"
+            }
+\n[REGLA ANTI - SILENCIO]: Si el usuario responde con simples confirmaciones("Si", "Claro", "Ok") a una pregunta de datos, TU RESPUESTA DEBE SER:
+1. Agradecer / Confirmar("¡Perfecto!", "¡Excelente!").
 2. VOLVER A PEDIR EL DATO FALTANTE EXPLICÍTAMENTE.
 3. JAMÁS DEJES "response_text" VACÍO si faltan datos.
 `;
@@ -764,7 +780,7 @@ ${audit.dnaLines}
             const result = await chat.sendMessage(userParts);
             const textResult = result.response.text();
             try {
-                const sanitized = textResult.replace(/```json|```/g, '').trim();
+                const sanitized = textResult.replace(/```json | ```/g, '').trim();
                 aiResult = JSON.parse(sanitized);
                 responseTextVal = aiResult.response_text;
 
@@ -780,9 +796,9 @@ ${audit.dnaLines}
                 // CRITICAL: Activate safeguard if response is empty AND profile is still incomplete
                 if (hasEmptyResponse && !isNowComplete) {
                     console.warn(`[SILENCE SAFEGUARD V2] 🚨 Empty response detected for incomplete profile.`);
-                    console.warn(`[SILENCE SAFEGUARD V2] Missing fields: ${audit.missingLabels.join(', ')}`);
+                    console.warn(`[SILENCE SAFEGUARD V2] Missing fields: ${audit.missingLabels.join(', ')} `);
                     console.warn(`[SILENCE SAFEGUARD V2] User input: "${aggregatedText}"`);
-                    console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation}`);
+                    console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation} `);
 
                     // 🧠 INTELLIGENT FIELD SELECTION
                     // Re-audit WITH the extracted data to see what is REALLY still missing
@@ -819,11 +835,11 @@ ${audit.dnaLines}
                         // If detected field is still missing, use it
                         if (detectedField && audit.missingLabels.includes(detectedField)) {
                             nextMissing = detectedField;
-                            console.log(`[SILENCE SAFEGUARD V2] 🎯 Detected we were asking for: ${nextMissing}`);
+                            console.log(`[SILENCE SAFEGUARD V2] 🎯 Detected we were asking for: ${nextMissing} `);
                         } else {
                             // Fallback: Use first missing field in sequential order
                             nextMissing = audit.missingLabels[0];
-                            console.log(`[SILENCE SAFEGUARD V2] 📋 Using first missing field: ${nextMissing}`);
+                            console.log(`[SILENCE SAFEGUARD V2] 📋 Using first missing field: ${nextMissing} `);
                         }
                     }
 
@@ -834,7 +850,7 @@ ${audit.dnaLines}
 
                     // Category-specific fallback with list
                     if (nextMissing === 'Categoría' && categoriesList) {
-                        const categoryArray = categoriesList.split(', ').map(c => `✅ ${c}`).join('\n');
+                        const categoryArray = categoriesList.split(', ').map(c => `✅ ${c} `).join('\n');
 
                         let intros = [];
                         if (isInterruption) {
@@ -855,7 +871,7 @@ ${audit.dnaLines}
                         }
                         const randomIntro = intros[Math.floor(Math.random() * intros.length)];
 
-                        aiResult.response_text = `${randomIntro} ¿En qué área te gustaría trabajar? Estas son las opciones:\n${categoryArray}\n¿Cuál eliges? 😊`;
+                        aiResult.response_text = `${randomIntro} ¿En qué área te gustaría trabajar ? Estas son las opciones: \n${categoryArray} \n¿Cuál eliges ? 😊`;
                         aiResult.thought_process = isInterruption ? "SAFEGUARD: Interruption detected (Category phase)" : "SAFEGUARD: Categoría no capturada, re-listando opciones.";
                     } else {
                         // Generic fallback for other fields
@@ -865,25 +881,25 @@ ${audit.dnaLines}
                             phrases = [
                                 `¡Buena pregunta! 💡 En un segundito te digo, pero antes ayúdame con tu ${nextMissing} para ver qué opciones te tocan. 😉`,
                                 `¡Entendido! 👌 Ahorita revisamos eso, pero primero necesito tu ${nextMissing} para registrarte. 😊`,
-                                `¡Claro! En un momento te comparto esa info. 😉 ¿Me podrías decir tu ${nextMissing} mientras?`
+                                `¡Claro! En un momento te comparto esa info. 😉 ¿Me podrías decir tu ${nextMissing} mientras ? `
                             ];
                         } else {
                             // Standard "Distracted" phrases
                             phrases = [
-                                `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`,
+                                `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor ? `,
                                 `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
-                                `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor?`,
+                                `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor ? `,
                                 `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
                                 `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
                             ];
                         }
 
                         aiResult.response_text = phrases[Math.floor(Math.random() * phrases.length)];
-                        aiResult.thought_process = isInterruption ? `SAFEGUARD: Interruption detected (${nextMissing})` : `SAFEGUARD: ${nextMissing} no capturado.`;
+                        aiResult.thought_process = isInterruption ? `SAFEGUARD: Interruption detected(${nextMissing})` : `SAFEGUARD: ${nextMissing} no capturado.`;
                     }
                 } else if (hasEmptyResponse && isNowComplete) {
                     // Profile is complete but AI went silent - send transition message
-                    console.log(`[SILENCE SAFEGUARD V2] 🏁 Profile completed but AI silent. Injecting transition.`);
+                    console.log(`[SILENCE SAFEGUARD V2] 🏁 Profile completed but AI silent.Injecting transition.`);
                     aiResult.response_text = "¡Perfecto! ✨ Ya tengo todos tus datos. En un momento te cuento más. 😉";
                     aiResult.thought_process = "SAFEGUARD: Profile complete but AI went silent.";
                     aiResult.close_conversation = false;
@@ -893,7 +909,7 @@ ${audit.dnaLines}
                 console.log(`[SILENCE SAFEGUARD V2] ✅ Injected fallback: "${responseTextVal.substring(0, 50)}..."`);
             } catch (e) {
                 console.error(`[Gemini JSON Parse Error] ❌`, e);
-                console.error(`[Gemini JSON Parse Error] Raw response: ${textResult?.substring(0, 200)}`);
+                console.error(`[Gemini JSON Parse Error] Raw response: ${textResult?.substring(0, 200)} `);
 
                 // Enhanced fallback for JSON parse error
                 if (!isProfileComplete) {
@@ -937,7 +953,7 @@ ${audit.dnaLines}
                     const isInterruption = interruptionKeywords.some(kw => aggregatedText.toLowerCase().includes(kw));
 
                     if (nextMissing === 'Categoría' && categoriesList) {
-                        const categoryArray = categoriesList.split(', ').map(c => `✅ ${c}`).join('\n');
+                        const categoryArray = categoriesList.split(', ').map(c => `✅ ${c} `).join('\n');
 
                         let intros = [];
                         if (isInterruption) {
@@ -956,20 +972,20 @@ ${audit.dnaLines}
                             ];
                         }
                         const randomIntro = intros[Math.floor(Math.random() * intros.length)];
-                        responseTextVal = `${randomIntro} ¿En qué área te gustaría trabajar?\n${categoryArray}`;
+                        responseTextVal = `${randomIntro} ¿En qué área te gustaría trabajar ?\n${categoryArray} `;
                     } else {
                         let phrases = [];
                         if (isInterruption) {
                             phrases = [
                                 `¡Buena pregunta! 💡 En un segundito te digo, pero antes ayúdame con tu ${nextMissing} para ver qué opciones te tocan. 😉`,
                                 `¡Entendido! 👌 Ahorita revisamos eso, pero primero necesito tu ${nextMissing} para registrarte. 😊`,
-                                `¡Claro! En un momento te comparto esa info. 😉 ¿Me podrías decir tu ${nextMissing} mientras?`
+                                `¡Claro! En un momento te comparto esa info. 😉 ¿Me podrías decir tu ${nextMissing} mientras ? `
                             ];
                         } else {
                             phrases = [
-                                `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor?`,
+                                `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor ? `,
                                 `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
-                                `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor?`,
+                                `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor ? `,
                                 `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
                                 `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
                             ];
@@ -1039,7 +1055,7 @@ ${audit.dnaLines}
 
                 // Override response to ask for correct format
                 if (!isProfileComplete && audit.missingLabels.includes('Fecha de Nacimiento')) {
-                    responseTextVal = `¡Uy! Necesito la fecha en formato completo, por ejemplo: 19/05/1988 (día/mes/año completo) 😊`;
+                    responseTextVal = `¡Uy! Necesito la fecha en formato completo, por ejemplo: 19 /05 / 1988(día / mes / año completo) 😊`;
                     aiResult.response_text = responseTextVal;
                     aiResult.thought_process = "SAFEGUARD: Invalid date format detected.";
                     console.log(`[Date Validation] ✅ Injected format correction message`);
@@ -1075,7 +1091,7 @@ ${audit.dnaLines}
 
         // Trigger if: Profile complete AND (No project OR Stationed in Waiting Room)
         if (isNowComplete && isBypassEnabled && (!candidateData.projectId || isInWaitingRoom)) {
-            console.log(`[BYPASS] 🔍 Starting evaluation for ${candidateId}. Profile is COMPLETE.`);
+            console.log(`[BYPASS] 🔍 Starting evaluation for ${candidateId}.Profile is COMPLETE.`);
 
             // 🕵️‍♂️ DEBUG TRACE OBJECT
             const debugTrace = {
@@ -1096,7 +1112,7 @@ ${audit.dnaLines}
             try {
                 const bypassIds = await redis.zrange('bypass:list', 0, -1);
                 if (bypassIds.length > 0) {
-                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id}`));
+                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id} `));
                     const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
 
                     for (const rule of activeRules) {
@@ -1138,7 +1154,7 @@ ${audit.dnaLines}
 
                         const isMatch = ageMatch && genderMatch && munMatch && escMatch && catMatch;
 
-                        console.log(`[BYPASS] Rule Check: "${rule.name}" | Match: ${isMatch} | Checks: age:${ageMatch}, mun:${munMatch}, cat:${catMatch}, esc:${escMatch}, gen:${genderMatch}`);
+                        console.log(`[BYPASS] Rule Check: "${rule.name}" | Match: ${isMatch} | Checks: age:${ageMatch}, mun:${munMatch}, cat:${catMatch}, esc:${escMatch}, gen:${genderMatch} `);
 
                         // Add to Debug Trace
                         debugTrace.rules.push({
@@ -1155,7 +1171,7 @@ ${audit.dnaLines}
                         });
 
                         if (isMatch) {
-                            console.log(`[BYPASS] ✅ MATCH FOUND: Rule "${rule.name}" → Project ${projectId}`);
+                            console.log(`[BYPASS] ✅ MATCH FOUND: Rule "${rule.name}" → Project ${projectId} `);
 
                             // Assign candidate to project
                             const { addCandidateToProject } = await import('../utils/storage.js');
@@ -1168,7 +1184,7 @@ ${audit.dnaLines}
                             debugTrace.matchedRule = rule.name;
                             debugTrace.assignedProject = projectId;
 
-                            console.log(`[BYPASS] 🎯 Candidate ${candidateId} routed to project ${projectId}`);
+                            console.log(`[BYPASS] 🎯 Candidate ${candidateId} routed to project ${projectId} `);
                             break; // Stop at first match
                         }
                     }
@@ -1183,7 +1199,7 @@ ${audit.dnaLines}
                 await redis.ltrim('debug:bypass:traces', 0, 49);
 
             } catch (bypassError) {
-                console.error(`[BYPASS] ❌ Error during evaluation:`, bypassError);
+                console.error(`[BYPASS] ❌ Error during evaluation: `, bypassError);
             }
         }
 
@@ -1281,12 +1297,12 @@ ${audit.dnaLines}
                     timestamp: new Date().toISOString(),
                     receivedMessage: aggregatedText,
                     intent,
-                    apiUsed: isRecruiterMode ? `recruiter-agent (Step: ${activeStepId})` : 'capturista-brain',
+                    apiUsed: isRecruiterMode ? `recruiter - agent(Step: ${activeStepId})` : 'capturista-brain',
                     aiResult,
                     isNowComplete
                 };
-                await redisClient.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
-                await redisClient.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
+                await redisClient.lpush(`debug: agent: logs:${candidateId} `, JSON.stringify(trace));
+                await redisClient.ltrim(`debug: agent: logs:${candidateId} `, 0, 49);
                 await redisClient.set('debug:global:last_run', JSON.stringify({
                     candidateId,
                     timestamp: trace.timestamp,
@@ -1295,7 +1311,7 @@ ${audit.dnaLines}
                 }), 'EX', 3600);
             }
         } catch (e) {
-            console.error(`[DEBUG] Trace failed:`, e.message);
+            console.error(`[DEBUG] Trace failed: `, e.message);
         }
 
         return responseTextVal || '[SILENCIO]';
