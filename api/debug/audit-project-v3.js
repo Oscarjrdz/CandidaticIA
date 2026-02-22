@@ -8,8 +8,10 @@ export default async function handler(req, res) {
         const candidateId = 'cand_1771740607320_w8sn1y0j9';
         const projectId = 'proj_1771225156891_10ez5k';
 
-        const candidateRaw = await redis.get(`candidatic:candidate:${candidateId}`);
-        const candidate = candidateRaw ? JSON.parse(candidateRaw) : null;
+        // 2. Get Candidate Data
+        const candidateRaw = await redis.get(`candidate:${candidateId}`);
+        if (!candidateRaw) return res.status(404).json({ error: 'Candidate not found with prefix candidate:', candidateId });
+        const candidate = JSON.parse(candidateRaw);
 
         const metaRaw = await redis.hget(`project:cand_meta:${projectId}`, candidateId);
         const meta = metaRaw ? JSON.parse(metaRaw) : {};
