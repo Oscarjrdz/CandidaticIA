@@ -1,20 +1,20 @@
 import { getRedisClient } from '../utils/storage.js';
 
 export default async function handler(req, res) {
+    const redis = getRedisClient();
+    if (!redis) return res.status(500).json({ error: 'No Redis' });
+
     try {
-        const redis = getRedisClient();
-        if (!redis) return res.status(500).json({ error: 'No Redis client' });
-
-        const projectId = 'proj_1770344883461_mshj'; // The one linked to Oscar
-        const projectData = await redis.get(`project:${projectId}`);
-
-        if (!projectData) return res.status(404).json({ error: 'Project not found' });
+        const projectId = 'proj_1771225156891_10ez5k';
+        const project = await redis.get(`project:${projectId}`);
+        const parsedProject = project ? JSON.parse(project) : null;
 
         return res.status(200).json({
             success: true,
-            project: JSON.parse(projectData)
+            projectId,
+            project: parsedProject
         });
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
+    } catch (e) {
+        return res.status(500).json({ error: e.message });
     }
 }
