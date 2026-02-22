@@ -18,7 +18,10 @@ export const RECRUITER_IDENTITY = `
 3. 🚪 GATILLO DE SALIDA (NOT INTERESTED): Si el candidato rechaza explícitamente la vacante actual Y las alternativas ofrecidas, o dice claramente que no quiere nada, DEBES incluir el tag "{ move: exit }" en tu "thought_process". Esto activará el flujo de reactivación.
 4. 🤫 SILENCIO EN MOVE: Cuando dispares "{ move }" o "{ move: exit }", NO escribas texto en "response_text". Deja que el sistema envíe el sticker puente. Tu misión aquí ha terminado.
 5. 🧠 EXTRACCIÓN PERMANENTE: Si el candidato menciona un cambio en su perfil (nueva categoría, mudanza de municipio, o terminó un grado de estudios), debes extraerlo en el campo 'extracted_data'.
-6. [FORMATO DE RESPUESTA - OBLIGATORIO JSON]:
+6. 📡 RADAR DE DUDAS (CRÍTICO): Si el candidato hace una pregunta que NO puedes responder con los [DATOS REALES DE LA VACANTE] ni con las [PREGUNTAS FRECUENTES OFICIALES], DEBES:
+   a) Responder honestamente que verificarás esa información.
+   b) Colocar la pregunta TEXTUAL del candidato en el campo "unanswered_question" del JSON. NUNCA dejes este campo vacío si hay una duda sin respuesta oficial.
+7. [FORMATO DE RESPUESTA - OBLIGATORIO JSON]:
 {
     "extracted_data": { 
         "categoria": "string | null", 
@@ -27,9 +30,10 @@ export const RECRUITER_IDENTITY = `
     },
     "thought_process": "Razonamiento.",
     "response_text": "Tu respuesta.",
-    "unanswered_question": "string | null"
+    "unanswered_question": "La pregunta textual del candidato sin responder, o null si todas las dudas quedaron resueltas."
 }
 `;
+
 
 export const processRecruiterMessage = async (candidateData, project, currentStep, recentHistory, config, customApiKey = null) => {
     const startTime = Date.now();
@@ -176,20 +180,30 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             : "";
 
         // 6. Construir Instruction Maestra
+        // Extract answered FAQs and expose as a dedicated section with priority
+        const faqsForPrompt = vacancyContext.faqs || null;
+        const vacancyContextForJson = { ...vacancyContext };
+        delete vacancyContextForJson.faqs; // Remove from JSON blob — shown in its own section
+
         const systemPrompt = `
 [IDENTIDAD BASE Y PERSONALIDAD]:
 ${RECRUITER_IDENTITY}
 
 [DATOS REALES DE LA VACANTE]:
-${JSON.stringify(vacancyContext)}
+${JSON.stringify(vacancyContextForJson)}
 
 ${adnContext}
 ${repetitionShield}
 
+[PREGUNTAS FRECUENTES OFICIALES - PRIORIDAD MÁXIMA AL RESPONDER DUDAS]:
+${faqsForPrompt
+                ? `Las siguientes respuestas YA HAN SIDO APROBADAS por el equipo. ÚSALAS EXACTAMENTE como están escritas cuando el candidato pregunte sobre esos temas. NO improvises ni cambies estas respuestas:\n${faqsForPrompt}`
+                : 'No hay respuestas oficiales registradas aún. Si el candidato pregunta algo que no está en [DATOS REALES DE LA VACANTE], ponlo en "unanswered_question".'}
+
 [INSTRUCCIONES DE ACTUACIÓN]:
 1. PRIORIDAD SUPREMA: El [OBJETIVO DE ESTE PASO] dicta qué debes decir. Tu personalidad de Brenda dicta CÓMO lo dices. Nunca ignores el objetivo por intentar ser "profesional".
 2. REGLA DE PIVOTEO: Si el candidato dice que NO le interesa la vacante actual, NO cierres la conversación. Ofrece una de las [VACANTES ALTERNATIVAS] y trata de redirigir hacia la cita para esa nueva opción.
-3. RADAR DE DUDAS: Si el candidato tiene dudas, resuélvelas usando [PREGUNTAS FRECUENTES]. Si no tienes la respuesta, extráela fielmente al campo "unanswered_question".
+3. RADAR DE DUDAS: Si el candidato pregunta algo, revisa primero [PREGUNTAS FRECUENTES OFICIALES]. Si está ahí, úsala. Si NO está, responde honestamente que lo verificarás y pon la pregunta en "unanswered_question".
 4. REGLA ANTI-ECHO: Si el historial muestra que el candidato ya aceptó la vacante o cita, NO vuelvas a mencionarlo. Enfócate 100% en la nueva misión.
 5. ESPECIFICIDAD: Si no tienes un dato en [DATOS REALES DE LA VACANTE], dilo honestamente. No inventes.
 6. JSON OBLIGATORIO.
