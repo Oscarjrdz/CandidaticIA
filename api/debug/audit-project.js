@@ -5,33 +5,12 @@ export default async function handler(req, res) {
     if (!redis) return res.status(500).json({ error: 'No Redis' });
 
     try {
-        const phone = '96877383037071'; // Oscar
-
-        const phoneIndexKeys = await redis.hkeys('candidatic:phone_index');
-
-        // 1. Find Candidate by Phone
-        const candidateId = await redis.hget('candidatic:phone_index', phone);
-
-        if (!candidateId) {
-            // Try with prefix 52
-            const altId = await redis.hget('candidatic:phone_index', '52' + phone);
-            if (altId) {
-                // proceed with altId
-            } else {
-                return res.status(404).json({
-                    error: 'Candidate not found by phone',
-                    phone,
-                    indexKeys: phoneIndexKeys.slice(0, 50),
-                    totalIndexSize: phoneIndexKeys.length
-                });
-            }
-        }
+        const candidateId = 'cand_1771740607320_w8sn1y0j9';
 
         // 2. Get Candidate Data
         const candidateRaw = await redis.get(`candidatic:candidate:${candidateId}`);
-        const candidate = candidateRaw ? JSON.parse(candidateRaw) : null;
-
-        if (!candidate) return res.status(404).json({ error: 'Candidate data missing', candidateId });
+        if (!candidateRaw) return res.status(404).json({ error: 'Candidate not found', candidateId });
+        const candidate = JSON.parse(candidateRaw);
 
         const projectId = candidate.projectId || (candidate.projectMetadata?.projectId);
 
