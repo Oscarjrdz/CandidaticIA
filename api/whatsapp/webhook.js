@@ -87,18 +87,32 @@ export default async function handler(req, res) {
                 if (phone === adminNumber) {
                     const lowerBody = body.toLowerCase().trim();
 
-                    // Command: Aprender puente [nombre]
-                    if (lowerBody.includes('aprender puente')) {
-                        const subName = lowerBody.split('aprender puente')[1]?.trim() || '';
-                        const stateVal = subName ? `waiting_bridge_sticker:${subName}` : 'waiting_bridge_sticker';
+                    // ---- BRIDGE LEARNING COMMANDS ----
+                    // Map of exact command phrases → { redisKey, label }
+                    const BRIDGE_COMMANDS = {
+                        'aprender puente extraccion completa': {
+                            key: 'bot_celebration_sticker',
+                            label: 'Extracción Completa (festejo de perfil listo)'
+                        },
+                        'aprender puente paso inicio': {
+                            key: 'bot_step_move_sticker',
+                            label: 'Paso Inicio (avance genérico entre pasos)'
+                        },
+                        'aprender puente cita': {
+                            key: 'bot_bridge_cita',
+                            label: 'Cita (cuando el candidato acepta agendar)'
+                        },
+                        'aprender puente cuando no interesa': {
+                            key: 'bot_bridge_exit',
+                            label: 'No Interesa (salida del flujo de vacantes)'
+                        }
+                    };
 
-                        await redis.set(`admin_state:${phone}`, stateVal);
-
-                        const msg = subName
-                            ? `¡Claro! 🌸 Mándame el STICKER que quieres usar como puente para el paso *${subName}*. ✨`
-                            : `¡Claro! 🌸 Mándame el STICKER que quieres usar como *puente visual universal*. ✨`;
-
-                        await sendMessage(adminNumber, msg);
+                    const matchedCommand = Object.keys(BRIDGE_COMMANDS).find(cmd => lowerBody.includes(cmd));
+                    if (matchedCommand) {
+                        const { key, label } = BRIDGE_COMMANDS[matchedCommand];
+                        await redis.set(`admin_state:${phone}`, `waiting_bridge_sticker:${key}`);
+                        await sendMessage(adminNumber, `✅ Listo. Ahora mándame el *STICKER* que quieres usar como puente para:\n\n🎯 *${label}*\n\nEspero tu sticker... 🌸`);
                         return res.status(200).send('bridge_mode_active');
                     }
 
@@ -169,21 +183,25 @@ export default async function handler(req, res) {
                     if (stickerUrl?.startsWith('http')) {
                         const adminState = await redis.get(`admin_state:${phone}`);
 
-                        if (adminState?.startsWith('waiting_bridge_sticker')) {
-                            const specificName = adminState.split(':')[1];
-                            const redisKey = specificName ? `bot_bridge_${specificName}` : 'bot_step_move_sticker';
+                        if (adminState?.startsWith('waiting_bridge_sticker:')) {
+                            // The part after ':' is the exact Redis key to save to
+                            const redisKey = adminState.split('waiting_bridge_sticker:')[1];
+
+                            const BRIDGE_LABELS = {
+                                'bot_celebration_sticker': 'Extracción Completa',
+                                'bot_step_move_sticker': 'Paso Inicio',
+                                'bot_bridge_cita': 'Cita',
+                                'bot_bridge_exit': 'No Interesa'
+                            };
+                            const label = BRIDGE_LABELS[redisKey] || redisKey;
 
                             await redis.set(redisKey, stickerUrl);
                             await redis.del(`admin_state:${phone}`);
-
-                            const confirmMsg = specificName
-                                ? `✅ ¡Puente para *${specificName}* guardado con éxito! 🚀✨`
-                                : `✅ ¡Puente visual universal guardado! 🚀✨`;
-
-                            await sendMessage(adminNumber, confirmMsg);
+                            await sendMessage(adminNumber, `✅ ¡Puente *"${label}"* guardado con éxito! 🚀\n\nClave: \`${redisKey}\``);
                             return res.status(200).send('bridge_sticker_captured');
+
                         } else {
-                            // Default: Celebration sticker
+                            // Default: Celebration sticker (if no pending command)
                             await redis.set('bot_celebration_sticker', stickerUrl);
                             await sendMessage(adminNumber, `✅ ¡Sticker de festejo (fin de perfil) guardado! ✨🎉`);
                             return res.status(200).send('celebration_sticker_captured');
