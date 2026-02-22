@@ -7,9 +7,15 @@ export default async function handler(req, res) {
     try {
         const phone = '96877383037071'; // Oscar
 
+        const allPhones = await redis.hgetall('candidatic:phone_index');
+
         // 1. Find Candidate by Phone
         const candidateId = await redis.hget('candidatic:phone_index', phone);
-        if (!candidateId) return res.status(404).json({ error: 'Candidate not found by phone', phone });
+        if (!candidateId) return res.status(404).json({
+            error: 'Candidate not found by phone',
+            phone,
+            indexedPhones: allPhones
+        });
 
         // 2. Get Candidate Data
         const candidateRaw = await redis.get(`candidatic:candidate:${candidateId}`);
