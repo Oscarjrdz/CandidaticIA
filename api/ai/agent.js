@@ -503,6 +503,15 @@ ${audit.dnaLines}
                     const unansweredQ = rawUQ && rawUQ !== 'null' && rawUQ !== 'undefined' && String(rawUQ).trim().length > 3
                         ? String(rawUQ).trim() : null;
 
+                    // 🔄 RECALCULATE activeVacancyId: if we just rotated to a new vacancy this turn,
+                    // use the NEW index so questions are filed under the correct vacancy
+                    if (candidateUpdates.currentVacancyIndex !== undefined && project?.vacancyIds?.length > 0) {
+                        const updatedIdx = candidateUpdates.currentVacancyIndex;
+                        const safeUpdatedIdx = Math.min(updatedIdx, project.vacancyIds.length - 1);
+                        activeVacancyId = project.vacancyIds[safeUpdatedIdx];
+                        console.log(`[FAQ Engine] 🔄 activeVacancyId recalculated to index ${updatedIdx}: ${activeVacancyId}`);
+                    }
+
                     // 🎯 FAQ RADAR: Save to FAQ engine regardless — unanswered OR answered
                     const geminiKey = apiKey || activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
                     if (activeVacancyId && geminiKey) {
