@@ -135,15 +135,14 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
         // 6. Construir Instruction Maestra
         const systemPrompt = `
+[IDENTIDAD BASE]:
+${RECRUITER_IDENTITY}
+
 [DATOS REALES DE LA VACANTE]:
 ${JSON.stringify(vacancyContext)}
 
-[PREGUNTAS FRECUENTES (RESPUESTAS OFICIALES)]:
-${vacancyContext.faqs || '(No hay FAQs registradas aún)'}
-
----
-[IDENTIDAD RECLUTADORA]: 
-${RECRUITER_IDENTITY}
+[OBJETIVO DE ESTE PASO]:
+"${finalPrompt}"
 
 ${adnContext}
 ${repetitionShield}
@@ -151,24 +150,13 @@ ${repetitionShield}
 [DATOS REALES DE LA VACANTE]:
 ${JSON.stringify(vacancyContext)}
 
-[REGLAS DE OPERACIÓN]:
-1. PRIORIDAD ABSOLUTA DE MISIÓN (CRÍTICO): Tu objetivo principal es cumplir con el [ESCENARIO Y OBJETIVO ACTUAL]. Todo lo demás es secundario. Si el objetivo es "contar un chiste", HAZLO inmediatamente, sin importar si la conversación anterior era seria.
-2. PRIORIDAD QUIRÚRGICA DE FAQ: Las respuestas en [PREGUNTAS FRECUENTES] sobreescriben CUALQUIER otra información técnica.
-3. EXTRACCIÓN OBLIGATORIA (RADAR): DEBES extraer CUALQUIER duda al campo "unanswered_question".
-4. HONESTIDAD Y ESPECIFICIDAD: Si no tienes un dato, sé honesta ("No lo tengo a la mano...").
-5. REGLA DE NO REDUNDANCIA: Si el [ESCUDO DE REPETICIÓN ACTIVO] está presente, NO repitas la descripción masiva de la vacante.
-6. CALL TO ACTION (CTA): Termina con una invitación breve (ej. "¿Te interesa?"). Si tu misión ya incluye una pregunta, no agregues otra.
-7. ANTI-BOT: Varía tus saludos y sé creativa. No repitas frases del historial.
-8. DISPARO DE MOVIMIENTO: Escribe "{ move }" en "thought_process" cuando el objetivo del paso se cumpla.
-
-[HISTORIAL DE CHAT PARA MEMORIA]:
-(Ver mensajes del sistema para el flujo real)
-
----
-[ESCENARIO Y OBJETIVO ACTUAL - ¡TU MISIÓN PRIORITARIA!]:
-"${finalPrompt}"
----
-[FORMATO DE RESPUESTA]: JSON OBLIGATORIO.
+[INSTRUCCIONES DE ACTUACIÓN]:
+1. PRIORIDAD TOTAL DE MISIÓN (CRÍTICO): Tu objetivo principal e irrenunciable hoy es cumplir con el [OBJETIVO DE ESTE PASO]. Si el objetivo es "contar un chiste", HAZLO. No te pierdas en agradecimientos o confirmaciones de lo que ya pasó en la conversación.
+2. REGLA ANTI-ECHO: Si el historial muestra que el candidato ya aceptó algo (como una cita) y ya se le confirmó, NO vuelvas a mencionarlo. Pasa de largo y ejecuta tu misión actual.
+3. PRIORIDAD QUIRÚRGICA DE FAQ: Las respuestas en [PREGUNTAS FRECUENTES] sobreescriben cualquier otra información.
+4. HONESTIDAD: Si no sabes un dato, dilo ("No tengo el dato exacto...").
+5. CALL TO ACTION (CTA): Termina invitando al candidato a seguir el flujo (ej. "¿Te gustó el chiste?", "¿Seguimos?").
+6. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
    
 ⚡ EJEMPLO DE USO DE FAQ Y EXTRACCIÓN:
 Si preguntan por el sueldo y está en FAQs:
@@ -183,11 +171,17 @@ Si preguntan por el sueldo y está en FAQs:
 
 
         // 4. Obtener respuesta de GPT-4o
-        // Pasamos el historial estructurado para que GPT entienda los roles
-        const messagesForOpenAI = recentHistory.map(m => ({
-            from: m.role === 'model' ? 'bot' : 'user',
-            content: m.parts?.[0]?.text || ''
-        }));
+        // Pasamos el historial estructurado e inyectamos la misión al final como instrucción de sistema
+        const messagesForOpenAI = [
+            ...recentHistory.map(m => ({
+                from: m.role === 'model' ? 'bot' : 'user',
+                content: m.parts?.[0]?.text || ''
+            })),
+            {
+                from: 'user',
+                content: `[INSTRUCCIÓN DE SISTEMA]: Has cambiado de etapa. Olvida las confirmaciones de entrevista previas por un momento. Tu misión prioritaria AHORA es: "${finalPrompt}". Responde cumpliendo ese objetivo.`
+            }
+        ];
 
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,

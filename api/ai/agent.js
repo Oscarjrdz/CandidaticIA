@@ -1243,17 +1243,22 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             (async () => {
                 const redis = getRedisClient();
                 if (redis) {
-                    const trace = {
-                        timestamp: new Date().toISOString(),
-                        receivedMessage: aggregatedText,
-                        intent,
-                        apiUsed: isRecruiterMode ? 'recruiter-agent' : 'capturista-brain',
-                        stepId: activeStepId,
-                        aiResult,
-                        isNowComplete
-                    };
-                    await redis.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
-                    await redis.ltrim(`debug:agent:logs:${candidateId}`, 0, 19);
+                    try {
+                        const trace = {
+                            timestamp: new Date().toISOString(),
+                            receivedMessage: aggregatedText,
+                            intent,
+                            apiUsed: isRecruiterMode ? `recruiter-agent (Step: ${activeStepId})` : 'capturista-brain',
+                            stepId: candidateUpdates.stepId || activeStepId,
+                            aiResult,
+                            isNowComplete
+                        };
+                        await redis.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
+                        await redis.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
+                        console.log(`[DEBUG] Trace saved for ${candidateId}`);
+                    } catch (e) {
+                        console.error(`[DEBUG] Trace failed for ${candidateId}:`, e.message);
+                    }
                 }
             })()
         ]);
