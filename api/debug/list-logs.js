@@ -5,11 +5,20 @@ export default async function handler(req, res) {
     if (!redis) return res.status(500).json({ error: 'No Redis' });
 
     try {
-        const keys = await redis.keys('debug:agent:logs:*');
+        let keys = [];
+        let cursor = '0';
+        do {
+            const [nextCursor, foundKeys] = await redis.scan(cursor, 'MATCH', 'debug:agent:logs:*', 'COUNT', 100);
+            cursor = nextCursor;
+            keys = keys.concat(foundKeys);
+        } while (cursor !== '0' && keys.length < 500);
 
         const pipeline = redis.pipeline();
         keys.forEach(k => pipeline.lindex(k, 0)); // Get only latest log for each
         const latestLogs = await pipeline.exec();
+
+        // Add last global run for tracking
+        const lastRun = await redis.get('debug:global:last_run');
 
         const summary = keys.map((k, i) => {
             const id = k.split(':').pop();
@@ -26,6 +35,7 @@ export default async function handler(req, res) {
 
         return res.status(200).json({
             success: true,
+            lastGlobalRun: lastRun ? JSON.parse(lastRun) : null,
             count: keys.length,
             recent: summary.slice(0, 20)
         });

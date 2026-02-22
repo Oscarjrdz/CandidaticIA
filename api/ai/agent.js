@@ -1224,6 +1224,14 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                         };
                         await redis.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
                         await redis.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
+
+                        // GLOBAL LAST RUN: For identifying real ID being used
+                        await redis.set('debug:global:last_run', JSON.stringify({
+                            candidateId,
+                            timestamp: trace.timestamp,
+                            msg: aggregatedText.substring(0, 50)
+                        }), 'EX', 3600);
+
                         console.log(`[DEBUG] Trace saved for ${candidateId}`);
                     } catch (e) {
                         console.error(`[DEBUG] Trace failed for ${candidateId}:`, e.message);
