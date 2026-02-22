@@ -390,14 +390,29 @@ ${audit.dnaLines}
             project = await getProjectById(activeProjectId);
             const currentStep = project?.steps?.find(s => s.id === activeStepId) || project?.steps?.[0];
 
-            // 🎯 Determine active vacancy for FAQ engine and pitches
-            const currentIdx = candidateData.currentVacancyIndex !== undefined
+            // 🎯 Determine active vacancy — always read from project:cand_meta (most up-to-date source)
+            let currentIdx = candidateData.currentVacancyIndex !== undefined
                 ? candidateData.currentVacancyIndex
                 : (candidateData.projectMetadata?.currentVacancyIndex || 0);
+
+            // Override with the authoritative value from project:cand_meta if available
+            try {
+                const redisForIdx = getRedisClient();
+                if (redisForIdx) {
+                    const metaRaw = await redisForIdx.hget(`project:cand_meta:${activeProjectId}`, candidateId);
+                    if (metaRaw) {
+                        const meta = JSON.parse(metaRaw);
+                        if (meta.currentVacancyIndex !== undefined) {
+                            currentIdx = meta.currentVacancyIndex;
+                        }
+                    }
+                }
+            } catch (_) { }
 
             let activeVacancyId = null;
             if (project?.vacancyIds && project.vacancyIds.length > 0) {
                 activeVacancyId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
+                console.log(`[FAQ] activeVacancyId resolved: index=${currentIdx} → ${activeVacancyId}`);
             } else if (project?.vacancyId) {
                 activeVacancyId = project.vacancyId;
             }
