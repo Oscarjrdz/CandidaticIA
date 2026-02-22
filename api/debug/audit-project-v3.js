@@ -11,7 +11,8 @@ export default async function handler(req, res) {
         }
 
         if (req.query.action === 'searchByPhone') {
-            const phone = req.query.phone || '96877383037071'; // Use phone from query or default
+            const phoneSearch = req.query.phone || '96877383037071';
+            const suffix = phoneSearch.slice(-11); // Last 11 digits
 
             let foundCandidate = null;
             let candidateId = null;
@@ -19,7 +20,7 @@ export default async function handler(req, res) {
             const candidateKeys = await redis.keys('candidate:*');
             for (const key of candidateKeys) {
                 const data = await redis.get(key);
-                if (data && data.includes(phone)) {
+                if (data && data.includes(suffix)) {
                     foundCandidate = JSON.parse(data);
                     candidateId = key.replace('candidate:', '');
                     break;
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
             }
 
             if (!foundCandidate) {
-                return res.status(404).json({ error: 'Candidate not found by scanning phones', phone, totalCandidatesChecked: candidateKeys.length });
+                return res.status(404).json({ error: 'Candidate not found by suffix', suffix, totalCandidatesChecked: candidateKeys.length });
             }
 
             const projectId = foundCandidate.projectId || (foundCandidate.projectMetadata?.projectId);
