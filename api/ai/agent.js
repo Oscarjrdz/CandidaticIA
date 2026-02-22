@@ -16,7 +16,7 @@ import {
     recordVacancyInteraction,
     updateProjectCandidateMeta
 } from '../utils/storage.js';
-import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction, sendUltraMsgLocation } from '../whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
 import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { getOpenAIResponse } from '../utils/openai.js';
@@ -34,9 +34,7 @@ export const DEFAULT_EXTRACTION_RULES = `
    - FECHA: Formato exacto DD/MM/YYYY.
    - ESCOLARIDAD: SOLO acepta: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado. (Ej: "Prepa" -> "Preparatoria"). "Kinder" o "Ninguna" son inválidos.
    - CATEGORÍA: Solo acepta categorías de la lista: {{categorias}}. Si dice "Ayudante", guarda "Ayudante General".
-   - EMPLEO: DEBE ser estrictamente "Empleado" o "Desempleado". 
-     * Si dice "no estoy trabajando", "no tengo empleo", "estoy desempleado", "apenas ando buscando", guarda: "Desempleado".
-     * Si dice "estoy jalando", "tengo chamba", "sí trabajo", guarda: "Empleado".
+   - EMPLEO: Solo guarda "Sí" o "No" explícitamente. (Ej: "estoy jalando" -> "Sí", "buscando" -> "No").
 4. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
 5. REGLA TELEFONO: JAMÁS preguntes el número de teléfono/celular. Ya lo tienes (campo 'whatsapp').
 `;
@@ -239,33 +237,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             recentHistory.shift();
         }
 
-        // 🛡️ GEMINI FORMAT SHIELD: Strictly Consolidate Alternate Roles (user -> model -> user)
-        let consolidatedHistory = [];
-        for (const item of recentHistory) {
-            if (consolidatedHistory.length === 0) {
-                consolidatedHistory.push(item);
-            } else {
-                const lastIdx = consolidatedHistory.length - 1;
-                if (consolidatedHistory[lastIdx].role === item.role) {
-                    consolidatedHistory[lastIdx].parts[0].text += `\n${item.parts[0].text}`;
-                } else {
-                    consolidatedHistory.push(item);
-                }
-            }
-        }
-        recentHistory = consolidatedHistory;
-
-        // CRITICAL: Since `chat.sendMessage(userParts)` ALWAYS appends a 'user' message,
-        // the last item in `recentHistory` MUST be 'model' to maintain alternate roles.
-        // If the last item is 'user', we pop it out and prepend it to the incoming `userParts`.
-        if (recentHistory.length > 0 && recentHistory[recentHistory.length - 1].role === 'user') {
-            const poppedUserMsg = recentHistory.pop();
-            // Append this missing text directly to the aggregated extraction text
-            aggregatedText = poppedUserMsg.parts[0].text + " | " + aggregatedText;
-            // Also update userParts so it's sent to Gemini!
-            userParts.unshift({ text: poppedUserMsg.parts[0].text });
-        }
-
         const lastUserMessages = validMessages.filter(m => m.from === 'user').slice(-5).map(m => m.content);
         const themes = lastUserMessages.length > 0 ? lastUserMessages.join(' | ') : 'Nuevo contacto';
 
@@ -437,13 +408,7 @@ ${audit.dnaLines}
 
                 // --- MULTI-VACANCY REJECTION SHIELD ---
                 let skipRecruiterInference = false;
-
-                // 🛡️ CRITICAL INCOMPLETE PROFILE SHIELD
-                // Do not classify intent if the profile is incomplete, because boolean 
-                // answers like "No" (to 'tieneEmpleo') will be misclassified as a REJECTION of the vacancy.
-                const intent = isProfileComplete
-                    ? await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.parts[0].text).join('\n'))
-                    : 'UNKNOWN';
+                const intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.parts[0].text).join('\n'));
 
                 if (intent === 'REJECTION' && project.vacancyIds && project.vacancyIds.length > 0) {
                     console.log(`[RECRUITER BRAIN] 🛡️ Rejection intent detected for candidate ${candidateId}`);
@@ -751,16 +716,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             systemInstruction += `\n[REGLAS DE EXTRACCIÓN ESTRICTA PARA JSON]:
 - escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería". Si dice "secu", pon "Secundaria". Si dice "prepa", pon "Preparatoria".
 - categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato. Si dice "Ayudante", pon "Ayudante General".
-- tieneEmpleo: Extrae literalmente el estatus que responda el usuario (ej. "Desempleado", "Empleado", "estoy pidiendo informes").
-- municipio: Extrae el nombre del municipio (ej. "Monterrey", "San Nicolás", "Escobedo", "Juárez").
-
-[🚨 REGLA ANTI-ROBOT (CRÍTICA)]: Tu ÚLTIMO mensaje fue: "${lastBotMessages.length > 0 ? lastBotMessages[lastBotMessages.length - 1] : '(Ninguno)'}".
-¡TIENES PROHIBIDO REPETIR ESA MISMA FRASE O ESTRUCTURA! Usa sinónimos, cambia la forma de pedir el dato. Si te repites exactamente, serás apagada.
 `;
 
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
 {
-    "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "string | null", "escolaridad": "string | null", "edad": "number | null" },
+    "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Si | No | null", "escolaridad": "string | null", "edad": "number | null" },
     "thought_process": "Razonamiento.",
     "reaction": "null",
     "trigger_media": "string | null",
@@ -768,22 +728,17 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
     "gratitude_reached": "boolean",
     "close_conversation": "boolean"
 } 
-\n[REGLA ANTI-SILENCIO]: Si el usuario responde con simples confirmaciones o vacilaciones ("Si", "Claro", "Ok") a una pregunta de datos abiertos (como sueldo o nombre), TU RESPUESTA DEBE SER: 
+\n[REGLA ANTI-SILENCIO]: Si el usuario responde con simples confirmaciones ("Si", "Claro", "Ok") a una pregunta de datos, TU RESPUESTA DEBE SER: 
 1. Agradecer/Confirmar ("¡Perfecto!", "¡Excelente!").
 2. VOLVER A PEDIR EL DATO FALTANTE EXPLICÍTAMENTE.
 3. JAMÁS DEJES "response_text" VACÍO si faltan datos.
-(EXCEPCIÓN CRÍTICA: Para el campo "tieneEmpleo", las respuestas "Empleado" y "Desempleado" SON COMPLETAMENTE VÁLIDAS. NO vuelvas a pedir el dato de empleo si te responde indicando si tiene o no trabajo, simplemente infiérelo y guárdalo en "extracted_data").
 `;
 
             const genAI = new GoogleGenerativeAI(apiKey);
             const model = genAI.getGenerativeModel({
                 model: "gemini-2.0-flash",
                 systemInstruction,
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    temperature: 0.8,
-                    topP: 0.9
-                }
+                generationConfig: { responseMimeType: "application/json" }
             });
             const chat = model.startChat({ history: recentHistory });
             const result = await chat.sendMessage(userParts);
@@ -791,9 +746,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             try {
                 const sanitized = textResult.replace(/```json|```/g, '').trim();
                 aiResult = JSON.parse(sanitized);
-                console.log(`[DEBUG EXTRACTION] 🧠 AI Result for ${candidateId}:`, JSON.stringify(aiResult, null, 2));
                 responseTextVal = aiResult.response_text;
-
 
                 // 🚨 ENHANCED SILENCE SAFEGUARD V2 🚨
                 // Prevents Brenda from going silent under ANY circumstance when profile is incomplete
@@ -1025,38 +978,17 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
 
         if (aiResult?.extracted_data) {
             Object.entries(aiResult.extracted_data).forEach(([key, val]) => {
-                // 🛡️ JSON Falsy Shield: Allow explicitly boolean 'false' through
-                const isDefined = val !== null && val !== undefined && val !== 'null';
-
-                if (isDefined && candidateData[key] !== val) {
+                if (val && val !== 'null' && candidateData[key] !== val) {
                     let cleanedVal = val;
-
-                    // Handle 'tieneEmpleo' strictly (Normalize to Sí/No for internal audit/compatibility)
-                    if (key === 'tieneEmpleo') {
-                        const strVal = String(val).toLowerCase().trim();
-                        if (strVal === 'si' || strVal === 'sí' || strVal === 'true' || strVal === 'empleado' || strVal.includes('trabajando') || strVal.includes('laborando') || strVal.includes('trabajo')) {
-                            cleanedVal = 'Sí';
-                        } else if (strVal === 'no' || strVal === 'false' || strVal === 'desempleado' || strVal.includes('no tengo') || strVal.includes('buscando')) {
-                            cleanedVal = 'No';
-                        }
+                    if (key === 'tieneEmpleo' && typeof val === 'string') {
+                        const low = val.toLowerCase().trim();
+                        if (low === 'si' || low === 'sí') cleanedVal = 'Sí';
+                        else if (low === 'no') cleanedVal = 'No';
                     }
-
-
                     candidateUpdates[key] = cleanedVal;
                 }
             });
         }
-
-
-        // 🛡️ RECRUITER BRAIN EXTRACTION MERGE
-        // If the recruiter agent also extracted data, merge it into candidateUpdates
-        if (aiResult?.extracted_data_external) {
-            Object.entries(aiResult.extracted_data_external).forEach(([key, val]) => {
-                const isDefined = val !== null && val !== undefined && val !== 'null';
-                if (isDefined) candidateUpdates[key] = val;
-            });
-        }
-
 
         // 🧠 INTELLIGENT GENDER INFERENCE (FALLBACK)
         const currentGender = candidateUpdates.genero || candidateData.genero;
@@ -1259,64 +1191,20 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             candidateUpdates.congratulated = true;
             candidateUpdates.bridge_counter = 0;
             candidateUpdates.esNuevo = 'NO';
+            responseTextVal = null;
 
-            // 🛡️ Guard: Only clear if not already set by Recruiter Brain bifurcation or if we plan to re-call it
-            if (!isRecruiterMode) responseTextVal = null;
-        }
-
-        // --- BYPASS / PROJECT DISPATCH LOGIC ---
-        // 🚀 CRITICAL FIX: Decoupled from `shouldSendSticker`. Bypasses MUST trigger the Recruiter pitch immediately
-        // upon a MATCH even if the user already had a complete profile or was not owed a sticker.
-        const bypassJustMatched = (candidateUpdates.projectId && candidateUpdates.projectId !== candidateData.projectId);
-
-        if (shouldSendSticker || bypassJustMatched) {
             const finalProjectId = candidateUpdates.projectId || candidateData.projectId;
             if (finalProjectId) {
-                // 🎯 BYPASS MATCH OR NEW PROJECT START: Enter project's first step
+                // 🎯 BYPASS MATCH: Enter project's first step
                 const project = await getProjectById(finalProjectId);
                 const currentStep = project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId)) || project?.steps?.[0];
                 if (currentStep?.aiConfig?.enabled) {
-                    // 🛡️ Fix: Fetch ai_config safely because bypass might have skipped the earlier recruiter block
-                    const bypassAiConfig = batchConfig.ai_config ? (typeof batchConfig.ai_config === 'string' ? JSON.parse(batchConfig.ai_config) : batchConfig.ai_config) : {};
-
-                    // If we just sent congrats, add it to GPT history so it doesn't double-congratulate
-                    const historyToUse = shouldSendSticker
-                        ? [...historyForGpt, { role: 'model', parts: [{ text: "¡Súper! 🌟 Ya tengo tu perfil 100% completo. 📝✅" }] }]
-                        : historyForGpt;
-
-                    const recruiterResult = (!isRecruiterMode || bypassJustMatched)
-                        ? await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyToUse, config, bypassAiConfig.openaiApiKey)
-                        : null;
-
+                    const historyWithCongrats = [...historyForGpt, { role: 'model', parts: [{ text: congratsMsg }] }];
+                    const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, activeAiConfig.openaiApiKey);
                     if (recruiterResult?.response_text) responseTextVal = recruiterResult.response_text;
-
-                    // 🧠 Merge secondary extraction from recruiter match
-                    if (recruiterResult?.extracted_data) {
-                        Object.entries(recruiterResult.extracted_data).forEach(([key, val]) => {
-                            if (val !== null && val !== undefined) {
-                                // Apply same normalization as Capturista
-                                let cleanedVal = val;
-                                if (key === 'tieneEmpleo') {
-                                    const strVal = String(val).toLowerCase().trim();
-                                    if (strVal === 'si' || strVal === 'sí' || strVal === 'true' || strVal === 'empleado' || strVal.includes('trabajando') || strVal.includes('laborando') || strVal.includes('trabajo')) {
-                                        cleanedVal = 'Sí';
-                                    } else if (strVal === 'no' || strVal === 'false' || strVal === 'desempleado' || strVal.includes('no tengo') || strVal.includes('buscando')) {
-                                        cleanedVal = 'No';
-                                    }
-                                }
-                                candidateUpdates[key] = cleanedVal;
-                            }
-                        });
-                    }
-
-                    // 📎 Merge media objects from recruiter
-                    if (recruiterResult?.matched_faq_object) aiResult.matched_faq_object = recruiterResult.matched_faq_object;
-                    if (recruiterResult?.matched_vacancy_media_object) aiResult.matched_vacancy_media_object = recruiterResult.matched_vacancy_media_object;
-
                 }
-            } else if (shouldSendSticker) {
-
-                // 🏠 NO PROJECT: Enter waiting room (only meaningful if they just completed their profile)
+            } else {
+                // 🏠 NO PROJECT: Enter waiting room
                 console.log(`[GPT Host] Candidate ${candidateId} completed profile without project.`);
                 candidateUpdates.gratitudAlcanzada = false;
                 candidateUpdates.silencioActivo = false;
@@ -1324,22 +1212,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
-
-        console.log(`[DEBUG STORAGE] 📦 Final candidateUpdates for ${candidateId}:`, JSON.stringify(candidateUpdates, null, 2));
-
-        // --- 🚀 OFF-BAND DEBUG LOGGING ---
-        await redis.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify({
-            timestamp: new Date().toISOString(),
-            aiResult,
-            candidateUpdates,
-            receivedMessage: aggregatedText
-        }));
-        await redis.ltrim(`debug:agent:logs:${candidateId}`, 0, 9); // Keep last 10
-        await redis.expire(`debug:agent:logs:${candidateId}`, 3600); // 1 hour
-
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
-
-
         let reactionPromise = Promise.resolve();
         if (msgId && config && aiResult?.reaction) {
             reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
@@ -1349,40 +1222,8 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
         const resText = String(responseTextVal || '').trim();
         const isTechnical = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
 
-        let faqMediaPromise = Promise.resolve();
-
         if (responseTextVal && !isTechnical) {
-            deliveryPromise = (async () => {
-                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
-
-                // AFTER sending the text, check if we need to send an FAQ attachment
-                if (aiResult?.matched_faq_object) {
-                    const faq = aiResult.matched_faq_object;
-                    if (faq.mediaType === 'image' && faq.mediaUrl) {
-                        console.log(`[AGENT MULTIMEDIA] 🖼️ Sending FAQ Image...`);
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, faq.mediaUrl, 'image');
-                    } else if (faq.mediaType === 'document' && faq.mediaUrl) {
-                        console.log(`[AGENT MULTIMEDIA] 📄 Sending FAQ Document...`);
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, faq.mediaUrl, 'document', { filename: 'Documento' });
-                    } else if (faq.mediaType === 'location' && faq.locationLat && faq.locationLng) {
-                        console.log(`[AGENT MULTIMEDIA] 📍 Sending FAQ Location...`);
-                        await sendUltraMsgLocation(config.instanceId, config.token, candidateData.whatsapp, faq.locationAddress || 'Ubicación', faq.locationLat, faq.locationLng);
-                    }
-                } else if (aiResult?.matched_vacancy_media_object) {
-                    // Check if the AI decided to send the GLOBAL Vacancy Media (e.g., during the pitch)
-                    const vMedia = aiResult.matched_vacancy_media_object;
-                    if (vMedia.mediaType === 'image' && vMedia.mediaUrl) {
-                        console.log(`[AGENT MULTIMEDIA] 🖼️ Sending Global Vacancy Image...`);
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, vMedia.mediaUrl, 'image');
-                    } else if (vMedia.mediaType === 'document' && vMedia.mediaUrl) {
-                        console.log(`[AGENT MULTIMEDIA] 📄 Sending Global Vacancy Document...`);
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, vMedia.mediaUrl, 'document', { filename: 'Vacante' });
-                    } else if (vMedia.mediaType === 'location' && vMedia.locationLat && vMedia.locationLng) {
-                        console.log(`[AGENT MULTIMEDIA] 📍 Sending Global Vacancy Location...`);
-                        await sendUltraMsgLocation(config.instanceId, config.token, candidateData.whatsapp, vMedia.locationAddress || 'Ubicación', vMedia.locationLat, vMedia.locationLng);
-                    }
-                }
-            })();
+            deliveryPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
         }
 
         await Promise.allSettled([

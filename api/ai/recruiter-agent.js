@@ -101,8 +101,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                         const faqs = JSON.parse(faqData);
                         const answeredFaqs = faqs.filter(f => f.officialAnswer);
                         if (answeredFaqs.length > 0) {
-                            vacancyContext.faqsList = answeredFaqs; // Keep a reference
-                            vacancyContext.faqs = answeredFaqs.map(f => `- Q: ${f.topic} (ID: ${f.id})\n  A: ${f.officialAnswer}`).join('\n');
+                            vacancyContext.faqs = answeredFaqs.map(f => `- Q: ${f.topic}\n  A: ${f.officialAnswer}`).join('\n');
                         }
                     }
                 } catch (e) { }
@@ -160,7 +159,6 @@ REGLAS DE ACTUACIÓN PROFESIONAL:
 5. PRIORIDAD A DUDAS: Responde dudas de forma breve y humana. NO uses el momento de una duda para repetir todo el pitch.
 6. CALL TO ACTION (CTA) OBLIGATORIO: Siempre termina con una invitación (ej. "¿Te interesa agendar?").
 7. ANTI-BOT: Varía tus saludos. Sé creativa.
-8. ADJUNTO DE VACANTE: Si en tu mensaje estás presentando la vacante por primera vez, o si el usuario pide información general de ella, y observas en [DATOS REALES] que tiene \`mediaType\` configurado, DEBES incluir "send_vacancy_media": true en tu JSON. De lo contrario, pon false.
 
 [HISTORIAL DE CHAT (VIEJO -> NUEVO)]:
 ${forwardHistoryText || '(Sin historial previo)'}
@@ -168,22 +166,17 @@ ${forwardHistoryText || '(Sin historial previo)'}
 [REGLAS DE OPERACIÓN]:
 1. TU MISIÓN ES ACTUAR EL ESCENARIO, pero la REGLA DE PRECEDENCIA DE FAQ y NO REDUNDANCIA mandan.
 2. DISPARO DE MOVIMIENTO — REGLA ABSOLUTA: Debes escribir "{ move }" al final de "thought_process" cuando el candidato aceptó explícitamente.
-3. FORMATO DE RESPUESTA: JSON OBLIGATORIO. PRECAUCIÓN DE EXTRACCIÓN: En "extracted_data", si preguntas por empleo, extrae el estatus del usuario en "tieneEmpleo" (ej. "Empleado" o "Desempleado").
-4. MATCHED FAQ ID: Si tu respuesta a una pregunta del candidato viene de la lista [PREGUNTAS FRECUENTES], DEBES incluir el campo "matched_faq_id" con el ID exacto de la FAQ usada. Si no usaste ninguna FAQ para responder, pon null.
+3. FORMATO DE RESPUESTA: JSON OBLIGATORIO.
    
 ⚡ EJEMPLO DE USO DE FAQ Y EXTRACCIÓN:
-Si preguntan por el sueldo y está en FAQs con ID "xt31":
+Si preguntan por el sueldo y está en FAQs:
 {
-    "thought_process": "El candidato pregunta por el sueldo. Consulto [PREGUNTAS FRECUENTES] y veo que son 10k. Usaré el ID xt31. Responderé y extraeré la pregunta para el Radar.",
+    "thought_process": "El candidato pregunta por el sueldo. Consulto [PREGUNTAS FRECUENTES] y veo que son 10k. Responderé y extraeré la pregunta para el Radar.",
     "response_text": "¡Claro! El sueldo es de $10,000 mensuales más prestaciones. 😊 ¿Te interesa agendar entrevista?",
-    "extracted_data": { "tieneEmpleo": "Desempleado" },
     "unanswered_question": "¿Cuánto pagan?",
-    "matched_faq_id": "xt31",
-    "send_vacancy_media": false,
     "gratitude_reached": false,
     "close_conversation": false
 }
-
 `;
 
 
@@ -214,32 +207,9 @@ Si preguntan por el sueldo y está en FAQs con ID "xt31":
             aiResult = {
                 response_text: gptResponse.content.replace(/\*/g, ''),
                 thought_process: 'Fallback: JSON parse failed.',
-                matched_faq_id: null,
-                send_vacancy_media: false,
                 gratitude_reached: false,
                 close_conversation: false
             };
-        }
-
-        // Attach matched FAQ object to aiResult for media handling upstream
-        if (aiResult.matched_faq_id && vacancyContext.faqsList) {
-            const matchedFaq = vacancyContext.faqsList.find(f => f.id === aiResult.matched_faq_id);
-            if (matchedFaq) {
-                aiResult.matched_faq_object = matchedFaq;
-                console.log(`[RECRUITER BRAIN] 📎 Attached FAQ Media Object from ID: ${aiResult.matched_faq_id}`);
-            }
-        }
-
-        // Attach global vacancy media if requested by the AI
-        if (aiResult.send_vacancy_media && vacancyContext.mediaType && vacancyContext.mediaType !== '') {
-            aiResult.matched_vacancy_media_object = {
-                mediaType: vacancyContext.mediaType,
-                mediaUrl: vacancyContext.mediaUrl,
-                locationLat: vacancyContext.locationLat,
-                locationLng: vacancyContext.locationLng,
-                locationAddress: vacancyContext.locationAddress
-            };
-            console.log(`[RECRUITER BRAIN] 📎 Attached Global Vacancy attached Media`);
         }
 
         // 5. Lógica de Movimiento { move } y Rastreo de Vacantes

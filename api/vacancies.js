@@ -10,14 +10,6 @@ import { randomUUID } from 'crypto';
 
 // Sync to Candidatic removed as per UltraMsg migration
 
-export const config = {
-    api: {
-        bodyParser: {
-            sizeLimit: '10mb',
-        },
-    },
-};
-
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -66,7 +58,7 @@ export default async function handler(req, res) {
         // POST - Create vacancy
         if (req.method === 'POST') {
             const body = req.body;
-            const { name, company, category, description, messageDescription, mediaType, mediaUrl, locationLat, locationLng, locationAddress } = body;
+            const { name, company, category, description, messageDescription } = body;
 
             if (!name || !company || !category) {
                 return res.status(400).json({ error: 'Missing required fields (name, company, category)' });
@@ -79,11 +71,6 @@ export default async function handler(req, res) {
                 category,
                 description: description || '',
                 messageDescription: messageDescription || '',
-                mediaType: mediaType || '',
-                mediaUrl: mediaUrl || '',
-                locationLat: locationLat || '',
-                locationLng: locationLng || '',
-                locationAddress: locationAddress || '',
                 createdAt: new Date().toISOString(),
                 active: true
             };

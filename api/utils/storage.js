@@ -277,12 +277,11 @@ export const auditProfile = (c, customFields = []) => {
             val.length < 2 ||
             val.includes('luego') ||
             val.includes('después') ||
-            val === 'no lo se' ||
-            val === 'no se' ||
-            val === 'nose' ||
+            val.includes('no lo se') ||
+            val.includes('no se') ||
             val.includes('para que') ||
             val.includes('porque quieres') ||
-            val.includes('no te importa') ||
+            val.includes('no te') ||
             val.includes('privado') ||
             val === 'hola' ||
             val === 'buenas' ||
@@ -1372,12 +1371,17 @@ export const addCandidateToProject = async (projectId, candidateId, metadata = n
 
     await pipeline.exec();
 
-    // 🔥 SURGICAL OVERRIDE: Use updateCandidate to ensure we merge instead of overwrite
-    await updateCandidate(candidateId, {
-        projectId,
-        stepId: finalMetadata.stepId
-    });
-
+    // 🔥 ATOMIC OVERRIDE: Ensure the candidate root JSON has this projectId.
+    // This prevents webhooks racing conditions from overwriting it with old data.
+    const candRaw = await client.get(`${KEYS.CANDIDATE_PREFIX}${candidateId}`);
+    if (candRaw) {
+        try {
+            const candJson = JSON.parse(candRaw);
+            candJson.projectId = projectId;
+            candJson.stepId = finalMetadata.stepId;
+            await client.set(`${KEYS.CANDIDATE_PREFIX}${candidateId}`, JSON.stringify(candJson));
+        } catch (e) { }
+    }
 
     // ⚡ REAL-TIME NOTIFICATION
     try {

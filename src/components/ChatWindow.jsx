@@ -440,7 +440,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                                         {/* Media Rendering */}
                                         {msg.mediaUrl && (
                                             <div className="mb-2 rounded-lg overflow-hidden border border-black/5">
-                                                {(msg.type === 'image' || msg.type === 'image_received' || msg.type === 'sticker' || msg.type === 'sticker_received') && (
+                                                {(msg.type === 'image' || msg.type === 'image_received') && (
                                                     <img src={msg.mediaUrl} alt="Media" className="max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.mediaUrl, '_blank')} />
                                                 )}
                                                 {(msg.type === 'video' || msg.type === 'video_received') && (

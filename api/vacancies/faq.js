@@ -2,14 +2,6 @@ import { getRedisClient } from '../utils/storage.js';
 import { reclusterVacancyFaqs } from '../ai/faq-engine.js';
 import { getCachedConfig } from '../utils/cache.js';
 
-export const config = {
-    api: {
-        bodyParser: {
-            sizeLimit: '10mb',
-        },
-    },
-};
-
 export default async function handler(req, res) {
     const { method } = req;
     const { vacancyId } = req.query;
@@ -44,8 +36,8 @@ export default async function handler(req, res) {
         }
 
         if (method === 'POST') {
-            // Update officialAnswer, topic, or media for a specific FAQ
-            const { faqId, officialAnswer, topic, mediaType, mediaUrl, locationLat, locationLng, locationAddress } = body;
+            // Update officialAnswer or topic for a specific FAQ
+            const { faqId, officialAnswer, topic } = body;
 
             if (!faqId) {
                 return res.status(400).json({ error: 'faqId is required for update' });
@@ -65,13 +57,6 @@ export default async function handler(req, res) {
 
             if (topic) faqs[index].topic = topic;
             if (officialAnswer !== undefined) faqs[index].officialAnswer = officialAnswer;
-
-            // Media fields
-            if (mediaType !== undefined) faqs[index].mediaType = mediaType;
-            if (mediaUrl !== undefined) faqs[index].mediaUrl = mediaUrl;
-            if (locationLat !== undefined) faqs[index].locationLat = locationLat;
-            if (locationLng !== undefined) faqs[index].locationLng = locationLng;
-            if (locationAddress !== undefined) faqs[index].locationAddress = locationAddress;
 
             await client.set(key, JSON.stringify(faqs));
 

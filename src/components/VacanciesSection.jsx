@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical, Sparkles, RefreshCw, Image as ImageIcon, MapPin, Paperclip } from 'lucide-react';
+import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical, Sparkles, RefreshCw } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -167,16 +167,10 @@ const VacanciesSection = ({ showToast }) => {
         company: '',
         category: '',
         description: '',
-        messageDescription: '',
-        mediaType: '',
-        mediaUrl: '',
-        locationLat: '',
-        locationLng: '',
-        locationAddress: ''
+        messageDescription: ''
     });
 
     const [availableFields, setAvailableFields] = useState([]);
-    const [isEditingFaq, setIsEditingFaq] = useState(false); // To pause auto-refresh when user is typing/uploading
 
     const loadFaqs = async (vacancyId) => {
         setLoadingFaqs(true);
@@ -193,65 +187,30 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
-    // Auto-refresh (silent poll) para FAQ radar - REMOVIDO POR PETICIÓN DEL USUARIO
-    // useEffect(() => { ... }, [isModalOpen, editingId, isEditingFaq]);
-
-    const handleFileUpload = (e, faqId) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        // Basic validation (~5MB max recommended for Base64 over JSON)
-        if (file.size > 5 * 1024 * 1024) {
-            showToast('El archivo es demasiado grande (Máximo recomendado 5MB)', 'error');
-            return;
+    // Auto-refresh (silent poll) para FAQ radar
+    useEffect(() => {
+        let interval;
+        if (isModalOpen && editingId) {
+            interval = setInterval(() => {
+                fetch(`/api/vacancies/faq?vacancyId=${editingId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success) {
+                            setFaqs(data.faqs || []);
+                        }
+                    })
+                    .catch(e => console.error('Silent FAQ poll error:', e));
+            }, 10000);
         }
+        return () => clearInterval(interval);
+    }, [isModalOpen, editingId]);
 
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64String = reader.result;
-            const newFaqs = [...faqs];
-            const idx = newFaqs.findIndex(f => f.id === faqId);
-            if (idx > -1) {
-                newFaqs[idx].mediaUrl = base64String;
-                setFaqs(newFaqs);
-            }
-        };
-        reader.readAsDataURL(file);
-    };
-
-    const handleVacancyFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        if (file.size > 5 * 1024 * 1024) {
-            showToast('El archivo es demasiado grande (Máximo recomendado 5MB)', 'error');
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64String = reader.result;
-            setFormData(prev => ({ ...prev, mediaUrl: base64String }));
-        };
-        reader.readAsDataURL(file);
-    };
-
-    const handleSaveFaq = async (faq) => {
+    const handleSaveFaq = async (faqId, officialAnswer) => {
         try {
-            const bodyPayload = {
-                faqId: faq.id,
-                officialAnswer: faq.officialAnswer,
-                mediaType: faq.mediaType,
-                mediaUrl: faq.mediaUrl,
-                locationLat: faq.locationLat,
-                locationLng: faq.locationLng,
-                locationAddress: faq.locationAddress
-            };
-
             const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(bodyPayload)
+                body: JSON.stringify({ faqId, officialAnswer })
             });
             if (res.ok) {
                 showToast('Respuesta oficial guardada e inyectada a la IA', 'success');
@@ -444,12 +403,7 @@ const VacanciesSection = ({ showToast }) => {
             company: vacancy.company,
             category: vacancy.category,
             description: vacancy.description || '',
-            messageDescription: vacancy.messageDescription || '',
-            mediaType: vacancy.mediaType || '',
-            mediaUrl: vacancy.mediaUrl || '',
-            locationLat: vacancy.locationLat || '',
-            locationLng: vacancy.locationLng || '',
-            locationAddress: vacancy.locationAddress || ''
+            messageDescription: vacancy.messageDescription || ''
         });
         setIsModalOpen(true);
         loadFaqs(vacancy.id);
@@ -535,12 +489,7 @@ const VacanciesSection = ({ showToast }) => {
                 company: vacancy.company,
                 category: vacancy.category,
                 description: vacancy.description || '',
-                messageDescription: vacancy.messageDescription || '',
-                mediaType: vacancy.mediaType || '',
-                mediaUrl: vacancy.mediaUrl || '',
-                locationLat: vacancy.locationLat || '',
-                locationLng: vacancy.locationLng || '',
-                locationAddress: vacancy.locationAddress || ''
+                messageDescription: vacancy.messageDescription || ''
             };
 
             const res = await fetch('/api/vacancies', {
@@ -842,83 +791,6 @@ const VacanciesSection = ({ showToast }) => {
                             />
                         </div>
 
-                        {/* Vacancy Global Media Attachment */}
-                        <div className="space-y-2 pt-2 border-t border-gray-100 dark:border-gray-800">
-                            <label className="block text-[10px] font-black tracking-widest text-indigo-500 uppercase flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5" /> Adjunto Principal de la Vacante (Envío Automático)
-                            </label>
-                            <div className="flex gap-2">
-                                <select
-                                    value={formData.mediaType || ''}
-                                    onChange={(e) => {
-                                        setFormData(prev => ({
-                                            ...prev,
-                                            mediaType: e.target.value,
-                                            mediaUrl: e.target.value === '' ? '' : prev.mediaUrl,
-                                            locationLat: e.target.value === '' ? '' : prev.locationLat,
-                                            locationLng: e.target.value === '' ? '' : prev.locationLng,
-                                            locationAddress: e.target.value === '' ? '' : prev.locationAddress
-                                        }));
-                                    }}
-                                    className="px-2 py-2 text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg outline-none border border-transparent focus:border-indigo-300 transition-all border border-indigo-100/50"
-                                >
-                                    <option value="">Sin Adjunto Global</option>
-                                    <option value="image">Imagen / Póster</option>
-                                    <option value="document">Documento (PDF)</option>
-                                    <option value="location">Ubicación (Maps)</option>
-                                </select>
-                            </div>
-
-                            {(formData.mediaType === 'image' || formData.mediaType === 'document') && (
-                                <div className="relative flex items-center mt-2">
-                                    {formData.mediaType === 'image' ? <ImageIcon className="w-4 h-4 absolute left-3 text-indigo-400" /> : <Paperclip className="w-4 h-4 absolute left-3 text-indigo-400" />}
-                                    <input
-                                        type="file"
-                                        accept={formData.mediaType === 'image' ? "image/*" : ".pdf"}
-                                        onChange={handleVacancyFileUpload}
-                                        className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-100 file:text-indigo-700 hover:file:bg-indigo-200 cursor-pointer"
-                                    />
-                                    {formData.mediaUrl && formData.mediaUrl.startsWith('data:') && (
-                                        <span className="absolute right-3 text-[10px] text-green-600 font-bold bg-green-100 px-2 py-1 rounded">¡Archivo Listo!</span>
-                                    )}
-                                </div>
-                            )}
-
-                            {formData.mediaType === 'location' && (
-                                <div className="flex flex-col gap-2 mt-2">
-                                    <div className="flex gap-2">
-                                        <div className="relative flex-1">
-                                            <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400" />
-                                            <input
-                                                type="text"
-                                                placeholder="Latitud (ej. 25.6866)"
-                                                value={formData.locationLat || ''}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, locationLat: e.target.value }))}
-                                                className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                                            />
-                                        </div>
-                                        <div className="relative flex-1">
-                                            <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400" />
-                                            <input
-                                                type="text"
-                                                placeholder="Longitud (ej. -100.3161)"
-                                                value={formData.locationLng || ''}
-                                                onChange={(e) => setFormData(prev => ({ ...prev, locationLng: e.target.value }))}
-                                                className="w-full pl-9 pr-3 py-2 text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                                            />
-                                        </div>
-                                    </div>
-                                    <input
-                                        type="text"
-                                        placeholder="Dirección referencial (ej. Monterrey Centro)"
-                                        value={formData.locationAddress || ''}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, locationAddress: e.target.value }))}
-                                        className="w-full px-4 py-2 text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none"
-                                    />
-                                </div>
-                            )}
-                        </div>
-
                         <div className="flex justify-end gap-3 pt-4">
                             <Button
                                 variant="ghost"
@@ -1072,7 +944,6 @@ const VacanciesSection = ({ showToast }) => {
                                                             type="text"
                                                             value={faq.officialAnswer || ''}
                                                             onChange={(e) => {
-                                                                setIsEditingFaq(true);
                                                                 const newFaqs = [...faqs];
                                                                 const idx = newFaqs.findIndex(f => f.id === faq.id);
                                                                 if (idx > -1) {
@@ -1080,126 +951,17 @@ const VacanciesSection = ({ showToast }) => {
                                                                     setFaqs(newFaqs);
                                                                 }
                                                             }}
-                                                            onBlur={() => setTimeout(() => setIsEditingFaq(false), 2000)}
                                                             placeholder="Entrena a Brenda para que sepa responder exactamente esto..."
                                                             className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-inner"
                                                         />
                                                     </div>
                                                     <button
-                                                        onClick={() => handleSaveFaq(faq)}
+                                                        onClick={() => handleSaveFaq(faq.id, faq.officialAnswer)}
                                                         className="px-5 py-2 bg-indigo-600 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-indigo-500/20 hover:shadow-none translate-y-0 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
                                                         disabled={!faq.officialAnswer?.trim()}
                                                     >
                                                         Enseñar
                                                     </button>
-                                                </div>
-
-                                                {/* Media / Attachment Setting */}
-                                                <div className="mt-3 flex flex-wrap gap-2 items-start border-t border-indigo-100/30 dark:border-indigo-800/20 pt-3">
-                                                    <div className="flex gap-1.5 items-center">
-                                                        <select
-                                                            value={faq.mediaType || ''}
-                                                            onChange={(e) => {
-                                                                setIsEditingFaq(true);
-                                                                const newFaqs = [...faqs];
-                                                                const idx = newFaqs.findIndex(f => f.id === faq.id);
-                                                                if (idx > -1) {
-                                                                    newFaqs[idx].mediaType = e.target.value;
-                                                                    if (!e.target.value) {
-                                                                        newFaqs[idx].mediaUrl = '';
-                                                                        newFaqs[idx].locationLat = '';
-                                                                        newFaqs[idx].locationLng = '';
-                                                                        newFaqs[idx].locationAddress = '';
-                                                                    }
-                                                                    setFaqs(newFaqs);
-                                                                }
-                                                            }}
-                                                            className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 bg-indigo-100/50 dark:bg-indigo-900/30 rounded-lg outline-none border border-transparent focus:border-indigo-300 dark:focus:border-indigo-700 transition-all"
-                                                        >
-                                                            <option value="">Sin Adjunto</option>
-                                                            <option value="image">Imagen</option>
-                                                            <option value="document">Documento (PDF)</option>
-                                                            <option value="location">Ubicación (Maps)</option>
-                                                        </select>
-                                                    </div>
-
-                                                    {(faq.mediaType === 'image' || faq.mediaType === 'document') && (
-                                                        <div className="flex-1 min-w-[200px] flex gap-2">
-                                                            <div className="flex-1 relative flex items-center">
-                                                                {faq.mediaType === 'image' ? <ImageIcon className="w-3.5 h-3.5 absolute left-2 text-indigo-400" /> : <Paperclip className="w-3.5 h-3.5 absolute left-2 text-indigo-400" />}
-                                                                <input
-                                                                    type="file"
-                                                                    accept={faq.mediaType === 'image' ? "image/*" : ".pdf"}
-                                                                    onChange={(e) => {
-                                                                        setIsEditingFaq(true);
-                                                                        handleFileUpload(e, faq.id);
-                                                                    }}
-                                                                    className="w-full pl-7 pr-3 py-1.5 text-xs bg-white dark:bg-gray-800 border-none rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-900/50 dark:file:text-indigo-400 dark:hover:file:bg-indigo-800/50 cursor-pointer"
-                                                                />
-                                                                {faq.mediaUrl && faq.mediaUrl.startsWith('data:') && (
-                                                                    <span className="absolute right-2 text-[10px] text-green-500 font-bold bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded">¡Cargado!</span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {faq.mediaType === 'location' && (
-                                                        <div className="flex-1 min-w-[250px] flex flex-col gap-2">
-                                                            <div className="flex gap-2 w-full">
-                                                                <div className="relative flex-1">
-                                                                    <MapPin className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-indigo-400" />
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder="Latitud (ej. 25.6866)"
-                                                                        value={faq.locationLat || ''}
-                                                                        onChange={(e) => {
-                                                                            setIsEditingFaq(true);
-                                                                            const newFaqs = [...faqs];
-                                                                            const idx = newFaqs.findIndex(f => f.id === faq.id);
-                                                                            if (idx > -1) {
-                                                                                newFaqs[idx].locationLat = e.target.value;
-                                                                                setFaqs(newFaqs);
-                                                                            }
-                                                                        }}
-                                                                        className="w-full pl-7 pr-2 py-1.5 text-xs bg-white dark:bg-gray-800 border-none rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
-                                                                    />
-                                                                </div>
-                                                                <div className="relative flex-1">
-                                                                    <MapPin className="w-3.5 h-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-indigo-400" />
-                                                                    <input
-                                                                        type="text"
-                                                                        placeholder="Longitud (ej. -100.3161)"
-                                                                        value={faq.locationLng || ''}
-                                                                        onChange={(e) => {
-                                                                            setIsEditingFaq(true);
-                                                                            const newFaqs = [...faqs];
-                                                                            const idx = newFaqs.findIndex(f => f.id === faq.id);
-                                                                            if (idx > -1) {
-                                                                                newFaqs[idx].locationLng = e.target.value;
-                                                                                setFaqs(newFaqs);
-                                                                            }
-                                                                        }}
-                                                                        className="w-full pl-7 pr-2 py-1.5 text-xs bg-white dark:bg-gray-800 border-none rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                            <input
-                                                                type="text"
-                                                                placeholder="Dirección (ej. Oficina Principal, Monterrey)"
-                                                                value={faq.locationAddress || ''}
-                                                                onChange={(e) => {
-                                                                    setIsEditingFaq(true);
-                                                                    const newFaqs = [...faqs];
-                                                                    const idx = newFaqs.findIndex(f => f.id === faq.id);
-                                                                    if (idx > -1) {
-                                                                        newFaqs[idx].locationAddress = e.target.value;
-                                                                        setFaqs(newFaqs);
-                                                                    }
-                                                                }}
-                                                                className="w-full px-3 py-1.5 text-xs bg-white dark:bg-gray-800 border-none rounded-lg focus:ring-2 focus:ring-indigo-500/20 outline-none shadow-sm"
-                                                            />
-                                                        </div>
-                                                    )}
                                                 </div>
                                             </div>
                                         </div>
