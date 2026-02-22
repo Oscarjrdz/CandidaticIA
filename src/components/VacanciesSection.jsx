@@ -302,7 +302,7 @@ const VacanciesSection = ({ showToast }) => {
     const handleReclusterFaqs = async () => {
         if (!confirm('Brenda volverá a analizar todas las preguntas para agruparlas mejor según los nombres de los temas actuales. ¿Deseas continuar?')) return;
 
-        setIsLoadingFaqs(true);
+        setLoadingFaqs(true);
         try {
             const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
                 method: 'PUT',
@@ -319,7 +319,7 @@ const VacanciesSection = ({ showToast }) => {
             console.error('Error reclustering FAQs:', error);
             showToast('Error de conexión', 'error');
         } finally {
-            setIsLoadingFaqs(false);
+            setLoadingFaqs(false);
         }
     };
     const availableTags = [
