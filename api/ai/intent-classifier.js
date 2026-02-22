@@ -50,8 +50,10 @@ CATEGORÍAS:
    - Ejemplos directos: "Sí", "Si", "Dale", "Ok", "Claro", "Quiero", "Me interesa", "Perfecto", "Listo", "Sí quiero", "Cuándo sería", "A qué hora", "Cuándo me llaman", "Dónde es", "Cómo le hago", "Me late", "Ándale", "Véngale", "Va", "Bueno", "Está bien", "Me apunto", "Me anoto", "Agéndame", "Cuándo puedo ir", "Mañana puedo", "Hoy puedo", "Acepto", "Sí, ayudante".
    - Ejemplos implícitos: Preguntar detalles logísticos ("¿A qué dirección voy?", "¿Cómo llego?", "¿Cuál es la dirección?") porque implica que ya quiso ir a la entrevista.
 6. REJECTION: El candidato rechaza explícitamente la vacante o propuesta actual, o indica que no le conviene.
-   - Ejemplos: "No me interesa", "Me queda muy lejos", "Pagan muy poco", "No, gracias", "Paso de esa", "Tienen otra cosa?".
-7. CLOSURE: Despedidas, agradecimientos finales, confirmaciones de cierre o frases de cortesía mutua.
+   - Ejemplos: "No me interesa", "Me queda muy lejos", "Pagan muy poco", "No, gracias", "Paso de esa".
+7. PIVOT: El candidato pide explícitamente ver una vacante diferente, sin rechazar la actual de forma negativa.
+   - Ejemplos: "Tienes algo de almacen?", "Tienes otra cosa?", "Hay otro puesto?", "No tienes de oficina?", "Me das otras opciones?", "Qué más tienes?", "Puedo ver otra vacante?", "Tienen algo diferente?".
+8. CLOSURE: Despedidas, agradecimientos finales, confirmaciones de cierre o frases de cortesía mutua.
    - Ejemplos: "Gracias", "Adiós", "Hasta luego", "Bye", "Nos vemos", "Chao", "Bueno gracias", "Vale", "Hasta pronto", "Cuídate", "Saludos", "Igualmente", "Sale", "Enterado", "Que tengas buen día".
 
 DATOS DE ENTRADA:
@@ -73,6 +75,7 @@ Respuesta:`;
         if (text.includes('ATTENTION')) return 'ATTENTION';
         if (text.includes('SMALL_TALK')) return 'SMALL_TALK';
         if (text.includes('DATA_GIVE')) return 'DATA_GIVE';
+        if (text.includes('PIVOT')) return 'PIVOT';
         if (text.includes('QUERY')) return 'QUERY';
         if (text.includes('REJECTION')) return 'REJECTION';
         if (text.includes('CLOSURE')) return 'CLOSURE';

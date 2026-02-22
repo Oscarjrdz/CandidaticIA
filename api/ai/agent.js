@@ -426,8 +426,9 @@ ${audit.dnaLines}
                 let skipRecruiterInference = false;
                 const intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.parts[0].text).join('\n'));
 
-                if (intent === 'REJECTION' && project.vacancyIds && project.vacancyIds.length > 0) {
-                    console.log(`[RECRUITER BRAIN] 🛡️ Rejection intent detected for candidate ${candidateId}`);
+                if ((intent === 'REJECTION' || intent === 'PIVOT') && project.vacancyIds && project.vacancyIds.length > 0) {
+                    const isPivot = intent === 'PIVOT';
+                    console.log(`[RECRUITER BRAIN] 🛡️ ${isPivot ? 'PIVOT' : 'Rejection'} intent detected for candidate ${candidateId}`);
                     const currentIdx = candidateData.currentVacancyIndex || 0;
 
                     let reason = "Motivo no especificado";
@@ -442,12 +443,14 @@ ${audit.dnaLines}
                     const currentHist = candidateData.projectMetadata?.historialRechazos || [];
                     const activeVacId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
 
-                    currentHist.push({ vacancyId: activeVacId, timestamp: new Date().toISOString(), motivo: reason });
-                    candidateUpdates.historialRechazos = currentHist;
+                    if (!isPivot) {
+                        // Only log formal rejection, not pivots
+                        currentHist.push({ vacancyId: activeVacId, timestamp: new Date().toISOString(), motivo: reason });
+                        candidateUpdates.historialRechazos = currentHist;
+                        await recordVacancyInteraction(candidateId, project.id, activeVacId, 'REJECTED', reason);
+                    }
                     candidateUpdates.currentVacancyIndex = currentIdx + 1;
-
                     await updateProjectCandidateMeta(project.id, candidateId, { currentVacancyIndex: currentIdx + 1 });
-                    await recordVacancyInteraction(candidateId, project.id, activeVacId, 'REJECTED', reason);
 
                     if (currentIdx + 1 >= project.vacancyIds.length) {
                         console.log(`[RECRUITER BRAIN] 🏁 All vacancies rejected. Moving to Exit Flow.`);
