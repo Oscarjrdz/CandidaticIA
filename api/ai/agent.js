@@ -789,6 +789,7 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             const result = await chat.sendMessage(userParts);
             const textResult = result.response.text();
             try {
+                const sanitized = textResult.replace(/```json|```/g, '').trim();
                 aiResult = JSON.parse(sanitized);
                 console.log(`[DEBUG EXTRACTION] 🧠 AI Result for ${candidateId}:`, JSON.stringify(aiResult, null, 2));
                 responseTextVal = aiResult.response_text;
