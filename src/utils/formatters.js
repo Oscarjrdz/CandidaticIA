@@ -149,6 +149,11 @@ export const formatValue = (val) => {
         return '-';
     }
 
-    const normalized = lower === 'si' || lower === 'sí' ? 'Sí' : (lower === 'no' ? 'No' : str);
+    // Normalize negative employment statements for UI table clarity
+    if (lower === 'no' || lower === 'nop' || lower.includes('no estoy') || lower.includes('no tengo') || lower.includes('desemplead')) {
+        return 'No';
+    }
+
+    const normalized = lower === 'si' || lower === 'sí' ? 'Sí' : str;
     return normalized;
 };

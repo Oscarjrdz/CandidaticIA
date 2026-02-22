@@ -1250,8 +1250,11 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
                 const project = await getProjectById(finalProjectId);
                 const currentStep = project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId)) || project?.steps?.[0];
                 if (currentStep?.aiConfig?.enabled) {
+                    // 🛡️ Fix: Fetch ai_config safely because bypass might have skipped the earlier recruiter block
+                    const bypassAiConfig = batchConfig.ai_config ? (typeof batchConfig.ai_config === 'string' ? JSON.parse(batchConfig.ai_config) : batchConfig.ai_config) : {};
+
                     const historyWithCongrats = [...historyForGpt, { role: 'model', parts: [{ text: congratsMsg }] }];
-                    const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, activeAiConfig.openaiApiKey);
+                    const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, bypassAiConfig.openaiApiKey);
                     if (recruiterResult?.response_text) responseTextVal = recruiterResult.response_text;
                 }
             } else {
