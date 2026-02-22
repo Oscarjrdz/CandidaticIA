@@ -789,9 +789,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             const result = await chat.sendMessage(userParts);
             const textResult = result.response.text();
             try {
-                const sanitized = textResult.replace(/```json|```/g, '').trim();
                 aiResult = JSON.parse(sanitized);
+                console.log(`[DEBUG EXTRACTION] 🧠 AI Result for ${candidateId}:`, JSON.stringify(aiResult, null, 2));
                 responseTextVal = aiResult.response_text;
+
 
                 // 🚨 ENHANCED SILENCE SAFEGUARD V2 🚨
                 // Prevents Brenda from going silent under ANY circumstance when profile is incomplete
@@ -1317,8 +1318,10 @@ ${lastBotMessages.length > 0 ? lastBotMessages.map(m => `- "${m}"`).join('\n') :
             }
         }
 
-        console.log(`[Storage] 📦 Final candidateUpdates for ${candidateId}:`, JSON.stringify(candidateUpdates));
+
+        console.log(`[DEBUG STORAGE] 📦 Final candidateUpdates for ${candidateId}:`, JSON.stringify(candidateUpdates, null, 2));
         const updatePromise = updateCandidate(candidateId, candidateUpdates);
+
 
         let reactionPromise = Promise.resolve();
         if (msgId && config && aiResult?.reaction) {
