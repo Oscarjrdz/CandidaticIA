@@ -266,10 +266,15 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
             </div>
 
             <div className="flex-1 min-w-0 pr-14" {...listeners}>
-                <div className="flex items-center gap-2 mb-0.5">
+                <div className="flex flex-col mb-0.5">
                     <h4 className="font-extrabold text-slate-900 dark:text-white text-[11px] truncate uppercase tracking-tight">
                         {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
                     </h4>
+                    {(candidate.currentVacancyName || candidate.projectMetadata?.currentVacancyName) && (
+                        <p className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter truncate italic">
+                            {candidate.currentVacancyName || candidate.projectMetadata.currentVacancyName}
+                        </p>
+                    )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[7px] text-slate-500 font-bold uppercase tracking-widest opacity-80">
                     <div className="flex items-center gap-0.5 whitespace-nowrap">
@@ -307,7 +312,7 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
                     <Trash2 className="w-2.5 h-2.5" />
                 </button>
             </div>
-        </div>
+        </div >
     );
 };
 

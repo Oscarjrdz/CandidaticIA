@@ -638,6 +638,7 @@ const CandidatesSection = ({ showToast }) => {
                                         </React.Fragment>
                                     ))}
 
+                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Vacante</th>
                                     <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
                                         <div className="flex justify-center">
@@ -739,6 +740,12 @@ const CandidatesSection = ({ showToast }) => {
                                                     </td>
                                                 </React.Fragment>
                                             ))}
+
+                                            <td className="py-0.5 px-2.5">
+                                                <div className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase italic whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+                                                    {candidate.currentVacancyName || (candidate.projectMetadata?.currentVacancyName) || '-'}
+                                                </div>
+                                            </td>
 
                                             <td className="py-0.5 px-2.5">
                                                 <div className="text-[10px] text-gray-700 dark:text-gray-300 font-medium">
