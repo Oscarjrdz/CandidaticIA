@@ -204,6 +204,14 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         const vacancyContextForJson = { ...vacancyContext };
         delete vacancyContextForJson.faqs; // Remove from JSON blob — shown in its own section
 
+        // --- DEBUG DIAGNOSTIC ---
+        console.log(`[FAQ DEBUG] 🎯 Candidate: ${candidateData.id} | Project: ${project.id} | ActiveVacancyId: ${activeVacancyId}`);
+        if (!faqsForPrompt) {
+            console.log(`[FAQ DEBUG] ⚠️ No official FAQs found for vacancy ${activeVacancyId}`);
+        } else {
+            console.log(`[FAQ DEBUG] ✅ Injected FAQs:\n${faqsForPrompt}`);
+        }
+
         const systemPrompt = `
 [FUENTES DE VERDAD - CONSULTAR ANTES DE RESPONDER]:
 
