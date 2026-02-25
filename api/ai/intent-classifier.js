@@ -8,33 +8,33 @@ import { FEATURES } from '../utils/feature-flags.js';
  * Determines the primary intent of a user message to decide Brenda's response strategy.
  */
 export async function classifyIntent(candidateId, lastMessage, historyText = "") {
-    if (!lastMessage) return 'UNKNOWN';
+   if (!lastMessage) return 'UNKNOWN';
 
-    try {
-        const redis = getRedisClient();
-        let apiKey = process.env.GEMINI_API_KEY;
+   try {
+      const redis = getRedisClient();
+      let apiKey = process.env.GEMINI_API_KEY;
 
-        if (!apiKey && redis) {
-            // Use cache if feature flag enabled, otherwise direct Redis
-            const aiConfigJson = FEATURES.USE_BACKEND_CACHE
-                ? await getCachedConfig(redis, 'ai_config')
-                : await redis.get('ai_config');
+      if (!apiKey && redis) {
+         // Use cache if feature flag enabled, otherwise direct Redis
+         const aiConfigJson = FEATURES.USE_BACKEND_CACHE
+            ? await getCachedConfig(redis, 'ai_config')
+            : await redis.get('ai_config');
 
-            if (aiConfigJson) {
-                const aiConfig = JSON.parse(aiConfigJson);
-                apiKey = aiConfig.geminiApiKey;
-            }
-        }
+         if (aiConfigJson) {
+            const aiConfig = JSON.parse(aiConfigJson);
+            apiKey = aiConfig.geminiApiKey;
+         }
+      }
 
-        if (!apiKey) return 'UNKNOWN';
+      if (!apiKey) return 'UNKNOWN';
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-            generationConfig: { temperature: 0.7 }
-        });
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({
+         model: "gemini-2.0-flash",
+         generationConfig: { temperature: 0.7 }
+      });
 
-        const prompt = `[INTENT CLASSIFIER v2.3]
+      const prompt = `[INTENT CLASSIFIER v2.3]
 Analiza el último mensaje del usuario y el contexto para clasificarlo en una INTENCIÓN.
 
 CATEGORÍAS:
@@ -66,24 +66,25 @@ REGLA CRÍTICA: Si el contexto muestra que Brenda hizo una pregunta de confirmac
 Responde ÚNICAMENTE con el nombre de la categoría en MAYÚSCULAS.
 Respuesta:`;
 
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text().toUpperCase();
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().toUpperCase();
 
-        console.log(`[Intent Classifier] Raw LLM Response: "${text}"`);
+      console.log(`[Intent Classifier] Raw LLM Response: "${text}"`);
 
-        if (text.includes('ATTENTION')) return 'ATTENTION';
-        if (text.includes('SMALL_TALK')) return 'SMALL_TALK';
-        if (text.includes('DATA_GIVE')) return 'DATA_GIVE';
-        if (text.includes('PIVOT')) return 'PIVOT';
-        if (text.includes('QUERY')) return 'QUERY';
-        if (text.includes('REJECTION')) return 'REJECTION';
-        if (text.includes('CLOSURE')) return 'CLOSURE';
+      if (text.includes('ATTENTION')) return 'ATTENTION';
+      if (text.includes('SMALL_TALK')) return 'SMALL_TALK';
+      if (text.includes('DATA_GIVE')) return 'DATA_GIVE';
+      if (text.includes('PIVOT')) return 'PIVOT';
+      if (text.includes('QUERY')) return 'QUERY';
+      if (text.includes('ACCEPTANCE')) return 'ACCEPTANCE';
+      if (text.includes('REJECTION')) return 'REJECTION';
+      if (text.includes('CLOSURE')) return 'CLOSURE';
 
-        return 'UNKNOWN';
+      return 'UNKNOWN';
 
-    } catch (error) {
-        console.error('❌ [Intent Classifier] Error:', error);
-        return 'UNKNOWN';
-    }
+   } catch (error) {
+      console.error('❌ [Intent Classifier] Error:', error);
+      return 'UNKNOWN';
+   }
 }
