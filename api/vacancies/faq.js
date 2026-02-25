@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 
         if (method === 'POST') {
             // Update officialAnswer or topic for a specific FAQ
-            const { faqId, officialAnswer, topic } = body;
+            const { faqId, officialAnswer, topic, mediaUrl } = body;
 
             if (!faqId) {
                 return res.status(400).json({ error: 'faqId is required for update' });
@@ -57,6 +57,7 @@ export default async function handler(req, res) {
 
             if (topic) faqs[index].topic = topic;
             if (officialAnswer !== undefined) faqs[index].officialAnswer = officialAnswer;
+            if (mediaUrl !== undefined) faqs[index].mediaUrl = mediaUrl;
 
             await client.set(key, JSON.stringify(faqs));
 

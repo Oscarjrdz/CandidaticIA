@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical, Sparkles, RefreshCw } from 'lucide-react';
+import { Briefcase, Plus, Building2, Tag, FileText, Loader2, Save, Trash2, Pencil, Copy, Power, GripVertical, Sparkles, RefreshCw, Paperclip, Image as ImageIcon, X } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -171,6 +171,8 @@ const VacanciesSection = ({ showToast }) => {
     });
 
     const [availableFields, setAvailableFields] = useState([]);
+    const [uploadingFaqId, setUploadingFaqId] = useState(null);
+    const faqFileInputRef = React.useRef(null);
 
     const loadFaqs = async (vacancyId) => {
         setLoadingFaqs(true);
@@ -218,12 +220,12 @@ const VacanciesSection = ({ showToast }) => {
         return () => clearInterval(interval);
     }, [isModalOpen, editingId]);
 
-    const handleSaveFaq = async (faqId, officialAnswer) => {
+    const handleSaveFaq = async (faqId, officialAnswer, mediaUrl) => {
         try {
             const res = await fetch(`/api/vacancies/faq?vacancyId=${editingId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ faqId, officialAnswer })
+                body: JSON.stringify({ faqId, officialAnswer, mediaUrl })
             });
             if (res.ok) {
                 showToast('Respuesta oficial guardada e inyectada a la IA', 'success');
@@ -948,6 +950,33 @@ const VacanciesSection = ({ showToast }) => {
 
                                             {/* Footer: Input de entrenamiento (Horizontal) */}
                                             <div className="bg-indigo-50/30 dark:bg-indigo-900/10 p-2 rounded-2xl border border-indigo-100/50 dark:border-indigo-800/30 relative z-10">
+                                                {faq.mediaUrl && (
+                                                    <div className="mb-2 p-1 bg-white dark:bg-gray-900 rounded-xl border border-indigo-100 dark:border-indigo-800 flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100">
+                                                                <img src={faq.mediaUrl} alt="Preview" className="w-full h-full object-cover" />
+                                                            </div>
+                                                            <div className="text-[10px] text-gray-500 truncate max-w-[150px]">
+                                                                Imagen adjunta lista
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                const newFaqs = [...faqs];
+                                                                const idx = newFaqs.findIndex(f => f.id === faq.id);
+                                                                if (idx > -1) {
+                                                                    newFaqs[idx].mediaUrl = null;
+                                                                    setFaqs(newFaqs);
+                                                                }
+                                                            }}
+                                                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                            title="Eliminar imagen"
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                )}
+
                                                 <div className="flex items-center gap-2">
                                                     <div className="flex-1 relative group/input">
                                                         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400 group-focus-within/input:text-indigo-600 transition-colors">
@@ -965,13 +994,23 @@ const VacanciesSection = ({ showToast }) => {
                                                                 }
                                                             }}
                                                             placeholder="Entrena a Brenda para que sepa responder exactamente esto..."
-                                                            className="w-full pl-9 pr-4 py-2 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-inner"
+                                                            className="w-full pl-9 pr-10 py-2 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-inner"
                                                         />
+                                                        <button
+                                                            onClick={() => {
+                                                                setUploadingFaqId(faq.id);
+                                                                setTimeout(() => faqFileInputRef.current?.click(), 0);
+                                                            }}
+                                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-indigo-600 transition-colors"
+                                                            title="Adjuntar imagen a esta respuesta"
+                                                        >
+                                                            <Paperclip className="w-4 h-4" />
+                                                        </button>
                                                     </div>
                                                     <button
-                                                        onClick={() => handleSaveFaq(faq.id, faq.officialAnswer)}
+                                                        onClick={() => handleSaveFaq(faq.id, faq.officialAnswer, faq.mediaUrl)}
                                                         className="px-5 py-2 bg-indigo-600 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-indigo-500/20 hover:shadow-none translate-y-0 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
-                                                        disabled={!faq.officialAnswer?.trim()}
+                                                        disabled={!faq.officialAnswer?.trim() && !faq.mediaUrl}
                                                     >
                                                         Enseñar
                                                     </button>
@@ -985,6 +1024,15 @@ const VacanciesSection = ({ showToast }) => {
                     )}
                 </div>
             </Modal>
+
+            {/* Hidden File Input for FAQs */}
+            <input
+                type="file"
+                ref={faqFileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleFaqImageSelect}
+            />
         </div>
     );
 };
