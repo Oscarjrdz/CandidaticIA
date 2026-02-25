@@ -163,6 +163,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             esNuevo: 'NO'
         };
 
+        let intent = 'UNKNOWN';
+
         // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
         if (candidateData.blocked === true) {
             console.log(`[BLOCK SHIELD] Skipping processMessage for blocked candidate: ${candidateId}`);
@@ -425,7 +427,7 @@ ${audit.dnaLines}
 
                 // --- MULTI-VACANCY REJECTION SHIELD ---
                 let skipRecruiterInference = false;
-                const intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.parts[0].text).join('\n'));
+                intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.parts[0].text).join('\n'));
 
                 if ((intent === 'REJECTION' || intent === 'PIVOT') && project.vacancyIds && project.vacancyIds.length > 0) {
                     const isPivot = intent === 'PIVOT';
@@ -1319,21 +1321,17 @@ ${audit.dnaLines}
 
         if (responseTextVal && !isTechnical) {
             deliveryPromise = (async () => {
-                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
-                if (aiResult?.media_url && aiResult.media_url !== 'null') {
-                    let mUrl = aiResult.media_url;
+                let mUrl = aiResult?.media_url;
+                if (mUrl && mUrl !== 'null') {
                     // Ensure absolute URL for UltraMsg
-                    if (mUrl && mUrl.startsWith('/api/')) {
+                    if (mUrl.startsWith('/api/')) {
                         mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
-                    } else if (mUrl && mUrl.includes('candidatic.ia') && !mUrl.includes('vercel.app')) {
-                        // Switch to the technical domain which is more reliable for crawlers
+                    } else if (mUrl.includes('candidatic.ia') && !mUrl.includes('vercel.app')) {
                         mUrl = mUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
                     }
-                    const mUrlForDetect = mUrl;
-                    // Detect if it's a PDF by extension or URL pattern
-                    let isPdf = mUrl.toLowerCase().includes('.pdf') || mUrl.includes('mime=application%2Fpdf');
 
-                    // DEEP DETECTION: Query Redis for internal URLs to guarantee document type
+                    // Detect if it's a PDF
+                    let isPdf = mUrl.toLowerCase().includes('.pdf') || mUrl.includes('mime=application%2Fpdf');
                     if (mUrl.includes('/api/image')) {
                         try {
                             const urlObj = new URL(mUrl, 'https://candidatic.ia');
@@ -1352,33 +1350,28 @@ ${audit.dnaLines}
                     }
 
                     const filename = isPdf ? 'Informacion.pdf' : 'Imagen.jpg';
-                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename });
-                    console.log(`[MEDIA DELIVERY] Sent ${isPdf ? 'PDF' : 'IMAGE'}: ${mUrl}`);
+                    const textPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
+                    const mediaPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename });
+
+                    await Promise.allSettled([textPromise, mediaPromise]);
+                    console.log(`[MEDIA DELIVERY] Sent parallel text + ${isPdf ? 'PDF' : 'IMAGE'}`);
+                } else {
+                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
+                    console.log(`[TEXT DELIVERY] Sent text only: ${candidateId}`);
                 }
             })();
         }
 
-        await Promise.allSettled([
-            deliveryPromise,
-            stickerPromise,
-            reactionPromise,
-            saveMessage(candidateId, {
-                from: 'bot',
-                content: responseTextVal || (aiResult?.reaction ? `[REACCIÓN: ${aiResult.reaction}]` : '[SILENCIO]'),
-                timestamp: new Date().toISOString()
-            })
-        ]);
-
-        // 📝 [DEBUG LOG]: Store full trace (Synchronous for Vercel/Serverless reliability)
+        // 📝 [DEBUG LOG]: Store full trace NOW before potential timeouts in secondary deliveries
         try {
             const redisClient = getRedisClient();
             if (redisClient) {
                 const trace = {
-                    v: "V_FINAL_SYNC_OK",
+                    v: "V_FINAL_STABLE_V1",
                     timestamp: new Date().toISOString(),
                     receivedMessage: aggregatedText,
                     intent,
-                    apiUsed: isRecruiterMode ? `recruiter - agent(Step: ${activeStepId})` : 'capturista-brain',
+                    apiUsed: isRecruiterMode ? `recruiter-agent(Step: ${activeStepId})` : 'capturista-brain',
                     aiResult,
                     isNowComplete
                 };
@@ -1394,6 +1387,17 @@ ${audit.dnaLines}
         } catch (e) {
             console.error(`[DEBUG] Trace failed: `, e.message);
         }
+
+        await Promise.allSettled([
+            deliveryPromise,
+            stickerPromise,
+            reactionPromise,
+            saveMessage(candidateId, {
+                from: 'bot',
+                content: responseTextVal || (aiResult?.reaction ? `[REACCIÓN: ${aiResult.reaction}]` : '[SILENCIO]'),
+                timestamp: new Date().toISOString()
+            })
+        ]);
 
         return responseTextVal || '[SILENCIO]';
     } catch (error) {
