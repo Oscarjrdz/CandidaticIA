@@ -210,7 +210,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         let recentHistory = validMessages
             .slice(-21, -1) // Memory Boost: 20 messages of history
             .filter(m => {
-                const ghostKeywords = ['preguntón', 'focusada', 'procesa su perfil'];
+                const ghostKeywords = ['focusada', 'procesa su perfil'];
                 if ((m.from === 'bot' || m.from === 'me') && ghostKeywords.some(kw => m.content.toLowerCase().includes(kw))) {
                     return false;
                 }
