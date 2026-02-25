@@ -137,7 +137,10 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                         const faqs = JSON.parse(faqData);
                         const answeredFaqs = faqs.filter(f => f.officialAnswer);
                         if (answeredFaqs.length > 0) {
-                            vacancyContext.faqs = answeredFaqs.map(f => `- Pregunta: "${f.topic}"\n  Respuesta oficial aprobada: "${f.officialAnswer}"`).join('\n');
+                            vacancyContext.faqs = answeredFaqs.map(f => {
+                                const keywords = f.originalQuestions ? ` (Palabras clave: ${f.originalQuestions.join(', ')})` : '';
+                                return `- TEMA: "${f.topic}"${keywords}\n  RESPUESTA OFICIAL: "${f.officialAnswer}"`;
+                            }).join('\n');
                         }
                     }
                 } catch (e) { }
