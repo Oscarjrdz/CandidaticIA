@@ -1244,10 +1244,12 @@ ${audit.dnaLines}
         if (shouldSendSticker) {
             const stickerUrl = await redis?.get('bot_celebration_sticker');
             const congratsMsg = "¡Súper! 🌟 Ya tengo tu perfil 100% completo. 📝✅";
-            stickerPromise = (async () => {
-                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, congratsMsg);
-                if (stickerUrl) await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
-            })();
+
+            // 🛡️ [SERIAL DELIVERY]: Send congrats + sticker BEFORE the recruiter brain logic
+            // This prevents race conditions and ensures Jim Carrey arrives FIRST
+            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, congratsMsg);
+            if (stickerUrl) await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
+
             await saveMessage(candidateId, { from: 'bot', content: congratsMsg, timestamp: new Date().toISOString() });
             candidateUpdates.congratulated = true;
             candidateUpdates.bridge_counter = 0;
