@@ -1291,9 +1291,19 @@ ${audit.dnaLines}
             console.log('[Move Tag Sanitizer] ⚠️ Stripped move tag from outbound message.');
         }
 
+        if (responseTextVal && (!aiResult?.media_url || aiResult.media_url === 'null')) {
+            // [MEDIA RECOVERY]: If Brenda leaked the link into text but forgot the JSON field, recover it
+            const mediaApiPattern = /https?:\/\/[^/]+\/api\/(image|upload)\?id=[^\s\)]+/i;
+            const match = responseTextVal.match(mediaApiPattern);
+            if (match) {
+                if (!aiResult) aiResult = {};
+                aiResult.media_url = match[0];
+                console.log(`[Media Recovery] 🚑 Recovered leaked URL from text: ${aiResult.media_url}`);
+            }
+        }
+
         if (responseTextVal && aiResult?.media_url && aiResult.media_url !== 'null') {
-            // Failsafe: Remove any detected URLs or Markdown images that match the media_url or typical patterns
-            // This prevents Brenda from "leaking" the raw link into the text
+            // Failsafe: Remove any detected URLs or Markdown images to prevent leakage
             const urlRegex = /https?:\/\/[^\s\)]+/g;
             const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
             responseTextVal = responseTextVal.replace(markdownImageRegex, '').replace(urlRegex, '').replace(/\s+/g, ' ').trim();

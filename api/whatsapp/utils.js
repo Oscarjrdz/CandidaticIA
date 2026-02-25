@@ -53,7 +53,7 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'document':
-                payload.document = body;
+                payload.document = isHttp ? (body.includes('.pdf') ? body : (body.includes('?') ? `${body}&ext=.pdf` : `${body}?ext=.pdf`)) : body;
                 payload.filename = extraParams.filename || 'document.pdf';
                 break;
             case 'sticker':
