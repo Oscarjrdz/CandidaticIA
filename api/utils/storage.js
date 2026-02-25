@@ -298,6 +298,12 @@ export const auditProfile = (c, customFields = []) => {
             val === 'perfecto' || val === 'excelente' || val === 'genial' || val === 'todo bien' ||
             val === 'todos' || val === 'alguno' || val === 'algunos' || val === 'cualquiera';
 
+        // --- NAME PRECISION (FULL NAME) ---
+        if (field.value === 'nombreReal' && !isInvalid) {
+            const nameParts = val.split(/\s+/).filter(p => p.length >= 2);
+            if (nameParts.length < 2) isInvalid = true; // Must have at least Name + Surname
+        }
+
         // --- DATE PRECISION (DD/MM/YYYY) ---
         if (field.value === 'fechaNacimiento' && !isInvalid) {
             const dateRegex = /^(0?[1-9]|[12][0-9]|3[01])\/(0?[1-9]|1[012])\/\d{4}$/;

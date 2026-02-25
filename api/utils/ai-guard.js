@@ -76,13 +76,15 @@ export class AIGuard {
             recoveryText = `¡Hola! ✨ Soy la Lic. Brenda Rodríguez de Candidatic. 🌸 Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`;
         } else {
             const nameWords = candidateName ? candidateName.trim().split(/\s+/).length : 0;
+            const firstName = candidateName ? candidateName.split(/\s+/)[0] : null;
+
             // Smart Logic: Only ask for surnames if we *only* have a first name (1 word)
             if (firstMissing === 'Nombre Real' && nameWords === 1) {
-                recoveryText = `¡Súper! ✨ Ya tengo tu nombre registrado. ¿Me podrías proporcionar tus apellidos para completar el registro? 🌸`;
+                recoveryText = `¡Súper, ${firstName}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para completar tu registro? 🌸`;
             } else if (reason === 'FALLBACK_REPETITION' || reason === 'FALLBACK_IDENTITY_REPETITION') {
                 // Specific variation for repetition to break the loop
                 const variationTemplates = [
-                    `Para tu registro, aún necesito tu ${firstMissing}. ¿Me ayudas con ese dato? ✨`,
+                    `${firstName ? firstName + ', p' : 'P'}ara tu registro aún necesito tu ${firstMissing}. ¿Me ayudas con eso? ✨`,
                     `Solo me falta tu ${firstMissing} para avanzar. ¿Me lo pasas? 🌸`,
                     `¡Súper! 🌸 Me falta confirmar tu ${firstMissing} para seguir. ✨`
                 ];
@@ -90,7 +92,7 @@ export class AIGuard {
             } else {
                 // Simple but high-quality recovery templates (REFINED: Direct & Professional)
                 const templates = [
-                    `Para continuar con tu registro, ¿me podrías indicar tu ${firstMissing}? ✨`,
+                    `${firstName ? firstName + ', p' : 'P'}ara continuar con tu registro, ¿me podrías indicar tu ${firstMissing}? ✨`,
                     `Solo me falta tu ${firstMissing} para tener tu perfil listo. ¿Me lo proporcionas? 🌸`,
                     `Me falta el dato de tu ${firstMissing} para poder avanzar. ✨`
                 ];

@@ -44,16 +44,18 @@ export const DEFAULT_CEREBRO1_RULES = `
 2. Tono tierno y servicial. ✨
 3. No saltes de dato hasta llenar el actual.
 4. FECHA: Solicítala de forma natural con un ejemplo. Ej: "¿Me podrías proporcionar tu fecha de nacimiento? Por ejemplo: 19-05-1983. 📅". Evita decir "en formato DD-MM-YYYY".
-5. No aceptes datos basura.
+5. CATEGORÍA: Si falta la Categoría, DEBES imprimir la [LISTA DE CATEGORÍAS] completa para que el usuario elija.
+6. No aceptes datos basura.
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = `
 [IDENTIDAD]: Lic. Brenda Rodríguez (25), reclutadora de Candidatic. Cálida, tierna, 3 emojis/msg. ✨🌸
 1. BREVEDAD: Respuestas cortas. No asteriscos (*).
 2. PROTOCOLO: 1er contacto: "¡Hola! Soy la Lic. Brenda Rodríguez...". 
-3. ANTI-HOLA (BLOQUEO TOTAL): Si [CHARLA_ACTIVA]: TRUE, tienes PROHIBIDO saludar ("Hola", "Buenas tardes"), presentarte ("Soy Brenda") o mencionar el nombre del candidato al inicio. Ve directo al dato. Saludar en hilo activo es un ERROR CRÍTICO.
+3. ANTI-HOLA (BLOQUEO TOTAL): Si [CHARLA_ACTIVA]: TRUE, tienes PROHIBIDO saludar ("Hola", "Buenas tardes"), presentarte ("Soy Brenda") o mencionar el NOMBRE COMPLETO del candidato. Usa el NOMBRE DE PILA (First Name) si es necesario, pero sé directa. Saludar en hilo activo es un ERROR CRÍTICO.
 4. NOMENCLATURA: Si el usuario da Nombre + UN apellido, es SUCIENTE. No pidas el materno.
 5. ANTI-REPETICIÓN: Prohibido calcar respuestas previas.
+6. CERCANÍA: USA SOLO EL NOMBRE DE PILA (First Name) en tus diálogos. Está PROHIBIDO usar "Nombre + Apellido" (ej. "Oscar Rodriguez") en tus respuestas. Di solo "Oscar" para sonar más natural.
 [REGLA DE REACCIONES]:
 - El sistema pondrá un 👍 automático si detectas gratitud (gratitude_reached: true).
 - GRATITUD (ESTRICTO): Solo si dicen "Gracias", "Agradecido", "Muchas gracias".
@@ -149,6 +151,12 @@ function coalesceDate(existing, incoming) {
     // If existing part exists and new part arrives (e.g. "25" then "Mayo")
     // For now, satisfy with normalization, but additive logic could go here
     return incoming;
+}
+
+function getFirstName(fullName) {
+    if (!fullName || typeof fullName !== 'string') return null;
+    const parts = fullName.trim().split(/\s+/);
+    return parts[0] || null;
 }
 
 const getIdentityLayer = (customPrompt = null) => {
@@ -271,7 +279,9 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         });
 
         // Identity Protection (Titan Shield Pass) - System context for safety
-        let displayName = candidateData.nombreReal;
+        const realName = candidateData.nombreReal;
+        let displayName = getFirstName(realName);
+
         if (!displayName || displayName === 'Desconocido' || /^\+?\d+$/.test(displayName)) {
             displayName = null;
         }
@@ -806,8 +816,8 @@ ${safeDnaLines}
                 isProfileComplete: audit.paso1Status === 'COMPLETO',
                 missingFields: audit.missingLabels,
                 lastInput: aggregatedText,
-                isNewFlag: isNewFlag,
-                candidateName: candidateData.nombreReal,
+                isNewFlag: isNewFlag && !botHasSpoken, // 🛡️ Hardened Loop Breaker
+                candidateName: getFirstName(realName) || realName, // Use first name for context
                 lastBotMessages: lastBotMessages
             };
 
