@@ -180,7 +180,20 @@ const VacanciesSection = ({ showToast }) => {
             const res = await fetch(`/api/vacancies/faq?vacancyId=${vacancyId}`);
             const data = await res.json();
             if (data.success) {
-                setFaqs(data.faqs || []);
+                setFaqs(current => {
+                    if (current.length === 0) return data.faqs || [];
+                    return (data.faqs || []).map(newFaq => {
+                        const existing = current.find(f => f.id === newFaq.id);
+                        if (existing) {
+                            return {
+                                ...newFaq,
+                                officialAnswer: existing.officialAnswer !== undefined ? existing.officialAnswer : newFaq.officialAnswer,
+                                mediaUrl: existing.mediaUrl !== undefined ? existing.mediaUrl : newFaq.mediaUrl
+                            };
+                        }
+                        return newFaq;
+                    });
+                });
             }
         } catch (error) {
             console.error('Error loading FAQs:', error);
@@ -203,11 +216,13 @@ const VacanciesSection = ({ showToast }) => {
                                 if (!data.faqs) return [];
                                 return data.faqs.map(newFaq => {
                                     const existing = currentFaqs.find(f => f.id === newFaq.id);
-                                    // Si el usuario tiene un valor local "sucio" (diferente al que ya sabíamos que tenía el servidor), lo preservamos
-                                    if (existing && existing.officialAnswer !== undefined) {
-                                        // Si el servidor mandó un cambio real en la respuesta oficial (otra persona lo editó), 
-                                        // podrías decidir qué hacer. Por ahora, si el usuario está escribiendo, respetamos su teclado.
-                                        return { ...newFaq, officialAnswer: existing.officialAnswer };
+                                    if (existing) {
+                                        // Conservamos lo que el usuario está escribiendo o el adjunto que subió pero aún no guarda
+                                        return {
+                                            ...newFaq,
+                                            officialAnswer: existing.officialAnswer !== undefined ? existing.officialAnswer : newFaq.officialAnswer,
+                                            mediaUrl: existing.mediaUrl !== undefined ? existing.mediaUrl : newFaq.mediaUrl
+                                        };
                                     }
                                     return newFaq;
                                 });
@@ -627,7 +642,7 @@ const VacanciesSection = ({ showToast }) => {
     const handleDeleteCategory = async (id) => {
         if (!confirm('¿Seguro que deseas eliminar esta categoría?')) return;
         try {
-            const res = await fetch(`/ api / categories ? id = ${id}`, { method: 'DELETE' });
+            const res = await fetch(`/api/categories?id=${id}`, { method: 'DELETE' });
             if (res.ok) {
                 showToast('Categoría eliminada', 'success');
                 loadCategories();
