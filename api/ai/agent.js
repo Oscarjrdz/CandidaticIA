@@ -1274,7 +1274,9 @@ ${audit.dnaLines}
                 console.log(`[GPT Host] Candidate ${candidateId} completed profile without project.`);
                 candidateUpdates.gratitudAlcanzada = false;
                 candidateUpdates.silencioActivo = false;
-                responseTextVal = null;
+
+                // 🛡️ [SILENCE SAFEGUARD]: Send a waiting room message instead of going silent
+                responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. En un momento uno de nuestros reclutadores revisará tu perfil para vincularte a la vacante ideal. ¡Pronto te contactaremos! ✨🌸";
             }
         }
 
@@ -1315,6 +1317,12 @@ ${audit.dnaLines}
         }
 
         const isTechnical = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
+
+        // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
+        if (!responseTextVal && !isTechnical && !aiResult?.close_conversation && !isRecruiterMode) {
+            console.warn(`[FINAL SAFEGUARD] 🚨 Attempted silence for candidate ${candidateId}. Forcing fallback.`);
+            responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
+        }
 
         if (responseTextVal && !isTechnical) {
             deliveryPromise = (async () => {
