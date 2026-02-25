@@ -25,6 +25,9 @@ import { processRecruiterMessage } from './recruiter-agent.js';
 import { inferGender } from '../utils/gender-helper.js';
 import { classifyIntent } from './intent-classifier.js';
 import { FEATURES } from '../utils/feature-flags.js';
+import { AIGuard } from '../utils/ai-guard.js';
+import { Orchestrator } from '../utils/orchestrator.js';
+import { MediaEngine } from '../utils/media-engine.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
 [EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad, tieneEmpleo.
@@ -718,568 +721,73 @@ ${audit.dnaLines}
 
         // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
-            // 🛡️ CONTEXT GUARD: Never re-introduce if profile is complete, even if 'new' flag persisted.
+            // 🛡️ [IDENTITY & RULES]
             if (isNewFlag && !isProfileComplete) {
-                systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje.Preséntate como la Lic.Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
+                systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
             } else if (!isProfileComplete) {
-                const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
-                const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
+                const cerebro1Rules = (batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES)
                     .replace('{{faltantes}}', audit.missingLabels.join(', '))
                     .replace(/{{categorias}}/g, categoriesList);
-                systemInstruction += `\n${cerebro1Rules} \n`;
+                systemInstruction += `\n${cerebro1Rules}\n`;
             } else {
-                if (!hasGratitude) {
-                    systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo.Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
-                } else {
-                    systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias.Ya cumpliste.NO escribas texto.SOLO pon una reacción(👍) y marca close_conversation: true. 👋🤫\n`;
-                }
+                systemInstruction += !hasGratitude
+                    ? `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable y busca que el usuario te dé las gracias. ✨💅\n`
+                    : `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya agradeció. No escribas texto. واکنش 👍 y close_conversation: true. 👋🤫\n`;
             }
 
-            // Show Gemini its own previous responses in full — let it decide what's repetitive
+            // [ANTI-REPETITION LAYER]
             const lastBotMsgsForPrompt = lastBotMessages.slice(-4);
-            systemInstruction += `\n[TUS RESPUESTAS ANTERIORES - LEE ESTO CON ATENCIÓN]: \n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Primera interacción)'} \n⚠️ REGLA DE ORIGINALIDAD: Tu próxima respuesta debe sonar COMPLETAMENTE DIFERENTE a cualquiera de las anteriores.No repitas la misma apertura, el mismo tono de broma, ni la misma estructura de frase.Si sientes que tu respuesta se parece a alguna de las anteriores, reescríbela desde cero con otro enfoque.\n`;
-
-            systemInstruction += `\n[REGLAS DE EXTRACCIÓN ESTRICTA PARA JSON]:
-- tieneEmpleo: DEBE ser uno de estos valores exactos: "Empleado" o "Desempleado".Si el usuario indica que trabaja o tiene "chamba", pon "Empleado".Si indica que está buscando, no tiene trabajo o está libre, pon "Desempleado".
-- escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería".Si dice "secu", pon "Secundaria".Si dice "prepa", pon "Preparatoria".
-- categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato.Si dice "Ayudante", pon "Ayudante General".
-- municipio: Usa tu comprensión del español y del contexto mexicano.Si el candidato de cualquier forma implica dónde vive — ya sea directamente("Escobedo", "Monterrey"), en una frase("Vivo en Escobedo", "Soy de Apodaca", "Del otro lado de Monterrey") o con rodeos — extrae la localidad.No esperes un formato específico.Confía en tu entendimiento del idioma.
-- nombreReal: Si el candidato da solo su nombre de pila sin apellido(ej.solo "Oscar", solo "Juan"), NO guardes el dato todavía.Pídele explícitamente sus apellidos antes de continuar con el siguiente campo.
-`;
-
-            systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
-{
-    "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Empleado | Desempleado | null", "escolaridad": "string | null", "edad": "number | null" },
-    "thought_process": "Razonamiento.",
-        "reaction": "null",
-            "trigger_media": "string | null",
-                "response_text": "Tu respuesta.",
-                    "gratitude_reached": "boolean",
-                        "close_conversation": "boolean"
-}
-\n[REGLA ANTI - SILENCIO]: Si el usuario responde con simples confirmaciones("Si", "Claro", "Ok") a una pregunta de datos, TU RESPUESTA DEBE SER:
-1. Agradecer / Confirmar("¡Perfecto!", "¡Excelente!").
-2. VOLVER A PEDIR EL DATO FALTANTE EXPLICÍTAMENTE.
-3. JAMÁS DEJES "response_text" VACÍO si faltan datos.
-`;
+            systemInstruction += `\n[MEMORIA RECIENTE]: \n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Primer contacto)'}\n⚠️ Tu respuesta debe ser TOTALMENTE DIFERENTE a las anteriores.\n`;
 
             const genAI = new GoogleGenerativeAI(apiKey);
             const model = genAI.getGenerativeModel({
                 model: "gemini-2.0-flash",
                 systemInstruction,
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    temperature: 0.8  // Balanced creativity for natural conversation during extraction
-                }
+                generationConfig: { responseMimeType: "application/json", temperature: 0.8 }
             });
+
             const chat = model.startChat({ history: recentHistory });
             const result = await chat.sendMessage(userParts);
             const textResult = result.response.text();
-            try {
-                const sanitized = textResult.replace(/```json | ```/g, '').trim();
-                aiResult = JSON.parse(sanitized);
-                responseTextVal = aiResult.response_text;
 
-                // 🚨 ENHANCED SILENCE SAFEGUARD V2 🚨
-                // Prevents Brenda from going silent under ANY circumstance when profile is incomplete
-                const hasEmptyResponse = !responseTextVal || responseTextVal.trim() === '' || responseTextVal === 'null' || responseTextVal === 'undefined';
-
-                // Merge extracted data to check current status
-                const mergedStatus = { ...candidateData, ...aiResult.extracted_data };
-                const currentAudit = auditProfile(mergedStatus, customFields);
-                const isNowComplete = currentAudit.paso1Status === 'COMPLETO';
-
-                // CRITICAL: Activate safeguard if response is empty AND profile is still incomplete
-                if (hasEmptyResponse && !isNowComplete) {
-                    console.warn(`[SILENCE SAFEGUARD V2] 🚨 Empty response detected for incomplete profile.`);
-                    console.warn(`[SILENCE SAFEGUARD V2] Missing fields: ${audit.missingLabels.join(', ')} `);
-                    console.warn(`[SILENCE SAFEGUARD V2] User input: "${aggregatedText}"`);
-                    console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation} `);
-
-                    // 🧠 INTELLIGENT FIELD SELECTION
-                    // Re-audit WITH the extracted data to see what is REALLY still missing
-                    const mergedForSafeguard = { ...candidateData, ...aiResult.extracted_data };
-                    const freshAudit = auditProfile(mergedForSafeguard, customFields);
-
-                    let nextMissing = 'datos';
-
-                    if (freshAudit.missingLabels.length > 0) {
-                        // Strategy: Look at the last bot message to see what we were asking for
-                        const lastBotMsg = validMessages.filter(m => m.from === 'bot').slice(-1)[0];
-                        const lastBotText = lastBotMsg?.content?.toLowerCase() || '';
-
-                        // Field detection patterns
-                        const fieldPatterns = {
-                            'Nombre Real': ['nombre completo', 'apellidos', 'apellido', 'nombre real', 'cómo te llamas'],
-                            'Género': ['género', 'genero', 'hombre o mujer', 'masculino o femenino', 'sexo'],
-                            'Municipio': ['municipio', 'dónde vives', 'donde vives', 'ciudad', 'resides', 'ubicación', 'de donde eres'],
-                            'Fecha de Nacimiento': ['fecha de nacimiento', 'fecha nacimiento', 'cuándo naciste', 'cuando naciste', 'edad', 'años tienes', 'cumpleaños'],
-                            'Categoría': ['categoría', 'categoria', 'área', 'area', 'puesto', 'trabajo', 'opciones', 'vacantes', 'te interesa'],
-                            'Empleo': ['empleo', 'trabajas', 'trabajo actual', 'tienes empleo', 'actualmente tienes empleo', 'laborando'],
-                            'Escolaridad': ['escolaridad', 'estudios', 'nivel de estudios', 'nivel de escolaridad', 'educación', 'grado escolar']
-                        };
-
-                        // Try to detect what we were asking for
-                        let detectedField = null;
-                        for (const [fieldLabel, patterns] of Object.entries(fieldPatterns)) {
-                            if (patterns.some(pattern => lastBotText.includes(pattern))) {
-                                detectedField = fieldLabel;
-                                break;
-                            }
-                        }
-
-                        // If detected field is still missing, use it
-                        if (detectedField && audit.missingLabels.includes(detectedField)) {
-                            nextMissing = detectedField;
-                            console.log(`[SILENCE SAFEGUARD V2] 🎯 Detected we were asking for: ${nextMissing} `);
-                        } else {
-                            // Fallback: Use first missing field in sequential order
-                            nextMissing = audit.missingLabels[0];
-                            console.log(`[SILENCE SAFEGUARD V2] 📋 Using first missing field: ${nextMissing} `);
-                        }
-                    }
-
-                    // 🕵️ INTERRUPTION DETECTION
-                    const interruptionKeywords = ['cuanto', 'cuánto', 'donde', 'dónde', 'que', 'qué', 'como', 'cómo', 'pagan', 'sueldo', 'ubicacion', 'ubicación', 'horario', 'prestaciones'];
-                    const isInterruption = interruptionKeywords.some(kw => aggregatedText.toLowerCase().includes(kw));
-
-                    // Category-specific fallback with list
-                    if (nextMissing === 'Categoría' && categoriesList) {
-                        const categoryArray = categoriesList.split(', ').map(c => `✅ ${c} `).join('\n');
-
-                        let intros = [];
-                        if (isInterruption) {
-                            intros = [
-                                '¡Esa es una excelente pregunta! 💡 En un momento te doy todos los detalles, pero primero',
-                                '¡Entiendo tu duda! 😉 Ahorita te cuento todo, solo ayúdame primero',
-                                '¡Claro! Enseguida te digo, pero antes necesito que elijas una opción'
-                            ];
-                        } else {
-                            // Standard "Distracted" intros
-                            intros = [
-                                '¡Ay! Me distraje un momento. 😅',
-                                '¡Ups! Se me fue el hilo. 🙈',
-                                'Perdón, me perdí un segundo. 😊',
-                                '¡Uy! Me despiste. 😅',
-                                'Disculpa, me desconcentré. 🙈'
-                            ];
-                        }
-                        const randomIntro = intros[Math.floor(Math.random() * intros.length)];
-
-                        aiResult.response_text = `${randomIntro} ¿En qué área te gustaría trabajar ? Estas son las opciones: \n${categoryArray} \n¿Cuál eliges ? 😊`;
-                        aiResult.thought_process = isInterruption ? "SAFEGUARD: Interruption detected (Category phase)" : "SAFEGUARD: Categoría no capturada, re-listando opciones.";
-                    } else {
-                        // Generic fallback for other fields
-                        let phrases = [];
-
-                        if (isInterruption) {
-                            phrases = [
-                                `¡Buena pregunta! 💡 En un segundito te digo, pero antes ayúdame con tu ${nextMissing} para ver qué opciones te tocan. 😉`,
-                                `¡Entendido! 👌 Ahorita revisamos eso, pero primero necesito tu ${nextMissing} para registrarte. 😊`,
-                                `¡Claro! En un momento te comparto esa info. 😉 ¿Me podrías decir tu ${nextMissing} mientras ? `
-                            ];
-                        } else {
-                            // Standard "Distracted" phrases
-                            phrases = [
-                                `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor ? `,
-                                `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
-                                `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor ? `,
-                                `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
-                                `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
-                            ];
-                        }
-
-                        aiResult.response_text = phrases[Math.floor(Math.random() * phrases.length)];
-                        aiResult.thought_process = isInterruption ? `SAFEGUARD: Interruption detected(${nextMissing})` : `SAFEGUARD: ${nextMissing} no capturado.`;
-                    }
-                } else if (hasEmptyResponse && isNowComplete) {
-                    // Profile is complete but AI went silent - send transition message
-                    console.log(`[SILENCE SAFEGUARD V2] 🏁 Profile completed but AI silent.Injecting transition.`);
-                    aiResult.response_text = "¡Perfecto! ✨ Ya tengo todos tus datos. En un momento te cuento más. 😉";
-                    aiResult.thought_process = "SAFEGUARD: Profile complete but AI went silent.";
-                    aiResult.close_conversation = false;
-                }
-
-                responseTextVal = aiResult.response_text;
-                console.log(`[SILENCE SAFEGUARD V2] ✅ Injected fallback: "${responseTextVal.substring(0, 50)}..."`);
-            } catch (e) {
-                console.error(`[Gemini JSON Parse Error] ❌`, e);
-                console.error(`[Gemini JSON Parse Error] Raw response: ${textResult?.substring(0, 200)} `);
-
-                // Enhanced fallback for JSON parse error
-                if (!isProfileComplete) {
-
-                    // 🧠 INTELLIGENT FIELD SELECTION (Copy of main safeguard)
-                    let nextMissing = 'datos';
-                    if (audit.missingLabels.length > 0) {
-                        // Strategy: Look at the last bot message to see what we were asking for
-                        const lastBotMsg = validMessages.filter(m => m.from === 'bot').slice(-1)[0];
-                        const lastBotText = lastBotMsg?.content?.toLowerCase() || '';
-
-                        // Field detection patterns
-                        const fieldPatterns = {
-                            'Nombre Real': ['nombre completo', 'apellidos', 'apellido', 'nombre real', 'cómo te llamas'],
-                            'Género': ['género', 'genero', 'hombre o mujer', 'masculino o femenino', 'sexo'],
-                            'Municipio': ['municipio', 'dónde vives', 'donde vives', 'ciudad', 'resides', 'ubicación', 'de donde eres'],
-                            'Fecha de Nacimiento': ['fecha de nacimiento', 'fecha nacimiento', 'cuándo naciste', 'cuando naciste', 'edad', 'años tienes', 'cumpleaños'],
-                            'Categoría': ['categoría', 'categoria', 'área', 'area', 'puesto', 'trabajo', 'opciones', 'vacantes', 'te interesa'],
-                            'Empleo': ['empleo', 'trabajas', 'trabajo actual', 'tienes empleo', 'actualmente tienes empleo', 'laborando'],
-                            'Escolaridad': ['escolaridad', 'estudios', 'nivel de estudios', 'nivel de escolaridad', 'educación', 'grado escolar']
-                        };
-
-                        let detectedField = null;
-                        for (const [fieldLabel, patterns] of Object.entries(fieldPatterns)) {
-                            if (patterns.some(pattern => lastBotText.includes(pattern))) {
-                                detectedField = fieldLabel;
-                                break;
-                            }
-                        }
-
-                        // If detected field is still missing, use it
-                        if (detectedField && audit.missingLabels.includes(detectedField)) {
-                            nextMissing = detectedField;
-                        } else {
-                            nextMissing = audit.missingLabels[0];
-                        }
-                    }
-
-                    // 🕵️ INTERRUPTION DETECTION
-                    const interruptionKeywords = ['cuanto', 'cuánto', 'donde', 'dónde', 'que', 'qué', 'como', 'cómo', 'pagan', 'sueldo', 'ubicacion', 'ubicación', 'horario', 'prestaciones'];
-                    const isInterruption = interruptionKeywords.some(kw => aggregatedText.toLowerCase().includes(kw));
-
-                    if (nextMissing === 'Categoría' && categoriesList) {
-                        const categoryArray = categoriesList.split(', ').map(c => `✅ ${c} `).join('\n');
-
-                        let intros = [];
-                        if (isInterruption) {
-                            intros = [
-                                '¡Esa es una excelente pregunta! 💡 En un momento te doy todos los detalles, pero primero',
-                                '¡Entiendo tu duda! 😉 Ahorita te cuento todo, solo ayúdame primero',
-                                '¡Claro! Enseguida te digo, pero antes necesito que elijas una opción'
-                            ];
-                        } else {
-                            intros = [
-                                '¡Ay! Me distraje un momento. 😅',
-                                '¡Ups! Se me fue el hilo. 🙈',
-                                'Perdón, me perdí un segundo. 😊',
-                                '¡Uy! Me despiste. 😅',
-                                'Disculpa, me desconcentré. 🙈'
-                            ];
-                        }
-                        const randomIntro = intros[Math.floor(Math.random() * intros.length)];
-                        responseTextVal = `${randomIntro} ¿En qué área te gustaría trabajar ?\n${categoryArray} `;
-                    } else {
-                        let phrases = [];
-                        if (isInterruption) {
-                            phrases = [
-                                `¡Buena pregunta! 💡 En un segundito te digo, pero antes ayúdame con tu ${nextMissing} para ver qué opciones te tocan. 😉`,
-                                `¡Entendido! 👌 Ahorita revisamos eso, pero primero necesito tu ${nextMissing} para registrarte. 😊`,
-                                `¡Claro! En un momento te comparto esa info. 😉 ¿Me podrías decir tu ${nextMissing} mientras ? `
-                            ];
-                        } else {
-                            phrases = [
-                                `¡Perdón! Me distraje un momento. 😅 ¿Me podrías decir tu ${nextMissing}, por favor ? `,
-                                `¡Ups! Se me fue el hilo. 🙈 ¿Cuál es tu ${nextMissing}?`,
-                                `Disculpa, me despiste. 😊 ¿Me repites tu ${nextMissing}, por favor ? `,
-                                `¡Ay! Me desconcentré. 😅 ¿Me podrías compartir tu ${nextMissing}?`,
-                                `Perdón, me perdí un segundo. 🙈 ¿Cuál es tu ${nextMissing}?`
-                            ];
-                        }
-                        responseTextVal = phrases[Math.floor(Math.random() * phrases.length)];
-                    }
-
-                    // Create minimal aiResult for downstream processing
-                    aiResult = {
-                        response_text: responseTextVal,
-                        thought_process: "SAFEGUARD: JSON parse error recovery",
-                        extracted_data: {},
-                        reaction: null,
-                        close_conversation: false,
-                        gratitude_reached: false
-                    };
-
-                    console.log(`[Gemini JSON Parse Error] ✅ Fallback injected: "${responseTextVal.substring(0, 50)}..."`);
-                }
-            }
-        }
-
-        // --- FINAL CONSOLIDATION (Merged with initial candidateUpdates) ---
-        // Fields like lastBotMessageAt are already there
-        candidateUpdates.bridge_counter = (typeof candidateData.bridge_counter === 'number') ? candidateData.bridge_counter : 0;
-
-        if (aiResult?.extracted_data) {
-            Object.entries(aiResult.extracted_data).forEach(([key, val]) => {
-                if (val && val !== 'null' && candidateData[key] !== val) {
-                    let cleanedVal = val;
-                    if (key === 'tieneEmpleo' && typeof val === 'string') {
-                        const low = val.toLowerCase().trim();
-                        if (low === 'si' || low === 'sí') cleanedVal = 'Sí';
-                        else if (low === 'no') cleanedVal = 'No';
-                    }
-                    candidateUpdates[key] = cleanedVal;
-                }
-            });
-        }
-
-        // 🧠 INTELLIGENT GENDER INFERENCE (FALLBACK)
-        const currentGender = candidateUpdates.genero || candidateData.genero;
-        if (!currentGender || currentGender === 'desconocido' || currentGender === 'null') {
-            const nameToUse = candidateUpdates.nombreReal || candidateData.nombreReal || candidateData.nombre;
-            if (nameToUse && nameToUse !== 'Desconocido') {
-                const inferred = inferGender(nameToUse);
-                if (inferred) {
-                    candidateUpdates.genero = inferred;
-                    console.log(`[Gender Inference] ✅ Inferred "${inferred}" from name "${nameToUse}"`);
-                }
-            }
-        }
-
-        // 📅 DATE NORMALIZATION & VALIDATION
-        // Normalize and validate birth date before saving
-        if (aiResult?.extracted_data?.fechaNacimiento) {
-            const rawDate = aiResult.extracted_data.fechaNacimiento;
-            const normalized = normalizeBirthDate(rawDate);
-
-            if (normalized.isValid) {
-                candidateUpdates.fechaNacimiento = normalized.date;
-                console.log(`[Date Normalization] ✅ "${rawDate}" → "${normalized.date}"`);
-            } else {
-                // Invalid date format - trigger specific safeguard
-                console.warn(`[Date Validation] ❌ Invalid format: "${rawDate}"`);
-                delete candidateUpdates.fechaNacimiento; // Don't save invalid date
-
-                // Override response to ask for correct format
-                if (!isProfileComplete && audit.missingLabels.includes('Fecha de Nacimiento')) {
-                    responseTextVal = `¡Uy! Necesito la fecha en formato completo, por ejemplo: 19 /05 / 1988(día / mes / año completo) 😊`;
-                    aiResult.response_text = responseTextVal;
-                    aiResult.thought_process = "SAFEGUARD: Invalid date format detected.";
-                    console.log(`[Date Validation] ✅ Injected format correction message`);
-                }
-            }
-        }
-
-        // 🧠 AGE CALCULATOR (Deterministic Math > AI Hallucination)
-        const dobToUse = candidateUpdates.fechaNacimiento || candidateData.fechaNacimiento;
-        if (dobToUse && /^\d{2}\/\d{2}\/\d{4}$/.test(dobToUse)) {
-            try {
-                const [d, m, y] = dobToUse.split('/').map(Number);
-                const birthDate = new Date(y, m - 1, d);
-                const today = new Date();
-                let age = today.getFullYear() - birthDate.getFullYear();
-                const mo = today.getMonth() - birthDate.getMonth();
-                if (mo < 0 || (mo === 0 && today.getDate() < birthDate.getDate())) {
-                    age--;
-                }
-                if (age > 10 && age < 100) candidateUpdates.edad = age; // Sanity check
-            } catch (e) { }
-        }
-
-        const finalMerged = { ...candidateData, ...candidateUpdates };
-        const finalAudit = auditProfile(finalMerged, customFields);
-        const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
-
-        // 📝 [STRATEGIC PERSISTENCE]: Save data NOW before bypass or chained AI. 
-        // This prevents data loss if Vercel times out during slow secondary operations.
-        await updateCandidate(candidateId, candidateUpdates);
-
-        // 🔀 BYPASS SYSTEM - Automatic Project Routing
-        const isBypassEnabled = batchConfig.bypass_enabled === 'true';
-        const currentStepName = (project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId))?.name || '')
-            .toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const isInWaitingRoom = currentStepName.includes('no interesa');
-
-        // Trigger if: Profile complete AND (No project OR Stationed in Waiting Room)
-        if (isNowComplete && isBypassEnabled && (!candidateData.projectId || isInWaitingRoom)) {
-            console.log(`[BYPASS] 🔍 Starting evaluation for ${candidateId}.Profile is COMPLETE.`);
-
-            // 🕵️‍♂️ DEBUG TRACE OBJECT
-            const debugTrace = {
-                timestamp: new Date().toISOString(),
-                candidateId: candidateId,
-                candidateData: {
-                    edad: finalMerged.edad,
-                    municipio: finalMerged.municipio,
-                    categoria: finalMerged.categoria,
-                    escolaridad: finalMerged.escolaridad,
-                    genero: finalMerged.genero,
-                    nombreReal: finalMerged.nombreReal
-                },
-                rules: [],
-                finalResult: 'NO_MATCH'
+            // 🛡️ [AI GUARDRAIL]
+            const rawJson = AIGuard.sanitizeJSON(textResult);
+            const guardContext = {
+                isProfileComplete: audit.paso1Status === 'COMPLETO',
+                missingFields: audit.missingLabels,
+                lastInput: aggregatedText
             };
 
-            try {
-                const bypassIds = await redis.zrange('bypass:list', 0, -1);
-                if (bypassIds.length > 0) {
-                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id} `));
-                    const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
+            aiResult = AIGuard.validate(rawJson, guardContext);
+            responseTextVal = aiResult.response_text;
 
-                    for (const rule of activeRules) {
-                        const { minAge, maxAge, municipios, escolaridades, categories, gender, projectId } = rule;
+            // 🧬 [DUAL-STREAM EXTRACTION]
+            if (aiResult.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
+                console.log(`[DUAL-STREAM] 🧬 Extracted:`, aiResult.extracted_data);
+                Object.assign(candidateUpdates, aiResult.extracted_data);
+            }
 
-                        // 🛡️ SAFEQUARD: Ensure criteria are arrays even if missing in Redis keys
-                        const safeMun = Array.isArray(municipios) ? municipios : [];
-                        const safeEsc = Array.isArray(escolaridades) ? escolaridades : [];
-                        const safeCat = Array.isArray(categories) ? categories : [];
+            // 🔄 [TRANSITION & HANDOVER]
+            const currentAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
+            const isNowComplete = currentAudit.paso1Status === 'COMPLETO';
 
-                        // Match logic (Case Insensitive & trimmed)
-                        const candidateAge = parseInt(finalMerged.edad || 0);
-                        const cMun = String(finalMerged.municipio || '').toLowerCase().trim();
-                        const cEsc = String(finalMerged.escolaridad || '').toLowerCase().trim();
-                        const cGen = String(finalMerged.genero || '').toLowerCase().trim();
-                        const cCats = (finalMerged.categoria || '').split(',').map(c => c.toLowerCase().trim());
-
-                        const ageMatch = (!minAge || candidateAge >= parseInt(minAge)) && (!maxAge || candidateAge <= parseInt(maxAge));
-                        const genderMatch = (gender === 'Cualquiera' || cGen === String(gender).toLowerCase().trim());
-
-                        // Municipality match (ALLOW PARTIAL MATCH e.g. "Escobedo" matches "General Escobedo")
-                        const munMatch = (safeMun.length === 0 || safeMun.some(m => {
-                            const rm = String(m).toLowerCase().trim();
-                            return rm.includes(cMun) || cMun.includes(rm);
-                        }));
-
-                        // Schooling match (ALLOW PARTIAL MATCH e.g. "Secu" matches "Secundaria")
-                        const escMatch = (safeEsc.length === 0 || safeEsc.some(e => {
-                            const re = String(e).toLowerCase().trim();
-                            return re.includes(cEsc) || cEsc.includes(re);
-                        }));
-
-                        // Categories match if ANY of the candidate's cats are in the rule ones
-                        // ALLOW PARTIAL MATCH (e.g. "Ayudante" matches "Ayudante General")
-                        const ruleCatsLow = safeCat.map(c => String(c).toLowerCase().trim());
-                        const catMatch = (ruleCatsLow.length === 0 || cCats.some(c =>
-                            ruleCatsLow.some(rc => rc.includes(c) || c.includes(rc))
-                        ));
-
-                        const isMatch = ageMatch && genderMatch && munMatch && escMatch && catMatch;
-
-                        console.log(`[BYPASS] Rule Check: "${rule.name}" | Match: ${isMatch} | Checks: age:${ageMatch}, mun:${munMatch}, cat:${catMatch}, esc:${escMatch}, gen:${genderMatch} `);
-
-                        // Add to Debug Trace
-                        debugTrace.rules.push({
-                            ruleName: rule.name,
-                            criteria: { minAge, maxAge, municipios, escolaridades, categories, gender },
-                            checks: {
-                                age: ageMatch,
-                                municipio: munMatch,
-                                categoria: catMatch,
-                                escolaridad: escMatch,
-                                genero: genderMatch
-                            },
-                            isMatch
-                        });
-
-                        if (isMatch) {
-                            console.log(`[BYPASS] ✅ MATCH FOUND: Rule "${rule.name}" → Project ${projectId} `);
-
-                            // Assign candidate to project
-                            const { addCandidateToProject } = await import('../utils/storage.js');
-                            await addCandidateToProject(projectId, candidateId);
-
-                            candidateUpdates.projectId = projectId;
-                            candidateUpdates.stepId = 'step_default';
-
-                            // 🎯 BYPASS VACANCY NAME: Store first vacancy name for the ADN card
-                            try {
-                                const proj = await getProjectById(projectId);
-                                if (proj?.vacancyIds?.length > 0) {
-                                    const firstVac = await getVacancyById(proj.vacancyIds[0]);
-                                    if (firstVac) candidateUpdates.currentVacancyName = firstVac.name;
-                                }
-                            } catch (vErr) {
-                                console.error("[BYPASS] Failed to attach vacancy name:", vErr);
-                            }
-
-                            debugTrace.finalResult = 'MATCH';
-                            debugTrace.matchedRule = rule.name;
-                            debugTrace.assignedProject = projectId;
-
-                            console.log(`[BYPASS] 🎯 Candidate ${candidateId} routed to project ${projectId} `);
-                            break; // Stop at first match
-                        }
-                    }
+            if (await Orchestrator.checkBypass(candidateData, currentAudit)) {
+                console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
+                const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config);
+                if (handoverResult?.triggered) {
+                    candidateUpdates.projectId = handoverResult.projectId;
+                    candidateUpdates.stepId = handoverResult.stepId;
+                    responseTextVal = null; // Silence main stream, handover message already sent
                 }
-
-                if (debugTrace.finalResult === 'NO_MATCH') {
-                    console.log(`[BYPASS] ❌ No matching rules found for ${candidateId}`);
-                }
-
-                // Save debug trace
-                await redis.lpush('debug:bypass:traces', JSON.stringify(debugTrace));
-                await redis.ltrim('debug:bypass:traces', 0, 49);
-
-            } catch (bypassError) {
-                console.error(`[BYPASS] ❌ Error during evaluation: `, bypassError);
+            } else if (isNowComplete && !candidateData.congratulated) {
+                console.log(`[ORCHESTRATOR] 🛋️ Entering Waiting Room.`);
+                responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. Pronto un reclutador te contactará. ✨🌸";
+                candidateUpdates.congratulated = true;
+                await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker');
             }
         }
 
-        // --- COMPLETION & CELEBRATION LOGIC ---
-        if (!isBridgeActive && !isHostMode) {
-            if (isNowComplete && aiResult?.gratitude_reached === true) {
-                aiResult.reaction = '👍';
-            } else if (!aiResult?.reaction && !isRecruiterMode) {
-                aiResult.reaction = null;
-            }
-
-            // 🚫 MOVE SILENCE: If we moved, don't send a reaction to the old message
-            if (hasMoveTag) {
-                console.log(`[RECRUITER BRAIN] 🤫 Silencing reaction for move event.`);
-                aiResult.reaction = null;
-            }
-        }
-
-        let stickerPromise = Promise.resolve();
-        const shouldSendSticker = !isRecruiterMode && (initialStatus === 'INCOMPLETO' && isNowComplete) && !hasBeenCongratulated;
-
-        if (shouldSendSticker) {
-            const stickerUrl = await redis?.get('bot_celebration_sticker');
-            const congratsMsg = "¡Súper! 🌟 Ya tengo tu perfil 100% completo. 📝✅";
-
-            // 🛡️ [SERIAL DELIVERY]: Send congrats + sticker BEFORE the recruiter brain logic
-            // This prevents race conditions and ensures Jim Carrey arrives FIRST
-            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, congratsMsg);
-            if (stickerUrl) await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, stickerUrl, 'sticker');
-
-            await saveMessage(candidateId, { from: 'bot', content: congratsMsg, timestamp: new Date().toISOString() });
-            candidateUpdates.congratulated = true;
-            candidateUpdates.bridge_counter = 0;
-            candidateUpdates.esNuevo = 'NO';
-            responseTextVal = null;
-
-            const finalProjectId = candidateUpdates.projectId || candidateData.projectId;
-            if (finalProjectId) {
-                // 🎯 BYPASS MATCH: Enter project's first step
-                const project = await getProjectById(finalProjectId);
-                const currentStep = project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId)) || project?.steps?.[0];
-                if (currentStep?.aiConfig?.enabled) {
-                    const historyWithCongrats = [...historyForGpt, { from: 'bot', parts: [{ text: congratsMsg }] }];
-                    const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, activeAiConfig.openaiApiKey, currentIdx);
-
-                    if (recruiterResult) {
-                        if (recruiterResult.response_text) responseTextVal = recruiterResult.response_text;
-                        // 🚀 [TRIPLE MERGE]: Re-attach media/metadata/result from recruiter
-                        if (!aiResult) aiResult = {};
-                        if (recruiterResult.media_url) aiResult.media_url = recruiterResult.media_url;
-                        if (recruiterResult.unanswered_question) aiResult.unanswered_question = recruiterResult.unanswered_question;
-                        if (recruiterResult.extracted_data) {
-                            aiResult.extracted_data = { ...aiResult.extracted_data, ...recruiterResult.extracted_data };
-                        }
-                        // Important: Ensure aiResult, which is used for logging, reflects the total thought process
-                        aiResult.thought_process = `[RECRUITER]: ${recruiterResult.thought_process || 'Success'} `;
-                        isNowComplete = true; // Lock in the final state
-                    }
-                }
-            } else {
-                // 🏠 NO PROJECT: Enter waiting room
-                console.log(`[GPT Host] Candidate ${candidateId} completed profile without project.`);
-                candidateUpdates.gratitudAlcanzada = false;
-                candidateUpdates.silencioActivo = false;
-
-                // 🛡️ [SILENCE SAFEGUARD]: Send a waiting room message instead of going silent
-                responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. En un momento uno de nuestros reclutadores revisará tu perfil para vincularte a la vacante ideal. ¡Pronto te contactaremos! ✨🌸";
-            }
-        }
-
+        // --- REACTION LOGIC ---
         let reactionPromise = Promise.resolve();
         if (msgId && config && aiResult?.reaction) {
             reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
