@@ -44,7 +44,9 @@ export class AIGuard {
     static getRecoveryResponse(reason, missingFields, lastInput, isNewFlag = false, extracted = {}, candidateName = null) {
         console.log(`[AI GUARD] 💊 Generating Recovery Response for reason: ${reason}. isNew: ${isNewFlag}`);
 
-        const firstMissing = missingFields && missingFields.length > 0 ? missingFields[0] : 'datos';
+        // 🛡️ [GENDER SUPPRESSION]: Ensure fallback never asks for gender
+        const safeMissing = (missingFields || []).filter(f => f !== 'Género' && f !== 'genero');
+        const firstMissing = safeMissing.length > 0 ? safeMissing[0] : 'datos';
 
         let recoveryText = "";
 
@@ -53,13 +55,13 @@ export class AIGuard {
         } else {
             // Smart Logic: If name is missing but we already have a partial name, ask for surnames
             if (firstMissing === 'Nombre Real' && candidateName && candidateName.length > 2) {
-                recoveryText = `¡Súper! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para completar el registro? 🌸`;
+                recoveryText = `¡Súper! ✨ Ya tengo tu nombre registrado. ¿Me podrías proporcionar tus apellidos para completar el registro? 🌸`;
             } else {
-                // Simple but high-quality recovery templates
+                // Simple but high-quality recovery templates (REFINED: Direct & Professional)
                 const templates = [
-                    `¡Perfecto! ✨ Para continuar con tu registro, ¿me podrías proporcionar tu ${firstMissing}?`,
-                    `¡Excelente decisión! 🌸 Solo me falta tu ${firstMissing} para tener tu perfil listo. ¿Me lo pasas?`,
-                    `¡Súper! ✨ Me falta el dato de tu ${firstMissing} para poder avanzar. ¿Me ayudas con eso?`
+                    `Para continuar con tu registro, ¿me podrías indicar tu ${firstMissing}? ✨`,
+                    `Solo me falta tu ${firstMissing} para tener tu perfil listo. ¿Me lo proporcionas? 🌸`,
+                    `Me falta el dato de tu ${firstMissing} para poder avanzar. ✨`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             }
