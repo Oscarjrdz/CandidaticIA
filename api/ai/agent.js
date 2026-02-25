@@ -47,11 +47,11 @@ export const DEFAULT_CEREBRO1_RULES = `
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = `
-[IDENTIDAD]: Brenda (25), reclutadora de Candidatic. Cálida, tierna, 3 emojis/msg. ✨🌸
+[IDENTIDAD]: Lic. Brenda Rodríguez (25), reclutadora de Candidatic. Cálida, tierna, 3 emojis/msg. ✨🌸
 1. BREVEDAD: Respuestas cortas. No asteriscos (*).
 2. PUENTE: Si < 2h, sé directa. Si > 2h, saluda ("¡Hola de nuevo! ✨").
-3. PROTOCOLO: 1er contacto: "¡Hola! Soy Brenda...". 
-4. ANTI-HOLA: Si el historial muestra que YA saludaste recientemente, NO repitas saludos ni menciones el nombre del candidato en cada frase. Sé fluida como una charla de WhatsApp.
+3. PROTOCOLO: 1er contacto: "¡Hola! Soy la Lic. Brenda Rodríguez...". 
+4. ANTI-HOLA (ESTRICTO): Si el historial muestra que YA saludaste recientemente ([CHARLA_ACTIVA]: TRUE), NO repitas saludos ni menciones el nombre del candidato en cada frase. Sé fluida como una charla de WhatsApp.
 5. ANTI-REPETICIÓN (PENALIDAD FATAL): Está PROHIBIDO usar las mismas frases o estructuras de [MEMORIA DEL HILO]. Si te repites, fallas en tu misión humana. Cambia palabras, orden y estilo.
 [REGLA DE REACCIONES]:
 - El sistema pondrá un 👍 automático si detectas gratitud (gratitude_reached: true).
@@ -116,11 +116,39 @@ function normalizeBirthDate(input) {
                 return { isValid: false, date: null };
             }
 
-            return { isValid: true, date: `${day} /${month}/${year} ` };
         }
     }
 
     return { isValid: false, date: null };
+}
+
+/**
+ * 🧬 COALESCENCE HELPERS (Zuckerberg Standard)
+ * Merges partial data fragments into a complete state.
+ */
+function coalesceName(existing, incoming) {
+    if (!incoming) return existing;
+    if (!existing || /proporcionado|desconocido|luego|privado|\+/i.test(existing)) return incoming;
+
+    const e = String(existing).trim();
+    const i = String(incoming).trim();
+
+    // If incoming is already contained or is a better version of existing
+    if (e.toLowerCase().includes(i.toLowerCase())) return existing;
+    if (i.toLowerCase().includes(e.toLowerCase())) return incoming;
+
+    // Join with space if they seem to be parts (e.g. "Oscar" + "Rodriguez")
+    return `${e} ${i}`;
+}
+
+function coalesceDate(existing, incoming) {
+    if (!incoming) return existing;
+    const normalizedIn = normalizeBirthDate(incoming);
+    if (normalizedIn.isValid) return normalizedIn.date;
+
+    // If existing part exists and new part arrives (e.g. "25" then "Mayo")
+    // For now, satisfy with normalization, but additive logic could go here
+    return incoming;
 }
 
 const getIdentityLayer = (customPrompt = null) => {
@@ -280,11 +308,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const currentIsSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
-- ¿Es Primer Contacto ?: ${isNewFlag && !isProfileComplete ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
+- ¿Es Primer Contacto?: ${isNewFlag && !botHasSpoken ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
+- [CHARLA_ACTIVA]: ${botHasSpoken ? 'TRUE (Omitir presentaciones formales)' : 'FALSE'}
 - Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
 - Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
-- Inactividad: ${minSinceLastBot} min(${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
-\n[REGLA CRÍTICA]: SI[PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente.Sin embargo, SI el usuario provee información nueva o corrige un dato(ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
+- Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
+\n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
 
         // Use Nitro Cached Config
         const aiConfigJson = batchConfig.ai_config;
@@ -726,8 +755,8 @@ ${audit.dnaLines}
   "thought_process": "Breve nota interna"
 }\n`;
 
-            if (isNewFlag && !isProfileComplete) {
-                systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
+            if (isNewFlag && !botHasSpoken) {
+                systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda Rodríguez y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
             } else if (!isProfileComplete) {
                 const cerebro1Rules = (batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES)
                     .replace('{{faltantes}}', audit.missingLabels.join(', '))
@@ -761,15 +790,25 @@ ${audit.dnaLines}
                 isProfileComplete: audit.paso1Status === 'COMPLETO',
                 missingFields: audit.missingLabels,
                 lastInput: aggregatedText,
-                isNewFlag: isNewFlag
+                isNewFlag: isNewFlag,
+                candidateName: candidateData.nombreReal
             };
 
             aiResult = AIGuard.validate(rawJson, guardContext);
             responseTextVal = aiResult.response_text;
 
-            // 🧬 [DUAL-STREAM EXTRACTION]
+            // 🧬 [DUAL-STREAM EXTRACTION & COALESCENCE]
             if (aiResult.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
                 console.log(`[DUAL-STREAM] 🧬 Extracted:`, aiResult.extracted_data);
+
+                // Zuckerberg-Level Coalescence Engine
+                if (aiResult.extracted_data.nombreReal) {
+                    aiResult.extracted_data.nombreReal = coalesceName(candidateData.nombreReal, aiResult.extracted_data.nombreReal);
+                }
+                if (aiResult.extracted_data.fechaNacimiento) {
+                    aiResult.extracted_data.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, aiResult.extracted_data.fechaNacimiento);
+                }
+
                 Object.assign(candidateUpdates, aiResult.extracted_data);
             }
 
