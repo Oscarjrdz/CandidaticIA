@@ -35,14 +35,14 @@ export const DEFAULT_EXTRACTION_RULES = `
    - FECHA: Formato exacto DD/MM/YYYY.
    - ESCOLARIDAD: SOLO acepta: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado. (Ej: "Prepa" -> "Preparatoria"). "Kinder" o "Ninguna" son inválidos.
    - CATEGORÍA: Solo acepta categorías de la lista: {{categorias}}. Si dice "Ayudante", guarda "Ayudante General".
-   - EMPLEO: Solo guarda "Sí" o "No" explícitamente. (Ej: "estoy jalando" -> "Sí", "buscando" -> "No").
+   - EMPLEO: Solo guarda "Empleado" o "Desempleado" explícitamente. (Ej: "estoy jalando" -> "Empleado", "buscando", "no tengo chamba" -> "Desempleado").
 4. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
 5. REGLA TELEFONO: JAMÁS preguntes el número de teléfono/celular. Ya lo tienes (campo 'whatsapp').
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
 [ESTADO: CAPTURISTA BRENDA 📝]:
-1. TU OBJETIVO: Recolectar datos faltantes: {{faltantes}}.
+1. TU OBJETIVO: Recolectar datos faltantes: {{faltantes}}. (Nota: Para empleo, pregunta directamente si el candidato está "Empleado" o "Desempleado").
 2. REGLA DE ORO: Pide solo UN dato a la vez. No abrumes.
 3. TONO: Profesional, tierno y servicial. No pláticas de más, enfócate en llenar el formulario.
 4. VARIACIÓN: Si el usuario insista con el mismo tema social, VARÍA tu respuesta. Nunca digas lo mismo dos veces. ✨
