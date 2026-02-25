@@ -1094,6 +1094,10 @@ ${audit.dnaLines}
         const finalAudit = auditProfile(finalMerged, customFields);
         const isNowComplete = finalAudit.paso1Status === 'COMPLETO';
 
+        // 📝 [STRATEGIC PERSISTENCE]: Save data NOW before bypass or chained AI. 
+        // This prevents data loss if Vercel times out during slow secondary operations.
+        await updateCandidate(candidateId, candidateUpdates);
+
         // 🔀 BYPASS SYSTEM - Automatic Project Routing
         const isBypassEnabled = batchConfig.bypass_enabled === 'true';
         const currentStepName = (project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId))?.name || '')
@@ -1275,7 +1279,6 @@ ${audit.dnaLines}
             }
         }
 
-        const updatePromise = updateCandidate(candidateId, candidateUpdates);
         let reactionPromise = Promise.resolve();
         if (msgId && config && aiResult?.reaction) {
             reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
@@ -1363,8 +1366,7 @@ ${audit.dnaLines}
                 from: 'bot',
                 content: responseTextVal || (aiResult?.reaction ? `[REACCIÓN: ${aiResult.reaction}]` : '[SILENCIO]'),
                 timestamp: new Date().toISOString()
-            }),
-            updatePromise
+            })
         ]);
 
         // 📝 [DEBUG LOG]: Store full trace (Synchronous for Vercel/Serverless reliability)
