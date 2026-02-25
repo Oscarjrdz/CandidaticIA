@@ -646,7 +646,7 @@ ${audit.dnaLines}
                                 if (nextAiResult?.response_text) {
                                     await new Promise(r => setTimeout(r, 800));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
-                                    await saveMessage(candidateId, { from: 'bot', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
+                                    await saveMessage(candidateId, { from: 'me', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
                                     console.log(`[RECRUITER BRAIN] ✅ Chained AI sent for step: ${nextStep.name} `);
                                 } else {
                                     console.warn(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text for step: ${nextStep.name} `);
@@ -715,6 +715,17 @@ ${audit.dnaLines}
         // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
             // 🛡️ [IDENTITY & RULES]
+            let systemInstruction = getIdentityLayer(config.customPrompt);
+
+            // FORCE JSON SCHEMA FOR GEMINI
+            systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
+{
+  "response_text": "Texto para el usuario",
+  "reaction": "Emoji o null",
+  "extracted_data": { "nombreReal": "Valor", "genero": "Valor", ... },
+  "thought_process": "Breve nota interna"
+}\n`;
+
             if (isNewFlag && !isProfileComplete) {
                 systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
             } else if (!isProfileComplete) {
@@ -742,13 +753,15 @@ ${audit.dnaLines}
             const chat = model.startChat({ history: recentHistory });
             const result = await chat.sendMessage(userParts);
             const textResult = result.response.text();
+            console.log(`[GEMINI RAW] 🤖:`, textResult);
 
             // 🛡️ [AI GUARDRAIL]
             const rawJson = AIGuard.sanitizeJSON(textResult);
             const guardContext = {
                 isProfileComplete: audit.paso1Status === 'COMPLETO',
                 missingFields: audit.missingLabels,
-                lastInput: aggregatedText
+                lastInput: aggregatedText,
+                isNewFlag: isNewFlag
             };
 
             aiResult = AIGuard.validate(rawJson, guardContext);
@@ -905,7 +918,7 @@ ${audit.dnaLines}
             reactionPromise,
             updateCandidate(candidateId, candidateUpdates),
             saveMessage(candidateId, {
-                from: 'bot',
+                from: 'me',
                 content: responseTextVal || (aiResult?.reaction ? `[REACCIÓN: ${aiResult.reaction}]` : '[SILENCIO]'),
                 timestamp: new Date().toISOString()
             })

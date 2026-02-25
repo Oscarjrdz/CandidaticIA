@@ -11,13 +11,16 @@ export class AIGuard {
      * @returns {Object} Validated and recovered AI response.
      */
     static validate(aiResult, context) {
-        const { isProfileComplete, missingFields, lastInput } = context;
+        const { isProfileComplete, missingFields, lastInput, isNewFlag } = context;
 
-        console.log(`[AI GUARD] 🛡️ Validating response. Profile Complete: ${isProfileComplete}`);
+        console.log(`[AI GUARD] 🛡️ Validating response. Profile Complete: ${isProfileComplete} | New: ${isNewFlag}`);
+
+        // Extract any data present even if response_text is missing/malformed
+        const extracted = aiResult?.extracted_data || {};
 
         // 1. Basic JSON/Null Check
         if (!aiResult) {
-            return this.getRecoveryResponse("FALLBACK_NULL", missingFields, lastInput);
+            return this.getRecoveryResponse("FALLBACK_NULL", missingFields, lastInput, isNewFlag, extracted);
         }
 
         const responseText = aiResult.response_text;
@@ -26,11 +29,11 @@ export class AIGuard {
         // 2. Silence Detection for Incomplete Profiles
         if (hasEmptyResponse && !isProfileComplete) {
             console.warn(`[AI GUARD] 🚨 Silence detected on incomplete profile. Triggering Recovery.`);
-            return this.getRecoveryResponse("FALLBACK_SILENCE", missingFields, lastInput);
+            return this.getRecoveryResponse("FALLBACK_SILENCE", missingFields, lastInput, isNewFlag, extracted);
         }
 
-        // 3. Logic Consistency (e.g., gratitude reached but still asking for data)
-        // (Add more premium logic here later)
+        // Ensure extracted data is preserved
+        aiResult.extracted_data = extracted;
 
         return aiResult;
     }
@@ -38,27 +41,30 @@ export class AIGuard {
     /**
      * Generates a deterministic recovery response based on the missing data.
      */
-    static getRecoveryResponse(reason, missingFields, lastInput) {
-        console.log(`[AI GUARD] 💊 Generating Recovery Response for reason: ${reason}`);
+    static getRecoveryResponse(reason, missingFields, lastInput, isNewFlag = false, extracted = {}) {
+        console.log(`[AI GUARD] 💊 Generating Recovery Response for reason: ${reason}. isNew: ${isNewFlag}`);
 
         const firstMissing = missingFields && missingFields.length > 0 ? missingFields[0] : 'datos';
 
         let recoveryText = "";
 
-        // Simple but high-quality recovery templates
-        const templates = [
-            `¡Perfecto! ✨ Para continuar con tu registro, ¿me podrías proporcionar tu ${firstMissing}?`,
-            `¡Excelente decisión! 🌸 Solo me falta tu ${firstMissing} para tener tu perfil listo. ¿Me lo pasas?`,
-            `¡Súper! ✨ Me falta el dato de tu ${firstMissing} para poder avanzar. ¿Me ayudas con eso?`
-        ];
-
-        recoveryText = templates[Math.floor(Math.random() * templates.length)];
+        if (isNewFlag) {
+            recoveryText = `¡Hola! ✨ Soy la Lic. Brenda de Candidatic. 🌸 Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`;
+        } else {
+            // Simple but high-quality recovery templates
+            const templates = [
+                `¡Perfecto! ✨ Para continuar con tu registro, ¿me podrías proporcionar tu ${firstMissing}?`,
+                `¡Excelente decisión! 🌸 Solo me falta tu ${firstMissing} para tener tu perfil listo. ¿Me lo pasas?`,
+                `¡Súper! ✨ Me falta el dato de tu ${firstMissing} para poder avanzar. ¿Me ayudas con eso?`
+            ];
+            recoveryText = templates[Math.floor(Math.random() * templates.length)];
+        }
 
         return {
             response_text: recoveryText,
             thought_process: `RECOVERY_TRIGGERED: ${reason}. Manual fallback due to AI failure.`,
-            reaction: '✨',
-            extracted_data: {},
+            reaction: isNewFlag ? '✨' : null, // Only react on first message to reduce spark spam
+            extracted_data: extracted, // 🧬 CRITICAL: Keep what the AI *did* manage to extract
             gratitude_reached: false,
             close_conversation: false,
             recovery_active: true
