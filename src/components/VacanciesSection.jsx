@@ -337,6 +337,49 @@ const VacanciesSection = ({ showToast }) => {
             setLoadingFaqs(false);
         }
     };
+
+    const handleFaqImageSelect = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !uploadingFaqId) return;
+
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Archivo demasiado grande (Máx 5MB)', 'error');
+            return;
+        }
+
+        try {
+            const reader = new FileReader();
+            const base64Promise = new Promise(resolve => {
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(file);
+            });
+            const base64 = await base64Promise;
+
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64 })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                const mediaUrl = `${window.location.origin}${data.url}`;
+                // Actualizar localmente el FAQ
+                setFaqs(current => current.map(f =>
+                    f.id === uploadingFaqId ? { ...f, mediaUrl } : f
+                ));
+                showToast('Imagen subida correctamente. Recuerda guardar el FAQ.', 'success');
+            } else {
+                showToast('Error al subir imagen', 'error');
+            }
+        } catch (err) {
+            console.error('Upload error:', err);
+            showToast('Error de conexión al subir', 'error');
+        } finally {
+            setUploadingFaqId(null);
+            if (e.target) e.target.value = '';
+        }
+    };
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
         { label: 'WhatsApp', value: '{{whatsapp}}' },
