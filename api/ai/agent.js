@@ -1,3 +1,4 @@
+// Deployment trigger: Rollback to stable version confirmed.
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { processUnansweredQuestion } from './faq-engine.js';
 import axios from "axios";
