@@ -63,8 +63,9 @@ export class AIGuard {
         if (isNewFlag && reason !== 'FALLBACK_REPETITION') {
             recoveryText = `¡Hola! ✨ Soy la Lic. Brenda Rodríguez de Candidatic. 🌸 Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`;
         } else {
-            // Smart Logic: If name is missing but we already have a partial name, ask for surnames
-            if (firstMissing === 'Nombre Real' && candidateName && candidateName.length > 2) {
+            const nameWords = candidateName ? candidateName.trim().split(/\s+/).length : 0;
+            // Smart Logic: Only ask for surnames if we *only* have a first name (1 word)
+            if (firstMissing === 'Nombre Real' && nameWords === 1) {
                 recoveryText = `¡Súper! ✨ Ya tengo tu nombre registrado. ¿Me podrías proporcionar tus apellidos para completar el registro? 🌸`;
             } else if (reason === 'FALLBACK_REPETITION') {
                 // Specific variation for repetition to break the loop

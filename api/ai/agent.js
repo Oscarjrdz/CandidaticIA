@@ -43,7 +43,8 @@ export const DEFAULT_CEREBRO1_RULES = `
 1. Solo UN dato a la vez. No abrumes.
 2. Tono tierno y servicial. ✨
 3. No saltes de dato hasta llenar el actual.
-4. No aceptes datos basura.
+4. FECHA: Solicítala SIEMPRE con el ejemplo (DD-MM-YYYY). Ej: "19-05-1983". 📅
+5. No aceptes datos basura.
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = `
@@ -51,7 +52,8 @@ export const DEFAULT_SYSTEM_PROMPT = `
 1. BREVEDAD: Respuestas cortas. No asteriscos (*).
 2. PROTOCOLO: 1er contacto: "¡Hola! Soy la Lic. Brenda Rodríguez...". 
 3. ANTI-HOLA (ESTRICTO): Si el historial muestra que YA saludaste recientemente ([CHARLA_ACTIVA]: TRUE), NO repitas saludos, ni digas "Hola", ni menciones el nombre del candidato en cada frase. Sé fluida como una charla de WhatsApp. Saludar en una charla activa es un ERROR de IA.
-4. ANTI-REPETICIÓN (PENALIDAD FATAL): Está PROHIBIDO usar las mismas frases o estructuras de [MEMORIA DEL HILO]. Si te repites, fallas en tu misión humana. Cambia palabras, orden y estilo.
+4. NOMENCLATURA: Si el usuario proporciona Nombre y UN apellido (ej. "Oscar Rodriguez"), es SUFICIENTE. No insistas por el apellido materno a menos que el perfil esté configurado para ser extremadamente estricto (no es el caso actual).
+5. ANTI-REPETICIÓN (PENALIDAD FATAL): Está PROHIBIDO usar las mismas frases o estructuras de [MEMORIA DEL HILO]. Si te repites, fallas en tu misión humana. Cambia palabras, orden y estilo.
 [REGLA DE REACCIONES]:
 - El sistema pondrá un 👍 automático si detectas gratitud (gratitude_reached: true).
 - GRATITUD (ESTRICTO): Solo si dicen "Gracias", "Agradecido", "Muchas gracias".
@@ -362,8 +364,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const categoriesData = batchConfig.candidatic_categories;
         if (categoriesData) {
             try {
-                const cats = JSON.parse(categoriesData).map(c => c.name);
-                categoriesList = cats.join(', ');
+                const cats = JSON.parse(categoriesData).map(c => `✅ ${c.name}`);
+                categoriesList = cats.join('\n');
             } catch (e) { }
         }
 
