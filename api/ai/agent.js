@@ -43,7 +43,7 @@ export const DEFAULT_CEREBRO1_RULES = `
 1. Solo UN dato a la vez. No abrumes.
 2. Tono tierno y servicial. ✨
 3. No saltes de dato hasta llenar el actual.
-4. FECHA: Solicítala SIEMPRE con el ejemplo (DD-MM-YYYY). Ej: "19-05-1983". 📅
+4. FECHA: Solicítala de forma natural con un ejemplo. Ej: "¿Me podrías proporcionar tu fecha de nacimiento? Por ejemplo: 19-05-1983. 📅". Evita decir "en formato DD-MM-YYYY".
 5. No aceptes datos basura.
 `;
 
