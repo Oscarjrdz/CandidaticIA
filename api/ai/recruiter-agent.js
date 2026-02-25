@@ -203,37 +203,37 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         delete vacancyContextForJson.faqs; // Remove from JSON blob — shown in its own section
 
         const systemPrompt = `
-[IDENTIDAD BASE Y PERSONALIDAD]:
-${RECRUITER_IDENTITY}
+[FUENTES DE VERDAD - CONSULTAR ANTES DE RESPONDER]:
+
+[PREGUNTAS FRECUENTES OFICIALES - PRIORIDAD MÁXIMA]:
+${faqsForPrompt
+                ? `Las siguientes respuestas HAN SIDO APROBADAS. ÚSALAS para responder dudas relacionadas:\n${faqsForPrompt}`
+                : 'No hay respuestas oficiales registradas aún. Si preguntan algo no listado aquí o abajo, usa el fallback de duda.'}
 
 [DATOS REALES DE LA VACANTE]:
 ${JSON.stringify(vacancyContextForJson)}
 
+[IDENTIDAD BASE Y PERSONALIDAD]:
+${RECRUITER_IDENTITY}
+
 ${adnContext}
 ${repetitionShield}
 
-[PREGUNTAS FRECUENTES OFICIALES - PRIORIDAD MÁXIMA AL RESPONDER DUDAS]:
-${faqsForPrompt
-                ? `Las siguientes respuestas YA HAN SIDO APROBADAS por el equipo. ÚSALAS EXACTAMENTE como están escritas cuando el candidato pregunte sobre esos temas. NO improvises ni cambies estas respuestas:\n${faqsForPrompt}`
-                : 'No hay respuestas oficiales registradas aún. Si el candidato pregunta algo que no está en [DATOS REALES DE LA VACANTE], ponlo en "unanswered_question".'}
-
 [INSTRUCCIONES DE ACTUACIÓN]:
-1. PRIORIDAD DE INFORMACIÓN: Al responder dudas, busca siempre primero en [PREGUNTAS FRECUENTES OFICIALES]. Si la información no está ahí, busca en [DATOS REALES DE LA VACANTE].
-2. COMPRENSIÓN SEMÁNTICA (FAQ): En [PREGUNTAS FRECUENTES OFICIALES], un tema como "Uniforme" o "Vestimenta" puede cubrir dudas sobre "guaraches", "tenis", "playera", etc. Sé flexible: si el tema o la respuesta oficial cubren la duda del candidato (aunque use palabras diferentes), RESPÓNDELA usando esa info.
-3. RADAR DE DUDAS: Solo si la respuesta NO existe de ninguna forma en las fuentes mencionadas (o es una duda totalmente nueva), responde que lo verificarás y captura la duda en "unanswered_question".
-4. PRIORIDAD SUPREMA: El [OBJETIVO DE ESTE PASO] dicta qué debes decir. Tu personalidad de Brenda dicta CÓMO lo dices.
-5. REGLA DE PIVOTEO: Si el candidato dice que NO le interesa la vacante actual, NO cierres la conversación. Ofrece una de las [VACANTES ALTERNATIVAS].
-6. ESPECIFICIDAD: Si no tienes un dato en [DATOS REALES DE LA VACANTE], dilo honestamente. No inventes.
-7. JSON OBLIGATORIO.
-8. 🎯 OFERTA DE ENTREVISTA SIEMPRE: Después de responder cualquier duda del candidato (sueldo, horario, beneficios, etc.), SIEMPRE termina tu mensaje ofreciendo agendar la entrevista. Ejemplo: "¿Te gustaría agendar tu entrevista? 💖". NUNCA dejes la conversación sin esta invitación después de resolver una pregunta.
+1. PRIORIDAD: Al responder dudas, busca siempre primero en [PREGUNTAS FRECUENTES OFICIALES] (uso semántico permitido).
+2. RADAR DE DUDAS: Solo si la respuesta NO existe en las fuentes mencionadas, usa el fallback y captura en "unanswered_question".
+3. PRIORIDAD SUPREMA: El [OBJETIVO DE ESTE PASO] dicta qué debes decir. Tu personalidad de Brenda dicta CÓMO lo dices.
+4. REGLA DE PIVOTEO: Si el candidato rechaza la vacante actual, ofrece una de las [VACANTES ALTERNATIVAS].
+5. JSON OBLIGATORIO.
+6. 🎯 OFERTA DE ENTREVISTA: Siempre termina ofreciendo agendar después de resolver una duda.
 
-[VACANTES ALTERNATIVAS (PARA PIVOTEO - AÚN NO VISTAS)]:
+[VACANTES ALTERNATIVAS]:
 ${alternatives.length > 0
-                ? `Las siguientes vacantes están disponibles si el candidato rechaza la actual. Preséntala como opción SOLO si rechaza explícitamente.\n${JSON.stringify(alternatives)}`
-                : "No hay más vacantes disponibles. Si el candidato rechaza esta, dispara { move: exit }."}
+                ? JSON.stringify(alternatives)
+                : "No hay más vacantes disponibles."}
 
 ---
-[OBJETIVO ACTUAL DE ESTE PASO - ¡SÍGUELO AHORA!]:
+[OBJETIVO ACTUAL DE ESTE PASO]:
 "${finalPrompt}"
 ---
 `;
