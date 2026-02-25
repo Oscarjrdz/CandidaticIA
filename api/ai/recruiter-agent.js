@@ -142,7 +142,11 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                         if (answeredFaqs.length > 0) {
                             vacancyContext.faqs = answeredFaqs.map(f => {
                                 const keywords = f.originalQuestions ? ` (Palabras clave: ${f.originalQuestions.join(', ')})` : '';
-                                const mediaNote = f.mediaUrl ? ` [MEDIA_DISPONIBLE: ${f.mediaUrl}]` : '';
+                                let mUrl = f.mediaUrl || '';
+                                if (mUrl && mUrl.startsWith('/api/')) {
+                                    mUrl = `https://candidatic.ia${mUrl}`;
+                                }
+                                const mediaNote = mUrl ? ` [MEDIA_DISPONIBLE: ${mUrl}]` : '';
                                 return `- TEMA: "${f.topic}"${keywords}${mediaNote}\n  RESPUESTA OFICIAL: "${f.officialAnswer}"`;
                             }).join('\n');
                         }

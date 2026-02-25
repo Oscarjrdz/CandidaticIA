@@ -1297,9 +1297,33 @@ ${audit.dnaLines}
             deliveryPromise = (async () => {
                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
                 if (aiResult?.media_url && aiResult.media_url !== 'null') {
-                    const mUrl = aiResult.media_url;
+                    let mUrl = aiResult.media_url;
+                    // Ensure absolute URL for UltraMsg
+                    if (mUrl && mUrl.startsWith('/api/')) {
+                        mUrl = `https://candidatic.ia${mUrl}`;
+                    }
+                    const mUrlForDetect = mUrl;
                     // Detect if it's a PDF by extension or URL pattern
-                    const isPdf = mUrl.toLowerCase().includes('.pdf') || mUrl.includes('mime=application%2Fpdf');
+                    let isPdf = mUrl.toLowerCase().includes('.pdf') || mUrl.includes('mime=application%2Fpdf');
+
+                    // DEEP DETECTION: Query Redis for internal URLs to guarantee document type
+                    if (mUrl.includes('/api/image')) {
+                        try {
+                            const urlObj = new URL(mUrl, 'https://candidatic.ia');
+                            const mediaId = urlObj.searchParams.get('id');
+                            if (mediaId) {
+                                const redis = getRedisClient();
+                                if (redis) {
+                                    const metaRaw = await redis.get(`meta:image:${mediaId}`);
+                                    if (metaRaw) {
+                                        const meta = JSON.parse(metaRaw);
+                                        if (meta.mime === 'application/pdf') isPdf = true;
+                                    }
+                                }
+                            }
+                        } catch (e) { console.warn('[MEDIA DELIVERY] Deep detection failed:', e.message); }
+                    }
+
                     const filename = isPdf ? 'Informacion.pdf' : 'Imagen.jpg';
                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename });
                     console.log(`[MEDIA DELIVERY] Sent ${isPdf ? 'PDF' : 'IMAGE'}: ${mUrl}`);
