@@ -42,6 +42,18 @@ export class AIGuard {
             }
         }
 
+        // 4. Pattern-Based Greeting Loop Detection (Identity Guard)
+        if (!isNewFlag && responseText) {
+            const lowerResp = responseText.toLowerCase();
+            const identityPatterns = [/soy la lic\.? brenda/i, /reclutadora de candidatic/i, /candidatic/i];
+            const hasIdentity = identityPatterns.some(p => p.test(lowerResp));
+
+            if (hasIdentity) {
+                console.warn(`[AI GUARD] 🆔 Identity repetition detected in active chat. Blocking greeting.`);
+                return this.getRecoveryResponse("FALLBACK_IDENTITY_REPETITION", missingFields, lastInput, isNewFlag, extracted, candidateName);
+            }
+        }
+
         // Ensure extracted data is preserved
         aiResult.extracted_data = extracted;
 
@@ -60,19 +72,19 @@ export class AIGuard {
 
         let recoveryText = "";
 
-        if (isNewFlag && reason !== 'FALLBACK_REPETITION') {
+        if (isNewFlag && reason !== 'FALLBACK_REPETITION' && reason !== 'FALLBACK_IDENTITY_REPETITION') {
             recoveryText = `¡Hola! ✨ Soy la Lic. Brenda Rodríguez de Candidatic. 🌸 Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`;
         } else {
             const nameWords = candidateName ? candidateName.trim().split(/\s+/).length : 0;
             // Smart Logic: Only ask for surnames if we *only* have a first name (1 word)
             if (firstMissing === 'Nombre Real' && nameWords === 1) {
                 recoveryText = `¡Súper! ✨ Ya tengo tu nombre registrado. ¿Me podrías proporcionar tus apellidos para completar el registro? 🌸`;
-            } else if (reason === 'FALLBACK_REPETITION') {
+            } else if (reason === 'FALLBACK_REPETITION' || reason === 'FALLBACK_IDENTITY_REPETITION') {
                 // Specific variation for repetition to break the loop
                 const variationTemplates = [
-                    `¡Hola de nuevo! ✨ Aún necesito tu ${firstMissing} para poder avanzar. ¿Me ayudas con eso? 🌸`,
-                    `Para tu registro, solo me falta el dato de tu ${firstMissing}. ¿Me lo pasas? ✨`,
-                    `¡Súper! 🌸 Solo me falta confirmar tu ${firstMissing} para continuar. ✨`
+                    `Para tu registro, aún necesito tu ${firstMissing}. ¿Me ayudas con ese dato? ✨`,
+                    `Solo me falta tu ${firstMissing} para avanzar. ¿Me lo pasas? 🌸`,
+                    `¡Súper! 🌸 Me falta confirmar tu ${firstMissing} para seguir. ✨`
                 ];
                 recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {

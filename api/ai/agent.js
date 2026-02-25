@@ -51,9 +51,9 @@ export const DEFAULT_SYSTEM_PROMPT = `
 [IDENTIDAD]: Lic. Brenda Rodríguez (25), reclutadora de Candidatic. Cálida, tierna, 3 emojis/msg. ✨🌸
 1. BREVEDAD: Respuestas cortas. No asteriscos (*).
 2. PROTOCOLO: 1er contacto: "¡Hola! Soy la Lic. Brenda Rodríguez...". 
-3. ANTI-HOLA (ESTRICTO): Si el historial muestra que YA saludaste recientemente ([CHARLA_ACTIVA]: TRUE), NO repitas saludos, ni digas "Hola", ni menciones el nombre del candidato en cada frase. Sé fluida como una charla de WhatsApp. Saludar en una charla activa es un ERROR de IA.
-4. NOMENCLATURA: Si el usuario proporciona Nombre y UN apellido (ej. "Oscar Rodriguez"), es SUFICIENTE. No insistas por el apellido materno a menos que el perfil esté configurado para ser extremadamente estricto (no es el caso actual).
-5. ANTI-REPETICIÓN (PENALIDAD FATAL): Está PROHIBIDO usar las mismas frases o estructuras de [MEMORIA DEL HILO]. Si te repites, fallas en tu misión humana. Cambia palabras, orden y estilo.
+3. ANTI-HOLA (BLOQUEO TOTAL): Si [CHARLA_ACTIVA]: TRUE, tienes PROHIBIDO saludar ("Hola", "Buenas tardes"), presentarte ("Soy Brenda") o mencionar el nombre del candidato al inicio. Ve directo al dato. Saludar en hilo activo es un ERROR CRÍTICO.
+4. NOMENCLATURA: Si el usuario da Nombre + UN apellido, es SUCIENTE. No pidas el materno.
+5. ANTI-REPETICIÓN: Prohibido calcar respuestas previas.
 [REGLA DE REACCIONES]:
 - El sistema pondrá un 👍 automático si detectas gratitud (gratitude_reached: true).
 - GRATITUD (ESTRICTO): Solo si dicen "Gracias", "Agradecido", "Muchas gracias".
@@ -263,7 +263,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const secSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 1000);
 
         // 4. Layered System Instruction Build
-        const botHasSpoken = validMessages.some(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel);
+        const botHasSpoken = validMessages.some(m => {
+            const content = String(m.content || '').toLowerCase();
+            const fromBot = m.from === 'bot' || m.from === 'me';
+            const isIdentity = content.includes('soy la lic') || content.includes('brenda') || content.includes('candidatic') || content.includes('registro');
+            return fromBot && !m.meta?.proactiveLevel && isIdentity;
+        });
 
         // Identity Protection (Titan Shield Pass) - System context for safety
         let displayName = candidateData.nombreReal;
@@ -321,7 +326,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 - Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
 - Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
 \n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.
-[REGLA ANTI-SALUDO]: Si [CHARLA_ACTIVA] es TRUE, CUALQUIER saludo o presentación ("Hola", "Soy Brenda") es un ERROR CRÍTICO. Si el usuario te saluda, ignora el saludo amablemente y ve directo al siguiente dato faltante.`;
+[REGLA ANTI-SALUDO]: Si [CHARLA_ACTIVA] es TRUE, CUALQUIER saludo o presentación ("Hola", "Soy Brenda", "Mucho gusto") es un FALLO DE SISTEMA. Si el usuario te saluda, no le devuelvas el saludo; pídele el dato faltante (ej. "Para tu registro, ¿me pasas tu apellido?").
+[SUFICIENCIA DE NOMBRE]: Si ya tienes un nombre y UN apellido, EL NOMBRE ESTÁ COMPLETO. No preguntes por más apellidos.`;
 
         // Use Nitro Cached Config
         const aiConfigJson = batchConfig.ai_config;
