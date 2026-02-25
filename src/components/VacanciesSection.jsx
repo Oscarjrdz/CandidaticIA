@@ -378,7 +378,8 @@ const VacanciesSection = ({ showToast }) => {
             const data = await res.json();
 
             if (data.success) {
-                const mediaUrl = `${window.location.origin}${data.url}`;
+                const extension = data.mime === 'application/pdf' ? '&ext=.pdf' : '&ext=.jpg';
+                const mediaUrl = `${window.location.origin}${data.url}${extension}`;
                 // Actualizar localmente el FAQ
                 setFaqs(current => current.map(f =>
                     f.id === uploadingFaqId ? { ...f, mediaUrl } : f

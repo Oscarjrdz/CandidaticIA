@@ -855,7 +855,6 @@ ${audit.dnaLines}
                     }
 
                     // 🕵️ INTERRUPTION DETECTION
-                    // Check if user asked a question instead of answering
                     const interruptionKeywords = ['cuanto', 'cuánto', 'donde', 'dónde', 'que', 'qué', 'como', 'cómo', 'pagan', 'sueldo', 'ubicacion', 'ubicación', 'horario', 'prestaciones'];
                     const isInterruption = interruptionKeywords.some(kw => aggregatedText.toLowerCase().includes(kw));
 
@@ -1300,8 +1299,9 @@ ${audit.dnaLines}
                 if (aiResult?.media_url && aiResult.media_url !== 'null') {
                     const mUrl = aiResult.media_url;
                     // Detect if it's a PDF by extension or URL pattern
-                    const isPdf = mUrl.toLowerCase().split(/[?#]/)[0].endsWith('.pdf') || mUrl.includes('mime=application%2Fpdf');
-                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image');
+                    const isPdf = mUrl.toLowerCase().includes('.pdf') || mUrl.includes('mime=application%2Fpdf');
+                    const filename = isPdf ? 'Informacion.pdf' : 'Imagen.jpg';
+                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename });
                     console.log(`[MEDIA DELIVERY] Sent ${isPdf ? 'PDF' : 'IMAGE'}: ${mUrl}`);
                 }
             })();
