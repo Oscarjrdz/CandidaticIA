@@ -756,6 +756,7 @@ ${audit.dnaLines}
             systemInstruction += `\n[TUS RESPUESTAS ANTERIORES - LEE ESTO CON ATENCIÓN]:\n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Primera interacción)'}\n⚠️ REGLA DE ORIGINALIDAD: Tu próxima respuesta debe sonar COMPLETAMENTE DIFERENTE a cualquiera de las anteriores. No repitas la misma apertura, el mismo tono de broma, ni la misma estructura de frase. Si sientes que tu respuesta se parece a alguna de las anteriores, reescríbela desde cero con otro enfoque. \n`;
 
             systemInstruction += `\n[REGLAS DE EXTRACCIÓN ESTRICTA PARA JSON]:
+- tieneEmpleo: DEBE ser uno de estos valores exactos: "Empleado" o "Desempleado". Si el usuario indica que trabaja o tiene "chamba", pon "Empleado". Si indica que está buscando, no tiene trabajo o está libre, pon "Desempleado".
 - escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería". Si dice "secu", pon "Secundaria". Si dice "prepa", pon "Preparatoria".
 - categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato. Si dice "Ayudante", pon "Ayudante General".
 - municipio: Usa tu comprensión del español y del contexto mexicano. Si el candidato de cualquier forma implica dónde vive — ya sea directamente ("Escobedo", "Monterrey"), en una frase ("Vivo en Escobedo", "Soy de Apodaca", "Del otro lado de Monterrey") o con rodeos — extrae la localidad. No esperes un formato específico. Confía en tu entendimiento del idioma.
@@ -764,7 +765,7 @@ ${audit.dnaLines}
 
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
             {
-                "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Si | No | null", "escolaridad": "string | null", "edad": "number | null" },
+                "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Empleado | Desempleado | null", "escolaridad": "string | null", "edad": "number | null" },
                 "thought_process": "Razonamiento.",
                     "reaction": "null",
                         "trigger_media": "string | null",
