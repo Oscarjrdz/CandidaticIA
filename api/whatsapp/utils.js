@@ -45,7 +45,13 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
 
         switch (endpoint) {
             case 'image':
-                payload.image = isHttp ? (body.includes('?') ? `${body}&ext=.jpg` : `${body}?ext=.jpg`) : body;
+                let imgUrl = body;
+                if (isHttp && imgUrl.includes('/api/image?id=')) {
+                    imgUrl = imgUrl.replace(/\/api\/image\?id=([^&]+).*/, '/api/media/$1.jpg');
+                } else if (isHttp) {
+                    imgUrl = imgUrl.includes('?') ? `${imgUrl}&ext=.jpg` : `${imgUrl}?ext=.jpg`;
+                }
+                payload.image = imgUrl;
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'video':
@@ -53,7 +59,14 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'document':
-                payload.document = isHttp ? (body.includes('.pdf') ? body : (body.includes('?') ? `${body}&ext=.pdf` : `${body}?ext=.pdf`)) : body;
+                let docUrl = body;
+                if (isHttp && docUrl.includes('/api/image?id=')) {
+                    // Transform to clean path: /api/media/ID.pdf
+                    docUrl = docUrl.replace(/\/api\/image\?id=([^&]+).*/, '/api/media/$1.pdf');
+                } else if (isHttp && !docUrl.includes('.pdf')) {
+                    docUrl = docUrl.includes('?') ? `${docUrl}&ext=.pdf` : `${docUrl}?ext=.pdf`;
+                }
+                payload.document = docUrl;
                 payload.filename = extraParams.filename || 'document.pdf';
                 break;
             case 'sticker':

@@ -1293,8 +1293,9 @@ ${audit.dnaLines}
 
         if (responseTextVal && (!aiResult?.media_url || aiResult.media_url === 'null')) {
             // [MEDIA RECOVERY]: If Brenda leaked the link into text but forgot the JSON field, recover it
-            const mediaApiPattern = /https?:\/\/[^/]+\/api\/(image|upload)\?id=[^\s\)]+/i;
-            const match = responseTextVal.match(mediaApiPattern);
+            // Matches both /api/image?id=... and /api/media/ID.ext
+            const mediaPattern = /https?:\/\/[^/]+\/api\/(image\?id=|media\/)([^\s\)]+)/i;
+            const match = responseTextVal.match(mediaPattern);
             if (match) {
                 if (!aiResult) aiResult = {};
                 aiResult.media_url = match[0];
@@ -1319,7 +1320,10 @@ ${audit.dnaLines}
                     let mUrl = aiResult.media_url;
                     // Ensure absolute URL for UltraMsg
                     if (mUrl && mUrl.startsWith('/api/')) {
-                        mUrl = `https://candidatic.ia${mUrl}`;
+                        mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
+                    } else if (mUrl && mUrl.includes('candidatic.ia') && !mUrl.includes('vercel.app')) {
+                        // Switch to the technical domain which is more reliable for crawlers
+                        mUrl = mUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
                     }
                     const mUrlForDetect = mUrl;
                     // Detect if it's a PDF by extension or URL pattern
