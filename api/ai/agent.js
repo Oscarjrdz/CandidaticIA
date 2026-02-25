@@ -318,8 +318,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 - [CHARLA_ACTIVA]: ${botHasSpoken ? 'TRUE (Omitir presentaciones formales)' : 'FALSE'}
 - Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
 - Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
-- Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
-\n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
+\n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.
+[REGLA ANTI-SALUDO]: Si [CHARLA_ACTIVA] es TRUE, CUALQUIER saludo o presentación ("Hola", "Soy Brenda") es un ERROR CRÍTICO. Si el usuario te saluda, ignora el saludo amablemente y ve directo al siguiente dato faltante.`;
 
         // Use Nitro Cached Config
         const aiConfigJson = batchConfig.ai_config;
@@ -372,13 +372,15 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             .replace('{{categorias}}', categoriesList)
             .replace('CATEGORÍAS VÁLIDAS: ', `CATEGORÍAS VÁLIDAS: ${categoriesList} `);
 
+        const safeDnaLines = audit.dnaLines.split('\n').filter(l => !l.toLowerCase().includes('género') && !l.toLowerCase().includes('genero')).join('\n');
+
         systemInstruction += `\n[ESTADO DEL CANDIDATO]:
 - Perfil Completo: ${audit.paso1Status === 'COMPLETO' ? 'SÍ' : 'NO'}
 - Nombre Real: ${candidateData.nombreReal || 'No proporcionado'}
 - WhatsApp: ${candidateData.whatsapp}
 - Municipio: ${candidateData.municipio || 'No proporcionado'}
 - Categoría: ${candidateData.categoria || 'No proporcionado'}
-${audit.dnaLines}
+${safeDnaLines}
 - Temas recientes: ${themes || 'Nuevo contacto'}
 \n[CATEGORÍAS VÁLIDAS EN EL SISTEMA]: ${categoriesList} \n
 \n${extractionRules} `;
@@ -797,7 +799,8 @@ ${audit.dnaLines}
                 missingFields: audit.missingLabels,
                 lastInput: aggregatedText,
                 isNewFlag: isNewFlag,
-                candidateName: candidateData.nombreReal
+                candidateName: candidateData.nombreReal,
+                lastBotMessages: lastBotMessages
             };
 
             aiResult = AIGuard.validate(rawJson, guardContext);

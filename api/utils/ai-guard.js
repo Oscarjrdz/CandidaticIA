@@ -11,7 +11,7 @@ export class AIGuard {
      * @returns {Object} Validated and recovered AI response.
      */
     static validate(aiResult, context) {
-        const { isProfileComplete, missingFields, lastInput, isNewFlag, candidateName } = context;
+        const { isProfileComplete, missingFields, lastInput, isNewFlag, candidateName, lastBotMessages } = context;
 
         console.log(`[AI GUARD] 🛡️ Validating response. Profile Complete: ${isProfileComplete} | New: ${isNewFlag}`);
 
@@ -32,6 +32,16 @@ export class AIGuard {
             return this.getRecoveryResponse("FALLBACK_SILENCE", missingFields, lastInput, isNewFlag, extracted, candidateName);
         }
 
+        // 3. Duplicate Detection (Anti-Loop)
+        if (responseText && lastBotMessages && lastBotMessages.length > 0) {
+            const normalizedResp = responseText.trim().toLowerCase();
+            const isDuplicate = lastBotMessages.some(m => m.toLowerCase() === normalizedResp);
+            if (isDuplicate) {
+                console.warn(`[AI GUARD] 🔄 Repetition detected: "${responseText.substring(0, 30)}...". Triggering Recovery.`);
+                return this.getRecoveryResponse("FALLBACK_REPETITION", missingFields, lastInput, isNewFlag, extracted, candidateName);
+            }
+        }
+
         // Ensure extracted data is preserved
         aiResult.extracted_data = extracted;
 
@@ -50,12 +60,20 @@ export class AIGuard {
 
         let recoveryText = "";
 
-        if (isNewFlag) {
+        if (isNewFlag && reason !== 'FALLBACK_REPETITION') {
             recoveryText = `¡Hola! ✨ Soy la Lic. Brenda Rodríguez de Candidatic. 🌸 Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`;
         } else {
             // Smart Logic: If name is missing but we already have a partial name, ask for surnames
             if (firstMissing === 'Nombre Real' && candidateName && candidateName.length > 2) {
                 recoveryText = `¡Súper! ✨ Ya tengo tu nombre registrado. ¿Me podrías proporcionar tus apellidos para completar el registro? 🌸`;
+            } else if (reason === 'FALLBACK_REPETITION') {
+                // Specific variation for repetition to break the loop
+                const variationTemplates = [
+                    `¡Hola de nuevo! ✨ Aún necesito tu ${firstMissing} para poder avanzar. ¿Me ayudas con eso? 🌸`,
+                    `Para tu registro, solo me falta el dato de tu ${firstMissing}. ¿Me lo pasas? ✨`,
+                    `¡Súper! 🌸 Solo me falta confirmar tu ${firstMissing} para continuar. ✨`
+                ];
+                recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {
                 // Simple but high-quality recovery templates (REFINED: Direct & Professional)
                 const templates = [
