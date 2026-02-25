@@ -27,28 +27,20 @@ import { classifyIntent } from './intent-classifier.js';
 import { FEATURES } from '../utils/feature-flags.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
-[REGLAS DE EXTRACCIÓN Y FORMATEO ZERO-SHOT]:
-1. Analiza el historial para extraer: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad, tieneEmpleo.
-2. REGLA DE REFINAMIENTO: Si el dato que tienes en [ESTADO DEL CANDIDATO] es incompleto y el usuario da más info, FUSIÓNALO.
-3. REGLAS DE FORMATEO ESTRICTO (ORO):
-   - NOMBRES Y MUNICIPIOS: Guárdalos SIEMPRE en "Title Case" (Ej: "Juan Pérez", "San Nicolás de los Garza"). Corrige ortografía.
-   - FECHA: Formato exacto DD/MM/YYYY.
-   - ESCOLARIDAD: SOLO acepta: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado. (Ej: "Prepa" -> "Preparatoria"). "Kinder" o "Ninguna" son inválidos.
-   - CATEGORÍA: Solo acepta categorías de la lista: {{categorias}}. Si dice "Ayudante", guarda "Ayudante General".
-   - EMPLEO: Solo guarda "Empleado" o "Desempleado" explícitamente. (Ej: "estoy jalando" -> "Empleado", "buscando", "no tengo chamba" -> "Desempleado").
-4. REGLA DE GÉNERO: Infiérelo del nombreReal (Hombre/Mujer).
-5. REGLA TELEFONO: JAMÁS preguntes el número de teléfono/celular. Ya lo tienes (campo 'whatsapp').
+[EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad, tieneEmpleo.
+1. REFINAR: Si el dato en [ESTADO] es incompleto, fusiónalo con el nuevo.
+2. FORMATO: Nombres/Municipios en Title Case. Fecha DD/MM/YYYY.
+3. ESCOLARIDAD: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado.
+4. EMPLEO: "Empleado" o "Desempleado".
+5. CATEGORÍA: Solo de: {{categorias}}.
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
-[ESTADO: CAPTURISTA BRENDA 📝]:
-1. TU OBJETIVO: Recolectar datos faltantes: {{faltantes}}. (Nota: Para empleo, pregunta directamente si el candidato está "Empleado" o "Desempleado").
-2. REGLA DE ORO: Pide solo UN dato a la vez. No abrumes.
-3. TONO: Profesional, tierno y servicial. No pláticas de más, enfócate en llenar el formulario.
-4. VARIACIÓN: Si el usuario insista con el mismo tema social, VARÍA tu respuesta. Nunca digas lo mismo dos veces. ✨
-5. GUARDIA ADN (ESTRICTO): PROHIBIDO saltar de un dato a otro sin haber obtenido el anterior. Si el usuario bromea o evade, responde con gracia pero vuelve siempre al dato faltante exacto: {{faltantes}}. No digas que el perfil está listo si falta algo.
-6. NO COMPLACIENTE: No aceptes datos basura (como Kinder) solo por ser amable. Detén el flujo hasta tener un dato real.
-7. CATEGORÍAS DISPONIBLES: {{categorias}}. Usa esta lista para guiar al usuario si pregunta qué vacantes hay.
+[CAPTURISTA BRENDA]: Recolecta {{faltantes}}. (Empleo: pregunta si está "Empleado" o "Desempleado").
+1. Solo UN dato a la vez. No abrumes.
+2. Tono tierno y servicial. ✨
+3. No saltes de dato hasta llenar el actual.
+4. No aceptes datos basura.
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = `
@@ -1270,7 +1262,17 @@ ${audit.dnaLines}
                 if (currentStep?.aiConfig?.enabled) {
                     const historyWithCongrats = [...historyForGpt, { role: 'model', parts: [{ text: congratsMsg }] }];
                     const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, activeAiConfig.openaiApiKey, currentIdx);
-                    if (recruiterResult?.response_text) responseTextVal = recruiterResult.response_text;
+
+                    if (recruiterResult) {
+                        if (recruiterResult.response_text) responseTextVal = recruiterResult.response_text;
+                        // 🚀 [TRIPLE MERGE]: Re-attach media/metadata from recruiter to the main AI result
+                        if (!aiResult) aiResult = {};
+                        if (recruiterResult.media_url) aiResult.media_url = recruiterResult.media_url;
+                        if (recruiterResult.unanswered_question) aiResult.unanswered_question = recruiterResult.unanswered_question;
+                        if (recruiterResult.extracted_data) {
+                            aiResult.extracted_data = { ...aiResult.extracted_data, ...recruiterResult.extracted_data };
+                        }
+                    }
                 }
             } else {
                 // 🏠 NO PROJECT: Enter waiting room
