@@ -958,9 +958,9 @@ const VacanciesSection = ({ showToast }) => {
                                                     </div>
                                                 </div>
                                                 <button
-                                                    className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all"
+                                                    className="text-gray-400 hover:text-red-500 p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all border border-transparent hover:border-red-100"
                                                     onClick={() => handleDeleteFaq(faq.id)}
-                                                    title="Eliminar duda"
+                                                    title="Eliminar duda del radar"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>

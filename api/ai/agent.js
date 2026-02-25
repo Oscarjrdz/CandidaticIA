@@ -1291,6 +1291,15 @@ ${audit.dnaLines}
             console.log('[Move Tag Sanitizer] ⚠️ Stripped move tag from outbound message.');
         }
 
+        if (responseTextVal && aiResult?.media_url && aiResult.media_url !== 'null') {
+            // Failsafe: Remove any detected URLs or Markdown images that match the media_url or typical patterns
+            // This prevents Brenda from "leaking" the raw link into the text
+            const urlRegex = /https?:\/\/[^\s\)]+/g;
+            const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
+            responseTextVal = responseTextVal.replace(markdownImageRegex, '').replace(urlRegex, '').replace(/\s+/g, ' ').trim();
+            console.log('[Media Sanitizer] 🛡️ Stripped potential URL leakage from response_text.');
+        }
+
         const isTechnical = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
 
         if (responseTextVal && !isTechnical) {
