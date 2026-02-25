@@ -44,22 +44,12 @@ export const DEFAULT_CEREBRO1_RULES = `
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = `
-[IDENTIDAD]: Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. Tono: cálido, profesional, tierno y servicial. ✨🌸
-
-[REGLAS GENERALES]:
-1. BREVEDAD: Sigue las instrucciones de longitud del mensaje que el administrador haya configurado en tu identidad. Prohibido usar asteriscos (*).
-2. ANCLA Y PUENTE (ELIMINAR SI < 2 HORAS): 
-   - SI PERFIL COMPLETO: JAMÁS te vuelvas a presentar. Saluda brevemente ("¡Hola de nuevo!").
-   - SI PASARON > 2 HORAS: Valida lo que dijo el usuario antes de pedir algo (Variedad: "¡Excelente! ✨", "¡Anotado! 📍").
-   - SI PASARON < 2 HORAS: Sigue siendo directa, pero TIENES PERMISO de usar puentes sociales si el usuario socializa o bromea. No seas un robot.
-3. LISTAS: Usa emoji de check ✅ SOLO para cuando listes vacantes o categorías disponibles.
-4. PROTOCOLO DE RECONEXIÓN:
-   - PRIMER CONTACTO: Preséntate amablemente 👋 ("¡Hola! Soy la Lic. Brenda Rodríguez...").
-   - SI YA HAS HABLADO (< 2 horas): Evita saludos largos, pero mantén la calidez si el contexto lo requiere.
-   - SI PASARON > 2 horas: Saludo breve ("¡Qué gusto saludarte de nuevo!").
-5. CLIMA: Si el usuario es cortante, sé breve. Si usa emojis, úsalos tú también. 🎉
-6. ANTI-REPETICIÓN (PENALIDAD FATAL): Está PROHIBIDO usar las mismas frases o estructuras de [MEMORIA DEL HILO]. Si te repites, fallas en tu misión humana. Cambia palabras, orden y estilo.
-
+[IDENTIDAD]: Brenda (25), reclutadora de Candidatic. Cálida, tierna, 3 emojis/msg. ✨🌸
+1. BREVEDAD: Respuestas cortas. No asteriscos (*).
+2. PUENTE: Si < 2h, sé directa. Si > 2h, saluda ("¡Hola de nuevo! ✨").
+3. PROTOCOLO: 1er contacto: "¡Hola! Soy Brenda...". 
+4. ANTI-HOLA: Si el historial muestra que YA saludaste recientemente, NO repitas saludos ni menciones el nombre del candidato en cada frase. Sé fluida como una charla de WhatsApp.
+5. ANTI-REPETICIÓN (PENALIDAD FATAL): Está PROHIBIDO usar las mismas frases o estructuras de [MEMORIA DEL HILO]. Si te repites, fallas en tu misión humana. Cambia palabras, orden y estilo.
 [REGLA DE REACCIONES]:
 - El sistema pondrá un 👍 automático si detectas gratitud (gratitude_reached: true).
 - GRATITUD (ESTRICTO): Solo si dicen "Gracias", "Agradecido", "Muchas gracias".
@@ -101,7 +91,7 @@ function normalizeBirthDate(input) {
             if (year.length === 2) {
                 const yy = parseInt(year);
                 // Assume 1900s for years 50-99, 2000s for 00-49
-                year = yy >= 50 ? `19${year}` : `20${year}`;
+                year = yy >= 50 ? `19${year} ` : `20${year} `;
             }
 
             // Pad day and month with leading zeros
@@ -123,7 +113,7 @@ function normalizeBirthDate(input) {
                 return { isValid: false, date: null };
             }
 
-            return { isValid: true, date: `${day}/${month}/${year}` };
+            return { isValid: true, date: `${day} /${month}/${year} ` };
         }
     }
 
@@ -159,7 +149,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
         if (candidateData.blocked === true) {
-            console.log(`[BLOCK SHIELD] Skipping processMessage for blocked candidate: ${candidateId}`);
+            console.log(`[BLOCK SHIELD] Skipping processMessage for blocked candidate: ${candidateId} `);
             return null;
         }
 
@@ -174,7 +164,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             ? incomingMessage.split(/ \| |\n/)
             : [incomingMessage];
 
-        console.log(`[DEBUG AGENT ENTRY] Candidate: ${candidateId} | Messages: ${allMessages.length}`);
+        console.log(`[DEBUG AGENT ENTRY]Candidate: ${candidateId} | Messages: ${allMessages.length} `);
 
 
         for (const msg of messagesToProcess) {
@@ -217,7 +207,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 // Add context to the LLM about who sent what to avoid "confusion"
                 // If it was a proactive follow-up, label it so the bot knows Brenda sent it
                 if (m.meta?.proactiveLevel) {
-                    content = `[Mensaje de Lic. Brenda - Seguimiento Automático]: ${content}`;
+                    content = `[Mensaje de Lic.Brenda - Seguimiento Automático]: ${content} `;
                 }
 
                 return {
@@ -293,11 +283,11 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
-- ¿Es Primer Contacto?: ${isNewFlag && !isProfileComplete ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
+- ¿Es Primer Contacto ?: ${isNewFlag && !isProfileComplete ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
 - Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
 - Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
-- Inactividad: ${minSinceLastBot} min (${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
-\n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
+- Inactividad: ${minSinceLastBot} min(${isLongSilence ? 'Regreso fresco' : 'Hilo continuo'})
+\n[REGLA CRÍTICA]: SI[PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente.Sin embargo, SI el usuario provee información nueva o corrige un dato(ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
 
         // Use Nitro Cached Config
         const aiConfigJson = batchConfig.ai_config;
@@ -307,7 +297,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             if (candidateData && candidateData.whatsapp) {
                 const phone = candidateData.whatsapp;
                 const id = candidateId;
-                await redis.del(`candidatic:candidate:${id}`);
+                await redis.del(`candidatic: candidate:${id} `);
                 await redis.hdel('candidatic:phone_index', phone);
                 if (config) {
                     await sendUltraMsgMessage(config.instanceId, config.token, phone, "🧨 DATOS BORRADOS. Eres un usuario nuevo. Di 'Hola' para empezar.");
@@ -317,7 +307,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         }
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
-        systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos. SI NO SABES EL NOMBRE REAL (Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
+        systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos.SI NO SABES EL NOMBRE REAL(Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
         let apiKey = process.env.GEMINI_API_KEY;
         if (aiConfigJson) {
@@ -348,7 +338,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const customExtractionRules = batchConfig.bot_extraction_rules;
         const extractionRules = (customExtractionRules || DEFAULT_EXTRACTION_RULES)
             .replace('{{categorias}}', categoriesList)
-            .replace('CATEGORÍAS VÁLIDAS: ', `CATEGORÍAS VÁLIDAS: ${categoriesList}`);
+            .replace('CATEGORÍAS VÁLIDAS: ', `CATEGORÍAS VÁLIDAS: ${categoriesList} `);
 
         systemInstruction += `\n[ESTADO DEL CANDIDATO]:
 - Perfil Completo: ${audit.paso1Status === 'COMPLETO' ? 'SÍ' : 'NO'}
@@ -358,8 +348,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 - Categoría: ${candidateData.categoria || 'No proporcionado'}
 ${audit.dnaLines}
 - Temas recientes: ${themes || 'Nuevo contacto'}
-\n[CATEGORÍAS VÁLIDAS EN EL SISTEMA]: ${categoriesList}\n
-\n${extractionRules}`;
+\n[CATEGORÍAS VÁLIDAS EN EL SISTEMA]: ${categoriesList} \n
+\n${extractionRules} `;
 
         let activeProjectId = candidateData.projectId || candidateData.projectMetadata?.projectId;
         let activeStepId = candidateData.stepId || candidateData.projectMetadata?.stepId || 'step_new';
@@ -368,7 +358,7 @@ ${audit.dnaLines}
             const client = getRedisClient();
             activeProjectId = await client.hget('index:cand_project', candidateId);
             if (activeProjectId) {
-                const rawMeta = await client.hget(`project:cand_meta:${activeProjectId}`, candidateId);
+                const rawMeta = await client.hget(`project: cand_meta:${activeProjectId} `, candidateId);
                 const meta = rawMeta ? JSON.parse(rawMeta) : {};
                 activeStepId = meta.stepId || 'step_new';
             }
@@ -394,7 +384,7 @@ ${audit.dnaLines}
             try {
                 const redisForIdx = getRedisClient();
                 if (redisForIdx) {
-                    const metaRaw = await redisForIdx.hget(`project:cand_meta:${activeProjectId}`, candidateId);
+                    const metaRaw = await redisForIdx.hget(`project: cand_meta:${activeProjectId} `, candidateId);
                     if (metaRaw) {
                         const meta = JSON.parse(metaRaw);
                         if (meta.currentVacancyIndex !== undefined) {
@@ -407,7 +397,7 @@ ${audit.dnaLines}
             let activeVacancyId = null;
             if (project?.vacancyIds && project.vacancyIds.length > 0) {
                 activeVacancyId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
-                console.log(`[FAQ] activeVacancyId resolved: index=${currentIdx} → ${activeVacancyId}`);
+                console.log(`[FAQ] activeVacancyId resolved: index = ${currentIdx} → ${activeVacancyId} `);
             } else if (project?.vacancyId) {
                 activeVacancyId = project.vacancyId;
             }
@@ -428,7 +418,7 @@ ${audit.dnaLines}
 
                     let reason = "Motivo no especificado";
                     try {
-                        const reasonPrompt = `El candidato ha rechazado una vacante. Extrae el motivo principal en máximo 3-4 palabras a partir de este mensaje: "${aggregatedText}". Si no hay motivo claro, responde "No le interesó". Responde solo con el motivo.`;
+                        const reasonPrompt = `El candidato ha rechazado una vacante.Extrae el motivo principal en máximo 3 - 4 palabras a partir de este mensaje: "${aggregatedText}".Si no hay motivo claro, responde "No le interesó".Responde solo con el motivo.`;
                         const gptReason = await getOpenAIResponse([], reasonPrompt, 'gpt-4o-mini', activeAiConfig.openaiApiKey);
                         if (gptReason?.content) reason = gptReason.content.replace(/\*/g, '').trim();
                     } catch (e) {
@@ -458,7 +448,7 @@ ${audit.dnaLines}
                     });
 
                     if (currentIdx + 1 >= project.vacancyIds.length) {
-                        console.log(`[RECRUITER BRAIN] 🏁 All vacancies rejected. Moving to Exit Flow.`);
+                        console.log(`[RECRUITER BRAIN] 🏁 All vacancies rejected.Moving to Exit Flow.`);
                         // Instead of just silencing, we prepare to fire a move:exit
                         aiResult = {
                             thought_process: "ALL_VACANCIES_REJECTED { move: exit }",
@@ -468,7 +458,7 @@ ${audit.dnaLines}
                         };
                         skipRecruiterInference = true;
                     } else {
-                        console.log(`[RECRUITER BRAIN] 🚦 Moving to next vacancy (Index: ${currentIdx + 1}/${project.vacancyIds.length})`);
+                        console.log(`[RECRUITER BRAIN] 🚦 Moving to next vacancy(Index: ${currentIdx + 1}/${project.vacancyIds.length})`);
                     }
                 }
 
@@ -488,7 +478,7 @@ ${audit.dnaLines}
                             ...historyForGpt.slice(0, -1), // Drop the rejection message
                             {
                                 role: 'user',
-                                parts: [{ text: `[SISTEMA INTERNO]: El candidato rechazó la vacante anterior. Ahora preséntale la siguiente vacante disponible (índice ${newIdx}). Es la primera vez que la ve. NO asumas que la rechaza — apreséntatela con entusiasmo y espera su respuesta.` }]
+                                parts: [{ text: `[SISTEMA INTERNO]: El candidato rechazó la vacante anterior.Ahora preséntale la siguiente vacante disponible(índice ${newIdx}).Es la primera vez que la ve.NO asumas que la rechaza — apreséntatela con entusiasmo y espera su respuesta.` }]
                             }
                         ];
                         console.log(`[RECRUITER BRAIN] 🔄 Vacancy transition context injected for index ${newIdx}`);
@@ -520,7 +510,7 @@ ${audit.dnaLines}
                         if (categoria) candidateUpdates.categoria = categoria;
                         if (municipio) candidateUpdates.municipio = municipio;
                         if (escolaridad) candidateUpdates.escolaridad = escolaridad;
-                        console.log(`[RECRUITER BRAIN] 🧬 Extracted data merged:`, aiResult.extracted_data);
+                        console.log(`[RECRUITER BRAIN] 🧬 Extracted data merged: `, aiResult.extracted_data);
                     }
 
                     const rawUQ = aiResult?.unanswered_question;
@@ -533,7 +523,7 @@ ${audit.dnaLines}
                         const updatedIdx = candidateUpdates.currentVacancyIndex;
                         const safeUpdatedIdx = Math.min(updatedIdx, project.vacancyIds.length - 1);
                         activeVacancyId = project.vacancyIds[safeUpdatedIdx];
-                        console.log(`[FAQ Engine] 🔄 activeVacancyId recalculated to index ${updatedIdx}: ${activeVacancyId}`);
+                        console.log(`[FAQ Engine] 🔄 activeVacancyId recalculated to index ${updatedIdx}: ${activeVacancyId} `);
                     }
 
                     // 🎯 FAQ RADAR: Save to FAQ engine regardless — unanswered OR answered
@@ -541,7 +531,7 @@ ${audit.dnaLines}
                     if (activeVacancyId && geminiKey) {
                         if (unansweredQ) {
                             // Question has no answer — save as unanswered
-                            console.log(`[FAQ Engine] 📡 Capturing UNANSWERED: "${unansweredQ}" → vacancy ${activeVacancyId}`);
+                            console.log(`[FAQ Engine] 📡 Capturing UNANSWERED: "${unansweredQ}" → vacancy ${activeVacancyId} `);
                             await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
                             processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey)
                                 .then(() => console.log(`[FAQ Engine] ✅ Unanswered question saved`))
@@ -584,7 +574,7 @@ ${audit.dnaLines}
                         botText.includes('te queda bien');
 
                     if (isInterviewInvite) {
-                        console.log(`[RECRUITER BRAIN] 🛡️ Contextual Acceptance detected (Bot invited, User said Yes)! Forcing { move }.`);
+                        console.log(`[RECRUITER BRAIN] 🛡️ Contextual Acceptance detected(Bot invited, User said Yes)! Forcing { move }.`);
                         hasMoveTag = true;
                     }
                 }
@@ -621,8 +611,8 @@ ${audit.dnaLines}
                             const stepNameLower = isExitMove ? 'exit' : (currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_'));
                             const specificKeys = [];
                             if (isExitMove) specificKeys.push('bot_bridge_exit', 'bot_bridge_no_interesa');
-                            if (stepNameLower && !isExitMove) specificKeys.push(`bot_bridge_${stepNameLower}`);
-                            if (!isExitMove) specificKeys.push(`bot_bridge_${activeStepId}`, 'bot_step_move_sticker');
+                            if (stepNameLower && !isExitMove) specificKeys.push(`bot_bridge_${stepNameLower} `);
+                            if (!isExitMove) specificKeys.push(`bot_bridge_${activeStepId} `, 'bot_step_move_sticker');
 
                             let bridgeKey = null;
                             for (const key of specificKeys) {
@@ -636,9 +626,9 @@ ${audit.dnaLines}
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
                                 }
                             } else {
-                                console.log(`[RECRUITER BRAIN] Bridge: No sticker for ${isExitMove ? 'exit' : stepNameLower}, skipping.`);
+                                console.log(`[RECRUITER BRAIN]Bridge: No sticker for ${isExitMove ? 'exit' : stepNameLower}, skipping.`);
                             }
-                        } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail:`, e.message); }
+                        } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail: `, e.message); }
 
                         // Now trigger next step's AI
                         if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
@@ -646,7 +636,7 @@ ${audit.dnaLines}
                                 // 🧹 CLEAN HISTORY for the new step to prevent acceptance leakage from previous step
                                 const historyForNextStep = [
                                     ...historyForGpt.filter(h => h.role === 'user').slice(-3), // Keep some context but limited
-                                    { role: 'user', parts: [{ text: `[SISTEMA]: El candidato acaba de avanzar al paso "${nextStep.name}". Este es tu primer contacto en este paso. Sigue tu OBJETIVO DE PASO.` }] }
+                                    { role: 'user', parts: [{ text: `[SISTEMA]: El candidato acaba de avanzar al paso "${nextStep.name}".Este es tu primer contacto en este paso.Sigue tu OBJETIVO DE PASO.` }] }
                                 ];
                                 if (recruiterFinalSpeech) historyForNextStep.splice(-1, 0, { role: 'model', parts: [{ text: recruiterFinalSpeech }] });
 
@@ -661,11 +651,11 @@ ${audit.dnaLines}
                                     await new Promise(r => setTimeout(r, 800));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
                                     await saveMessage(candidateId, { from: 'bot', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
-                                    console.log(`[RECRUITER BRAIN] ✅ Chained AI sent for step: ${nextStep.name}`);
+                                    console.log(`[RECRUITER BRAIN] ✅ Chained AI sent for step: ${nextStep.name} `);
                                 } else {
-                                    console.warn(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text for step: ${nextStep.name}`);
+                                    console.warn(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text for step: ${nextStep.name} `);
                                 }
-                            } catch (e) { console.error(`[RECRUITER BRAIN] Chain Fail:`, e.message); }
+                            } catch (e) { console.error(`[RECRUITER BRAIN] Chain Fail: `, e.message); }
                         } else {
                             console.log(`[RECRUITER BRAIN] Next step '${nextStep.name}' has no aiConfig enabled — skipping chained AI.`);
                         }
@@ -682,7 +672,7 @@ ${audit.dnaLines}
 
         // 1. SILENCE SHIELD (Exactly 2 messages after sticker)
         if (!isRecruiterMode && isProfileComplete && hasBeenCongratulated && bridgeCounter < 2) {
-            console.log(`[Silence Shield] Active for ${candidateId}. Count: ${bridgeCounter}`);
+            console.log(`[Silence Shield] Active for ${candidateId}.Count: ${bridgeCounter} `);
             isBridgeActive = true;
 
             const lowerText = aggregatedText.toLowerCase();
@@ -703,11 +693,11 @@ ${audit.dnaLines}
         // 2. GPT HOST (OpenAI Social Brain) - Triggers after 2 messages of silence
         const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
         if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
-            console.log(`[HANDOVER] 🚀 Handing off to GPT HOST (OpenAI) for candidate ${candidateId}`);
+            console.log(`[HANDOVER] 🚀 Handing off to GPT HOST(OpenAI) for candidate ${candidateId}`);
             isHostMode = true;
             try {
                 const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
-                const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt}\n[ADN]: ${JSON.stringify(candidateData)}`, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
+                const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt} \n[ADN]: ${JSON.stringify(candidateData)} `, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
 
                 if (gptResponse?.content) {
                     const textContent = gptResponse.content.replace(/\*/g, '');
@@ -730,7 +720,7 @@ ${audit.dnaLines}
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
             // 🛡️ CONTEXT GUARD: Never re-introduce if profile is complete, even if 'new' flag persisted.
             if (isNewFlag && !isProfileComplete) {
-                systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
+                systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje.Preséntate como la Lic.Brenda y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
             } else if (!isProfileComplete) {
                 const customCerebro1Rules = batchConfig.bot_cerebro1_rules;
                 const cerebro1Rules = (customCerebro1Rules || DEFAULT_CEREBRO1_RULES)
@@ -739,34 +729,34 @@ ${audit.dnaLines}
                 systemInstruction += `\n${cerebro1Rules} \n`;
             } else {
                 if (!hasGratitude) {
-                    systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
+                    systemInstruction += `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo.Sé súper amable, dile que le va a ir genial y busca que el usuario te dé las gracias. ✨💅\n`;
                 } else {
-                    systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias. Ya cumpliste. NO escribas texto. SOLO pon una reacción (👍) y marca close_conversation: true. 👋🤫\n`;
+                    systemInstruction += `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya te dio las gracias.Ya cumpliste.NO escribas texto.SOLO pon una reacción(👍) y marca close_conversation: true. 👋🤫\n`;
                 }
             }
 
             // Show Gemini its own previous responses in full — let it decide what's repetitive
             const lastBotMsgsForPrompt = lastBotMessages.slice(-4);
-            systemInstruction += `\n[TUS RESPUESTAS ANTERIORES - LEE ESTO CON ATENCIÓN]:\n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Primera interacción)'}\n⚠️ REGLA DE ORIGINALIDAD: Tu próxima respuesta debe sonar COMPLETAMENTE DIFERENTE a cualquiera de las anteriores. No repitas la misma apertura, el mismo tono de broma, ni la misma estructura de frase. Si sientes que tu respuesta se parece a alguna de las anteriores, reescríbela desde cero con otro enfoque. \n`;
+            systemInstruction += `\n[TUS RESPUESTAS ANTERIORES - LEE ESTO CON ATENCIÓN]: \n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Primera interacción)'} \n⚠️ REGLA DE ORIGINALIDAD: Tu próxima respuesta debe sonar COMPLETAMENTE DIFERENTE a cualquiera de las anteriores.No repitas la misma apertura, el mismo tono de broma, ni la misma estructura de frase.Si sientes que tu respuesta se parece a alguna de las anteriores, reescríbela desde cero con otro enfoque.\n`;
 
             systemInstruction += `\n[REGLAS DE EXTRACCIÓN ESTRICTA PARA JSON]:
-- tieneEmpleo: DEBE ser uno de estos valores exactos: "Empleado" o "Desempleado". Si el usuario indica que trabaja o tiene "chamba", pon "Empleado". Si indica que está buscando, no tiene trabajo o está libre, pon "Desempleado".
-- escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería". Si dice "secu", pon "Secundaria". Si dice "prepa", pon "Preparatoria".
-- categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato. Si dice "Ayudante", pon "Ayudante General".
-- municipio: Usa tu comprensión del español y del contexto mexicano. Si el candidato de cualquier forma implica dónde vive — ya sea directamente ("Escobedo", "Monterrey"), en una frase ("Vivo en Escobedo", "Soy de Apodaca", "Del otro lado de Monterrey") o con rodeos — extrae la localidad. No esperes un formato específico. Confía en tu entendimiento del idioma.
-- nombreReal: Si el candidato da solo su nombre de pila sin apellido (ej. solo "Oscar", solo "Juan"), NO guardes el dato todavía. Pídele explícitamente sus apellidos antes de continuar con el siguiente campo.
+- tieneEmpleo: DEBE ser uno de estos valores exactos: "Empleado" o "Desempleado".Si el usuario indica que trabaja o tiene "chamba", pon "Empleado".Si indica que está buscando, no tiene trabajo o está libre, pon "Desempleado".
+- escolaridad: DEBE ser uno de estos valores exactos: "Primaria", "Secundaria", "Preparatoria", "Carrera Técnica", "Licenciatura", "Ingeniería".Si dice "secu", pon "Secundaria".Si dice "prepa", pon "Preparatoria".
+- categoria: DEBE coincidir con alguna palabra de las opciones presentadas al candidato.Si dice "Ayudante", pon "Ayudante General".
+- municipio: Usa tu comprensión del español y del contexto mexicano.Si el candidato de cualquier forma implica dónde vive — ya sea directamente("Escobedo", "Monterrey"), en una frase("Vivo en Escobedo", "Soy de Apodaca", "Del otro lado de Monterrey") o con rodeos — extrae la localidad.No esperes un formato específico.Confía en tu entendimiento del idioma.
+- nombreReal: Si el candidato da solo su nombre de pila sin apellido(ej.solo "Oscar", solo "Juan"), NO guardes el dato todavía.Pídele explícitamente sus apellidos antes de continuar con el siguiente campo.
 `;
 
             systemInstruction += `\n[FORMATO DE RESPUESTA - OBLIGATORIO JSON]: Tu salida DEBE ser un JSON válido con este esquema:
-            {
-                "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Empleado | Desempleado | null", "escolaridad": "string | null", "edad": "number | null" },
-                "thought_process": "Razonamiento.",
-                    "reaction": "null",
-                        "trigger_media": "string | null",
-                            "response_text": "Tu respuesta.",
-                                "gratitude_reached": "boolean",
-                                    "close_conversation": "boolean"
-            }
+{
+    "extracted_data": { "nombreReal": "string | null", "genero": "Hombre | Mujer | null", "fechaNacimiento": "string | null", "municipio": "string | null", "categoria": "string | null", "tieneEmpleo": "Empleado | Desempleado | null", "escolaridad": "string | null", "edad": "number | null" },
+    "thought_process": "Razonamiento.",
+        "reaction": "null",
+            "trigger_media": "string | null",
+                "response_text": "Tu respuesta.",
+                    "gratitude_reached": "boolean",
+                        "close_conversation": "boolean"
+}
 \n[REGLA ANTI - SILENCIO]: Si el usuario responde con simples confirmaciones("Si", "Claro", "Ok") a una pregunta de datos, TU RESPUESTA DEBE SER:
 1. Agradecer / Confirmar("¡Perfecto!", "¡Excelente!").
 2. VOLVER A PEDIR EL DATO FALTANTE EXPLICÍTAMENTE.
@@ -802,9 +792,9 @@ ${audit.dnaLines}
                 // CRITICAL: Activate safeguard if response is empty AND profile is still incomplete
                 if (hasEmptyResponse && !isNowComplete) {
                     console.warn(`[SILENCE SAFEGUARD V2] 🚨 Empty response detected for incomplete profile.`);
-                    console.warn(`[SILENCE SAFEGUARD V2] Missing fields: ${audit.missingLabels.join(', ')}`);
+                    console.warn(`[SILENCE SAFEGUARD V2] Missing fields: ${audit.missingLabels.join(', ')} `);
                     console.warn(`[SILENCE SAFEGUARD V2] User input: "${aggregatedText}"`);
-                    console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation}`);
+                    console.warn(`[SILENCE SAFEGUARD V2] AI close_conversation flag: ${aiResult.close_conversation} `);
 
                     // 🧠 INTELLIGENT FIELD SELECTION
                     // Re-audit WITH the extracted data to see what is REALLY still missing
@@ -841,11 +831,11 @@ ${audit.dnaLines}
                         // If detected field is still missing, use it
                         if (detectedField && audit.missingLabels.includes(detectedField)) {
                             nextMissing = detectedField;
-                            console.log(`[SILENCE SAFEGUARD V2] 🎯 Detected we were asking for: ${nextMissing}`);
+                            console.log(`[SILENCE SAFEGUARD V2] 🎯 Detected we were asking for: ${nextMissing} `);
                         } else {
                             // Fallback: Use first missing field in sequential order
                             nextMissing = audit.missingLabels[0];
-                            console.log(`[SILENCE SAFEGUARD V2] 📋 Using first missing field: ${nextMissing}`);
+                            console.log(`[SILENCE SAFEGUARD V2] 📋 Using first missing field: ${nextMissing} `);
                         }
                     }
 
@@ -1121,7 +1111,7 @@ ${audit.dnaLines}
             try {
                 const bypassIds = await redis.zrange('bypass:list', 0, -1);
                 if (bypassIds.length > 0) {
-                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id}`));
+                    const rulesRaw = await redis.mget(bypassIds.map(id => `bypass:${id} `));
                     const activeRules = rulesRaw.filter(r => r).map(r => JSON.parse(r)).filter(r => r.active);
 
                     for (const rule of activeRules) {
@@ -1163,7 +1153,7 @@ ${audit.dnaLines}
 
                         const isMatch = ageMatch && genderMatch && munMatch && escMatch && catMatch;
 
-                        console.log(`[BYPASS] Rule Check: "${rule.name}" | Match: ${isMatch} | Checks: age:${ageMatch}, mun:${munMatch}, cat:${catMatch}, esc:${escMatch}, gen:${genderMatch}`);
+                        console.log(`[BYPASS] Rule Check: "${rule.name}" | Match: ${isMatch} | Checks: age:${ageMatch}, mun:${munMatch}, cat:${catMatch}, esc:${escMatch}, gen:${genderMatch} `);
 
                         // Add to Debug Trace
                         debugTrace.rules.push({
@@ -1180,7 +1170,7 @@ ${audit.dnaLines}
                         });
 
                         if (isMatch) {
-                            console.log(`[BYPASS] ✅ MATCH FOUND: Rule "${rule.name}" → Project ${projectId}`);
+                            console.log(`[BYPASS] ✅ MATCH FOUND: Rule "${rule.name}" → Project ${projectId} `);
 
                             // Assign candidate to project
                             const { addCandidateToProject } = await import('../utils/storage.js');
@@ -1204,7 +1194,7 @@ ${audit.dnaLines}
                             debugTrace.matchedRule = rule.name;
                             debugTrace.assignedProject = projectId;
 
-                            console.log(`[BYPASS] 🎯 Candidate ${candidateId} routed to project ${projectId}`);
+                            console.log(`[BYPASS] 🎯 Candidate ${candidateId} routed to project ${projectId} `);
                             break; // Stop at first match
                         }
                     }
@@ -1262,18 +1252,21 @@ ${audit.dnaLines}
                 const project = await getProjectById(finalProjectId);
                 const currentStep = project?.steps?.find(s => s.id === (candidateUpdates.stepId || activeStepId)) || project?.steps?.[0];
                 if (currentStep?.aiConfig?.enabled) {
-                    const historyWithCongrats = [...historyForGpt, { role: 'model', parts: [{ text: congratsMsg }] }];
+                    const historyWithCongrats = [...historyForGpt, { from: 'bot', parts: [{ text: congratsMsg }] }];
                     const recruiterResult = await processRecruiterMessage({ ...candidateData, ...candidateUpdates }, project, currentStep, historyWithCongrats, config, activeAiConfig.openaiApiKey, currentIdx);
 
                     if (recruiterResult) {
                         if (recruiterResult.response_text) responseTextVal = recruiterResult.response_text;
-                        // 🚀 [TRIPLE MERGE]: Re-attach media/metadata from recruiter to the main AI result
+                        // 🚀 [TRIPLE MERGE]: Re-attach media/metadata/result from recruiter
                         if (!aiResult) aiResult = {};
                         if (recruiterResult.media_url) aiResult.media_url = recruiterResult.media_url;
                         if (recruiterResult.unanswered_question) aiResult.unanswered_question = recruiterResult.unanswered_question;
                         if (recruiterResult.extracted_data) {
                             aiResult.extracted_data = { ...aiResult.extracted_data, ...recruiterResult.extracted_data };
                         }
+                        // Important: Ensure aiResult, which is used for logging, reflects the total thought process
+                        aiResult.thought_process = `[RECRUITER]: ${recruiterResult.thought_process || 'Success'} `;
+                        isNowComplete = true; // Lock in the final state
                     }
                 }
             } else {
@@ -1309,7 +1302,7 @@ ${audit.dnaLines}
             if (match) {
                 if (!aiResult) aiResult = {};
                 aiResult.media_url = match[0];
-                console.log(`[Media Recovery] 🚑 Recovered leaked URL from text: ${aiResult.media_url}`);
+                console.log(`[Media Recovery] 🚑 Recovered leaked URL from text: ${aiResult.media_url} `);
             }
         }
 

@@ -126,7 +126,8 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                     description: vac.description || '[SIN_DESCRIPCION]',
                     messageDescription: vac.messageDescription || vac.description || '[SIN_RESEÑA]',
                     salary: vac.salary || 'N/A',
-                    schedule: vac.schedule || 'N/A'
+                    schedule: vac.schedule || 'N/A',
+                    media_url: vac.media_url || null
                 };
             }
 
