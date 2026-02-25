@@ -172,6 +172,7 @@ const VacanciesSection = ({ showToast }) => {
 
     const [availableFields, setAvailableFields] = useState([]);
     const [uploadingFaqId, setUploadingFaqId] = useState(null);
+    const [isUploadingFaq, setIsUploadingFaq] = useState(false);
     const faqFileInputRef = React.useRef(null);
 
     const loadFaqs = async (vacancyId) => {
@@ -359,9 +360,11 @@ const VacanciesSection = ({ showToast }) => {
 
         if (file.size > 5 * 1024 * 1024) {
             showToast('Archivo demasiado grande (Máx 5MB)', 'error');
+            setUploadingFaqId(null);
             return;
         }
 
+        setIsUploadingFaq(true);
         try {
             const reader = new FileReader();
             const base64Promise = new Promise(resolve => {
@@ -392,6 +395,7 @@ const VacanciesSection = ({ showToast }) => {
             console.error('Upload error:', err);
             showToast('Error de conexión al subir', 'error');
         } finally {
+            setIsUploadingFaq(false);
             setUploadingFaqId(null);
             if (e.target) e.target.value = '';
         }
@@ -1059,16 +1063,23 @@ const VacanciesSection = ({ showToast }) => {
                                                             placeholder="Entrena a Brenda para que sepa responder exactamente esto..."
                                                             className="w-full pl-9 pr-10 py-2 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-inner"
                                                         />
-                                                        <button
-                                                            onClick={() => {
-                                                                setUploadingFaqId(faq.id);
-                                                                setTimeout(() => faqFileInputRef.current?.click(), 0);
-                                                            }}
-                                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-indigo-600 transition-colors"
-                                                            title="Adjuntar archivo (Imagen o PDF) a esta respuesta"
-                                                        >
-                                                            <Paperclip className="w-4 h-4" />
-                                                        </button>
+                                                        {isUploadingFaq && uploadingFaqId === faq.id ? (
+                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-indigo-600 font-medium">
+                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                                <span className="text-[10px]">Subiendo...</span>
+                                                            </div>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setUploadingFaqId(faq.id);
+                                                                    setTimeout(() => faqFileInputRef.current?.click(), 0);
+                                                                }}
+                                                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-indigo-600 transition-colors"
+                                                                title="Adjuntar archivo (Imagen o PDF) a esta respuesta"
+                                                            >
+                                                                <Paperclip className="w-4 h-4" />
+                                                            </button>
+                                                        )}
                                                     </div>
                                                     <button
                                                         onClick={() => handleSaveFaq(faq.id, faq.officialAnswer, faq.mediaUrl)}
