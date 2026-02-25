@@ -140,6 +140,7 @@ export default async function handler(req, res) {
 
         if (method === 'DELETE') {
             const { faqId } = body;
+            console.log(`[FAQ API] 🗑️ DELETE request for vacancy ${vacancyId}, faqId: ${faqId}`);
             if (!faqId) {
                 return res.status(400).json({ error: 'faqId is required for deletion' });
             }
