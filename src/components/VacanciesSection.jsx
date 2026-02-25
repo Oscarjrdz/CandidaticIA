@@ -196,7 +196,20 @@ const VacanciesSection = ({ showToast }) => {
                     .then(res => res.json())
                     .then(data => {
                         if (data.success) {
-                            setFaqs(data.faqs || []);
+                            // MERGE LOGIC: Conservar lo que el usuario está escribiendo localmente
+                            setFaqs(currentFaqs => {
+                                if (!data.faqs) return [];
+                                return data.faqs.map(newFaq => {
+                                    const existing = currentFaqs.find(f => f.id === newFaq.id);
+                                    // Si el usuario tiene un valor local "sucio" (diferente al que ya sabíamos que tenía el servidor), lo preservamos
+                                    if (existing && existing.officialAnswer !== undefined) {
+                                        // Si el servidor mandó un cambio real en la respuesta oficial (otra persona lo editó), 
+                                        // podrías decidir qué hacer. Por ahora, si el usuario está escribiendo, respetamos su teclado.
+                                        return { ...newFaq, officialAnswer: existing.officialAnswer };
+                                    }
+                                    return newFaq;
+                                });
+                            });
                         }
                     })
                     .catch(e => console.error('Silent FAQ poll error:', e));
