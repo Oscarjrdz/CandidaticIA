@@ -22,9 +22,10 @@ export const RECRUITER_IDENTITY = `
 [📡 RADAR DE DUDAS - REGLA DE VERDAD]: 
 SI EL CANDIDATO PREGUNTA ALGO (rasurarse, pelo, uniforme, rutas, documentos, etc.):
 1. PRIORIDAD: Busca la respuesta en [PREGUNTAS FRECUENTES OFICIALES] y luego en [DATOS REALES DE LA VACANTE].
-2. FLEXIBILIDAD: Se permite la comprensión semántica. Si el tema o la respuesta oficial cubren la intención de la duda (ej. "guaraches" entra en "calzado" o "uniforme"), RESPÓNDELA. No es necesario que la palabra sea idéntica, solo que el dato esté presente en tus fuentes oficiales.
-3. PROHIBICIÓN DE INVENCIÓN: Si el dato NO existe de ninguna forma en tus fuentes, NO uses tu criterio. 
-4. FALLBACK OBLIGATORIO: Solo si la respuesta es totalmente desconocida, responde EXACTAMENTE: "Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨" y llena el campo "unanswered_question".
+2. RESPUESTA MULTIMEDIA (CRÍTICO): Si la duda tiene una [MEDIA_DISPONIBLE], DEBE aparecer en el campo 'media_url' de tu JSON. Esto es obligatorio para que el candidato reciba la imagen o el PDF correspondiente.
+3. FLEXIBILIDAD: Se permite la comprensión semántica. Si el tema o la respuesta oficial cubren la intención de la duda (ej. "guaraches" entra en "calzado" o "uniforme"), RESPÓNDELA. No es necesario que la palabra sea idéntica, solo que el dato esté presente en tus fuentes oficiales.
+4. PROHIBICIÓN DE INVENCIÓN: Si el dato NO existe de ninguna forma en tus fuentes, NO uses tu criterio. 
+5. FALLBACK OBLIGATORIO: Solo si la respuesta es totalmente desconocida, responde EXACTAMENTE: "Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨" y llena el campo "unanswered_question".
 
 ❌ EJEMPLO DE ERROR (NO HACER ESTO):
 Candidato: "¿Puedo llevar el pelo largo?"
@@ -44,6 +45,7 @@ unanswered_question: "¿Puedo llevar el pelo largo?"
     "extracted_data": { "categoria": "string|null", "municipio": "string|null", "escolaridad": "string|null" },
     "thought_process": "Razonamiento interno.",
     "response_text": "Tu respuesta cálida de Brenda.",
+    "media_url": "URL del archivo multimedia si la duda lo tiene, sino null.",
     "unanswered_question": "La pregunta del candidato si no tienes el dato real, sino null."
 }
 `;
@@ -139,7 +141,8 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                         if (answeredFaqs.length > 0) {
                             vacancyContext.faqs = answeredFaqs.map(f => {
                                 const keywords = f.originalQuestions ? ` (Palabras clave: ${f.originalQuestions.join(', ')})` : '';
-                                return `- TEMA: "${f.topic}"${keywords}\n  RESPUESTA OFICIAL: "${f.officialAnswer}"`;
+                                const mediaNote = f.mediaUrl ? ` [MEDIA_DISPONIBLE: ${f.mediaUrl}]` : '';
+                                return `- TEMA: "${f.topic}"${keywords}${mediaNote}\n  RESPUESTA OFICIAL: "${f.officialAnswer}"`;
                             }).join('\n');
                         }
                     }

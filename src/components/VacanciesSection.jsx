@@ -338,7 +338,7 @@ const VacanciesSection = ({ showToast }) => {
         }
     };
 
-    const handleFaqImageSelect = async (e) => {
+    const handleFaqFileSelect = async (e) => {
         const file = e.target.files[0];
         if (!file || !uploadingFaqId) return;
 
@@ -368,9 +368,9 @@ const VacanciesSection = ({ showToast }) => {
                 setFaqs(current => current.map(f =>
                     f.id === uploadingFaqId ? { ...f, mediaUrl } : f
                 ));
-                showToast('Imagen subida correctamente. Recuerda guardar el FAQ.', 'success');
+                showToast('Archivo subido correctamente. Recuerda guardar el FAQ.', 'success');
             } else {
-                showToast('Error al subir imagen', 'error');
+                showToast('Error al subir archivo', 'error');
             }
         } catch (err) {
             console.error('Upload error:', err);
@@ -996,11 +996,15 @@ const VacanciesSection = ({ showToast }) => {
                                                 {faq.mediaUrl && (
                                                     <div className="mb-2 p-1 bg-white dark:bg-gray-900 rounded-xl border border-indigo-100 dark:border-indigo-800 flex items-center justify-between">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100">
-                                                                <img src={faq.mediaUrl} alt="Preview" className="w-full h-full object-cover" />
+                                                            <div className="w-10 h-10 rounded-lg overflow-hidden border border-gray-100 flex items-center justify-center bg-gray-50">
+                                                                {faq.mediaUrl.toLowerCase().includes('.pdf') || faq.mediaUrl.includes('mime=application%2Fpdf') ? (
+                                                                    <FileText className="w-5 h-5 text-red-500" />
+                                                                ) : (
+                                                                    <img src={faq.mediaUrl} alt="Preview" className="w-full h-full object-cover" />
+                                                                )}
                                                             </div>
                                                             <div className="text-[10px] text-gray-500 truncate max-w-[150px]">
-                                                                Imagen adjunta lista
+                                                                {faq.mediaUrl.toLowerCase().includes('.pdf') || faq.mediaUrl.includes('mime=application%2Fpdf') ? 'PDF adjunto listo' : 'Imagen adjunta lista'}
                                                             </div>
                                                         </div>
                                                         <button
@@ -1045,7 +1049,7 @@ const VacanciesSection = ({ showToast }) => {
                                                                 setTimeout(() => faqFileInputRef.current?.click(), 0);
                                                             }}
                                                             className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-indigo-600 transition-colors"
-                                                            title="Adjuntar imagen a esta respuesta"
+                                                            title="Adjuntar archivo (Imagen o PDF) a esta respuesta"
                                                         >
                                                             <Paperclip className="w-4 h-4" />
                                                         </button>
@@ -1073,8 +1077,8 @@ const VacanciesSection = ({ showToast }) => {
                 type="file"
                 ref={faqFileInputRef}
                 className="hidden"
-                accept="image/*"
-                onChange={handleFaqImageSelect}
+                accept="image/*,application/pdf"
+                onChange={handleFaqFileSelect}
             />
         </div>
     );
