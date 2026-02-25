@@ -1,4 +1,4 @@
-// Deployment trigger: Rollback to stable version confirmed.
+// [PREMIUM ARCHITECTURE] V_FINAL_STABLE_V1 - Zero-Silence Infrastructure Active
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { processUnansweredQuestion } from './faq-engine.js';
 import axios from "axios";
@@ -149,6 +149,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         };
 
         let intent = 'UNKNOWN';
+        let isNowComplete = false;
 
         // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
         if (candidateData.blocked === true) {
@@ -266,24 +267,17 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         const customFields = batchConfig.custom_fields ? JSON.parse(batchConfig.custom_fields) : [];
         const audit = auditProfile(candidateData, customFields);
-        const initialStatus = audit.paso1Status;
-
         const customPrompt = batchConfig.bot_ia_prompt || '';
-        const assistantCustomPrompt = batchConfig.assistant_ia_prompt || '';
-
         let systemInstruction = getIdentityLayer(customPrompt);
 
         // --- GRACE & SILENCE ARCHITECTURE ---
         const isNewFlag = candidateData.esNuevo === 'SI';
         const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
-        const isSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
         const isLongSilence = minSinceLastBot >= 5;
 
-        // Total Responsiveness Logic: Any incoming message breaks previous silence.
-        let currentHasGratitude = false;
-        let currentIsSilenced = false;
-
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
+        const currentHasGratitude = hasGratitude;
+        const currentIsSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
 - ¿Es Primer Contacto ?: ${isNewFlag && !isProfileComplete ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
@@ -371,7 +365,6 @@ ${audit.dnaLines}
         let isRecruiterMode = false;
         let responseTextVal = null;
         let project = null;
-        let hasMoveTag = false;
         const historyForGpt = [...recentHistory, currentMessageForGpt];
 
         if (activeProjectId) {
@@ -769,7 +762,7 @@ ${audit.dnaLines}
 
             // 🔄 [TRANSITION & HANDOVER]
             const currentAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
-            const isNowComplete = currentAudit.paso1Status === 'COMPLETO';
+            isNowComplete = currentAudit.paso1Status === 'COMPLETO';
 
             if (await Orchestrator.checkBypass(candidateData, currentAudit)) {
                 console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
@@ -875,6 +868,12 @@ ${audit.dnaLines}
             })();
         }
 
+        // 🧬 [STATE SYNC] Ensure we know if they are complete even if we didn't go through Gemini
+        if (!isNowComplete) {
+            const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
+            isNowComplete = finalAudit.paso1Status === 'COMPLETO';
+        }
+
         // 📝 [DEBUG LOG]: Store full trace NOW before potential timeouts in secondary deliveries
         try {
             const redisClient = getRedisClient();
@@ -903,8 +902,8 @@ ${audit.dnaLines}
 
         await Promise.allSettled([
             deliveryPromise,
-            stickerPromise,
             reactionPromise,
+            updateCandidate(candidateId, candidateUpdates),
             saveMessage(candidateId, {
                 from: 'bot',
                 content: responseTextVal || (aiResult?.reaction ? `[REACCIÓN: ${aiResult.reaction}]` : '[SILENCIO]'),
