@@ -72,13 +72,6 @@ export default async function handler(req, res) {
                 });
             }
 
-            if (type === 'bot_proactive_enabled') {
-                value = await redis.get('bot_proactive_enabled');
-                return res.status(200).json({
-                    success: true,
-                    data: value === 'true'
-                });
-            }
 
             if (type === 'bypass_enabled') {
                 value = await redis.get('bypass_enabled');
@@ -171,13 +164,6 @@ export default async function handler(req, res) {
                 });
             }
 
-            if (type === 'bot_proactive_enabled') {
-                await redis.set('bot_proactive_enabled', data ? 'true' : 'false');
-                return res.status(200).json({
-                    success: true,
-                    message: 'Proactive status saved'
-                });
-            }
 
             if (type === 'bypass_enabled') {
                 await redis.set('bypass_enabled', data ? 'true' : 'false');

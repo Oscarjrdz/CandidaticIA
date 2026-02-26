@@ -17,9 +17,6 @@ export default async function handler(req, res) {
                 token,
                 systemPrompt,
                 isActive,
-                proactiveEnabled,
-                operativeConfig,
-                inactiveStages,
                 extractionRules,
                 cerebro1Rules,
                 cerebro2Context,
@@ -38,26 +35,6 @@ export default async function handler(req, res) {
             // 2. AI Prompt
             if (systemPrompt !== undefined) {
                 await redis.set('bot_ia_prompt', systemPrompt);
-            }
-
-            // 2.5 Proactive Hook Prompt
-            if (req.body.proactivePrompt !== undefined) {
-                await redis.set('bot_proactive_prompt', req.body.proactivePrompt);
-            }
-
-            // 4. Proactive Status (Follow-up)
-            if (proactiveEnabled !== undefined) {
-                await redis.set('bot_proactive_enabled', String(proactiveEnabled));
-            }
-
-            // 5. Operative Config (Hours, Limits)
-            if (operativeConfig !== undefined) {
-                await redis.set('bot_operative_config', JSON.stringify(operativeConfig));
-            }
-
-            // 6. Inactive Stages (Timeline)
-            if (inactiveStages !== undefined) {
-                await redis.set('bot_inactive_stages', JSON.stringify(inactiveStages));
             }
 
             // 7. Advanced Internal Protocols
@@ -79,47 +56,11 @@ export default async function handler(req, res) {
         try {
             const ultramsgConfig = await redis.get('ultramsg_credentials') || await redis.get('ultramsg_config');
             const systemPrompt = await redis.get('bot_ia_prompt');
-            const proactivePrompt = await redis.get('bot_proactive_prompt');
             const isActive = await redis.get('bot_ia_active');
-            const proactiveEnabled = await redis.get('bot_proactive_enabled');
-            const operativeConfigJson = await redis.get('bot_operative_config');
-            const inactiveStagesJson = await redis.get('bot_inactive_stages');
             const extractionRules = await redis.get('bot_extraction_rules');
             const cerebro1Rules = await redis.get('bot_cerebro1_rules');
             const cerebro2Context = await redis.get('bot_cerebro2_context');
             const aiModel = await redis.get('bot_ia_model');
-
-            const operativeConfig = operativeConfigJson ? JSON.parse(operativeConfigJson) : {
-                startHour: 7,
-                endHour: 23,
-                dailyLimit: 300
-            };
-
-            const inactiveStages = inactiveStagesJson ? JSON.parse(inactiveStagesJson) : [
-                { hours: 24, label: 'Recordatorio (Lic. Brenda)' },
-                { hours: 48, label: 'Re-confirmación interés' },
-                { hours: 72, label: 'Último aviso de vacante' },
-                { hours: 168, label: 'Limpieza de base' }
-            ];
-
-            // Default Stats state (Safe fallback)
-            let stats = {
-                today: 0,
-                totalSent: 0,
-                totalRecovered: 0,
-                pending: 0
-            };
-
-            try {
-                const { calculateBotStats } = await import('../utils/bot-stats.js');
-                const calculatedStats = await calculateBotStats();
-                if (calculatedStats) {
-                    stats = calculatedStats;
-                }
-            } catch (statsError) {
-                console.error('⚠️ [Stats] Minor failure fetching stats:', statsError.message);
-                // We let it continue with default 0s so the UI doesn't break
-            }
 
             let instanceId = '';
             let token = '';
@@ -138,16 +79,11 @@ export default async function handler(req, res) {
                 instanceId,
                 token,
                 systemPrompt: systemPrompt || '',
-                proactivePrompt: proactivePrompt || '',
                 isActive: isActive === 'true',
-                proactiveEnabled: proactiveEnabled === 'true',
-                operativeConfig,
-                inactiveStages,
                 extractionRules: extractionRules || '',
                 cerebro1Rules: cerebro1Rules || '',
                 cerebro2Context: cerebro2Context || '',
-                aiModel: aiModel || 'gpt-4o-mini',
-                stats
+                aiModel: aiModel || 'gpt-4o-mini'
             });
 
         } catch (error) {

@@ -14,12 +14,7 @@ const BotIASection = ({ showToast }) => {
 
     // AI Settings
     const [systemPrompt, setSystemPrompt] = useState('');
-    const [proactivePrompt, setProactivePrompt] = useState('');
-    const [proactiveEnabled, setProactiveEnabled] = useState(false);
-    const [aiModel, setAiModel] = useState('gemini-2.0-flash');
-    const [stats, setStats] = useState({ today: 0, totalSent: 0, totalRecovered: 0 });
-    const [operativeConfig, setOperativeConfig] = useState({ startHour: 7, endHour: 23, dailyLimit: 300 });
-    const [inactiveStages, setInactiveStages] = useState([]);
+    const [aiModel, setAiModel] = useState('gpt-4o-mini');
     const [gptConfig, setGptConfig] = useState({
         openaiApiKey: '',
         openaiModel: 'gpt-4o-mini',
@@ -39,33 +34,16 @@ const BotIASection = ({ showToast }) => {
                 if (res.ok) {
                     const data = await res.json();
                     setSystemPrompt(data.systemPrompt || '');
-                    setProactivePrompt(data.proactivePrompt || '');
                     setIsActive(data.isActive);
-                    setProactiveEnabled(data.proactiveEnabled);
                     setExtractionRules(data.extractionRules || '');
                     setCerebro1Rules(data.cerebro1Rules || '');
                     setAiModel(data.aiModel || 'gpt-4o-mini');
-                    if (data.stats) setStats(data.stats);
-                    if (data.operativeConfig) setOperativeConfig(data.operativeConfig);
-                    if (data.inactiveStages) setInactiveStages(data.inactiveStages);
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
             }
         };
 
-        const loadStats = async () => {
-            try {
-                const res = await fetch('/api/bot-ia/settings');
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.stats) setStats(data.stats);
-                    // Polling now ONLY updates statistics to prevent overwriting user edits in progress.
-                }
-            } catch (error) {
-                console.error('Error polling stats:', error);
-            }
-        };
 
         const loadGptConfig = async () => {
             try {
@@ -92,21 +70,6 @@ const BotIASection = ({ showToast }) => {
             setIsInitialLoading(false);
         };
         init();
-
-        // SSE for Live Stats & Flight Plan
-        const eventSource = new EventSource('/api/bot-ia/stats-stream');
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data) setStats(data);
-            } catch (err) {
-                console.error('SSE Parse Error:', err);
-            }
-        };
-
-        return () => {
-            eventSource.close();
-        };
     }, []);
 
     const handleSave = async () => {
@@ -117,10 +80,7 @@ const BotIASection = ({ showToast }) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    systemPrompt, // Added systemPrompt here
-                    proactivePrompt,
-                    operativeConfig,
-                    inactiveStages,
+                    systemPrompt,
                     extractionRules,
                     cerebro1Rules,
                     aiModel
@@ -164,38 +124,6 @@ const BotIASection = ({ showToast }) => {
             showToast('Error al cambiar estado del Bot', 'error');
             setIsActive(!newValue); // Rollback
         }
-    };
-
-    const toggleProactive = async () => {
-        const newValue = !proactiveEnabled;
-        setProactiveEnabled(newValue);
-        try {
-            await fetch('/api/bot-ia/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ proactiveEnabled: newValue })
-            });
-        } catch (error) {
-            console.error('Error toggling Proactive:', error);
-            showToast('Error al cambiar seguimiento', 'error');
-            setProactiveEnabled(!newValue); // Rollback
-        }
-    };
-
-    const addStage = () => {
-        const newStages = [...inactiveStages, { hours: 24, message: '¡Hola! Sigues interesado?' }];
-        setInactiveStages(newStages);
-    };
-
-    const removeStage = (index) => {
-        const newStages = inactiveStages.filter((_, i) => i !== index);
-        setInactiveStages(newStages);
-    };
-
-    const updateStage = (index, field, value) => {
-        const newStages = [...inactiveStages];
-        newStages[index] = { ...newStages[index], [field]: value };
-        setInactiveStages(newStages);
     };
 
     // ⚡ Auto-Save for GPT Host Toggle
@@ -260,8 +188,8 @@ const BotIASection = ({ showToast }) => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* 1. Prompt Extracción (Gemini) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* 1. Prompt Extracción */}
                 <Card
                     title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt Extracción</span>}
                     icon={Bot}
@@ -298,149 +226,6 @@ const BotIASection = ({ showToast }) => {
                                 <option value="gpt-4o">⚡ GPT-4o (Premium)</option>
                                 <option value="gpt-4-turbo">🧠 GPT-4 Turbo</option>
                             </select>
-                        </div>
-                    </div>
-                </Card>
-
-                {/* 2. Prompt de Seguimiento (Gemini) */}
-                <Card
-                    title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt de Seguimiento</span>}
-                    icon={Sparkles}
-                    className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
-                    headerClassName="h-16"
-                    actions={
-                        <button
-                            type="button"
-                            onClick={toggleProactive}
-                            className={`
-                                relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none
-                                ${proactiveEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
-                            `}
-                        >
-                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${proactiveEnabled ? 'translate-x-5' : 'translate-x-1'}`} />
-                        </button>
-                    }
-                >
-                    <div className="space-y-3">
-                        {/* 1. Hook - UI MATCHING CARD 1 */}
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between mb-1.5">
-                                <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
-                                    PROMPT DE SEGUIMIENTO 🎯
-                                </label>
-                                <span className="text-[8px] font-bold text-gray-400 uppercase">OpenAI Powered</span>
-                            </div>
-                            {isInitialLoading ? (
-                                <Skeleton className="w-full h-24 rounded-2xl" />
-                            ) : (
-                                <textarea
-                                    className="w-full h-24 p-4 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-900/40 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 text-xs resize-none leading-relaxed font-medium transition-all"
-                                    value={proactivePrompt}
-                                    onChange={(e) => setProactivePrompt(e.target.value)}
-                                    placeholder="Mensaje inicial..."
-                                />
-                            )}
-                        </div>
-
-                        {/* 2. Flight Plan (Compact) */}
-                        <div className="bg-indigo-50/30 dark:bg-indigo-900/10 border border-indigo-100/30 dark:border-indigo-900/20 p-2.5 rounded-2xl">
-                            <div className="flex items-center justify-between mb-1.5">
-                                <div className="text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                                    <Send className="w-3 h-3" />
-                                    <p className="text-[9px] font-black uppercase tracking-widest">Plan de Vuelo ✈️</p>
-                                </div>
-                                <span className="text-[8px] font-black text-indigo-500 bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded-full border border-indigo-100/50">
-                                    Total: {stats.flightPlan?.summary?.totalItems || 0}
-                                </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
-                                {stats.flightPlan && Object.keys(stats.flightPlan).filter(k => k !== 'summary').slice(0, 4).map((h, i) => {
-                                    const p = stats.flightPlan[h];
-                                    return (
-                                        <div key={i} className="flex flex-col gap-0.5">
-                                            <div className="flex justify-between text-[8px] font-bold">
-                                                <span className="text-gray-500 opacity-70 uppercase">{h}h</span>
-                                                <span className="text-indigo-600">{p.percentage}%</span>
-                                            </div>
-                                            <div className="w-full h-1 bg-white dark:bg-gray-800 rounded-full overflow-hidden">
-                                                <div className="h-full bg-indigo-500/80 rounded-full" style={{ width: `${p.percentage}%` }} />
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* 3. Reactivation Protocols */}
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between px-1">
-                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Protocolos 📑</label>
-                                <button onClick={addStage} className="text-blue-600 hover:text-blue-700 text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
-                                    <Sparkles className="w-2.5 h-2.5" />
-                                    <span>Añadir</span>
-                                </button>
-                            </div>
-                            <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-                                {inactiveStages.map((stage, idx) => (
-                                    <div key={idx} className="group relative flex-shrink-0 w-32 bg-blue-50/40 dark:bg-blue-900/20 p-2 rounded-xl border border-blue-100/30 dark:border-blue-800/30 flex flex-col items-center">
-                                        <div className="flex items-center justify-between w-full mb-1">
-                                            <input
-                                                type="text"
-                                                value={stage.label || ''}
-                                                onChange={(e) => updateStage(idx, 'label', e.target.value)}
-                                                className="w-16 bg-transparent text-[8px] font-black uppercase text-blue-600 focus:outline-none"
-                                                placeholder={`P${idx + 1}`}
-                                            />
-                                            <input
-                                                type="number"
-                                                value={stage.hours}
-                                                onChange={(e) => updateStage(idx, 'hours', parseInt(e.target.value))}
-                                                className="w-6 bg-white dark:bg-gray-800 rounded text-center text-[8px] font-black text-gray-700 focus:outline-none"
-                                            />
-                                        </div>
-                                        <textarea
-                                            value={stage.message}
-                                            onChange={(e) => updateStage(idx, 'message', e.target.value)}
-                                            className="w-full bg-transparent text-[8px] text-gray-600 focus:outline-none placeholder-gray-300 resize-none h-6 leading-tight"
-                                            placeholder="Mensaje..."
-                                        />
-                                        <button onClick={() => removeStage(idx)} className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 bg-red-500 text-white rounded-full p-0.5"><Trash2 className="w-2 h-2" /></button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-2 px-1 pt-1 opacity-80">
-                            <div className="flex flex-col">
-                                <span className="text-[7px] font-black uppercase text-gray-400">Rango Horario</span>
-                                <div className="flex items-center gap-1">
-                                    <input
-                                        type="number"
-                                        value={operativeConfig.startHour}
-                                        onChange={(e) => setOperativeConfig({ ...operativeConfig, startHour: parseInt(e.target.value) || 0 })}
-                                        className="w-4 bg-transparent text-[9px] font-black text-blue-600 focus:outline-none"
-                                    />
-                                    <span className="text-[7px] text-gray-400">-</span>
-                                    <input
-                                        type="number"
-                                        value={operativeConfig.endHour}
-                                        onChange={(e) => setOperativeConfig({ ...operativeConfig, endHour: parseInt(e.target.value) || 0 })}
-                                        className="w-4 bg-transparent text-[9px] font-black text-blue-600 focus:outline-none"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex flex-col items-end">
-                                <span className="text-[7px] font-black uppercase text-red-400">Límite Diario</span>
-                                <div className="flex items-center gap-1">
-                                    <input
-                                        type="number"
-                                        value={operativeConfig.dailyLimit}
-                                        onChange={(e) => setOperativeConfig({ ...operativeConfig, dailyLimit: parseInt(e.target.value) || 0 })}
-                                        className="w-8 bg-transparent text-[9px] font-black text-red-600 focus:outline-none text-right"
-                                    />
-                                    <span className="text-[7px] text-gray-400 uppercase font-black">msg</span>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 </Card>
