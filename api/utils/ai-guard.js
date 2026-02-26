@@ -112,8 +112,13 @@ export class AIGuard {
                 recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {
                 // HIGH VARIETY RECOVERY TEMPLATES (NON-REPETITIVE, BRANDED)
-                const connector = (firstMissing === 'Apellidos') ? 'tus' : 'tu';
-                const maybeExample = (firstMissing === 'Fecha de Nacimiento' || firstMissing === 'fechaNacimiento') ? ' (ej: 19/05/1990)' : '';
+                const missingKey = firstMissing.toLowerCase().trim();
+                const isDate = missingKey.includes('fecha') || missingKey === 'fechanacimiento';
+                const isNames = missingKey.includes('apellidos') || missingKey === 'apellidos';
+                const isCategory = missingKey.includes('categor') || missingKey === 'categoria';
+
+                const connector = isNames ? 'tus' : 'tu';
+                const maybeExample = isDate ? ' (ej: 19/05/1990)' : '';
 
                 const templates = [
                     `¡Excelente! ✨ ${firstName ? firstName + ', p' : 'P'}ara avanzar con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}${maybeExample}? 😉🌸`,
@@ -128,7 +133,7 @@ export class AIGuard {
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
 
                 // 🎡 [SPECIAL CATEGORY RECOVERY]: If missing field is Category, force the list injection
-                if (firstMissing === 'Categoría' || firstMissing === 'categoria') {
+                if (isCategory) {
                     recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${categoriesList}\n\n¿Cuál eliges? 🤭✨`;
                 }
             }
