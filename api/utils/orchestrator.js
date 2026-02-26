@@ -132,6 +132,34 @@ export class Orchestrator {
         const bridgeKey = await MediaEngine.resolveBridgeSticker('STEP_MOVE');
         await MediaEngine.sendCongratsPack(config, phone, bridgeKey || 'bot_step_move_sticker');
 
+        // 📊 [X-RAY INTEGRATION]
+        if (redis) {
+            try {
+                const xrayTrace = {
+                    timestamp: new Date().toISOString(),
+                    candidateId,
+                    candidateData: {
+                        nombreReal: candidateData.nombreReal,
+                        edad: candidateData.edad,
+                        municipio: candidateData.municipio,
+                        categoria: candidateData.categoria,
+                        escolaridad: candidateData.escolaridad,
+                        genero: candidateData.genero
+                    },
+                    finalResult: 'MATCH',
+                    projectMatched: project.name,
+                    rules: [{ ruleName: 'Intelligent Matching Engine', isMatch: true, criteria: {}, checks: { age: true, municipio: true, categoria: true, escolaridad: true, genero: true } }]
+                };
+                await redis.lpush('debug:bypass:traces', JSON.stringify(xrayTrace));
+                await redis.ltrim('debug:bypass:traces', 0, 49);
+                // Also v2 if exists
+                await redis.lpush('debug:bypass:v2:traces', JSON.stringify(xrayTrace));
+                await redis.ltrim('debug:bypass:v2:traces', 0, 49);
+            } catch (e) {
+                console.warn('[ORCHESTRATOR] X-Ray trace failed');
+            }
+        }
+
         console.log(`[ORCHESTRATOR] ✅ Handover Success!`);
 
         return {
