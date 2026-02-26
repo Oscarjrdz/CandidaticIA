@@ -16,9 +16,6 @@ import { sendUltraMsgMessage } from '../whatsapp/utils.js';
 export class Orchestrator {
     /**
      * Determines if a candidate is ready to bypass Brenda and enter a project.
-     */
-    /**
-     * Determines if a candidate is ready to bypass Brenda and enter a project.
      * GLOBAL BEST PRACTICE: Re-evaluate on every 'COMPLETO' event.
      */
     static async checkBypass(candidateData, audit, isEnabled = true) {
@@ -48,52 +45,67 @@ export class Orchestrator {
     static async executeHandover(candidateData, config) {
         const candidateId = candidateData.id;
         const phone = candidateData.whatsapp;
+        const trace = [];
+        const logTrace = (m) => {
+            console.log(m);
+            trace.push(`[${new Date().toISOString()}] ${m}`);
+        };
 
-        console.log(`[ORCHESTRATOR] 🎯 Executing Intelligent Handover for ${candidateId}`);
+        logTrace(`🎯 Starting Intelligent Handover for ${candidateId}`);
 
         // 1. SMART MATCHING ENGINE (Silicon Valley Pattern)
         const redis = getRedisClient();
         const projects = await getProjects();
-        console.log(`[ORCHESTRATOR] 🧩 Found ${projects.length} active projects for handover.`);
+        logTrace(`🧩 Found ${projects.length} active projects for handover.`);
 
         // Priority 1: Specifically selected bypass project
         let targetProjectId = await redis?.get('bypass_selection');
-        if (targetProjectId && targetProjectId.trim() === '') targetProjectId = null;
+        if (targetProjectId && (targetProjectId.trim() === '' || targetProjectId === 'null')) targetProjectId = null;
 
-        console.log(`[ORCHESTRATOR] 📍 Global Bypass Selection: ${targetProjectId || 'None'}`);
+        logTrace(`📍 Global Bypass Selection: ${targetProjectId || 'None'}`);
 
         // Validation: Ensure the selected bypass project actually exists
         if (targetProjectId) {
             const selectedExists = projects.some(p => p.id === targetProjectId);
             if (!selectedExists) {
-                console.warn(`[ORCHESTRATOR] ⚠️ Bypass project ${targetProjectId} not found in active list. Falling back...`);
+                logTrace(`⚠️ Bypass project ${targetProjectId} not found in active list. Falling back...`);
                 targetProjectId = null;
             }
         }
 
         // Priority 2: Match based on Municipality/Category or first active project
         if (!targetProjectId && projects.length > 0) {
-            console.log(`[ORCHESTRATOR] 🔍 Proactive matching logic triggered...`);
+            logTrace(`🔍 Proactive matching logic triggered...`);
             const matchedProject = projects.find(p => {
                 const vacancyIds = p.vacancyIds || [];
                 // Silicon Valley Pattern: Link to the first project that has active vacancies
                 const hasVacancies = Array.isArray(vacancyIds) && vacancyIds.length > 0;
-                if (hasVacancies) console.log(`[ORCHESTRATOR] ✅ Found project with vacancies: ${p.name}`);
+                if (hasVacancies) logTrace(`✅ Project matched with vacancies: ${p.name}`);
                 return hasVacancies;
             }) || projects[0];
 
             targetProjectId = matchedProject?.id;
-            console.log(`[ORCHESTRATOR] 🏁 Match Result: ${targetProjectId} (${matchedProject?.name || 'Unknown'})`);
+            logTrace(`🏁 Match Result: ${targetProjectId} (${matchedProject?.name || 'Unknown'})`);
+        }
+
+        // --- PERSISTENCE TRACE ---
+        if (trace.length > 0 && redis) {
+            try {
+                await redis.lpush(`trace:handover:${candidateId}`, ...trace.reverse());
+                await redis.ltrim(`trace:handover:${candidateId}`, 0, 19);
+            } catch (e) {
+                console.warn('[ORCHESTRATOR] Failed to save trace to Redis');
+            }
         }
 
         if (!targetProjectId) {
-            console.warn('[ORCHESTRATOR] ⚠️ No matching project found for handover.');
+            logTrace('❌ No matching project found for handover.');
             return false;
         }
 
         const project = await getProjectById(targetProjectId);
         if (!project || !project.steps || project.steps.length === 0) {
-            console.warn(`[ORCHESTRATOR] ⚠️ Invalid project ${targetProjectId} for handover.`);
+            logTrace(`❌ Invalid project ${targetProjectId} for handover.`);
             return false;
         }
 
@@ -117,11 +129,10 @@ export class Orchestrator {
         await saveMessage(candidateId, { from: 'bot', content: congratsMsg, timestamp: new Date().toISOString() });
 
         // 🌉 THE "JIM CARREY" BRIDGE STICKER
-        // We look for 'bot_step_move_sticker' or 'bot_bridge_standard'
         const bridgeKey = await MediaEngine.resolveBridgeSticker('STEP_MOVE');
         await MediaEngine.sendCongratsPack(config, phone, bridgeKey || 'bot_step_move_sticker');
 
-        console.log(`[ORCHESTRATOR] ✅ Handover Success: Candidate ${candidateId} -> ${project.name}`);
+        console.log(`[ORCHESTRATOR] ✅ Handover Success!`);
 
         return {
             projectId: targetProjectId,

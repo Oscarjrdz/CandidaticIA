@@ -379,7 +379,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             if (candidateData && candidateData.whatsapp) {
                 const phone = candidateData.whatsapp;
                 const id = candidateId;
-                await redis.del(`candidatic: candidate:${id} `);
+                await redis.del(`candidate:${id}`);
                 await redis.hdel('candidatic:phone_index', phone);
                 if (config) {
                     await sendUltraMsgMessage(config.instanceId, config.token, phone, "🧨 DATOS BORRADOS. Eres un usuario nuevo. Di 'Hola' para empezar.");
