@@ -91,10 +91,20 @@ export class AIGuard {
             const nameWords = candidateName ? candidateName.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
             const firstName = (candidateName && nameWords > 0) ? candidateName.trim().split(/\s+/)[0] : null;
 
+            // 🧠 [SENTIMENT ANALYSIS - LIGHT]: Detect if user is giving a neutral or negative answer
+            const lowerInput = (lastInput || "").toLowerCase().trim();
+            const isNeutralOrNeg = /^(no|nop|ni modo|nada|ninguno|nu|mmm|pos|pues|mal|ay|que mal|tache|ni idea|no se|no sé|desconozco)$/i.test(lowerInput) ||
+                lowerInput.includes('no vivo') || lowerInput.includes('no tengo');
+
             // Smart Logic: Only ask for surnames if we *only* have a first name (1 word)
             if (firstMissing === 'Apellidos' || (firstMissing === 'Nombre completo' && nameWords === 1)) {
                 const namePart = firstName ? `, ${firstName}` : '';
-                const templates = [
+                const templates = isNeutralOrNeg ? [
+                    `Entiendo${namePart}. 😉 Pero para seguir, sí me harían falta tus apellidos. ¿Me los pasas? ✨`,
+                    `No te preocupes${namePart}. ✨ Solo dime tus apellidos para que ya quedes en nuestro sistema. 🤭`,
+                    `¡Vale! ✨ Solo nos faltan tus apellidos para avanzar con tu registro. ¿Me ayudas? 🌸`,
+                    `Dato anotado${namePart}. ✅ ¿Me pasarías tus apellidos para continuar? ✨`
+                ] : [
                     `¡Excelente${namePart}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para continuar con tu registro? 🌸`,
                     `¡Mucho gusto${namePart}! 💖 Solo me faltan tus apellidos para que ya quedes en nuestro sistema. 🤭 ¿Me los pasas? ✨`,
                     `¡Qué bonito nombre${namePart}! 🌟 ¿Podrías decirme tus apellidos? Es para seguir con el proceso. 😉✨`,
@@ -102,16 +112,14 @@ export class AIGuard {
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             } else if (reason === 'FALLBACK_REPETITION' || reason === 'FALLBACK_IDENTITY_REPETITION') {
-                // Specific variation for repetition to break the loop - DIVERSIFIED
                 const variationTemplates = [
                     `${firstName ? firstName + ', d' : 'D'}ime, ¿me puedes pasar tu ${firstMissing}? Es para tu registro. ✨`,
                     `Para seguir, ¿cuál es tu ${firstMissing}? 😉🌸`,
                     `${firstName ? firstName + ', c' : 'C'}uéntame sobre tu ${firstMissing}, ¡me falta ese dato! ✨`,
-                    `¡Qué bien! ✨ Pero me falta confirmar tu ${firstMissing}. 🌸 ¿Me lo dices?`
+                    `¡Ok! ✨ Pero me falta confirmar tu ${firstMissing}. 🌸 ¿Me lo dices?`
                 ];
                 recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {
-                // HIGH VARIETY RECOVERY TEMPLATES (NON-REPETITIVE, BRANDED)
                 const missingKey = firstMissing.toLowerCase().trim();
                 const isDate = missingKey.includes('fecha') || missingKey === 'fechanacimiento';
                 const isNames = missingKey.includes('apellidos') || missingKey === 'apellidos';
@@ -120,7 +128,12 @@ export class AIGuard {
                 const connector = isNames ? 'tus' : 'tu';
                 const maybeExample = isDate ? ' (ej: 19/05/1990)' : '';
 
-                const templates = [
+                const templates = isNeutralOrNeg ? [
+                    `Entiendo. ✨ Para seguir con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}${maybeExample}? 😉🌸`,
+                    `¡Vale! ✨ Me hace falta saber ${connector} ${firstMissing}${maybeExample} para tener tu perfil listo. 🤭 ¿Me ayudas? ✨`,
+                    `No te preocupes. 💖 Oye, ¿me darías el dato de ${connector} ${firstMissing}${maybeExample}? Es para buscarte vacante hoy mismo. 😉✨`,
+                    `Dato anotado. ✅ ¿Me podrías decir ${connector} ${firstMissing}${maybeExample}? Es importante para el proceso. 🌸`
+                ] : [
                     `¡Excelente! ✨ ${firstName ? firstName + ', p' : 'P'}ara avanzar con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}${maybeExample}? 😉🌸`,
                     `${firstName ? '¡' + firstName + '! ✨ ' : ''}Me hace falta saber ${connector} ${firstMissing}${maybeExample} para tener tu perfil listo. 🤭 ¿Me ayudas con eso? ✨`,
                     `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito el dato de ${connector} ${firstMissing}${maybeExample} para encontrarte la mejor vacante hoy mismo. 😉✨`,
@@ -134,7 +147,10 @@ export class AIGuard {
 
                 // 🎡 [SPECIAL CATEGORY RECOVERY]: If missing field is Category, force the list injection
                 if (isCategory) {
-                    recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${categoriesList}\n\n¿Cuál eliges? 🤭✨`;
+                    const finalCats = (categoriesList && categoriesList.trim().length > 5) ? categoriesList : "✅ Operador General\n✅ Almacenista\n✅ Montacarguista\n✅ Administrativo";
+                    recoveryText = isNeutralOrNeg ?
+                        `¡Vale! ✨ Para ya darte de alta en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${finalCats}\n\n¿Cuál eliges? 🤭✨` :
+                        `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${finalCats}\n\n¿Cuál eliges? 🤭✨`;
                 }
             }
         }
