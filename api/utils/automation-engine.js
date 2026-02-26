@@ -1,14 +1,11 @@
 import {
     getRedisClient,
     getMessages,
-    getAIAutomations,
     getCandidates,
     saveMessage,
     getCandidateByPhone,
-    incrementAIAutomationSentCount,
     updateCandidate,
     auditProfile,
-    isProfileComplete,
     recordAITelemetry
 } from './storage.js';
 import { GoogleGenerativeAI } from "@google/generative-ai";
