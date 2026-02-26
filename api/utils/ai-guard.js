@@ -81,7 +81,7 @@ export class AIGuard {
         } else if (lastInput && /^(si|claro|por supuesto|ok|sip|ayudo|te ayudo|adelante|dime|está bien|esta bien|bueno)$/i.test(lastInput.trim().toLowerCase())) {
             // 🌸 INTENT-TO-HELP HANDOVER: If user said "Yes", "Sure", etc.
             const templates = [
-                `¡Súper! ✨ Cuéntame, ¿cuál es tu ${firstMissing}? 🤭`,
+                `¡Qué bien! ✨ Cuéntame, ¿cuál es tu ${firstMissing}? 🤭`,
                 `¡Excelente! 🌟 Dime tu ${firstMissing} para avanzar. ✨`,
                 `¡Qué alegría! 💖 ¿Me pasas tu ${firstMissing} porfa? 🌸`,
                 `¡Perfecto! 😉 ¿Me podrías decir tu ${firstMissing}? ✨`
@@ -95,10 +95,10 @@ export class AIGuard {
             if (firstMissing === 'Apellidos' || (firstMissing === 'Nombre completo' && nameWords === 1)) {
                 const namePart = firstName ? `, ${firstName}` : '';
                 const templates = [
-                    `¡Súper${namePart}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para completar tu registro? 🌸`,
+                    `¡Excelente${namePart}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para completar tu registro? 🌸`,
                     `¡Mucho gusto${namePart}! 💖 Solo me faltan tus apellidos para que ya quedes en el sistema. 🤭 ¿Me los pasas? ✨`,
                     `¡Qué bonito nombre${namePart}! 🌟 ¿Podrías decirme tus apellidos? Es el último pasito. 😉✨`,
-                    `¡Excelente${namePart}! ✨ Para terminar, ¿cuáles son tus apellidos? 🌸`
+                    `¡Perfecto${namePart}! ✨ Para terminar, ¿cuáles son tus apellidos? 🌸`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             } else if (reason === 'FALLBACK_REPETITION' || reason === 'FALLBACK_IDENTITY_REPETITION') {
@@ -107,21 +107,21 @@ export class AIGuard {
                     `${firstName ? firstName + ', d' : 'D'}ime, ¿me puedes pasar tu ${firstMissing}? Es para tu registro. ✨`,
                     `Para seguir, ¿cuál es tu ${firstMissing}? 😉🌸`,
                     `Oye, cuéntame sobre tu ${firstMissing}, ¡me falta ese dato! ✨`,
-                    `¡Súper! ✨ Pero me falta confirmar tu ${firstMissing}. 🌸 ¿Me lo dices?`
+                    `¡Qué bien! ✨ Pero me falta confirmar tu ${firstMissing}. 🌸 ¿Me lo dices?`
                 ];
                 recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {
                 // HIGH VARIETY RECOVERY TEMPLATES (NON-REPETITIVE, BRANDED)
                 const connector = (firstMissing === 'Apellidos') ? 'tus' : 'tu';
                 const templates = [
-                    `¡Súper! ✨ ${firstName ? firstName + ', p' : 'P'}ara avanzar con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}? 😉🌸`,
+                    `¡Excelente! ✨ ${firstName ? firstName + ', p' : 'P'}ara avanzar con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}? 😉🌸`,
                     `${firstName ? '¡' + firstName + '! ✨ ' : ''}Me hace falta saber ${connector} ${firstMissing} para tener tu perfil listo en el sistema. 🤭 ¿Me ayudas con eso? ✨`,
                     `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito el dato de ${connector} ${firstMissing} para encontrarte la mejor vacante hoy mismo. 😉✨`,
                     `¿Me podrías decir ${connector} ${firstMissing}? ✨ Es el último paso para entrar al proceso. 🌸`,
-                    `¡Excelente! 🌟 Para que ya quedes en la base de datos, dime ${connector} ${firstMissing}. 🤭✨`,
+                    `¡Qué alegría! 🌟 Para que ya quedes en la base de datos, dime ${connector} ${firstMissing}. 🤭✨`,
                     `¡Vas súper bien! ✨ ${firstName ? firstName + ', d' : 'D'}ime ${connector} ${firstMissing} para decirte qué vacantes tenemos disponibles. 🌸`,
                     `Oye, ${firstName || 'un detalle'}, ¿cuál es ${connector} ${firstMissing}? ✨ Me sirve mucho para tu registro. 😉`,
-                    `¡Qué alegría! 💖 Ya casi acabamos. ¿Me pasas ${connector} ${firstMissing}? ✨🌸`
+                    `¡Perfecto! 💖 Ya casi acabamos. ¿Me pasas ${connector} ${firstMissing}? ✨🌸`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             }

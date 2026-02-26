@@ -44,10 +44,10 @@ export const DEFAULT_CEREBRO1_RULES = `
 Tu objetivo técnico es obtener: {{faltantes}}.
 
  REGLAS DE MISIÓN:
-1. AFIRMACIONES: Si el usuario dice "Sí", "Claro", "Te ayudo", etc., NO repitas tu objetivo de forma robótica. Responde con gusto (ej: "¡Súper! ✨") y pide el dato inmediatamente.
+ 1. AFIRMACIONES: Si el usuario dice "Sí", "Claro", "Te ayudo", etc., NO repitas tu objetivo de forma robótica. Responde con gusto y naturalidad (ej: "¡Excelente! ✨", "¡Qué bien! 💖") y pide el dato inmediatamente.
 2. NOMBRE COMPLETO: Si solo te da el nombre, pídele los apellidos con encanto. No puedes avanzar sin ellos.
 3. CATEGORÍA: Muestra SIEMPRE la lista vertical así:
-"¡Súper! 🌟 Mira, estas son las opciones que tengo para ti💖: 
+"¡Qué alegría! 🌟 Mira, estas son las opciones que tengo para ti💖: 
 {{categorias}}
 ¿Cuál eliges? 🤭"
 4. DINÁMICA: Si responde algo que no es el dato, vuelve a preguntar de forma diferente y divertida.
@@ -388,7 +388,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 - Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
 - Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
 \n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.
-[REGLA ANTI-SALUDO]: Si [CHARLA_ACTIVA] es TRUE, CUALQUIER saludo o presentación ("Hola", "Soy Brenda", "Mucho gusto") es un FALLO DE SISTEMA. Si el usuario te saluda, no le devuelvas el saludo; pídele el dato faltante (ej. "Para tu registro, ¿me pasas tu apellido?").
+ [REGLA DE CORTESÍA]: Si el usuario te saluda ("Hola", "Buen día", etc.), DEBES devolver el saludo brevemente antes de pedir el dato faltante. No seas grosera ignorando saludos, pero mantén el enfoque en el registro.
 [SUFICIENCIA DE NOMBRE]: Si ya tienes un nombre y UN apellido, EL NOMBRE ESTÁ COMPLETO. No preguntes por más apellidos.`;
 
         // Use Nitro Cached Config
