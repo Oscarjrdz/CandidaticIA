@@ -26,9 +26,7 @@ const CandidatesSection = ({ showToast }) => {
     const [search, setSearch] = useState('');
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
-    const [proactiveEnabled, setProactiveEnabled] = useState(false);
     const [lastUpdate, setLastUpdate] = useState(null);
-    const [proactiveLoading, setProactiveLoading] = useState(false);
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
         try {
@@ -100,21 +98,6 @@ const CandidatesSection = ({ showToast }) => {
 
             // Cargar campos dinámicos
             loadFields();
-
-            // Cargar estatus proactivo
-            loadProactiveStatus();
-        };
-
-        const loadProactiveStatus = async () => {
-            try {
-                const res = await fetch('/api/settings?type=bot_proactive_enabled');
-                if (res.ok) {
-                    const json = await res.json();
-                    setProactiveEnabled(json.data === true);
-                }
-            } catch (error) {
-                console.error('Error loading proactive status:', error);
-            }
         };
 
         const loadFields = async () => {
@@ -142,25 +125,6 @@ const CandidatesSection = ({ showToast }) => {
         return () => subscription.stop();
     }, [aiFilteredCandidates]); // Restart/Update subscription when context changes
 
-    const toggleProactive = async () => {
-        setProactiveLoading(true);
-        const newValue = !proactiveEnabled;
-        try {
-            const res = await fetch('/api/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'bot_proactive_enabled', data: newValue })
-            });
-            if (res.ok) {
-                setProactiveEnabled(newValue);
-                showToast(newValue ? 'Seguimiento IA Activado' : 'Seguimiento IA Desactivado', 'info');
-            }
-        } catch (error) {
-            showToast('Error al cambiar estatus', 'error');
-        } finally {
-            setProactiveLoading(false);
-        }
-    };
 
 
     const handleViewHistory = async (candidate) => {
@@ -486,33 +450,6 @@ const CandidatesSection = ({ showToast }) => {
                         showToast={showToast}
                     />
 
-                    {/* Proactive Follow-up Master Switch */}
-                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm">
-                        <div className="flex flex-col">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Seguimiento</span>
-                            <span className={`text-[10px] font-bold ${proactiveEnabled ? 'text-blue-600' : 'text-gray-400'}`}>
-                                {proactiveEnabled ? 'AUTO' : 'OFF'}
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={toggleProactive}
-                            disabled={proactiveLoading}
-                            className={`
-                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                                ${proactiveEnabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
-                                ${proactiveLoading ? 'opacity-50' : 'opacity-100'}
-                            `}
-                        >
-                            <span
-                                className={`
-                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform
-                                    ${proactiveEnabled ? 'translate-x-6' : 'translate-x-1'}
-                                `}
-                            />
-                        </button>
-                    </div>
-
                     {/* Hide Incomplete Master Switch */}
                     <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm cursor-pointer" onClick={() => setHideIncomplete(!hideIncomplete)}>
                         <div className="flex flex-col">
@@ -648,11 +585,6 @@ const CandidatesSection = ({ showToast }) => {
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
                                         <div className="flex justify-center">
                                             <Ban className="w-3.5 h-3.5 opacity-50" />
-                                        </div>
-                                    </th>
-                                    <th className="text-center py-1 px-1 font-black text-gray-400 dark:text-gray-500 w-10">
-                                        <div className="flex justify-center">
-                                            <span className="text-[8px] uppercase tracking-tighter">Seg.</span>
                                         </div>
                                     </th>
                                     <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10"></th>
@@ -797,33 +729,6 @@ const CandidatesSection = ({ showToast }) => {
                                                         </div>
                                                     </button>
                                                 </div>
-                                            </td>
-                                            <td className="py-0.5 px-2.5 text-center">
-                                                {/* Rainbow Checkmarks (Separate Column) - Infinite Cycle 50% size */}
-                                                {candidate.followUps > 0 && (
-                                                    <div
-                                                        className="flex items-center justify-center -space-x-1 cursor-default select-none pointer-events-none flex-wrap max-w-[60px] mx-auto"
-                                                        title={`${candidate.followUps} seguimientos enviados`}
-                                                    >
-                                                        {[...Array(Number(candidate.followUps))].map((_, i) => {
-                                                            const colors = [
-                                                                'text-blue-500', 'text-purple-500', 'text-orange-500',
-                                                                'text-pink-500', 'text-emerald-500', 'text-rose-500',
-                                                                'text-amber-500', 'text-indigo-500', 'text-cyan-500',
-                                                                'text-violet-500'
-                                                            ];
-                                                            const colorClass = colors[i % colors.length];
-
-                                                            return (
-                                                                <Check
-                                                                    key={i}
-                                                                    className={`w-2 h-2 ${colorClass} -ml-1 first:ml-0`}
-                                                                    strokeWidth={8}
-                                                                />
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
                                             </td>
                                             <td className="py-0.5 px-2.5 text-center">
                                                 <button
