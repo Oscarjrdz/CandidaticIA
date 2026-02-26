@@ -52,7 +52,7 @@ export default async function handler(req, res) {
                 value = await redis.get('ai_config');
                 return res.status(200).json({
                     success: true,
-                    data: value ? JSON.parse(value) : { geminiApiKey: '' }
+                    data: value ? JSON.parse(value) : { openaiApiKey: '' }
                 });
             }
 

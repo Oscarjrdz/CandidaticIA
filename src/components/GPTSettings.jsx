@@ -3,8 +3,8 @@ import { Brain, Save, Loader2, Key, CheckCircle, XCircle, RefreshCw, Sparkles } 
 import Card from './ui/Card';
 import Button from './ui/Button';
 
-const AISettings = ({ showToast }) => {
-    const [config, setConfig] = useState({ geminiApiKey: '' });
+const GPTSettings = ({ showToast }) => {
+    const [config, setConfig] = useState({ openaiApiKey: '', openaiModel: 'gpt-4o-mini' });
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [validating, setValidating] = useState(false);
@@ -22,8 +22,8 @@ const AISettings = ({ showToast }) => {
             const data = await response.json();
             if (data.success && data.data) {
                 setConfig(data.data);
-                if (data.data.geminiApiKey) {
-                    validateKey(data.data.geminiApiKey);
+                if (data.data.openaiApiKey) {
+                    validateKey(data.data.openaiApiKey);
                 }
             }
         } catch (error) {
@@ -33,7 +33,7 @@ const AISettings = ({ showToast }) => {
         }
     };
 
-    const validateKey = async (keyToValidate = config.geminiApiKey) => {
+    const validateKey = async (keyToValidate = config.openaiApiKey) => {
         if (!keyToValidate) return;
         setValidating(true);
         setStatus('loading');
@@ -72,7 +72,7 @@ const AISettings = ({ showToast }) => {
             });
             const data = await response.json();
             if (data.success) {
-                showToast('Configuración de AI guardada', 'success');
+                showToast('Configuración de GPT guardada', 'success');
                 validateKey();
             } else {
                 showToast(data.error || 'Error al guardar', 'error');
@@ -93,8 +93,8 @@ const AISettings = ({ showToast }) => {
                             <Brain className="w-5 h-5 text-purple-600 dark:text-purple-300" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Candidatic Intelligence</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Configuración de Inteligencia Artificial (OpenAI GPT)</p>
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">GPT Credenciales</h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Configuración Central de GPT (OpenAI)</p>
                         </div>
                     </div>
 
@@ -181,4 +181,4 @@ const AISettings = ({ showToast }) => {
     );
 };
 
-export default AISettings;
+export default GPTSettings;

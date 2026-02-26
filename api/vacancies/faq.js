@@ -127,7 +127,7 @@ export default async function handler(req, res) {
 
             if (action === 'recluster') {
                 const config = await getCachedConfig();
-                const apiKey = config.geminiApiKey || process.env.GEMINI_API_KEY;
+                const apiKey = config.openaiApiKey || process.env.OPENAI_API_KEY;
 
                 const result = await reclusterVacancyFaqs(vacancyId, apiKey);
                 if (result.success) {

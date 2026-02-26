@@ -1,5 +1,5 @@
 import React from 'react';
-import AISettings from './AISettings';
+import GPTSettings from './GPTSettings';
 import UltraMsgSettings from './UltraMsgSettings';
 
 /**
@@ -12,7 +12,7 @@ const SettingsSection = ({ instanceId, token, onCredentialsChange, showToast }) 
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <UltraMsgSettings showToast={showToast} />
-                <AISettings showToast={showToast} />
+                <GPTSettings showToast={showToast} />
             </div>
         </div>
     );

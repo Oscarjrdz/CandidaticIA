@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import axios from 'axios';
 import { getRedisClient, recordAITelemetry } from "../utils/storage.js";
 
 /**
@@ -16,18 +16,7 @@ export const processUnansweredQuestion = async (vacancyId, question, responseTex
         const data = await client.get(key);
         let faqs = data ? JSON.parse(data) : [];
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-
-        // Fast, cheap model for clustering (v2.0 fixed 404 errors)
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-            generationConfig: {
-                temperature: 0.1,
-                responseMimeType: "application/json",
-            }
-        });
-
-        // We only pass the topics to save tokens
+        // Classification Prompt
         const existingTopics = faqs.map(f => ({
             id: f.id,
             topic: f.topic
@@ -51,19 +40,24 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
 }
 `;
 
-        const result = await model.generateContent(prompt);
-        let responseJson = result.response.text().trim();
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.1,
+            response_format: { type: "json_object" }
+        }, {
+            headers: {
+                'Authorization': `Bearer ${apiKey.trim()}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 15000
+        });
 
-        if (responseJson.startsWith('```json')) {
-            responseJson = responseJson.replace(/```json\n?/, '').replace(/```\n?$/, '');
-        }
-
-        const parsed = JSON.parse(responseJson);
+        const parsed = response.data.choices[0].message.content ? JSON.parse(response.data.choices[0].message.content) : {};
 
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
         if (parsed.id) {
-            // Found an existing topic
             const index = faqs.findIndex(f => f.id === parsed.id);
             if (index !== -1) {
                 faqs[index].frequency = (faqs[index].frequency || 1) + 1;
@@ -71,10 +65,8 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
                     faqs[index].originalQuestions.push(question);
                 }
                 faqs[index].lastAskedAt = new Date().toISOString();
-                // Store the last AI response for auditing
                 faqs[index].lastAiResponse = responseText;
             } else {
-                // Fallback if AI hallucinations an ID
                 faqs.push({
                     id: generateId(),
                     topic: parsed.new_topic || "Preguntas Generales",
@@ -86,7 +78,6 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
                 });
             }
         } else {
-            // New topic
             faqs.push({
                 id: generateId(),
                 topic: parsed.new_topic || "Preguntas Generales",
@@ -98,20 +89,19 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
             });
         }
 
-        // Save back to Redis
         await client.set(key, JSON.stringify(faqs));
-        console.log(`[FAQ Engine] ✅ Processed question for vacancy ${vacancyId}: "${question}"`);
+        console.log(`[FAQ Engine] ✅ Processed question (OpenAI) for vacancy ${vacancyId}: "${question}"`);
         await recordAITelemetry('SYSTEM', 'faq_processed', { vacancyId, question, status: 'success' });
 
     } catch (e) {
-        console.error('❌ FAQ Engine Error:', e);
+        console.error('❌ FAQ Engine Error (OpenAI):', e.response?.data || e.message);
         await recordAITelemetry('SYSTEM', 'faq_error', { vacancyId, question, error: e.message });
     }
 };
+
 /**
  * 🧹 RE-CLUSTER FAQ ENGINE
- * Re-evaluates all existing questions against the current topics.
- * Useful after renaming topics to improve classification.
+ * Re-evaluates all existing questions against the current topics using OpenAI.
  */
 export const reclusterVacancyFaqs = async (vacancyId, apiKey) => {
     if (!vacancyId || !apiKey) return { success: false, error: 'Missing params' };
@@ -127,8 +117,6 @@ export const reclusterVacancyFaqs = async (vacancyId, apiKey) => {
         let faqs = JSON.parse(data);
         if (faqs.length === 0) return { success: true };
 
-        // 1. Gather all unique questions and their associated metadata (like officialAnswer)
-        // We'll try to preserve officialAnswers if they exist for a topic.
         const allQuestions = [];
         faqs.forEach(f => {
             (f.originalQuestions || []).forEach(q => {
@@ -141,16 +129,6 @@ export const reclusterVacancyFaqs = async (vacancyId, apiKey) => {
             topic: f.topic
         }));
 
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-            generationConfig: {
-                temperature: 0.1,
-                responseMimeType: "application/json",
-            }
-        });
-
-        // 2. Ask AI to map EACH question to the best topic
         const prompt = `Actúas como un organizador de preguntas de candidatos.
 Se te ha dado una lista de preguntas reales y una lista de temas (topics) definidos por el usuario.
 
@@ -165,21 +143,29 @@ Asigna cada pregunta al ID del tema que mejor le corresponda.
 Si una pregunta no encaja en NINGUNO de los temas actuales, asígnala a null.
 
 RESPONDE ÚNICAMENTE CON UN ARRAY DE OBJETOS JSON:
-[
-  { "q": "texto de la pregunta", "topicId": "id-del-tema o null" },
-  ...
-]`;
+{
+  "mappings": [
+    { "q": "texto de la pregunta", "topicId": "id-del-tema o null" },
+    ...
+  ]
+}`;
 
-        const result = await model.generateContent(prompt);
-        let responseJson = result.response.text().trim();
-        if (responseJson.startsWith('```json')) {
-            responseJson = responseJson.replace(/```json\n?/, '').replace(/```\n?$/, '');
-        }
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+            model: 'gpt-4o-mini',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.1,
+            response_format: { type: "json_object" }
+        }, {
+            headers: {
+                'Authorization': `Bearer ${apiKey.trim()}`,
+                'Content-Type': 'application/json'
+            },
+            timeout: 30000
+        });
 
-        const mappings = JSON.parse(responseJson);
+        const result = response.data.choices[0].message.content ? JSON.parse(response.data.choices[0].message.content) : {};
+        const mappings = result.mappings || [];
 
-        // 3. Rebuild the FAQ structure
-        // We keep the old topics (to preserve officialAnswers) but clear their questions
         const newFaqs = faqs.map(f => ({
             ...f,
             originalQuestions: [],
@@ -197,8 +183,6 @@ RESPONDE ÚNICAMENTE CON UN ARRAY DE OBJETOS JSON:
                     target.lastAskedAt = new Date().toISOString();
                 }
             } else {
-                // Orphan question or needs new topic
-                // For simplicity in recluster, we find or create an "Otros" topic if not mapped
                 let otros = newFaqs.find(f => f.topic.toLowerCase().includes('otros') || f.topic.toLowerCase().includes('general'));
                 if (!otros) {
                     otros = {
@@ -216,7 +200,6 @@ RESPONDE ÚNICAMENTE CON UN ARRAY DE OBJETOS JSON:
             }
         });
 
-        // Remove topics that ended up with 0 questions (unless they have an official answer)
         const filteredFaqs = newFaqs.filter(f => f.frequency > 0 || f.officialAnswer);
 
         await client.set(key, JSON.stringify(filteredFaqs));
@@ -225,7 +208,7 @@ RESPONDE ÚNICAMENTE CON UN ARRAY DE OBJETOS JSON:
         return { success: true, faqs: filteredFaqs };
 
     } catch (e) {
-        console.error('❌ Recluster Error:', e);
+        console.error('❌ Recluster Error (OpenAI):', e.response?.data || e.message);
         return { success: false, error: e.message };
     }
 };

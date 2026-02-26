@@ -299,7 +299,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 };
             });
 
-        // CRITICAL FIX: Gemini requires first message to be from 'user'
+        // 📋 [MISSION: Profile Complete?]
         // If history starts with 'model', remove leading model messages
         while (recentHistory.length > 0 && recentHistory[0].role === 'model') {
             recentHistory.shift();
@@ -413,10 +413,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos.SI NO SABES EL NOMBRE REAL(Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
-        let apiKey = process.env.GEMINI_API_KEY;
         if (aiConfigJson) {
-            const parsed = typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson;
-            if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
+            // Config parsed from Redis
         }
 
         const userText = aggregatedText;
@@ -634,32 +632,29 @@ ${safeDnaLines}
                     }
 
                     // 🎯 FAQ RADAR: Save to FAQ engine regardless — unanswered OR answered
-                    const geminiKey = apiKey || activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
-                    if (activeVacancyId && geminiKey) {
+                    const openAiKey = activeAiConfig.openaiApiKey || process.env.OPENAI_API_KEY;
+                    if (activeVacancyId && openAiKey) {
+                        const { processUnansweredQuestion } = await import('./faq-engine.js');
                         if (unansweredQ) {
-                            // Question has no answer — save as unanswered
-                            console.log(`[FAQ Engine] 📡 Capturing UNANSWERED: "${unansweredQ}" → vacancy ${activeVacancyId} `);
+                            console.log(`[FAQ Engine] 📡 Capturing UNANSWERED: "${unansweredQ}" → vacancy ${activeVacancyId}`);
                             await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
-                            processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey)
+                            processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, openAiKey)
                                 .then(() => console.log(`[FAQ Engine] ✅ Unanswered question saved`))
                                 .catch(e => console.error('[FAQ Engine] ❌ Cluster Error (unanswered):', e));
                         } else {
-                            // Question was answered — detect if user asked something and save it
                             const lastUserMsg = historyForGpt.filter(h => h.role === 'user').slice(-1)[0];
                             const userText = lastUserMsg?.parts?.[0]?.text || '';
                             const questionPatterns = /[?¿]|cuál|cómo|cuánto|cuándo|dónde|qué|quién|hacen|tienen|hay|incluye|es|son|dan|pagan|trabaj|horario|sueldo|salario|uniforme|transporte|beneficio|requisito|antidop/i;
                             const isQuestion = questionPatterns.test(userText) && userText.length > 5;
                             if (isQuestion && responseTextVal) {
                                 console.log(`[FAQ Engine] 📝 Recording ANSWERED question: "${userText}"`);
-                                processUnansweredQuestion(activeVacancyId, userText, responseTextVal, geminiKey)
+                                processUnansweredQuestion(activeVacancyId, userText, responseTextVal, openAiKey)
                                     .then(() => console.log(`[FAQ Engine] ✅ Answered question saved to FAQ log`))
                                     .catch(e => console.error('[FAQ Engine] ❌ Cluster Error (answered):', e));
-                            } else {
-                                console.log(`[FAQ Engine] ⏭️ Not a question or no response, skipping FAQ log`);
                             }
                         }
                     } else {
-                        console.warn(`[FAQ Engine] ⚠️ Skipped — missing vacancyId(${activeVacancyId}) or geminiKey`);
+                        console.warn(`[FAQ Engine] ⚠️ Skipped — missing vacancyId(${activeVacancyId}) or openAiKey`);
                     }
                 }
 
