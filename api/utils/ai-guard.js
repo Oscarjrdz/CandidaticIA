@@ -86,20 +86,26 @@ export class AIGuard {
             if (firstMissing === 'Apellidos' || (firstMissing === 'Nombre completo' && nameWords === 1)) {
                 recoveryText = `¡Súper, ${firstName}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para completar tu registro? 🌸`;
             } else if (reason === 'FALLBACK_REPETITION' || reason === 'FALLBACK_IDENTITY_REPETITION') {
-                // ... (logic continues)
+                // Specific variation for repetition to break the loop - DIVERSIFIED
                 const variationTemplates = [
-                    `${firstName ? firstName + ', p' : 'P'}ara tu registro aún necesito tu ${firstMissing}. ¿Me ayudas con eso? ✨`,
-                    `Solo me falta el detalle de ${firstMissing === 'Apellidos' ? 'tus' : 'tu'} ${firstMissing} para avanzar. ¿Me lo pasas? 🌸`,
-                    `¡Súper! 🌸 Me falta confirmar ${firstMissing === 'Apellidos' ? 'tus' : 'tu'} ${firstMissing} para seguir. ✨`
+                    `${firstName ? firstName + ', d' : 'D'}ime, ¿me puedes pasar tu ${firstMissing}? Es para tu registro. ✨`,
+                    `Para seguir, ¿cuál es tu ${firstMissing}? 😉🌸`,
+                    `Oye, cuéntame sobre tu ${firstMissing}, ¡me falta ese dato! ✨`,
+                    `¡Súper! ✨ Pero me falta confirmar tu ${firstMissing}. 🌸 ¿Me lo dices?`
                 ];
                 recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {
-                // Simple but high-quality recovery templates (ELOCUENT, WARM & BRANDED)
+                // HIGH VARIETY RECOVERY TEMPLATES (NON-REPETITIVE, BRANDED)
                 const connector = (firstMissing === 'Apellidos') ? 'tus' : 'tu';
                 const templates = [
-                    `¡Súper! ✨ ${firstName ? firstName + ', p' : 'P'}ara seguir avanzando y que ya quedes en el sistema, ¿me podrías pasar ${connector} ${firstMissing}? 😉🌸`,
-                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Solo me falta el detalle de ${connector} ${firstMissing} para decirte que ya estás dentro. 🤭 ¿Me lo proporcionas? ✨`,
-                    `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', solo' : 'Solo'} necesito saber ${connector} ${firstMissing} para encontrarte la mejor vacante hoy mismo. 😉✨`
+                    `¡Súper! ✨ ${firstName ? firstName + ', p' : 'P'}ara avanzar con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}? 😉🌸`,
+                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Me hace falta saber ${connector} ${firstMissing} para tener tu perfil listo en el sistema. 🤭 ¿Me ayudas con eso? ✨`,
+                    `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito el dato de ${connector} ${firstMissing} para encontrarte la mejor vacante hoy mismo. 😉✨`,
+                    `¿Me podrías decir ${connector} ${firstMissing}, ${firstName || 'perla'}? ✨ Es el último paso para entrar al proceso. 🌸`,
+                    `¡Excelente! 🌟 Para que ya quedes en la base de datos, dime ${connector} ${firstMissing}. 🤭✨`,
+                    `¡Vas súper bien! ✨ ${firstName ? firstName + ', d' : 'D'}ime ${connector} ${firstMissing} para decirte qué vacantes tenemos disponibles. 🌸`,
+                    `Oye, ${firstName || 'un detalle'}, ¿cuál es ${connector} ${firstMissing}? ✨ Me sirve mucho para tu registro. 😉`,
+                    `¡Qué alegría! 💖 Ya casi acabamos. ¿Me pasas ${connector} ${firstMissing}? ✨🌸`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             }

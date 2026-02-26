@@ -840,8 +840,9 @@ ${safeDnaLines}
                 if (isNewFlag && !botHasSpoken) {
                     systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda Rodríguez y pide el Nombre completo (Nombre y Apellidos) para iniciar el registro. ✨🌸\n`;
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
-                    // Smart injection: Only show full list if not recently shown or if specifically needed
-                    const displayCats = wasCategoriesShown ? "(Ya mostraste la lista, NO la repitas de nuevo. Solo pregunta cuál le interesa de las opciones anteriores)" : categoriesList;
+                    // Smart injection: Only show full list if not recently shown or if specifically requested
+                    const userWantsToSee = aggregatedText.toLowerCase().includes('muest') || aggregatedText.toLowerCase().includes('ver') || aggregatedText.toLowerCase().includes('cuáles');
+                    const displayCats = (wasCategoriesShown && !userWantsToSee) ? "(Ya mostraste la lista, NO la repitas de nuevo. Solo pregunta cuál le interesa de las opciones anteriores)" : categoriesList;
 
                     const cerebro1Rules = (batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES)
                         .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
