@@ -322,7 +322,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const customFields = batchConfig.custom_fields ? JSON.parse(batchConfig.custom_fields) : [];
         const auditRaw = auditProfile(candidateData, customFields);
 
-        const audit = auditRaw; // Gender is now a required field for bypass
+        let audit = auditRaw; // Gender is now a required field for bypass
 
         // 🧬 [PREMIUM BLINDAJE]: Intelligent Extractor (Viper-Grip) Pass
         // Instead of waiting for a rescue, we run the premium extractor on EVERY message
@@ -349,6 +349,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         // Re-audit AFTER premium extraction and early inference
         const finalAudit = auditProfile(candidateData, customFields);
+        audit = finalAudit; // 🛡️ SYNC: AI Guardrail MUST see the latest truth
         const auditForMode = finalAudit;
 
         const customPrompt = batchConfig.bot_ia_prompt || '';
@@ -861,10 +862,22 @@ ${safeDnaLines}
                     generationConfig: { responseMimeType: "application/json", temperature: 0.8 }
                 });
 
-                const chat = model.startChat({ history: recentHistory });
-                const result = await chat.sendMessage(userParts);
-                const textResult = result.response.text();
-                console.log(`[GEMINI RAW] 🤖:`, textResult);
+                let textResult = '';
+                try {
+                    const chat = model.startChat({ history: recentHistory });
+                    const result = await chat.sendMessage(userParts);
+                    textResult = result.response.text();
+                    console.log(`[GEMINI RAW] 🤖:`, textResult);
+                } catch (gemIniErr) {
+                    console.error('[GEMINI 2.0] ❌ API Error:', gemIniErr.message);
+                    // Single retry with simplified prompt if quota or format failed
+                    if (gemIniErr.message.includes('quota') || gemIniErr.message.includes('JSON')) {
+                        console.log('[GEMINI 2.0] 🔄 Retrying with simple model...');
+                        const retryModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                        const retryResult = await retryModel.generateContent(systemInstruction + "\n" + aggregatedText);
+                        textResult = retryResult.response.text();
+                    }
+                }
 
                 // 🛡️ [AI GUARDRAIL]
                 const rawJson = AIGuard.sanitizeJSON(textResult);

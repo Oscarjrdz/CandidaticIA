@@ -94,11 +94,11 @@ export class AIGuard {
                 ];
                 recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {
-                // Simple but high-quality recovery templates (REFINED: Direct & Professional)
+                // Simple but high-quality recovery templates (ELOCUENT, WARM & BRANDED)
                 const templates = [
-                    `${firstName ? firstName + ', p' : 'P'}ara continuar con tu registro, ¿me podrías indicar tu ${firstMissing}? ✨`,
-                    `Solo me falta tu ${firstMissing} para tener tu perfil listo. ¿Me lo proporcionas? 🌸`,
-                    `Me falta el dato de tu ${firstMissing} para poder avanzar. ✨`
+                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Para seguir avanzando con tu registro, ¿me podrías indicar tu ${firstMissing}? 😉`,
+                    `${firstName ? firstName + ', s' : 'S'}olo me falta el dato de tu ${firstMissing} para decirte que ya estás en el sistema. ✨🌸 ¿Me lo pasas?`,
+                    `¡Casi terminamos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito saber tu ${firstMissing} para encontrarte la mejor vacante. 😉✨`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             }
