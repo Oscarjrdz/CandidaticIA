@@ -322,7 +322,13 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const customFields = batchConfig.custom_fields ? JSON.parse(batchConfig.custom_fields) : [];
         const auditRaw = auditProfile(candidateData, customFields);
 
-        let audit = auditRaw; // Gender is now a required field for bypass
+        // 🛡️ [GENDER SUPPRESSION]: Filter Gender from missing fields list. Prohibited from proactive asking.
+        let audit = {
+            ...auditRaw,
+            missingLabels: auditRaw.missingLabels.filter(l => l !== 'Género' && l !== 'genero'),
+            missingValues: auditRaw.missingValues.filter(v => v !== 'genero')
+        };
+        audit.paso1Status = audit.missingLabels.length === 0 ? 'COMPLETO' : 'INCOMPLETO';
 
         // 🧬 [PREMIUM BLINDAJE]: Intelligent Extractor (Viper-Grip) Pass
         // Instead of waiting for a rescue, we run the premium extractor on EVERY message
@@ -349,8 +355,15 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         // Re-audit AFTER premium extraction and early inference
         const finalAudit = auditProfile(candidateData, customFields);
-        audit = finalAudit; // 🛡️ SYNC: AI Guardrail MUST see the latest truth
-        const auditForMode = finalAudit;
+
+        // 🛡️ [PERFECT SYNC]: Update master audit and mode audit with suppressed final state
+        audit = {
+            ...finalAudit,
+            missingLabels: finalAudit.missingLabels.filter(l => l !== 'Género' && l !== 'genero'),
+            missingValues: finalAudit.missingValues.filter(v => v !== 'genero')
+        };
+        audit.paso1Status = audit.missingLabels.length === 0 ? 'COMPLETO' : 'INCOMPLETO';
+        const auditForMode = audit;
 
         const customPrompt = batchConfig.bot_ia_prompt || '';
         let systemInstruction = getIdentityLayer(customPrompt);
@@ -882,7 +895,7 @@ ${safeDnaLines}
                 // 🛡️ [AI GUARDRAIL]
                 const rawJson = AIGuard.sanitizeJSON(textResult);
                 const guardContext = {
-                    isProfileComplete: audit.paso1Status === 'COMPLETO',
+                    isProfileComplete: audit.paso1Status === 'COMPLETO' || (audit.missingLabels.length === 0),
                     missingFields: audit.missingLabels,
                     lastInput: aggregatedText,
                     isNewFlag: isNewFlag && !botHasSpoken, // 🛡️ Hardened Loop Breaker

@@ -96,9 +96,9 @@ export class AIGuard {
             } else {
                 // Simple but high-quality recovery templates (ELOCUENT, WARM & BRANDED)
                 const templates = [
-                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Para seguir avanzando con tu registro, ¿me podrías indicar tu ${firstMissing}? 😉`,
-                    `${firstName ? firstName + ', s' : 'S'}olo me falta el dato de tu ${firstMissing} para decirte que ya estás en el sistema. ✨🌸 ¿Me lo pasas?`,
-                    `¡Casi terminamos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito saber tu ${firstMissing} para encontrarte la mejor vacante. 😉✨`
+                    `¡Súper! ✨ ${firstName ? firstName + ', p' : 'P'}ara seguir avanzando y que ya quedes en el sistema, ¿me podrías pasar tu ${firstMissing}? 😉🌸`,
+                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Solo me falta el detalle de tu ${firstMissing} para decirte que ya estás dentro. 🤭 ¿Me lo proporcionas? ✨`,
+                    `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', solo' : 'Solo'} necesito saber tu ${firstMissing} para encontrarte la mejor vacante hoy mismo. 😉✨`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             }
