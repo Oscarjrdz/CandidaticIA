@@ -315,8 +315,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // 4. Layered System Instruction Build
         const botHasSpoken = validMessages.some(m => {
             const fromBot = m.from === 'bot' || m.from === 'me';
-            const isTechnical = ['[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(String(m.content || ''));
-            return fromBot && !m.meta?.proactiveLevel && !isTechnical && m.content && m.content.length > 5;
+            return fromBot && m.content && m.content.length > 3;
         });
 
         // Identity Protection (Titan Shield Pass) - System context for safety
@@ -825,50 +824,52 @@ ${safeDnaLines}
             }
         }
 
-        // 3. CAPTURISTA BRAIN (GPT-4o-mini now the main magic)
+        // 3. CAPTURISTA BRAIN (GPT-4o-mini consolidated)
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
             try {
-                let handoverTriggered = false; // 🛡️ Initialize for logic consistency
-
-                // 🚀 [GPT-4o-mini MAGIC BRAIN]: Consolidated EXTRACTION + CONVERSATION
+                let handoverTriggered = false;
                 const gptStartTime = Date.now();
 
-                // Incorporate rules into the prompt
+                // Build Instructions
                 const extractionRules = batchConfig.bot_extraction_rules || DEFAULT_EXTRACTION_RULES;
                 systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, categoriesList)}`;
 
-                // 🧠 [PROMPT CONSTRUCTION]: Ensure JSON format and instructions are clear
                 systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
 {
   "response_text": "Texto para el usuario",
-  "reaction": "Emoji o null",
   "extracted_data": { "nombreReal": "Valor", "genero": "Valor", ... },
+  "reaction": "Emoji o null",
   "thought_process": "Breve nota interna"
 }
 
-[REGLA DE ORO DE TURNO]: 
-1. Si detectas un dato en el mensaje actual del usuario (ej: su nombre), inclúyelo obligatoriamente en "extracted_data".
-2. NO vuelvas a pedir el dato que acabas de extraer en "response_text". Agradécelo brevemente y pasa a la SIGUIENTE pregunta del flujo.
-3. Si el usuario te da un dato, NO le respondas con un saludo de bienvenida otra vez.\n`;
+[RECONOCIMIENTO DE TURNO]: 
+- Si el usuario acaba de darte su nombre (ej: "Oscar Rodriguez"), dalo por bueno INMEDIATAMENTE. 
+- "Nombre y Apellidos" se cumple si hay al menos un espacio entre dos palabras.
+- NO vuelvas a pedir el dato que el usuario acaba de escribir en su último mensaje. Agracede brevemente y pasa a la SIGUIENTE pregunta.\n`;
 
                 if (isNewFlag && !botHasSpoken) {
+                    candidateUpdates.esNuevo = 'NO';
                     const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
-                    systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como ${welcomeName} y pide el Nombre completo (Nombre y Apellidos) para iniciar el registro. ✨🌸\n`;
-                } else if (auditForMode.paso1Status !== 'COMPLETO') {
-                    let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
-                    if (customPrompt && !batchConfig.bot_cerebro1_rules) {
-                        baseRules = baseRules
-                            .replace(/Responde con mucha alegría y dulzura \(ej: "¡Ay, qué lindo! 🤭✨ me chiveas"\)/g, 'Responde con amabilidad')
-                            .replace(/con encanto/g, '')
-                            .replace(/con un emoji variado/g, 'brevemente');
+                    systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Preséntate como ${welcomeName} y solicita el Nombre Completo (con apellidos) para iniciar. ✨🌸\n`;
+                } else {
+                    candidateUpdates.esNuevo = 'NO';
+                    if (auditForMode.paso1Status !== 'COMPLETO') {
+                        let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
+                        if (customPrompt && !batchConfig.bot_cerebro1_rules) {
+                            baseRules = baseRules
+                                .replace(/Responde con mucha alegría y dulzura \(ej: "¡Ay, qué lindo! 🤭✨ me chiveas"\)/g, 'Responde con amabilidad')
+                                .replace(/con encanto/g, '')
+                                .replace(/con un emoji variado/g, 'brevemente');
+                        }
+                        const cerebro1Rules = baseRules
+                            .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
+                            .replace(/{{categorias}}/g, categoriesList)
+                            .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
+                        systemInstruction += `\n${cerebro1Rules}\n`;
                     }
-                    const cerebro1Rules = baseRules
-                        .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
-                        .replace(/{{categorias}}/g, categoriesList)
-                        .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
-                    systemInstruction += `\n${cerebro1Rules}\n`;
                 }
 
+                // Call Magic GPT
                 const gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, 'gpt-4o-mini', activeAiConfig.openaiApiKey);
 
                 if (gptResult?.content) {
@@ -876,49 +877,46 @@ ${safeDnaLines}
                         let jsonMatch = gptResult.content.match(/\{[\s\S]*\}/);
                         const cleanJson = jsonMatch ? jsonMatch[0] : gptResult.content;
                         aiResult = JSON.parse(cleanJson);
-
                         recordAITelemetry(candidateId, 'consolidated_brain', {
                             model: 'gpt-4o-mini',
                             latency: Date.now() - gptStartTime,
                             tokens: gptResult.usage?.total_tokens || 0
                         });
-
                         responseTextVal = aiResult.response_text;
                         console.log(`[GPT CONSOLIDATED] ✅ Extraction + Response:`, aiResult);
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
                         throw new Error('GPT returned invalid JSON');
                     }
-                } else {
-                    throw new Error('GPT returned empty content');
                 }
 
-                // 🧬 [EXTRACTION & COALESCENCE]
-                if (aiResult.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
-                    if (aiResult.extracted_data.nombreReal) {
-                        aiResult.extracted_data.nombreReal = coalesceName(candidateData.nombreReal, aiResult.extracted_data.nombreReal);
-                        if (!candidateData.genero && !aiResult.extracted_data.genero) {
-                            const inferred = inferGender(aiResult.extracted_data.nombreReal);
-                            if (inferred) aiResult.extracted_data.genero = inferred;
+                // Merge Extracted Data
+                if (aiResult?.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
+                    const ext = aiResult.extracted_data;
+                    if (ext.nombreReal) {
+                        ext.nombreReal = coalesceName(candidateData.nombreReal, ext.nombreReal);
+                        if (!candidateData.genero && !ext.genero) {
+                            const inferred = inferGender(ext.nombreReal);
+                            if (inferred) ext.genero = inferred;
                         }
                     }
-                    if (aiResult.extracted_data.fechaNacimiento) {
-                        aiResult.extracted_data.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, aiResult.extracted_data.fechaNacimiento);
+                    if (ext.fechaNacimiento) {
+                        ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
                     }
-                    Object.assign(candidateUpdates, aiResult.extracted_data);
+                    Object.assign(candidateUpdates, ext);
                 }
 
-                // 🛡️ [AI GUARDRAIL]
+                // Guardrail Pass
+                const freshAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
                 const guardContext = {
-                    isProfileComplete: audit.paso1Status === 'COMPLETO',
-                    missingFields: audit.missingLabels,
+                    isProfileComplete: freshAudit.paso1Status === 'COMPLETO',
+                    missingFields: freshAudit.missingLabels,
                     lastInput: aggregatedText,
-                    isNewFlag: isNewFlag && !botHasSpoken,
+                    isNewFlag: false,
                     candidateName: displayName,
                     lastBotMessages,
                     categoriesList
                 };
-
                 const validation = await AIGuard.validate(aiResult, guardContext, allMessages);
                 if (validation.isModified) {
                     aiResult = validation.result;
@@ -926,16 +924,14 @@ ${safeDnaLines}
                     if (aiResult.extracted_data) Object.assign(candidateUpdates, aiResult.extracted_data);
                 }
 
-                // 🔄 [TRANSITION & HANDOVER]
-                const currentAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
-                isNowComplete = currentAudit.paso1Status === 'COMPLETO';
+                // Transition Logic
+                const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
+                isNowComplete = finalAudit.paso1Status === 'COMPLETO';
 
-                if (await Orchestrator.checkBypass(candidateData, currentAudit, batchConfig.bypass_enabled === 'true')) {
-                    console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
+                if (await Orchestrator.checkBypass(candidateData, finalAudit, batchConfig.bypass_enabled === 'true')) {
                     const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config, msgId);
                     if (handoverResult?.triggered) {
-                        candidateUpdates.projectId = handoverResult.projectId;
-                        candidateUpdates.stepId = handoverResult.stepId;
+                        Object.assign(candidateUpdates, { projectId: handoverResult.projectId, stepId: handoverResult.stepId });
                         responseTextVal = null;
                         handoverTriggered = true;
                     }
@@ -949,16 +945,15 @@ ${safeDnaLines}
 
             } catch (err) {
                 console.error('❌ [GPT BRAIN FATAL] Error:', err.message);
-                // 100% GPT Mode: No Gemini fallbacks.
-                const fallbackContext = {
+                const fbContext = {
                     isProfileComplete: audit?.paso1Status === 'COMPLETO',
                     missingFields: audit?.missingLabels || [],
-                    isNewFlag: isNewFlag && !botHasSpoken,
+                    isNewFlag: false,
                     candidateName: displayName,
                     lastBotMessages,
                     categoriesList
                 };
-                aiResult = AIGuard.validate(null, fallbackContext);
+                aiResult = AIGuard.validate(null, fbContext);
                 responseTextVal = aiResult?.response_text;
             }
         }
