@@ -242,8 +242,9 @@ ${JSON.stringify(schema, null, 2)}
                 }
 
                 // 4. Block single-word names that look like locations if we already have a stable name
-                if (!isPlaceholder && val.split(' ').length === 1 && confidence < 0.95) {
-                    shouldUpdate = false;
+                if (!isPlaceholder && val.split(/\s+/).length === 1 && confidence < 0.95) {
+                    // But allow if it's clearly a name addition (append mode)
+                    shouldUpdate = true;
                 }
             }
             // --------------------------------------------------------
@@ -251,6 +252,24 @@ ${JSON.stringify(schema, null, 2)}
             if (shouldUpdate) {
                 try {
                     let finalVal = val;
+
+                    // --- NAME FUSION: Oscar + Rodriguez = Oscar Rodriguez ---
+                    if (canonicalField === 'nombreReal' && existingVal && !isPlaceholder) {
+                        const e = String(existingVal).trim();
+                        const i = String(val).trim();
+                        const eLower = e.toLowerCase();
+                        const iLower = i.toLowerCase();
+
+                        if (eLower.includes(iLower)) {
+                            finalVal = e; // Existing already has it
+                        } else if (iLower.includes(eLower)) {
+                            // New one has everything (finalVal is already correct)
+                        } else if (i.split(/\s+/).length === 1) {
+                            // If incoming is one word and not in existing, append it
+                            finalVal = `${e} ${i}`;
+                            console.log(`[Name-Fusion] 🧬 Combined "${e}" + "${i}" -> "${finalVal}"`);
+                        }
+                    }
 
                     // Apply Standard Cleaners if present in Registry
                     if (schema && schema.cleaner) {

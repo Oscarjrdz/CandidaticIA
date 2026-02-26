@@ -216,7 +216,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const candidateUpdates = {
             lastBotMessageAt: new Date().toISOString(),
             ultimoMensaje: new Date().toISOString(),
-            esNuevo: 'NO'
+            esNuevo: candidateData.esNuevo === 'SI' ? 'NO' : candidateData.esNuevo
         };
 
         let intent = 'UNKNOWN';
@@ -898,12 +898,17 @@ ${safeDnaLines}
 
                 // 🛡️ [AI GUARDRAIL]
                 const rawJson = AIGuard.sanitizeJSON(textResult);
+
+                // Recalculate context for Guardrail after extraction/coalescence
+                const currentRealName = candidateData.nombreReal || '';
+                const currentFirstName = getFirstName(currentRealName) || currentRealName;
+
                 const guardContext = {
                     isProfileComplete: audit.paso1Status === 'COMPLETO' || (audit.missingLabels.length === 0),
                     missingFields: audit.missingLabels,
                     lastInput: aggregatedText,
-                    isNewFlag: isNewFlag && !botHasSpoken, // 🛡️ Hardened Loop Breaker
-                    candidateName: getFirstName(realName) || realName, // Use first name for context
+                    isNewFlag: isNewFlag && !botHasSpoken,
+                    candidateName: currentFirstName,
                     lastBotMessages: lastBotMessages
                 };
 
