@@ -128,7 +128,15 @@ export default async function handler(req, res) {
                 }
 
                 const existing = await redis.get('ai_config');
-                const merged = existing ? { ...JSON.parse(existing), ...data } : data;
+                let merged = {};
+                try {
+                    const parsed = existing ? JSON.parse(existing) : {};
+                    merged = (typeof parsed === 'object' && parsed !== null) ? { ...parsed, ...data } : data;
+                } catch (e) {
+                    console.error('⚠️ [API] Corrupted JSON in ai_config, using incoming data only');
+                    merged = data;
+                }
+
                 await redis.set('ai_config', JSON.stringify(merged));
 
                 return res.status(200).json({

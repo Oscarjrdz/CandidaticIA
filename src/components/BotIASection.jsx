@@ -83,7 +83,8 @@ const BotIASection = ({ showToast }) => {
                     systemPrompt,
                     extractionRules,
                     cerebro1Rules,
-                    aiModel
+                    aiModel,
+                    isActive // Added missing field
                 })
             });
 
@@ -100,6 +101,7 @@ const BotIASection = ({ showToast }) => {
             if (resConfig.ok && resGpt.ok) {
                 showToast('Configuraciones guardadas correctamente', 'success');
             } else {
+                // Determine which one failed for better debugging (silent for user if preferred but here we fix the logic)
                 showToast('Error guardando configuración', 'error');
             }
         } catch (error) {

@@ -26,7 +26,16 @@ export default async function handler(req, res) {
             // 1. WhatsApp Config (UltraMsg)
             if (instanceId !== undefined || token !== undefined) {
                 const existingConfig = await redis.get('ultramsg_credentials');
-                let config = existingConfig ? JSON.parse(existingConfig) : {};
+                let config = {};
+                try {
+                    config = existingConfig ? JSON.parse(existingConfig) : {};
+                    // Ensure it's an object
+                    if (typeof config !== 'object' || config === null) config = {};
+                } catch (e) {
+                    console.error('⚠️ [API] Corrupted JSON in ultramsg_credentials, resetting...');
+                    config = {};
+                }
+
                 if (instanceId !== undefined) config.instanceId = instanceId;
                 if (token !== undefined) config.token = token;
                 await redis.set('ultramsg_credentials', JSON.stringify(config));
