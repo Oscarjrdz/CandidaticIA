@@ -139,8 +139,7 @@ export class AIGuard {
 
                 // 🎡 [SPECIAL CATEGORY RECOVERY]: If missing field is Category, force the list injection
                 if (isCategory) {
-                    const finalCats = (categoriesList && categoriesList.trim().length > 5) ? categoriesList : "✅ Operador General\n✅ Almacenista\n✅ Montacarguista\n✅ Administrativo";
-                    recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${finalCats}\n\n¿Cuál eliges? 🤭✨`;
+                    recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${categoriesList || '[Error: No hay categorías en el sistema]'}\n\n¿Cuál eliges? 🤭✨`;
                 }
             }
         }

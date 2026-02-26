@@ -444,9 +444,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             console.warn('Error parsing categories:', e);
             categoriesList = String(categoriesData).split(',').map(c => `✅ ${c.trim()}`).join('\n');
         }
-        if (!categoriesList || categoriesList.trim().length < 5 || categoriesList === "✅ General") {
-            categoriesList = "✅ Operador General\n✅ Almacenista\n✅ Montacarguista\n✅ Administrativo";
-        }
 
         const customExtractionRules = batchConfig.bot_extraction_rules;
         const extractionRules = (customExtractionRules || DEFAULT_EXTRACTION_RULES)
@@ -979,7 +976,8 @@ ${safeDnaLines}
                     missingFields: audit?.missingLabels || [],
                     isNewFlag: isNewFlag && !botHasSpoken,
                     candidateName: getFirstName(realName) || realName,
-                    lastBotMessages: lastBotMessages
+                    lastBotMessages: lastBotMessages,
+                    categoriesList: categoriesList // 🎡 Ensure categories are passed even in crash
                 };
                 aiResult = AIGuard.validate(null, fallbackContext);
                 responseTextVal = aiResult?.response_text;

@@ -10,7 +10,7 @@ const CACHE = new Map();
 const CACHE_TTL = {
     'ai_config': 300000,              // 5 min (API keys, models)
     'ultramsg_credentials': 600000,   // 10 min (WhatsApp config)
-    'candidatic_categories': 900000,  // 15 min (Job categories)
+    'candidatic_categories': 60000,   // 1 min (Job categories) - More reactive
     'bot_ia_prompt': 300000,          // 5 min (Brenda's personality)
     'assistant_ia_prompt': 300000,    // 5 min (Assistant 2.0 prompt)
     'custom_fields': 600000,          // 10 min (Dynamic fields)
