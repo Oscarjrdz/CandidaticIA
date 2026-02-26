@@ -338,8 +338,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // 🧬 [PREMIUM BLINDAJE]: Intelligent Extractor (Viper-Grip) Pass
         // Instead of waiting for a rescue, we run the premium extractor on EVERY message
         // to ensure name-surname precision, date fusion, and location shielding.
-        console.log(`[VIPER-GRIP] 🛡️ Running Premium Extraction for ${candidateId}`);
-        const refinedData = await intelligentExtract(candidateId, aggregatedText);
+        const historyTextForViper = validMessages.slice(-10).map(m => `${m.from === 'user' ? 'Candidato' : 'Lic. Brenda'}: ${m.content}`).join('\n');
+        const refinedData = await intelligentExtract(candidateId, historyTextForViper);
 
         // Merge refined data back into our working objects before audit
         if (refinedData) {

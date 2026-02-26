@@ -119,7 +119,7 @@ export class AIGuard {
                     `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito el dato de ${connector} ${firstMissing} para encontrarte la mejor vacante hoy mismo. 😉✨`,
                     `¿Me podrías decir ${connector} ${firstMissing}? ✨ Es el último paso para entrar al proceso. 🌸`,
                     `¡Qué alegría! 🌟 Para que ya quedes en la base de datos, dime ${connector} ${firstMissing}. 🤭✨`,
-                    `¡Vas súper bien! ✨ ${firstName ? firstName + ', d' : 'D'}ime ${connector} ${firstMissing} para decirte qué vacantes tenemos disponibles. 🌸`,
+                    `¡Vas excelente! ✨ ${firstName ? firstName + ', d' : 'D'}ime ${connector} ${firstMissing} para decirte qué vacantes tenemos disponibles. 🌸`,
                     `Oye, ${firstName || 'un detalle'}, ¿cuál es ${connector} ${firstMissing}? ✨ Me sirve mucho para tu registro. 😉`,
                     `¡Perfecto! 💖 Ya casi acabamos. ¿Me pasas ${connector} ${firstMissing}? ✨🌸`
                 ];
@@ -127,8 +127,9 @@ export class AIGuard {
             }
         }
 
+        const greetingReturn = lastInput && /hola|buen(as)? (dia|tarde|noche)|que tal/i.test(lastInput.toLowerCase()) ? "¡Hola! 👋 " : "";
         return {
-            response_text: recoveryText,
+            response_text: `${greetingReturn}${recoveryText}`,
             thought_process: `RECOVERY_TRIGGERED: ${reason}. Manual fallback due to AI failure.`,
             reaction: isNewFlag ? '✨' : null, // Only react on first message to reduce spark spam
             extracted_data: extracted, // 🧬 CRITICAL: Keep what the AI *did* manage to extract
