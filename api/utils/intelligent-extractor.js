@@ -220,9 +220,9 @@ ${JSON.stringify(schema, null, 2)}
                 String(existingVal).toLowerCase() === 'desconocido';
 
             // ATOMIC DECISION: Should we update?
-            // Rule 1: Always update if existing value is a placeholder and confidence > 0.35
+            // Rule 1: Always update if existing value is a placeholder and confidence > 0.4
             // Rule 2: Only update STABLE data if confidence is very high (> 0.85)
-            let shouldUpdate = isPlaceholder ? (confidence > 0.35) : (confidence > 0.85);
+            let shouldUpdate = isPlaceholder ? (confidence > 0.4) : (confidence > 0.85);
 
             // --- 🛡️ TITAN SHIELD: CROSS-FIELD EXCLUSION (HARDENED) ---
             if (canonicalField === 'nombreReal' && val) {
