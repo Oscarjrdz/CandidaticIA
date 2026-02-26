@@ -122,9 +122,10 @@ ${extractionInstructions}
 
 ESTRATEGIA DE RAZONAMIENTO (PROTOCOLO VIPER 3.1):
 1. PENSAMIENTO (thought_process): Analiza quién es el Reclutador (Oscar) y quién es el Candidato. 
-   - REGLA CRÍTICA DE NOMBRE: El "nombreReal" es el nombre del candidato. 
-      * Si el usuario solo da un nombre (ej. "Oscar"), EXTRÁELO, pero indica en thought_process que es parcial y faltan los apellidos. 
+   - REGLA DE FRAGMENTOS (ÉXITO PARCIAL): Si el usuario responde solo con un nombre o un apellido (ej. "Rodriguez", "Óscar"), EXTRÁELO como nombreReal con ALTA CONFIANZA (0.95). El sistema se encargará de unirlo al anterior.
+   - REGLA CRÍTICA DE NOMBRE: El "nombreReal" es el nombre o apellido del candidato. 
       * NUNCA debe ser un municipio, ciudad o estado (ej. "Escobedo", "Monterrey").
+      * NUNCA extraigas saludos (Hola) o frases vacías (Si) en este campo.
    - REGLA CRÍTICA DE EVASIÓN: Si el usuario responde con frases negativas o evasivas, NO extraigas nada.
    - REGLA DE SALUDOS: Frases cortas sin contexto de datos NO se extraen.
    - REGLA DE ADJETIVOS (JUNK): "Bien", "Ok", "Cualquiera" sin dato real deben ser null.
@@ -263,12 +264,15 @@ ${JSON.stringify(schema, null, 2)}
                         const eLower = e.toLowerCase();
                         const iLower = i.toLowerCase();
 
+                        const eWords = e.split(/\s+/).filter(w => w.length > 0).length;
+                        const iWords = i.split(/\s+/).filter(w => w.length > 0).length;
+
                         if (eLower.includes(iLower)) {
                             finalVal = e; // Existing already has it
                         } else if (iLower.includes(eLower)) {
                             // New one has everything (finalVal is already correct)
-                        } else if (i.split(/\s+/).length === 1) {
-                            // If incoming is one word and not in existing, append it
+                        } else if (eWords < 2 && iWords === 1) {
+                            // If we have 1 word and get 1 word, it's Name + Surname
                             finalVal = `${e} ${i}`;
                             console.log(`[Name-Fusion] 🧬 Combined "${e}" + "${i}" -> "${finalVal}"`);
                         }
