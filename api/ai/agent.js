@@ -911,7 +911,8 @@ ${safeDnaLines}
                     lastInput: aggregatedText,
                     isNewFlag: isNewFlag && !botHasSpoken,
                     candidateName: currentFirstName,
-                    lastBotMessages: lastBotMessages
+                    lastBotMessages: lastBotMessages,
+                    categoriesList: categoriesList
                 };
 
                 aiResult = AIGuard.validate(rawJson, guardContext);

@@ -11,7 +11,7 @@ export class AIGuard {
      * @returns {Object} Validated and recovered AI response.
      */
     static validate(aiResult, context) {
-        const { isProfileComplete, missingFields, lastInput, isNewFlag, candidateName, lastBotMessages } = context;
+        const { isProfileComplete, missingFields, lastInput, isNewFlag, candidateName, lastBotMessages, categoriesList } = context;
 
         console.log(`[AI GUARD] 🛡️ Validating response. Profile Complete: ${isProfileComplete} | New: ${isNewFlag}`);
 
@@ -20,7 +20,7 @@ export class AIGuard {
 
         // 1. Basic JSON/Null Check
         if (!aiResult) {
-            return this.getRecoveryResponse("FALLBACK_NULL", missingFields, lastInput, isNewFlag, extracted, candidateName);
+            return this.getRecoveryResponse("FALLBACK_NULL", missingFields, lastInput, isNewFlag, extracted, candidateName, categoriesList);
         }
 
         const responseText = aiResult.response_text;
@@ -29,7 +29,7 @@ export class AIGuard {
         // 2. Silence Detection for Incomplete Profiles
         if (hasEmptyResponse && !isProfileComplete) {
             console.warn(`[AI GUARD] 🚨 Silence detected on incomplete profile. Triggering Recovery.`);
-            return this.getRecoveryResponse("FALLBACK_SILENCE", missingFields, lastInput, isNewFlag, extracted, candidateName);
+            return this.getRecoveryResponse("FALLBACK_SILENCE", missingFields, lastInput, isNewFlag, extracted, candidateName, categoriesList);
         }
 
         // 3. Duplicate Detection (Anti-Loop)
@@ -38,7 +38,7 @@ export class AIGuard {
             const isDuplicate = lastBotMessages.some(m => m.toLowerCase() === normalizedResp);
             if (isDuplicate) {
                 console.warn(`[AI GUARD] 🔄 Repetition detected: "${responseText.substring(0, 30)}...". Triggering Recovery.`);
-                return this.getRecoveryResponse("FALLBACK_REPETITION", missingFields, lastInput, isNewFlag, extracted, candidateName);
+                return this.getRecoveryResponse("FALLBACK_REPETITION", missingFields, lastInput, isNewFlag, extracted, candidateName, categoriesList);
             }
         }
 
@@ -54,7 +54,7 @@ export class AIGuard {
 
             if (hasIdentity) {
                 console.warn(`[AI GUARD] 🆔 Identity repetition detected in active chat. Blocking greeting.`);
-                return this.getRecoveryResponse("FALLBACK_IDENTITY_REPETITION", missingFields, lastInput, isNewFlag, extracted, candidateName);
+                return this.getRecoveryResponse("FALLBACK_IDENTITY_REPETITION", missingFields, lastInput, isNewFlag, extracted, candidateName, categoriesList);
             }
         }
 
@@ -67,7 +67,7 @@ export class AIGuard {
     /**
      * Generates a deterministic recovery response based on the missing data.
      */
-    static getRecoveryResponse(reason, missingFields, lastInput, isNewFlag = false, extracted = {}, candidateName = null) {
+    static getRecoveryResponse(reason, missingFields, lastInput, isNewFlag = false, extracted = {}, candidateName = null, categoriesList = "") {
         console.log(`[AI GUARD] 💊 Generating Recovery Response for reason: ${reason}. isNew: ${isNewFlag}`);
 
         // 🛡️ [GENDER SUPPRESSION]: Ensure fallback never asks for gender
@@ -124,10 +124,17 @@ export class AIGuard {
                     `¡Perfecto! 💖 Ya casi acabamos. ¿Me pasas ${connector} ${firstMissing}? ✨🌸`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
+
+                // 🎡 [SPECIAL CATEGORY RECOVERY]: If missing field is Category, force the list injection
+                if (firstMissing === 'Categoría' || firstMissing === 'categoria') {
+                    recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en la base de datos, mira estas son las opciones que tengo para ti 💖: \n${categoriesList}\n¿Cuál eliges? 🤭✨`;
+                }
             }
         }
 
-        const greetingReturn = lastInput && /hola|buen(as)? (dia|tarde|noche)|que tal/i.test(lastInput.toLowerCase()) ? "¡Hola! 👋 " : "";
+        const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇"];
+        const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
+        const greetingReturn = lastInput && /hola|buen(as)? (dia|tarde|noche)|que tal/i.test(lastInput.toLowerCase()) ? `¡Hola! ${gEmoji} ` : "";
         return {
             response_text: `${greetingReturn}${recoveryText}`,
             thought_process: `RECOVERY_TRIGGERED: ${reason}. Manual fallback due to AI failure.`,
