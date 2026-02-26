@@ -341,18 +341,9 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         };
         audit.paso1Status = audit.missingLabels.length === 0 ? 'COMPLETO' : 'INCOMPLETO';
 
-        // 🧬 [PREMIUM BLINDAJE]: Intelligent Extractor (Viper-Grip) Pass
-        // Instead of waiting for a rescue, we run the premium extractor on EVERY message
-        // to ensure name-surname precision, date fusion, and location shielding.
-        const historyTextForViper = validMessages.slice(-10).map(m => `${m.from === 'user' ? 'Candidato' : 'Lic. Brenda'}: ${m.content}`).join('\n');
-        const refinedData = await intelligentExtract(candidateId, historyTextForViper);
-
-        // Merge refined data back into our working objects before audit
-        if (refinedData) {
-            Object.assign(candidateData, refinedData);
-            Object.assign(candidateUpdates, refinedData);
-            console.log(`[VIPER-GRIP] ✅ Refined data merged:`, refinedData);
-        }
+        // 🧬 [ULTRA-SPEED CONSOLIDATION]: Redundant extraction removed.
+        // Extraction is now handled natively by the main GPT brain at the end of the pipeline.
+        const refinedData = null;
 
         // 🧬 [AUTO-GENDER PRE-PASS]: If name exists but gender doesn't, infer it NOW
         if (candidateData.nombreReal && !candidateData.genero) {
@@ -835,14 +826,19 @@ ${safeDnaLines}
             }
         }
 
-        // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
+        // 3. CAPTURISTA BRAIN (GPT-4o-mini now the main magic)
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
             try {
-                let handoverTriggered = false; // 🛡️ Initialize to avoid ReferenceError
-                // 🧠 [SMART CONTEXT]: Detect if categories were already shown to avoid spam
-                const wasCategoriesShown = lastBotMessages.some(m => m.includes('✅') && m.includes('¿Cuál eliges?'));
+                let handoverTriggered = false; // 🛡️ Initialize for logic consistency
 
-                // FORCE JSON SCHEMA FOR GEMINI
+                // 🚀 [GPT-4o-mini MAGIC BRAIN]: Consolidated EXTRACTION + CONVERSATION
+                const gptStartTime = Date.now();
+
+                // Incorporate rules into the prompt
+                const extractionRules = batchConfig.bot_extraction_rules || DEFAULT_EXTRACTION_RULES;
+                systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, categoriesList)}`;
+
+                // 🧠 [PROMPT CONSTRUCTION]: Ensure JSON format and instructions are clear
                 systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
 {
   "response_text": "Texto para el usuario",
@@ -856,147 +852,107 @@ ${safeDnaLines}
                     systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como ${welcomeName} y pide el Nombre completo (Nombre y Apellidos) para iniciar el registro. ✨🌸\n`;
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
                     let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
-
-                    // 🛡️ [PERSONALITY BYPASS]: If using a custom prompt, strip hardcoded 'sweetness' from Cerebro1 rules
                     if (customPrompt && !batchConfig.bot_cerebro1_rules) {
                         baseRules = baseRules
                             .replace(/Responde con mucha alegría y dulzura \(ej: "¡Ay, qué lindo! 🤭✨ me chiveas"\)/g, 'Responde con amabilidad')
                             .replace(/con encanto/g, '')
                             .replace(/con un emoji variado/g, 'brevemente');
                     }
-
                     const cerebro1Rules = baseRules
                         .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
                         .replace(/{{categorias}}/g, categoriesList)
                         .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
                     systemInstruction += `\n${cerebro1Rules}\n`;
+                }
 
-                    if (botHasSpoken) {
-                        systemInstruction += `\n[REGLA ANTI-HOLA]: El usuario ya te conoce. Prohibido saludar (Hola, Buenas). Sé directa y carismática.\n`;
-                    }
-                    if (displayName) {
-                        systemInstruction += `\n[REGLA DE NOMBRE]: Menciona al candidato SOLO por su primer nombre ("${displayName}"), nunca uses su nombre completo.\n`;
+                const gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, 'gpt-4o-mini', activeAiConfig.openaiApiKey);
+
+                if (gptResult?.content) {
+                    try {
+                        let jsonMatch = gptResult.content.match(/\{[\s\S]*\}/);
+                        const cleanJson = jsonMatch ? jsonMatch[0] : gptResult.content;
+                        aiResult = JSON.parse(cleanJson);
+
+                        recordAITelemetry(candidateId, 'consolidated_brain', {
+                            model: 'gpt-4o-mini',
+                            latency: Date.now() - gptStartTime,
+                            tokens: gptResult.usage?.total_tokens || 0
+                        });
+
+                        responseTextVal = aiResult.response_text;
+                        console.log(`[GPT CONSOLIDATED] ✅ Extraction + Response:`, aiResult);
+                    } catch (err) {
+                        console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
+                        throw new Error('GPT returned invalid JSON');
                     }
                 } else {
-                    const closurePrompt = `
-[CIERRE DE REGISTRO]: El perfil está al 100%. Elige una de estas frases aleatoriamente para felicitarlo:
-- ¡Listo! 🥳 Perfil completo y yo estoy feliz. ¡Te aviso en cuanto salga algo para ti! 😉✨
-- ¡Lo logramos! 💖 Ya quedó todo. ¡No comas ansias, yo te escribo muy pronto! 🤭✨
-- ¡Súper! 🌟 Perfil al 100%. Me encantó platicar contigo.
-(NUNCA menciones el teléfono).
-`;
-                    systemInstruction += !hasGratitude
-                        ? closurePrompt
-                        : `\n[GRATITUD IDENTIFICADA]: El usuario ya agradeció. Solo reacciona con 👍 y cierra la charla. 👋🤫\n`;
+                    throw new Error('GPT returned empty content');
                 }
 
-                // [ANTI-REPETITION LAYER]
-                const lastBotMsgsForPrompt = lastBotMessages.slice(-4);
-                systemInstruction += `\n[MEMORIA RECIENTE]: \n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Primer contacto)'}\n⚠️ Tu respuesta debe ser TOTALMENTE DIFERENTE a las anteriores.\n`;
-
-                const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({
-                    model: "gemini-2.0-flash",
-                    systemInstruction,
-                    generationConfig: { responseMimeType: "application/json", temperature: 0.8 }
-                });
-
-                let textResult = '';
-                try {
-                    const chat = model.startChat({ history: recentHistory });
-                    const result = await chat.sendMessage(userParts);
-                    textResult = result.response.text();
-                    console.log(`[GEMINI RAW] 🤖:`, textResult);
-                } catch (gemIniErr) {
-                    console.error('[GEMINI 2.0] ❌ API Error:', gemIniErr.message);
-                    // Single retry with simplified prompt if quota or format failed
-                    if (gemIniErr.message.includes('quota') || gemIniErr.message.includes('JSON')) {
-                        console.log('[GEMINI 2.0] 🔄 Retrying with simple model...');
-                        const retryModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                        const retryResult = await retryModel.generateContent(systemInstruction + "\n" + aggregatedText);
-                        textResult = retryResult.response.text();
-                    }
-                }
-
-                // 🛡️ [AI GUARDRAIL]
-                const rawJson = AIGuard.sanitizeJSON(textResult);
-
-                // Recalculate context for Guardrail after extraction/coalescence
-                const currentRealName = candidateData.nombreReal || '';
-                const currentFirstName = getFirstName(currentRealName) || currentRealName;
-
-                const guardContext = {
-                    isProfileComplete: audit.paso1Status === 'COMPLETO' || (audit.missingLabels.length === 0),
-                    missingFields: audit.missingLabels,
-                    lastInput: aggregatedText,
-                    isNewFlag: isNewFlag && !botHasSpoken,
-                    candidateName: currentFirstName,
-                    lastBotMessages: lastBotMessages,
-                    categoriesList: categoriesList
-                };
-
-                aiResult = AIGuard.validate(rawJson, guardContext);
-                responseTextVal = aiResult.response_text;
-
-                // 🧬 [DUAL-STREAM EXTRACTION & COALESCENCE]
+                // 🧬 [EXTRACTION & COALESCENCE]
                 if (aiResult.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
-                    console.log(`[DUAL-STREAM] 🧬 Extracted:`, aiResult.extracted_data);
-
-                    // Zuckerberg-Level Coalescence Engine
                     if (aiResult.extracted_data.nombreReal) {
                         aiResult.extracted_data.nombreReal = coalesceName(candidateData.nombreReal, aiResult.extracted_data.nombreReal);
-
-                        // 🧬 [AUTO-GENDER]: Infer gender from name if not already set
                         if (!candidateData.genero && !aiResult.extracted_data.genero) {
                             const inferred = inferGender(aiResult.extracted_data.nombreReal);
-                            if (inferred) {
-                                aiResult.extracted_data.genero = inferred;
-                                console.log(`[GENDER INFERENCE] 🧬 Inferred ${inferred} for ${aiResult.extracted_data.nombreReal}`);
-                            }
+                            if (inferred) aiResult.extracted_data.genero = inferred;
                         }
                     }
                     if (aiResult.extracted_data.fechaNacimiento) {
                         aiResult.extracted_data.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, aiResult.extracted_data.fechaNacimiento);
                     }
-
                     Object.assign(candidateUpdates, aiResult.extracted_data);
+                }
+
+                // 🛡️ [AI GUARDRAIL]
+                const guardContext = {
+                    isProfileComplete: audit.paso1Status === 'COMPLETO',
+                    missingFields: audit.missingLabels,
+                    lastInput: aggregatedText,
+                    isNewFlag: isNewFlag && !botHasSpoken,
+                    candidateName: displayName,
+                    lastBotMessages,
+                    categoriesList
+                };
+
+                const validation = await AIGuard.validate(aiResult, guardContext, allMessages);
+                if (validation.isModified) {
+                    aiResult = validation.result;
+                    responseTextVal = aiResult.response_text;
+                    if (aiResult.extracted_data) Object.assign(candidateUpdates, aiResult.extracted_data);
                 }
 
                 // 🔄 [TRANSITION & HANDOVER]
                 const currentAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
                 isNowComplete = currentAudit.paso1Status === 'COMPLETO';
 
-                const bypassEnabled = batchConfig.bypass_enabled === 'true';
-                const handoverAudit = currentAudit;
-
-                if (await Orchestrator.checkBypass(candidateData, handoverAudit, bypassEnabled)) {
+                if (await Orchestrator.checkBypass(candidateData, currentAudit, batchConfig.bypass_enabled === 'true')) {
                     console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
                     const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config, msgId);
                     if (handoverResult?.triggered) {
                         candidateUpdates.projectId = handoverResult.projectId;
                         candidateUpdates.stepId = handoverResult.stepId;
-                        responseTextVal = null; // Silence main stream
+                        responseTextVal = null;
                         handoverTriggered = true;
                     }
                 }
 
-                // FALLBACK: If no handover happened but profile is complete, send to Waiting Room
                 if (!handoverTriggered && isNowComplete && !candidateData.congratulated) {
-                    console.log(`[ORCHESTRATOR] 🛋️ Entering Waiting Room.`);
                     responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. Pronto un reclutador te contactará. ✨🌸";
                     candidateUpdates.congratulated = true;
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker');
                 }
-            } catch (e) {
-                console.error('[GEMINI BRAIN] ❌ Runtime Error:', e);
-                // Fallback context if loop crashed early
+
+            } catch (err) {
+                console.error('❌ [GPT BRAIN FATAL] Error:', err.message);
+                // 100% GPT Mode: No Gemini fallbacks.
                 const fallbackContext = {
                     isProfileComplete: audit?.paso1Status === 'COMPLETO',
                     missingFields: audit?.missingLabels || [],
                     isNewFlag: isNewFlag && !botHasSpoken,
-                    candidateName: getFirstName(realName) || realName,
-                    lastBotMessages: lastBotMessages,
-                    categoriesList: categoriesList // 🎡 Ensure categories are passed even in crash
+                    candidateName: displayName,
+                    lastBotMessages,
+                    categoriesList
                 };
                 aiResult = AIGuard.validate(null, fallbackContext);
                 responseTextVal = aiResult?.response_text;
@@ -1084,7 +1040,7 @@ ${safeDnaLines}
                     await Promise.allSettled([textPromise, mediaPromise]);
                     console.log(`[MEDIA DELIVERY] Sent parallel text + ${isPdf ? 'PDF' : 'IMAGE'}`);
                 } else {
-                    sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal, 'chat', { priority: 0 }).catch(() => { });
+                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal, 'chat', { priority: 0 }).catch(() => { });
                     console.log(`[TEXT DELIVERY] Sent text only: ${candidateId}`);
                 }
             })();
