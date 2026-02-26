@@ -195,7 +195,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             'candidatic_categories',
             'bot_extraction_rules',
             'bot_cerebro1_rules',
-            'bypass_enabled'
+            'bypass_enabled',
+            'bot_ia_model'
         ];
 
         const [candidateData, config, allMessages, batchConfig] = await Promise.all([
@@ -313,10 +314,9 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const secSinceLastBot = Math.floor((new Date() - lastBotMsgAt) / 1000);
 
         // 4. Layered System Instruction Build
-        const botHasSpoken = validMessages.some(m => {
-            const fromBot = m.from === 'bot' || m.from === 'me';
-            return fromBot && m.content && m.content.length > 3;
-        });
+        // Simplest check: Does Redis list have any bot/me message?
+        const botHasSpoken = validMessages.some(m => m.from === 'bot' || m.from === 'me');
+        const isNewFlag = candidateData.esNuevo !== 'NO' && !botHasSpoken;
 
         // Identity Protection (Titan Shield Pass) - System context for safety
         const realName = candidateData.nombreReal;
@@ -369,12 +369,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         let systemInstruction = getIdentityLayer(customPrompt);
 
         // --- GRACE & SILENCE ARCHITECTURE ---
-        const isNewFlag = candidateData.esNuevo === 'SI';
+        isProfileComplete = audit.paso1Status === 'COMPLETO';
         const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
         // (minSinceLastBot already calculated at line 312)
         const isLongSilence = minSinceLastBot >= 5;
 
-        const isProfileComplete = audit.paso1Status === 'COMPLETO';
+        //const isProfileComplete = audit.paso1Status === 'COMPLETO';
         const currentHasGratitude = hasGratitude;
         const currentIsSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
 
@@ -830,6 +830,11 @@ ${safeDnaLines}
                 let handoverTriggered = false;
                 const gptStartTime = Date.now();
 
+                // 🏎️ [FORCE STATUS]: If speaking now, they are no longer NEW.
+                if (isNewFlag) {
+                    candidateUpdates.esNuevo = 'NO';
+                    await updateCandidate(candidateId, { esNuevo: 'NO' });
+                }
                 // Build Instructions
                 const extractionRules = batchConfig.bot_extraction_rules || DEFAULT_EXTRACTION_RULES;
                 systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, categoriesList)}`;
@@ -843,34 +848,33 @@ ${safeDnaLines}
 }
 
 [RECONOCIMIENTO DE TURNO]: 
-- Si el usuario acaba de darte su nombre (ej: "Oscar Rodriguez"), dalo por bueno INMEDIATAMENTE. 
-- "Nombre y Apellidos" se cumple si hay al menos un espacio entre dos palabras.
-- NO vuelvas a pedir el dato que el usuario acaba de escribir en su último mensaje. Agracede brevemente y pasa a la SIGUIENTE pregunta.\n`;
+- Si el usuario menciona su nombre o apellidos (ej: "Oscar Rodriguez" o solo "Rodriguez"), dalo por bueno e inclúyelo en "extracted_data".
+- NO pidas el nombre si el usuario acaba de dártelo ahora mismo.
+- "Nombre Completo" se considera válido si hay al menos dos palabras separadas por espacios.
+- Si el usuario dice "Ya te lo dije" o similar, NO repitas la misma pregunta; revisa bien el mensaje anterior o el ADN y discúlpate con encanto antes de seguir.\n`;
 
-                if (isNewFlag && !botHasSpoken) {
-                    candidateUpdates.esNuevo = 'NO';
+                if (isNewFlag) {
                     const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
-                    systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Preséntate como ${welcomeName} y solicita el Nombre Completo (con apellidos) para iniciar. ✨🌸\n`;
-                } else {
+                    systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate como ${welcomeName} y solicita el Nombre y Apellidos. ✨🌸\n`;
+                } else if (auditForMode.paso1Status !== 'COMPLETO') {
                     candidateUpdates.esNuevo = 'NO';
-                    if (auditForMode.paso1Status !== 'COMPLETO') {
-                        let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
-                        if (customPrompt && !batchConfig.bot_cerebro1_rules) {
-                            baseRules = baseRules
-                                .replace(/Responde con mucha alegría y dulzura \(ej: "¡Ay, qué lindo! 🤭✨ me chiveas"\)/g, 'Responde con amabilidad')
-                                .replace(/con encanto/g, '')
-                                .replace(/con un emoji variado/g, 'brevemente');
-                        }
-                        const cerebro1Rules = baseRules
-                            .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
-                            .replace(/{{categorias}}/g, categoriesList)
-                            .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
-                        systemInstruction += `\n${cerebro1Rules}\n`;
+                    let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
+                    if (customPrompt && !batchConfig.bot_cerebro1_rules) {
+                        baseRules = baseRules
+                            .replace(/Responde con mucha alegría y dulzura \(ej: "¡Ay, qué lindo! 🤭✨ me chiveas"\)/g, 'Responde con amabilidad')
+                            .replace(/con encanto/g, '')
+                            .replace(/con un emoji variado/g, 'brevemente');
                     }
+                    const cerebro1Rules = baseRules
+                        .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
+                        .replace(/{{categorias}}/g, categoriesList)
+                        .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
+                    systemInstruction += `\n${cerebro1Rules}\n`;
                 }
 
-                // Call Magic GPT
-                const gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, 'gpt-4o-mini', activeAiConfig.openaiApiKey);
+                // Call Magic GPT (Dynamic Model)
+                const selectedModel = batchConfig.bot_ia_model || 'gpt-4o-mini';
+                const gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey);
 
                 if (gptResult?.content) {
                     try {
@@ -878,7 +882,7 @@ ${safeDnaLines}
                         const cleanJson = jsonMatch ? jsonMatch[0] : gptResult.content;
                         aiResult = JSON.parse(cleanJson);
                         recordAITelemetry(candidateId, 'consolidated_brain', {
-                            model: 'gpt-4o-mini',
+                            model: selectedModel,
                             latency: Date.now() - gptStartTime,
                             tokens: gptResult.usage?.total_tokens || 0
                         });

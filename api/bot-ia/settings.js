@@ -22,7 +22,8 @@ export default async function handler(req, res) {
                 inactiveStages,
                 extractionRules,
                 cerebro1Rules,
-                cerebro2Context
+                cerebro2Context,
+                aiModel
             } = req.body;
 
             // 1. WhatsApp Config (UltraMsg)
@@ -63,6 +64,7 @@ export default async function handler(req, res) {
             if (extractionRules !== undefined) await redis.set('bot_extraction_rules', extractionRules);
             if (cerebro1Rules !== undefined) await redis.set('bot_cerebro1_rules', cerebro1Rules);
             if (cerebro2Context !== undefined) await redis.set('bot_cerebro2_context', cerebro2Context);
+            if (aiModel !== undefined) await redis.set('bot_ia_model', aiModel);
 
             return res.status(200).json({ success: true });
 
@@ -85,6 +87,7 @@ export default async function handler(req, res) {
             const extractionRules = await redis.get('bot_extraction_rules');
             const cerebro1Rules = await redis.get('bot_cerebro1_rules');
             const cerebro2Context = await redis.get('bot_cerebro2_context');
+            const aiModel = await redis.get('bot_ia_model');
 
             const operativeConfig = operativeConfigJson ? JSON.parse(operativeConfigJson) : {
                 startHour: 7,
@@ -143,6 +146,7 @@ export default async function handler(req, res) {
                 extractionRules: extractionRules || '',
                 cerebro1Rules: cerebro1Rules || '',
                 cerebro2Context: cerebro2Context || '',
+                aiModel: aiModel || 'gpt-4o-mini',
                 stats
             });
 

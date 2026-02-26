@@ -94,7 +94,7 @@ const AISettings = ({ showToast }) => {
                         </div>
                         <div>
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white">Candidatic Intelligence</h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">Configuración de Inteligencia Artificial (Gemini)</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Configuración de Inteligencia Artificial (OpenAI GPT)</p>
                         </div>
                     </div>
 
@@ -127,50 +127,12 @@ const AISettings = ({ showToast }) => {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {/* Gemini Section */}
-                        <div className="space-y-4 pb-4 border-b border-gray-100 dark:border-gray-800">
-                            <div>
-                                <div className="flex justify-between items-center mb-1">
-                                    <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tight">
-                                        Gemini API Key
-                                    </label>
-                                    <button
-                                        onClick={() => validateKey()}
-                                        disabled={validating || !config.geminiApiKey}
-                                        className="text-[10px] text-purple-600 hover:text-purple-700 font-bold flex items-center space-x-1 disabled:opacity-50"
-                                    >
-                                        <RefreshCw className={`w-3 h-3 ${validating ? 'animate-spin' : ''}`} />
-                                        <span>Verificar</span>
-                                    </button>
-                                </div>
-                                <div className="relative">
-                                    <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <input
-                                        type="password"
-                                        placeholder="AIzaSy..."
-                                        className={`w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border rounded-lg focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all text-sm dark:text-gray-200 ${status === 'valid' ? 'border-green-200 dark:border-green-800' :
-                                            status === 'invalid' ? 'border-red-200 dark:border-red-800' :
-                                                'border-gray-200 dark:border-gray-700'
-                                            }`}
-                                        value={config.geminiApiKey}
-                                        onChange={(e) => {
-                                            setConfig({ ...config, geminiApiKey: e.target.value });
-                                            if (status !== 'idle') setStatus('idle');
-                                        }}
-                                    />
-                                </div>
-                                {status === 'invalid' && errorMessage && (
-                                    <p className="mt-1 text-[9px] text-red-500 font-medium">Error: {errorMessage}</p>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* OpenAI Section (Host Pilot Technical Settings) */}
+                        {/* OpenAI Section (Central Brain Technical Settings) */}
                         <div className="space-y-4 pt-2">
                             <div className="flex items-center space-x-2 mb-1">
                                 <Sparkles className="w-4 h-4 text-purple-500" />
                                 <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tight">
-                                    OpenAI (Host Pilot)
+                                    OpenAI Global Configuration
                                 </label>
                             </div>
 

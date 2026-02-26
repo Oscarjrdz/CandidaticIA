@@ -44,6 +44,7 @@ const BotIASection = ({ showToast }) => {
                     setProactiveEnabled(data.proactiveEnabled);
                     setExtractionRules(data.extractionRules || '');
                     setCerebro1Rules(data.cerebro1Rules || '');
+                    setAiModel(data.aiModel || 'gpt-4o-mini');
                     if (data.stats) setStats(data.stats);
                     if (data.operativeConfig) setOperativeConfig(data.operativeConfig);
                     if (data.inactiveStages) setInactiveStages(data.inactiveStages);
@@ -121,7 +122,8 @@ const BotIASection = ({ showToast }) => {
                     operativeConfig,
                     inactiveStages,
                     extractionRules,
-                    cerebro1Rules
+                    cerebro1Rules,
+                    aiModel
                 })
             });
 
@@ -262,7 +264,7 @@ const BotIASection = ({ showToast }) => {
                 {/* 1. Prompt Extracción (Gemini) */}
                 <Card
                     title={<span className="text-gray-900 dark:text-white font-bold text-sm">Prompt Extracción</span>}
-                    icon={Sparkles}
+                    icon={Bot}
                     className="shadow-sm border-gray-100 dark:border-gray-700 rounded-3xl"
                     headerClassName="h-16"
                 >
@@ -272,7 +274,7 @@ const BotIASection = ({ showToast }) => {
                                 <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
                                     PROMPT BRENDA EXTRACCIÓN 📑✨
                                 </label>
-                                <span className="text-[8px] font-bold text-gray-400 uppercase">Gemini Powered</span>
+                                <span className="text-[8px] font-bold text-gray-400 uppercase">OpenAI Powered</span>
                             </div>
                             {isInitialLoading ? (
                                 <Skeleton className="w-full h-80 rounded-2xl" />
@@ -292,9 +294,9 @@ const BotIASection = ({ showToast }) => {
                                 onChange={(e) => setAiModel(e.target.value)}
                                 className="w-full p-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold shadow-sm"
                             >
-                                <option value="gemini-2.0-flash">🚀 Gemini 2.0 Flash</option>
-                                <option value="gemini-1.5-flash">⚡ Gemini 1.5 Flash</option>
-                                <option value="gemini-1.5-pro">🧠 Gemini 1.5 Pro</option>
+                                <option value="gpt-4o-mini">🚀 GPT-4o Mini (Recomendado)</option>
+                                <option value="gpt-4o">⚡ GPT-4o (Premium)</option>
+                                <option value="gpt-4-turbo">🧠 GPT-4 Turbo</option>
                             </select>
                         </div>
                     </div>
@@ -326,7 +328,7 @@ const BotIASection = ({ showToast }) => {
                                 <label className="text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
                                     PROMPT DE SEGUIMIENTO 🎯
                                 </label>
-                                <span className="text-[8px] font-bold text-gray-400 uppercase">Gemini Powered</span>
+                                <span className="text-[8px] font-bold text-gray-400 uppercase">OpenAI Powered</span>
                             </div>
                             {isInitialLoading ? (
                                 <Skeleton className="w-full h-24 rounded-2xl" />
