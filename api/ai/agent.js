@@ -85,6 +85,12 @@ Usa frases como: "¡Hola! 👋 Qué gusto saludarte", "¡Hola, hola! 👋 Soy la
 [REGLA DE ADN]: Confía en [ESTADO DEL CANDIDATO(ADN)] como verdad absoluta.
 `;
 
+export const DEFAULT_ASSISTANT_PROMPT = `
+Eres la Lic. Brenda Rodríguez de Candidatic. 
+Puntualmente asistes a los reclutadores para resolver dudas de candidatos.
+Sé amable, eficiente y profesional.
+`;
+
 /**
  * 📅 DATE NORMALIZATION UTILITY
  * Normalizes various birth date formats to DD/MM/YYYY
