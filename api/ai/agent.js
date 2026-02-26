@@ -322,12 +322,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const customFields = batchConfig.custom_fields ? JSON.parse(batchConfig.custom_fields) : [];
         const auditRaw = auditProfile(candidateData, customFields);
 
-        // 🛡️ [GENDER SUPPRESSION]: Filter Gender from missing fields list. Prohibited from proactive asking.
-        const audit = {
-            ...auditRaw,
-            missingLabels: auditRaw.missingLabels.filter(l => l !== 'Género'),
-            missingValues: auditRaw.missingValues.filter(v => v !== 'genero')
-        };
+        const audit = auditRaw; // Gender is now a required field for bypass
 
         // 🧬 [PREMIUM BLINDAJE]: Intelligent Extractor (Viper-Grip) Pass
         // Instead of waiting for a rescue, we run the premium extractor on EVERY message
@@ -342,13 +337,19 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             console.log(`[VIPER-GRIP] ✅ Refined data merged:`, refinedData);
         }
 
-        // Re-audit AFTER premium extraction to get the TRUE missing fields
+        // 🧬 [AUTO-GENDER PRE-PASS]: If name exists but gender doesn't, infer it NOW
+        if (candidateData.nombreReal && !candidateData.genero) {
+            const inferred = inferGender(candidateData.nombreReal);
+            if (inferred) {
+                candidateData.genero = inferred;
+                candidateUpdates.genero = inferred;
+                console.log(`[EARLY GENDER INFERENCE] 🧬 Inferred ${inferred} for ${candidateData.nombreReal}`);
+            }
+        }
+
+        // Re-audit AFTER premium extraction and early inference
         const finalAudit = auditProfile(candidateData, customFields);
-        const auditForMode = {
-            ...finalAudit,
-            missingLabels: finalAudit.missingLabels.filter(l => l !== 'Género'),
-            missingValues: finalAudit.missingValues.filter(v => v !== 'genero')
-        };
+        const auditForMode = finalAudit;
 
         const customPrompt = batchConfig.bot_ia_prompt || '';
         let systemInstruction = getIdentityLayer(customPrompt);
@@ -904,13 +905,11 @@ ${safeDnaLines}
                 }
 
                 // 🔄 [TRANSITION & HANDOVER]
-                const rawAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
-                // [GENDER SUPPRESSION]: Handover ignores gender as a blocker
-                isNowComplete = rawAudit.missingValues.filter(v => v !== 'genero').length === 0;
+                const currentAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
+                isNowComplete = currentAudit.paso1Status === 'COMPLETO';
 
                 const bypassEnabled = batchConfig.bypass_enabled === 'true';
-                // Create a virtual audit for the Orchestrator that respects our suppression rules
-                const handoverAudit = { ...rawAudit, paso1Status: isNowComplete ? 'COMPLETO' : 'INCOMPLETO' };
+                const handoverAudit = currentAudit;
 
                 if (await Orchestrator.checkBypass(candidateData, handoverAudit, bypassEnabled)) {
                     console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
@@ -1035,7 +1034,7 @@ ${safeDnaLines}
         // 🧬 [STATE SYNC] Ensure we know if they are complete even if we didn't go through Gemini
         if (!isNowComplete) {
             const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
-            isNowComplete = finalAudit.missingValues.filter(v => v !== 'genero').length === 0;
+            isNowComplete = finalAudit.paso1Status === 'COMPLETO';
         }
 
         // 📝 [DEBUG LOG]: Store full trace NOW before potential timeouts in secondary deliveries
