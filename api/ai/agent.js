@@ -886,6 +886,15 @@ ${safeDnaLines}
                     // Zuckerberg-Level Coalescence Engine
                     if (aiResult.extracted_data.nombreReal) {
                         aiResult.extracted_data.nombreReal = coalesceName(candidateData.nombreReal, aiResult.extracted_data.nombreReal);
+
+                        // 🧬 [AUTO-GENDER]: Infer gender from name if not already set
+                        if (!candidateData.genero && !aiResult.extracted_data.genero) {
+                            const inferred = inferGender(aiResult.extracted_data.nombreReal);
+                            if (inferred) {
+                                aiResult.extracted_data.genero = inferred;
+                                console.log(`[GENDER INFERENCE] 🧬 Inferred ${inferred} for ${aiResult.extracted_data.nombreReal}`);
+                            }
+                        }
                     }
                     if (aiResult.extracted_data.fechaNacimiento) {
                         aiResult.extracted_data.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, aiResult.extracted_data.fechaNacimiento);
@@ -895,13 +904,15 @@ ${safeDnaLines}
                 }
 
                 // 🔄 [TRANSITION & HANDOVER]
-                const currentAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
-                isNowComplete = currentAudit.paso1Status === 'COMPLETO';
+                const rawAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
+                // [GENDER SUPPRESSION]: Handover ignores gender as a blocker
+                isNowComplete = rawAudit.missingValues.filter(v => v !== 'genero').length === 0;
 
                 const bypassEnabled = batchConfig.bypass_enabled === 'true';
-                let handoverTriggered = false;
+                // Create a virtual audit for the Orchestrator that respects our suppression rules
+                const handoverAudit = { ...rawAudit, paso1Status: isNowComplete ? 'COMPLETO' : 'INCOMPLETO' };
 
-                if (await Orchestrator.checkBypass(candidateData, currentAudit, bypassEnabled)) {
+                if (await Orchestrator.checkBypass(candidateData, handoverAudit, bypassEnabled)) {
                     console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
                     const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config);
                     if (handoverResult?.triggered) {
@@ -1024,7 +1035,7 @@ ${safeDnaLines}
         // 🧬 [STATE SYNC] Ensure we know if they are complete even if we didn't go through Gemini
         if (!isNowComplete) {
             const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
-            isNowComplete = finalAudit.paso1Status === 'COMPLETO';
+            isNowComplete = finalAudit.missingValues.filter(v => v !== 'genero').length === 0;
         }
 
         // 📝 [DEBUG LOG]: Store full trace NOW before potential timeouts in secondary deliveries
