@@ -589,7 +589,7 @@ ${safeDnaLines}
                             ...historyForGpt.slice(0, -1), // Drop the rejection message
                             {
                                 role: 'user',
-                                parts: [{ text: `[SISTEMA INTERNO]: El candidato rechazó la vacante anterior.Ahora preséntale la siguiente vacante disponible(índice ${newIdx}).Es la primera vez que la ve.NO asumas que la rechaza — apreséntatela con entusiasmo y espera su respuesta.` }]
+                                content: `[SISTEMA INTERNO]: El candidato rechazó la vacante anterior.Ahora preséntale la siguiente vacante disponible(índice ${newIdx}).Es la primera vez que la ve.NO asumas que la rechaza — apreséntatela con entusiasmo y espera su respuesta.`
                             }
                         ];
                         console.log(`[RECRUITER BRAIN] 🔄 Vacancy transition context injected for index ${newIdx}`);
@@ -744,9 +744,9 @@ ${safeDnaLines}
                                 // 🧹 CLEAN HISTORY for the new step to prevent acceptance leakage from previous step
                                 const historyForNextStep = [
                                     ...historyForGpt.filter(h => h.role === 'user').slice(-3), // Keep some context but limited
-                                    { role: 'user', parts: [{ text: `[SISTEMA]: El candidato acaba de avanzar al paso "${nextStep.name}".Este es tu primer contacto en este paso.Sigue tu OBJETIVO DE PASO.` }] }
+                                    { role: 'user', content: `[SISTEMA]: El candidato acaba de avanzar al paso "${nextStep.name}".Este es tu primer contacto en este paso.Sigue tu OBJETIVO DE PASO.` }
                                 ];
-                                if (recruiterFinalSpeech) historyForNextStep.splice(-1, 0, { role: 'model', parts: [{ text: recruiterFinalSpeech }] });
+                                if (recruiterFinalSpeech) historyForNextStep.splice(-1, 0, { role: 'assistant', content: recruiterFinalSpeech });
 
                                 const nextAiResult = await processRecruiterMessage(
                                     { ...candidateData, ...candidateUpdates },
