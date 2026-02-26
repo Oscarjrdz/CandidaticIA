@@ -281,7 +281,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         if (userParts.length === 0) userParts.push({ text: 'Hola' });
 
         let recentHistory = validMessages
-            .slice(-21, -1) // Memory Boost: 20 messages of history
+            .slice(-20) // Memory Boost: 20 messages of history
             .filter(m => {
                 const ghostKeywords = ['focusada', 'procesa su perfil'];
                 if ((m.from === 'bot' || m.from === 'me') && ghostKeywords.some(kw => m.content.toLowerCase().includes(kw))) {
@@ -896,17 +896,18 @@ ${safeDnaLines}
                     isProfileComplete: freshAudit.paso1Status === 'COMPLETO',
                     missingFields: freshAudit.missingLabels,
                     lastInput: aggregatedText,
-                    isNewFlag: false,
+                    isNewFlag: isNewFlag,
                     candidateName: displayName,
                     lastBotMessages,
                     categoriesList
                 };
                 const validation = await AIGuard.validate(aiResult, guardContext, allMessages);
-                if (validation.isModified) {
-                    aiResult = validation.result;
+                if (validation && validation.recovery_active) {
+                    aiResult = validation;
                     responseTextVal = aiResult.response_text;
                     if (aiResult.extracted_data) Object.assign(candidateUpdates, aiResult.extracted_data);
                 }
+
 
                 // Transition Logic
                 const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
@@ -932,7 +933,7 @@ ${safeDnaLines}
                 const fbContext = {
                     isProfileComplete: audit?.paso1Status === 'COMPLETO',
                     missingFields: audit?.missingLabels || [],
-                    isNewFlag: false,
+                    isNewFlag: isNewFlag,
                     candidateName: displayName,
                     lastBotMessages,
                     categoriesList
