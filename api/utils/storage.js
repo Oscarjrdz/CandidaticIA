@@ -327,7 +327,8 @@ export const auditProfile = (c, customFields = []) => {
         }
 
         if (isInvalid) {
-            missingLabels.push(field.label);
+            const label = (field.value === 'nombreReal' && val.length >= 2) ? "Apellidos" : field.label;
+            missingLabels.push(label);
             missingValues.push(field.value);
         }
 

@@ -83,22 +83,23 @@ export class AIGuard {
             const firstName = candidateName ? candidateName.split(/\s+/)[0] : null;
 
             // Smart Logic: Only ask for surnames if we *only* have a first name (1 word)
-            if (firstMissing === 'Nombre Real' && nameWords === 1) {
+            if (firstMissing === 'Apellidos' || (firstMissing === 'Nombre completo' && nameWords === 1)) {
                 recoveryText = `¡Súper, ${firstName}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para completar tu registro? 🌸`;
             } else if (reason === 'FALLBACK_REPETITION' || reason === 'FALLBACK_IDENTITY_REPETITION') {
-                // Specific variation for repetition to break the loop
+                // ... (logic continues)
                 const variationTemplates = [
                     `${firstName ? firstName + ', p' : 'P'}ara tu registro aún necesito tu ${firstMissing}. ¿Me ayudas con eso? ✨`,
-                    `Solo me falta tu ${firstMissing} para avanzar. ¿Me lo pasas? 🌸`,
-                    `¡Súper! 🌸 Me falta confirmar tu ${firstMissing} para seguir. ✨`
+                    `Solo me falta el detalle de ${firstMissing === 'Apellidos' ? 'tus' : 'tu'} ${firstMissing} para avanzar. ¿Me lo pasas? 🌸`,
+                    `¡Súper! 🌸 Me falta confirmar ${firstMissing === 'Apellidos' ? 'tus' : 'tu'} ${firstMissing} para seguir. ✨`
                 ];
                 recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {
                 // Simple but high-quality recovery templates (ELOCUENT, WARM & BRANDED)
+                const connector = (firstMissing === 'Apellidos') ? 'tus' : 'tu';
                 const templates = [
-                    `¡Súper! ✨ ${firstName ? firstName + ', p' : 'P'}ara seguir avanzando y que ya quedes en el sistema, ¿me podrías pasar tu ${firstMissing}? 😉🌸`,
-                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Solo me falta el detalle de tu ${firstMissing} para decirte que ya estás dentro. 🤭 ¿Me lo proporcionas? ✨`,
-                    `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', solo' : 'Solo'} necesito saber tu ${firstMissing} para encontrarte la mejor vacante hoy mismo. 😉✨`
+                    `¡Súper! ✨ ${firstName ? firstName + ', p' : 'P'}ara seguir avanzando y que ya quedes en el sistema, ¿me podrías pasar ${connector} ${firstMissing}? 😉🌸`,
+                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Solo me falta el detalle de ${connector} ${firstMissing} para decirte que ya estás dentro. 🤭 ¿Me lo proporcionas? ✨`,
+                    `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', solo' : 'Solo'} necesito saber ${connector} ${firstMissing} para encontrarte la mejor vacante hoy mismo. 😉✨`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             }
