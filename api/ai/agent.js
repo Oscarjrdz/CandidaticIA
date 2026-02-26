@@ -804,9 +804,11 @@ ${safeDnaLines}
         }
 
         // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
-        // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
             try {
+                // 🧠 [SMART CONTEXT]: Detect if categories were already shown to avoid spam
+                const wasCategoriesShown = lastBotMessages.some(m => m.includes('✅') && m.includes('¿Cuál eliges?'));
+
                 // FORCE JSON SCHEMA FOR GEMINI
                 systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
 {
@@ -819,11 +821,21 @@ ${safeDnaLines}
                 if (isNewFlag && !botHasSpoken) {
                     systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda Rodríguez y pide el Nombre completo (Nombre y Apellidos) para iniciar el registro. ✨🌸\n`;
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
+                    // Smart injection: Only show full list if not recently shown or if specifically needed
+                    const displayCats = wasCategoriesShown ? "(Ya mostraste la lista, NO la repitas de nuevo. Solo pregunta cuál le interesa de las opciones anteriores)" : categoriesList;
+
                     const cerebro1Rules = (batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES)
                         .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
-                        .replace(/{{categorias}}/g, categoriesList)
-                        .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
+                        .replace(/{{categorias}}/g, displayCats)
+                        .replace(/\[LISTA DE CATEGORÍAS\]/g, displayCats);
                     systemInstruction += `\n${cerebro1Rules}\n`;
+
+                    if (botHasSpoken) {
+                        systemInstruction += `\n[REGLA ANTI-HOLA]: El usuario ya te conoce. Prohibido saludar (Hola, Buenas). Sé directa y carismática.\n`;
+                    }
+                    if (displayName) {
+                        systemInstruction += `\n[REGLA DE NOMBRE]: Menciona al candidato SOLO por su primer nombre ("${displayName}"), nunca uses su nombre completo.\n`;
+                    }
                 } else {
                     const closurePrompt = `
 [CIERRE DE REGISTRO]: El perfil está al 100%. Elige una de estas frases aleatoriamente para felicitarlo:
