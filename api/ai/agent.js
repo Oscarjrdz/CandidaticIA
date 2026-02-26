@@ -435,20 +435,14 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             .map(m => m.content.trim());
 
         let categoriesList = "";
-        const categoriesData = (batchConfig.candidatic_categories && batchConfig.candidatic_categories.length > 2) ?
-            batchConfig.candidatic_categories :
-            ((batchConfig.bot_categories && batchConfig.bot_categories.length > 2) ?
-                batchConfig.bot_categories : "Especialista, Operador General, Almacenista, Montacarguista, Administrativo");
+        const categoriesData = batchConfig.candidatic_categories || batchConfig.bot_categories || "General";
         try {
             const rawCats = typeof categoriesData === 'string' ? (categoriesData.includes('[') ? JSON.parse(categoriesData) : categoriesData.split(',').map(c => c.trim())) : categoriesData;
-            const cats = (Array.isArray(rawCats) && rawCats.length > 0) ? rawCats : ["General"];
+            const cats = Array.isArray(rawCats) ? rawCats : [rawCats];
             categoriesList = cats.map(c => `✅ ${typeof c === 'string' ? c : (c.name || c.value || JSON.stringify(c))}`).join('\n');
         } catch (e) {
             console.warn('Error parsing categories:', e);
-            categoriesList = String(categoriesData || "General").split(',').map(c => `✅ ${c.trim()}`).join('\n');
-        }
-        if (!categoriesList || categoriesList.trim().length < 5) {
-            categoriesList = "✅ Operador General\n✅ Almacenista\n✅ Montacarguista\n✅ Administrativo";
+            categoriesList = String(categoriesData).split(',').map(c => `✅ ${c.trim()}`).join('\n');
         }
 
         const customExtractionRules = batchConfig.bot_extraction_rules;
@@ -852,14 +846,10 @@ ${safeDnaLines}
                 if (isNewFlag && !botHasSpoken) {
                     systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda Rodríguez y pide el Nombre completo (Nombre y Apellidos) para iniciar el registro. ✨🌸\n`;
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
-                    // Smart injection: Only show full list if not recently shown or if specifically requested
-                    const userWantsToSee = aggregatedText.toLowerCase().includes('muest') || aggregatedText.toLowerCase().includes('ver') || aggregatedText.toLowerCase().includes('cuáles');
-                    const displayCats = (wasCategoriesShown && !userWantsToSee) ? "(Ya mostraste la lista, NO la repitas de nuevo. Solo pregunta cuál le interesa de las opciones anteriores)" : categoriesList;
-
                     const cerebro1Rules = (batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES)
                         .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
-                        .replace(/{{categorias}}/g, displayCats)
-                        .replace(/\[LISTA DE CATEGORÍAS\]/g, displayCats);
+                        .replace(/{{categorias}}/g, categoriesList)
+                        .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
                     systemInstruction += `\n${cerebro1Rules}\n`;
 
                     if (botHasSpoken) {
