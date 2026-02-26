@@ -375,7 +375,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         let systemInstruction = getIdentityLayer(customPrompt);
 
         // --- GRACE & SILENCE ARCHITECTURE ---
-        isProfileComplete = audit.paso1Status === 'COMPLETO';
+        let isProfileComplete = audit.paso1Status === 'COMPLETO';
         const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
         // (minSinceLastBot already calculated at line 312)
         const isLongSilence = minSinceLastBot >= 5;
