@@ -773,30 +773,14 @@ ${safeDnaLines}
 
 
         // --- BIFURCATION POINT: Silence Shield / Recruiter / GPT Host / Gemini ---
-        const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? parseInt(candidateData.bridge_counter || 0) : 0;
         let isBridgeActive = false;
         let isHostMode = false;
-        const hasBeenCongratulated = candidateData.congratulated === true || candidateData.congratulated === 'true';
 
-        // 1. SILENCE SHIELD (Exactly 2 messages after sticker)
-        if (!isRecruiterMode && isProfileComplete && hasBeenCongratulated && bridgeCounter < 2) {
-            console.log(`[Silence Shield] Active for ${candidateId}.Count: ${bridgeCounter} `);
-            isBridgeActive = true;
+        // 🛡️ [SILENCE SHIELD REMOVED]: Since follow-up system is gone, we no longer muzzle Brenda after completion.
+        // We now allow GPT Host or Capturista Brain to handle social interactions naturally.
 
-            const lowerText = aggregatedText.toLowerCase();
-            const gratitudeKeywords = ['gracias', 'grx', 'thx', 'thank', 'agradecid', 'amable', 'bendicion'];
-            const hasRealGratitude = gratitudeKeywords.some(kw => lowerText.includes(kw));
-
-            aiResult = {
-                reaction: hasRealGratitude ? '👍' : '✨',
-                response_text: null,
-                close_conversation: true,
-                extracted_data: {}
-            };
-            candidateData.bridge_counter = bridgeCounter + 1;
-            candidateData.esNuevo = 'NO'; // Activity breaks "New" status
-            responseTextVal = null;
-        }
+        const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? parseInt(candidateData.bridge_counter || 0) : 0;
+        candidateUpdates.bridge_counter = bridgeCounter + 1; // Now correctly persisted in candidateUpdates
 
         // 2. GPT HOST (OpenAI Social Brain) - Triggers after 2 messages of silence
         const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
@@ -998,11 +982,11 @@ ${safeDnaLines}
             console.log('[Media Sanitizer] 🛡️ Stripped potential URL leakage from response_text.');
         }
 
-        const isTechnical = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
+        const isTechnicalOrEmpty = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
-        if (!responseTextVal && !isTechnical && !aiResult?.close_conversation && !isRecruiterMode) {
-            console.warn(`[FINAL SAFEGUARD] 🚨 Attempted silence for candidate ${candidateId}. Forcing fallback.`);
+        if (isTechnicalOrEmpty && !aiResult?.close_conversation && !isRecruiterMode) {
+            console.warn(`[FINAL SAFEGUARD] 🚨 Silence detected for candidate ${candidateId}. Forcing fallback.`);
             responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
         }
 

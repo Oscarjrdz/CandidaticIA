@@ -79,6 +79,25 @@ export class AIGuard {
 
         // 🛡️ [GENDER SUPPRESSION]: Ensure fallback never asks for gender
         const safeMissing = (missingFields || []).filter(f => f !== 'Género' && f !== 'genero');
+
+        // 🌸 SOCIAL FALLBACK: If profile is complete, don't ask for data!
+        if (isProfileComplete || safeMissing.length === 0) {
+            const templates = [
+                `¡Excelente! ✨ Aquí sigo al pendiente de tu registro. Si tienes alguna duda, dime. 😉🌸`,
+                `¡Perfecto! 💖 Ya tengo tu perfil listo en nuestro sistema. ✨ ¿En qué más te puedo ayudar?`,
+                `¡Súper! 🌟 Quedo a la espera de que un reclutador revise tu información. ✨🌸`,
+                `¡Entendido! 😉 Cualquier cosa aquí estoy, ¡lindo día! ✨`
+            ];
+            return {
+                response_text: templates[Math.floor(Math.random() * templates.length)],
+                thought_process: `SOCIAL_FALLBACK: Profile complete, no mission data required.`,
+                reaction: '✨',
+                extracted_data: extracted,
+                close_conversation: false,
+                recovery_active: true
+            };
+        }
+
         const firstMissing = safeMissing.length > 0 ? safeMissing[0] : 'datos';
 
         let recoveryText = "";
