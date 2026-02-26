@@ -166,6 +166,10 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
             logs.push(`🔍[DEBUG] Candidatos totales en proyecto: ${candidates.length} `);
 
             const candidatesInStep = candidates.filter(c => {
+                // 🚀 BLAZING FAST HANDOVER BYPASS: If we just pushed them, they might not have projectMetadata cached yet.
+                if (manualConfig?.stepId === step.id && c.status === 'PROCESO') {
+                    return true;
+                }
                 const cStepId = c.projectMetadata?.stepId || 'step_new';
                 const isFirstStepMatch = (stepIndex === 0 && cStepId === 'step_new');
                 const isExactMatch = (cStepId === step.id);

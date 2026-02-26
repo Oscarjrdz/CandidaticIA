@@ -626,6 +626,11 @@ const CandidatesSection = ({ showToast }) => {
                                                 </div>
                                             </td>
                                             <td className="py-0.5 px-2.5">
+                                                <div className="text-[10px] text-gray-900 dark:text-white truncate max-w-[80px]" title={candidate.tieneEmpleo}>
+                                                    {candidate.tieneEmpleo || '-'}
+                                                </div>
+                                            </td>
+                                            <td className="py-0.5 px-2.5">
                                                 <div className="text-[10px] text-gray-900 dark:text-white font-mono font-medium">
                                                     {formatPhone(candidate.whatsapp)}
                                                 </div>
