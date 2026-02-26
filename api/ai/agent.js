@@ -28,6 +28,7 @@ import { FEATURES } from '../utils/feature-flags.js';
 import { AIGuard } from '../utils/ai-guard.js';
 import { Orchestrator } from '../utils/orchestrator.js';
 import { MediaEngine } from '../utils/media-engine.js';
+import { intelligentExtract } from '../utils/intelligent-extractor.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
 [EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad, tieneEmpleo.
@@ -39,32 +40,42 @@ export const DEFAULT_EXTRACTION_RULES = `
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
-[CAPTURISTA BRENDA]: Recolecta {{faltantes}}. (Empleo: pregunta si está "Empleado" o "Desempleado").
-1. Solo UN dato a la vez. No abrumes.
-2. Tono tierno y servicial. ✨
-3. No saltes de dato hasta llenar el actual.
-4. FECHA: Solicítala de forma natural con un ejemplo. Ej: "¿Me podrías proporcionar tu fecha de nacimiento? Por ejemplo: 19-05-1983. 📅". Evita decir "en formato DD-MM-YYYY".
-5. CATEGORÍA: Si falta la Categoría, DEBES imprimir la [LISTA DE CATEGORÍAS] completa para que el usuario elija.
-6. No aceptes datos basura.
+[FASE 1: TU MISIÓN PRINCIPAL - FLUJO DE CAPTURA]
+Tu objetivo técnico es obtener: {{faltantes}}.
+
+ REGLAS DE MISIÓN:
+1. NOMBRE COMPLETO: Si solo te da el nombre, pídele los apellidos con encanto. No puedes avanzar sin ellos.
+2. CATEGORÍA: Muestra SIEMPRE la lista vertical así:
+"¡Súper! 🌟 Mira, estas son las opciones que tengo para ti💖: 
+{{categorias}}
+¿Cuál eliges? 🤭"
+3. DINÁMICA: Si responde algo que no es el dato, vuelve a preguntar de forma diferente y divertida.
+4. PERSUASIÓN: Si pregunta por vacantes o sueldos, dile que necesitas sus datos para que el sistema le asigne la mejor opción y continúas con: {{faltantes}}.
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = `
-[IDENTIDAD]: Lic. Brenda Rodríguez (25), reclutadora de Candidatic. Cálida, tierna, 3 emojis/msg. ✨🌸
-1. BREVEDAD: Respuestas cortas. No asteriscos (*).
-2. PROTOCOLO: 1er contacto: "¡Hola! Soy la Lic. Brenda Rodríguez...". 
-3. ANTI-HOLA (BLOQUEO TOTAL): Si [CHARLA_ACTIVA]: TRUE, tienes PROHIBIDO saludar ("Hola", "Buenas tardes"), presentarte ("Soy Brenda") o mencionar el NOMBRE COMPLETO del candidato. Usa el NOMBRE DE PILA (First Name) si es necesario, pero sé directa. Saludar en hilo activo es un ERROR CRÍTICO.
-4. NOMENCLATURA: Si el usuario da Nombre + UN apellido, es SUCIENTE. No pidas el materno.
-5. ANTI-REPETICIÓN: Prohibido calcar respuestas previas.
-6. CERCANÍA: USA SOLO EL NOMBRE DE PILA (First Name) en tus diálogos. Está PROHIBIDO usar "Nombre + Apellido" (ej. "Oscar Rodriguez") en tus respuestas. Di solo "Oscar" para sonar más natural.
-[REGLA DE REACCIONES]:
-- El sistema pondrá un 👍 automático si detectas gratitud (gratitude_reached: true).
-- GRATITUD (ESTRICTO): Solo si dicen "Gracias", "Agradecido", "Muchas gracias".
-- NO ES GRATITUD: "Bye", "Adios", "Ok", "Enterado", "Sale". NO pongas Like en estos.
-- NO intentes usar reacciones manuales en "reaction", el sistema las ignora.
+[PERSONALIDAD]:
+Eres la Lic. Brenda Rodríguez (25 años), reclutadora de Candidatic. 
+Eres carismática, profesional, coqueta y muy divertida. 
+Hablas como una joven de oficina que usa su encanto para que los candidatos se sientan en confianza.
+Usa emojis para hacerlo agradable y tierno, no uses los mismos siempre. No uses asteriscos (*).
 
-[ESTRATEGIA DE CONVERSACIÓN]:
-1. CONFIRMACIÓN DE CAMBIOS: Si el usuario corrige un dato (ej. su nombre), tu "response_text" DEBE confirmar explícitamente que ya realizaste el cambio.
-2. CIERRE DEFINITIVO: Si ya cerraste la charla (Silencio Operativo: SÍ) y el usuario solo responde con confirmaciones cortas o cortesías (ej. "Ok", "Sale", "Gracias a ti"), NO respondas con texto. Mantén el silencio o usa una reacción (👍).
+[REGLAS DE ORO]:
+- NUNCA REPITAS MENSAJES. Sé creativa, varía tus palabras.
+- Si preguntan por vacantes/sueldos: Explica que necesitas sus datos para que el sistema le asigne lo mejor. Mantén la expectativa alta (ej: "estoy revisando zonas", "validando turnos").
+- Si te ligan: Responde con picardía y divertida pero SIN REPETIR FRASES. Re-enfoca a la extracción inmediatamente.
+- MENSAJES CORTOS: Máximo 4 líneas.
+
+[PROTOCOLO DE SALUDO (ALEATORIO)]:
+Usa frases como: "¡Hola! 👋 Qué gusto saludarte", "¡Hola, hola! 👋 Soy la Lic. Brenda", "¡Qué tal! Por aquí la Lic. Brenda", "¡Mucho gusto! ✨". Varía siempre.
+
+[REGLAS DE FORMATO]:
+- PROHIBIDO USAR ASTERISCOS (*).
+- No uses "Hola" en segundos mensajes, solo en el inicial.
+- No hagas halagos personales (guapo, lindo, etc.).
+- LISTAS VERTICALES: Categorías siempre una por renglón con ✅.
+
+[REGLA DE ADN]: Confía en [ESTADO DEL CANDIDATO(ADN)] como verdad absoluta.
 `;
 
 /**
@@ -318,6 +329,27 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             missingValues: auditRaw.missingValues.filter(v => v !== 'genero')
         };
 
+        // 🧬 [PREMIUM BLINDAJE]: Intelligent Extractor (Viper-Grip) Pass
+        // Instead of waiting for a rescue, we run the premium extractor on EVERY message
+        // to ensure name-surname precision, date fusion, and location shielding.
+        console.log(`[VIPER-GRIP] 🛡️ Running Premium Extraction for ${candidateId}`);
+        const refinedData = await intelligentExtract(candidateId, aggregatedText);
+
+        // Merge refined data back into our working objects before audit
+        if (refinedData) {
+            Object.assign(candidateData, refinedData);
+            Object.assign(candidateUpdates, refinedData);
+            console.log(`[VIPER-GRIP] ✅ Refined data merged:`, refinedData);
+        }
+
+        // Re-audit AFTER premium extraction to get the TRUE missing fields
+        const finalAudit = auditProfile(candidateData, customFields);
+        const auditForMode = {
+            ...finalAudit,
+            missingLabels: finalAudit.missingLabels.filter(l => l !== 'Género'),
+            missingValues: finalAudit.missingValues.filter(v => v !== 'genero')
+        };
+
         const customPrompt = batchConfig.bot_ia_prompt || '';
         let systemInstruction = getIdentityLayer(customPrompt);
 
@@ -377,12 +409,15 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             .map(m => m.content.trim());
 
         let categoriesList = "";
-        const categoriesData = batchConfig.candidatic_categories;
+        const categoriesData = batchConfig.candidatic_categories || batchConfig.bot_categories;
         if (categoriesData) {
             try {
-                const cats = JSON.parse(categoriesData).map(c => `✅ ${c.name}`);
-                categoriesList = cats.join('\n');
-            } catch (e) { }
+                const cats = typeof categoriesData === 'string' ? (categoriesData.includes('[') ? JSON.parse(categoriesData) : categoriesData.split(',').map(c => ({ name: c.trim() }))) : categoriesData;
+                categoriesList = cats.map(c => `✅ ${c.name || c}`).join('\n');
+            } catch (e) {
+                console.warn('Error parsing categories:', e);
+                categoriesList = String(categoriesData);
+            }
         }
 
         const customExtractionRules = batchConfig.bot_extraction_rules;
@@ -435,7 +470,7 @@ ${safeDnaLines}
             try {
                 const redisForIdx = getRedisClient();
                 if (redisForIdx) {
-                    const metaRaw = await redisForIdx.hget(`project: cand_meta:${activeProjectId} `, candidateId);
+                    const metaRaw = await redisForIdx.hget(`project:cand_meta:${activeProjectId}`, candidateId);
                     if (metaRaw) {
                         const meta = JSON.parse(metaRaw);
                         if (meta.currentVacancyIndex !== undefined) {
@@ -715,6 +750,7 @@ ${safeDnaLines}
             }
         }
 
+
         // --- BIFURCATION POINT: Silence Shield / Recruiter / GPT Host / Gemini ---
         const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? parseInt(candidateData.bridge_counter || 0) : 0;
         let isBridgeActive = false;
@@ -768,12 +804,11 @@ ${safeDnaLines}
         }
 
         // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
+        // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
-            // 🛡️ [IDENTITY & RULES]
-            let systemInstruction = getIdentityLayer(config.customPrompt);
-
-            // FORCE JSON SCHEMA FOR GEMINI
-            systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
+            try {
+                // FORCE JSON SCHEMA FOR GEMINI
+                systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
 {
   "response_text": "Texto para el usuario",
   "reaction": "Emoji o null",
@@ -781,81 +816,102 @@ ${safeDnaLines}
   "thought_process": "Breve nota interna"
 }\n`;
 
-            if (isNewFlag && !botHasSpoken) {
-                systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda Rodríguez y pide el Nombre completo para iniciar el registro. ✨🌸\n`;
-            } else if (!isProfileComplete) {
-                const cerebro1Rules = (batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES)
-                    .replace('{{faltantes}}', audit.missingLabels.join(', '))
-                    .replace(/{{categorias}}/g, categoriesList);
-                systemInstruction += `\n${cerebro1Rules}\n`;
-            } else {
-                systemInstruction += !hasGratitude
-                    ? `\n[MISIÓN ACTUAL: BUSCAR GRATITUD]: El perfil está completo. Sé súper amable y busca que el usuario te dé las gracias. ✨💅\n`
-                    : `\n[MISIÓN ACTUAL: OPERACIÓN SILENCIO]: El usuario ya agradeció. No escribas texto. واکنش 👍 y close_conversation: true. 👋🤫\n`;
-            }
-
-            // [ANTI-REPETITION LAYER]
-            const lastBotMsgsForPrompt = lastBotMessages.slice(-4);
-            systemInstruction += `\n[MEMORIA RECIENTE]: \n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Primer contacto)'}\n⚠️ Tu respuesta debe ser TOTALMENTE DIFERENTE a las anteriores.\n`;
-
-            const genAI = new GoogleGenerativeAI(apiKey);
-            const model = genAI.getGenerativeModel({
-                model: "gemini-2.0-flash",
-                systemInstruction,
-                generationConfig: { responseMimeType: "application/json", temperature: 0.8 }
-            });
-
-            const chat = model.startChat({ history: recentHistory });
-            const result = await chat.sendMessage(userParts);
-            const textResult = result.response.text();
-            console.log(`[GEMINI RAW] 🤖:`, textResult);
-
-            // 🛡️ [AI GUARDRAIL]
-            const rawJson = AIGuard.sanitizeJSON(textResult);
-            const guardContext = {
-                isProfileComplete: audit.paso1Status === 'COMPLETO',
-                missingFields: audit.missingLabels,
-                lastInput: aggregatedText,
-                isNewFlag: isNewFlag && !botHasSpoken, // 🛡️ Hardened Loop Breaker
-                candidateName: getFirstName(realName) || realName, // Use first name for context
-                lastBotMessages: lastBotMessages
-            };
-
-            aiResult = AIGuard.validate(rawJson, guardContext);
-            responseTextVal = aiResult.response_text;
-
-            // 🧬 [DUAL-STREAM EXTRACTION & COALESCENCE]
-            if (aiResult.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
-                console.log(`[DUAL-STREAM] 🧬 Extracted:`, aiResult.extracted_data);
-
-                // Zuckerberg-Level Coalescence Engine
-                if (aiResult.extracted_data.nombreReal) {
-                    aiResult.extracted_data.nombreReal = coalesceName(candidateData.nombreReal, aiResult.extracted_data.nombreReal);
-                }
-                if (aiResult.extracted_data.fechaNacimiento) {
-                    aiResult.extracted_data.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, aiResult.extracted_data.fechaNacimiento);
+                if (isNewFlag && !botHasSpoken) {
+                    systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda Rodríguez y pide el Nombre completo (Nombre y Apellidos) para iniciar el registro. ✨🌸\n`;
+                } else if (auditForMode.paso1Status !== 'COMPLETO') {
+                    const cerebro1Rules = (batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES)
+                        .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
+                        .replace(/{{categorias}}/g, categoriesList)
+                        .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
+                    systemInstruction += `\n${cerebro1Rules}\n`;
+                } else {
+                    const closurePrompt = `
+[CIERRE DE REGISTRO]: El perfil está al 100%. Elige una de estas frases aleatoriamente para felicitarlo:
+- ¡Listo! 🥳 Perfil completo y yo estoy feliz. ¡Te aviso en cuanto salga algo para ti! 😉✨
+- ¡Lo logramos! 💖 Ya quedó todo. ¡No comas ansias, yo te escribo muy pronto! 🤭✨
+- ¡Súper! 🌟 Perfil al 100%. Me encantó platicar contigo.
+(NUNCA menciones el teléfono).
+`;
+                    systemInstruction += !hasGratitude
+                        ? closurePrompt
+                        : `\n[GRATITUD IDENTIFICADA]: El usuario ya agradeció. Solo reacciona con 👍 y cierra la charla. 👋🤫\n`;
                 }
 
-                Object.assign(candidateUpdates, aiResult.extracted_data);
-            }
+                // [ANTI-REPETITION LAYER]
+                const lastBotMsgsForPrompt = lastBotMessages.slice(-4);
+                systemInstruction += `\n[MEMORIA RECIENTE]: \n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Primer contacto)'}\n⚠️ Tu respuesta debe ser TOTALMENTE DIFERENTE a las anteriores.\n`;
 
-            // 🔄 [TRANSITION & HANDOVER]
-            const currentAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
-            isNowComplete = currentAudit.paso1Status === 'COMPLETO';
+                const genAI = new GoogleGenerativeAI(apiKey);
+                const model = genAI.getGenerativeModel({
+                    model: "gemini-2.0-flash",
+                    systemInstruction,
+                    generationConfig: { responseMimeType: "application/json", temperature: 0.8 }
+                });
 
-            if (await Orchestrator.checkBypass(candidateData, currentAudit)) {
-                console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
-                const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config);
-                if (handoverResult?.triggered) {
-                    candidateUpdates.projectId = handoverResult.projectId;
-                    candidateUpdates.stepId = handoverResult.stepId;
-                    responseTextVal = null; // Silence main stream, handover message already sent
+                const chat = model.startChat({ history: recentHistory });
+                const result = await chat.sendMessage(userParts);
+                const textResult = result.response.text();
+                console.log(`[GEMINI RAW] 🤖:`, textResult);
+
+                // 🛡️ [AI GUARDRAIL]
+                const rawJson = AIGuard.sanitizeJSON(textResult);
+                const guardContext = {
+                    isProfileComplete: audit.paso1Status === 'COMPLETO',
+                    missingFields: audit.missingLabels,
+                    lastInput: aggregatedText,
+                    isNewFlag: isNewFlag && !botHasSpoken, // 🛡️ Hardened Loop Breaker
+                    candidateName: getFirstName(realName) || realName, // Use first name for context
+                    lastBotMessages: lastBotMessages
+                };
+
+                aiResult = AIGuard.validate(rawJson, guardContext);
+                responseTextVal = aiResult.response_text;
+
+                // 🧬 [DUAL-STREAM EXTRACTION & COALESCENCE]
+                if (aiResult.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
+                    console.log(`[DUAL-STREAM] 🧬 Extracted:`, aiResult.extracted_data);
+
+                    // Zuckerberg-Level Coalescence Engine
+                    if (aiResult.extracted_data.nombreReal) {
+                        aiResult.extracted_data.nombreReal = coalesceName(candidateData.nombreReal, aiResult.extracted_data.nombreReal);
+                    }
+                    if (aiResult.extracted_data.fechaNacimiento) {
+                        aiResult.extracted_data.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, aiResult.extracted_data.fechaNacimiento);
+                    }
+
+                    Object.assign(candidateUpdates, aiResult.extracted_data);
                 }
-            } else if (isNowComplete && !candidateData.congratulated) {
-                console.log(`[ORCHESTRATOR] 🛋️ Entering Waiting Room.`);
-                responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. Pronto un reclutador te contactará. ✨🌸";
-                candidateUpdates.congratulated = true;
-                await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker');
+
+                // 🔄 [TRANSITION & HANDOVER]
+                const currentAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
+                isNowComplete = currentAudit.paso1Status === 'COMPLETO';
+
+                if (await Orchestrator.checkBypass(candidateData, currentAudit)) {
+                    console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
+                    const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config);
+                    if (handoverResult?.triggered) {
+                        candidateUpdates.projectId = handoverResult.projectId;
+                        candidateUpdates.stepId = handoverResult.stepId;
+                        responseTextVal = null; // Silence main stream, handover message already sent
+                    }
+                } else if (isNowComplete && !candidateData.congratulated) {
+                    console.log(`[ORCHESTRATOR] 🛋️ Entering Waiting Room.`);
+                    responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. Pronto un reclutador te contactará. ✨🌸";
+                    candidateUpdates.congratulated = true;
+                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker');
+                }
+            } catch (e) {
+                console.error('[GEMINI BRAIN] ❌ Runtime Error:', e);
+                // Fallback context if loop crashed early
+                const fallbackContext = {
+                    isProfileComplete: audit?.paso1Status === 'COMPLETO',
+                    missingFields: audit?.missingLabels || [],
+                    isNewFlag: isNewFlag && !botHasSpoken,
+                    candidateName: getFirstName(realName) || realName,
+                    lastBotMessages: lastBotMessages
+                };
+                aiResult = AIGuard.validate(null, fallbackContext);
+                responseTextVal = aiResult?.response_text;
             }
         }
 
@@ -878,13 +934,12 @@ ${safeDnaLines}
 
         if (responseTextVal && (!aiResult?.media_url || aiResult.media_url === 'null')) {
             // [MEDIA RECOVERY]: If Brenda leaked the link into text but forgot the JSON field, recover it
-            // Matches both /api/image?id=... and /api/media/ID.ext
             const mediaPattern = /https?:\/\/[^/]+\/api\/(image\?id=|media\/)([^\s\)]+)/i;
             const match = responseTextVal.match(mediaPattern);
             if (match) {
                 if (!aiResult) aiResult = {};
                 aiResult.media_url = match[0];
-                console.log(`[Media Recovery] 🚑 Recovered leaked URL from text: ${aiResult.media_url} `);
+                console.log(`[Media Recovery] 🚑 Recovered leaked URL from text: ${aiResult.media_url}`);
             }
         }
 

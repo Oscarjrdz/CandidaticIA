@@ -78,9 +78,15 @@ export async function intelligentExtract(candidateId, historyText) {
         // 2. Fetch Valid Categories for better mapping
         let categoriesList = "";
         try {
-            const categoriesData = await redis?.get('candidatic_categories');
+            const categoriesData = (await redis?.get('candidatic_categories')) || (await redis?.get('bot_categories'));
             if (categoriesData) {
-                const cats = JSON.parse(categoriesData).map(c => c.name);
+                let cats = [];
+                try {
+                    const parsed = JSON.parse(categoriesData);
+                    cats = Array.isArray(parsed) ? parsed.map(c => c.name || c) : [parsed];
+                } catch (e) {
+                    cats = String(categoriesData).split(',').map(c => c.trim());
+                }
                 categoriesList = `\n[CATEGORÍAS VÁLIDAS EN EL SISTEMA]: ${cats.join(', ')}`;
             }
         } catch (e) { console.warn('Error fetching categories for extractor:', e); }
@@ -102,7 +108,7 @@ export async function intelligentExtract(candidateId, historyText) {
             extractionInstructions += `- ${rule.fieldLabel || rule.field}: ${rule.prompt || `Extrae el valor para ${rule.fieldLabel}`}\n`;
         });
 
-        const prompt = `[VIPER-GRIP REASONING PROTOCOL v2.1]
+        const prompt = `[VIPER-GRIP REASONING PROTOCOL v2.5]
 Analiza exhaustivamente la conversación para extraer datos del Candidato usando Razonamiento Lógico (Chain of Thought).
 
 CONVERSACIÓN HISTÓRICA:
@@ -116,18 +122,17 @@ ${extractionInstructions}
 
 ESTRATEGIA DE RAZONAMIENTO (PROTOCOLO VIPER 3.1):
 1. PENSAMIENTO (thought_process): Analiza quién es el Reclutador (Oscar) y quién es el Candidato. 
-   - REGLA CRÍTICA DE NOMBRE: El "nombreReal" NUNCA debe ser un municipio, ciudad o estado (ej. "Escobedo", "Monterrey", "Apodaca"). Si el usuario dice "Soy de Monterrey", Monterrey es el MUNICIPIO, no su nombre.
-   - REGLA CRÍTICA DE EVASIÓN: Si el usuario responde con frases negativas, evasivas o dice que "no" a una pregunta de datos (ej. "luego", "no te diré", "para qué"), NO extraigas nada. El valor debe ser null.
-    - REGLA CRÍTICA DE SALUDOS: Frases como "hola", "buenas", "que tal", "estoy listo", "dime", "si", "no" SIN CONTEXTO de datos NO deben ser extraídas como valores. Usa null.
-    - REGLA DE ADJETIVOS (JUNK): Respuestas vagas o adjetivos como "bien", "super bien", "está bien", "perfecto", "ok", "claro", "excelente", "todos", "alguno", "algunos", "cualquiera" sin un dato concreto (ej. sin un puesto o fecha real) deben ser ignoradas. El valor debe ser null.
-    - REGLA DE FECHA (PRECISIÓN): Para el campo "fechaNacimiento", el valor DEBE ser un string "DD/MM/YYYY". 
-      * INFERENCIA DE AÑO: Si solo da 2 dígitos (ej. "83"), infiere el siglo XX (1983). Si da "01", infiere el siglo XXI (2001).
-      * Si solo menciona día y mes (ej. "19 de mayo") o la edad (ej. "45 años"), extrae null y explica en el thought_process que falta el año exacto.
-    - REGLA DE UBICACIÓN (FRAGMENTOS): Para el campo "municipio", acepta nombres parciales o apodos (ej. "Santa" -> "Santa Catarina", "San Nico" -> "San Nicolás de los Garza"). Mapea al nombre oficial más probable de Nuevo León.
-    - REGLA DE ESCOLARIDAD (VALIDACIÓN): El valor DEBE ser un nivel educativo real (ej. Primaria, Secundaria, Preparatoria, Licenciatura). Si el usuario dice "Kinder", "Ninguno", "Nada", "No estudié", o niveles similares, extrae null y explica en el thought_process que se requiere al menos nivel Primaria para el sistema.
-    - REGLA DE NOMBRE: El nombre debe ser una persona real. Prohibido nombres de empresas, ciudades o frases evasivas o saludos.
-   - REGLA CRÍTICA DE GÉNERO: Solo extrae datos si el Candidato los dice sobre SÍ MISMO.
-   - REGLA DE CATEGORÍA: Si menciona "Ayudante", esa es la categoría principal.
+   - REGLA CRÍTICA DE NOMBRE (ESTRICTO): El "nombreReal" DEBE ser un nombre humano COMPLETO (Nombre + al menos un Apellido). 
+     * SI EL USUARIO SOLO DA UN NOMBRE (ej. "Oscar"), extrae null y explica que falta el apellido. 
+     * NUNCA debe ser un municipio, ciudad o estado (ej. "Escobedo", "Monterrey").
+     * Si el usuario se identifica con una sola palabra, se considera INCOMPLETO.
+   - REGLA CRÍTICA DE EVASIÓN: Si el usuario responde con frases negativas o evasivas, NO extraigas nada.
+    - REGLA DE SALUDOS: Frases cortas sin contexto de datos NO se extraen.
+    - REGLA DE ADJETIVOS (JUNK): "Bien", "Ok", "Cualquiera" sin dato real deben ser null.
+    - REGLA DE FECHA (PRECISIÓN): Formato "DD/MM/YYYY". Infiere siglo XX si son 2 dígitos (ej. "83" -> "1983").
+    - REGLA DE UBICACIÓN: Mapea nombres parciales al municipio oficial más cercano de Nuevo León.
+    - REGLA DE ESCOLARIDAD: Solo niveles reales (Primaria, Secundaria, etc.).
+   - REGLA DE CATEGORÍA: Mapea estrictamente a las [CATEGORÍAS VÁLIDAS]. Si no coincide exactamente, busca la más cercana semánticamente.
 2. CITACIÓN: Incluye el fragmento exacto. Si no hay evidencia, usa null.
 3. CONFIDENCIA: Puntaje 0.0 a 1.0.
    - 1.0: "Mi nombre es Juan".

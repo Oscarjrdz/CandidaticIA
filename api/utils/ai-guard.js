@@ -45,7 +45,11 @@ export class AIGuard {
         // 4. Pattern-Based Greeting Loop Detection (Identity Guard)
         if (!isNewFlag && responseText) {
             const lowerResp = responseText.toLowerCase();
-            const identityPatterns = [/soy la lic\.? brenda/i, /reclutadora de candidatic/i, /candidatic/i];
+            const identityPatterns = [
+                /soy la lic\.? brenda/i,
+                /reclutadora de candidatic/i
+                // removed /candidatic/i to avoid false positives on legitimate mentions
+            ];
             const hasIdentity = identityPatterns.some(p => p.test(lowerResp));
 
             if (hasIdentity) {

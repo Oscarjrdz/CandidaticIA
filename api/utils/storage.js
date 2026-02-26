@@ -239,7 +239,7 @@ export const deleteAuthToken = async (phone) => {
  * Synchronized across the entire platform.
  */
 export const CORE_REQUIRED_FIELDS = [
-    { value: 'nombreReal', label: 'Nombre Real', invalidValue: 'proporcionado' },
+    { value: 'nombreReal', label: 'Nombre completo', invalidValue: 'proporcionado' },
     { value: 'genero', label: 'Género', invalidValue: 'desconocido' },
     { value: 'municipio', label: 'Municipio', invalidValue: 'proporcionado' },
     { value: 'fechaNacimiento', label: 'Fecha de Nacimiento', invalidValue: 'proporcionada' },
