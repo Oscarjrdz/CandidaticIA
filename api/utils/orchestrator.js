@@ -22,17 +22,19 @@ export class Orchestrator {
      * GLOBAL BEST PRACTICE: Re-evaluate on every 'COMPLETO' event.
      */
     static async checkBypass(candidateData, audit, isEnabled = true) {
-        if (!isEnabled) return false;
-
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
         const hasBeenCongratulated = !!(candidateData.congratulated === true || candidateData.congratulated === 'true');
-
-        // 🛡️ [PROJECT ISOLATION]: If candidate already belongs to a project, 
-        // they should follow their own flow and NOT be hijacked by the bypass engine.
         const alreadyInProject = !!(candidateData.projectId || candidateData.projectMetadata?.projectId);
 
-        // Zuckerberg Level: Even if in a project, if they haven't been congratulated 
-        // as "Complete", we might want to trigger the handover logic.
+        console.log(`[ORCHESTRATOR] 🧐 Checking Bypass for ${candidateData.id}:`, {
+            isEnabled,
+            isProfileComplete,
+            hasBeenCongratulated,
+            alreadyInProject
+        });
+
+        if (!isEnabled) return false;
+
         if (isProfileComplete && !hasBeenCongratulated && !alreadyInProject) {
             return true;
         }
@@ -52,9 +54,13 @@ export class Orchestrator {
         // 1. SMART MATCHING ENGINE (Silicon Valley Pattern)
         const redis = getRedisClient();
         const projects = await getProjects();
+        console.log(`[ORCHESTRATOR] 🧩 Found ${projects.length} active projects for handover.`);
 
         // Priority 1: Specifically selected bypass project
         let targetProjectId = await redis?.get('bypass_selection');
+        if (targetProjectId && targetProjectId.trim() === '') targetProjectId = null;
+
+        console.log(`[ORCHESTRATOR] 📍 Global Bypass Selection: ${targetProjectId || 'None'}`);
 
         // Validation: Ensure the selected bypass project actually exists
         if (targetProjectId) {
@@ -67,14 +73,17 @@ export class Orchestrator {
 
         // Priority 2: Match based on Municipality/Category or first active project
         if (!targetProjectId && projects.length > 0) {
-            console.log(`[ORCHESTRATOR] 🧩 Matching logic triggered for ${projects.length} projects...`);
+            console.log(`[ORCHESTRATOR] 🔍 Proactive matching logic triggered...`);
             const matchedProject = projects.find(p => {
                 const vacancyIds = p.vacancyIds || [];
                 // Silicon Valley Pattern: Link to the first project that has active vacancies
-                return vacancyIds.length > 0;
-            }) || projects[0]; // Final fallback: first project in list
+                const hasVacancies = Array.isArray(vacancyIds) && vacancyIds.length > 0;
+                if (hasVacancies) console.log(`[ORCHESTRATOR] ✅ Found project with vacancies: ${p.name}`);
+                return hasVacancies;
+            }) || projects[0];
 
             targetProjectId = matchedProject?.id;
+            console.log(`[ORCHESTRATOR] 🏁 Match Result: ${targetProjectId} (${matchedProject?.name || 'Unknown'})`);
         }
 
         if (!targetProjectId) {
