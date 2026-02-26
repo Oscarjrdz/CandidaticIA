@@ -88,12 +88,19 @@ export class AIGuard {
             ];
             recoveryText = templates[Math.floor(Math.random() * templates.length)];
         } else {
-            const nameWords = candidateName ? candidateName.trim().split(/\s+/).length : 0;
-            const firstName = candidateName ? candidateName.split(/\s+/)[0] : null;
+            const nameWords = candidateName ? candidateName.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
+            const firstName = (candidateName && nameWords > 0) ? candidateName.trim().split(/\s+/)[0] : null;
 
             // Smart Logic: Only ask for surnames if we *only* have a first name (1 word)
             if (firstMissing === 'Apellidos' || (firstMissing === 'Nombre completo' && nameWords === 1)) {
-                recoveryText = `¡Súper, ${firstName}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para completar tu registro? 🌸`;
+                const namePart = firstName ? `, ${firstName}` : '';
+                const templates = [
+                    `¡Súper${namePart}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para completar tu registro? 🌸`,
+                    `¡Mucho gusto${namePart}! 💖 Solo me faltan tus apellidos para que ya quedes en el sistema. 🤭 ¿Me los pasas? ✨`,
+                    `¡Qué bonito nombre${namePart}! 🌟 ¿Podrías decirme tus apellidos? Es el último pasito. 😉✨`,
+                    `¡Excelente${namePart}! ✨ Para terminar, ¿cuáles son tus apellidos? 🌸`
+                ];
+                recoveryText = templates[Math.floor(Math.random() * templates.length)];
             } else if (reason === 'FALLBACK_REPETITION' || reason === 'FALLBACK_IDENTITY_REPETITION') {
                 // Specific variation for repetition to break the loop - DIVERSIFIED
                 const variationTemplates = [
