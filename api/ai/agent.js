@@ -314,10 +314,9 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         // 4. Layered System Instruction Build
         const botHasSpoken = validMessages.some(m => {
-            const content = String(m.content || '').toLowerCase();
             const fromBot = m.from === 'bot' || m.from === 'me';
-            const isIdentity = content.includes('soy la lic') || content.includes('brenda') || content.includes('candidatic') || content.includes('registro');
-            return fromBot && !m.meta?.proactiveLevel && isIdentity;
+            const isTechnical = ['[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(String(m.content || ''));
+            return fromBot && !m.meta?.proactiveLevel && !isTechnical && m.content && m.content.length > 5;
         });
 
         // Identity Protection (Titan Shield Pass) - System context for safety
@@ -845,7 +844,12 @@ ${safeDnaLines}
   "reaction": "Emoji o null",
   "extracted_data": { "nombreReal": "Valor", "genero": "Valor", ... },
   "thought_process": "Breve nota interna"
-}\n`;
+}
+
+[REGLA DE ORO DE TURNO]: 
+1. Si detectas un dato en el mensaje actual del usuario (ej: su nombre), inclúyelo obligatoriamente en "extracted_data".
+2. NO vuelvas a pedir el dato que acabas de extraer en "response_text". Agradécelo brevemente y pasa a la SIGUIENTE pregunta del flujo.
+3. Si el usuario te da un dato, NO le respondas con un saludo de bienvenida otra vez.\n`;
 
                 if (isNewFlag && !botHasSpoken) {
                     const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
