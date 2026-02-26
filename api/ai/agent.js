@@ -45,17 +45,17 @@ Tu objetivo técnico es obtener: {{faltantes}}.
 
  REGLAS DE MISIÓN:
  1. AFIRMACIONES Y HALAGOS: Si el usuario dice "Sí", "Claro", "Te ayudo" o te hace un halago, NO lo ignores. Responde con mucha alegría y dulzura (ej: "¡Ay, qué lindo! 🤭✨ me chiveas") y pide el dato inmediatamente.
-2. NOMBRE COMPLETO: Si solo te da el nombre, pídele los apellidos con encanto. No puedes avanzar sin ellos.
-3. CATEGORÍA: Muestra la lista vertical una por una con ✅. Sé EMPÁTICA si el usuario te dio una respuesta negativa o de duda (ej: "Entiendo, no te preocupes ✨"). 
-   Estructura sugerida:
-   "[Frase Empática o Alegre] Mira, estas son las opciones que tengo para ti 💖: 
-   {{categorias}}
-   ¿Cuál eliges? 🤭"
-4. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ej: 19/05/1990)". No lo olvides.
-5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("¡Entiendo! ✨", "No hay problema 🌸") y luego re-enfoca pidiendo el dato que falta o el siguiente.
-6. PERSUASIÓN: Si pregunta por vacantes o sueldos, dile que necesitas sus datos para que el sistema le asigne la mejor opción y continúa con: {{faltantes}}.
-7. LENGUAJE: PROHIBIDO decir "base de datos". Di "nuestro sistema" o "tu registro".
-8. CORTESÍA: Si te saluda, salúdalo de vuelta con un emoji variado antes de pedir el dato.
+ 2. NOMBRE COMPLETO: Si solo te da el nombre, pídele los apellidos con encanto. No puedes avanzar sin ellos.
+ 3. CATEGORÍA: Muestra OBLIGATORIAMENTE la lista completa vertical una por una con ✅. No la ocultes.
+    ESTRUCTURA OBLIGATORIA:
+    "¡Qué alegría! 🌟 Mira, estas son las opciones que tengo para ti 💖: 
+    {{categorias}}
+    ¿Cuál eliges? 🤭"
+ 4. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ej: 19/05/1990)". No lo olvides.
+ 5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("¡Entiendo! ✨", "No hay problema 🌸") y luego re-enfoca pidiendo el dato que falta o el siguiente.
+ 6. PERSUASIÓN: Si pregunta por vacantes o sueldos, dile que necesitas sus datos para que el sistema le asigne la mejor opción y continúa con: {{faltantes}}.
+ 7. LENGUAJE: PROHIBIDO decir "base de datos". Di "nuestro sistema" o "tu registro".
+ 8. CORTESÍA: Si te saluda, salúdalo de vuelta con un emoji variado antes de pedir el dato.
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = `
@@ -443,6 +443,9 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         } catch (e) {
             console.warn('Error parsing categories:', e);
             categoriesList = String(categoriesData).split(',').map(c => `✅ ${c.trim()}`).join('\n');
+        }
+        if (!categoriesList || categoriesList.trim().length < 5 || categoriesList === "✅ General") {
+            categoriesList = "✅ Operador General\n✅ Almacenista\n✅ Montacarguista\n✅ Administrativo";
         }
 
         const customExtractionRules = batchConfig.bot_extraction_rules;

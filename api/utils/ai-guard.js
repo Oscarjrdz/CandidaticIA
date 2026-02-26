@@ -48,7 +48,6 @@ export class AIGuard {
             const identityPatterns = [
                 /soy la lic\.? brenda/i,
                 /reclutadora de candidatic/i
-                // removed /candidatic/i to avoid false positives on legitimate mentions
             ];
             const hasIdentity = identityPatterns.some(p => p.test(lowerResp));
 
@@ -56,6 +55,14 @@ export class AIGuard {
                 console.warn(`[AI GUARD] 🆔 Identity repetition detected in active chat. Blocking greeting.`);
                 return this.getRecoveryResponse("FALLBACK_IDENTITY_REPETITION", missingFields, lastInput, isNewFlag, extracted, candidateName, categoriesList);
             }
+        }
+
+        // 5. 🎡 Category Presence Guard
+        const safeMissing = (missingFields || []).map(f => f.toLowerCase().trim());
+        const categoryMissing = safeMissing.some(k => k.includes('categor') || k === 'categoria');
+        if (categoryMissing && responseText && !responseText.includes('✅') && !responseText.includes('🤔')) {
+            console.warn(`[AI GUARD] 🎡 Category missing from response_text but required. Triggering Recovery.`);
+            return this.getRecoveryResponse("FALLBACK_MISSING_CATEGORIES", missingFields, lastInput, isNewFlag, extracted, candidateName, categoriesList);
         }
 
         // Ensure extracted data is preserved
@@ -132,7 +139,8 @@ export class AIGuard {
 
                 // 🎡 [SPECIAL CATEGORY RECOVERY]: If missing field is Category, force the list injection
                 if (isCategory) {
-                    recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${categoriesList}\n\n¿Cuál eliges? 🤭✨`;
+                    const finalCats = (categoriesList && categoriesList.trim().length > 5) ? categoriesList : "✅ Operador General\n✅ Almacenista\n✅ Montacarguista\n✅ Administrativo";
+                    recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${finalCats}\n\n¿Cuál eliges? 🤭✨`;
                 }
             }
         }
