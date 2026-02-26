@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getRedisClient, updateCandidate, getMessages, recordAITelemetry, getCandidateById } from './storage.js';
 import { getSchemaByField } from './schema-registry.js';
+import { getOpenAIResponse } from './openai.js';
 
 /**
  * Intelligent Extractor v1.0
@@ -146,30 +147,52 @@ ${JSON.stringify(schema, null, 2)}
 `;
 
         let jsonText = '';
-        for (const mName of modelsToTry) {
-            try {
-                const startTime = Date.now();
-                const model = genAI.getGenerativeModel({
-                    model: mName,
-                    generationConfig: {
-                        temperature: 0.1,
-                    }
-                });
-                const result = await model.generateContent(prompt);
-                const response = await result.response;
-                jsonText = response.text();
+
+        // --- PHASE A: GPT-4o-mini (Primary Extractor) ---
+        try {
+            const startTime = Date.now();
+            const gptResult = await getOpenAIResponse([], prompt, 'gpt-4o-mini');
+            if (gptResult && gptResult.content) {
+                jsonText = gptResult.content;
 
                 // Telemetry
                 recordAITelemetry(candidateId, 'extraction', {
-                    model: mName,
+                    model: 'gpt-4o-mini',
                     latency: Date.now() - startTime,
-                    tokens: response.usageMetadata?.totalTokenCount || 0
+                    tokens: gptResult.usage?.total_tokens || 0
                 });
+            }
+        } catch (gptErr) {
+            console.warn('⚠️ [Viper] GPT-4o-mini primary extraction failed, falling back to Gemini:', gptErr.message);
+        }
 
-                if (jsonText && jsonText.includes('{')) break;
-            } catch (err) {
-                console.warn(`⚠️ [Viper] Model ${mName} failed:`, err.message);
-                continue;
+        // --- PHASE B: Gemini Fallback ---
+        if (!jsonText || !jsonText.includes('{')) {
+            for (const mName of modelsToTry) {
+                try {
+                    const startTime = Date.now();
+                    const model = genAI.getGenerativeModel({
+                        model: mName,
+                        generationConfig: {
+                            temperature: 0.1,
+                        }
+                    });
+                    const result = await model.generateContent(prompt);
+                    const response = await result.response;
+                    jsonText = response.text();
+
+                    // Telemetry
+                    recordAITelemetry(candidateId, 'extraction', {
+                        model: mName,
+                        latency: Date.now() - startTime,
+                        tokens: response.usageMetadata?.totalTokenCount || 0
+                    });
+
+                    if (jsonText && jsonText.includes('{')) break;
+                } catch (err) {
+                    console.warn(`⚠️ [Viper] Gemini Model ${mName} failed:`, err.message);
+                    continue;
+                }
             }
         }
 

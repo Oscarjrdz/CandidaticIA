@@ -831,6 +831,7 @@ ${safeDnaLines}
         // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
             try {
+                let handoverTriggered = false; // 🛡️ Initialize to avoid ReferenceError
                 // 🧠 [SMART CONTEXT]: Detect if categories were already shown to avoid spam
                 const wasCategoriesShown = lastBotMessages.some(m => m.includes('✅') && m.includes('¿Cuál eliges?'));
 

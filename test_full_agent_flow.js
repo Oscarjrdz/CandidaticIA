@@ -3,7 +3,7 @@ import { processMessage } from './api/ai/agent.js';
 import { getRedisClient } from './api/utils/storage.js';
 
 async function run() {
-    const candidateId = 'cand_1772032125322_yknf1wars';
+    const candidateId = 'cand_1769466470882_ckd3yvpq5';
     const message = {
         id: 'test_msg_id',
         content: 'No tengo trabajo actualmente',
