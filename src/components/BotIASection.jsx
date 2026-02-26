@@ -98,12 +98,18 @@ const BotIASection = ({ showToast }) => {
                 })
             });
 
-            if (resConfig.ok && resGpt.ok) {
-                showToast('Configuraciones guardadas correctamente', 'success');
-            } else {
-                // Determine which one failed for better debugging (silent for user if preferred but here we fix the logic)
-                showToast('Error guardando configuración', 'error');
+            if (!resConfig.ok) {
+                console.error('Config IA error:', await resConfig.text());
+                showToast('Error al guardar Prompt/Reglas', 'error');
+                return;
             }
+            if (!resGpt.ok) {
+                console.error('Config GPT error:', await resGpt.text());
+                showToast('Error al guardar credenciales OpenAI', 'error');
+                return;
+            }
+
+            showToast('Configuraciones guardadas correctamente', 'success');
         } catch (error) {
             console.error(error);
             showToast('Error de conexión', 'error');
@@ -136,11 +142,12 @@ const BotIASection = ({ showToast }) => {
 
         // 2. Persist to Server
         try {
-            await fetch('/api/bot-ia/settings', {
+            await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    gptHostEnabled: newValue
+                    type: 'ai_config',
+                    data: { ...gptConfig, gptHostEnabled: newValue }
                 })
             });
             showToast(newValue ? 'Sala de Espera Activada' : 'Sala de Espera Desactivada', 'success');

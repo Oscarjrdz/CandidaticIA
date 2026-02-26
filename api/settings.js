@@ -131,7 +131,9 @@ export default async function handler(req, res) {
                 let merged = {};
                 try {
                     const parsed = existing ? JSON.parse(existing) : {};
-                    merged = (typeof parsed === 'object' && parsed !== null) ? { ...parsed, ...data } : data;
+                    // Safety: Ensure we only spread if it's a plain object
+                    const safeParsed = (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) ? parsed : {};
+                    merged = { ...safeParsed, ...data };
                 } catch (e) {
                     console.error('⚠️ [API] Corrupted JSON in ai_config, using incoming data only');
                     merged = data;
