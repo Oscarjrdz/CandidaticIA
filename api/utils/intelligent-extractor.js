@@ -122,13 +122,12 @@ ${extractionInstructions}
 
 ESTRATEGIA DE RAZONAMIENTO (PROTOCOLO VIPER 3.1):
 1. PENSAMIENTO (thought_process): Analiza quién es el Reclutador (Oscar) y quién es el Candidato. 
-   - REGLA CRÍTICA DE NOMBRE (ESTRICTO): El "nombreReal" DEBE ser un nombre humano COMPLETO (Nombre + al menos un Apellido). 
-     * SI EL USUARIO SOLO DA UN NOMBRE (ej. "Oscar"), extrae null y explica que falta el apellido. 
-     * NUNCA debe ser un municipio, ciudad o estado (ej. "Escobedo", "Monterrey").
-     * Si el usuario se identifica con una sola palabra, se considera INCOMPLETO.
+   - REGLA CRÍTICA DE NOMBRE: El "nombreReal" es el nombre del candidato. 
+      * Si el usuario solo da un nombre (ej. "Oscar"), EXTRÁELO, pero indica en thought_process que es parcial y faltan los apellidos. 
+      * NUNCA debe ser un municipio, ciudad o estado (ej. "Escobedo", "Monterrey").
    - REGLA CRÍTICA DE EVASIÓN: Si el usuario responde con frases negativas o evasivas, NO extraigas nada.
-    - REGLA DE SALUDOS: Frases cortas sin contexto de datos NO se extraen.
-    - REGLA DE ADJETIVOS (JUNK): "Bien", "Ok", "Cualquiera" sin dato real deben ser null.
+   - REGLA DE SALUDOS: Frases cortas sin contexto de datos NO se extraen.
+   - REGLA DE ADJETIVOS (JUNK): "Bien", "Ok", "Cualquiera" sin dato real deben ser null.
     - REGLA DE FECHA (PRECISIÓN): Formato "DD/MM/YYYY". Infiere siglo XX si son 2 dígitos (ej. "83" -> "1983").
     - REGLA DE UBICACIÓN: Mapea nombres parciales al municipio oficial más cercano de Nuevo León.
     - REGLA DE ESCOLARIDAD: Solo niveles reales (Primaria, Secundaria, etc.).

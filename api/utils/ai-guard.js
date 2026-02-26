@@ -77,7 +77,16 @@ export class AIGuard {
         let recoveryText = "";
 
         if (isNewFlag && reason !== 'FALLBACK_REPETITION' && reason !== 'FALLBACK_IDENTITY_REPETITION') {
-            recoveryText = `¡Hola! ✨ Soy la Lic. Brenda Rodríguez de Candidatic. 🌸 Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`;
+            recoveryText = `¡Hola! 👋 Soy la Lic. Brenda Rodríguez de Candidatic. 🌸 Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`;
+        } else if (lastInput && /^(si|claro|por supuesto|ok|sip|ayudo|te ayudo|adelante|dime|está bien|esta bien|bueno)$/i.test(lastInput.trim().toLowerCase())) {
+            // 🌸 INTENT-TO-HELP HANDOVER: If user said "Yes", "Sure", etc.
+            const templates = [
+                `¡Súper! ✨ Cuéntame, ¿cuál es tu ${firstMissing}? 🤭`,
+                `¡Excelente! 🌟 Dime tu ${firstMissing} para avanzar. ✨`,
+                `¡Qué alegría! 💖 ¿Me pasas tu ${firstMissing} porfa? 🌸`,
+                `¡Perfecto! 😉 ¿Me podrías decir tu ${firstMissing}? ✨`
+            ];
+            recoveryText = templates[Math.floor(Math.random() * templates.length)];
         } else {
             const nameWords = candidateName ? candidateName.trim().split(/\s+/).length : 0;
             const firstName = candidateName ? candidateName.split(/\s+/)[0] : null;
@@ -101,7 +110,7 @@ export class AIGuard {
                     `¡Súper! ✨ ${firstName ? firstName + ', p' : 'P'}ara avanzar con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}? 😉🌸`,
                     `${firstName ? '¡' + firstName + '! ✨ ' : ''}Me hace falta saber ${connector} ${firstMissing} para tener tu perfil listo en el sistema. 🤭 ¿Me ayudas con eso? ✨`,
                     `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito el dato de ${connector} ${firstMissing} para encontrarte la mejor vacante hoy mismo. 😉✨`,
-                    `¿Me podrías decir ${connector} ${firstMissing}, ${firstName || 'perla'}? ✨ Es el último paso para entrar al proceso. 🌸`,
+                    `¿Me podrías decir ${connector} ${firstMissing}? ✨ Es el último paso para entrar al proceso. 🌸`,
                     `¡Excelente! 🌟 Para que ya quedes en la base de datos, dime ${connector} ${firstMissing}. 🤭✨`,
                     `¡Vas súper bien! ✨ ${firstName ? firstName + ', d' : 'D'}ime ${connector} ${firstMissing} para decirte qué vacantes tenemos disponibles. 🌸`,
                     `Oye, ${firstName || 'un detalle'}, ¿cuál es ${connector} ${firstMissing}? ✨ Me sirve mucho para tu registro. 😉`,
