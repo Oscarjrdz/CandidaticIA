@@ -130,7 +130,7 @@ export class Orchestrator {
         }
 
         // Phase 2: Enthusiastic Announcement
-        const introMsg = `¡OMG, \${candidateName}! 🤩 Acabo de revisar tu perfil y... ¡está PERFECTO! ✨🌸`;
+        const introMsg = `¡OMG, ${candidateName}! 🤩 Acabo de revisar tu perfil y... ¡está PERFECTO! ✨🌸`;
         await sendUltraMsgMessage(config.instanceId, config.token, phone, introMsg, 'chat', { priority: 0 });
         await saveMessage(candidateId, { from: 'bot', content: introMsg, timestamp: new Date().toISOString() });
 
@@ -138,13 +138,13 @@ export class Orchestrator {
         await new Promise(r => setTimeout(r, 1500));
 
         // Phase 4: Project Induction
-        const inductionMsg = `Ya te abrí las puertas de nuestro sistema oficial. 🥳 Acabas de ser seleccionado para avanzar al proyecto de: *\${project.name || 'Candidatic'}*. 🌟\n\nPronto un reclutador se pondrá en contacto contigo para los siguientes pasos. ¡Mucha suerte! 😉✨`;
+        const inductionMsg = `Ya te abrí las puertas de nuestro sistema oficial. 🥳 Acabas de ser seleccionado para avanzar al proyecto de: *${project.name || 'Candidatic'}*. 🌟\n\nPronto un reclutador se pondrá en contacto contigo para los siguientes pasos. ¡Mucha suerte! 😉✨`;
         await sendUltraMsgMessage(config.instanceId, config.token, phone, inductionMsg, 'chat', { priority: 0 });
         await saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() });
 
         // Phase 5: Bridge Sticker (The Finale)
         const bridgeKey = await MediaEngine.resolveBridgeSticker('STEP_MOVE');
-        await MediaEngine.sendCongratsPack(config, phone, bridgeKey || 'bot_step_move_sticker');
+        await MediaEngine.sendCongratsPack(config, phone, bridgeKey || 'bot_celebration_sticker');
 
         // 📊 [X-RAY INTEGRATION]
         if (redis) {
