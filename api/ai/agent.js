@@ -50,8 +50,9 @@ Tu objetivo técnico es obtener: {{faltantes}}.
 "¡Qué alegría! 🌟 Mira, estas son las opciones que tengo para ti💖: 
 {{categorias}}
 ¿Cuál eliges? 🤭"
-4. DINÁMICA: Si responde algo que no es el dato, vuelve a preguntar de forma diferente y divertida.
-5. PERSUASIÓN: Si pregunta por vacantes o sueldos, dile que necesitas sus datos para que el sistema le asigne la mejor opción y continúas con: {{faltantes}}.
+4. FECHA DE NACIMIENTO: Pídela siempre dando un ejemplo claro: (ej: 19/05/1990).
+5. DINÁMICA: Si responde algo que no es el dato, vuelve a preguntar de forma diferente y divertida.
+6. PERSUASIÓN: Si pregunta por vacantes o sueldos, dile que necesitas sus datos para que el sistema le asigne la mejor opción y continúas con: {{faltantes}}.
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = `
@@ -64,7 +65,7 @@ Usa emojis para hacerlo agradable y tierno, no uses los mismos siempre. No uses 
 [REGLAS DE ORO]:
 - NUNCA REPITAS MENSAJES. Sé creativa, varía tus palabras.
 - Si preguntan por vacantes/sueldos: Explica que necesitas sus datos para que el sistema le asigne lo mejor. Mantén la expectativa alta (ej: "estoy revisando zonas", "validando turnos").
-- Si te ligan: Responde con picardía y divertida pero SIN REPETIR FRASES. Re-enfoca a la extracción inmediatamente.
+- Si te ligan o halagan: Responde con picardía, gracia y mucha dulzura (ej: "¡Ay, qué lindo! 🤭✨ me chiveas"), pero re-enfoca a la extracción inmediatamente para no perder el tiempo.
 - MENSAJES CORTOS: Máximo 4 líneas.
 
 [PROTOCOLO DE SALUDO (ALEATORIO)]:
@@ -94,9 +95,9 @@ function normalizeBirthDate(input) {
     // Try to parse various formats
     const patterns = [
         // DD/MM/YYYY (already correct)
-        /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+        /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/,
         // DD/MM/YY (2-digit year)
-        /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/,
+        /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/,
     ];
 
     for (const pattern of patterns) {
@@ -107,29 +108,29 @@ function normalizeBirthDate(input) {
             // Convert 2-digit year to 4-digit
             if (year.length === 2) {
                 const yy = parseInt(year);
-                // Assume 1900s for years 50-99, 2000s for 00-49
-                year = yy >= 50 ? `19${year} ` : `20${year} `;
+                year = yy >= 40 ? `19${year}` : `20${year}`;
             }
 
             // Pad day and month with leading zeros
             day = day.padStart(2, '0');
             month = month.padStart(2, '0');
 
-            // Validate ranges
             const d = parseInt(day);
             const m = parseInt(month);
             const y = parseInt(year);
 
+            // Basic Range Validation
             if (d < 1 || d > 31 || m < 1 || m > 12 || y < 1900 || y > new Date().getFullYear()) {
                 return { isValid: false, date: null };
             }
 
-            // Check if date is actually valid (e.g., not Feb 30)
+            // Correctness check (Leap Year/Days in month)
             const testDate = new Date(y, m - 1, d);
             if (testDate.getDate() !== d || testDate.getMonth() !== m - 1) {
                 return { isValid: false, date: null };
             }
 
+            return { isValid: true, date: `${day}/${month}/${year}` };
         }
     }
 
