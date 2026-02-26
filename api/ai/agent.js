@@ -382,20 +382,27 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // --- GRACE & SILENCE ARCHITECTURE ---
         const isNewFlag = candidateData.esNuevo === 'SI';
         const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
+        // (minSinceLastBot already calculated at line 312)
         const isLongSilence = minSinceLastBot >= 5;
 
         const isProfileComplete = audit.paso1Status === 'COMPLETO';
         const currentHasGratitude = hasGratitude;
         const currentIsSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
+
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
 - ¿Es Primer Contacto?: ${isNewFlag && !botHasSpoken ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
 - [CHARLA_ACTIVA]: ${botHasSpoken ? 'TRUE (Omitir presentaciones formales)' : 'FALSE'}
 - Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
 - Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
-\n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.
- [REGLA DE CORTESÍA]: Si el usuario te saluda ("Hola", "Buen día", etc.), DEBES devolver el saludo brevemente antes de pedir el dato faltante. No seas grosera ignorando saludos, pero mantén el enfoque en el registro.
+\n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
+
+        // 🛡️ [PROMPT PRIORITY]: Only append hardcoded courtesy/logic rules if NO custom prompt is present
+        // This avoids instructions redundancy (e.g. user prompt already handles greetings)
+        if (!customPrompt) {
+            systemInstruction += `\n[REGLA DE CORTESÍA]: Si el usuario te saluda ("Hola", "Buen día", etc.), DEBES devolver el saludo brevemente antes de pedir el dato faltante.
 [SUFICIENCIA DE NOMBRE]: Si ya tienes un nombre y UN apellido, EL NOMBRE ESTÁ COMPLETO. No preguntes por más apellidos.`;
+        }
 
         // Use Nitro Cached Config
         const aiConfigJson = batchConfig.ai_config;
@@ -845,9 +852,20 @@ ${safeDnaLines}
 }\n`;
 
                 if (isNewFlag && !botHasSpoken) {
-                    systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda Rodríguez y pide el Nombre completo (Nombre y Apellidos) para iniciar el registro. ✨🌸\n`;
+                    const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
+                    systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como ${welcomeName} y pide el Nombre completo (Nombre y Apellidos) para iniciar el registro. ✨🌸\n`;
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
-                    const cerebro1Rules = (batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES)
+                    let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
+
+                    // 🛡️ [PERSONALITY BYPASS]: If using a custom prompt, strip hardcoded 'sweetness' from Cerebro1 rules
+                    if (customPrompt && !batchConfig.bot_cerebro1_rules) {
+                        baseRules = baseRules
+                            .replace(/Responde con mucha alegría y dulzura \(ej: "¡Ay, qué lindo! 🤭✨ me chiveas"\)/g, 'Responde con amabilidad')
+                            .replace(/con encanto/g, '')
+                            .replace(/con un emoji variado/g, 'brevemente');
+                    }
+
+                    const cerebro1Rules = baseRules
                         .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
                         .replace(/{{categorias}}/g, categoriesList)
                         .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
