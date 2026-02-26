@@ -4,12 +4,13 @@
  */
 import {
     updateCandidate,
-    moveCandidateStep,
+    addCandidateToProject,
     getProjectById,
     getRedisClient,
     saveMessage,
     getProjects
 } from './storage.js';
+import { runAIAutomations } from './automation-engine.js';
 import { MediaEngine } from './media-engine.js';
 import { sendUltraMsgMessage } from '../whatsapp/utils.js';
 
@@ -119,7 +120,7 @@ export class Orchestrator {
             status: 'PROCESO'
         });
 
-        await moveCandidateStep(targetProjectId, candidateId, firstStep.id);
+        await addCandidateToProject(targetProjectId, candidateId, { stepId: firstStep.id, origin: 'bot_handover' });
 
         // 3. ✨ PREMIUM MEDIA SEQUENCE (Multi-Layered)
 
@@ -137,14 +138,21 @@ export class Orchestrator {
         // Phase 3: Tactical Pause (Typing simulated by delay)
         await new Promise(r => setTimeout(r, 1500));
 
-        // Phase 4: Project Induction
-        const inductionMsg = `Ya te abrí las puertas de nuestro sistema oficial. 🥳 Acabas de ser seleccionado para avanzar al proyecto de: *${project.name || 'Candidatic'}*. 🌟\n\nPronto un reclutador se pondrá en contacto contigo para los siguientes pasos. ¡Mucha suerte! 😉✨`;
+        // Phase 4: Project Induction (Simplified Text)
+        const inductionMsg = `Acabas de ser seleccionado para avanzar al proyecto de: *${project.name || 'Candidatic'}*. 🌟`;
         await sendUltraMsgMessage(config.instanceId, config.token, phone, inductionMsg, 'chat', { priority: 0 });
         await saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() });
 
-        // Phase 5: Bridge Sticker (The Finale)
-        const bridgeKey = await MediaEngine.resolveBridgeSticker('STEP_MOVE');
-        await MediaEngine.sendCongratsPack(config, phone, bridgeKey || 'bot_celebration_sticker');
+        // Phase 5: Bridge Sticker (Jim Carrey Celebration Enforced)
+        await MediaEngine.sendCongratsPack(config, phone, 'bot_celebration_sticker');
+
+        // Phase 6: Instant Automations Trigger (Send Vacancy Immediately)
+        try {
+            logTrace(`⚙️ Triggering real-time project automations for ${targetProjectId}...`);
+            await runAIAutomations(true, { projectId: targetProjectId, stepId: firstStep.id });
+        } catch (e) {
+            console.error('[ORCHESTRATOR] Auto-trigger failed:', e.message);
+        }
 
         // 📊 [X-RAY INTEGRATION]
         if (redis) {
