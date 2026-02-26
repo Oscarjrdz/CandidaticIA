@@ -37,6 +37,11 @@ export default async function handler(req, res) {
                 await redis.set('bot_ia_prompt', systemPrompt);
             }
 
+            // 3. Master Bot Switch (CRITICAL FIX)
+            if (isActive !== undefined) {
+                await redis.set('bot_ia_active', isActive ? 'true' : 'false');
+            }
+
             // 7. Advanced Internal Protocols
             if (extractionRules !== undefined) await redis.set('bot_extraction_rules', extractionRules);
             if (cerebro1Rules !== undefined) await redis.set('bot_cerebro1_rules', cerebro1Rules);
