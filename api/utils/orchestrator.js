@@ -42,33 +42,34 @@ export class Orchestrator {
      * Executes the Atomic Handover: move candidate + send congrats + start project.
      * Uses a Matching Engine to find the best project.
      */
-    static async executeHandover(candidateData, config) {
+    static async executeHandover(candidateData, config, msgId = null) {
         const candidateId = candidateData.id;
         const phone = candidateData.whatsapp;
+        const candidateName = candidateData.nombreReal ? candidateData.nombreReal.split(' ')[0] : '';
         const trace = [];
         const logTrace = (m) => {
             console.log(m);
-            trace.push(`[${new Date().toISOString()}] ${m}`);
+            trace.push(`[${new Date().toISOString()}] \${m}`);
         };
 
-        logTrace(`🎯 Starting Intelligent Handover for ${candidateId}`);
+        logTrace(`🎯 Starting Premium Handover for \${candidateId}`);
 
         // 1. SMART MATCHING ENGINE (Silicon Valley Pattern)
         const redis = getRedisClient();
         const projects = await getProjects();
-        logTrace(`🧩 Found ${projects.length} active projects for handover.`);
+        logTrace(`🧩 Found \${projects.length} active projects for handover.`);
 
         // Priority 1: Specifically selected bypass project
         let targetProjectId = await redis?.get('bypass_selection');
         if (targetProjectId && (targetProjectId.trim() === '' || targetProjectId === 'null')) targetProjectId = null;
 
-        logTrace(`📍 Global Bypass Selection: ${targetProjectId || 'None'}`);
+        logTrace(`📍 Global Bypass Selection: \${targetProjectId || 'None'}`);
 
         // Validation: Ensure the selected bypass project actually exists
         if (targetProjectId) {
             const selectedExists = projects.some(p => p.id === targetProjectId);
             if (!selectedExists) {
-                logTrace(`⚠️ Bypass project ${targetProjectId} not found in active list. Falling back...`);
+                logTrace(`⚠️ Bypass project \${targetProjectId} not found in active list. Falling back...`);
                 targetProjectId = null;
             }
         }
@@ -78,21 +79,19 @@ export class Orchestrator {
             logTrace(`🔍 Proactive matching logic triggered...`);
             const matchedProject = projects.find(p => {
                 const vacancyIds = p.vacancyIds || [];
-                // Silicon Valley Pattern: Link to the first project that has active vacancies
                 const hasVacancies = Array.isArray(vacancyIds) && vacancyIds.length > 0;
-                if (hasVacancies) logTrace(`✅ Project matched with vacancies: ${p.name}`);
+                if (hasVacancies) logTrace(`✅ Project matched with vacancies: \${p.name}`);
                 return hasVacancies;
             }) || projects[0];
 
             targetProjectId = matchedProject?.id;
-            logTrace(`🏁 Match Result: ${targetProjectId} (${matchedProject?.name || 'Unknown'})`);
+            logTrace(`🏁 Match Result: \${targetProjectId} (\${matchedProject?.name || 'Unknown'})`);
         }
 
-        // --- PERSISTENCE TRACE ---
         if (trace.length > 0 && redis) {
             try {
-                await redis.lpush(`trace:handover:${candidateId}`, ...trace.reverse());
-                await redis.ltrim(`trace:handover:${candidateId}`, 0, 19);
+                await redis.lpush(`trace:handover:\${candidateId}`, ...trace.reverse());
+                await redis.ltrim(`trace:handover:\${candidateId}`, 0, 19);
             } catch (e) {
                 console.warn('[ORCHESTRATOR] Failed to save trace to Redis');
             }
@@ -105,7 +104,7 @@ export class Orchestrator {
 
         const project = await getProjectById(targetProjectId);
         if (!project || !project.steps || project.steps.length === 0) {
-            logTrace(`❌ Invalid project ${targetProjectId} for handover.`);
+            logTrace(`❌ Invalid project \${targetProjectId} for handover.`);
             return false;
         }
 
@@ -117,18 +116,33 @@ export class Orchestrator {
             stepId: firstStep.id,
             congrats_sent_at: new Date().toISOString(),
             congratulated: true,
-            status: 'PROCESO' // Enterprise status update
+            status: 'PROCESO'
         });
 
         await moveCandidateStep(targetProjectId, candidateId, firstStep.id);
 
-        // 3. MEDIA SEQUENCE: Congrats Message + Bridge Sticker (Jim Carrey style)
-        const congratsMsg = `¡Felicidades! 🎉 Tu perfil está 100% completo y has sido seleccionado para avanzar. ✨🌸\n\nEstoy muy emocionada de decirte que ya entraste a nuestro proceso oficial para la vacante de ${project.name || 'Candidatic'}.`;
+        // 3. ✨ PREMIUM MEDIA SEQUENCE (Multi-Layered)
 
-        await sendUltraMsgMessage(config.instanceId, config.token, phone, congratsMsg);
-        await saveMessage(candidateId, { from: 'bot', content: congratsMsg, timestamp: new Date().toISOString() });
+        // Phase 1: Immediate Reaction (Non-blocking for speed)
+        const { sendUltraMsgReaction } = await import('../whatsapp/utils.js');
+        if (msgId) {
+            sendUltraMsgReaction(config.instanceId, config.token, msgId, '🎉').catch(() => { });
+        }
 
-        // 🌉 THE "JIM CARREY" BRIDGE STICKER
+        // Phase 2: Enthusiastic Announcement
+        const introMsg = `¡OMG, \${candidateName}! 🤩 Acabo de revisar tu perfil y... ¡está PERFECTO! ✨🌸`;
+        await sendUltraMsgMessage(config.instanceId, config.token, phone, introMsg, 'chat', { priority: 0 });
+        await saveMessage(candidateId, { from: 'bot', content: introMsg, timestamp: new Date().toISOString() });
+
+        // Phase 3: Tactical Pause (Typing simulated by delay)
+        await new Promise(r => setTimeout(r, 1500));
+
+        // Phase 4: Project Induction
+        const inductionMsg = `Ya te abrí las puertas de nuestro sistema oficial. 🥳 Acabas de ser seleccionado para avanzar al proyecto de: *\${project.name || 'Candidatic'}*. 🌟\n\nPronto un reclutador se pondrá en contacto contigo para los siguientes pasos. ¡Mucha suerte! 😉✨`;
+        await sendUltraMsgMessage(config.instanceId, config.token, phone, inductionMsg, 'chat', { priority: 0 });
+        await saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() });
+
+        // Phase 5: Bridge Sticker (The Finale)
         const bridgeKey = await MediaEngine.resolveBridgeSticker('STEP_MOVE');
         await MediaEngine.sendCongratsPack(config, phone, bridgeKey || 'bot_step_move_sticker');
 
@@ -152,9 +166,6 @@ export class Orchestrator {
                 };
                 await redis.lpush('debug:bypass:traces', JSON.stringify(xrayTrace));
                 await redis.ltrim('debug:bypass:traces', 0, 49);
-                // Also v2 if exists
-                await redis.lpush('debug:bypass:v2:traces', JSON.stringify(xrayTrace));
-                await redis.ltrim('debug:bypass:v2:traces', 0, 49);
             } catch (e) {
                 console.warn('[ORCHESTRATOR] X-Ray trace failed');
             }

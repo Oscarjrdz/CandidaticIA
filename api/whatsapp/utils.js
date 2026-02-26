@@ -40,7 +40,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             formattedTo = `${cleanPhone}@c.us`;
         }
 
-        const payload = { token, to: formattedTo };
+        const payload = {
+            token,
+            to: formattedTo,
+            priority: extraParams.priority !== undefined ? extraParams.priority : 10 // Default to 10 for safety, but we'll use 0 for bots
+        };
         const isHttp = typeof body === 'string' && body.startsWith('http');
 
         switch (endpoint) {

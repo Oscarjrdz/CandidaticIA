@@ -180,13 +180,37 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const redis = getRedisClient();
 
         // 1. Initial High-Speed Parallel Acquisition (Memory Boost: 40 messages)
-        const [candidateData, config, allMessages] = await Promise.all([
+        const configKeys = [
+            'custom_fields',
+            'bot_ia_prompt',
+            'assistant_ia_prompt',
+            'ai_config',
+            'candidatic_categories',
+            'bot_extraction_rules',
+            'bot_cerebro1_rules',
+            'bypass_enabled'
+        ];
+
+        const [candidateData, config, allMessages, batchConfig] = await Promise.all([
             getCandidateById(candidateId),
             getUltraMsgConfig(),
-            getMessages(candidateId, 40)
+            getMessages(candidateId, 40),
+            FEATURES.USE_BACKEND_CACHE
+                ? getCachedConfigBatch(redis, configKeys)
+                : (async () => {
+                    const values = await redis?.mget(configKeys);
+                    const obj = {};
+                    configKeys.forEach((key, i) => obj[key] = values ? values[i] : null);
+                    return obj;
+                })()
         ]);
 
         if (!candidateData) return 'ERROR: No se encontró al candidato';
+
+        // 🏎️ [EARLY PRESENCE]: Signal typing status immediately to reduce perceived latency
+        if (config && candidateData.whatsapp) {
+            sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => { });
+        }
 
         // 0. Initialize Candidate Updates accumulator
         const candidateUpdates = {
@@ -298,26 +322,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         }
         const isNameBoilerplate = !displayName || /proporcionado|desconocido|luego|después|privado|hola|buenos|\+/i.test(String(displayName));
 
-        // b. Nitro Batch Acquisition: Fetch all rules and prompts in one go
-        const configKeys = [
-            'custom_fields',
-            'bot_ia_prompt',
-            'assistant_ia_prompt',
-            'ai_config',
-            'candidatic_categories',
-            'bot_extraction_rules',
-            'bot_cerebro1_rules',
-            'bypass_enabled'
-        ];
-
-        const batchConfig = FEATURES.USE_BACKEND_CACHE
-            ? await getCachedConfigBatch(redis, configKeys)
-            : await (async () => {
-                const values = await redis?.mget(configKeys);
-                const obj = {};
-                configKeys.forEach((key, i) => obj[key] = values ? values[i] : null);
-                return obj;
-            })();
 
         const customFields = batchConfig.custom_fields ? JSON.parse(batchConfig.custom_fields) : [];
         const auditRaw = auditProfile(candidateData, customFields);
@@ -939,7 +943,7 @@ ${safeDnaLines}
 
                 if (await Orchestrator.checkBypass(candidateData, handoverAudit, bypassEnabled)) {
                     console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
-                    const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config);
+                    const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config, msgId);
                     if (handoverResult?.triggered) {
                         candidateUpdates.projectId = handoverResult.projectId;
                         candidateUpdates.stepId = handoverResult.stepId;
@@ -1045,13 +1049,13 @@ ${safeDnaLines}
                     }
 
                     const filename = isPdf ? 'Informacion.pdf' : 'Imagen.jpg';
-                    const textPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
-                    const mediaPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename });
+                    const textPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal, 'chat', { priority: 0 });
+                    const mediaPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 0 });
 
                     await Promise.allSettled([textPromise, mediaPromise]);
                     console.log(`[MEDIA DELIVERY] Sent parallel text + ${isPdf ? 'PDF' : 'IMAGE'}`);
                 } else {
-                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal);
+                    sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal, 'chat', { priority: 0 }).catch(() => { });
                     console.log(`[TEXT DELIVERY] Sent text only: ${candidateId}`);
                 }
             })();
