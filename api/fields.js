@@ -20,7 +20,7 @@ export default async function handler(req, res) {
             const customFieldsJson = await redis.get('custom_fields');
             let customFields = [];
             if (customFieldsJson) {
-                customFields = JSON.parse(customFieldsJson);
+                customFields = JSON.parse(customFieldsJson).filter(f => f.value !== 'empleo');
             }
 
             // Merge default and custom fields
