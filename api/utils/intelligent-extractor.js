@@ -220,8 +220,12 @@ ${JSON.stringify(schema, null, 2)}
 
             // ATOMIC DECISION: Should we update?
             // Rule 1: Always update if existing value is a placeholder and confidence > 0.4
-            // Rule 2: Only update STABLE data if confidence is very high (> 0.85)
-            let shouldUpdate = isPlaceholder ? (confidence > 0.4) : (confidence > 0.85);
+            // Rule 2: If it's a name and we only have 1 word, be more flexible (confidence > 0.6)
+            // Rule 3: Only update STABLE data if confidence is very high (> 0.85)
+            const existingWords = isPlaceholder ? 0 : String(existingVal).trim().split(/\s+/).filter(w => w.length > 0).length;
+            let shouldUpdate = isPlaceholder ? (confidence > 0.4) :
+                (canonicalField === 'nombreReal' && existingWords < 2) ? (confidence > 0.6) :
+                    (confidence > 0.85);
 
             // --- 🛡️ TITAN SHIELD: CROSS-FIELD EXCLUSION (HARDENED) ---
             if (canonicalField === 'nombreReal' && val) {
