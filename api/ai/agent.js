@@ -880,10 +880,16 @@ ${safeDnaLines}
                 if (aiResult?.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
                     const ext = aiResult.extracted_data;
                     if (ext.nombreReal) {
-                        ext.nombreReal = coalesceName(candidateData.nombreReal, ext.nombreReal);
-                        if (!candidateData.genero && !ext.genero) {
-                            const inferred = inferGender(ext.nombreReal);
-                            if (inferred) ext.genero = inferred;
+                        const words = ext.nombreReal.trim().split(/\s+/);
+                        if (words.length >= 2) {
+                            ext.nombreReal = coalesceName(candidateData.nombreReal, ext.nombreReal);
+                            if (!candidateData.genero && !ext.genero) {
+                                const inferred = inferGender(ext.nombreReal);
+                                if (inferred) ext.genero = inferred;
+                            }
+                        } else {
+                            // Strict Enforcement: Reject single-word names
+                            delete ext.nombreReal;
                         }
                     }
                     if (ext.fechaNacimiento) {
