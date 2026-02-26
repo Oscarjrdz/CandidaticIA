@@ -4,7 +4,7 @@ import { getRedisClient } from './storage.js';
 /**
  * OpenAI Adapter - The "Host" Brain
  */
-export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gpt-4o-mini', explicitApiKey = null) {
+export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gpt-4o-mini', explicitApiKey = null, responseFormat = null) {
     try {
         const redis = getRedisClient();
         let apiKey = explicitApiKey ? explicitApiKey.trim() : process.env.OPENAI_API_KEY;
@@ -45,12 +45,18 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
             })
         ];
 
-        const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+        const payload = {
             model: model,
             messages: formattedMessages,
             temperature: 0.75,
             max_tokens: 800
-        }, {
+        };
+
+        if (responseFormat) {
+            payload.response_format = responseFormat;
+        }
+
+        const response = await axios.post('https://api.openai.com/v1/chat/completions', payload, {
             headers: {
                 'Authorization': `Bearer ${apiKey.trim()}`,
                 'Content-Type': 'application/json'

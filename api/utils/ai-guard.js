@@ -59,9 +59,10 @@ export class AIGuard {
 
         // 5. 🎡 Category Presence Guard
         const safeMissing = (missingFields || []).map(f => f.toLowerCase().trim());
-        const categoryMissing = safeMissing.some(k => k.includes('categor') || k === 'categoria');
-        if (categoryMissing && responseText && !responseText.includes('✅') && !responseText.includes('🤔')) {
-            console.warn(`[AI GUARD] 🎡 Category missing from response_text but required. Triggering Recovery.`);
+        const isCategoryNext = safeMissing.length > 0 && (safeMissing[0].includes('categor') || safeMissing[0] === 'categoria');
+
+        if (isCategoryNext && responseText && !responseText.includes('✅') && !responseText.includes('🤔')) {
+            console.warn(`[AI GUARD] 🎡 Category is next required field but missing checkmarks in response. Triggering Recovery.`);
             return this.getRecoveryResponse("FALLBACK_MISSING_CATEGORIES", missingFields, lastInput, isNewFlag, extracted, candidateName, categoriesList);
         }
 

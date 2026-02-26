@@ -833,9 +833,9 @@ ${safeDnaLines}
 }
 
 [RECONOCIMIENTO DE TURNO]: 
-- Si el usuario menciona su nombre o apellidos (ej: "Oscar Rodriguez" o solo "Rodriguez"), dalo por bueno e inclúyelo en "extracted_data".
-- NO pidas el nombre si el usuario acaba de dártelo ahora mismo.
-- "Nombre Completo" se considera válido si hay al menos dos palabras separadas por espacios.
+- Si el usuario menciona su nombre o apellidos, inclúyelo en "extracted_data.nombreReal".
+- IMPORTANTE: Si el usuario sólo te da un nombre sin apellidos (ej: "Oscar"), extráelo y PREGUNTA POR SUS APELLIDOS amablemente para poder completar su registro.
+- "Nombre Completo" se considera válido SOLO si hay al menos dos palabras separadas por espacios.
 - Si el usuario dice "Ya te lo dije" o similar, NO repitas la misma pregunta; revisa bien el mensaje anterior o el ADN y discúlpate con encanto antes de seguir.\n`;
 
                 if (isNewFlag) {
@@ -844,12 +844,7 @@ ${safeDnaLines}
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
                     candidateUpdates.esNuevo = 'NO';
                     let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
-                    if (customPrompt && !batchConfig.bot_cerebro1_rules) {
-                        baseRules = baseRules
-                            .replace(/Responde con mucha alegría y dulzura \(ej: "¡Ay, qué lindo! 🤭✨ me chiveas"\)/g, 'Responde con amabilidad')
-                            .replace(/con encanto/g, '')
-                            .replace(/con un emoji variado/g, 'brevemente');
-                    }
+
                     const cerebro1Rules = baseRules
                         .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
                         .replace(/{{categorias}}/g, categoriesList)
@@ -859,7 +854,7 @@ ${safeDnaLines}
 
                 // Call Magic GPT (Dynamic Model)
                 const selectedModel = batchConfig.bot_ia_model || 'gpt-4o-mini';
-                const gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey);
+                const gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" });
 
                 if (gptResult?.content) {
                     try {
