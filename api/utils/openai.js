@@ -11,10 +11,14 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
 
         // Try to get from Redis settings (ai_config) if not explicitly provided and not in process.env
         if (!apiKey && redis) {
-            const aiConfigJson = await redis.get('ai_config');
-            if (aiConfigJson) {
-                const aiConfig = JSON.parse(aiConfigJson);
-                apiKey = aiConfig.openaiApiKey;
+            try {
+                const aiConfigJson = await redis.get('ai_config');
+                if (aiConfigJson) {
+                    const aiConfig = JSON.parse(aiConfigJson);
+                    apiKey = aiConfig.openaiApiKey;
+                }
+            } catch (rErr) {
+                console.warn('[OpenAI Adapter] Redis read failed:', rErr.message);
             }
         }
 
@@ -24,10 +28,21 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
 
         const formattedMessages = [
             { role: 'system', content: systemPrompt },
-            ...messages.map(m => ({
-                role: (m.from === 'bot' || m.from === 'me') ? 'assistant' : 'user',
-                content: m.content || m.parts?.[0]?.text || ''
-            }))
+            ...messages.map(m => {
+                // Robust role mapping
+                let role = 'user';
+                const from = m.from || '';
+                const mRole = m.role || '';
+
+                if (from === 'bot' || from === 'me' || mRole === 'model' || mRole === 'assistant') {
+                    role = 'assistant';
+                }
+
+                // Robust content extraction
+                const content = m.content || m.parts?.[0]?.text || '';
+
+                return { role, content };
+            })
         ];
 
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {

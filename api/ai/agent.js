@@ -300,8 +300,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 }
 
                 return {
-                    role,
-                    parts: [{ text: content }]
+                    role: role === 'model' ? 'assistant' : 'user',
+                    content: content
                 };
             });
 
@@ -426,7 +426,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const userText = aggregatedText;
         const currentMessageForGpt = {
             role: 'user',
-            parts: [{ text: userText }]
+            content: aggregatedText
         };
 
         const lastBotMessages = validMessages
@@ -991,7 +991,7 @@ ${safeDnaLines}
             responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
         }
 
-        if (responseTextVal && !isTechnical) {
+        if (responseTextVal && !isTechnicalOrEmpty) {
             deliveryPromise = (async () => {
                 let mUrl = aiResult?.media_url;
                 if (mUrl && mUrl !== 'null') {

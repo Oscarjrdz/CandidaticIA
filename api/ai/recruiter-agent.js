@@ -197,8 +197,8 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         // 4. Historial en orden CRONOLÓGICO (Viejo -> Nuevo)
         const forwardHistoryText = recentHistory
             .map(m => {
-                const role = m.role === 'model' ? 'Brenda' : 'Candidato';
-                const text = m.parts?.[0]?.text || '';
+                const role = (m.role === 'model' || m.role === 'assistant') ? 'Brenda' : 'Candidato';
+                const text = m.content || m.parts?.[0]?.text || '';
                 return `[${role}]: ${text}`;
             })
             .join('\n');
@@ -265,8 +265,8 @@ ${alternatives.length > 0
         // 4. Obtener respuesta de GPT-4o
         // Pasamos el historial estructurado sin inyecciones artificiales
         const messagesForOpenAI = recentHistory.map(m => ({
-            from: m.role === 'model' ? 'bot' : 'user',
-            content: m.parts?.[0]?.text || ''
+            role: (m.role === 'model' || m.role === 'assistant') ? 'assistant' : 'user',
+            content: m.content || m.parts?.[0]?.text || ''
         }));
 
         const gptResponse = await getOpenAIResponse(
