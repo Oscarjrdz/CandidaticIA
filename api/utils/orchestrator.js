@@ -7,7 +7,8 @@ import {
     moveCandidateStep,
     getProjectById,
     getRedisClient,
-    saveMessage
+    saveMessage,
+    getProjects
 } from './storage.js';
 import { MediaEngine } from './media-engine.js';
 import { sendUltraMsgMessage } from '../whatsapp/utils.js';
@@ -50,24 +51,29 @@ export class Orchestrator {
 
         // 1. SMART MATCHING ENGINE (Silicon Valley Pattern)
         const redis = getRedisClient();
-        const projectsRaw = await redis?.get('projects:all');
-        const projects = projectsRaw ? JSON.parse(projectsRaw) : [];
+        const projects = await getProjects();
 
         // Priority 1: Specifically selected bypass project
         let targetProjectId = await redis?.get('bypass_selection');
 
-        // Priority 2: Match based on Municipality/Category (Proactive Routing)
+        // Validation: Ensure the selected bypass project actually exists
+        if (targetProjectId) {
+            const selectedExists = projects.some(p => p.id === targetProjectId);
+            if (!selectedExists) {
+                console.warn(`[ORCHESTRATOR] ⚠️ Bypass project ${targetProjectId} not found in active list. Falling back...`);
+                targetProjectId = null;
+            }
+        }
+
+        // Priority 2: Match based on Municipality/Category or first active project
         if (!targetProjectId && projects.length > 0) {
-            console.log(`[ORCHESTRATOR] 🧩 No global bypass set. Routing via Filter Engine...`);
+            console.log(`[ORCHESTRATOR] 🧩 Matching logic triggered for ${projects.length} projects...`);
             const matchedProject = projects.find(p => {
                 const vacancyIds = p.vacancyIds || [];
-                // If the project has vacancies, it's a potential match
-                if (vacancyIds.length === 0) return false;
+                // Silicon Valley Pattern: Link to the first project that has active vacancies
+                return vacancyIds.length > 0;
+            }) || projects[0]; // Final fallback: first project in list
 
-                // Deep filter matching (Enterprise Pattern)
-                // In this system, projects are often linked to vacancies which have the real constraints
-                return true; // Fallback to first active project if no specific engine is set
-            });
             targetProjectId = matchedProject?.id;
         }
 
