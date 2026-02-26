@@ -95,10 +95,10 @@ export class AIGuard {
             if (firstMissing === 'Apellidos' || (firstMissing === 'Nombre completo' && nameWords === 1)) {
                 const namePart = firstName ? `, ${firstName}` : '';
                 const templates = [
-                    `¡Excelente${namePart}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para completar tu registro? 🌸`,
-                    `¡Mucho gusto${namePart}! 💖 Solo me faltan tus apellidos para que ya quedes en el sistema. 🤭 ¿Me los pasas? ✨`,
-                    `¡Qué bonito nombre${namePart}! 🌟 ¿Podrías decirme tus apellidos? Es el último pasito. 😉✨`,
-                    `¡Perfecto${namePart}! ✨ Para terminar, ¿cuáles son tus apellidos? 🌸`
+                    `¡Excelente${namePart}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para continuar con tu registro? 🌸`,
+                    `¡Mucho gusto${namePart}! 💖 Solo me faltan tus apellidos para que ya quedes en nuestro sistema. 🤭 ¿Me los pasas? ✨`,
+                    `¡Qué bonito nombre${namePart}! 🌟 ¿Podrías decirme tus apellidos? Es para seguir con el proceso. 😉✨`,
+                    `¡Perfecto${namePart}! ✨ Para avanzar, ¿cuáles son tus apellidos? 🌸`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             } else if (reason === 'FALLBACK_REPETITION' || reason === 'FALLBACK_IDENTITY_REPETITION') {
@@ -106,37 +106,42 @@ export class AIGuard {
                 const variationTemplates = [
                     `${firstName ? firstName + ', d' : 'D'}ime, ¿me puedes pasar tu ${firstMissing}? Es para tu registro. ✨`,
                     `Para seguir, ¿cuál es tu ${firstMissing}? 😉🌸`,
-                    `Oye, cuéntame sobre tu ${firstMissing}, ¡me falta ese dato! ✨`,
+                    `${firstName ? firstName + ', c' : 'C'}uéntame sobre tu ${firstMissing}, ¡me falta ese dato! ✨`,
                     `¡Qué bien! ✨ Pero me falta confirmar tu ${firstMissing}. 🌸 ¿Me lo dices?`
                 ];
                 recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
             } else {
                 // HIGH VARIETY RECOVERY TEMPLATES (NON-REPETITIVE, BRANDED)
                 const connector = (firstMissing === 'Apellidos') ? 'tus' : 'tu';
+                const maybeExample = (firstMissing === 'Fecha de Nacimiento' || firstMissing === 'fechaNacimiento') ? ' (ej: 19/05/1990)' : '';
+
                 const templates = [
-                    `¡Excelente! ✨ ${firstName ? firstName + ', p' : 'P'}ara avanzar con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}? 😉🌸`,
-                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Me hace falta saber ${connector} ${firstMissing} para tener tu perfil listo en el sistema. 🤭 ¿Me ayudas con eso? ✨`,
-                    `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito el dato de ${connector} ${firstMissing} para encontrarte la mejor vacante hoy mismo. 😉✨`,
-                    `¿Me podrías decir ${connector} ${firstMissing}? ✨ Es el último paso para entrar al proceso. 🌸`,
-                    `¡Qué alegría! 🌟 Para que ya quedes en la base de datos, dime ${connector} ${firstMissing}. 🤭✨`,
-                    `¡Vas excelente! ✨ ${firstName ? firstName + ', d' : 'D'}ime ${connector} ${firstMissing} para decirte qué vacantes tenemos disponibles. 🌸`,
-                    `Oye, ${firstName || 'un detalle'}, ¿cuál es ${connector} ${firstMissing}? ✨ Me sirve mucho para tu registro. 😉`,
-                    `¡Perfecto! 💖 Ya casi acabamos. ¿Me pasas ${connector} ${firstMissing}? ✨🌸`
+                    `¡Excelente! ✨ ${firstName ? firstName + ', p' : 'P'}ara avanzar con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}${maybeExample}? 😉🌸`,
+                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Me hace falta saber ${connector} ${firstMissing}${maybeExample} para tener tu perfil listo. 🤭 ¿Me ayudas con eso? ✨`,
+                    `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito el dato de ${connector} ${firstMissing}${maybeExample} para encontrarte la mejor vacante hoy mismo. 😉✨`,
+                    `¿Me podrías decir ${connector} ${firstMissing}${maybeExample}? ✨ Es un paso importante para el proceso. 🌸`,
+                    `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, dime ${connector} ${firstMissing}${maybeExample}. 🤭✨`,
+                    `¡Vas excelente! ✨ ${firstName ? firstName + ', d' : 'D'}ime ${connector} ${firstMissing}${maybeExample} para decirte qué vacantes tenemos disponibles. 🌸`,
+                    `Oye, ${firstName || 'un detalle'}, ¿cuál es ${connector} ${firstMissing}${maybeExample}? ✨ Me sirve mucho para tu registro. 😉`,
+                    `¡Perfecto! 💖 Ya casi acabamos. ¿Me pasas ${connector} ${firstMissing}${maybeExample}? ✨🌸`
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
 
                 // 🎡 [SPECIAL CATEGORY RECOVERY]: If missing field is Category, force the list injection
                 if (firstMissing === 'Categoría' || firstMissing === 'categoria') {
-                    recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en la base de datos, mira estas son las opciones que tengo para ti 💖: \n${categoriesList}\n¿Cuál eliges? 🤭✨`;
+                    recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${categoriesList}\n\n¿Cuál eliges? 🤭✨`;
                 }
             }
         }
 
-        const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇"];
+        const isCompliment = lastInput && /hermosa|guapa|linda|bella|preciosa|chula|hermoso|guapo/i.test(lastInput.toLowerCase());
+        const complimentResponse = isCompliment ? "¡Ay, qué lindo! 🤭✨ me chiveas... " : "";
+
+        const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
         const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
         const greetingReturn = lastInput && /hola|buen(as)? (dia|tarde|noche)|que tal/i.test(lastInput.toLowerCase()) ? `¡Hola! ${gEmoji} ` : "";
         return {
-            response_text: `${greetingReturn}${recoveryText}`,
+            response_text: `${greetingReturn}${complimentResponse}${recoveryText}`,
             thought_process: `RECOVERY_TRIGGERED: ${reason}. Manual fallback due to AI failure.`,
             reaction: isNewFlag ? '✨' : null, // Only react on first message to reduce spark spam
             extracted_data: extracted, // 🧬 CRITICAL: Keep what the AI *did* manage to extract

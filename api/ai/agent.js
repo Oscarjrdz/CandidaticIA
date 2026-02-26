@@ -44,15 +44,15 @@ export const DEFAULT_CEREBRO1_RULES = `
 Tu objetivo técnico es obtener: {{faltantes}}.
 
  REGLAS DE MISIÓN:
- 1. AFIRMACIONES: Si el usuario dice "Sí", "Claro", "Te ayudo", etc., NO repitas tu objetivo de forma robótica. Responde con gusto y naturalidad (ej: "¡Excelente! ✨", "¡Qué bien! 💖") y pide el dato inmediatamente.
+ 1. AFIRMACIONES Y HALAGOS: Si el usuario dice "Sí", "Claro", "Te ayudo" o te hace un halago ("Qué guapa", "Qué linda"), NO ignores el mensaje. Responde con mucha alegría y dulzura (ej: "¡Ay, qué lindo! 🤭✨ me chiveas", "¡Qué bien! 💖") y pide el dato inmediatamente.
 2. NOMBRE COMPLETO: Si solo te da el nombre, pídele los apellidos con encanto. No puedes avanzar sin ellos.
-3. CATEGORÍA: Muestra SIEMPRE la lista vertical así:
-"¡Qué alegría! 🌟 Mira, estas son las opciones que tengo para ti💖: 
+3. CATEGORÍA: Muestra SIEMPRE la lista vertical una por una con ✅ así:
+"¡Qué alegría! 🌟 Mira, estas son las opciones que tengo para ti 💖: 
 {{categorias}}
 ¿Cuál eliges? 🤭"
 4. FECHA DE NACIMIENTO: Pídela siempre dando un ejemplo claro: (ej: 19/05/1990).
 5. DINÁMICA: Si responde algo que no es el dato, vuelve a preguntar de forma diferente y divertida.
-6. PERSUASIÓN: Si pregunta por vacantes o sueldos, dile que necesitas sus datos para que el sistema le asigne la mejor opción y continúas con: {{faltantes}}.
+6. PERSUASIÓN: Si pregunta por vacantes o sueldos, dile que necesitas sus datos para que el sistema le asigne la mejor opción y continúa con: {{faltantes}}.
 `;
 
 export const DEFAULT_SYSTEM_PROMPT = `
@@ -76,6 +76,8 @@ Usa frases como: "¡Hola! 👋 Qué gusto saludarte", "¡Hola, hola! 👋 Soy la
 - No uses "Hola" en segundos mensajes, solo en el inicial.
 - No hagas halagos personales (guapo, lindo, etc.).
 - LISTAS VERTICALES: Categorías siempre una por renglón con ✅.
+- FECHAS: Siempre usa el ejemplo (19/05/1990).
+- NO digas "base de datos", di "tu registro" o "nuestro sistema".
 
 [REGLA DE ADN]: Confía en [ESTADO DEL CANDIDATO(ADN)] como verdad absoluta.
 `;
@@ -430,15 +432,14 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             .map(m => m.content.trim());
 
         let categoriesList = "";
-        const categoriesData = batchConfig.candidatic_categories || batchConfig.bot_categories;
-        if (categoriesData) {
-            try {
-                const cats = typeof categoriesData === 'string' ? (categoriesData.includes('[') ? JSON.parse(categoriesData) : categoriesData.split(',').map(c => ({ name: c.trim() }))) : categoriesData;
-                categoriesList = cats.map(c => `✅ ${c.name || c}`).join('\n');
-            } catch (e) {
-                console.warn('Error parsing categories:', e);
-                categoriesList = String(categoriesData);
-            }
+        const categoriesData = batchConfig.candidatic_categories || batchConfig.bot_categories || "General";
+        try {
+            const rawCats = typeof categoriesData === 'string' ? (categoriesData.includes('[') ? JSON.parse(categoriesData) : categoriesData.split(',').map(c => c.trim())) : categoriesData;
+            const cats = Array.isArray(rawCats) ? rawCats : [rawCats];
+            categoriesList = cats.map(c => `✅ ${typeof c === 'string' ? c : (c.name || c.value || JSON.stringify(c))}`).join('\n');
+        } catch (e) {
+            console.warn('Error parsing categories:', e);
+            categoriesList = String(categoriesData).split(',').map(c => `✅ ${c.trim()}`).join('\n');
         }
 
         const customExtractionRules = batchConfig.bot_extraction_rules;
