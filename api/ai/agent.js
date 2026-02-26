@@ -307,7 +307,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         // 📋 [MISSION: Profile Complete?]
         // If history starts with 'model', remove leading model messages
-        while (recentHistory.length > 0 && recentHistory[0].role === 'model') {
+        while (recentHistory.length > 0 && (recentHistory[0].role === 'model' || recentHistory[0].role === 'assistant')) {
             recentHistory.shift();
         }
 
@@ -520,7 +520,7 @@ ${safeDnaLines}
 
                 // --- MULTI-VACANCY REJECTION SHIELD ---
                 let skipRecruiterInference = false;
-                intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.parts[0].text).join('\n'));
+                intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.content || '').join('\n'));
 
                 if ((intent === 'REJECTION' || intent === 'PIVOT') && project.vacancyIds && project.vacancyIds.length > 0) {
                     const isPivot = intent === 'PIVOT';
@@ -649,7 +649,7 @@ ${safeDnaLines}
                                 .catch(e => console.error('[FAQ Engine] ❌ Cluster Error (unanswered):', e));
                         } else {
                             const lastUserMsg = historyForGpt.filter(h => h.role === 'user').slice(-1)[0];
-                            const userText = lastUserMsg?.parts?.[0]?.text || '';
+                            const userText = lastUserMsg?.content || '';
                             const questionPatterns = /[?¿]|cuál|cómo|cuánto|cuándo|dónde|qué|quién|hacen|tienen|hay|incluye|es|son|dan|pagan|trabaj|horario|sueldo|salario|uniforme|transporte|beneficio|requisito|antidop/i;
                             const isQuestion = questionPatterns.test(userText) && userText.length > 5;
                             if (isQuestion && responseTextVal) {
@@ -675,8 +675,8 @@ ${safeDnaLines}
                 // If Brenda forgets the tag but the developer-certified intent is ACCEPTANCE 
                 // AND the bot just asked to schedule, we force the move.
                 if (!hasMoveTag && intent === 'ACCEPTANCE') {
-                    const lastBotMsg = historyForGpt.filter(h => h.role === 'model').slice(-1)[0];
-                    const botText = (lastBotMsg?.parts?.[0]?.text || '').toLowerCase();
+                    const lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
+                    const botText = (lastBotMsg?.content || '').toLowerCase();
                     const isInterviewInvite = botText.includes('agendar tu entrevista') ||
                         botText.includes('agendamos tu entrevista') ||
                         botText.includes('te queda bien');
