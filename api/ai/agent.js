@@ -990,7 +990,7 @@ ${safeDnaLines}
         const isTechnicalOrEmpty = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
-        if (isTechnicalOrEmpty && !aiResult?.close_conversation && !isRecruiterMode) {
+        if (isTechnicalOrEmpty && !aiResult?.close_conversation && !isRecruiterMode && !handoverTriggered) {
             console.warn(`[FINAL SAFEGUARD] 🚨 Silence detected for candidate ${candidateId}. Forcing fallback.`);
             responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
         }

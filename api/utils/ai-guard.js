@@ -135,12 +135,13 @@ export class AIGuard {
                     `${firstName ? firstName + ', c' : 'C'}uéntame sobre tu ${firstMissing}, ¡me falta ese dato! ✨`,
                     `¡Ok! ✨ Pero me falta confirmar tu ${firstMissing}. 🌸 ¿Me lo dices?`
                 ];
-                recoveryText = variationTemplates[Math.floor(Math.random() * variationTemplates.length)];
+                recoveryText = variationTemplates[Math.floor(Math.random() * templates.length)];
             } else {
                 const missingKey = firstMissing.toLowerCase().trim();
                 const isDate = missingKey.includes('fecha') || missingKey === 'fechanacimiento';
-                const isNames = missingKey.includes('apellidos') || missingKey === 'apellidos';
+                const isNames = missingKey.includes('apellidos') || missingKey === 'apellidos' || (missingKey === 'nombre completo' && nameWords === 1);
                 const isCategory = missingKey.includes('categor') || missingKey === 'categoria';
+
 
                 const connector = isNames ? 'tus' : 'tu';
                 const maybeExample = isDate ? ' (ej: 19/05/1990)' : '';
