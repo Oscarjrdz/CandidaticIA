@@ -898,15 +898,22 @@ ${safeDnaLines}
                 const currentAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
                 isNowComplete = currentAudit.paso1Status === 'COMPLETO';
 
-                if (await Orchestrator.checkBypass(candidateData, currentAudit)) {
+                const bypassEnabled = batchConfig.bypass_enabled === 'true';
+                let handoverTriggered = false;
+
+                if (await Orchestrator.checkBypass(candidateData, currentAudit, bypassEnabled)) {
                     console.log(`[ORCHESTRATOR] 🚀 Handover Triggered.`);
                     const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config);
                     if (handoverResult?.triggered) {
                         candidateUpdates.projectId = handoverResult.projectId;
                         candidateUpdates.stepId = handoverResult.stepId;
-                        responseTextVal = null; // Silence main stream, handover message already sent
+                        responseTextVal = null; // Silence main stream
+                        handoverTriggered = true;
                     }
-                } else if (isNowComplete && !candidateData.congratulated) {
+                }
+
+                // FALLBACK: If no handover happened but profile is complete, send to Waiting Room
+                if (!handoverTriggered && isNowComplete && !candidateData.congratulated) {
                     console.log(`[ORCHESTRATOR] 🛋️ Entering Waiting Room.`);
                     responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. Pronto un reclutador te contactará. ✨🌸";
                     candidateUpdates.congratulated = true;
