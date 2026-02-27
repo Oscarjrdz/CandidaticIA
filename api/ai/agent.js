@@ -1171,18 +1171,26 @@ ${safeDnaLines}
             console.error(`[DEBUG] Trace failed: `, e.message);
         }
 
+        const finalReaction = (aiResult?.reaction && aiResult.reaction !== 'null' && aiResult.reaction !== 'undefined') ? aiResult.reaction : null;
+        let dbContentToSave = responseTextVal;
+
+        // If it's truly empty, save an invisible system space instead of ugly tags, UNLESS there's a valid reaction.
+        if (!dbContentToSave) {
+            dbContentToSave = finalReaction ? `[REACCIÓN: ${finalReaction}]` : ' ';
+        }
+
         await Promise.allSettled([
             deliveryPromise,
             reactionPromise,
             updateCandidate(candidateId, candidateUpdates),
             saveMessage(candidateId, {
                 from: 'me',
-                content: responseTextVal || (aiResult?.reaction ? `[REACCIÓN: ${aiResult.reaction}]` : '[SILENCIO]'),
+                content: dbContentToSave,
                 timestamp: new Date().toISOString()
             })
         ]);
 
-        return responseTextVal || '[SILENCIO]';
+        return responseTextVal || '';
     } catch (error) {
         console.error('❌ [AI Agent] Fatal Error:', error);
         return "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";

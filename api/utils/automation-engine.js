@@ -233,6 +233,7 @@ REGLAS DE ORO:
 4. Si la instrucción es solo preguntar algo, LIMITATE A PREGUNTAR eso. No intentes "vender" la vacante si no es el momento.
 5. Tu respuesta debe ser natural, sonar humana y respetar la brevedad/longitud configurada en tu instrucción.
 6. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso (ej. aceptó la entrevista), incluye el tag [MOVE] en tu respuesta.
+7. OBLIGACIÓN DE CIERRE (MANDATORIO): Si la instrucción maestra incluye invitar a entrevista o mandar fechas, SIEMPRE termina tu mensaje textualmente con la pregunta "¿Te gustaría agendar una entrevista?" o "¿Te queda bien?". NUNCA termines con frases abiertas como "Si tienes dudas avísame".
 `;
                 try {
                     const messageHistory = [
@@ -247,8 +248,26 @@ REGLAS DE ORO:
                     const moveTagFound = response.match(/\[MOVE\]|\{MOVE\}/gi);
                     const cleanResponse = response.replace(/\[MOVE\]|\{MOVE\}/gi, '').trim();
 
-                    // Send WhatsApp (Clean)
-                    await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, cleanResponse);
+                    // Send WhatsApp (Clean with Splitting)
+                    const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
+                    let messagesToSend = [cleanResponse];
+
+                    if (splitRegex.test(cleanResponse)) {
+                        const parts = cleanResponse.split(splitRegex);
+                        if (parts.length >= 3) {
+                            messagesToSend = [
+                                parts[0].trim(),
+                                (parts[1] + (parts[2] || '')).trim()
+                            ].filter(Boolean);
+                        }
+                    }
+
+                    for (let i = 0; i < messagesToSend.length; i++) {
+                        await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, messagesToSend[i], 'chat', { priority: i });
+                        if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
+                            await new Promise(r => setTimeout(r, 3000));
+                        }
+                    }
 
                     // AUTO-MOVE LOGIC (Outbound)
                     if (moveTagFound) {
