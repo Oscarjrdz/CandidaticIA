@@ -2,12 +2,11 @@ import { getRedisClient } from '../utils/storage.js';
 import { classifyIntent } from '../ai/intent-classifier.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { getCachedConfig } from '../utils/cache.js';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
     try {
         const redis = getRedisClient();
-        let apiKey = process.env.GEMINI_API_KEY;
+        let apiKey = process.env.OPENAI_API_KEY;
         let p_status = apiKey ? "Found in ENV" : "Not in ENV";
 
         if (!apiKey && redis) {
@@ -17,7 +16,7 @@ export default async function handler(req, res) {
 
             if (aiConfigJson) {
                 const aiConfig = JSON.parse(aiConfigJson);
-                apiKey = aiConfig.geminiApiKey;
+                apiKey = aiConfig.openaiApiKey;
                 p_status += apiKey ? " / Found in REDIS" : " / Not in REDIS";
             }
         }

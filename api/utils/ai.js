@@ -1,7 +1,7 @@
 // Utils AI
 
 /**
- * Detects gender (Hombre/Mujer) based on a name using Gemini AI
+ * Detects gender (Hombre/Mujer) based on a name using OpenAI
  * @param {string} name - The name to analyze
  * @returns {Promise<string>} - "Hombre" | "Mujer" | "Desconocido"
  */

@@ -823,17 +823,22 @@ ${safeDnaLines}
                 systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
 {
   "response_text": "Texto para el usuario",
-  "extracted_data": { "nombreReal": "Valor", "genero": "Valor", ... },
+  "extracted_data": { 
+    "nombreReal": "Valor en Title Case o null si es basura/cortesía", 
+    "genero": "Hombre | Mujer | Desconocido (Inferido de nombreReal)",
+    ... 
+  },
   "reaction": "Emoji o null",
   "thought_process": "Breve nota interna"
 }
 
-[RECONOCIMIENTO DE TURNO]: 
-- Si el usuario menciona su nombre o apellidos, inclúyelo en "extracted_data.nombreReal".
-- IMPORTANTE: Si el usuario sólo te da un nombre sin apellidos (ej: "Oscar"), extráelo y PREGUNTA POR SUS APELLIDOS amablemente para poder completar su registro.
-- REGLA ESTRICTA DE NOMBRES: NUNCA extraigas frases de cortesía o afirmaciones como "Si claro", "sin problema", "buenas noches" como si fueran un nombre.
-- CRÍTICO: Tú eres la Licenciada Brenda Rodríguez. EL USUARIO ES OTRA PERSONA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, extraigas "Brenda" o "Brenda Rodríguez" como si fuera el nombre del usuario, incluso si el usuario te responde con su apellido. Si el usuario te da un apellido sin nombre, PREGÚNTALE SU NOMBRE DE PILA.
-- PROHIBICIÓN DE COMPORTAMIENTO INAPROPIADO: ESTÁ ESTRICTAMENTE PROHIBIDO usar frases como "Me chiveas", "Ay, qué lindo", "Hermoso", o respuestas coquetas/excesivamente coloquiales. Mantén un tono sumamente profesional, amable pero riguroso, como Licenciada en Recursos Humanos.
+[RECONOCIMIENTO DE TURNO Y REGLAS DE NOMBRE]: 
+- Si el usuario provee su nombre o apellidos, extráelo en "extracted_data.nombreReal" formatiendo a Title Case (Ej: "juan perez" -> "Juan Perez").
+- REGLA ESTRICTA DE NOMBRES: NUNCA extraigas apodos, frases de cortesía o afirmaciones como "Si", "Claro", "sin problema", "buenas noches" como nombre. Si el texto no es un nombre real válido, NO LO EXTRAIGAS.
+- GÉNERO: Si extrajiste un "nombreReal" válido, infiere automáticamente el género (Hombre, Mujer o Desconocido) y ponlo en "extracted_data.genero".
+- Si el usuario sólo te da un nombre sin apellidos (ej: "Oscar"), extráelo y PREGUNTA POR SUS APELLIDOS amablemente para poder completar su registro.
+- CRÍTICO: Tú eres la Licenciada Brenda Rodríguez. EL USUARIO ES OTRA PERSONA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, extraigas "Brenda" o "Brenda Rodríguez" como si fuera el nombre del usuario.
+- PROHIBICIÓN DE COMPORTAMIENTO INAPROPIADO: ESTÁ ESTRICTAMENTE PROHIBIDO usar frases como "Me chiveas", "Ay, qué lindo", "Hermoso". Mantén un tono sumamente profesional.
 - Si el usuario dice "Ya te lo dije" o similar, NO repitas la misma pregunta; revisa bien el mensaje anterior o el ADN y discúlpate de forma profesional antes de seguir.\n`;
 
                 if (isNewFlag) {
@@ -874,25 +879,24 @@ ${safeDnaLines}
                 // Merge Extracted Data
                 if (aiResult?.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
                     const ext = aiResult.extracted_data;
-                    if (ext.nombreReal && ext.nombreReal !== candidateData.nombreReal) {
-                        const { cleanNameWithAI, detectGender } = await import('../utils/ai.js');
-                        try {
-                            const cleanedName = await cleanNameWithAI(ext.nombreReal);
-                            if (cleanedName) {
-                                ext.nombreReal = coalesceName(candidateData.nombreReal, cleanedName);
-                                if (!candidateData.genero && !ext.genero) {
-                                    const gender = await detectGender(cleanedName);
-                                    if (gender !== 'Desconocido') ext.genero = gender;
-                                }
-                            } else {
-                                // Rejected by strict AI validation (e.g. conversational filler, ambiguous)
-                                delete ext.nombreReal;
-                            }
-                        } catch (cleanErr) {
-                            console.error('[GPT BRAIN] cleanNameWithAI Error:', cleanErr.message);
-                            delete ext.nombreReal;
+
+                    if (ext.nombreReal && ext.nombreReal.trim().length > 1) {
+                        const previousName = candidateData.nombreReal || '';
+
+                        // We trust the AI validation from the prompt above
+                        ext.nombreReal = coalesceName(candidateData.nombreReal, ext.nombreReal);
+
+                        // If we got a valid gender inference and the candidate doesn't have one yet
+                        if (!candidateData.genero && ext.genero && ext.genero !== 'Desconocido') {
+                            // Keep inferred gender
+                        } else {
+                            delete ext.genero; // Don't override existing or save 'Desconocido'
                         }
+                    } else if (ext.nombreReal !== undefined) {
+                        // Name was null, rejected by validation, or too short. Do not save.
+                        delete ext.nombreReal;
                     }
+
                     if (ext.fechaNacimiento) {
                         ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
                     }

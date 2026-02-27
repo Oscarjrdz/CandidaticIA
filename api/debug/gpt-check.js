@@ -87,7 +87,7 @@ export default async function handler(req, res) {
         if ((audit.paso1Status === 'COMPLETO' || report.isBetaTester) && report.isBetaTester && aiConfig.gptHostEnabled && aiConfig.openaiApiKey) {
             report.decision = '✅ GPT HOST SHOULD TRIGGER';
         } else {
-            report.decision = '❌ GEMINI FALLBACK';
+            report.decision = '❌ GPT FALLBACK';
             report.reason = [];
             if (!report.isBetaTester) report.reason.push('Not a Beta Tester');
             if (!aiConfig.gptHostEnabled) report.reason.push('Host Disabled');
