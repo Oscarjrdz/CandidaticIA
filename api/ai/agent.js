@@ -31,7 +31,7 @@ import { MediaEngine } from '../utils/media-engine.js';
 import { intelligentExtract } from '../utils/intelligent-extractor.js';
 
 export const DEFAULT_EXTRACTION_RULES = `
-[EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad, tieneEmpleo.
+[EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad.
 1. REFINAR: Si el dato en [ESTADO] es incompleto, fusiónalo con el nuevo.
 2. FORMATO: Nombres/Municipios en Title Case. Fecha DD/MM/YYYY.
 3. ESCOLARIDAD: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado.

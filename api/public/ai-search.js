@@ -49,14 +49,12 @@ export default async function handler(req, res) {
         const genAI = new GoogleGenerativeAI(apiKey);
         const systemPrompt = `
 Eres un experto recrutador. Tu tarea es extraer filtros de búsqueda de una frase natural.
-Campos disponibles: nombreReal, fechaNacimiento (para edad), municipio, categoria, tieneEmpleo.
+Campos disponibles: nombreReal, fechaNacimiento (para edad), municipio, categoria.
 
 Reglas:
 1. Retorna SOLO JSON válido.
 2. Estructura: { "filters": { ... }, "keywords": [...] }
 3. Si busca edad "mayor a X", usa { "edad": { "op": ">", "val": X } }.
-4. Si busca "empleado" o "con trabajo", usa { "tieneEmpleo": "Sí" }.
-5. "Sin trabajo" -> { "tieneEmpleo": "No" }.
 
 Consulta: "${query}"
 `;

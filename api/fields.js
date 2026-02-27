@@ -12,7 +12,6 @@ export default async function handler(req, res) {
                 { value: 'genero', label: 'Género' },
                 { value: 'municipio', label: 'Municipio' },
                 { value: 'categoria', label: 'Categoría' },
-                { value: 'tieneEmpleo', label: 'Empleo' },
                 { value: 'escolaridad', label: 'Escolaridad' },
                 { value: 'foto', label: 'Foto (URL)' }
             ];

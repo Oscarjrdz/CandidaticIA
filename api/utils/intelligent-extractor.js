@@ -53,7 +53,6 @@ export async function intelligentExtract(candidateId, historyText) {
                 { value: 'fechaNacimiento', label: 'Fecha Nacimiento' },
                 { value: 'municipio', label: 'Municipio' },
                 { value: 'categoria', label: 'Categoría' },
-                { value: 'tieneEmpleo', label: 'Tiene empleo' },
                 { value: 'escolaridad', label: 'Escolaridad' }
             ];
 

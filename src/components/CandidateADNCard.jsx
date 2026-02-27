@@ -91,12 +91,7 @@ const CandidateADNCard = ({ candidate }) => {
                             value={candidate.escolaridad}
                             colorClass="text-amber-600"
                         />
-                        <ProfileItem
-                            icon={Briefcase}
-                            label="¿Empleo actual?"
-                            value={String(candidate.tieneEmpleo || '').toLowerCase().trim().includes('si') ? 'Trabajando' : (candidate.tieneEmpleo === 'No' ? 'Desempleado' : '-')}
-                            colorClass="text-rose-600"
-                        />
+
                         <ProfileItem
                             icon={Binary}
                             label="Género"

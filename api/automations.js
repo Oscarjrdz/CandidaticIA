@@ -45,16 +45,6 @@ const DEFAULT_RULES = [
         createdAt: new Date().toISOString()
     },
     {
-        id: 'auto_empleo',
-        prompt: 'Determina si el candidato tiene empleo actualmente (Responde Sí/No).',
-        pattern: 'entonces\\s+(No|Sí)\\s+Tienes\\s+empleo',
-        field: 'tieneEmpleo',
-        fieldLabel: 'Tiene empleo',
-        description: 'Determina estatus laboral actual',
-        enabled: true,
-        createdAt: new Date().toISOString()
-    },
-    {
         id: 'auto_escolaridad',
         prompt: 'Identifica el nivel máximo de estudios o escolaridad del candidato.',
         pattern: '(?:escolaridad|estudios)\\s*[:]?\\s*([^.!?\\n]+)',
@@ -75,7 +65,10 @@ async function getAutomationRules() {
         const rulesJson = await redis.get(REDIS_KEY);
 
         if (rulesJson) {
-            return JSON.parse(rulesJson);
+            let rules = JSON.parse(rulesJson);
+            // Delete auto_empleo or field tieneEmpleo if they exist in redis
+            rules = rules.filter(r => r.id !== 'auto_empleo' && r.field !== 'tieneEmpleo');
+            return rules;
         }
 
         // Initialize with defaults if empty

@@ -139,7 +139,6 @@ export default async function handler(req, res) {
             { value: 'municipio', label: 'Municipio' },
             { value: 'escolaridad', label: 'Nivel educativo / Escolaridad' },
             { value: 'categoria', label: 'Categoría' },
-            { value: 'tieneEmpleo', label: 'Tiene empleo' },
             { value: 'nombre', label: 'Nombre de WhatsApp' },
             { value: 'whatsapp', label: 'Teléfono/WhatsApp' },
             { value: 'statusAudit', label: 'Estado del registro (completos/pendientes)' },

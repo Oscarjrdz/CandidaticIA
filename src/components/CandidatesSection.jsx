@@ -340,7 +340,7 @@ const CandidatesSection = ({ showToast }) => {
     // --- 🚩 PASO 1 LOGIC ---
     const isProfileComplete = (c) => {
         // Red dot if ANY field is missing, Green dot if ALL fields are present
-        const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero', 'tieneEmpleo'];
+        const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
         const hasCoreData = coreFields.every(f => {
             const val = formatValue(c[f]);
             return val !== '-';
@@ -566,7 +566,7 @@ const CandidatesSection = ({ showToast }) => {
                                         <React.Fragment key={field.value}>
                                             <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
                                                 <div className="flex items-center space-x-1">
-                                                    {['nombreReal', 'municipio', 'tieneEmpleo', 'escolaridad', 'categoria', 'fechaNacimiento'].includes(field.value) && (
+                                                    {['nombreReal', 'municipio', 'escolaridad', 'categoria', 'fechaNacimiento'].includes(field.value) && (
                                                         <Sparkles className="w-3.5 h-3.5 text-blue-500" />
                                                     )}
                                                     <span>{field.label}</span>

@@ -166,14 +166,30 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
             logs.push(`🔍[DEBUG] Candidatos totales en proyecto: ${candidates.length} `);
 
             const candidatesInStep = candidates.filter(c => {
+                let match = false;
+                let reason = '';
                 // 🚀 BLAZING FAST HANDOVER BYPASS: Target exact candidate immediately
                 if (manualConfig?.targetCandidateId) {
-                    return c.id === manualConfig.targetCandidateId;
+                    if (c.id === manualConfig.targetCandidateId) {
+                        match = true;
+                        reason = 'Manual Target Match';
+                    } else {
+                        reason = 'Not the target';
+                    }
+                } else {
+                    const cStepId = c.projectMetadata?.stepId || 'step_new';
+                    const isFirstStepMatch = (stepIndex === 0 && cStepId === 'step_new');
+                    const isExactMatch = (cStepId === step.id);
+                    match = isFirstStepMatch || isExactMatch;
+                    reason = match ? 'Natural Match' : 'Step ID mismatch';
                 }
-                const cStepId = c.projectMetadata?.stepId || 'step_new';
-                const isFirstStepMatch = (stepIndex === 0 && cStepId === 'step_new');
-                const isExactMatch = (cStepId === step.id);
-                return isFirstStepMatch || isExactMatch;
+
+                if (manualConfig?.targetCandidateId) {
+                    try {
+                        require('fs').appendFileSync('/tmp/auto_debug.log', `[${new Date().toISOString()}] Target: ${manualConfig.targetCandidateId} | Checking ${c.id} (${c.nombre}) | Match: ${match} - ${reason} | Status: ${c.status}\n`);
+                    } catch (e) { }
+                }
+                return match;
             });
 
             logs.push(`🔍[DEBUG] Candidatos en este paso: ${candidatesInStep.length} `);

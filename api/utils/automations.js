@@ -69,12 +69,7 @@ export async function processBotResponse(candidateId, botMessage) {
                 })());
             }
 
-            if (updateData.tieneEmpleo) {
-                extraTasks.push((async () => {
-                    const cleaned = await cleanEmploymentStatusWithAI(updateData.tieneEmpleo);
-                    await updateCandidate(candidateId, { tieneEmpleo: cleaned });
-                })());
-            }
+
 
             if (updateData.fechaNacimiento || updateData.fecha) {
                 const targetField = updateData.fechaNacimiento ? 'fechaNacimiento' : 'fecha';

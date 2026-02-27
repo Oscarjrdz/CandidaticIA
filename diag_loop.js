@@ -31,7 +31,7 @@ async function simulateTurn(cId, userText, eventId) {
 
 async function run() {
     console.log('--- PURGING HISTORY AND SIMULATING GREETING LOOP (REALISTIC) ---');
-    const cId = 'cand_1772145153642_p7kh83lwy'; // X
+    const cId = 'cand_1772147679972_ulbed7w9w'; // User's active phone session
     const redis = new Redis(redisUrl);
 
     // Purge everything
