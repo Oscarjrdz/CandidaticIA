@@ -410,8 +410,8 @@ const VacanciesSection = ({ showToast }) => {
         const file = e.target.files?.[0];
         if (!file || !newDocName.trim()) return;
 
-        if (file.type !== 'application/pdf') {
-            showToast('El archivo debe ser un PDF', 'error');
+        if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            showToast('El archivo debe ser un PDF, JPG, PNG o WebP', 'error');
             if (e.target) e.target.value = '';
             return;
         }
@@ -428,19 +428,27 @@ const VacanciesSection = ({ showToast }) => {
             reader.readAsDataURL(file);
             reader.onload = async () => {
                 const base64Data = reader.result;
+                const uploadType = file.type === 'application/pdf' ? 'pdf' : 'image';
+
                 const res = await fetch('/api/upload', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: base64Data, type: 'pdf' })
+                    body: JSON.stringify({ image: base64Data, type: uploadType })
                 });
                 const data = await res.json();
 
                 if (data.success) {
-                    const docUrl = `${window.location.origin}${data.url}&ext=.pdf`;
+                    // Extract exact extension from mime type or filename
+                    let ext = '.pdf';
+                    if (file.type !== 'application/pdf') {
+                        ext = `.${file.name.split('.').pop()}`;
+                    }
+                    const docUrl = `${window.location.origin}${data.url}&ext=${ext.replace('.', '')}`;
                     const newDoc = {
                         id: `doc_${Date.now()}`,
                         name: newDocName.trim(),
-                        url: docUrl
+                        url: docUrl,
+                        type: file.type // 'application/pdf', 'image/jpeg', etc.
                     };
 
                     setFormData(prev => ({
@@ -448,7 +456,7 @@ const VacanciesSection = ({ showToast }) => {
                         documents: [...(prev.documents || []), newDoc]
                     }));
                     setNewDocName('');
-                    showToast('Documento agregado. Recuerda guardar la vacante.', 'success');
+                    showToast('Archivo agregado. Recuerda guardar la vacante.', 'success');
                 } else {
                     showToast(data.error || 'Error al subir', 'error');
                 }
@@ -964,17 +972,17 @@ const VacanciesSection = ({ showToast }) => {
                                             type="file"
                                             ref={docInputRef}
                                             className="hidden"
-                                            accept="application/pdf"
+                                            accept="application/pdf,image/jpeg,image/png,image/webp"
                                             onChange={handleUploadDocument}
                                         />
                                         <Button
                                             onClick={() => docInputRef.current?.click()}
                                             disabled={!newDocName.trim() || isUploadingDoc}
                                             variant={newDocName.trim() ? "primary" : "outline"}
-                                            icon={isUploadingDoc ? Loader2 : FileText}
+                                            icon={isUploadingDoc ? Loader2 : Paperclip}
                                             className="w-full"
                                         >
-                                            {isUploadingDoc ? 'Subiendo...' : 'Adjuntar PDF'}
+                                            {isUploadingDoc ? 'Subiendo...' : 'Adjuntar Archivo'}
                                         </Button>
                                     </div>
                                 </div>
@@ -989,12 +997,12 @@ const VacanciesSection = ({ showToast }) => {
                                     {formData.documents.map((doc) => (
                                         <div key={doc.id} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg group hover:border-indigo-300 transition-colors shadow-sm">
                                             <div className="flex items-center gap-3 overflow-hidden">
-                                                <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center flex-shrink-0">
-                                                    <FileText className="w-4 h-4" />
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${doc.type && doc.type.startsWith('image/') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500' : 'bg-red-50 dark:bg-red-900/20 text-red-500'}`}>
+                                                    {doc.type && doc.type.startsWith('image/') ? <ImageIcon className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
                                                 </div>
                                                 <div className="truncate">
                                                     <p className="text-sm font-semibold text-gray-900 dark:text-white truncate" title={doc.name}>{doc.name}</p>
-                                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-500 hover:text-indigo-600 font-medium">Ver PDF</a>
+                                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-500 hover:text-indigo-600 font-medium">Ver Archivo</a>
                                                 </div>
                                             </div>
                                             <button
