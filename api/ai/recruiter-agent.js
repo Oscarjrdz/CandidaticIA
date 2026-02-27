@@ -225,7 +225,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             console.log(`[FAQ DEBUG] ✅ Injected FAQs:\n${faqsForPrompt}`);
         }
 
-        const systemPrompt = `
+        let systemPrompt = `
 [FUENTES DE VERDAD - CONSULTAR ANTES DE RESPONDER]:
 
 [PREGUNTAS FRECUENTES OFICIALES - PRIORIDAD MÁXIMA]:
