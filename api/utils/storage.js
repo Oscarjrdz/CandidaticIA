@@ -264,7 +264,6 @@ export const CORE_REQUIRED_FIELDS = [
     { value: 'municipio', label: 'Municipio', invalidValue: 'proporcionado' },
     { value: 'fechaNacimiento', label: 'Fecha de Nacimiento', invalidValue: 'proporcionada' },
     { value: 'categoria', label: 'Categoría', invalidValue: 'proporcionas' },
-    { value: 'tieneEmpleo', label: 'Empleo', invalidValue: 'proporcionado' },
     { value: 'escolaridad', label: 'Escolaridad', invalidValue: 'proporcionado' }
 ];
 
