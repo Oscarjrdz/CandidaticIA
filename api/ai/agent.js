@@ -1038,6 +1038,24 @@ ${safeDnaLines}
         if (responseTextVal && !isTechnicalOrEmpty) {
             deliveryPromise = (async () => {
                 let mUrl = aiResult?.media_url;
+
+                // --- MESSAGE SPLITTER LOGIC ---
+                // Visually split long vacancy presentations if the call to action is present.
+                let messagesToSend = [];
+                const splitPhrase = 'Si te interesa, ¡podemos agendar tu entrevista';
+
+                if (responseTextVal.includes(splitPhrase)) {
+                    const parts = responseTextVal.split(splitPhrase);
+                    // Part 1: Vacancy Details
+                    if (parts[0].trim()) {
+                        messagesToSend.push(parts[0].trim());
+                    }
+                    // Part 2: Call to Action (re-append the split phrase)
+                    messagesToSend.push(splitPhrase + parts[1]);
+                } else {
+                    messagesToSend.push(responseTextVal);
+                }
+
                 if (mUrl && mUrl !== 'null') {
                     // Ensure absolute URL for UltraMsg
                     if (mUrl.startsWith('/api/')) {
@@ -1066,14 +1084,27 @@ ${safeDnaLines}
                     }
 
                     const filename = isPdf ? 'Informacion.pdf' : 'Imagen.jpg';
-                    const textPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal, 'chat', { priority: 0 });
+
+                    // Send media first.
                     const mediaPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 0 });
 
-                    await Promise.allSettled([textPromise, mediaPromise]);
-                    console.log(`[MEDIA DELIVERY] Sent parallel text + ${isPdf ? 'PDF' : 'IMAGE'}`);
+                    // Then send the text (or split texts) sequentially
+                    let textPromises = messagesToSend.map((txt, index) =>
+                        sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, txt, 'chat', { priority: index + 1 })
+                    );
+
+                    await Promise.allSettled([mediaPromise, ...textPromises]);
+                    console.log(`[MEDIA DELIVERY] Sent parallel split text + ${isPdf ? 'PDF' : 'IMAGE'}`);
                 } else {
-                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, responseTextVal, 'chat', { priority: 0 }).catch(() => { });
-                    console.log(`[TEXT DELIVERY] Sent text only: ${candidateId}`);
+                    // Text only, send sequentially
+                    for (let i = 0; i < messagesToSend.length; i++) {
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i }).catch(() => { });
+                        // Brief pause to ensure physical WhatsApp rendering order for multi-part messages
+                        if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
+                            await new Promise(r => setTimeout(r, 400));
+                        }
+                    }
+                    console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId}`);
                 }
             })();
         }
