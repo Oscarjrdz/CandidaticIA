@@ -271,26 +271,32 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
                         {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
                     </h4>
                     {(candidate.currentVacancyName || candidate.projectMetadata?.currentVacancyName) && (
-                        <p className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter truncate italic">
-                            {candidate.currentVacancyName || candidate.projectMetadata.currentVacancyName}
+                        <p className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter truncate italic mt-0.5">
+                            VACANTE: {candidate.currentVacancyName || candidate.projectMetadata.currentVacancyName}
                         </p>
                     )}
                 </div>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[7px] text-slate-500 font-bold uppercase tracking-widest opacity-80">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[7px] text-slate-500 font-bold uppercase tracking-widest opacity-80 mt-1">
                     <div className="flex items-center gap-0.5 whitespace-nowrap">
                         <MapPin className="w-1.5 h-1.5 text-blue-500" />
                         {candidate.municipio || 'N/A'}
                     </div>
-                    {candidate.edad && (
-                        <div className="flex items-center gap-0.5 whitespace-nowrap">
-                            <Calendar className="w-1.5 h-1.5 text-blue-500" />
-                            {candidate.edad} años
-                        </div>
-                    )}
                     {candidate.escolaridad && (
                         <div className="flex items-center gap-0.5 whitespace-nowrap">
                             <GraduationCap className="w-1.5 h-1.5 text-blue-500" />
                             {candidate.escolaridad}
+                        </div>
+                    )}
+                    {(candidate.edad || candidate.fechaNacimiento) && (
+                        <div className="flex items-center gap-0.5 whitespace-nowrap">
+                            <Calendar className="w-1.5 h-1.5 text-blue-500" />
+                            {calculateAge(candidate.fechaNacimiento, candidate.edad)}
+                        </div>
+                    )}
+                    {candidate.genero && candidate.genero !== 'Desconocido' && (
+                        <div className="flex items-center gap-0.5 whitespace-nowrap">
+                            <User className="w-1.5 h-1.5 text-blue-500" />
+                            {candidate.genero}
                         </div>
                     )}
                 </div>
