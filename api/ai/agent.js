@@ -716,8 +716,8 @@ ${safeDnaLines}
                             const stepNameLower = isExitMove ? 'exit' : (currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_'));
                             const specificKeys = [];
                             if (isExitMove) specificKeys.push('bot_bridge_exit', 'bot_bridge_no_interesa');
-                            if (stepNameLower && !isExitMove) specificKeys.push(`bot_bridge_${stepNameLower} `);
-                            if (!isExitMove) specificKeys.push(`bot_bridge_${activeStepId} `, 'bot_step_move_sticker');
+                            if (stepNameLower && !isExitMove) specificKeys.push(`bot_bridge_${stepNameLower}`);
+                            if (!isExitMove) specificKeys.push(`bot_bridge_${activeStepId}`, 'bot_step_move_sticker');
 
                             let bridgeKey = null;
                             for (const key of specificKeys) {
@@ -753,20 +753,26 @@ ${safeDnaLines}
 
                                 if (nextAiResult?.response_text) {
                                     let cMessagesToSend = [];
-                                    const cSplitPhrases = ['¿Te gustaría agendar una entrevista?', '¿Te queda bien?'];
+                                    const splitRegex = /(¿Te gustaría agendar una entrevista\?|¿Te queda bien\?)/i;
+                                    const match = nextAiResult.response_text.match(splitRegex);
 
-                                    let matchedPhrase = cSplitPhrases.find(phrase => nextAiResult.response_text.includes(phrase));
+                                    if (match) {
+                                        const splitIdx = match.index;
+                                        const part1 = nextAiResult.response_text.substring(0, splitIdx).trim();
+                                        const part2 = nextAiResult.response_text.substring(splitIdx).trim();
 
-                                    if (matchedPhrase) {
-                                        const parts = nextAiResult.response_text.split(matchedPhrase);
-                                        if (parts[0].trim()) cMessagesToSend.push(parts[0].trim());
-                                        cMessagesToSend.push(matchedPhrase + parts[1]);
+                                        if (part1) cMessagesToSend.push(part1);
+                                        cMessagesToSend.push(part2);
                                     } else {
                                         cMessagesToSend.push(nextAiResult.response_text);
                                     }
 
                                     for (let i = 0; i < cMessagesToSend.length; i++) {
-                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cMessagesToSend[i], 'chat', { priority: i + 1 });
+                                        // Filter out nested [SILENCIO] leakage in chained step
+                                        const uppercaseMsg = cMessagesToSend[i].toUpperCase();
+                                        if (['NULL', 'UNDEFINED', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(uppercaseMsg)) continue;
+
+                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cMessagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
                                         if (cMessagesToSend.length > 1 && i < cMessagesToSend.length - 1) {
                                             await new Promise(r => setTimeout(r, 1500));
                                         }
@@ -1062,18 +1068,16 @@ ${safeDnaLines}
                 // --- MESSAGE SPLITTER LOGIC ---
                 // Visually split long vacancy presentations if the call to action is present.
                 let messagesToSend = [];
-                const splitPhrases = ['¿Te gustaría agendar una entrevista?', '¿Te queda bien?'];
+                const splitRegex = /(¿Te gustaría agendar una entrevista\?|¿Te queda bien\?)/i;
+                const match = responseTextVal.match(splitRegex);
 
-                let matchedPhrase = splitPhrases.find(phrase => responseTextVal.includes(phrase));
+                if (match) {
+                    const splitIdx = match.index;
+                    const part1 = responseTextVal.substring(0, splitIdx).trim();
+                    const part2 = responseTextVal.substring(splitIdx).trim();
 
-                if (matchedPhrase) {
-                    const parts = responseTextVal.split(matchedPhrase);
-                    // Part 1: Vacancy Details
-                    if (parts[0].trim()) {
-                        messagesToSend.push(parts[0].trim());
-                    }
-                    // Part 2: Call to Action (re-append the split phrase)
-                    messagesToSend.push(matchedPhrase + parts[1]);
+                    if (part1) messagesToSend.push(part1);
+                    messagesToSend.push(part2);
                 } else {
                     messagesToSend.push(responseTextVal);
                 }
