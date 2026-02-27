@@ -752,9 +752,26 @@ ${safeDnaLines}
                                 );
 
                                 if (nextAiResult?.response_text) {
-                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
+                                    let cMessagesToSend = [];
+                                    const cSplitPhrase = 'Si te interesa, ¡podemos agendar tu entrevista';
+
+                                    if (nextAiResult.response_text.includes(cSplitPhrase)) {
+                                        const parts = nextAiResult.response_text.split(cSplitPhrase);
+                                        if (parts[0].trim()) cMessagesToSend.push(parts[0].trim());
+                                        cMessagesToSend.push(cSplitPhrase + parts[1]);
+                                    } else {
+                                        cMessagesToSend.push(nextAiResult.response_text);
+                                    }
+
+                                    for (let i = 0; i < cMessagesToSend.length; i++) {
+                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cMessagesToSend[i], 'chat', { priority: i + 1 });
+                                        if (cMessagesToSend.length > 1 && i < cMessagesToSend.length - 1) {
+                                            await new Promise(r => setTimeout(r, 1500));
+                                        }
+                                    }
+
                                     await saveMessage(candidateId, { from: 'me', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
-                                    console.log(`[RECRUITER BRAIN] ✅ Chained AI sent for step: ${nextStep.name} `);
+                                    console.log(`[RECRUITER BRAIN] ✅ Chained AI sent sequentially for step: ${nextStep.name} `);
                                 } else {
                                     console.warn(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text for step: ${nextStep.name} `);
                                 }
