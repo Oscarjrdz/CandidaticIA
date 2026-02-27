@@ -150,6 +150,34 @@ export class Orchestrator {
         try {
             logTrace(`⚙️ Triggering real-time project automations for ${targetProjectId}...`);
             await runAIAutomations(true, { projectId: targetProjectId, stepId: firstStep.id, targetCandidateId: candidateId });
+
+            // Failsafe: Si el motor de automatización falló por concurrencia u otro bloqueo interno,
+            // garantizamos la entrega de la vacante disparando directamente el prompt configurado.
+            const metaKey = `pipeline:${targetProjectId}:${firstStep.id}:${candidateId}:processed`;
+            const isProcessed = await redis.get(metaKey);
+
+            if (!isProcessed && firstStep.aiConfig?.prompt) {
+                console.warn('[ORCHESTRATOR] ⚠️ Failsafe auto-trigger firing! Engine bypassed.');
+                const { getVacancyById } = await import('./storage.js');
+                const v = await getVacancyById(project.vacancyId);
+                const vacCtx = {
+                    name: v?.name || '[Sin Vacante]',
+                    messageDescription: v?.messageDescription || '[Sin Info]',
+                    description: v?.description || '',
+                    salary: v?.salary_range || 'N/A',
+                    schedule: v?.schedule || 'N/A'
+                };
+
+                let p = firstStep.aiConfig.prompt
+                    .replace(/{{Candidato}}/gi, candidateData.nombreReal || candidateData.nombre)
+                    .replace(/{{Vacante}}/gi, vacCtx.name)
+                    .replace(/{{Vacante\\.MessageDescription}}/gi, vacCtx.messageDescription)
+                    .replace(/{{Vacante\\.Descripcion}}/gi, vacCtx.description);
+
+                await sendUltraMsgMessage(config.instanceId, config.token, phone, p, 'chat', { priority: 0 });
+                await redis.set(metaKey, 'true', 'EX', 3600 * 24 * 30);
+                await saveMessage(candidateId, { from: 'bot', content: p, timestamp: new Date().toISOString(), meta: { pipelineStep: firstStep.id } });
+            }
         } catch (e) {
             console.error('[ORCHESTRATOR] Auto-trigger failed:', e.message);
         }
