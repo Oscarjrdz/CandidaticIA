@@ -168,11 +168,9 @@ export class Orchestrator {
                     schedule: v?.schedule || 'N/A'
                 };
 
-                let p = firstStep.aiConfig.prompt
-                    .replace(/{{Candidato}}/gi, candidateData.nombreReal || candidateData.nombre)
-                    .replace(/{{Vacante}}/gi, vacCtx.name)
-                    .replace(/{{Vacante\\.MessageDescription}}/gi, vacCtx.messageDescription)
-                    .replace(/{{Vacante\\.Descripcion}}/gi, vacCtx.description);
+                // SEND THE ACTUAL HUMAN MESSAGE, NOT THE RAW AI PROMPT
+                let candidateFirstName = (candidateData.nombreReal || candidateData.nombre || 'Candidato').split(' ')[0];
+                let p = `¡Mira ${candidateFirstName}! Te comparto la vacante que encontré para ti: ⏬\n\n${vacCtx.messageDescription}`;
 
                 await sendUltraMsgMessage(config.instanceId, config.token, phone, p, 'chat', { priority: 0 });
                 await redis.set(metaKey, 'true', 'EX', 3600 * 24 * 30);
