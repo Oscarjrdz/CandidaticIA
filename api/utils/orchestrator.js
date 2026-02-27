@@ -175,16 +175,34 @@ export class Orchestrator {
 
         const firstStep = project.steps[0];
 
+        // Retrieve Vacancy Name for UI
+        let currentVacancyName = '';
+        try {
+            const { getVacancyById } = await import('./storage.js');
+            const vId = Array.isArray(project.vacancyIds) && project.vacancyIds.length > 0 ? project.vacancyIds[0] : project.vacancyId;
+            if (vId) {
+                const v = await getVacancyById(vId);
+                if (v && v.name) currentVacancyName = v.name;
+            }
+        } catch (e) {
+            console.error('[ORCHESTRATOR] Error fetching vacancy name:', e.message);
+        }
+
         // 2. ATOMIC TRANSACTION: State Migration
         await updateCandidate(candidateId, {
             projectId: targetProjectId,
             stepId: firstStep.id,
             congrats_sent_at: new Date().toISOString(),
             congratulated: true,
-            status: 'PROCESO'
+            status: 'PROCESO',
+            ...(currentVacancyName ? { currentVacancyName } : {})
         });
 
-        await addCandidateToProject(targetProjectId, candidateId, { stepId: firstStep.id, origin: 'bot_handover' });
+        await addCandidateToProject(targetProjectId, candidateId, {
+            stepId: firstStep.id,
+            origin: 'bot_handover',
+            ...(currentVacancyName ? { currentVacancyName } : {})
+        });
 
         // 3. ✨ PREMIUM MEDIA SEQUENCE (Multi-Layered)
 
