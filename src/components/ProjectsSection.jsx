@@ -1262,28 +1262,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                         />
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
-                                            Mensaje de Espera (Tapón Inteligente)
-                                            <button
-                                                onClick={() => handleOptimizePrompt(stepWaitMsg, setStepWaitMsg, 'wait')}
-                                                disabled={isOptimizing || !stepWaitMsg.trim()}
-                                                className={`p-1 rounded-md transition-all ${isOptimizing ? 'animate-spin text-yellow-500' : 'text-yellow-500 hover:bg-yellow-100 dark:hover:bg-yellow-900/40 hover:scale-110'}`}
-                                                title="Mejorar mensaje de espera"
-                                            >
-                                                <Sparkles className="w-3.5 h-3.5" />
-                                            </button>
-                                        </label>
-                                        <p className="text-[10px] text-slate-500 italic mb-1">
-                                            Si el siguiente paso está APAGADO, Brenda dirá esto para ganar tiempo.
-                                        </p>
-                                        <textarea
-                                            value={stepWaitMsg}
-                                            onChange={(e) => setStepWaitMsg(e.target.value)}
-                                            className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-500 outline-none resize-none h-20"
-                                            placeholder="Ej: Excelente, cumples el perfil. Estamos coordinando fechas para entrevistas, te aviso en breve..."
-                                        />
-                                    </div>
+
                                 </div>
 
                                 <div className="flex justify-end gap-3 pt-2">
