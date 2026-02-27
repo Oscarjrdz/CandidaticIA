@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import Card from './ui/Card';
 import ErrorBoundary from './ui/ErrorBoundary';
 import Button from './ui/Button';
@@ -15,6 +18,48 @@ import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatVa
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 
 /**
+ * Sortable Header Sub-component
+ */
+function SortableHeaderCell({ id, label }) {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 999 : 'auto',
+        opacity: isDragging ? 0.8 : 1,
+    };
+
+    return (
+        <th
+            ref={setNodeRef}
+            style={style}
+            // Increase px padding slighly to fit grip icon gracefully
+            className={`text-left py-1 px-1.5 font-semibold text-gray-700 dark:text-gray-300 relative group select-none ${isDragging ? 'bg-gray-100 dark:bg-gray-700 shadow-md' : ''}`}
+        >
+            <div className="flex items-center space-x-1">
+                <button
+                    {...attributes}
+                    {...listeners}
+                    className="p-1 cursor-grab active:cursor-grabbing hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors text-gray-400 group-hover:text-gray-600 dark:group-hover:text-gray-300"
+                    title="Arrastrar columna"
+                >
+                    <GripVertical className="w-3.5 h-3.5" />
+                </button>
+                {['nombreReal', 'municipio', 'escolaridad', 'categoria', 'fechaNacimiento'].includes(id) && (
+                    <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                )}
+                <span>{label}</span>
+            </div>
+        </th>
+    );
+}
+
+/**
+ * Sección de Candidatos con Auto-Exportación y Columnas Arrastrables
+ */
+
+/**
  * Sección de Candidatos con Auto-Exportación
  */
 const CandidatesSection = ({ showToast }) => {
@@ -22,7 +67,39 @@ const CandidatesSection = ({ showToast }) => {
     const [stats, setStats] = useState(null); // Live dashboard stats
     const [loading, setLoading] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(true); // NEW: Prevent ghosting
-    const [fields, setFields] = useState([]); // Dynamic fields
+    // Dynamic Fields & Column Order State
+    const [fields, setFields] = useState([]);
+    const [columnOrder, setColumnOrder] = useState(() => {
+        try {
+            const saved = localStorage.getItem('candidateColumnOrder');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+
+    // DND Sensors (require slight movement to drag so clicks still work)
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
+
+    // DND Drag End Handler
+    const handleDragEnd = (event) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        setColumnOrder((prevOrder) => {
+            const oldIndex = prevOrder.indexOf(active.id);
+            const newIndex = prevOrder.indexOf(over.id);
+            const newOrder = arrayMove(prevOrder, oldIndex, newIndex);
+
+            // Save to localStorage
+            try { localStorage.setItem('candidateColumnOrder', JSON.stringify(newOrder)); } catch (e) { }
+            return newOrder;
+        });
+    };
+
     const [search, setSearch] = useState('');
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
@@ -103,7 +180,24 @@ const CandidatesSection = ({ showToast }) => {
         const loadFields = async () => {
             const result = await getFields();
             if (result.success) {
-                setFields(result.fields);
+                // Remove 'foto' and default hidden fields if necessary
+                const dynamicFields = result.fields.filter(f => f.value !== 'foto');
+                setFields(dynamicFields);
+
+                // Initialize column order if not present in localStorage
+                setColumnOrder(prevOrder => {
+                    const existingOrderIds = new Set(prevOrder);
+                    const newIds = dynamicFields.map(f => f.value).filter(id => !existingOrderIds.has(id));
+
+                    // Keep existing order, append new ones at the end
+                    const mergedOrder = [...prevOrder.filter(id => dynamicFields.some(f => f.value === id)), ...newIds];
+
+                    // Save merged order back if it changed
+                    if (mergedOrder.length !== prevOrder.length || mergedOrder.some((v, i) => v !== prevOrder[i])) {
+                        try { localStorage.setItem('candidateColumnOrder', JSON.stringify(mergedOrder)); } catch (e) { }
+                    }
+                    return mergedOrder;
+                });
             }
         };
 
@@ -553,197 +647,201 @@ const CandidatesSection = ({ showToast }) => {
                             </p>
                         </div>
                     ) : (
-                        <table className="w-full relative">
-                            <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
-                                <tr className="border-b border-gray-200 dark:border-gray-700 text-[10px] uppercase tracking-wider text-gray-500">
-                                    <th className="py-1 px-1 w-8"></th>
-                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300"></th>
-                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
-                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">From</th>
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <table className="w-full relative">
+                                <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
+                                    <tr className="border-b border-gray-200 dark:border-gray-700 text-[10px] uppercase tracking-wider text-gray-500">
+                                        <th className="py-1 px-1 w-8"></th>
+                                        <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300"></th>
+                                        <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
+                                        <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">From</th>
 
-                                    {/* Dynamic Headers */}
-                                    {fields.filter(f => f.value !== 'foto').map(field => (
-                                        <React.Fragment key={field.value}>
-                                            <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">
-                                                <div className="flex items-center space-x-1">
-                                                    {['nombreReal', 'municipio', 'escolaridad', 'categoria', 'fechaNacimiento'].includes(field.value) && (
-                                                        <Sparkles className="w-3.5 h-3.5 text-blue-500" />
-                                                    )}
-                                                    <span>{field.label}</span>
-                                                </div>
-                                            </th>
-                                        </React.Fragment>
-                                    ))}
+                                        {/* Dynamic Headers (Sortable) */}
+                                        <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
+                                            {columnOrder.map(colId => {
+                                                const field = fields.find(f => f.value === colId);
+                                                if (!field) return null;
+                                                return <SortableHeaderCell key={field.value} id={field.value} label={field.label} />;
+                                            })}
+                                        </SortableContext>
 
-                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Vacante</th>
-                                    <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
-                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
-                                        <div className="flex justify-center">
-                                            <MessageCircle className="w-4 h-4 opacity-50" />
-                                        </div>
-                                    </th>
-                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
-                                        <div className="flex justify-center">
-                                            <Ban className="w-3.5 h-3.5 opacity-50" />
-                                        </div>
-                                    </th>
-                                    <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {isInitialLoading ? (
-                                    <>
-                                        {[...Array(8)].map((_, i) => (
-                                            <TableRowSkeleton key={i} columns={fields.filter(f => f.value !== 'foto').length + 3} />
-                                        ))}
-                                    </>
-                                ) :
-                                    displayedCandidates.map((candidate) => (
-                                        <tr
-                                            key={candidate.id}
-                                            className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
-                                        >
-                                            <td className="py-0.5 px-1 text-center">
-                                                <div className="flex items-center justify-center">
-                                                    {isProfileComplete(candidate) ? (
-                                                        <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
-                                                    ) : (
-                                                        <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="py-0.5 px-2.5">
-                                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
-                                                    <img
-                                                        src={candidate.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.nombre || 'User')}&background=random&color=fff&size=128`}
-                                                        alt="Avatar"
-                                                        className="w-full h-full object-cover"
-                                                        onError={(e) => {
-                                                            e.target.onerror = null;
-                                                            e.target.src = 'https://ui-avatars.com/api/?name=User&background=gray&color=fff';
-                                                        }}
-                                                    />
-                                                </div>
-                                            </td>
-                                            <td className="py-0.5 px-2.5">
-                                                <div className="text-[10px] text-gray-900 dark:text-white font-mono font-medium">
-                                                    {formatPhone(candidate.whatsapp)}
-                                                </div>
-                                                <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
-                                                    Desde {formatRelativeDate(candidate.primerContacto)}
-                                                </div>
-                                            </td>
-                                            <td className="py-0.5 px-2.5">
-                                                <div className="text-[10px] text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
-                                                    {candidate.nombre && candidate.nombre.length > 8
-                                                        ? `${candidate.nombre.substring(0, 8)}...`
-                                                        : (candidate.nombre || '-')}
-                                                </div>
-                                            </td>
-
-                                            {/* Dynamic Cells */}
-                                            {fields.filter(f => f.value !== 'foto').map(field => (
-                                                <React.Fragment key={field.value}>
-                                                    <td className="py-0.5 px-2.5">
-                                                        {['escolaridad', 'categoria', 'nombreReal', 'municipio'].includes(field.value) ? (
-                                                            <div
-                                                                onClick={() => handleMagicFix(candidate.id, field.value, candidate[field.value])}
-                                                                className={`
-                                                                inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium
-                                                                ${magicLoading[`${candidate.id}-${field.value}`]
-                                                                        ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse'
-                                                                        : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}
-                                                            `}
-                                                                title="Clic para Magia IA ✨"
-                                                            >
-                                                                {magicLoading[`${candidate.id}-${field.value}`] && (
-                                                                    <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
-                                                                )}
-                                                                {formatValue(candidate[field.value])}
-                                                                <Sparkles className={`w-2.5 h-2.5 ml-1.5 opacity-0 group-hover:opacity-100 ${magicLoading[`${candidate.id}-${field.value}`] ? 'hidden' : ''} text-blue-400`} />
-                                                            </div>
-                                                        ) : (
-                                                            <div className="text-[10px] text-gray-900 dark:text-white font-medium">
-                                                                {field.value === 'edad'
-                                                                    ? calculateAge(candidate.fechaNacimiento, candidate.edad)
-                                                                    : formatValue(candidate[field.value])}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </React.Fragment>
+                                        <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Vacante</th>
+                                        <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">Último Mensaje</th>
+                                        <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
+                                            <div className="flex justify-center">
+                                                <MessageCircle className="w-4 h-4 opacity-50" />
+                                            </div>
+                                        </th>
+                                        <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10">
+                                            <div className="flex justify-center">
+                                                <Ban className="w-3.5 h-3.5 opacity-50" />
+                                            </div>
+                                        </th>
+                                        <th className="text-center py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {isInitialLoading ? (
+                                        <>
+                                            {[...Array(8)].map((_, i) => (
+                                                <TableRowSkeleton key={i} columns={columnOrder.length + 3} />
                                             ))}
-
-                                            <td className="py-0.5 px-2.5">
-                                                <div className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase italic whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
-                                                    {candidate.currentVacancyName || (candidate.projectMetadata?.currentVacancyName) || '-'}
-                                                </div>
-                                            </td>
-
-                                            <td className="py-0.5 px-2.5">
-                                                <div className="text-[10px] text-gray-700 dark:text-gray-300 font-medium">
-                                                    {formatDateTime(candidate.ultimoMensaje)}
-                                                </div>
-                                                <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
-                                                    {formatRelativeDate(candidate.ultimoMensaje)}
-                                                </div>
-                                            </td>
-
-                                            <td className="py-0.5 px-2.5 text-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleOpenChat(candidate);
-                                                    }}
-                                                    className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center"
-                                                    title="Abrir chat"
-                                                >
-                                                    <div className="relative">
-                                                        <MessageCircle className="w-4 h-4" />
-                                                        {candidate.ultimoMensaje && (
-                                                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
+                                        </>
+                                    ) :
+                                        displayedCandidates.map((candidate) => (
+                                            <tr
+                                                key={candidate.id}
+                                                className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative"
+                                            >
+                                                <td className="py-0.5 px-1 text-center">
+                                                    <div className="flex items-center justify-center">
+                                                        {isProfileComplete(candidate) ? (
+                                                            <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)] animate-pulse"></div>
+                                                        ) : (
+                                                            <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
                                                         )}
                                                     </div>
-                                                </button>
-                                            </td>
-                                            <td className="py-0.5 px-2 text-center">
-                                                <div className="flex justify-center items-center">
+                                                </td>
+                                                <td className="py-0.5 px-2.5">
+                                                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                                                        <img
+                                                            src={candidate.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.nombre || 'User')}&background=random&color=fff&size=128`}
+                                                            alt="Avatar"
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => {
+                                                                e.target.onerror = null;
+                                                                e.target.src = 'https://ui-avatars.com/api/?name=User&background=gray&color=fff';
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </td>
+                                                <td className="py-0.5 px-2.5">
+                                                    <div className="text-[10px] text-gray-900 dark:text-white font-mono font-medium">
+                                                        {formatPhone(candidate.whatsapp)}
+                                                    </div>
+                                                    <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
+                                                        Desde {formatRelativeDate(candidate.primerContacto)}
+                                                    </div>
+                                                </td>
+                                                <td className="py-0.5 px-2.5">
+                                                    <div className="text-[10px] text-gray-900 dark:text-white font-medium" title={candidate.nombre}>
+                                                        {candidate.nombre && candidate.nombre.length > 8
+                                                            ? `${candidate.nombre.substring(0, 8)}...`
+                                                            : (candidate.nombre || '-')}
+                                                    </div>
+                                                </td>
+
+                                                {/* Dynamic Cells (Mapped by Sorted columnOrder) */}
+                                                {columnOrder.map(colId => {
+                                                    const field = fields.find(f => f.value === colId);
+                                                    if (!field) return null;
+
+                                                    return (
+                                                        <td className="py-0.5 px-2.5" key={field.value}>
+                                                            {['escolaridad', 'categoria', 'nombreReal', 'municipio'].includes(field.value) ? (
+                                                                <div
+                                                                    onClick={() => handleMagicFix(candidate.id, field.value, candidate[field.value])}
+                                                                    className={`
+                                                                    inline-flex items-center px-2 py-0.5 rounded-md cursor-pointer smooth-transition text-[10px] font-medium
+                                                                    ${magicLoading[`${candidate.id}-${field.value}`]
+                                                                            ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 animate-pulse'
+                                                                            : 'hover:bg-blue-50 dark:hover:bg-blue-900/40 hover:text-blue-600 dark:text-white'}
+                                                                `}
+                                                                    title="Clic para Magia IA ✨"
+                                                                >
+                                                                    {magicLoading[`${candidate.id}-${field.value}`] && (
+                                                                        <Loader2 className="w-3 h-3 animate-spin mr-1.5" />
+                                                                    )}
+                                                                    {formatValue(candidate[field.value])}
+                                                                    <Sparkles className={`w-2.5 h-2.5 ml-1.5 opacity-0 group-hover:opacity-100 ${magicLoading[`${candidate.id}-${field.value}`] ? 'hidden' : ''} text-blue-400`} />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-[10px] text-gray-900 dark:text-white font-medium">
+                                                                    {field.value === 'edad'
+                                                                        ? calculateAge(candidate.fechaNacimiento, candidate.edad)
+                                                                        : formatValue(candidate[field.value])}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+
+                                                <td className="py-0.5 px-2.5">
+                                                    <div className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase italic whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+                                                        {candidate.currentVacancyName || (candidate.projectMetadata?.currentVacancyName) || '-'}
+                                                    </div>
+                                                </td>
+
+                                                <td className="py-0.5 px-2.5">
+                                                    <div className="text-[10px] text-gray-700 dark:text-gray-300 font-medium">
+                                                        {formatDateTime(candidate.ultimoMensaje)}
+                                                    </div>
+                                                    <div className="text-[8px] text-gray-500 dark:text-gray-400 mt-0.5 opacity-80">
+                                                        {formatRelativeDate(candidate.ultimoMensaje)}
+                                                    </div>
+                                                </td>
+
+                                                <td className="py-0.5 px-2.5 text-center">
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleBlockToggle(candidate);
+                                                            handleOpenChat(candidate);
                                                         }}
-                                                        disabled={blockLoading[candidate.id]}
-                                                        className={`w-6 h-3 rounded-full relative transition-colors duration-200 focus:outline-none ${candidate.blocked ? 'bg-red-500' : 'bg-gray-200 dark:bg-gray-700'
-                                                            }`}
-                                                        title={candidate.blocked ? 'Desbloquear candidato' : 'Bloquear candidato'}
+                                                        className="p-1.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-500 rounded-lg smooth-transition group relative flex items-center justify-center"
+                                                        title="Abrir chat"
                                                     >
-                                                        <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white shadow-sm transition-transform duration-200 ${candidate.blocked ? 'left-3.5' : 'left-0.5'
-                                                            }`}>
-                                                            {blockLoading[candidate.id] && (
-                                                                <div className="absolute inset-0 flex items-center justify-center">
-                                                                    <Loader2 className="w-2 h-2 text-red-500 animate-spin" />
-                                                                </div>
+                                                        <div className="relative">
+                                                            <MessageCircle className="w-4 h-4" />
+                                                            {candidate.ultimoMensaje && (
+                                                                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse border border-white dark:border-gray-800"></span>
                                                             )}
                                                         </div>
                                                     </button>
-                                                </div>
-                                            </td>
-                                            <td className="py-0.5 px-2.5 text-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => handleDelete(e, candidate.id, candidate.nombre)}
-                                                    className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
-                                                    title="Eliminar permanentemente"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                            </tbody>
-                        </table>
+                                                </td>
+                                                <td className="py-0.5 px-2 text-center">
+                                                    <div className="flex justify-center items-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleBlockToggle(candidate);
+                                                            }}
+                                                            disabled={blockLoading[candidate.id]}
+                                                            className={`w-6 h-3 rounded-full relative transition-colors duration-200 focus:outline-none ${candidate.blocked ? 'bg-red-500' : 'bg-gray-200 dark:bg-gray-700'
+                                                                }`}
+                                                            title={candidate.blocked ? 'Desbloquear candidato' : 'Bloquear candidato'}
+                                                        >
+                                                            <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white shadow-sm transition-transform duration-200 ${candidate.blocked ? 'left-3.5' : 'left-0.5'
+                                                                }`}>
+                                                                {blockLoading[candidate.id] && (
+                                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                                        <Loader2 className="w-2 h-2 text-red-500 animate-spin" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td className="py-0.5 px-2.5 text-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => handleDelete(e, candidate.id, candidate.nombre)}
+                                                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg smooth-transition group"
+                                                        title="Eliminar permanentemente"
+                                                    >
+                                                        <Trash2 className="w-3.5 h-3.5 text-gray-400 group-hover:text-red-600 dark:group-hover:text-red-400" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                </tbody>
+                            </table>
+                        </DndContext>
                     )}
                 </div>
 
