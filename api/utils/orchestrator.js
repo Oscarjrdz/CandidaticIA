@@ -84,7 +84,10 @@ export class Orchestrator {
             // 3. Category Check
             const cCat = (candidateData.categoria || '').toLowerCase().trim();
             if (rule.categories && rule.categories.length > 0) {
-                const isMatch = rule.categories.some(rc => rc.toLowerCase() === cCat);
+                const isMatch = rule.categories.some(rc => {
+                    const rCat = rc.toLowerCase().trim();
+                    return rCat.includes(cCat) || cCat.includes(rCat);
+                });
                 if (!isMatch) continue;
             }
 
@@ -92,14 +95,20 @@ export class Orchestrator {
             const normalizeStr = (s) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
             const cMun = normalizeStr(candidateData.municipio);
             if (rule.municipios && rule.municipios.length > 0) {
-                const isMatch = rule.municipios.some(rm => normalizeStr(rm) === cMun);
+                const isMatch = rule.municipios.some(rm => {
+                    const rMun = normalizeStr(rm);
+                    return rMun.includes(cMun) || cMun.includes(rMun);
+                });
                 if (!isMatch) continue;
             }
 
             // 5. Escolaridad Check
             const cEsc = normalizeStr(candidateData.escolaridad);
             if (rule.escolaridades && rule.escolaridades.length > 0) {
-                const isMatch = rule.escolaridades.some(re => normalizeStr(re) === cEsc);
+                const isMatch = rule.escolaridades.some(re => {
+                    const rEsc = normalizeStr(re);
+                    return rEsc.includes(cEsc) || cEsc.includes(rEsc);
+                });
                 if (!isMatch) continue;
             }
 
