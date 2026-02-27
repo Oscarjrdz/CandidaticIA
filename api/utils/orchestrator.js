@@ -149,7 +149,7 @@ export class Orchestrator {
         // Phase 6: Instant Automations Trigger (Send Vacancy Immediately)
         try {
             logTrace(`⚙️ Triggering real-time project automations for ${targetProjectId}...`);
-            await runAIAutomations(true, { projectId: targetProjectId, stepId: firstStep.id });
+            await runAIAutomations(true, { projectId: targetProjectId, stepId: firstStep.id, targetCandidateId: candidateId });
         } catch (e) {
             console.error('[ORCHESTRATOR] Auto-trigger failed:', e.message);
         }

@@ -166,9 +166,9 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
             logs.push(`🔍[DEBUG] Candidatos totales en proyecto: ${candidates.length} `);
 
             const candidatesInStep = candidates.filter(c => {
-                // 🚀 BLAZING FAST HANDOVER BYPASS: If we just pushed them, they might not have projectMetadata cached yet.
-                if (manualConfig?.stepId === step.id && c.status === 'PROCESO') {
-                    return true;
+                // 🚀 BLAZING FAST HANDOVER BYPASS: Target exact candidate immediately
+                if (manualConfig?.targetCandidateId) {
+                    return c.id === manualConfig.targetCandidateId;
                 }
                 const cStepId = c.projectMetadata?.stepId || 'step_new';
                 const isFirstStepMatch = (stepIndex === 0 && cStepId === 'step_new');
@@ -192,7 +192,7 @@ async function processProjectPipelines(redis, model, config, logs, manualConfig 
                 const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}: processed`;
                 const isProcessed = await redis.get(metaKey);
 
-                if (isProcessed && !manualConfig) {
+                if (isProcessed) {
                     logs.push(`⏭️[DEBUG] ${cand.nombre} ya fue procesado en este paso anteriormente(Key: ${metaKey}).`);
                     continue;
                 }
