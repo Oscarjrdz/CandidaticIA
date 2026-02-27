@@ -108,7 +108,6 @@ async function processProjectPipelines(redis, openAiKey, config, logs, manualCon
 
         if (activeSteps.length === 0) continue;
 
-        // Load project context (Vacancy)
         let vacancyContext = {
             name: '',
             salary: '',
@@ -117,8 +116,10 @@ async function processProjectPipelines(redis, openAiKey, config, logs, manualCon
             messageDescription: ''
         };
 
-        if (proj.vacancyId) {
-            const v = await getVacancyById(proj.vacancyId);
+        const activeVacancyId = Array.isArray(proj.vacancyIds) && proj.vacancyIds.length > 0 ? proj.vacancyIds[0] : proj.vacancyId;
+
+        if (activeVacancyId) {
+            const v = await getVacancyById(activeVacancyId);
             if (v) vacancyContext = {
                 name: v.name || '',
                 salary: v.salary_range || '',
@@ -187,7 +188,7 @@ async function processProjectPipelines(redis, openAiKey, config, logs, manualCon
                     continue;
                 }
                 // Check if already processed for this specific step
-                const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}: processed`;
+                const metaKey = `pipeline:${proj.id}:${step.id}:${cand.id}:processed`;
                 const isProcessed = await redis.get(metaKey);
 
                 if (isProcessed) {
