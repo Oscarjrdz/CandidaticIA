@@ -123,7 +123,7 @@ ${JSON.stringify(schema, null, 2)}
         // --- PHASE A: GPT-4o-mini (Primary Extractor) ---
         try {
             const startTime = Date.now();
-            const gptResult = await getOpenAIResponse([], prompt, 'gpt-4o-mini');
+            const gptResult = await getOpenAIResponse([], prompt, 'gpt-4o-mini', null, { type: 'json_object' });
             if (gptResult && gptResult.content) {
                 jsonText = gptResult.content;
 
@@ -142,7 +142,7 @@ ${JSON.stringify(schema, null, 2)}
         if (!jsonText || !jsonText.includes('{')) {
             try {
                 const startTime = Date.now();
-                const gptResult = await getOpenAIResponse([], prompt, 'gpt-4o');
+                const gptResult = await getOpenAIResponse([], prompt, 'gpt-4o', null, { type: 'json_object' });
                 if (gptResult && gptResult.content) {
                     jsonText = gptResult.content;
 

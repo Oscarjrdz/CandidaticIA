@@ -274,7 +274,8 @@ ${alternatives.length > 0
             messagesForOpenAI,
             systemPrompt,
             'gpt-4o-mini',
-            customApiKey
+            customApiKey,
+            { type: 'json_object' }
         );
 
         if (!gptResponse || !gptResponse.content) {
