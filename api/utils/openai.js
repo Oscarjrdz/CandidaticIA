@@ -26,16 +26,20 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
             throw new Error('OPENAI_API_KEY not configured. Please add it in Settings.');
         }
 
-        let systemMessageContent = systemPrompt;
+        let extraMessages = [];
         if (multimodalSystemContent && Array.isArray(multimodalSystemContent)) {
-            systemMessageContent = [
-                { type: "text", text: systemPrompt },
-                ...multimodalSystemContent
-            ];
+            extraMessages = [{
+                role: 'user',
+                content: [
+                    { type: "text", text: "INSTRUCCIÓN DEL SISTEMA (BASE DE CONOCIMIENTO MULTIMODAL): Por favor revisa los siguientes adjuntos de la vacante antes de procesar el historial:" },
+                    ...multimodalSystemContent
+                ]
+            }];
         }
 
         const formattedMessages = [
-            { role: 'system', content: systemMessageContent },
+            { role: 'system', content: systemPrompt },
+            ...extraMessages,
             ...messages.map(m => {
                 // Robust role mapping
                 let role = 'user';
