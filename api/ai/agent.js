@@ -938,7 +938,7 @@ ${safeDnaLines}
                 // Transition Logic
                 // 🛠️ [HACK] Synchronous Gender fallback for Orchestrator
                 let tempGenero = candidateUpdates.genero || candidateData.genero;
-                if (!tempGenero && (candidateUpdates.nombreReal || candidateData.nombreReal)) {
+                if ((!tempGenero || tempGenero === 'Desconocido') && (candidateUpdates.nombreReal || candidateData.nombreReal)) {
                     const nr = (candidateUpdates.nombreReal || candidateData.nombreReal || "").toLowerCase();
                     if (nr.startsWith("maria") || nr.startsWith("ana ") || nr.startsWith("laura") || nr.startsWith("brenda") || nr.endsWith("a")) {
                         tempGenero = "Mujer";
