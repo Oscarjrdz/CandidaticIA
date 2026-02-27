@@ -116,12 +116,20 @@ export class AIGuard {
             recoveryText = templates[Math.floor(Math.random() * templates.length)];
         } else {
             // Use freshly extracted data if available, fallback to existing DB candidateName
-            const currentName = extracted.nombreReal || candidateName;
-            const nameWords = currentName ? currentName.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
-            const firstName = (currentName && nameWords > 0) ? currentName.trim().split(/\s+/)[0] : null;
+            const currentName = extracted.nombreReal || candidateName || '';
+            const nameWords = currentName.trim().split(/\s+/).filter(w => w.length > 0).length;
+            const firstName = nameWords > 0 ? currentName.trim().split(/\s+/)[0] : null;
 
-            // Smart Logic: Only ask for surnames if we *only* have a first name (1 word) AND the user didn't just give us the surname.
-            if ((firstMissing === 'Apellidos' || (firstMissing === 'Nombre completo' && nameWords === 1)) && !extracted.nombreReal) {
+            // Smart Logic: If we already have a full name (>= 2 words), forcefully remove 'apellidos' and 'nombre completo' from the missing list
+            // so we don't redundantly ask for it if the profile is still incomplete for other reasons.
+            let activeMissing = [...safeMissing];
+            if (nameWords >= 2) {
+                activeMissing = activeMissing.filter(f => !f.toLowerCase().includes('apellido') && !f.toLowerCase().includes('nombre completo'));
+            }
+            const actualFirstMissing = activeMissing.length > 0 ? activeMissing[0] : 'datos';
+
+            // Only ask for surnames if we *only* have a first name (1 word) AND the user didn't just give us the surname.
+            if ((actualFirstMissing === 'Apellidos' || (actualFirstMissing === 'Nombre completo' && nameWords === 1)) && nameWords < 2) {
                 const namePart = firstName ? `, ${firstName}` : '';
                 const templates = [
                     `¡Excelente${namePart}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para continuar con tu registro? 🌸`,
@@ -132,15 +140,16 @@ export class AIGuard {
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
             } else if (reason === 'FALLBACK_REPETITION' || reason === 'FALLBACK_IDENTITY_REPETITION') {
                 const variationTemplates = [
-                    `${firstName ? firstName + ', d' : 'D'}ime, ¿me puedes pasar tu ${firstMissing}? Es para tu registro. ✨`,
-                    `Para seguir, ¿cuál es tu ${firstMissing}? 😉🌸`,
-                    `${firstName ? firstName + ', c' : 'C'}uéntame sobre tu ${firstMissing}, ¡me falta ese dato! ✨`,
-                    `¡Ok! ✨ Pero me falta confirmar tu ${firstMissing}. 🌸 ¿Me lo dices?`
+                    `${firstName ? firstName + ', d' : 'D'}ime, ¿me puedes pasar tu ${actualFirstMissing}? Es para tu registro. ✨`,
+                    `Para seguir, ¿cuál es tu ${actualFirstMissing}? 😉🌸`,
+                    `${firstName ? firstName + ', c' : 'C'}uéntame sobre tu ${actualFirstMissing}, ¡me falta ese dato! ✨`,
+                    `¡Ok! ✨ Pero me falta confirmar tu ${actualFirstMissing}. 🌸 ¿Me lo dices?`
                 ];
                 recoveryText = variationTemplates[Math.floor(Math.random() * templates.length)];
             } else {
-                const missingKey = firstMissing.toLowerCase().trim();
+                const missingKey = actualFirstMissing.toLowerCase().trim();
                 const isDate = missingKey.includes('fecha') || missingKey === 'fechanacimiento';
+                // isNames is strictly for 1 word names now, handled above mostly, but kept for fallback logic
                 const isNames = missingKey.includes('apellidos') || missingKey === 'apellidos' || (missingKey === 'nombre completo' && nameWords === 1);
                 const isCategory = missingKey.includes('categor') || missingKey === 'categoria';
 
