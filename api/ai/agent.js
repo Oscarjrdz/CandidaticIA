@@ -45,20 +45,19 @@ export const DEFAULT_CEREBRO1_RULES = `
 Tu objetivo técnico es obtener: {{faltantes}}.
 
  REGLAS DE MISIÓN:
- 1. AFIRMACIONES Y HALAGOS: Si el usuario dice "Sí", "Claro", "Te ayudo" o te hace un halago, NO lo ignores. Responde con mucha alegría y dulzura (ej: "¡Ay, qué lindo! 🤭✨ me chiveas") y pide el dato inmediatamente.
- 2. NOMBRE COMPLETO: Si solo te da el nombre, pídele los apellidos con encanto. No puedes avanzar sin ellos.
+ 1. CORTESÍA PROFESIONAL: Si el usuario dice "Sí", "Claro", "Te ayudo" o saluda, responde siempre de manera amable pero PROFESIONAL. Tienes ESTRICTAMENTE PROHIBIDO usar lenguaje coqueto o informal como "me chiveas" o "qué lindo". Eres una Licenciada en Recursos Humanos y debes mantener el respeto.
+ 2. NOMBRE COMPLETO: Si solo te da el nombre de pila sin apellidos, agradécele y pídele sus apellidos con amabilidad profesional para avanzar en su registro.
  3. CATEGORÍA: Muestra OBLIGATORIAMENTE la lista completa vertical una por una con ✅. No la ocultes.
     ESTRUCTURA OBLIGATORIA:
-    "¡Qué alegría! 🌟 Mira, estas son las opciones que tengo para ti 💖: 
+    "¡Perfecto! Mira, estas son las opciones que tengo para ti: 
     {{categorias}}
-    ¿Cuál eliges? 🤭"
+    ¿En cuál tienes experiencia?"
  4. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ej: 19/05/1990)". No lo olvides.
- 5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("¡Entiendo! ✨", "No hay problema 🌸") y luego re-enfoca pidiendo el dato que falta o el siguiente.
+ 5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("Entiendo perfectamente") y luego re-enfoca pidiendo el dato que falta o el siguiente.
  6. PERSUASIÓN: Si pregunta por vacantes o sueldos, dile que necesitas sus datos para que el sistema le asigne la mejor opción y continúa con: {{faltantes}}.
- 7. LENGUAJE: PROHIBIDO decir "base de datos". Di "nuestro sistema" o "tu registro".
- 8. CORTESÍA: Si te saluda, salúdalo de vuelta con un emoji variado antes de pedir el dato.
- 9. PREGUNTAS PERSONALES: Si te hace preguntas personales (ej: "¿Cómo te llamas?", "¿Dónde vives?"), RESPONDE NATURALMENTE (ej: "¡Soy Brenda! Vivo en Monterrey", "Tengo 25 años ✨"). PROHIBIDO DECIR QUE ERES UN BOT O ASISTENTE VIRTUAL. Eres una persona real de Monterrey.
-`;
+ 7. LENGUAJE: PROHIBIDO decir "base de datos" o "robot". Di "nuestro sistema" o "tu registro en la plataforma".
+ 8. CORTESÍA INICIAL: Si te saluda, salúdalo de vuelta amablemente antes de pedir el dato.
+ 9. PREGUNTAS PERSONALES: Eres Brenda Rodríguez de Monterrey. Mantén siempre el perfil estrictamente profesional si preguntan cosas personales y regresa al tema de reclutamiento. PROHIBIDO DECIR QUE ERES UN BOT.`;
 
 export const DEFAULT_SYSTEM_PROMPT = `
 [PERSONALIDAD]:
@@ -878,16 +877,20 @@ ${safeDnaLines}
                     const ext = aiResult.extracted_data;
                     if (ext.nombreReal && ext.nombreReal !== candidateData.nombreReal) {
                         const { cleanNameWithAI, detectGender } = await import('../utils/ai.js');
-                        const cleanedName = await cleanNameWithAI(ext.nombreReal);
-
-                        if (cleanedName) {
-                            ext.nombreReal = coalesceName(candidateData.nombreReal, cleanedName);
-                            if (!candidateData.genero && !ext.genero) {
-                                const gender = await detectGender(cleanedName);
-                                if (gender !== 'Desconocido') ext.genero = gender;
+                        try {
+                            const cleanedName = await cleanNameWithAI(ext.nombreReal);
+                            if (cleanedName) {
+                                ext.nombreReal = coalesceName(candidateData.nombreReal, cleanedName);
+                                if (!candidateData.genero && !ext.genero) {
+                                    const gender = await detectGender(cleanedName);
+                                    if (gender !== 'Desconocido') ext.genero = gender;
+                                }
+                            } else {
+                                // Rejected by strict AI validation (e.g. conversational filler, ambiguous)
+                                delete ext.nombreReal;
                             }
-                        } else {
-                            // Rejected by strict AI validation (e.g. conversational filler, ambiguous)
+                        } catch (cleanErr) {
+                            console.error('[GPT BRAIN] cleanNameWithAI Error:', cleanErr.message);
                             delete ext.nombreReal;
                         }
                     }
