@@ -1,5 +1,6 @@
 // [PREMIUM ARCHITECTURE] V_FINAL_STABLE_V1 - Zero-Silence Infrastructure Active
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google-generative-ai";
+/* global process */
 import { processUnansweredQuestion } from './faq-engine.js';
 import axios from "axios";
 import {
@@ -806,10 +807,10 @@ ${safeDnaLines}
             }
         }
 
+        let handoverTriggered = false;
         // 3. CAPTURISTA BRAIN (GPT-4o-mini consolidated)
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
             try {
-                let handoverTriggered = false;
                 const gptStartTime = Date.now();
 
                 // 🏎️ [FORCE STATUS]: If speaking now, they are no longer NEW.
@@ -832,11 +833,10 @@ ${safeDnaLines}
 [RECONOCIMIENTO DE TURNO]: 
 - Si el usuario menciona su nombre o apellidos, inclúyelo en "extracted_data.nombreReal".
 - IMPORTANTE: Si el usuario sólo te da un nombre sin apellidos (ej: "Oscar"), extráelo y PREGUNTA POR SUS APELLIDOS amablemente para poder completar su registro.
-- "Nombre Completo" se considera válido SOLO si hay al menos dos palabras separadas por espacios.
 - REGLA ESTRICTA DE NOMBRES: NUNCA extraigas frases de cortesía o afirmaciones como "Si claro", "sin problema", "buenas noches" como si fueran un nombre.
-- Si el usuario dice "Si claro", "Está bien" o "Buenas noches" y AÚN NO HA DADO SU NOMBRE, agradécele la cortesía y VUELVE A PEDIRLE SU NOMBRE COMPLETO.
-- PROHIBICIÓN DE COMPORTAMIENTO INAPROPIADO: NUNCA uses frases como "Me chiveas", "Qué lindo", o respuestas excesivamente coloquiales/coquetas. Mantén un tono profesional, amable y empático, pero respetuoso. Eres una Licenciada en Recursos Humanos.
-- Si el usuario dice "Ya te lo dije" o similar, NO repitas la misma pregunta; revisa bien el mensaje anterior o el ADN y discúlpate con encanto antes de seguir.\n`;
+- CRÍTICO: Tú eres la Licenciada Brenda Rodríguez. EL USUARIO ES OTRA PERSONA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, extraigas "Brenda" o "Brenda Rodríguez" como si fuera el nombre del usuario, incluso si el usuario te responde con su apellido. Si el usuario te da un apellido sin nombre, PREGÚNTALE SU NOMBRE DE PILA.
+- PROHIBICIÓN DE COMPORTAMIENTO INAPROPIADO: ESTÁ ESTRICTAMENTE PROHIBIDO usar frases como "Me chiveas", "Ay, qué lindo", "Hermoso", o respuestas coquetas/excesivamente coloquiales. Mantén un tono sumamente profesional, amable pero riguroso, como Licenciada en Recursos Humanos.
+- Si el usuario dice "Ya te lo dije" o similar, NO repitas la misma pregunta; revisa bien el mensaje anterior o el ADN y discúlpate de forma profesional antes de seguir.\n`;
 
                 if (isNewFlag) {
                     const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
@@ -876,16 +876,18 @@ ${safeDnaLines}
                 // Merge Extracted Data
                 if (aiResult?.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
                     const ext = aiResult.extracted_data;
-                    if (ext.nombreReal) {
-                        const words = ext.nombreReal.trim().split(/\s+/);
-                        if (words.length >= 2) {
-                            ext.nombreReal = coalesceName(candidateData.nombreReal, ext.nombreReal);
+                    if (ext.nombreReal && ext.nombreReal !== candidateData.nombreReal) {
+                        const { cleanNameWithAI, detectGender } = await import('../utils/ai.js');
+                        const cleanedName = await cleanNameWithAI(ext.nombreReal);
+
+                        if (cleanedName) {
+                            ext.nombreReal = coalesceName(candidateData.nombreReal, cleanedName);
                             if (!candidateData.genero && !ext.genero) {
-                                const inferred = inferGender(ext.nombreReal);
-                                if (inferred) ext.genero = inferred;
+                                const gender = await detectGender(cleanedName);
+                                if (gender !== 'Desconocido') ext.genero = gender;
                             }
                         } else {
-                            // Strict Enforcement: Reject single-word names
+                            // Rejected by strict AI validation (e.g. conversational filler, ambiguous)
                             delete ext.nombreReal;
                         }
                     }
