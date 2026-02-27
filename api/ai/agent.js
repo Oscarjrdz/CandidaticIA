@@ -726,7 +726,6 @@ ${safeDnaLines}
                             if (bridgeKey) {
                                 const bridgeSticker = await redis?.get(bridgeKey);
                                 if (bridgeSticker) {
-                                    await new Promise(r => setTimeout(r, 800));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
                                 }
                             } else {
@@ -752,7 +751,6 @@ ${safeDnaLines}
                                 );
 
                                 if (nextAiResult?.response_text) {
-                                    await new Promise(r => setTimeout(r, 800));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, nextAiResult.response_text);
                                     await saveMessage(candidateId, { from: 'me', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
                                     console.log(`[RECRUITER BRAIN] ✅ Chained AI sent for step: ${nextStep.name} `);

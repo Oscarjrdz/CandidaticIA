@@ -61,9 +61,9 @@ export async function runTurboEngine(candidateId, from) {
         }
 
         try {
-            // 🚀 2. BURST DE-BOUNCE: Wait 600ms for rapid-fire messages to accumulate
+            // 🚀 2. BURST DE-BOUNCE: Wait 100ms for rapid-fire messages to accumulate
             console.log(`[Serverless Engine] ⏳ De-bouncing burst for ${candidateId}...`);
-            await new Promise(r => setTimeout(r, 600));
+            await new Promise(r => setTimeout(r, 100));
 
             // 🚀 3. DRAIN WAITLIST
             await drainWaitlist(candidateId);

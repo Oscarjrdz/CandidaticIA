@@ -15,8 +15,8 @@ export class MediaEngine {
 
         if (stickerUrl) {
             console.log(`[MEDIA ENGINE] 🚀 Sending Congrats Sticker: ${customStickerKey}`);
-            // Sequenced delivery: wait a bit to ensure it arrives after any preceding text
-            await new Promise(r => setTimeout(r, 600));
+            // Fast sequenced delivery
+            await new Promise(r => setTimeout(r, 100));
             return await sendUltraMsgMessage(config.instanceId, config.token, phone, stickerUrl, 'sticker');
         }
         return false;
