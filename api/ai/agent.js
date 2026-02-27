@@ -753,7 +753,7 @@ ${safeDnaLines}
 
                                 if (nextAiResult?.response_text) {
                                     let cMessagesToSend = [];
-                                    const splitRegex = /(¿Te gustaría agendar una entrevista\?|¿Te queda bien\?)/i;
+                                    const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
                                     const match = nextAiResult.response_text.match(splitRegex);
 
                                     if (match) {
@@ -769,8 +769,8 @@ ${safeDnaLines}
 
                                     for (let i = 0; i < cMessagesToSend.length; i++) {
                                         // Filter out nested [SILENCIO] leakage in chained step
-                                        const uppercaseMsg = cMessagesToSend[i].toUpperCase();
-                                        if (['NULL', 'UNDEFINED', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(uppercaseMsg)) continue;
+                                        const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
+                                        if (filterRegex.test(String(cMessagesToSend[i]).trim())) continue;
 
                                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cMessagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
                                         if (cMessagesToSend.length > 1 && i < cMessagesToSend.length - 1) {
@@ -1052,8 +1052,8 @@ ${safeDnaLines}
             }
         }
 
-        const uppercaseRes = resText.toUpperCase();
-        const isTechnicalOrEmpty = !resText || ['NULL', 'UNDEFINED', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(uppercaseRes) || uppercaseRes.startsWith('[REACCIÓN:');
+        const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
+        const isTechnicalOrEmpty = !resText || filterRegex.test(String(resText).trim());
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
         if (isTechnicalOrEmpty && !aiResult?.close_conversation && !isRecruiterMode && !handoverTriggered) {
@@ -1068,7 +1068,8 @@ ${safeDnaLines}
                 // --- MESSAGE SPLITTER LOGIC ---
                 // Visually split long vacancy presentations if the call to action is present.
                 let messagesToSend = [];
-                const splitRegex = /(¿Te gustaría agendar una entrevista\?|¿Te queda bien\?)/i;
+                // More robust Regex: Grabs the start of the question and chunks everything up to the end into part2.
+                const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
                 const match = responseTextVal.match(splitRegex);
 
                 if (match) {
