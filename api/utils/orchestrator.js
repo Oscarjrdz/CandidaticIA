@@ -8,7 +8,8 @@ import {
     getProjectById,
     getRedisClient,
     saveMessage,
-    getProjects
+    getProjects,
+    getActiveBypassRules
 } from './storage.js';
 import { runAIAutomations } from './automation-engine.js';
 import { MediaEngine } from './media-engine.js';
@@ -58,35 +59,81 @@ export class Orchestrator {
         // 1. SMART MATCHING ENGINE (Silicon Valley Pattern)
         const redis = getRedisClient();
         const projects = await getProjects();
-        logTrace(`🧩 Found \${projects.length} active projects for handover.`);
+        const rules = await getActiveBypassRules();
+        logTrace(`🧩 Found ${projects.length} active projects and ${rules.length} Bypass Rules for handover.`);
 
-        // Priority 1: Specifically selected bypass project
-        let targetProjectId = await redis?.get('bypass_selection');
-        if (targetProjectId && (targetProjectId.trim() === '' || targetProjectId === 'null')) targetProjectId = null;
+        let targetProjectId = null;
+        let matchedRuleName = null;
 
-        logTrace(`📍 Global Bypass Selection: \${targetProjectId || 'None'}`);
+        // NEW INTELLIGENT ROUTING LOGIC (Bypass Rules Evaluation)
+        for (const rule of rules) {
+            logTrace(`   🔍 Evaluating Rule: ${rule.name}`);
 
-        // Validation: Ensure the selected bypass project actually exists
-        if (targetProjectId) {
-            const selectedExists = projects.some(p => p.id === targetProjectId);
-            if (!selectedExists) {
-                logTrace(`⚠️ Bypass project \${targetProjectId} not found in active list. Falling back...`);
-                targetProjectId = null;
+            // 1. Age Check
+            const cAge = parseInt(candidateData.edad);
+            if (!isNaN(cAge)) {
+                if (rule.minAge && cAge < parseInt(rule.minAge)) continue; // Fails min age
+                if (rule.maxAge && cAge > parseInt(rule.maxAge)) continue; // Fails max age
             }
+
+            // 2. Gender Check
+            const cGender = (candidateData.genero || '').toLowerCase();
+            const rGender = (rule.gender || 'Cualquiera').toLowerCase();
+            if (rGender !== 'cualquiera' && cGender !== rGender) continue;
+
+            // 3. Category Check
+            const cCat = (candidateData.categoria || '').toLowerCase().trim();
+            if (rule.categories && rule.categories.length > 0) {
+                const isMatch = rule.categories.some(rc => rc.toLowerCase() === cCat);
+                if (!isMatch) continue;
+            }
+
+            // 4. Municipio Check
+            const normalizeStr = (s) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+            const cMun = normalizeStr(candidateData.municipio);
+            if (rule.municipios && rule.municipios.length > 0) {
+                const isMatch = rule.municipios.some(rm => normalizeStr(rm) === cMun);
+                if (!isMatch) continue;
+            }
+
+            // 5. Escolaridad Check
+            const cEsc = normalizeStr(candidateData.escolaridad);
+            if (rule.escolaridades && rule.escolaridades.length > 0) {
+                const isMatch = rule.escolaridades.some(re => normalizeStr(re) === cEsc);
+                if (!isMatch) continue;
+            }
+
+            // MATCH FOUND
+            targetProjectId = rule.projectId;
+            matchedRuleName = rule.name;
+            logTrace(`   ✅ PERFECT MATCH on Rule: ${rule.name} -> Project ${targetProjectId}`);
+            break;
         }
 
-        // Priority 2: Match based on Municipality/Category or first active project
-        if (!targetProjectId && projects.length > 0) {
-            logTrace(`🔍 Proactive matching logic triggered...`);
-            const matchedProject = projects.find(p => {
-                const vacancyIds = p.vacancyIds || [];
-                const hasVacancies = Array.isArray(vacancyIds) && vacancyIds.length > 0;
-                if (hasVacancies) logTrace(`✅ Project matched with vacancies: \${p.name}`);
-                return hasVacancies;
-            }) || projects[0];
+        // FALLBACK: If no rules match, use legacy global bypass OR first project with vacancies 
+        if (!targetProjectId) {
+            logTrace(`⚠️ No Bypass Rules matched. Attempting Global Bypass Fallback...`);
+            targetProjectId = await redis?.get('bypass_selection');
+            if (targetProjectId && (targetProjectId.trim() === '' || targetProjectId === 'null')) targetProjectId = null;
 
-            targetProjectId = matchedProject?.id;
-            logTrace(`🏁 Match Result: \${targetProjectId} (\${matchedProject?.name || 'Unknown'})`);
+            if (targetProjectId) {
+                const selectedExists = projects.some(p => p.id === targetProjectId);
+                if (!selectedExists) targetProjectId = null;
+                else matchedRuleName = 'Legacy Global Bypass';
+            }
+
+            if (!targetProjectId && projects.length > 0) {
+                logTrace(`🔍 Match based on FIRST available project...`);
+                const matchedProject = projects.find(p => {
+                    const vacancyIds = p.vacancyIds || [];
+                    const hasVacancies = Array.isArray(vacancyIds) && vacancyIds.length > 0;
+                    return hasVacancies;
+                }) || projects[0];
+
+                targetProjectId = matchedProject?.id;
+                matchedRuleName = 'Fallback Default Project';
+                logTrace(`🏁 Fallback Result: ${targetProjectId} (${matchedProject?.name || 'Unknown'})`);
+            }
         }
 
         if (trace.length > 0 && redis) {
@@ -197,7 +244,7 @@ export class Orchestrator {
                     },
                     finalResult: 'MATCH',
                     projectMatched: project.name,
-                    rules: [{ ruleName: 'Intelligent Matching Engine', isMatch: true, criteria: {}, checks: { age: true, municipio: true, categoria: true, escolaridad: true, genero: true } }]
+                    rules: [{ ruleName: matchedRuleName || 'Intelligent Matching Engine', isMatch: true, criteria: {}, checks: { age: true, municipio: true, categoria: true, escolaridad: true, genero: true } }]
                 };
                 await redis.lpush('debug:bypass:traces', JSON.stringify(xrayTrace));
                 await redis.ltrim('debug:bypass:traces', 0, 49);

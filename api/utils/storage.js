@@ -92,6 +92,26 @@ export const DEFAULT_PROJECT_STEPS = [
     { id: 'step_hired', name: 'Contratado' }
 ];
 
+export const getActiveBypassRules = async () => {
+    const client = getClient();
+    if (!client) return [];
+    try {
+        const ids = await client.zrange(KEYS.BYPASS_LIST, 0, -1);
+        if (!ids || ids.length === 0) return [];
+
+        const rulesRaw = await client.mget(ids.map(id => `${KEYS.BYPASS_PREFIX}${id}`));
+        return rulesRaw
+            .filter(r => r !== null)
+            .map(r => {
+                try { return JSON.parse(r) } catch (e) { return null }
+            })
+            .filter(r => r !== null && r.active === true);
+    } catch (e) {
+        console.error('Error fetching bypass rules:', e);
+        return [];
+    }
+};
+
 
 /**
  * ==========================================
