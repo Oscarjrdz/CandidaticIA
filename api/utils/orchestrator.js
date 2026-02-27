@@ -204,29 +204,21 @@ export class Orchestrator {
             ...(currentVacancyName ? { currentVacancyName } : {})
         });
 
-        // 3. ✨ PREMIUM MEDIA SEQUENCE (Multi-Layered)
-
-        // Phase 1: Immediate Reaction (Non-blocking for speed)
-        const { sendUltraMsgReaction } = await import('../whatsapp/utils.js');
-        if (msgId) {
-            sendUltraMsgReaction(config.instanceId, config.token, msgId, '🎉').catch(() => { });
-        }
-
-        // Phase 2: Enthusiastic Announcement
+        // 3. ✨ PREMIUM MEDIA SEQUENCE (Multi-Layered) - PARALLELIZED FOR SPEED
         const introMsg = `¡OMG, ${candidateName}! 🤩 Acabo de revisar tu perfil y... ¡está PERFECTO! ✨🌸`;
-        await sendUltraMsgMessage(config.instanceId, config.token, phone, introMsg, 'chat', { priority: 0 });
-        await saveMessage(candidateId, { from: 'bot', content: introMsg, timestamp: new Date().toISOString() });
-
-        // Phase 3: Tactical Pause (Typing simulated by delay)
-        await new Promise(r => setTimeout(r, 1500));
-
-        // Phase 4: Project Induction (Simplified Text)
         const inductionMsg = `Acabas de ser seleccionado para avanzar al proyecto de: *${project.name || 'Candidatic'}*. 🌟`;
-        await sendUltraMsgMessage(config.instanceId, config.token, phone, inductionMsg, 'chat', { priority: 0 });
-        await saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() });
 
-        // Phase 5: Bridge Sticker (Jim Carrey Celebration Enforced)
-        await MediaEngine.sendCongratsPack(config, phone, 'bot_celebration_sticker');
+        const { sendUltraMsgReaction } = await import('../whatsapp/utils.js');
+
+        // Phase 1 to 5: Execute all network/DB I/O concurrently
+        await Promise.allSettled([
+            msgId ? sendUltraMsgReaction(config.instanceId, config.token, msgId, '🎉') : Promise.resolve(),
+            sendUltraMsgMessage(config.instanceId, config.token, phone, introMsg, 'chat', { priority: 0 }),
+            saveMessage(candidateId, { from: 'bot', content: introMsg, timestamp: new Date().toISOString() }),
+            sendUltraMsgMessage(config.instanceId, config.token, phone, inductionMsg, 'chat', { priority: 1 }), // Priority 1 ensures ordered delivery in UltraMsg
+            saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() }),
+            MediaEngine.sendCongratsPack(config, phone, 'bot_celebration_sticker')
+        ]);
 
         // Phase 6: Instant Automations Trigger (Send Vacancy Immediately)
         try {
