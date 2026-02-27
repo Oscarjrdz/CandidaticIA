@@ -968,21 +968,33 @@ ${safeDnaLines}
             responseTextVal = resText || null;
         }
 
-        if (responseTextVal && (!aiResult?.media_url || aiResult.media_url === 'null')) {
+        if (responseTextVal) {
             // [MEDIA RECOVERY]: If Brenda leaked the link into text but forgot the JSON field, recover it
-            const mediaPattern = /https?:\/\/[^/]+\/api\/(image\?id=|media\/)([^\s\)]+)/i;
-            const match = responseTextVal.match(mediaPattern);
-            if (match) {
-                if (!aiResult) aiResult = {};
-                aiResult.media_url = match[0];
+            if (!aiResult?.media_url || aiResult.media_url === 'null') {
+                const mediaTagPattern = /\[MEDIA_DISPONIBLE:?\s*(https?:\/\/[^\s\]]+)\]/i;
+                const tagMatch = responseTextVal.match(mediaTagPattern);
+                if (tagMatch && tagMatch[1]) {
+                    if (!aiResult) aiResult = {};
+                    aiResult.media_url = tagMatch[1];
+                } else {
+                    const mediaPattern = /https?:\/\/[^/]+\/api\/(image\?id=|media\/)([^\s\)]+)/i;
+                    const match = responseTextVal.match(mediaPattern);
+                    if (match) {
+                        if (!aiResult) aiResult = {};
+                        aiResult.media_url = match[0];
+                    }
+                }
             }
-        }
 
-        if (responseTextVal && aiResult?.media_url && aiResult.media_url !== 'null') {
-            // Failsafe: Remove any detected URLs or Markdown images to prevent leakage
-            const urlRegex = /https?:\/\/[^\s\)]+/g;
-            const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
-            responseTextVal = responseTextVal.replace(markdownImageRegex, '').replace(urlRegex, '').replace(/\s+/g, ' ').trim();
+            // [CLEANUP]: Sweep out ANY literal tag [MEDIA_DISPONIBLE] or [MEDIA_DISPONIBLE: url]
+            responseTextVal = responseTextVal.replace(/\[MEDIA_DISPONIBLE[^\]]*\]/gi, '').trim();
+
+            if (aiResult?.media_url && aiResult.media_url !== 'null') {
+                // Failsafe: Remove any detected URLs or Markdown images to prevent leakage
+                const urlRegex = /https?:\/\/[^\s\)]+/g;
+                const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
+                responseTextVal = responseTextVal.replace(markdownImageRegex, '').replace(urlRegex, '').replace(/\s+/g, ' ').trim();
+            }
         }
 
         const isTechnicalOrEmpty = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
