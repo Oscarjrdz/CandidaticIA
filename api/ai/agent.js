@@ -1044,7 +1044,8 @@ ${safeDnaLines}
             }
         }
 
-        const isTechnicalOrEmpty = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
+        const uppercaseRes = resText.toUpperCase();
+        const isTechnicalOrEmpty = !resText || ['NULL', 'UNDEFINED', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(uppercaseRes) || uppercaseRes.startsWith('[REACCIÓN:');
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
         if (isTechnicalOrEmpty && !aiResult?.close_conversation && !isRecruiterMode && !handoverTriggered) {

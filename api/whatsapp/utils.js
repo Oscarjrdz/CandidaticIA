@@ -77,8 +77,9 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 payload.sticker = body;
                 break;
             default:
-                const isTechnical = ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(String(body).trim()) ||
-                    String(body).trim().startsWith('[REACCIÓN:');
+                const uppercaseBody = String(body).trim().toUpperCase();
+                const isTechnical = ['NULL', 'UNDEFINED', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(uppercaseBody) ||
+                    uppercaseBody.startsWith('[REACCIÓN:');
 
                 if (isTechnical) {
                     console.log(`[ULTRAMSG FILTER] Blocking technical message send: "${body}"`);
