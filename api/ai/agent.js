@@ -1086,22 +1086,25 @@ ${safeDnaLines}
                     const filename = isPdf ? 'Informacion.pdf' : 'Imagen.jpg';
 
                     // Send media first.
-                    const mediaPromise = sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 0 });
+                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 0 });
 
-                    // Then send the text (or split texts) sequentially
-                    let textPromises = messagesToSend.map((txt, index) =>
-                        sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, txt, 'chat', { priority: index + 1 })
-                    );
+                    // Then send the text (or split texts) strictly sequentially
+                    for (let i = 0; i < messagesToSend.length; i++) {
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
+                        if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
+                            // ⏳ STRICT DELAY: Wait 1.5 full seconds after the massive vacancy blob
+                            // before hitting the UltraMsg API again, or the webhook drops the second tiny message.
+                            await new Promise(r => setTimeout(r, 1500));
+                        }
+                    }
 
-                    await Promise.allSettled([mediaPromise, ...textPromises]);
-                    console.log(`[MEDIA DELIVERY] Sent parallel split text + ${isPdf ? 'PDF' : 'IMAGE'}`);
+                    console.log(`[MEDIA DELIVERY] Sent strictly sequential text + ${isPdf ? 'PDF' : 'IMAGE'}`);
                 } else {
                     // Text only, send sequentially
                     for (let i = 0; i < messagesToSend.length; i++) {
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i }).catch(() => { });
-                        // Brief pause to ensure physical WhatsApp rendering order for multi-part messages
                         if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
-                            await new Promise(r => setTimeout(r, 400));
+                            await new Promise(r => setTimeout(r, 1500));
                         }
                     }
                     console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId}`);
