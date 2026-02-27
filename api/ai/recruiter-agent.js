@@ -127,7 +127,8 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                     messageDescription: vac.messageDescription || vac.description || '',
                     salary: vac.salary || 'N/A',
                     schedule: vac.schedule || 'N/A',
-                    media_url: vac.media_url || null
+                    media_url: vac.media_url || null,
+                    documents: vac.documents || []
                 };
             }
 
@@ -262,6 +263,32 @@ ${alternatives.length > 0
 ---
 `;
 
+        // --- MULTIMODAL KNOWLEDGE BASE SUPPORT ---
+        let multimodalDocuments = null;
+        if (vacancyContext.documents && vacancyContext.documents.length > 0) {
+            multimodalDocuments = [];
+            let iDoc = 1;
+            for (const doc of vacancyContext.documents) {
+                if (doc.type && doc.type.startsWith('image/')) {
+                    multimodalDocuments.push({
+                        type: "text",
+                        text: `Documento Adjunto (${iDoc}): "${doc.name}"`
+                    });
+                    multimodalDocuments.push({
+                        type: "image_url",
+                        image_url: { url: doc.url }
+                    });
+                    iDoc++;
+                }
+                // future expansion: pdf parsing
+            }
+            if (multimodalDocuments.length > 0) {
+                systemPrompt += `\n\n[BASE DE CONOCIMIENTO MULTIMODAL ADJUNTA]:\nTienes acceso a imágenes o documentos adjuntos (Rutas, Mapas, Reglamentos). **ÉSTOS DEBEN SER TU ÚNICA FUENTE DE VERDAD** para dudas técnicas que dependan de ellos. Léelos detenidamente antes de contestar.\n`;
+            } else {
+                multimodalDocuments = null;
+            }
+        }
+
 
         // 4. Obtener respuesta de GPT-4o
         // Pasamos el historial estructurado sin inyecciones artificiales
@@ -273,9 +300,10 @@ ${alternatives.length > 0
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
             systemPrompt,
-            'gpt-4o-mini',
+            'gpt-4o', // Upgraded to 4o to support Multimodal Image reading
             customApiKey,
-            { type: 'json_object' }
+            { type: 'json_object' },
+            multimodalDocuments
         );
 
         if (!gptResponse || !gptResponse.content) {

@@ -4,7 +4,7 @@ import { getRedisClient } from './storage.js';
 /**
  * OpenAI Adapter - The "Host" Brain
  */
-export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gpt-4o-mini', explicitApiKey = null, responseFormat = null) {
+export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gpt-4o', explicitApiKey = null, responseFormat = null, multimodalSystemContent = null) {
     try {
         const redis = getRedisClient();
         let apiKey = explicitApiKey ? explicitApiKey.trim() : process.env.OPENAI_API_KEY;
@@ -26,8 +26,16 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
             throw new Error('OPENAI_API_KEY not configured. Please add it in Settings.');
         }
 
+        let systemMessageContent = systemPrompt;
+        if (multimodalSystemContent && Array.isArray(multimodalSystemContent)) {
+            systemMessageContent = [
+                { type: "text", text: systemPrompt },
+                ...multimodalSystemContent
+            ];
+        }
+
         const formattedMessages = [
-            { role: 'system', content: systemPrompt },
+            { role: 'system', content: systemMessageContent },
             ...messages.map(m => {
                 // Robust role mapping
                 let role = 'user';
