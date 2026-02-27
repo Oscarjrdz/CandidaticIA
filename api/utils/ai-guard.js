@@ -115,11 +115,13 @@ export class AIGuard {
             ];
             recoveryText = templates[Math.floor(Math.random() * templates.length)];
         } else {
-            const nameWords = candidateName ? candidateName.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
-            const firstName = (candidateName && nameWords > 0) ? candidateName.trim().split(/\s+/)[0] : null;
+            // Use freshly extracted data if available, fallback to existing DB candidateName
+            const currentName = extracted.nombreReal || candidateName;
+            const nameWords = currentName ? currentName.trim().split(/\s+/).filter(w => w.length > 0).length : 0;
+            const firstName = (currentName && nameWords > 0) ? currentName.trim().split(/\s+/)[0] : null;
 
-            // Smart Logic: Only ask for surnames if we *only* have a first name (1 word)
-            if (firstMissing === 'Apellidos' || (firstMissing === 'Nombre completo' && nameWords === 1)) {
+            // Smart Logic: Only ask for surnames if we *only* have a first name (1 word) AND the user didn't just give us the surname.
+            if ((firstMissing === 'Apellidos' || (firstMissing === 'Nombre completo' && nameWords === 1)) && !extracted.nombreReal) {
                 const namePart = firstName ? `, ${firstName}` : '';
                 const templates = [
                     `¡Excelente${namePart}! ✨ Ya tengo tu nombre. ¿Me podrías proporcionar tus apellidos para continuar con tu registro? 🌸`,
