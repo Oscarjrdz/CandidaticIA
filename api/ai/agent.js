@@ -753,7 +753,7 @@ ${safeDnaLines}
 
                                 if (nextAiResult?.response_text) {
                                     let cMessagesToSend = [];
-                                    const cSplitPhrase = 'Si te interesa, ¡podemos agendar tu entrevista';
+                                    const cSplitPhrase = '¿Te gustaría agendar una entrevista?';
 
                                     if (nextAiResult.response_text.includes(cSplitPhrase)) {
                                         const parts = nextAiResult.response_text.split(cSplitPhrase);
@@ -1060,7 +1060,7 @@ ${safeDnaLines}
                 // --- MESSAGE SPLITTER LOGIC ---
                 // Visually split long vacancy presentations if the call to action is present.
                 let messagesToSend = [];
-                const splitPhrase = 'Si te interesa, ¡podemos agendar tu entrevista';
+                const splitPhrase = '¿Te gustaría agendar una entrevista?';
 
                 if (responseTextVal.includes(splitPhrase)) {
                     const parts = responseTextVal.split(splitPhrase);
