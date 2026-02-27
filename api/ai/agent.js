@@ -1,5 +1,5 @@
 // [PREMIUM ARCHITECTURE] V_FINAL_STABLE_V1 - Zero-Silence Infrastructure Active
-import { GoogleGenerativeAI } from "@google-generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 /* global process */
 import { processUnansweredQuestion } from './faq-engine.js';
 import axios from "axios";
