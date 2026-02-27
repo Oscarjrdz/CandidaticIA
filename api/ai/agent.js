@@ -753,12 +753,14 @@ ${safeDnaLines}
 
                                 if (nextAiResult?.response_text) {
                                     let cMessagesToSend = [];
-                                    const cSplitPhrase = '¿Te gustaría agendar una entrevista?';
+                                    const cSplitPhrases = ['¿Te gustaría agendar una entrevista?', '¿Te queda bien?'];
 
-                                    if (nextAiResult.response_text.includes(cSplitPhrase)) {
-                                        const parts = nextAiResult.response_text.split(cSplitPhrase);
+                                    let matchedPhrase = cSplitPhrases.find(phrase => nextAiResult.response_text.includes(phrase));
+
+                                    if (matchedPhrase) {
+                                        const parts = nextAiResult.response_text.split(matchedPhrase);
                                         if (parts[0].trim()) cMessagesToSend.push(parts[0].trim());
-                                        cMessagesToSend.push(cSplitPhrase + parts[1]);
+                                        cMessagesToSend.push(matchedPhrase + parts[1]);
                                     } else {
                                         cMessagesToSend.push(nextAiResult.response_text);
                                     }
@@ -1060,16 +1062,18 @@ ${safeDnaLines}
                 // --- MESSAGE SPLITTER LOGIC ---
                 // Visually split long vacancy presentations if the call to action is present.
                 let messagesToSend = [];
-                const splitPhrase = '¿Te gustaría agendar una entrevista?';
+                const splitPhrases = ['¿Te gustaría agendar una entrevista?', '¿Te queda bien?'];
 
-                if (responseTextVal.includes(splitPhrase)) {
-                    const parts = responseTextVal.split(splitPhrase);
+                let matchedPhrase = splitPhrases.find(phrase => responseTextVal.includes(phrase));
+
+                if (matchedPhrase) {
+                    const parts = responseTextVal.split(matchedPhrase);
                     // Part 1: Vacancy Details
                     if (parts[0].trim()) {
                         messagesToSend.push(parts[0].trim());
                     }
                     // Part 2: Call to Action (re-append the split phrase)
-                    messagesToSend.push(splitPhrase + parts[1]);
+                    messagesToSend.push(matchedPhrase + parts[1]);
                 } else {
                     messagesToSend.push(responseTextVal);
                 }
