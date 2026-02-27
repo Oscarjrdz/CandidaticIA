@@ -112,27 +112,35 @@ export class Orchestrator {
 
         // FALLBACK: If no rules match, use legacy global bypass OR first project with vacancies 
         if (!targetProjectId) {
-            logTrace(`⚠️ No Bypass Rules matched. Attempting Global Bypass Fallback...`);
-            targetProjectId = await redis?.get('bypass_selection');
-            if (targetProjectId && (targetProjectId.trim() === '' || targetProjectId === 'null')) targetProjectId = null;
+            logTrace(`⚠️ No Bypass Rules matched.`);
 
-            if (targetProjectId) {
-                const selectedExists = projects.some(p => p.id === targetProjectId);
-                if (!selectedExists) targetProjectId = null;
-                else matchedRuleName = 'Legacy Global Bypass';
-            }
+            // STRICT ENFORCEMENT: If bypass rules exist, and none matched, we MUST NOT fallback. 
+            // The candidate goes to the waiting room.
+            if (rules.length > 0) {
+                logTrace(`🚫 Bypass rules exist but none matched. Candidate must go to waiting room.`);
+            } else {
+                logTrace(`Attempting Global Bypass Fallback since no explicit rules are defined...`);
+                targetProjectId = await redis?.get('bypass_selection');
+                if (targetProjectId && (targetProjectId.trim() === '' || targetProjectId === 'null')) targetProjectId = null;
 
-            if (!targetProjectId && projects.length > 0) {
-                logTrace(`🔍 Match based on FIRST available project...`);
-                const matchedProject = projects.find(p => {
-                    const vacancyIds = p.vacancyIds || [];
-                    const hasVacancies = Array.isArray(vacancyIds) && vacancyIds.length > 0;
-                    return hasVacancies;
-                }) || projects[0];
+                if (targetProjectId) {
+                    const selectedExists = projects.some(p => p.id === targetProjectId);
+                    if (!selectedExists) targetProjectId = null;
+                    else matchedRuleName = 'Legacy Global Bypass';
+                }
 
-                targetProjectId = matchedProject?.id;
-                matchedRuleName = 'Fallback Default Project';
-                logTrace(`🏁 Fallback Result: ${targetProjectId} (${matchedProject?.name || 'Unknown'})`);
+                if (!targetProjectId && projects.length > 0) {
+                    logTrace(`🔍 Match based on FIRST available project...`);
+                    const matchedProject = projects.find(p => {
+                        const vacancyIds = p.vacancyIds || [];
+                        const hasVacancies = Array.isArray(vacancyIds) && vacancyIds.length > 0;
+                        return hasVacancies;
+                    }) || projects[0];
+
+                    targetProjectId = matchedProject?.id;
+                    matchedRuleName = 'Fallback Default Project';
+                    logTrace(`🏁 Fallback Result: ${targetProjectId} (${matchedProject?.name || 'Unknown'})`);
+                }
             }
         }
 
