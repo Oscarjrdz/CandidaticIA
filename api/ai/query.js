@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getOpenAIResponse } from '../utils/openai.js';
 
 // --- HELPERS DE FILTRADO (Global Scope) ---
 const normalize = (str) => String(str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
@@ -98,35 +98,22 @@ export default async function handler(req, res) {
         const { getRedisClient, getCandidates, getMessages } = await import('../utils/storage.js');
         const redis = getRedisClient();
 
-        let apiKey = process.env.GEMINI_API_KEY;
+        let apiKey = process.env.OPENAI_API_KEY;
 
         if (!apiKey && redis) {
             const aiConfigJson = await redis.get('ai_config');
             if (aiConfigJson) {
                 const aiConfig = JSON.parse(aiConfigJson);
-                apiKey = aiConfig.geminiApiKey;
+                apiKey = aiConfig.openaiApiKey;
             }
         }
 
         if (!apiKey || apiKey === 'undefined' || apiKey === 'null') {
             return res.status(500).json({
                 error: 'AI no configurada',
-                message: 'Falta GEMINI_API_KEY en Vercel o en la configuración de Settings. Por favor verifica que la llave sea válida.'
+                message: 'Falta OPENAI_API_KEY en Vercel o en la configuración de Settings. Por favor verifica que la llave sea válida.'
             });
         }
-
-        // SANITIZACIÓN ROBUSTA
-        apiKey = String(apiKey).trim();
-        // 1. Quitar comillas
-        apiKey = apiKey.replace(/^["']|["']$/g, '');
-        // 2. Extraer solo la parte que parece una API Key de Google (empieza con AIzaSy)
-        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-        if (match) {
-            apiKey = match[0];
-        } else {
-            apiKey = apiKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
-        }
-        apiKey = apiKey.trim();
 
         const maskedKey = `${apiKey.substring(0, 6)}...${apiKey.substring(apiKey.length - 4)}`;
 
@@ -154,73 +141,15 @@ export default async function handler(req, res) {
             console.warn('⚠️ No se pudieron cargar los campos personalizados:', e.message);
         }
 
-        // 2. Configurar Gemini
-        const genAI = new GoogleGenerativeAI(apiKey);
+        // Call GPT-4o-mini
+        const history = [{ role: 'system', content: systemPrompt }];
+        const result = await getOpenAIResponse(history, query, 'gpt-4o-mini');
 
-        const systemPrompt = `[ARCHITECTURE PROTOCOL: TITAN SEARCH v9.0 - MATHEMATICAL PRECISION]
-Eres el Motor de Traducción de Intenciones de Candidatic IA. Tu misión es convertir lenguaje natural en filtros técnicos INVIOLABLES.
-
-[REGLAS DE FILTRADO]:
-1. statusAudit (ESTRICTO): 
-   - SIEMPRE usa esto para intención de completitud.
-   - "completos", "ya terminaron", "registrados", "listos" -> {"statusAudit": "complete"}.
-   - "pendientes", "faltan", "no han terminado", "incompletos" -> {"statusAudit": "pending"}.
-2. GENERO (ESTRICTO):
-   - NUNCA pongas "mujer" o "hombre" en keywords.
-   - "mujeres", "damas", "chicas" -> {"genero": "Mujer"}.
-   - "hombres", "caballeros", "chicos" -> {"genero": "Hombre"}.
-3. EDAD (ESTRICTO - MATEMÁTICO): 
-   - SIEMPRE usa el campo "edad".
-   - IGUALDAD: "tiene 25" -> {"edad": 25}.
-   - OPERADORES: "mayores de 40", "más de 40", "> 40" -> {"edad": {"op": ">", "val": 40}}.
-   - OPERADORES: "menores de 20", "menos de 20", "< 20" -> {"edad": {"op": "<", "val": 20}}.
-   - RANGOS: "entre 18 y 30", "de 18 a 30" -> {"edad": {"min": 18, "max": 30}}.
-4. ESCOLARIDAD (CRÍTICO):
-   - Si mencionan nivel de estudios (prepa, secundaria, carrera, universidad, etc.), ASÍGNALO SIEMPRE al campo "escolaridad".
-   - "prepa", "preparatoria", "bachillerato" -> {"escolaridad": "preparatoria"}.
-- "proyecto": 1 si ya está en un proyecto, 0 si está libre. Usa {"proyecto": 0} para buscar gente disponible.
-   - "secundaria" -> {"escolaridad": "secundaria"}.
-5. MUNICIPIOS (CRÍTICO): 
-   - Si mencionan un lugar (Monterrey, Apodaca, Guadalupe, etc.), ASÍGNALO SIEMPRE al campo "municipio".
-6. KEYWORDS: Solo para nombres de personas ("Oscar") o habilidades técnicas específicas que no tengan campo.
-
-[FORMATO DE SALIDA]: JSON JSON JSON. NO TEXTO ADICIONAL.
-
-[BASE DE DATOS DE ATRIBUTOS]:
-${allFields.map(f => `- ${f.value} (${f.label})`).join('\n')}
-
-Consulta del usuario: "${query}"
-`;
-
-        // Intentar varios modelos hasta que uno funcione
-        const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash"];
-        let result;
-        let successModel = '';
-        let lastError = '';
-
-        for (const mName of modelsToTry) {
-            try {
-                const model = genAI.getGenerativeModel({
-                    model: mName,
-                    generationConfig: {
-                        temperature: 0.1,
-                        response_mime_type: "application/json"
-                    }
-                });
-                result = await model.generateContent(systemPrompt);
-                successModel = mName;
-                break;
-            } catch (e) {
-                lastError = e.message;
-                console.warn(`⚠️[AI Query] ${mName} failed: `, e.message);
-            }
+        if (!result || !result.content) {
+            throw new Error(`Ningún modelo respondió.`);
         }
 
-        if (!successModel) {
-            throw new Error(`Ningún modelo respondió. Último error: ${lastError}`);
-        }
-
-        const aiResponseRaw = (await result.response).text();
+        const aiResponseRaw = result.content;
 
         // --- ROBUST JSON EXTRACTION ---
         let cleaned = aiResponseRaw.trim();

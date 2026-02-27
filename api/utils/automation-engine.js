@@ -8,7 +8,7 @@ import {
     auditProfile,
     recordAITelemetry
 } from './storage.js';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getOpenAIResponse } from './openai.js';
 import { sendUltraMsgMessage, getUltraMsgConfig } from '../whatsapp/utils.js';
 
 const SAFETY_LIMIT_PER_RUN = 10;
@@ -35,25 +35,20 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
             return { success: true, logs, sent: 0, reason: 'BOT_OFF' };
         }
 
-        let geminiKey = process.env.GEMINI_API_KEY;
+        let openAiKey = process.env.OPENAI_API_KEY;
 
-        if (!geminiKey && redis) {
+        if (!openAiKey && redis) {
             const aiConfigJson = await redis.get('ai_config');
             if (aiConfigJson) {
                 const aiConfig = JSON.parse(aiConfigJson);
-                geminiKey = aiConfig.geminiApiKey;
+                openAiKey = aiConfig.openaiApiKey;
             }
         }
 
-        if (!geminiKey || geminiKey === 'undefined' || geminiKey === 'null') {
-            logs.push(`❌ CRITICAL: Falta GEMINI_API_KEY. Configure su API Key en Ajustes.`);
-            return { success: false, error: 'GEMINI_API_KEY_MISSING', logs };
+        if (!openAiKey || openAiKey === 'undefined' || openAiKey === 'null') {
+            logs.push(`❌ CRITICAL: Falta OPENAI_API_KEY. Configure su API Key en Ajustes.`);
+            return { success: false, error: 'OPENAI_API_KEY_MISSING', logs };
         }
-
-        // Sanitize API Key
-        geminiKey = String(geminiKey).trim().replace(/^["']|["']$/g, '');
-        const keyMatch = geminiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-        if (keyMatch) geminiKey = keyMatch[0];
 
         const config = await getUltraMsgConfig();
         if (!config?.instanceId || !config?.token) {
@@ -62,22 +57,9 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
         }
         logs.push(`✅ Configuración y API Key verificadas.`);
 
-        const genAI = new GoogleGenerativeAI(geminiKey);
-
-        // Resilience: Try 2.0 then 1.5
-        let model;
-        try {
-            model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-            // Test if model exists/accessible (briefly)
-            await model.countTokens("test");
-        } catch (e) {
-            logs.push(`⚠️ gemini-2.0-flash no disponible, usando fallback gemini-1.5-flash`);
-            model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        }
-
         // --- PIPELINE DE RECLUTAMIENTO ---
         try {
-            const pipeResult = await processProjectPipelines(redis, model, config, logs, manualConfig);
+            const pipeResult = await processProjectPipelines(redis, openAiKey, config, logs, manualConfig);
             processedCount = pipeResult?.sent || 0;
         } catch (e) {
             logs.push(`⚠️[PIPELINE] Error procesando embudos: ${e.message} `);
@@ -97,7 +79,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
  * --- PARTE 3: PIPELINE DE RECLUTAMIENTO ---
  * Procesa los candidatos que están "estacionados" en un paso activo.
  */
-async function processProjectPipelines(redis, model, config, logs, manualConfig = null) {
+async function processProjectPipelines(redis, openAiKey, config, logs, manualConfig = null) {
     const { getProjects, getProjectById, getProjectCandidates, getProjectCandidateMetadata, getVacancyById } = await import('./storage.js');
 
     let projects = [];
@@ -252,23 +234,13 @@ REGLAS DE ORO:
 6. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso (ej. aceptó la entrevista), incluye el tag [MOVE] en tu respuesta.
 `;
                 try {
-                    // Use systemInstruction parameter for better compliance
-                    const modelWithInstruction = genAI.getGenerativeModel({
-                        model: "gemini-1.5-flash",
-                        systemInstruction: systemInstructionText
-                    });
+                    const messageHistory = [
+                        { role: 'system', content: systemInstructionText },
+                        { role: 'user', content: "Hola Brenda, ya terminé mi perfil. ¿Qué sigue?" }
+                    ];
 
-                    const chat = modelWithInstruction.startChat({
-                        history: [
-                            {
-                                role: "user",
-                                parts: [{ text: "Hola Brenda, ya terminé mi perfil. ¿Qué sigue?" }]
-                            }
-                        ]
-                    });
-
-                    const result = await chat.sendMessage("Genera el mensaje para el candidato ahora basado en tu instrucción maestra.");
-                    let response = result.response.text();
+                    const result = await getOpenAIResponse(messageHistory, "Genera el mensaje para el candidato ahora basado en tu instrucción maestra.", "gpt-4o-mini");
+                    let response = result?.content || "";
 
                     // TRATAMIENTO DE LA RESPUESTA (FILTROS)
                     const moveTagFound = response.match(/\[MOVE\]|\{MOVE\}/gi);

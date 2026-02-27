@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getOpenAIResponse } from '../utils/openai.js';
 import { getRedisClient } from '../utils/storage.js';
 
 export default async function handler(req, res) {
@@ -9,48 +9,53 @@ export default async function handler(req, res) {
         if (!prompt) return res.status(400).json({ success: false, error: 'Prompt is required' });
 
         const redis = getRedisClient();
-        let apiKey = process.env.GEMINI_API_KEY;
+        let apiKey = process.env.OPENAI_API_KEY;
 
         if (!apiKey && redis) {
-            const aiConfigJson = await redis.get('ai_config');
-            if (aiConfigJson) {
-                const aiConfig = JSON.parse(aiConfigJson);
-                apiKey = aiConfig.geminiApiKey;
+            try {
+                const aiConfigJson = await redis.get('ai_config');
+                if (aiConfigJson) {
+                    const aiConfig = JSON.parse(aiConfigJson);
+                    apiKey = aiConfig.openaiApiKey;
+                }
+            } catch (e) {
+                console.warn('⚠️ [AI Improve Search] Redis check failed:', e);
             }
         }
 
-        if (!apiKey) return res.status(500).json({ success: false, error: 'AI not configured' });
+        if (!apiKey || apiKey === 'undefined' || apiKey === 'null') {
+            return res.status(500).json({ error: 'AI no configurada' });
+        }
 
-        // Sanitize API Key
-        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
-        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-        if (match) apiKey = match[0];
-
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const modelsToTry = ["gemini-1.5-flash", "gemini-2.0-flash"];
-
-        const systemInstructions = `Actúa como un experto en filtrado de talento.
-Tu objetivo es transladar una intención de búsqueda simple a una descripción detallada que un sistema de extracción de datos pueda entender mejor.
+        const systemPrompt = `Eres un asistente de búsqueda técnica en una base de datos de candidatos.
+El usuario ha intentado una búsqueda que devolvió 0 resultados.
+Tu tarea es analizar la búsqueda original y sugerir UNA versión más amplia o mejor redactada, enfocada en habilidades centrales.
 
 REGLAS:
-1. Sé específico con los criterios de filtrado (edad, ubicación, habilidades).
-2. Usa un lenguaje profesional pero directo.
-3. El resultado debe ser una sola instrucción de búsqueda mejorada.
-4. Responde ÚNICAMENTE con el texto de la búsqueda mejorada, sin explicaciones.
+1. Devuelve SOLO UN JSON válido.
+2. Formato: { "suggestedQuery": "nueva busqueda mejorada", "reasoning": "Por qué lo cambiaste (breve)" }
+3. Si la búsqueda original es muy específica (ej. "programador java con 5 años de experiencia en AWS"), redúcela a lo esencial (ej. "programador java AWS").
+4. Corrige errores ortográficos si los hay.
 
-Ejemplo:
-Input: "busco gente de 40 años"
-Output: "Identifica candidatos masculinos y femeninos que tengan exactamente o alrededor de 40 años de edad, sin importar su ubicación actual."
+Búsqueda Original: "${prompt}"
+`;
 
-Input: "arquitectos en apodaca"
-Output: "Busca perfiles con formación o experiencia en arquitectura que residan actualmente en el municipio de Apodaca."`;
+        const history = [{ role: 'system', content: systemPrompt }];
+        const result = await getOpenAIResponse(history, prompt, 'gpt-4o-mini');
 
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-        const result = await model.generateContent(`${systemInstructions}\n\nMejora esta búsqueda: "${prompt}"`);
-        const response = await result.response;
-        const improvedSearch = response.text().trim().replace(/^"|"$/g, '');
+        if (!result || !result.content) {
+            throw new Error(`La IA no devolvió una sugerencia válida.`);
+        }
 
-        return res.status(200).json({ success: true, improvedSearch });
+        const text = result.content;
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error(`La IA no devolvió un JSON válido.`);
+        }
+
+        const aiResponse = JSON.parse(jsonMatch[0]);
+
+        return res.status(200).json({ success: true, improvedSearch: aiResponse.suggestedQuery });
     } catch (error) {
         console.error('❌ Improve Search Error:', error);
         return res.status(500).json({ success: false, error: error.message });

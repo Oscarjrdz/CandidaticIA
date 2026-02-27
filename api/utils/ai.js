@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// Utils AI
 
 /**
  * Detects gender (Hombre/Mujer) based on a name using Gemini AI

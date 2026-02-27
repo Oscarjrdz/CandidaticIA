@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getOpenAIResponse } from '../utils/openai.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -26,14 +26,14 @@ export default async function handler(req, res) {
         const { getRedisClient } = await import('../utils/storage.js');
         const redis = getRedisClient();
 
-        let apiKey = process.env.GEMINI_API_KEY;
+        let apiKey = process.env.OPENAI_API_KEY;
 
         if (!apiKey && redis) {
             try {
                 const aiConfigJson = await redis.get('ai_config');
                 if (aiConfigJson) {
                     const aiConfig = JSON.parse(aiConfigJson);
-                    apiKey = aiConfig.geminiApiKey;
+                    apiKey = aiConfig.openaiApiKey;
                 }
             } catch (e) {
                 console.warn('⚠️ [AI Action] Redis check failed:', e);
@@ -44,21 +44,6 @@ export default async function handler(req, res) {
             console.error('❌ [AI Action] No API Key provided');
             return res.status(500).json({ error: 'AI no configurada' });
         }
-
-        // Sanitización de Key (Robusta, igual que query.js)
-        apiKey = String(apiKey).trim();
-        apiKey = apiKey.replace(/^["']|["']$/g, '');
-        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-        if (match) {
-            apiKey = match[0];
-        } else {
-            apiKey = apiKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '');
-        }
-        apiKey = apiKey.trim();
-
-
-        // Configurar Gemini
-        const genAI = new GoogleGenerativeAI(apiKey);
 
         const systemPrompt = `
 Eres un asistente de acción para un CRM de reclutamiento.
@@ -85,40 +70,15 @@ Datos de contexto:
 Consulta del usuario: "${query}"
 `;
 
-        // Intentar varios modelos hasta que uno funcione (Igual que query.js)
-        const modelsToTry = [
-            "gemini-flash-latest",
-            "gemini-2.0-flash",
-            "gemini-1.5-flash",
-            "gemini-1.5-pro",
-            "gemini-pro-latest",
-            "gemini-pro"
-        ];
-        let result;
-        let successModel = '';
-        let lastError = '';
+        const history = [{ role: 'system', content: systemPrompt }];
+        const result = await getOpenAIResponse(history, query, 'gpt-4o-mini');
 
-        for (const mName of modelsToTry) {
-            try {
-                const model = genAI.getGenerativeModel({ model: mName });
-                result = await model.generateContent(systemPrompt);
-                successModel = mName;
-                break;
-            } catch (e) {
-                lastError = e.message;
-                console.warn(`⚠️ [AI Action] ${mName} failed:`, e.message);
-            }
+        if (!result || !result.content) {
+            throw new Error(`La IA no devolvió una respuesta válida.`);
         }
 
-        if (!successModel) {
-            console.error('❌ [AI Action] All models failed. Last error:', lastError);
-            throw new Error(`Ningún modelo respondió. Último error: ${lastError}`);
-        }
-
-        const response = await result.response;
-        const text = response.text();
-
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        let jsonText = result.content.replace(/```json/g, '').replace(/```/g, '').trim();
+        const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             throw new Error(`La IA no devolvió un JSON válido.`);
         }

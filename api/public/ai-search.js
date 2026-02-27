@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getOpenAIResponse } from '../utils/openai.js';
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') {
@@ -26,54 +26,64 @@ export default async function handler(req, res) {
         const redis = getRedisClient();
 
         // 1. Resolve API Key
-        let apiKey = process.env.GEMINI_API_KEY;
+        let apiKey = process.env.OPENAI_API_KEY;
+
         if (!apiKey && redis) {
-            const aiConfigJson = await redis.get('ai_config');
-            if (aiConfigJson) {
-                const aiConfig = JSON.parse(aiConfigJson);
-                apiKey = aiConfig.geminiApiKey;
+            try {
+                const aiConfigJson = await redis.get('ai_config');
+                if (aiConfigJson) {
+                    const aiConfig = JSON.parse(aiConfigJson);
+                    apiKey = aiConfig.openaiApiKey;
+                }
+            } catch (e) {
+                console.warn('⚠️ [AI Search] Redis check failed:', e);
             }
         }
 
         if (!apiKey || apiKey === 'undefined' || apiKey === 'null') {
-            return res.status(500).json({ error: 'Service unavailable (Config)' });
+            console.error('❌ [AI Search] No API Key provided');
+            return res.status(500).json({ error: 'AI no configurada' });
         }
 
-        // Sanitize Key
-        apiKey = String(apiKey).trim().replace(/^["']|["']$/g, '');
-        const match = apiKey.match(/AIzaSy[A-Za-z0-9_-]{33}/);
-        if (match) apiKey = match[0];
-        else apiKey = apiKey.replace(/^GEMINI_API_KEY\s*=\s*/i, '').trim();
+        // Sistema de prompts
+        const systemPrompt = `Eres un asistente de búsqueda para un Job Board (Bolsa de Trabajo) llamado Candidatic.
+El usuario está buscando vacantes usando lenguaje natural.
+Tu tarea es traducir su consulta a filtros estructurados y palabras clave.
 
-        // 2. Setup Gemini
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const systemPrompt = `
-Eres un experto recrutador. Tu tarea es extraer filtros de búsqueda de una frase natural.
-Campos disponibles: nombreReal, fechaNacimiento (para edad), municipio, categoria.
+CAMPOS DISPONIBLES:
+- location: Municipio o zona (ej. Monterrey, Apodaca, Escobedo)
+- category: Tipo de trabajo (ej. Limpieza, Guardia, Promotor, Recepcionista)
+- salary_min: Si mencionan un sueldo mínimo esperado (usa números)
 
-Reglas:
-1. Retorna SOLO JSON válido.
-2. Estructura: { "filters": { ... }, "keywords": [...] }
-3. Si busca edad "mayor a X", usa { "edad": { "op": ">", "val": X } }.
+REGLAS:
+- Extrae la categoría de trabajo en singular si es posible.
+- Si no hay filtros obvios, pon las palabras importantes en 'keywords'.
+- RESPONDE ÚNICAMENTE CON UN JSON VÁLIDO. No agregues texto antes ni después.
 
-Consulta: "${query}"
+Consulta del usuario: "${query}"
+
+EJEMPLO DE SALIDA:
+{
+  "filters": {
+    "location": "Monterrey",
+    "category": "Guardia"
+  },
+  "keywords": ["nocturno", "experiencia"]
+}
 `;
 
-        const modelsToTry = ["gemini-1.5-flash", "gemini-pro"];
-        let result;
-        for (const mName of modelsToTry) {
-            try {
-                const model = genAI.getGenerativeModel({ model: mName });
-                result = await model.generateContent(systemPrompt);
-                break;
-            } catch (e) { console.warn(e.message); }
+        const history = [{ role: 'system', content: systemPrompt }];
+        const result = await getOpenAIResponse(history, query, 'gpt-4o-mini');
+
+        if (!result || !result.content) {
+            throw new Error(`La IA no devolvió una respuesta válida.`);
         }
 
-        if (!result) throw new Error("AI Service Busy");
-
-        const text = result.response.text();
+        const text = result.content;
         const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error("Invalid AI Response");
+        if (!jsonMatch) {
+            throw new Error(`La IA no devolvió un JSON válido.`);
+        }
 
         const aiResponse = JSON.parse(jsonMatch[0]);
 
