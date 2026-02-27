@@ -976,8 +976,8 @@ const VacanciesSection = ({ showToast }) => {
                                                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 font-sans leading-none">
                                                         🔍 Dudas Recabadas
                                                     </p>
-                                                    <ul className="space-y-1 list-none">
-                                                        {(faq.originalQuestions || []).slice(0, 3).map((q, idx) => (
+                                                    <ul className="space-y-1 list-none max-h-[120px] overflow-y-auto pr-1">
+                                                        {(faq.originalQuestions || []).map((q, idx) => (
                                                             <li key={idx} className="flex items-center justify-between group/q text-[11px] text-gray-600 dark:text-gray-400 italic pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 transition-all hover:bg-gray-100/50 dark:hover:bg-gray-800/50 rounded-r-lg py-0.5 leading-snug">
                                                                 <span className="truncate flex-1" title={q}>"{q}"</span>
                                                                 <div className="flex items-center opacity-0 group-hover/q:opacity-100 transition-all ml-1 flex-shrink-0">
