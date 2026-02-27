@@ -122,7 +122,8 @@ ESTRATEGIA DE RAZONAMIENTO (PROTOCOLO VIPER 3.1):
    - REGLA DE FRAGMENTOS (ÉXITO PARCIAL): Si el usuario responde solo con un nombre o un apellido (ej. "Rodriguez", "Óscar"), EXTRÁELO como nombreReal con ALTA CONFIANZA (0.95). El sistema se encargará de unirlo al anterior.
    - REGLA CRÍTICA DE NOMBRE: El "nombreReal" es el nombre o apellido del candidato. 
       * NUNCA debe ser un municipio, ciudad o estado (ej. "Escobedo", "Monterrey").
-      * NUNCA extraigas saludos (Hola) o frases vacías (Si) en este campo.
+      * NUNCA extraigas saludos (Hola, Buenas noches, Buenas tardes).
+      * NUNCA extraigas afirmaciones o frases de cortesía ("Si", "Claro", "Sin problema", "Ok", "Está bien") en este campo. El nombre debe ser un nombre humano real.
    - REGLA CRÍTICA DE EVASIÓN: Si el usuario responde con frases negativas o evasivas, NO extraigas nada.
    - REGLA DE SALUDOS: Frases cortas sin contexto de datos NO se extraen.
    - REGLA DE ADJETIVOS (JUNK): "Bien", "Ok", "Cualquiera" sin dato real deben ser null.
@@ -135,8 +136,8 @@ ESTRATEGIA DE RAZONAMIENTO (PROTOCOLO VIPER 3.1):
    - 1.0: "Mi nombre es Juan".
    - 0.5: Inferencia vaga.
    - 0.1: Basura o mensaje del sistema.
-4. VALIDACIÓN CRUZADA: No permitas que un municipio se filtre al campo de nombre.
-5. EXTRACCIÓN DE NOMBRE: El "nombreReal" debe ser el nombre humano del candidato.
+4. VALIDACIÓN CRUZADA: No permitas que un municipio o una frase ("si claro") se filtre al campo de nombre.
+5. EXTRACCIÓN DE NOMBRE: El "nombreReal" debe ser el nombre humano del candidato o un apellido real.
 
 Responde ÚNICAMENTE con un JSON puro que siga este esquema:
 ${JSON.stringify(schema, null, 2)}
