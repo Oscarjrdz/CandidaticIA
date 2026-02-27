@@ -159,7 +159,8 @@ export class Orchestrator {
             if (!isProcessed && firstStep.aiConfig?.prompt) {
                 console.warn('[ORCHESTRATOR] ⚠️ Failsafe auto-trigger firing! Engine bypassed.');
                 const { getVacancyById } = await import('./storage.js');
-                const v = await getVacancyById(project.vacancyId);
+                const vId = Array.isArray(project.vacancyIds) && project.vacancyIds.length > 0 ? project.vacancyIds[0] : project.vacancyId;
+                const v = await getVacancyById(vId);
                 const vacCtx = {
                     name: v?.name || '[Sin Vacante]',
                     messageDescription: v?.messageDescription || '[Sin Info]',
