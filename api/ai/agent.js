@@ -947,6 +947,7 @@ ${safeDnaLines}
                     }
                     candidateUpdates.genero = tempGenero;
                     candidateData.genero = tempGenero;
+                    await updateCandidate(candidateId, { genero: tempGenero });
                 }
 
                 const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
