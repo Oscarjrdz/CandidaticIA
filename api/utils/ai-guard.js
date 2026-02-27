@@ -78,8 +78,8 @@ export class AIGuard {
     static getRecoveryResponse(reason, missingFields, lastInput, isNewFlag = false, extracted = {}, candidateName = null, categoriesList = "") {
         console.log(`[AI GUARD] 💊 Generating Recovery Response for reason: ${reason}. isNew: ${isNewFlag}`);
 
-        // 🛡️ [GENDER SUPPRESSION]: Ensure fallback never asks for gender
-        const safeMissing = (missingFields || []).filter(f => f !== 'Género' && f !== 'genero');
+        // 🛡️ [REMOVED GENDER SUPPRESSION]: The bot *must* ask for gender if it's missing, because storage.js marks `genero` as a CORE_REQUIRED_FIELD. Without it, the candidate Profile is considered Incomplete and Bypass Logic is skipped.
+        const safeMissing = missingFields || [];
 
         // 🌸 SOCIAL FALLBACK: If profile is complete, don't ask for data!
         if (safeMissing.length === 0) {
