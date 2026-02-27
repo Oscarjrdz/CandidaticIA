@@ -34,10 +34,7 @@ export async function intelligentExtract(candidateId, historyText) {
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const modelsToTry = [
-            "gemini-1.5-flash",
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-exp",
-            "gemini-pro"
+            "gemini-1.5-flash"
         ];
 
         // 1. Fetch Dynamic Rules from Redis
@@ -296,7 +293,6 @@ ${JSON.stringify(schema, null, 2)}
                         } else if (eWords < 2 && iWords === 1) {
                             // If we have 1 word and get 1 word, it's Name + Surname
                             finalVal = `${e} ${i}`;
-                            console.log(`[Name-Fusion] 🧬 Combined "${e}" + "${i}" -> "${finalVal}"`);
                         }
                     }
 
@@ -317,7 +313,6 @@ ${JSON.stringify(schema, null, 2)}
                             finalVal = `${existingVal} de ${val}`;
                         } else if (existingHasYear && existingHasDayMonth && hasYear && !val.includes(' ')) {
                             // Scenario 2: Shield (Protect complete date from year-only fragment)
-                            console.log(`[Date-Shield] Protecting complete date "${existingVal}" from fragment "${val}"`);
                             finalVal = existingVal;
                         }
 
@@ -327,7 +322,6 @@ ${JSON.stringify(schema, null, 2)}
                             const currentYear2 = new Date().getFullYear() % 100;
                             // If year2 > currentYear2 + 2, it's likely 19xx, else 20xx
                             const inferredYear = year2 > (currentYear2 + 2) ? `19${val}` : `20${val}`;
-                            console.log(`[Year-Inference] Inferring ${inferredYear} from ${val}`);
 
                             if (existingHasDayMonth && !existingHasYear) {
                                 finalVal = `${existingVal} de ${inferredYear}`;
@@ -355,8 +349,6 @@ ${JSON.stringify(schema, null, 2)}
                     console.warn(`⚠️ [AmazonPipeline] Error reconciling ${rule.field}:`, err.message);
                     updateData[canonicalField] = val; // Fallback to raw
                 }
-            } else if (existingVal && confidence > 0) {
-                console.log(`[AmazonPipeline] Rejected update for ${canonicalField} (Confidence: ${confidence} vs High-Quality Existing Data)`);
             }
         }
 

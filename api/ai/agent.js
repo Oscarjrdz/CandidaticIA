@@ -347,17 +347,12 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         };
         audit.paso1Status = audit.missingLabels.length === 0 ? 'COMPLETO' : 'INCOMPLETO';
 
-        // 🧬 [ULTRA-SPEED CONSOLIDATION]: Redundant extraction removed.
-        // Extraction is now handled natively by the main GPT brain at the end of the pipeline.
-        const refinedData = null;
-
         // 🧬 [AUTO-GENDER PRE-PASS]: If name exists but gender doesn't, infer it NOW
         if (candidateData.nombreReal && !candidateData.genero) {
             const inferred = inferGender(candidateData.nombreReal);
             if (inferred) {
                 candidateData.genero = inferred;
                 candidateUpdates.genero = inferred;
-                console.log(`[EARLY GENDER INFERENCE] 🧬 Inferred ${inferred} for ${candidateData.nombreReal}`);
             }
         }
 
@@ -869,7 +864,6 @@ ${safeDnaLines}
                             tokens: gptResult.usage?.total_tokens || 0
                         });
                         responseTextVal = aiResult.response_text;
-                        console.log(`[GPT CONSOLIDATED] ✅ Extraction + Response:`, aiResult);
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
                         throw new Error('GPT returned invalid JSON');
@@ -965,7 +959,6 @@ ${safeDnaLines}
         if (moveTagPattern.test(resText)) {
             resText = resText.replace(moveTagPattern, '').trim();
             responseTextVal = resText || null;
-            console.log('[Move Tag Sanitizer] ⚠️ Stripped move tag from outbound message.');
         }
 
         if (responseTextVal && (!aiResult?.media_url || aiResult.media_url === 'null')) {
@@ -975,7 +968,6 @@ ${safeDnaLines}
             if (match) {
                 if (!aiResult) aiResult = {};
                 aiResult.media_url = match[0];
-                console.log(`[Media Recovery] 🚑 Recovered leaked URL from text: ${aiResult.media_url}`);
             }
         }
 
@@ -984,7 +976,6 @@ ${safeDnaLines}
             const urlRegex = /https?:\/\/[^\s\)]+/g;
             const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
             responseTextVal = responseTextVal.replace(markdownImageRegex, '').replace(urlRegex, '').replace(/\s+/g, ' ').trim();
-            console.log('[Media Sanitizer] 🛡️ Stripped potential URL leakage from response_text.');
         }
 
         const isTechnicalOrEmpty = !resText || ['null', 'undefined', '[SILENCIO]', '[REACCIÓN/SILENCIO]'].includes(resText) || resText.startsWith('[REACCIÓN:');
