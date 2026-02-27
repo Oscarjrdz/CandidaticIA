@@ -167,8 +167,13 @@ const VacanciesSection = ({ showToast }) => {
         company: '',
         category: '',
         description: '',
-        messageDescription: ''
+        messageDescription: '',
+        documents: []
     });
+
+    const [newDocName, setNewDocName] = useState('');
+    const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+    const docInputRef = React.useRef(null);
 
     const [availableFields, setAvailableFields] = useState([]);
     const [uploadingFaqId, setUploadingFaqId] = useState(null);
@@ -400,6 +405,70 @@ const VacanciesSection = ({ showToast }) => {
             if (e.target) e.target.value = '';
         }
     };
+
+    const handleUploadDocument = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !newDocName.trim()) return;
+
+        if (file.type !== 'application/pdf') {
+            showToast('El archivo debe ser un PDF', 'error');
+            if (e.target) e.target.value = '';
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('El archivo excede el límite de 5MB', 'error');
+            if (e.target) e.target.value = '';
+            return;
+        }
+
+        setIsUploadingDoc(true);
+        try {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async () => {
+                const base64Data = reader.result;
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64Data, type: 'pdf' })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const docUrl = `${window.location.origin}${data.url}&ext=.pdf`;
+                    const newDoc = {
+                        id: `doc_${Date.now()}`,
+                        name: newDocName.trim(),
+                        url: docUrl
+                    };
+
+                    setFormData(prev => ({
+                        ...prev,
+                        documents: [...(prev.documents || []), newDoc]
+                    }));
+                    setNewDocName('');
+                    showToast('Documento agregado. Recuerda guardar la vacante.', 'success');
+                } else {
+                    showToast(data.error || 'Error al subir', 'error');
+                }
+                setIsUploadingDoc(false);
+                if (e.target) e.target.value = '';
+            };
+        } catch (err) {
+            console.error('Doc upload error:', err);
+            showToast('Error de conexión', 'error');
+            setIsUploadingDoc(false);
+            if (e.target) e.target.value = '';
+        }
+    };
+
+    const handleDeleteDocument = (docId) => {
+        setFormData(prev => ({
+            ...prev,
+            documents: (prev.documents || []).filter(d => d.id !== docId)
+        }));
+    };
     const availableTags = [
         { label: 'Nombre', value: '{{nombre}}' },
         { label: 'WhatsApp', value: '{{whatsapp}}' },
@@ -469,7 +538,8 @@ const VacanciesSection = ({ showToast }) => {
 
     const handleOpenCreate = () => {
         setEditingId(null);
-        setFormData({ name: '', company: '', category: '', description: '', messageDescription: '' });
+        setFormData({ name: '', company: '', category: '', description: '', messageDescription: '', documents: [] });
+        setNewDocName('');
         setFaqs([]);
         setIsModalOpen(true);
     };
@@ -481,7 +551,8 @@ const VacanciesSection = ({ showToast }) => {
             company: vacancy.company,
             category: vacancy.category,
             description: vacancy.description || '',
-            messageDescription: vacancy.messageDescription || ''
+            messageDescription: vacancy.messageDescription || '',
+            documents: vacancy.documents || []
         });
         setIsModalOpen(true);
         loadFaqs(vacancy.id);
@@ -513,7 +584,8 @@ const VacanciesSection = ({ showToast }) => {
                 // Si es modo creación, cerramos modal. Si es edición, mantenemos abierto.
                 if (!editingId) {
                     setIsModalOpen(false);
-                    setFormData({ name: '', company: '', category: '', description: '', messageDescription: '' });
+                    setFormData({ name: '', company: '', category: '', description: '', messageDescription: '', documents: [] });
+                    setNewDocName('');
                 }
             } else {
                 showToast(data.error || 'Error al guardar', 'error');
@@ -867,6 +939,75 @@ const VacanciesSection = ({ showToast }) => {
                                 value={formData.messageDescription}
                                 onChange={(e) => setFormData({ ...formData, messageDescription: e.target.value })}
                             />
+                        </div>
+
+                        {/* BASE DE CONOCIMIENTO (PDF) */}
+                        <div className="space-y-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+                            <div>
+                                <h4 className="text-[12px] font-black tracking-widest text-indigo-600 dark:text-indigo-400 uppercase flex items-center gap-2 mb-1">
+                                    <FileText className="w-4 h-4" /> Base de Conocimiento (IA)
+                                </h4>
+                                <p className="text-xs text-gray-500 mb-3">Sube reglamentos o manuales de la vacante para que Brenda (IA) los lea y se vuelva experta.</p>
+                            </div>
+
+                            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
+                                    <Input
+                                        label="Nombre del Documento"
+                                        placeholder="Ej. Reglamento Interno Operarios..."
+                                        value={newDocName}
+                                        onChange={(e) => setNewDocName(e.target.value)}
+                                        className="mb-0"
+                                    />
+                                    <div>
+                                        <input
+                                            type="file"
+                                            ref={docInputRef}
+                                            className="hidden"
+                                            accept="application/pdf"
+                                            onChange={handleUploadDocument}
+                                        />
+                                        <Button
+                                            onClick={() => docInputRef.current?.click()}
+                                            disabled={!newDocName.trim() || isUploadingDoc}
+                                            variant={newDocName.trim() ? "primary" : "outline"}
+                                            icon={isUploadingDoc ? Loader2 : FileText}
+                                            className="w-full"
+                                        >
+                                            {isUploadingDoc ? 'Subiendo...' : 'Adjuntar PDF'}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {(!newDocName.trim() && !isUploadingDoc) && (
+                                    <p className="text-[10px] text-gray-400 mt-2 font-medium">✏️ Escribe un nombre descriptivo para habilitar el botón de adjuntar.</p>
+                                )}
+                            </div>
+
+                            {formData.documents && formData.documents.length > 0 && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
+                                    {formData.documents.map((doc) => (
+                                        <div key={doc.id} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg group hover:border-indigo-300 transition-colors shadow-sm">
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <div className="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center flex-shrink-0">
+                                                    <FileText className="w-4 h-4" />
+                                                </div>
+                                                <div className="truncate">
+                                                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate" title={doc.name}>{doc.name}</p>
+                                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-500 hover:text-indigo-600 font-medium">Ver PDF</a>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteDocument(doc.id)}
+                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                                                title="Eliminar documento"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         <div className="flex justify-end gap-3 pt-4">
