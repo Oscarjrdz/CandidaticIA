@@ -265,11 +265,16 @@ ${alternatives.length > 0
 
         // --- MULTIMODAL KNOWLEDGE BASE SUPPORT ---
         let multimodalDocuments = null;
+        let hasHardcodedTextDocuments = false;
         if (vacancyContext.documents && vacancyContext.documents.length > 0) {
             multimodalDocuments = [];
             let iDoc = 1;
             for (const doc of vacancyContext.documents) {
-                if (doc.type && doc.type.startsWith('image/')) {
+                if (doc.extractedText) {
+                    systemPrompt += `\n[DOCUMENTO ADJUNTO ${iDoc} ("${doc.name}")]:\n${doc.extractedText}\n`;
+                    hasHardcodedTextDocuments = true;
+                    iDoc++;
+                } else if (doc.type && doc.type.startsWith('image/')) {
                     multimodalDocuments.push({
                         type: "text",
                         text: `Documento Adjunto (${iDoc}): "${doc.name}"`
@@ -283,9 +288,12 @@ ${alternatives.length > 0
                 // future expansion: pdf parsing
             }
             if (multimodalDocuments.length > 0) {
-                systemPrompt += `\n\n[BASE DE CONOCIMIENTO MULTIMODAL ADJUNTA]:\nTienes acceso a imágenes o documentos adjuntos (Rutas, Mapas, Reglamentos). **ÉSTOS DEBEN SER TU ÚNICA FUENTE DE VERDAD** para dudas técnicas que dependan de ellos. Léelos detenidamente antes de contestar.\n`;
+                systemPrompt += `\n\n[BASE DE CONOCIMIENTO MULTIMODAL ADJUNTA]:\nTienes acceso a imágenes adjuntas (Rutas, Mapas, Reglamentos). **ÉSTOS DEBEN SER TU ÚNICA FUENTE DE VERDAD** para dudas técnicas que dependan de ellos. Léelos detenidamente antes de contestar.\n`;
             } else {
                 multimodalDocuments = null;
+            }
+            if (hasHardcodedTextDocuments) {
+                systemPrompt += `\n\n[BASE DE CONOCIMIENTO TEXTUAL ADJUNTA]:\nTienes información extraída previamente de adjuntos mostrada arriba. **ESTA DEBE SER TU ÚNICA FUENTE DE VERDAD** para dudas técnicas que dependan de ella.\n`;
             }
         }
 

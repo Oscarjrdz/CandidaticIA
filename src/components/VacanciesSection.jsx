@@ -444,11 +444,33 @@ const VacanciesSection = ({ showToast }) => {
                         ext = `.${file.name.split('.').pop()}`;
                     }
                     const docUrl = `${window.location.origin}${data.url}&ext=${ext.replace('.', '')}`;
+
+                    let extractedText = null;
+                    if (file.type && file.type.startsWith('image/')) {
+                        try {
+                            showToast('Analizando texto de la imagen (OCR)...', 'info');
+                            const ocrRes = await fetch('/api/ai/ocr', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ image: base64Data })
+                            });
+                            const ocrData = await ocrRes.json();
+                            if (ocrData.success && ocrData.text) {
+                                extractedText = ocrData.text;
+                                showToast('Texto extraído correctamente.', 'success');
+                            }
+                        } catch (ocrErr) {
+                            console.error('OCR Error:', ocrErr);
+                            showToast('Advertencia: No se pudo extraer texto de la imagen.', 'error');
+                        }
+                    }
+
                     const newDoc = {
                         id: `doc_${Date.now()}`,
                         name: newDocName.trim(),
                         url: docUrl,
-                        type: file.type // 'application/pdf', 'image/jpeg', etc.
+                        type: file.type, // 'application/pdf', 'image/jpeg', etc.
+                        extractedText: extractedText
                     };
 
                     setFormData(prev => ({
