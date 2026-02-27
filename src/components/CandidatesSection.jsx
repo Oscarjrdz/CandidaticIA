@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Settings, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -7,12 +7,11 @@ import Card from './ui/Card';
 import ErrorBoundary from './ui/ErrorBoundary';
 import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
-import ChatHistoryModal from './ChatHistoryModal';
 import MagicSearch from './MagicSearch';
 import Skeleton, { CardSkeleton, TableRowSkeleton } from './ui/Skeleton';
 import { getCandidates, deleteCandidate, blockCandidate, CandidatesSubscription } from '../services/candidatesService';
 import { getFields } from '../services/automationsService';
-import { getExportSettings, saveExportSettings, deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
+import { deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
 import { generateChatHistoryText } from '../services/chatExportService';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
@@ -103,7 +102,6 @@ const CandidatesSection = ({ showToast }) => {
     const [search, setSearch] = useState('');
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
-    const [lastUpdate, setLastUpdate] = useState(null);
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
         try {
@@ -130,19 +128,13 @@ const CandidatesSection = ({ showToast }) => {
 
     // Estado para el chat
     const [selectedCandidate, setSelectedCandidate] = useState(null);
-    const [credentials, setCredentials] = useState(null);
-
-    // Estado para historial modal
-    const [historyModalOpen, setHistoryModalOpen] = useState(false);
-    const [historyModalCandidate, setHistoryModalCandidate] = useState(null);
-    const [historyModalContent, setHistoryModalContent] = useState('');
 
     // --- 🪄 MAGIC AI FIX STATE ---
     const [magicLoading, setMagicLoading] = useState({});
     const [blockLoading, setBlockLoading] = useState({});
 
     // 📡 SSE: Real-time candidate updates
-    const { newCandidate, globalStats, connected: sseConnected } = useCandidatesSSE();
+    const { newCandidate, globalStats } = useCandidatesSSE();
 
     // Listen for new candidates via SSE
     useEffect(() => {
@@ -209,7 +201,6 @@ const CandidatesSection = ({ showToast }) => {
             if (!aiFilteredCandidates) {
                 setCandidates(newCandidates);
                 if (newStats) setStats(prev => ({ ...prev, ...newStats })); // Merge live stats
-                setLastUpdate(new Date());
             }
         }, 3000);
 
@@ -220,33 +211,6 @@ const CandidatesSection = ({ showToast }) => {
     }, [aiFilteredCandidates]); // Restart/Update subscription when context changes
 
 
-
-    const handleViewHistory = async (candidate) => {
-        setHistoryModalCandidate(candidate);
-        setHistoryModalOpen(true);
-        setHistoryModalContent('Cargando historial...');
-
-        try {
-            const res = await fetch(`/api/chat?candidateId=${candidate.id}`);
-            const data = await res.json();
-
-            if (data.success && data.messages) {
-                const candidateWithMessages = { ...candidate, messages: data.messages };
-                const content = generateChatHistoryText(candidateWithMessages);
-                setHistoryModalContent(content);
-                saveLocalChatFile(candidate.whatsapp, content);
-            } else {
-                setHistoryModalContent(generateChatHistoryText(candidate));
-            }
-        } catch (error) {
-            const localFile = getLocalChatFile(candidate.whatsapp);
-            if (localFile && localFile.content) {
-                setHistoryModalContent(localFile.content);
-            } else {
-                setHistoryModalContent(generateChatHistoryText(candidate));
-            }
-        }
-    };
 
     // AI Action Flow
     const [aiActionOpen, setAiActionOpen] = useState(false);
@@ -267,23 +231,21 @@ const CandidatesSection = ({ showToast }) => {
             const data = await res.json();
 
             if (data.success && data.action) {
-                const { intent, filters, message, explanation } = data.action;
+                const { intent, explanation } = data.action;
 
                 setAiActionOpen(false); // Close AI Input
 
                 if (intent === 'REFINE_FILTER') {
                     showToast(explanation || 'Refinando filtros...', 'info');
-                    const result = await aiQuery(query);
-                    if (result.success) {
-                        setAiFilteredCandidates(result.candidates);
-                        setAiExplanation(result.ai?.explanation || 'Refinado por IA');
-                    }
+                    // Removed broken aiQuery reference.
+                    // Instead just instruct user to use main search for filtering.
+                    showToast('Utiliza la barra de búsqueda superior para refinar mejor', 'info');
                 } else {
                     showToast('No entendí la acción. Intenta de nuevo.', 'warning');
                 }
             }
-        } catch (e) {
-            console.error('AI Action Error', e);
+        } catch (error) {
+            console.error('AI Action Error', error);
             showToast('Error procesando acción', 'error');
         }
     };
@@ -299,12 +261,11 @@ const CandidatesSection = ({ showToast }) => {
             if (result.success) {
                 setCandidates(result.candidates);
                 setTotalItems(result.total || result.count || 0);
-                setLastUpdate(new Date());
             } else {
                 showToast('Error cargando candidatos', 'error');
             }
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            console.error(error);
             showToast('Error de conexión', 'error');
         } finally {
             setLoading(false);
@@ -320,17 +281,8 @@ const CandidatesSection = ({ showToast }) => {
             return;
         }
         loadCandidates(currentPage);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, search]);
-
-    const handleSearch = (e) => {
-        setSearch(e.target.value);
-        setCurrentPage(1); // Reset to page 1
-    };
-
-    const handleSearchSubmit = (e) => {
-        e.preventDefault();
-        loadCandidates();
-    };
 
     /**
      * Alternar estado de bloqueo del candidato
