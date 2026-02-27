@@ -209,8 +209,8 @@ export class Orchestrator {
                 const vId = Array.isArray(project.vacancyIds) && project.vacancyIds.length > 0 ? project.vacancyIds[0] : project.vacancyId;
                 const v = await getVacancyById(vId);
                 const vacCtx = {
-                    name: v?.name || '[Sin Vacante]',
-                    messageDescription: v?.messageDescription || '[Sin Info]',
+                    name: v?.name || '',
+                    messageDescription: v?.messageDescription || v?.description || '',
                     description: v?.description || '',
                     salary: v?.salary_range || 'N/A',
                     schedule: v?.schedule || 'N/A'

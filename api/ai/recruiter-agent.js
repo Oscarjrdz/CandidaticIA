@@ -91,9 +91,9 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
         // 2. VACANCY DATA (HALLUCINATION SHIELD) & MULTI-VACANCY SUPPORT
         let vacancyContext = {
-            name: '[SIN_VACANTE_LIGADA]',
-            description: '[EXTINTO/FALTANTE]',
-            messageDescription: '[INDETERMINADO]',
+            name: '',
+            description: '',
+            messageDescription: '',
             salary: 'N/A',
             schedule: 'N/A'
         };
@@ -122,9 +122,9 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             const vac = await getVacancyById(activeVacancyId);
             if (vac) {
                 vacancyContext = {
-                    name: vac.name || '[SIN_NOMBRE]',
-                    description: vac.description || '[SIN_DESCRIPCION]',
-                    messageDescription: vac.messageDescription || vac.description || '[SIN_RESEÑA]',
+                    name: vac.name || '',
+                    description: vac.description || '',
+                    messageDescription: vac.messageDescription || vac.description || '',
                     salary: vac.salary || 'N/A',
                     schedule: vac.schedule || 'N/A',
                     media_url: vac.media_url || null
@@ -189,8 +189,8 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             .replace(/{{Candidato\.Escolaridad}}/gi, candidateData.escolaridad || 'N/A')
             .replace(/{{categorias}}/gi, formattedCats)
             .replace(/{{Vacante}}/gi, vacancyContext.name)
-            .replace(/{{Vacante\.MessageDescription}}/gi, vacancyContext.messageDescription || '[ERROR: VACANTE_PARA_MENSAJE_VACIO]')
-            .replace(/{{Vacante\.Descripcion}}/gi, vacancyContext.description || '[ERROR: DESCRIPCION_VACANTE_VACIA]')
+            .replace(/{{Vacante\.MessageDescription}}/gi, vacancyContext.messageDescription || vacancyContext.description || '')
+            .replace(/{{Vacante\.Descripcion}}/gi, vacancyContext.description || '')
             .replace(/{{Vacante\.Sueldo}}/gi, vacancyContext.salary || 'N/A')
             .replace(/{{Vacante\.Horario}}/gi, vacancyContext.schedule || 'N/A');
 
