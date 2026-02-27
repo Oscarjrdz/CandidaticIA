@@ -843,7 +843,7 @@ ${safeDnaLines}
 
 [REGLAS DE HOMOGENEIZACIÓN (ESTRICTAS)]:
 - **Municipio**: Devuelve ÚNICAMENTE el nombre oficial del municipio (ej: "Escobedo", "San Nicolás de los Garza") sin direcciones completas ni calles.
-- **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado, o N/A. (Ej: "Secu" o "Secundaria trunca" -> "Secundaria").
+- **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado. (Ej: "Secu" o "Secundaria trunca" -> "Secundaria").
 - **Categoría**: Si es "Ayudante" mantén "Ayudante". Si opera maquinaria -> "Montacarguista".\n`;
 
                 if (isNewFlag) {

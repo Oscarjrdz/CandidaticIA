@@ -171,6 +171,12 @@ export class AIGuard {
                 if (isCategory) {
                     recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${categoriesList || '[Error: No hay categorías en el sistema]'}\n\n¿Cuál eliges? 🤭✨`;
                 }
+
+                // 🎓 [SPECIAL ESCOLARIDAD RECOVERY]: If missing field is Escolaridad, show emoji list
+                const isEscolaridad = missingKey.includes('escolaridad');
+                if (isEscolaridad) {
+                    recoveryText = `¡Súper! ✨ Ya casi termino tu perfil. ¿Me podrías indicar cuál es tu grado máximo de estudios? 🎓\n\n🎒 Primaria\n🏫 Secundaria\n🎓 Preparatoria\n📚 Licenciatura\n🛠️ Técnica\n🧠 Posgrado`;
+                }
             }
         }
 
