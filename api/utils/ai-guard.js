@@ -78,24 +78,22 @@ export class AIGuard {
     static getRecoveryResponse(reason, missingFields, lastInput, isNewFlag = false, extracted = {}, candidateName = null, categoriesList = "") {
         console.log(`[AI GUARD] 💊 Generating Recovery Response for reason: ${reason}. isNew: ${isNewFlag}`);
 
-        // 🛡️ [REMOVED GENDER SUPPRESSION]: The bot *must* ask for gender if it's missing, because storage.js marks `genero` as a CORE_REQUIRED_FIELD. Without it, the candidate Profile is considered Incomplete and Bypass Logic is skipped.
-        const safeMissing = missingFields || [];
+        // 🛡️ [GENDER SUPPRESSION (ANTI-DISCRIMINATION)]: Ensure fallback never asks for gender explicitly.
+        // It must be inferred quietly by the AI.
+        const safeMissing = (missingFields || []).filter(f => f !== 'Género' && f !== 'genero');
 
         // 🌸 SOCIAL FALLBACK: If profile is complete, don't ask for data!
+        // Instead, we force a silent transition (close_conversation: true, no text)
+        // so the system naturally hands over to Bypass or next steps without the AI
+        // hallucinating a random farewell summary of vacancies.
         if (safeMissing.length === 0) {
-            const templates = [
-                `¡Excelente! ✨ Aquí sigo al pendiente de tu registro. Si tienes alguna duda, dime. 😉🌸`,
-                `¡Perfecto! 💖 Ya tengo tu perfil listo en nuestro sistema. ✨ ¿En qué más te puedo ayudar?`,
-                `¡Súper! 🌟 Quedo a la espera de que un reclutador revise tu información. ✨🌸`,
-                `¡Entendido! 😉 Cualquier cosa aquí estoy, ¡lindo día! ✨`
-            ];
             return {
-                response_text: templates[Math.floor(Math.random() * templates.length)],
-                thought_process: `SOCIAL_FALLBACK: Profile complete, no mission data required.`,
-                reaction: '✨',
+                response_text: null,
+                thought_process: `SOCIAL_FALLBACK: Profile complete, handing over to bypass silently.`,
+                reaction: null,
                 extracted_data: extracted,
-                close_conversation: false,
-                recovery_active: true
+                close_conversation: true,
+                recovery_active: false
             };
         }
 
