@@ -675,8 +675,11 @@ ${safeDnaLines}
                 // ⚡ ROBUST MOVE TAG DETECTION WITH PAYLOAD PARSING
                 // Attempt to parse advanced JSON-like tags: { move: "Citados", setDate: "Lunes", setTime: "10:00" }
                 // Or fallback to classic: { move } / { move: exit }
-                const advanceBracketsMatch = (aiResult?.thought_process || '').match(/[\{\[]\s*(move.*?)[\}\]]/i) ||
-                    (aiResult?.response_text || '').match(/[\{\[]\s*(move.*?)[\}\]]/i);
+                // Notice the ".*?" is optional so that `{ move }` works
+                const tpValue = aiResult?.thought_process || '';
+                const rtValue = aiResult?.response_text || '';
+                const advanceBracketsMatch = tpValue.match(/[\{\[]\s*(move.*?)[\}\]]/is) ||
+                    rtValue.match(/[\{\[]\s*(move.*?)[\}\]]/is);
 
                 let hasMoveTag = false;
                 let hasExitTag = false;
@@ -684,6 +687,7 @@ ${safeDnaLines}
 
                 if (advanceBracketsMatch && advanceBracketsMatch[0]) {
                     hasMoveTag = true;
+                    // Keep just the string `{ move }` or `{ move: exit }`
                     const innerContent = advanceBracketsMatch[0];
                     console.log(`[RECRUITER BRAIN] 🏷️ Found MOVE tag payload:`, innerContent);
 
@@ -695,7 +699,8 @@ ${safeDnaLines}
                     // Try to extract setDate / setTime using loose Regex (JSON.parse often fails on LLM output)
                     const dateMatch = innerContent.match(/setDate:\s*["']([^"']+)["']/i);
                     const timeMatch = innerContent.match(/setTime:\s*["']([^"']+)["']/i);
-                    const specificMoveMatch = innerContent.match(/move:\s*["']([^"']+)["']/i);
+                    // Match `move: "Cita"` or `move: 'Cita'` or even `move: Cita` WITHOUT QUOTES
+                    const specificMoveMatch = innerContent.match(/move:\s*["']?([^"'\s}]+)["']?/i);
 
                     if (specificMoveMatch && specificMoveMatch[1]) {
                         extractedMoveTarget = specificMoveMatch[1].trim();
@@ -729,8 +734,13 @@ ${safeDnaLines}
 
                     const isUserAffirmative = /^(si|sí|claro|por supuesto|obvio|va|dale|ok|okay|sipi|simon|simón|me parece bien|está bien|perfecto|excelente|adelante)/i.test(aggregatedText.trim());
 
-                    if (isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative)) {
-                        console.log(`[RECRUITER BRAIN] 🛡️ Contextual Acceptance detected(Bot invited, User said Yes)! Forcing { move }.`);
+                    // Let's loosen the restriction here. If the user is affirmative AND this is a step 
+                    // where Brenda might simply "accept" (Filtro Step), we can just force the move.
+                    const originStepName = (currentStep?.name || '').toLowerCase();
+                    const isFiltro = originStepName.includes('filtro') || originStepName.includes('inicio') || originStepName.includes('contacto');
+
+                    if ((isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative)) || (isFiltro && isUserAffirmative)) {
+                        console.log(`[RECRUITER BRAIN] 🛡️ Contextual Acceptance detected (Bot invited/Filtro, User said Yes)! Forcing { move }.`);
                         hasMoveTag = true;
                         inferredAcceptance = true;
                     }
