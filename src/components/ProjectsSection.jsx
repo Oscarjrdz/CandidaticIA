@@ -12,6 +12,7 @@ import Input from './ui/Input';
 import Skeleton, { ProjectSkeleton } from './ui/Skeleton';
 import MagicSearch from './MagicSearch';
 import ChatWindow from './ChatWindow';
+import VacancyEditorModal from './VacancyEditorModal';
 import { formatPhone, formatRelativeDate, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 
@@ -170,34 +171,6 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch }) => {
                         </button>
                     )}
 
-                    {/* AI Config Trigger */}
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault(); e.stopPropagation();
-                            onEdit(step.id, 'ai');
-                        }}
-                        className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.aiConfig?.enabled
-                            ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                            : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
-                        title="Configurar IA"
-                    >
-                        <Bot className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Quick Toggle */}
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault(); e.stopPropagation();
-                            onEdit(step.id, 'toggle');
-                        }}
-                        className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.aiConfig?.enabled
-                            ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                            : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
-                        title={step.aiConfig?.enabled ? 'Desactivar Auto' : 'Activar Auto'}
-                    >
-                        <Power className="w-3.5 h-3.5" />
-                    </button>
-
                     {/* Edit Vacancy Shortcut */}
                     <button
                         onClick={(e) => {
@@ -210,17 +183,6 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch }) => {
                         <Briefcase className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* End Quick Toggle */}
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault(); e.stopPropagation();
-                            onEdit(step.id, 'name');
-                        }}
-                        className="p-1.5 text-slate-300 hover:text-slate-600 dark:hover:text-slate-200 transition-colors relative z-10"
-                        title="Editar nombre"
-                    >
-                        <Pencil className="w-3.5 h-3.5" />
-                    </button>
                     {!step.locked && step.id !== 'step_default' && (
                         <button
                             onClick={(e) => {
@@ -370,6 +332,13 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     // Fechas ocultadas visualmente y en estado (se pasan vacías o default si el back las requiere)
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+
+    const [isAISearchOpen, setIsAISearchOpen] = useState(false);
+    const [aiQuery, setAiQuery] = useState('');
+
+    // --- VACANCY MODAL STATE ---
+    const [showVacancyModal, setShowVacancyModal] = useState(false);
+    const [editingVacancyId, setEditingVacancyId] = useState(null);
 
     // AI Step Config
     const [openStepConfig, setOpenStepConfig] = useState(null); // { stepId: '...', projectId: '...' }
@@ -717,15 +686,8 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             // Open Edit Vacancy Shortcut
             if (activeProject.vacancyIds && activeProject.vacancyIds.length > 0) {
                 const primaryVacancyId = activeProject.vacancyIds[0];
-                const vacancy = vacancies.find(v => v.id === primaryVacancyId);
-                if (vacancy) {
-                    // Quick modal or navigation to VacanciesSection can be triggered here. 
-                    // For now, prompt instruction suggests we just need a way to open it. 
-                    // If no global state exists for this, we emulate it or dispatch an event.
-                    window.dispatchEvent(new CustomEvent('open-edit-vacancy', { detail: { vacancy } }));
-                } else {
-                    showToast('No se encontró la vacante asociada', 'error');
-                }
+                setEditingVacancyId(primaryVacancyId);
+                setShowVacancyModal(true);
             } else {
                 showToast('Este proyecto no tiene vacantes asociadas', 'error');
             }
@@ -1650,6 +1612,18 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                     ) : null
                 ) : null}
             </DragOverlay>
+
+            {/* Vacancy Editor Modal shortcut */}
+            {showVacancyModal && (
+                <VacancyEditorModal
+                    isOpen={showVacancyModal}
+                    onClose={() => {
+                        setShowVacancyModal(false);
+                        setEditingVacancyId(null);
+                    }}
+                    vacancyId={editingVacancyId}
+                />
+            )}
 
             {/* Create Modal */}
             {showCreateModal && (
