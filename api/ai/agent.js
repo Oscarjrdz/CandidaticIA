@@ -672,12 +672,48 @@ ${safeDnaLines}
                     }
                 }
 
-                // ⚡ ROBUST MOVE TAG DETECTION
-                const moveRegex = /[\{\[]\s*move(?:[\s:]+[\w_]+)?\s*[\}\]]/i;
-                const exitRegex = /[\{\[]\s*move:\s*(exit|no_interesa)\s*[\}\]]/i;
+                // ⚡ ROBUST MOVE TAG DETECTION WITH PAYLOAD PARSING
+                // Attempt to parse advanced JSON-like tags: { move: "Citados", setDate: "Lunes", setTime: "10:00" }
+                // Or fallback to classic: { move } / { move: exit }
+                const advanceBracketsMatch = (aiResult?.thought_process || '').match(/[\{\[]\s*(move.*?)[\}\]]/i) ||
+                    (aiResult?.response_text || '').match(/[\{\[]\s*(move.*?)[\}\]]/i);
 
-                let hasMoveTag = moveRegex.test(aiResult?.thought_process || '') || moveRegex.test(aiResult?.response_text || '');
-                const hasExitTag = exitRegex.test(aiResult?.thought_process || '') || exitRegex.test(aiResult?.response_text || '');
+                let hasMoveTag = false;
+                let hasExitTag = false;
+                let extractedMoveTarget = null;
+
+                if (advanceBracketsMatch && advanceBracketsMatch[0]) {
+                    hasMoveTag = true;
+                    const innerContent = advanceBracketsMatch[0];
+                    console.log(`[RECRUITER BRAIN] 🏷️ Found MOVE tag payload:`, innerContent);
+
+                    // If it specifically says exit or no_interesa
+                    if (/move:\s*(exit|no_interesa|no interesa)/i.test(innerContent)) {
+                        hasExitTag = true;
+                    }
+
+                    // Try to extract setDate / setTime using loose Regex (JSON.parse often fails on LLM output)
+                    const dateMatch = innerContent.match(/setDate:\s*["']([^"']+)["']/i);
+                    const timeMatch = innerContent.match(/setTime:\s*["']([^"']+)["']/i);
+                    const specificMoveMatch = innerContent.match(/move:\s*["']([^"']+)["']/i);
+
+                    if (specificMoveMatch && specificMoveMatch[1]) {
+                        extractedMoveTarget = specificMoveMatch[1].trim();
+                        // Auto-detect if target was exit
+                        if (extractedMoveTarget.toLowerCase().includes('no interesa') || extractedMoveTarget.toLowerCase() === 'exit') {
+                            hasExitTag = true;
+                        }
+                    }
+
+                    if (dateMatch || timeMatch) {
+                        if (!candidateUpdates.projectMetadata) {
+                            candidateUpdates.projectMetadata = { ...candidateData.projectMetadata };
+                        }
+                        if (dateMatch && dateMatch[1]) candidateUpdates.projectMetadata.citaFecha = dateMatch[1].trim();
+                        if (timeMatch && timeMatch[1]) candidateUpdates.projectMetadata.citaHora = timeMatch[1].trim();
+                        console.log(`[RECRUITER BRAIN] 📅 Extracted Calendar Payloads from tag: Fecha=${candidateUpdates.projectMetadata.citaFecha}, Hora=${candidateUpdates.projectMetadata.citaHora}`);
+                    }
+                }
 
                 // 🛡️ CONTEXTUAL SAFETY TRIGGER (MARK STYLE)
                 // If Brenda forgets the tag but the developer-certified intent is ACCEPTANCE 
@@ -712,7 +748,19 @@ ${safeDnaLines}
                             s.name?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes('no interesa')
                         );
                         isExitMove = true;
+                    } else if (extractedMoveTarget) {
+                        // AI explicitly asked for a step name (e.g. "Citados")
+                        const targetNormalized = extractedMoveTarget.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                        nextStep = project.steps.find(s =>
+                            s.name?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(targetNormalized)
+                        );
+                        // If it didn't find the exact target, default to linear next step
+                        if (!nextStep) {
+                            console.warn(`[RECRUITER BRAIN] ⚠️ AI requested step "${extractedMoveTarget}" but it was not found. Defaulting to next linear step.`);
+                            nextStep = project.steps[currentIndex + 1];
+                        }
                     } else {
+                        // Linear progression
                         nextStep = project.steps[currentIndex + 1];
                     }
 
