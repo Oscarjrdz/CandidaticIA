@@ -744,6 +744,36 @@ ${safeDnaLines}
                         hasMoveTag = true;
                         inferredAcceptance = true;
                     }
+
+                    // Check THIS bot text for confirmation of appointment
+                    const thisBotText = (aiResult?.response_text || '').toLowerCase();
+                    const isCitaConfirmation = thisBotText.includes('queda agendada') ||
+                        thisBotText.includes('entrevista agendada') ||
+                        thisBotText.includes('confirmada tu entrevista');
+
+                    if (!hasMoveTag && isCitaConfirmation) {
+                        console.log(`[RECRUITER BRAIN] 🛡️ Contextual Scheduling Confirmation detected directly in bot text! Forcing move to Citados.`);
+                        hasMoveTag = true;
+                        extractedMoveTarget = "Citados";
+                        inferredAcceptance = true;
+
+                        // Attempt to extract date and time from the text as fallback
+                        const dateRegex = /para el\s+([a-zA-Z0-9\s]+?)\s+a\s+las/i;
+                        const timeRegex = /a\s+las\s+([0-9:]+\s*(?:AM|PM|am|pm|hrs))/i;
+
+                        const textDateMatch = aiResult?.response_text?.match(dateRegex);
+                        const textTimeMatch = aiResult?.response_text?.match(timeRegex);
+
+                        if (textDateMatch || textTimeMatch) {
+                            if (!candidateUpdates.projectMetadata) {
+                                candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
+                            }
+                            if (textDateMatch) candidateUpdates.projectMetadata.citaFecha = textDateMatch[1].trim();
+                            if (textTimeMatch) candidateUpdates.projectMetadata.citaHora = textTimeMatch[1].trim();
+
+                            console.log(`[RECRUITER BRAIN] 📅 Extracted Text Payloads: Fecha=${candidateUpdates.projectMetadata.citaFecha}, Hora=${candidateUpdates.projectMetadata.citaHora}`);
+                        }
+                    }
                 }
 
                 if (hasMoveTag || hasExitTag) {
