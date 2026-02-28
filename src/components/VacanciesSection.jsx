@@ -920,8 +920,8 @@ const VacanciesSection = ({ showToast }) => {
                                 onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                             />
 
-                            <div className="space-y-1">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                                     Categoría
                                 </label>
                                 <div className="relative">
