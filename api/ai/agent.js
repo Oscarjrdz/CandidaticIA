@@ -399,8 +399,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // Use Nitro Cached Config
         const aiConfigJson = batchConfig.ai_config;
 
-        // 🧨 RESET COMMAND (TEMPORARY FOR TESTING)
-        if (incomingMessage === 'RESET') {
+        // 🧨 RESET COMMAND (STRICT GUARDED)
+        if (incomingMessage === 'RESET' && process.env.NODE_ENV !== 'production') {
             if (candidateData && candidateData.whatsapp) {
                 const phone = candidateData.whatsapp;
                 const id = candidateId;
@@ -662,7 +662,7 @@ ${safeDnaLines}
                 }
 
                 // ⚡ ROBUST MOVE TAG DETECTION
-                const moveRegex = /[\{\[]\s*move\s*[\}\]]/i;
+                const moveRegex = /[\{\[]\s*move(?:[\s:]+[\w_]+)?\s*[\}\]]/i;
                 const exitRegex = /[\{\[]\s*move:\s*(exit|no_interesa)\s*[\}\]]/i;
 
                 let hasMoveTag = moveRegex.test(aiResult?.thought_process || '') || moveRegex.test(aiResult?.response_text || '');
@@ -783,7 +783,7 @@ ${safeDnaLines}
                                     const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
                                     const match = nextAiResult.response_text.match(splitRegex);
 
-                                    if (match) {
+                                    if (match && match.index > 0) {
                                         const splitIdx = match.index;
                                         const part1 = nextAiResult.response_text.substring(0, splitIdx).trim();
                                         const part2 = nextAiResult.response_text.substring(splitIdx).trim();
@@ -912,7 +912,7 @@ ${safeDnaLines}
                 let bypassGpt = false;
 
                 if (isNewFlag) {
-                    if (isGenericStart && auditForMode.missingLabels.length > 0) {
+                    if (isGenericStart && auditForMode.missingLabels.length > 0 && !customPrompt) {
                         bypassGpt = true;
                     } else {
                         const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
