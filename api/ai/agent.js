@@ -788,18 +788,21 @@ ${safeDnaLines}
                                         const part1 = nextAiResult.response_text.substring(0, splitIdx).trim();
                                         const part2 = nextAiResult.response_text.substring(splitIdx).trim();
 
-                                        if (part1) cMessagesToSend.push(part1);
-                                        cMessagesToSend.push(part2);
+                                        if (part1 && part1.length > 0) cMessagesToSend.push(part1);
+                                        if (part2 && part2.length > 0) cMessagesToSend.push(part2);
                                     } else {
-                                        cMessagesToSend.push(nextAiResult.response_text);
+                                        if (nextAiResult.response_text && nextAiResult.response_text.trim().length > 0) {
+                                            cMessagesToSend.push(nextAiResult.response_text.trim());
+                                        }
                                     }
 
                                     for (let i = 0; i < cMessagesToSend.length; i++) {
                                         // Filter out nested [SILENCIO] leakage in chained step
                                         const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
-                                        if (filterRegex.test(String(cMessagesToSend[i]).trim())) continue;
+                                        const msgClean = String(cMessagesToSend[i]).trim();
+                                        if (!msgClean || filterRegex.test(msgClean)) continue;
 
-                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cMessagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
+                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
                                         if (cMessagesToSend.length > 1 && i < cMessagesToSend.length - 1) {
                                             await new Promise(r => setTimeout(r, 1500));
                                         }

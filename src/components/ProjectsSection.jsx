@@ -1381,7 +1381,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                             Nuevo Proyecto
                                         </Button>
                                         <Button
-                                            icon={Sparkles}
+                                            icon={Bot}
                                             onClick={() => setShowAISearch(true)}
                                             className="bg-[#10a37f] hover:bg-[#0e906f] text-white rounded-lg font-black text-[8px] uppercase tracking-widest px-3 py-1.5 h-auto shadow-lg shadow-[#10a37f]/20 transition-all"
                                         >

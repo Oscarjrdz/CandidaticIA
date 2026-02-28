@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Sparkles, X, Loader2, Command } from 'lucide-react';
+import { Search, Sparkles, X, Loader2, Command, Bot } from 'lucide-react';
 import { aiQuery } from '../services/candidatesService';
 
 const STATUS_STEPS = [
@@ -109,11 +109,11 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
     if (!isOpen && isOpenProp === undefined) return (
         <button
             onClick={() => setInternalOpen(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-gray-100 dark:bg-gray-800/80 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-full border border-gray-200 dark:border-gray-700/50 transition-all font-medium group"
+            className="flex items-center space-x-2 px-4 py-2 bg-[#10a37f] hover:bg-[#0e906f] text-white rounded-lg border border-[#10a37f]/50 transition-all font-black text-[8px] uppercase tracking-widest shadow-lg shadow-[#10a37f]/20 group"
         >
-            <Search className="w-4 h-4 opacity-70 group-hover:scale-110 transition-transform" />
+            <Bot className="w-4 h-4 opacity-100 group-hover:scale-110 transition-transform" />
             <span className="text-sm font-semibold">Buscador Inteligente</span>
-            <div className="flex items-center space-x-1 opacity-50 px-1.5 py-0.5 rounded border border-gray-300 dark:border-gray-600">
+            <div className="flex items-center space-x-1 opacity-80 px-1.5 py-0.5 rounded border border-white/20 ml-2">
                 <Command className="w-2.5 h-2.5" />
                 <span className="text-[10px] font-bold">K</span>
             </div>
