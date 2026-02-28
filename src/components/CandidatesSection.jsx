@@ -134,7 +134,7 @@ const CandidatesSection = ({ showToast }) => {
     const [blockLoading, setBlockLoading] = useState({});
 
     // 📡 SSE: Real-time candidate updates
-    const { newCandidate, globalStats } = useCandidatesSSE();
+    const { newCandidate, updatedCandidate, globalStats } = useCandidatesSSE();
 
     // Listen for new candidates via SSE
     useEffect(() => {
@@ -152,6 +152,25 @@ const CandidatesSection = ({ showToast }) => {
             });
         }
     }, [newCandidate, showToast]);
+
+    // Listen for updated candidates via SSE
+    useEffect(() => {
+        if (updatedCandidate && updatedCandidate.candidateId && updatedCandidate.updates) {
+            setCandidates(prev => {
+                const index = prev.findIndex(c => c.id === updatedCandidate.candidateId);
+                if (index === -1) return prev; // Not in list, ignore
+
+                const updatedList = [...prev];
+                updatedList[index] = { ...updatedList[index], ...updatedCandidate.updates };
+                return updatedList;
+            });
+
+            // Si el candidato actualizado es el que está seleccionado en el chat lateral, actualizarlo también
+            if (selectedCandidate && selectedCandidate.id === updatedCandidate.candidateId) {
+                setSelectedCandidate(prev => ({ ...prev, ...updatedCandidate.updates }));
+            }
+        }
+    }, [updatedCandidate]);
 
     // Live Stats Integration: Update dashboard when globalStats pulse arrives
     useEffect(() => {
