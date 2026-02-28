@@ -1372,17 +1372,18 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <button
+                                        <Button
                                             onClick={handleOpenNewProjectModal}
-                                            className="flex items-center gap-1.5 text-slate-400 hover:text-blue-500 transition-colors p-1"
+                                            className="bg-white hover:bg-slate-50 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg font-black text-[8px] uppercase tracking-widest px-3 py-1.5 h-auto shadow-sm flex items-center gap-1.5 transition-all"
                                             title="Nuevo Proyecto"
                                         >
-                                            <Plus className="w-4 h-4" />
-                                        </button>
+                                            <Plus className="w-3.5 h-3.5" />
+                                            Nuevo Proyecto
+                                        </Button>
                                         <Button
                                             icon={Sparkles}
                                             onClick={() => setShowAISearch(true)}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-black text-[8px] uppercase tracking-widest px-3 py-1.5 h-auto shadow-lg shadow-blue-600/20"
+                                            className="bg-[#10a37f] hover:bg-[#0e906f] text-white rounded-lg font-black text-[8px] uppercase tracking-widest px-3 py-1.5 h-auto shadow-lg shadow-[#10a37f]/20 transition-all"
                                         >
                                             IA Search
                                         </Button>
