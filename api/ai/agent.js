@@ -671,16 +671,21 @@ ${safeDnaLines}
                 // 🛡️ CONTEXTUAL SAFETY TRIGGER (MARK STYLE)
                 // If Brenda forgets the tag but the developer-certified intent is ACCEPTANCE 
                 // AND the bot just asked to schedule, we force the move.
-                if (!hasMoveTag && intent === 'ACCEPTANCE') {
+                let inferredAcceptance = false;
+                if (!hasMoveTag) {
                     const lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
                     const botText = (lastBotMsg?.content || '').toLowerCase();
                     const isInterviewInvite = botText.includes('agendar tu entrevista') ||
+                        botText.includes('agendar una entrevista') ||
                         botText.includes('agendamos tu entrevista') ||
                         botText.includes('te queda bien');
 
-                    if (isInterviewInvite) {
+                    const isUserAffirmative = /^(si|sí|claro|por supuesto|obvio|va|dale|ok|okay|sipi|simon|simón|me parece bien|está bien|perfecto|excelente|adelante)/i.test(aggregatedText.trim());
+
+                    if (isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative)) {
                         console.log(`[RECRUITER BRAIN] 🛡️ Contextual Acceptance detected(Bot invited, User said Yes)! Forcing { move }.`);
                         hasMoveTag = true;
+                        inferredAcceptance = true;
                     }
                 }
 
