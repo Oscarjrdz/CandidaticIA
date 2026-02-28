@@ -900,9 +900,9 @@ const VacanciesSection = ({ showToast }) => {
                 title={editingId ? "Editar Vacante" : "Nueva Vacante"}
                 maxWidth={editingId ? "max-w-[1400px] w-[95vw]" : "max-w-xl"}
             >
-                <div className={`grid gap-8 ${editingId ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+                <div className={`grid gap-8 h-[calc(100vh-12rem)] max-h-[800px] ${editingId ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
                     {/* COLUMNA 1: FORMULARIO VACANTE */}
-                    <div className="space-y-4">
+                    <div className="space-y-4 h-full overflow-y-auto pr-2 custom-scrollbar">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Input
                                 label="Nombre de la Vacante"
