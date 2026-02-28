@@ -13,6 +13,7 @@ import Skeleton, { ProjectSkeleton } from './ui/Skeleton';
 import MagicSearch from './MagicSearch';
 import ChatWindow from './ChatWindow';
 import VacancyEditorModal from './VacancyEditorModal';
+import InteractiveCalendar from './InteractiveCalendar';
 import { formatPhone, formatRelativeDate, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 
@@ -1370,56 +1371,11 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     </button>
                                 </div>
 
-                                <div className="space-y-4">
-                                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                                        Agrega los días y horarios que Brenda ofrecerá a los candidatos en este paso. (Ej: "Lunes 10:00 AM" o "Mañana a las 4:00 PM")
-                                    </p>
-
-                                    <div className="flex gap-2">
-                                        <Input
-                                            value={newCalendarOption}
-                                            onChange={(e) => setNewCalendarOption(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && newCalendarOption.trim()) {
-                                                    e.preventDefault();
-                                                    setCalendarOptions([...calendarOptions, newCalendarOption.trim()]);
-                                                    setNewCalendarOption('');
-                                                }
-                                            }}
-                                            className="flex-1"
-                                            placeholder="Ej: Miércoles 24 - 11:30 AM"
-                                        />
-                                        <Button
-                                            onClick={() => {
-                                                if (newCalendarOption.trim()) {
-                                                    setCalendarOptions([...calendarOptions, newCalendarOption.trim()]);
-                                                    setNewCalendarOption('');
-                                                }
-                                            }}
-                                            className="bg-emerald-500 hover:bg-emerald-600 text-white px-4"
-                                            disabled={!newCalendarOption.trim()}
-                                        >
-                                            <Plus className="w-4 h-4" />
-                                        </Button>
-                                    </div>
-
-                                    <div className="space-y-2 mt-4 max-h-48 overflow-y-auto">
-                                        {calendarOptions.length === 0 ? (
-                                            <p className="text-center text-sm text-slate-400 py-4 italic">No hay horarios configurados</p>
-                                        ) : (
-                                            calendarOptions.map((opt, idx) => (
-                                                <div key={idx} className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                                                    <span className="font-medium text-slate-700 dark:text-slate-300 text-sm">{opt}</span>
-                                                    <button
-                                                        onClick={() => setCalendarOptions(calendarOptions.filter((_, i) => i !== idx))}
-                                                        className="text-slate-400 hover:text-red-500 p-1 rounded transition-colors"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
+                                <div className="space-y-4 w-full">
+                                    <InteractiveCalendar
+                                        options={calendarOptions}
+                                        onChange={setCalendarOptions}
+                                    />
                                 </div>
 
                                 <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800/50">
