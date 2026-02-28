@@ -900,9 +900,9 @@ const VacanciesSection = ({ showToast }) => {
                 title={editingId ? "Editar Vacante" : "Nueva Vacante"}
                 maxWidth={editingId ? "max-w-[1400px] w-[95vw]" : "max-w-xl"}
             >
-                <div className={`grid gap-8 flex-1 min-h-[400px] ${editingId ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+                <div className={`grid gap-8 flex-1 min-h-0 ${editingId ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
                     {/* COLUMNA 1: FORMULARIO VACANTE */}
-                    <div className="space-y-4 h-full overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="space-y-4 h-full min-h-0 overflow-y-auto pr-2 custom-scrollbar">
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Input
                                 label="Nombre de la Vacante"
@@ -1052,7 +1052,7 @@ const VacanciesSection = ({ showToast }) => {
 
                     {/* COLUMNA 2: RADAR DE DUDAS (SOLO EN EDICION) */}
                     {editingId && (
-                        <div className="space-y-4 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 pt-6 lg:pt-0 lg:pl-8 flex flex-col h-full">
+                        <div className="space-y-4 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 pt-6 lg:pt-0 lg:pl-8 flex flex-col h-full min-h-0">
                             <div className="flex items-center justify-between mb-2">
                                 <div>
                                     <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -1083,7 +1083,7 @@ const VacanciesSection = ({ showToast }) => {
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar h-full">
+                            <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-3 custom-scrollbar h-full">
                                 {loadingFaqs ? (
                                     <div className="flex justify-center py-8">
                                         <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
