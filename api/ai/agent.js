@@ -709,9 +709,10 @@ ${safeDnaLines}
                         console.log(`[RECRUITER BRAIN] 🚀 Moving to step: ${nextStep.name} (Exit: ${isExitMove})`);
                         const recruiterFinalSpeech = responseTextVal;
                         responseTextVal = null;
+                        let cleanSpeech = '';
 
                         if (recruiterFinalSpeech) {
-                            const cleanSpeech = recruiterFinalSpeech
+                            cleanSpeech = recruiterFinalSpeech
                                 .replace(/\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]/gi, '')
                                 .replace(/[\{\[]\s*move(?:[\s:]+\w+)?\s*[\}\]]/gi, '')
                                 .trim();
@@ -769,7 +770,9 @@ ${safeDnaLines}
                                     ...historyForGpt.filter(h => h.role === 'user').slice(-3), // Keep some context but limited
                                     { role: 'user', content: `[SISTEMA]: El candidato acaba de avanzar al paso "${nextStep.name}".Este es tu primer contacto en este paso.Sigue tu OBJETIVO DE PASO.` }
                                 ];
-                                if (recruiterFinalSpeech) historyForNextStep.splice(-1, 0, { role: 'assistant', content: recruiterFinalSpeech });
+                                if (cleanSpeech && cleanSpeech.length > 0) {
+                                    historyForNextStep.splice(-1, 0, { role: 'assistant', content: cleanSpeech });
+                                }
 
                                 const nextAiResult = await processRecruiterMessage(
                                     { ...candidateData, ...candidateUpdates },
