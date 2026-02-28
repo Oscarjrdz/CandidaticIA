@@ -24,6 +24,7 @@ const Button = ({
         success: 'bg-success hover:bg-green-600 text-white focus:ring-green-400',
         danger: 'bg-error hover:bg-red-600 text-white focus:ring-red-400',
         outline: 'border-2 border-gray-300 hover:border-gray-400 text-gray-700 dark:border-gray-600 dark:hover:border-gray-500 dark:text-gray-300 focus:ring-gray-400',
+        custom: '',
     };
 
     const sizes = {
