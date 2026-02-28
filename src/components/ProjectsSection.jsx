@@ -118,7 +118,7 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
     );
 };
 
-const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch }) => {
+const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour }) => {
     const {
         attributes,
         listeners,
@@ -183,7 +183,21 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch }) => {
                         <Briefcase className="w-3.5 h-3.5" />
                     </button>
 
-                    {!step.locked && step.id !== 'step_default' && (
+                    {/* Bot Prompt Config Trigger */}
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            onEdit(step.id, 'ai');
+                        }}
+                        className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.aiConfig?.prompt
+                            ? 'text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                            : 'text-slate-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
+                        title="Configurar Prompt del Bot"
+                    >
+                        <Bot className="w-3.5 h-3.5" />
+                    </button>
+
+                    {!step.locked && step.id !== 'step_default' && !isFirstFour && (
                         <button
                             onClick={(e) => {
                                 e.preventDefault(); e.stopPropagation();
@@ -1529,6 +1543,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                                     id={step.id}
                                                     step={step}
                                                     count={stepCands.length}
+                                                    isFirstFour={index < 4}
                                                     onEdit={(id, mode) => handleUpdateStepName(id, mode)}
                                                     onLaunch={(id) => handleLaunchStep(id)}
                                                 >
