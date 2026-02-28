@@ -710,6 +710,22 @@ ${safeDnaLines}
                         const recruiterFinalSpeech = responseTextVal;
                         responseTextVal = null;
 
+                        if (recruiterFinalSpeech) {
+                            const cleanSpeech = recruiterFinalSpeech
+                                .replace(/\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]/gi, '')
+                                .replace(/[\{\[]\s*move(?:[\s:]+\w+)?\s*[\}\]]/gi, '')
+                                .trim();
+
+                            if (cleanSpeech.length > 0) {
+                                console.log(`[RECRUITER BRAIN] 🗣️ Enviando mensaje final del paso actual: "${cleanSpeech}"`);
+                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 }).catch((e) => {
+                                    console.error('Error enviando pre-move:', e.message);
+                                });
+                                await saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() });
+                                await new Promise(r => setTimeout(r, 1500));
+                            }
+                        }
+
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
                         candidateUpdates.stepId = nextStep.id;
                         candidateUpdates.projectId = activeProjectId; // Keep them in project
