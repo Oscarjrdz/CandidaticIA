@@ -614,10 +614,21 @@ ${safeDnaLines}
                     // 🧠 EXTRACTION SYNC (RECRUITER MODE)
                     // If OpenAI extracted data during a project step, merge it.
                     if (aiResult?.extracted_data) {
-                        const { categoria, municipio, escolaridad } = aiResult.extracted_data;
+                        const { categoria, municipio, escolaridad, citaFecha, citaHora } = aiResult.extracted_data;
                         if (categoria) candidateUpdates.categoria = categoria;
                         if (municipio) candidateUpdates.municipio = municipio;
                         if (escolaridad) candidateUpdates.escolaridad = escolaridad;
+
+                        // Calendario / Agenda (Guardar en projectMetadata)
+                        if (citaFecha || citaHora) {
+                            if (!candidateUpdates.projectMetadata) {
+                                candidateUpdates.projectMetadata = { ...candidateData.projectMetadata };
+                            }
+                            if (citaFecha) candidateUpdates.projectMetadata.citaFecha = citaFecha;
+                            if (citaHora) candidateUpdates.projectMetadata.citaHora = citaHora;
+                            console.log(`[RECRUITER BRAIN] 📅 Extracted Calendar Data: Fecha=${citaFecha}, Hora=${citaHora}`);
+                        }
+
                         console.log(`[RECRUITER BRAIN] 🧬 Extracted data merged: `, aiResult.extracted_data);
                     }
 

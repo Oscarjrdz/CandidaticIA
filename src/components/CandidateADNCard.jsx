@@ -56,6 +56,15 @@ const CandidateADNCard = ({ candidate }) => {
                         <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase">
                             {candidate.currentVacancyName || candidate.categoria || 'N/A'}
                         </span>
+
+                        {(candidate.projectMetadata?.citaFecha || candidate.projectMetadata?.citaHora) && (
+                            <div className="mt-1 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded border border-emerald-100 dark:border-emerald-800/50">
+                                <Calendar className="w-3 h-3 text-emerald-500" />
+                                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter">
+                                    {candidate.projectMetadata.citaFecha || ''} {candidate.projectMetadata.citaHora || ''}
+                                </span>
+                            </div>
+                        )}
                     </div>
                     <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-500">
                         {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}

@@ -154,6 +154,22 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch }) => {
 
 
                 <div className="flex items-center gap-1">
+                    {/* Calendar Config Trigger (Only for CITA step) */}
+                    {step.name?.toLowerCase().includes('cita') && (
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation();
+                                onEdit(step.id, 'calendar');
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.calendarOptions?.length > 0
+                                ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                                : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
+                            title="Configurar Horarios Disponibles"
+                        >
+                            <Calendar className="w-3.5 h-3.5" />
+                        </button>
+                    )}
+
                     {/* AI Config Trigger */}
                     <button
                         onClick={(e) => {
@@ -161,8 +177,8 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch }) => {
                             onEdit(step.id, 'ai');
                         }}
                         className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.aiConfig?.enabled
-                            ? 'text-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                            : 'text-slate-300 hover:text-purple-500 hover:bg-purple-50'}`}
+                            ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                            : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
                         title="Configurar IA"
                     >
                         <Bot className="w-3.5 h-3.5" />
@@ -175,23 +191,23 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch }) => {
                             onEdit(step.id, 'toggle');
                         }}
                         className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.aiConfig?.enabled
-                            ? 'text-green-500 bg-green-50 dark:bg-green-900/20'
-                            : 'text-slate-300 hover:text-green-500'}`}
+                            ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                            : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
                         title={step.aiConfig?.enabled ? 'Desactivar Auto' : 'Activar Auto'}
                     >
                         <Power className="w-3.5 h-3.5" />
                     </button>
 
-                    {/* Launch Step (Manual) */}
+                    {/* Edit Vacancy Shortcut */}
                     <button
                         onClick={(e) => {
                             e.preventDefault(); e.stopPropagation();
-                            onLaunch(step.id);
+                            onEdit(step.id, 'vacancy');
                         }}
-                        className="p-1.5 rounded-lg transition-all text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 active:scale-90 relative z-10"
-                        title="Lanzar Brenda en este paso"
+                        className="p-1.5 rounded-lg transition-all text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 active:scale-90 relative z-10"
+                        title="Editar Vacante del Proyecto"
                     >
-                        <Rocket className="w-3.5 h-3.5" />
+                        <Briefcase className="w-3.5 h-3.5" />
                     </button>
 
                     {/* End Quick Toggle */}
@@ -275,6 +291,14 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
                             VACANTE: {candidate.currentVacancyName || candidate.projectMetadata.currentVacancyName}
                         </p>
                     )}
+                    {(candidate.projectMetadata?.citaFecha || candidate.projectMetadata?.citaHora) && (
+                        <div className="mt-0.5 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded w-fit border border-emerald-100 dark:border-emerald-800/50">
+                            <Calendar className="w-2.5 h-2.5 text-emerald-500" />
+                            <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tighter">
+                                {candidate.projectMetadata.citaFecha || ''} {candidate.projectMetadata.citaHora || ''}
+                            </span>
+                        </div>
+                    )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[7px] text-slate-500 font-bold uppercase tracking-widest opacity-80 mt-1">
                     <div className="flex items-center gap-0.5 whitespace-nowrap">
@@ -352,6 +376,11 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [stepPrompt, setStepPrompt] = useState('');
     const [stepWaitMsg, setStepWaitMsg] = useState('');
     const [isOptimizing, setIsOptimizing] = useState(false);
+
+    // Calendar Step Config
+    const [openCalendarConfig, setOpenCalendarConfig] = useState(null); // { stepId: '...', projectId: '...' }
+    const [calendarOptions, setCalendarOptions] = useState([]);
+    const [newCalendarOption, setNewCalendarOption] = useState('');
 
     // AI Search integration
     const [showAISearch, setShowAISearch] = useState(false);
@@ -676,6 +705,32 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             return;
         }
 
+        if (mode === 'calendar') {
+            // Open Calendar Config Modal
+            setOpenCalendarConfig({ stepId, projectId: activeProject.id });
+            setCalendarOptions(step.calendarOptions || []);
+            setNewCalendarOption('');
+            return;
+        }
+
+        if (mode === 'vacancy') {
+            // Open Edit Vacancy Shortcut
+            if (activeProject.vacancyIds && activeProject.vacancyIds.length > 0) {
+                const primaryVacancyId = activeProject.vacancyIds[0];
+                const vacancy = vacancies.find(v => v.id === primaryVacancyId);
+                if (vacancy) {
+                    // Quick modal or navigation to VacanciesSection can be triggered here. 
+                    // For now, prompt instruction suggests we just need a way to open it. 
+                    // If no global state exists for this, we emulate it or dispatch an event.
+                    window.dispatchEvent(new CustomEvent('open-edit-vacancy', { detail: { vacancy } }));
+                } else {
+                    showToast('No se encontró la vacante asociada', 'error');
+                }
+            } else {
+                showToast('Este proyecto no tiene vacantes asociadas', 'error');
+            }
+            return;
+        }
 
         if (mode === 'delete') {
             await handleDeleteStep(stepId);
@@ -1315,6 +1370,107 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                         </div>
                     </div>
                 )}
+
+                {/* Calendar Config Modal */}
+                {openCalendarConfig && activeProject && (
+                    <div className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-slate-200/50 dark:border-slate-800 flex flex-col max-h-[90vh]">
+                            <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                                <div className="flex items-start gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/50">
+                                    <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl">
+                                        <Calendar className="w-8 h-8 text-emerald-500" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Opciones de Agenda</h3>
+                                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                                            Paso: {activeProject.steps.find(s => s.id === openCalendarConfig.stepId)?.name}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setOpenCalendarConfig(null)}
+                                        className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                                        Agrega los días y horarios que Brenda ofrecerá a los candidatos en este paso. (Ej: "Lunes 10:00 AM" o "Mañana a las 4:00 PM")
+                                    </p>
+
+                                    <div className="flex gap-2">
+                                        <Input
+                                            value={newCalendarOption}
+                                            onChange={(e) => setNewCalendarOption(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && newCalendarOption.trim()) {
+                                                    e.preventDefault();
+                                                    setCalendarOptions([...calendarOptions, newCalendarOption.trim()]);
+                                                    setNewCalendarOption('');
+                                                }
+                                            }}
+                                            className="flex-1"
+                                            placeholder="Ej: Miércoles 24 - 11:30 AM"
+                                        />
+                                        <Button
+                                            onClick={() => {
+                                                if (newCalendarOption.trim()) {
+                                                    setCalendarOptions([...calendarOptions, newCalendarOption.trim()]);
+                                                    setNewCalendarOption('');
+                                                }
+                                            }}
+                                            className="bg-emerald-500 hover:bg-emerald-600 text-white px-4"
+                                            disabled={!newCalendarOption.trim()}
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+
+                                    <div className="space-y-2 mt-4 max-h-48 overflow-y-auto">
+                                        {calendarOptions.length === 0 ? (
+                                            <p className="text-center text-sm text-slate-400 py-4 italic">No hay horarios configurados</p>
+                                        ) : (
+                                            calendarOptions.map((opt, idx) => (
+                                                <div key={idx} className="flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+                                                    <span className="font-medium text-slate-700 dark:text-slate-300 text-sm">{opt}</span>
+                                                    <button
+                                                        onClick={() => setCalendarOptions(calendarOptions.filter((_, i) => i !== idx))}
+                                                        className="text-slate-400 hover:text-red-500 p-1 rounded transition-colors"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800/50">
+                                    <button
+                                        onClick={() => setOpenCalendarConfig(null)}
+                                        className="px-4 py-2 text-slate-500 hover:text-slate-700 font-bold text-sm uppercase tracking-widest"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <Button
+                                        onClick={() => {
+                                            const updatedSteps = activeProject.steps.map(s =>
+                                                s.id === openCalendarConfig.stepId ? { ...s, calendarOptions } : s
+                                            );
+                                            saveStepsUpdate(updatedSteps, 'Opciones de agenda actualizadas');
+                                            setOpenCalendarConfig(null);
+                                        }}
+                                        className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl px-6 py-2 shadow-lg shadow-emerald-500/20 font-black tracking-widest text-sm transition-all hover:scale-105"
+                                    >
+                                        Guardar Horarios
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-12 gap-6 flex-1 min-h-0">
                     {/* Projects List sidebar */}
                     <div className="col-span-12 lg:col-span-2 flex flex-col min-h-0 space-y-2 overflow-hidden">

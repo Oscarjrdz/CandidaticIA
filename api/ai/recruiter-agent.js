@@ -43,7 +43,7 @@ unanswered_question: "¿Puedo llevar el pelo largo?"
 
 [FORMATO DE RESPUESTA - JSON OBLIGATORIO]:
 {
-    "extracted_data": { "categoria": "string|null", "municipio": "string|null", "escolaridad": "string|null" },
+    "extracted_data": { "categoria": "string|null", "municipio": "string|null", "escolaridad": "string|null", "citaFecha": "string|null", "citaHora": "string|null" },
     "thought_process": "Razonamiento interno.",
     "response_text": "Tu respuesta cálida de Brenda.",
     "media_url": "URL del archivo multimedia si la duda lo tiene, sino null.",
@@ -241,6 +241,12 @@ ${RECRUITER_IDENTITY}
 
 ${adnContext}
 ${repetitionShield}
+
+[OPCIONES DE AGENDA DISPONIBLES]:
+${currentStep.calendarOptions && currentStep.calendarOptions.length > 0
+                ? `El reclutador ha configurado los siguientes horarios para entrevistas. OFRÉCELOS AL CANDIDATO:\n* ${currentStep.calendarOptions.join('\n* ')}`
+                : 'No hay horarios preconfigurados, pregunta por su disponibilidad general.'}
+
 
 [INSTRUCCIONES DE ACTUACIÓN]:
 1. PRIORIDAD: Al responder dudas, busca siempre primero en [PREGUNTAS FRECUENTES OFICIALES] (uso semántico permitido).
