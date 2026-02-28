@@ -878,9 +878,16 @@ ${safeDnaLines}
 - **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado. (Ej: "Secu" o "Secundaria trunca" -> "Secundaria").
 - **Categoría**: Si es "Ayudante" mantén "Ayudante". Si opera maquinaria -> "Montacarguista".\n`;
 
+                const isGenericStart = isNewFlag && /^(hola|buen[oa]s|info|vacantes?|empleos?|trabajos?|ola|q tal|que tal|\s*)$/i.test(aggregatedText.trim());
+                let bypassGpt = false;
+
                 if (isNewFlag) {
-                    const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
-                    systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate como ${welcomeName} y solicita el Nombre y Apellidos. ✨🌸\n`;
+                    if (isGenericStart && auditForMode.missingLabels.length > 0) {
+                        bypassGpt = true;
+                    } else {
+                        const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
+                        systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate como ${welcomeName} y solicita el Nombre y Apellidos. ✨🌸\n`;
+                    }
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
                     candidateUpdates.esNuevo = 'NO';
                     let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
@@ -894,18 +901,38 @@ ${safeDnaLines}
 
                 // Call Magic GPT (Dynamic Model)
                 const selectedModel = batchConfig.bot_ia_model || 'gpt-4o-mini';
-                const gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" });
+                let gptResult = null;
+
+                if (bypassGpt) {
+                    const welcomeName = customPrompt ? 'tu reclutadora' : 'la Lic. Brenda Rodríguez';
+                    const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
+                    const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
+                    gptResult = {
+                        content: JSON.stringify({
+                            response_text: `¡Hola! ${gEmoji} Soy ${welcomeName} de Candidatic. Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`,
+                            extracted_data: {},
+                            reaction: '✨',
+                            thought_process: "AUTO_GREETING_BYPASS: Fast initial response for generic greeting."
+                        }),
+                        usage: { total_tokens: 0 }
+                    };
+                    console.log(`[GPT BRAIN] ⚡ Fast-tracked initial greeting for candidate ${candidateId} (LLM Bypassed - 0ms)`);
+                } else {
+                    gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" });
+                }
 
                 if (gptResult?.content) {
                     try {
                         let jsonMatch = gptResult.content.match(/\{[\s\S]*\}/);
                         const cleanJson = jsonMatch ? jsonMatch[0] : gptResult.content;
                         aiResult = JSON.parse(cleanJson);
-                        recordAITelemetry(candidateId, 'consolidated_brain', {
-                            model: selectedModel,
-                            latency: Date.now() - gptStartTime,
-                            tokens: gptResult.usage?.total_tokens || 0
-                        });
+                        if (!bypassGpt) {
+                            recordAITelemetry(candidateId, 'consolidated_brain', {
+                                model: selectedModel,
+                                latency: Date.now() - gptStartTime,
+                                tokens: gptResult.usage?.total_tokens || 0
+                            });
+                        }
                         responseTextVal = aiResult.response_text;
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
