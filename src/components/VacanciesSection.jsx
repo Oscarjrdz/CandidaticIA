@@ -980,64 +980,73 @@ const VacanciesSection = ({ showToast }) => {
                                 <p className="text-xs text-gray-500 mb-3">Sube reglamentos o manuales de la vacante para que Brenda (IA) los lea y se vuelva experta.</p>
                             </div>
 
-                            <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
-                                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 items-end">
-                                    <Input
-                                        label="Nombre del Documento"
-                                        placeholder="Ej. Reglamento Interno Operarios..."
-                                        value={newDocName}
-                                        onChange={(e) => setNewDocName(e.target.value)}
-                                        className="mb-0"
-                                    />
-                                    <div>
-                                        <input
-                                            type="file"
-                                            ref={docInputRef}
-                                            className="hidden"
-                                            accept="application/pdf,image/jpeg,image/png,image/webp"
-                                            onChange={handleUploadDocument}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Zona de Carga - Izquierda */}
+                                <div className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700 h-fit">
+                                    <div className="grid grid-cols-1 gap-3">
+                                        <Input
+                                            label="Nombre del Documento"
+                                            placeholder="Ej. Reglamento Interno..."
+                                            value={newDocName}
+                                            onChange={(e) => setNewDocName(e.target.value)}
+                                            className="mb-0"
                                         />
-                                        <Button
-                                            onClick={() => docInputRef.current?.click()}
-                                            disabled={!newDocName.trim() || isUploadingDoc}
-                                            variant={newDocName.trim() ? "primary" : "outline"}
-                                            icon={isUploadingDoc ? Loader2 : Paperclip}
-                                            className="w-full"
-                                        >
-                                            {isUploadingDoc ? 'Subiendo...' : 'Adjuntar Archivo'}
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                {(!newDocName.trim() && !isUploadingDoc) && (
-                                    <p className="text-[10px] text-gray-400 mt-2 font-medium">✏️ Escribe un nombre descriptivo para habilitar el botón de adjuntar.</p>
-                                )}
-                            </div>
-
-                            {formData.documents && formData.documents.length > 0 && (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-                                    {formData.documents.map((doc) => (
-                                        <div key={doc.id} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg group hover:border-indigo-300 transition-colors shadow-sm">
-                                            <div className="flex items-center gap-3 overflow-hidden">
-                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${doc.type && doc.type.startsWith('image/') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500' : 'bg-red-50 dark:bg-red-900/20 text-red-500'}`}>
-                                                    {doc.type && doc.type.startsWith('image/') ? <ImageIcon className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
-                                                </div>
-                                                <div className="truncate">
-                                                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate" title={doc.name}>{doc.name}</p>
-                                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-500 hover:text-indigo-600 font-medium">Ver Archivo</a>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => handleDeleteDocument(doc.id)}
-                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
-                                                title="Eliminar documento"
+                                        <div>
+                                            <input
+                                                type="file"
+                                                ref={docInputRef}
+                                                className="hidden"
+                                                accept="application/pdf,image/jpeg,image/png,image/webp"
+                                                onChange={handleUploadDocument}
+                                            />
+                                            <Button
+                                                onClick={() => docInputRef.current?.click()}
+                                                disabled={!newDocName.trim() || isUploadingDoc}
+                                                variant={newDocName.trim() ? "primary" : "outline"}
+                                                icon={isUploadingDoc ? Loader2 : Paperclip}
+                                                className="w-full"
                                             >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                                {isUploadingDoc ? 'Subiendo...' : 'Adjuntar Archivo'}
+                                            </Button>
                                         </div>
-                                    ))}
+                                    </div>
+
+                                    {(!newDocName.trim() && !isUploadingDoc) && (
+                                        <p className="text-[10px] text-gray-400 mt-2 font-medium">✏️ Escribe un nombre descriptivo para habilitar el botón de adjuntar.</p>
+                                    )}
                                 </div>
-                            )}
+
+                                {/* Archivos Adjuntos - Derecha */}
+                                <div className="space-y-2">
+                                    {(!formData.documents || formData.documents.length === 0) ? (
+                                        <div className="flex flex-col items-center justify-center p-6 bg-gray-50/50 dark:bg-gray-900/30 border border-dashed border-gray-200 dark:border-gray-800 rounded-xl h-full min-h-[120px]">
+                                            <FileText className="w-6 h-6 text-gray-300 mb-2" strokeWidth={1.5} />
+                                            <p className="text-xs text-gray-400">Sin documentos adjuntos</p>
+                                        </div>
+                                    ) : (
+                                        formData.documents.map((doc) => (
+                                            <div key={doc.id} className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg group hover:border-indigo-300 transition-colors shadow-sm">
+                                                <div className="flex items-center gap-3 overflow-hidden">
+                                                    <div className={`w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0 ${doc.type && doc.type.startsWith('image/') ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500' : 'bg-red-50 dark:bg-red-900/20 text-red-500'}`}>
+                                                        {doc.type && doc.type.startsWith('image/') ? <ImageIcon className="w-3.5 h-3.5" strokeWidth={1.5} /> : <FileText className="w-3.5 h-3.5" strokeWidth={1.5} />}
+                                                    </div>
+                                                    <div className="truncate">
+                                                        <p className="text-[13px] font-medium text-gray-700 dark:text-gray-200 truncate" title={doc.name}>{doc.name}</p>
+                                                        <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-indigo-500 hover:text-indigo-600 font-medium">Ver Archivo</a>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleDeleteDocument(doc.id)}
+                                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                                                    title="Eliminar documento"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
                         </div>
 
                         <div className="flex justify-end gap-3 pt-4">
