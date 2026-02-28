@@ -1069,7 +1069,7 @@ const VacanciesSection = ({ showToast }) => {
 
                     {/* COLUMNA 2: RADAR DE DUDAS (SOLO EN EDICION) */}
                     {editingId && (
-                        <div className="space-y-4 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 pt-6 lg:pt-0 lg:pl-8 flex flex-col h-[calc(100vh-12rem)] max-h-[600px]">
+                        <div className="space-y-4 border-t lg:border-t-0 lg:border-l border-gray-100 dark:border-gray-800 pt-6 lg:pt-0 lg:pl-8 flex flex-col h-full">
                             <div className="flex items-center justify-between mb-2">
                                 <div>
                                     <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
