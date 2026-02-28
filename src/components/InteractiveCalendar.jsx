@@ -15,7 +15,7 @@ const getFirstDayOfMonth = (year, month) => new Date(year, month, 1).getDay();
 export default function InteractiveCalendar({ options = [], onChange }) {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
-    const [timeInput, setTimeInput] = useState('');
+    const [timeInput, setTimeInput] = useState('10:00 AM');
 
     // Parse options into a map of YYYY-MM-DD -> [times] and keep legacy ones separate.
     const [dateMap, setDateMap] = useState({});
@@ -60,10 +60,21 @@ export default function InteractiveCalendar({ options = [], onChange }) {
 
         if (!updatedMap[dateStr].includes(timeInput.trim())) {
             updatedMap[dateStr].push(timeInput.trim());
+            // Sort time slots logically based on a simple parsing
+            updatedMap[dateStr].sort((a, b) => {
+                const parseTime = (t) => {
+                    const match = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+                    if (!match) return 0;
+                    let [, h, m, mpm] = match;
+                    h = parseInt(h, 10);
+                    if (mpm?.toUpperCase() === 'PM' && h !== 12) h += 12;
+                    if (mpm?.toUpperCase() === 'AM' && h === 12) h = 0;
+                    return h * 60 + parseInt(m, 10);
+                };
+                return parseTime(a) - parseTime(b);
+            });
             handleSaveNewOptions(updatedMap, legacyOptions);
         }
-
-        setTimeInput('');
     };
 
     const removeTimeSlot = (dateStr, timeStr) => {
@@ -92,6 +103,23 @@ export default function InteractiveCalendar({ options = [], onChange }) {
 
     const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
     const dayNames = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
+
+    // Generate common time slots to pick from (every 30 mins from 8 AM to 8 PM)
+    const generateTimeSlots = () => {
+        const slots = [];
+        for (let h = 8; h <= 20; h++) {
+            for (let m = 0; m < 60; m += 30) {
+                const isPM = h >= 12;
+                const displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+                const amPm = isPM ? "PM" : "AM";
+                const timeStr = `${displayH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${amPm}`;
+                slots.push(timeStr);
+            }
+        }
+        return slots;
+    };
+
+    const PREDEFINED_TIMES = generateTimeSlots();
 
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -176,24 +204,24 @@ export default function InteractiveCalendar({ options = [], onChange }) {
 
                         <div className="flex gap-2 mb-4">
                             <div className="relative flex-1">
-                                <Clock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                <input
-                                    type="text"
+                                <Clock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 z-10 pointer-events-none" />
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-xs">▼</div>
+                                <select
                                     value={timeInput}
                                     onChange={(e) => setTimeInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') addTimeSlot();
-                                    }}
-                                    placeholder="Ej: 10:00 AM o 14:30"
-                                    className="w-full pl-9 pr-3 py-2 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                                />
+                                    className="w-full pl-9 pr-8 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 appearance-none cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all shadow-sm"
+                                >
+                                    {PREDEFINED_TIMES.map(time => (
+                                        <option key={time} value={time}>{time}</option>
+                                    ))}
+                                </select>
                             </div>
                             <Button
                                 onClick={addTimeSlot}
-                                className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 flex-shrink-0"
+                                className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 flex-shrink-0 shadow-md shadow-emerald-500/30 font-bold"
                                 disabled={!timeInput.trim()}
                             >
-                                <Plus className="w-4 h-4" />
+                                <Plus className="w-5 h-5" />
                             </Button>
                         </div>
 
