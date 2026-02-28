@@ -715,14 +715,20 @@ ${safeDnaLines}
                                 .replace(/\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]/gi, '')
                                 .replace(/[\{\[]\s*move(?:[\s:]+\w+)?\s*[\}\]]/gi, '')
                                 .trim();
+                            // 🤫 EXCEPCIÓN UX: Si estamos en el paso "CITA", NO enviar el speech de despedida.
+                            // Solo avanzar, mandar sticker y dejar que el siguiente paso hable.
+                            const originStepName = (currentStep?.name || '').toLowerCase();
+                            const isCitaStep = originStepName.includes('cita');
 
-                            if (cleanSpeech.length > 0) {
+                            if (cleanSpeech.length > 0 && !isCitaStep) {
                                 console.log(`[RECRUITER BRAIN] 🗣️ Enviando mensaje final del paso actual: "${cleanSpeech}"`);
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 }).catch((e) => {
                                     console.error('Error enviando pre-move:', e.message);
                                 });
                                 await saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() });
                                 await new Promise(r => setTimeout(r, 1500));
+                            } else if (isCitaStep) {
+                                console.log(`[RECRUITER BRAIN] 🤫 Silenciando speech final del paso Cita por regla de UX.`);
                             }
                         }
 
