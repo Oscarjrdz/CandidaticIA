@@ -1374,7 +1374,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     <div className="flex items-center gap-2">
                                         <Button
                                             onClick={handleOpenNewProjectModal}
-                                            className="bg-white hover:bg-slate-50 text-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg font-black text-[8px] uppercase tracking-widest px-3 py-1.5 h-auto shadow-sm flex items-center gap-1.5 transition-all"
+                                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-black text-[8px] uppercase tracking-widest px-3 py-1.5 h-auto shadow-sm shadow-blue-500/20 flex items-center gap-1.5 transition-all"
                                             title="Nuevo Proyecto"
                                         >
                                             <Plus className="w-3.5 h-3.5" />
