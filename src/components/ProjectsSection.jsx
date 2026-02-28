@@ -1226,55 +1226,71 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
 
                 {/* AI Step Config Modal */}
                 {openStepConfig && (
-                    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-                            <div className="p-6 space-y-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-3 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-lg shadow-purple-500/30">
-                                        <Bot className="w-8 h-8 text-white" />
+                    <div
+                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Escape') setOpenStepConfig(null);
+                        }}
+                        tabIndex={0}
+                        ref={(el) => el && el.focus()} // auto focus for keydown
+                        onClick={(e) => {
+                            if (e.target === e.currentTarget) setOpenStepConfig(null);
+                        }}
+                    >
+                        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-4xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
+                            {/* X Close Button */}
+                            <button
+                                onClick={() => setOpenStepConfig(null)}
+                                className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+
+                            <div className="p-8 space-y-8">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-4 bg-[#10a37f] rounded-2xl shadow-lg shadow-[#10a37f]/30">
+                                        <Bot className="w-10 h-10 text-white" />
                                     </div>
                                     <div>
-                                        <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Configurar Agente IA</h3>
-                                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                                        <h3 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Configurar Agente IA</h3>
+                                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
                                             Paso: {activeProject.steps.find(s => s.id === openStepConfig.stepId)?.name}
                                         </p>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                         <div className="flex justify-between items-center">
-                                            <label className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                                            <label className="text-sm font-bold text-slate-700 dark:text-slate-300 uppercase tracking-widest flex items-center gap-2">
                                                 Prompt / Instrucción
                                                 <button
                                                     onClick={() => handleOptimizePrompt(stepPrompt, setStepPrompt, 'instruction')}
                                                     disabled={isOptimizing || !stepPrompt.trim()}
-                                                    className={`p-1 rounded-md transition-all ${isOptimizing ? 'animate-spin text-purple-500' : 'text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:scale-110'}`}
+                                                    className={`p-1.5 rounded-md transition-all ${isOptimizing ? 'animate-spin text-[#10a37f]' : 'text-[#10a37f] hover:bg-[#10a37f]/10 hover:scale-110'}`}
                                                     title="Mejorar con IA Mágica"
                                                 >
-                                                    <Sparkles className="w-3.5 h-3.5" />
+                                                    <Sparkles className="w-4 h-4" />
                                                 </button>
                                             </label>
                                             <div className="flex gap-2">
-                                                <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500">{"{{Candidato}}"}</span>
-                                                <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500">{"{{Vacante}}"}</span>
+                                                <span className="text-xs font-medium bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-md text-slate-500">{"{{Candidato}}"}</span>
+                                                <span className="text-xs font-medium bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-md text-slate-500">{"{{Vacante}}"}</span>
                                             </div>
                                         </div>
                                         <textarea
                                             value={stepPrompt}
                                             onChange={(e) => setStepPrompt(e.target.value)}
-                                            className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm focus:ring-2 focus:ring-purple-500 outline-none resize-none h-32"
+                                            className="w-full bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-2xl p-5 text-base focus:ring-4 focus:ring-[#10a37f]/20 focus:border-[#10a37f] outline-none resize-none min-h-[400px]"
                                             placeholder="Ej: Saluda a {{Candidato}} y pregúntale si le interesa la vacante de {{Vacante}}..."
                                         />
                                     </div>
-
-
                                 </div>
 
-                                <div className="flex justify-end gap-3 pt-2">
+                                <div className="flex justify-end gap-4 pt-4 border-t border-slate-100 dark:border-slate-800/50">
                                     <button
                                         onClick={() => setOpenStepConfig(null)}
-                                        className="px-4 py-2 text-slate-500 hover:text-slate-700 font-bold text-xs uppercase"
+                                        className="px-6 py-3 text-slate-500 hover:text-slate-700 font-bold text-sm uppercase tracking-widest"
                                     >
                                         Cancelar
                                     </button>
@@ -1290,7 +1306,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                             updateStepAI(openStepConfig.stepId, newConfig);
                                             setOpenStepConfig(null);
                                         }}
-                                        className="bg-purple-600 hover:bg-purple-700 text-white rounded-xl px-6 py-2 shadow-lg shadow-purple-500/20"
+                                        className="bg-[#10a37f] hover:bg-[#0e906f] text-white rounded-xl px-10 py-3 shadow-xl shadow-[#10a37f]/20 font-black tracking-widest text-sm transition-all hover:scale-105"
                                     >
                                         Guardar y Activar
                                     </Button>
