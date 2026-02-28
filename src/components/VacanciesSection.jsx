@@ -1048,23 +1048,6 @@ const VacanciesSection = ({ showToast }) => {
                                 </div>
                             </div>
                         </div>
-
-                        <div className="flex justify-end gap-3 pt-4">
-                            <Button
-                                variant="ghost"
-                                onClick={() => setIsModalOpen(false)}
-                                disabled={saving}
-                            >
-                                Cancelar
-                            </Button>
-                            <Button
-                                onClick={handleSave}
-                                disabled={saving}
-                                icon={saving ? Loader2 : Save}
-                            >
-                                {saving ? (editingId ? 'Guardando...' : 'Creando...') : (editingId ? 'Actualizar Vacante' : 'Guardar Vacante')}
-                            </Button>
-                        </div>
                     </div>
 
                     {/* COLUMNA 2: RADAR DE DUDAS (SOLO EN EDICION) */}
@@ -1276,6 +1259,24 @@ const VacanciesSection = ({ showToast }) => {
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* Fixed Footer with Action Buttons */}
+                <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
+                    <Button
+                        variant="ghost"
+                        onClick={() => setIsModalOpen(false)}
+                        disabled={saving}
+                    >
+                        Cancelar
+                    </Button>
+                    <Button
+                        onClick={handleSave}
+                        disabled={saving}
+                        icon={saving ? Loader2 : Save}
+                    >
+                        {saving ? (editingId ? 'Guardando...' : 'Creando...') : (editingId ? 'Actualizar Vacante' : 'Guardar Vacante')}
+                    </Button>
                 </div>
             </Modal>
 
