@@ -178,7 +178,7 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                             e.preventDefault(); e.stopPropagation();
                             onEdit(step.id, 'vacancy');
                         }}
-                        className="p-1.5 rounded-lg transition-all text-slate-300 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 active:scale-90 relative z-10"
+                        className="p-1.5 rounded-lg transition-all text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 active:scale-90 relative z-10"
                         title="Editar Vacante del Proyecto"
                     >
                         <Briefcase className="w-3.5 h-3.5" />
@@ -191,8 +191,8 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                             onEdit(step.id, 'ai');
                         }}
                         className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.aiConfig?.prompt
-                            ? 'text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
-                            : 'text-slate-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
+                            ? 'text-[#10a37f] bg-[#10a37f]/10'
+                            : 'text-slate-300 hover:text-[#10a37f] hover:bg-[#10a37f]/10'}`}
                         title="Configurar Prompt del Bot"
                     >
                         <Bot className="w-3.5 h-3.5" />
