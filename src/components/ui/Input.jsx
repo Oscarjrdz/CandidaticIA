@@ -15,7 +15,7 @@ const Input = forwardRef(({
     ...props
 }, ref) => {
     const inputStyles = `
-    w-full px-4 py-2 
+    w-full px-4 h-10
     bg-white dark:bg-gray-800 
     border rounded-lg 
     text-gray-900 dark:text-gray-100
