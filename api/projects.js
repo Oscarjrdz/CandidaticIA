@@ -27,7 +27,12 @@ export default async function handler(req, res) {
             }
             if (req.query.action === 'getTemplate') {
                 const projects = await getProjects();
-                const template = projects.find(p => p.name?.toLowerCase().includes('ayudante aisin'));
+                // Find the project with the most steps to act as the golden template
+                // This replaces the hardcoded 'ayudante aisin' match so it works universally
+                const template = projects.reduce((prev, current) => {
+                    return (prev?.steps?.length || 0) > (current?.steps?.length || 0) ? prev : current;
+                }, null);
+
                 const steps = template?.steps || [];
                 return res.status(200).json({ success: true, steps });
             }

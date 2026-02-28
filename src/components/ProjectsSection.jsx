@@ -157,7 +157,7 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
 
                 <div className="flex items-center gap-1">
                     {/* Calendar Config Trigger (Only for CITA step) */}
-                    {step.name?.toLowerCase().includes('cita') && (
+                    {step.name?.trim().toLowerCase() === 'cita' && (
                         <button
                             onClick={(e) => {
                                 e.preventDefault(); e.stopPropagation();
