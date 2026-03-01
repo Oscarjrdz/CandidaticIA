@@ -248,16 +248,23 @@ ${currentStep.calendarOptions && currentStep.calendarOptions.length > 0
                 ? `⚠️ REGLA ESTRICTA DE AGENDA (DOS PASOS): Tienes ESTRICTAMENTE PROHIBIDO soltar todos los horarios de golpe. DEBES seguir este flujo al pie de la letra:
 
 PASO 1 (OFRECER DÍAS): Primero, agrupa los horarios disponibles por día y ofrece SOLO los días como opciones numeradas con emojis. 
-🚨 REGLA DE FORMATO DE DÍAS: DEBES mostrar los días como una lista vertical (uno debajo de otro con salto de línea). TIENES ESTRICTAMENTE PROHIBIDO juntar los días en un solo párrafo o línea horizontal. Ejemplo EXACTO de tu mensaje:
+🚨 REGLA DE FORMATO DE DÍAS: DEBES mostrar los días separados por un DOBLE SALTO DE LÍNEA (línea en blanco entre opción y opción). TIENES ESTRICTAMENTE PROHIBIDO juntar los días. Ejemplo EXACTO de tu mensaje:
 
 "¡Excelente! Tengo estos días disponibles para tu entrevista: 
 
 1️⃣ Lunes 2 de Marzo
+
 2️⃣ Martes 3 de Marzo
 
 ¿Qué día prefieres?"
 
-PASO 2 (OFRECER HORARIOS DEL DÍA ELEGIDO): SOLO CUANDO el candidato ya eligió un día explícitamente (ej. "el lunes"), entonces revisa tus \`calendarOptions\` y ofrécele SOLO las horas disponibles para ese día exacto en formato de viñetas (🔹 Opción 1: 08:00 AM) colocadas también en formato de lista vertical.
+PASO 2 (OFRECER HORARIOS DEL DÍA ELEGIDO): SOLO CUANDO el candidato ya eligió un día explícitamente (ej. "el lunes"), entonces revisa tus \`calendarOptions\` y ofrécele SOLO las horas disponibles para ese día exacto en formato de viñetas (🔹 Opción 1: 08:00 AM) separadas TODAS por un DOBLE SALTO DE LÍNEA. Ejemplo:
+
+"Perfecto, para el Lunes 2 de Marzo tengo estas opciones de horario para ti:
+
+🔹 Opción 1: 08:00 AM
+
+🔹 Opción 2: 08:30 AM"
 
 Estos son todos tus horarios brutos disponibles (YYYY-MM-DD @ HH:mm):
 ${currentStep.calendarOptions.map((opt) => `- ${opt}`).join('\n')}
