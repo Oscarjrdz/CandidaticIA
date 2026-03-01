@@ -141,9 +141,15 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
     let containerBgClass = "bg-slate-50/50 dark:bg-slate-900/30 border-slate-200/50 dark:border-slate-800/50";
     let headerBgClass = "bg-white/40 dark:bg-slate-800/20";
 
-    if (stepNameLower.includes('citados')) {
-        containerBgClass = "bg-green-500/10 dark:bg-green-500/20 border-green-500/20 dark:border-green-500/30";
-        headerBgClass = "bg-green-500/20 dark:bg-green-500/30";
+    if (stepNameLower.includes('inicio')) {
+        containerBgClass = "bg-yellow-500/5 dark:bg-yellow-500/10 border-yellow-500/10 dark:border-yellow-500/20";
+        headerBgClass = "bg-yellow-500/10 dark:bg-yellow-500/20";
+    } else if (stepNameLower.includes('cita') && !stepNameLower.includes('citado')) {
+        containerBgClass = "bg-orange-500/5 dark:bg-orange-500/10 border-orange-500/10 dark:border-orange-500/20";
+        headerBgClass = "bg-orange-500/10 dark:bg-orange-500/20";
+    } else if (stepNameLower.includes('citados')) {
+        containerBgClass = "bg-green-500/5 dark:bg-green-500/10 border-green-500/10 dark:border-green-500/20";
+        headerBgClass = "bg-green-500/10 dark:bg-green-500/20";
     } else if (stepNameLower.includes('no interesa')) {
         containerBgClass = "bg-red-500/5 dark:bg-red-500/10 border-red-500/10 dark:border-red-500/20";
         headerBgClass = "bg-red-500/10 dark:bg-red-500/20";
