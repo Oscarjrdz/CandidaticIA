@@ -245,7 +245,7 @@ ${repetitionShield}
 
 [OPCIONES DE AGENDA DISPONIBLES]:
 ${currentStep.calendarOptions && currentStep.calendarOptions.length > 0
-                ? `⚠️ REGLA ESTRICTA DE AGENDA: Tienes ESTRICTAMENTE PROHIBIDO resumir, juntar o cambiar el formato de los horarios. DEBES mostrar las opciones como una lista vertical EXACTAMENTE así:\n\n${currentStep.calendarOptions.map((opt, i) => `🔹 Opción ${i + 1}: ${opt}`).join('\n')}\n\nNUNCA combines los días en un solo párrafo ni los menciones de largo.`
+                ? `⚠️ REGLA ESTRICTA DE AGENDA: Tienes ESTRICTAMENTE PROHIBIDO resumir, juntar o cambiar el formato de los horarios en tus palabras. DEBES mostrar las opciones como una lista vertical EXACTAMENTE así:\n\n${currentStep.calendarOptions.map((opt, i) => `🔹 Opción ${i + 1}: ${opt}`).join('\n')}\n\n🚨 IMPORTANTE: Transforma las fechas crudas (ej. "2026-03-02 @ 08:00 AM") a un formato natural y amigable (ej. "Lunes 2 de Marzo a las 08:00 AM") dentro de cada viñeta.\n\nNUNCA combines los días en un solo párrafo ni los menciones de largo.`
                 : 'No hay horarios preconfigurados, pregunta por su disponibilidad general.'}
 
 
