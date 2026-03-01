@@ -622,10 +622,10 @@ ${safeDnaLines}
                         // Calendario / Agenda (Guardar en projectMetadata)
                         if (citaFecha || citaHora) {
                             if (!candidateUpdates.projectMetadata) {
-                                candidateUpdates.projectMetadata = { ...candidateData.projectMetadata };
+                                candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
                             }
-                            if (citaFecha) candidateUpdates.projectMetadata.citaFecha = citaFecha;
-                            if (citaHora) candidateUpdates.projectMetadata.citaHora = citaHora;
+                            if (citaFecha && citaFecha !== 'null') candidateUpdates.projectMetadata.citaFecha = citaFecha;
+                            if (citaHora && citaHora !== 'null') candidateUpdates.projectMetadata.citaHora = citaHora;
                             console.log(`[RECRUITER BRAIN] 📅 Extracted Calendar Data: Fecha=${citaFecha}, Hora=${citaHora}`);
                         }
 
@@ -781,8 +781,22 @@ ${safeDnaLines}
                 const isCitaStep = (currentStep?.name || '').toLowerCase().includes('cita');
                 if (isCitaStep && hasMoveTag && !hasExitTag) {
                     const mergedMeta = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
-                    if (!mergedMeta.citaFecha || !mergedMeta.citaHora) {
-                        console.log(`[RECRUITER BRAIN] 🛡️ Vetoing MOVE in Cita step. Missing citaFecha or citaHora.`);
+
+                    // Fallback to extract from historical context if somehow lost
+                    if (!mergedMeta.citaFecha || !mergedMeta.citaHora || mergedMeta.citaFecha === 'null' || mergedMeta.citaHora === 'null') {
+                        const allContext = historyForGpt.map(h => h.content).join(' ');
+                        const dateFallback = allContext.match(/para el\s+([a-zA-Z0-9\s]+?)\s+a\s+las/i);
+                        const timeFallback = allContext.match(/a\s+las\s+([0-9:]+\s*(?:AM|PM|am|pm|hrs))/i);
+                        if (dateFallback && !mergedMeta.citaFecha) mergedMeta.citaFecha = dateFallback[1].trim();
+                        if (timeFallback && !mergedMeta.citaHora) mergedMeta.citaHora = timeFallback[1].trim();
+
+                        if (dateFallback || timeFallback) {
+                            candidateUpdates.projectMetadata = mergedMeta;
+                        }
+                    }
+
+                    if (!mergedMeta.citaFecha || !mergedMeta.citaHora || mergedMeta.citaFecha === 'null' || mergedMeta.citaHora === 'null') {
+                        console.log(`[RECRUITER BRAIN] 🛡️ Vetoing MOVE in Cita step. Missing citaFecha or citaHora. Data:`, mergedMeta);
                         hasMoveTag = false;
                         inferredAcceptance = false;
 
@@ -794,6 +808,8 @@ ${safeDnaLines}
                                 responseTextVal = `${responseTextVal.trim()} ${callToAction}`;
                             }
                         }
+                    } else {
+                        console.log(`[RECRUITER BRAIN] ✅ CITA SAFEGUARD PASSED: Fecha=${mergedMeta.citaFecha}, Hora=${mergedMeta.citaHora}`);
                     }
                 }
 
