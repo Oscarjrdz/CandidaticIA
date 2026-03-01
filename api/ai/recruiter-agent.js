@@ -50,6 +50,7 @@ unanswered_question: "¿Puedo llevar el pelo largo?"
     "media_url": "URL del archivo multimedia si la duda lo tiene, sino null.",
     "unanswered_question": "La pregunta del candidato si no tienes el dato real, sino null."
 }
+⚠️ IMPORTANTE: Los campos "citaFecha" y "citaHora" deben llenarse OBLIGATORIAMENTE en cuanto el candidato elija el día y la hora, y mantenerse en el JSON final cuando dispares "{ move }". NUNCA envíes "{ move }" con "citaFecha" o "citaHora" como nulos.
 `;
 
 
@@ -247,8 +248,9 @@ ${repetitionShield}
 ${currentStep.calendarOptions && currentStep.calendarOptions.length > 0
                 ? `⚠️ REGLA ESTRICTA DE AGENDA (FLUJO DE TRES PASOS): Tienes ESTRICTAMENTE PROHIBIDO soltar horarios de golpe y PROHIBIDO cerrar la cita sin confirmar. DEBES seguir esta secuencia exacta:
 
-PASO 1 (OFRECER DÍAS): Si aún no elige día, agrupa los horarios disponibles y ofrece SOLO los días como opciones numeradas. Separados por un DOBLE SALTO DE LÍNEA.
-Ejemplo:
+PASO 1 (OFRECER DÍAS): Si aún no elige día, agrupa los horarios disponibles y ofrece SOLO los días como opciones numeradas. 
+🚨 REGLA VISUAL DE DÍAS: DEBES ENVIAR CADA OPCIÓN EN UN RENGLÓN DISTINTO. Tienes ESTRICTAMENTE PROHIBIDO poner dos días en el mismo renglón (ej. "el lunes 2 y martes 3").
+Ejemplo de formato que DEBES seguir:
 "¡Excelente! Tengo estos días disponibles para tu entrevista: 
 
 1️⃣ Lunes 2 de Marzo
@@ -257,7 +259,8 @@ Ejemplo:
 
 ¿Qué día prefieres?"
 
-PASO 2 (OFRECER HORARIOS): CUANDO el candidato ya eligió un día explícitamente, ofrécele SOLO las horas disponibles para ese día exacto en viñetas (🔹 Opción 1: 08:00 AM) separadas por DOBLE SALTO DE LÍNEA.
+PASO 2 (OFRECER HORARIOS): CUANDO el candidato ya eligió un día explícitamente, ofrécele SOLO las horas disponibles para ese día exacto en viñetas (🔹 Opción 1: 08:00 AM).
+🚨 REGLA VISUAL DE HORAS: DEBES ENVIAR CADA HORA EN UN RENGLÓN DISTINTO.
 Ejemplo:
 "Perfecto, para el Lunes 2 de Marzo tengo estas opciones de horario para ti:
 
