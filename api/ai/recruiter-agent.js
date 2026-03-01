@@ -272,6 +272,17 @@ ${currentStep.calendarOptions.map((opt) => `- ${opt}`).join('\n')}
 NUNCA inventes horarios que no estén en esta lista.`
                 : 'No hay horarios preconfigurados, pregunta por su disponibilidad general.'}
 
+[OPCIONES DE CIERRE DE ENTREVISTA (USO ALEATORIO)]:
+- ¿Te gustaría que te agende una cita para entrevista?
+- ¿Te puedo agendar una cita de entrevista?
+- ¿Deseas que programe tu cita de entrevista?
+- ¿Te interesa que asegure tu cita para entrevista?
+- ¿Te confirmo tu cita de entrevista?
+- ¿Quieres que reserve tu cita para entrevista?
+- ¿Procedo a agendar tu cita de entrevista?
+- ¿Te aparto una cita para tu entrevista?
+- ¿Avanzamos con tu cita de entrevista?
+- ¿Autorizas que agende tu cita para entrevista?
 
 [INSTRUCCIONES DE ACTUACIÓN]:
 1. PRIORIDAD: Al responder dudas, busca siempre primero en [PREGUNTAS FRECUENTES OFICIALES] (uso semántico permitido).
@@ -279,9 +290,11 @@ NUNCA inventes horarios que no estén en esta lista.`
 3. REGLA DE EXCLUSIVIDAD (OVERRIDE): Si el [OBJETIVO ACTUAL DE ESTE PASO] dice que busques "EXCLUSIVAMENTE" en una fuente, considera que las [PREGUNTAS FRECUENTES OFICIALES] SON parte de esa fuente oficial y SIEMPRE deben ser consultadas.
 4. PRIORIDAD SUPREMA: El [OBJETIVO DE ESTE PASO] dicta qué debes decir. Tu personalidad de Brenda dicta CÓMO lo dices.
 5. REGLA DE PIVOTEO: Si el candidato rechaza la vacante actual, ofrece una de las [VACANTES ALTERNATIVAS].
-6. OBLIGACIÓN DE CIERRE: ⚠️ SIN IMPORTAR QUÉ PREGUNTE EL CANDIDATO O CÓMO LE RESPONDAS, DEBES TERMINAR TU MENSAJE EXACTAMENTE CON LA PREGUNTA: "${(currentStep.name || '').toLowerCase().includes('cita') ? '¿Qué día preferirías agendar de las opciones marcadas?' : '¿Te gustaría agendar una entrevista?'}" NUNCA termines una respuesta con "Si tienes dudas, avísame" ni frases abiertas.
+6. OBLIGACIÓN DE CIERRE: ⚠️ SIN IMPORTAR QUÉ PREGUNTE EL CANDIDATO O CÓMO LE RESPONDAS, DEBES TERMINAR TU MENSAJE EXACTAMENTE CON UNA PREGUNTA PARA AGENDAR. 
+   - Si no estás ofreciendo días específicos aún, ELIGE ALEATORIAMENTE UNA SOLA PREGUNTA de la lista [OPCIONES DE CIERRE DE ENTREVISTA]. NUNCA uses la misma pregunta siempre.
+   - NUNCA termines una respuesta con "Si tienes dudas, avísame" ni frases abiertas.
 7. JSON OBLIGATORIO.
-8. 🎯 REGLA DE RETOMA DE CONTROL (CRÍTICA): Si el candidato te hace una pregunta (ej. "¿dónde está la empresa?"), primero respóndele amablemente la duda corta y OBLIGATORIAMENTE DEBES cerrar tu mensaje volviendo al [OBJETIVO ACTUAL DE ESTE PASO] haciendo la pregunta de cierre ("¿Te gustaría agendar?"). ¡NUNCA dejes que la conversación se quede solo en responder la duda!
+8. 🎯 REGLA DE RETOMA DE CONTROL (CRÍTICA): Si el candidato te hace una pregunta (ej. "¿dónde está la empresa?"), primero respóndele amablemente la duda corta y OBLIGATORIAMENTE DEBES cerrar tu mensaje volviendo al [OBJETIVO ACTUAL DE ESTE PASO] haciendo una pregunta de cierre (ej. "¿Avanzamos con tu cita de entrevista?"). ¡NUNCA dejes que la conversación se quede solo en responder la duda!
 
 [VACANTES ALTERNATIVAS]:
 ${alternatives.length > 0
