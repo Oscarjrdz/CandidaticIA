@@ -245,7 +245,20 @@ ${repetitionShield}
 
 [OPCIONES DE AGENDA DISPONIBLES]:
 ${currentStep.calendarOptions && currentStep.calendarOptions.length > 0
-                ? `⚠️ REGLA ESTRICTA DE AGENDA: Tienes ESTRICTAMENTE PROHIBIDO resumir, juntar o cambiar el formato de los horarios en tus palabras. DEBES mostrar las opciones como una lista vertical EXACTAMENTE así:\n\n${currentStep.calendarOptions.map((opt, i) => `🔹 Opción ${i + 1}: ${opt}`).join('\n')}\n\n🚨 IMPORTANTE: Transforma las fechas crudas (ej. "2026-03-02 @ 08:00 AM") a un formato natural y amigable (ej. "Lunes 2 de Marzo a las 08:00 AM") dentro de cada viñeta.\n\nNUNCA combines los días en un solo párrafo ni los menciones de largo.`
+                ? `⚠️ REGLA ESTRICTA DE AGENDA (DOS PASOS): Tienes ESTRICTAMENTE PROHIBIDO soltar todos los horarios de golpe. DEBES seguir este flujo al pie de la letra:
+
+PASO 1 (OFRECER DÍAS): Primero, agrupa los horarios disponibles por día y ofrece SOLO los días como opciones numeradas con emojis. Ejemplo EXACTO de tu mensaje:
+"¡Excelente! Tengo estos días disponibles para tu entrevista: 
+1️⃣ Lunes 2 de Marzo
+2️⃣ Martes 3 de Marzo
+¿Qué día prefieres?"
+
+PASO 2 (OFRECER HORARIOS DEL DÍA ELEGIDO): SOLO CUANDO el candidato ya eligió un día explícitamente (ej. "el lunes"), entonces revisa tus \`calendarOptions\` y ofrécele SOLO las horas disponibles para ese día exacto en formato de viñetas (🔹 Opción 1: 08:00 AM).
+
+Estos son todos tus horarios brutos disponibles (YYYY-MM-DD @ HH:mm):
+${currentStep.calendarOptions.map((opt) => `- ${opt}`).join('\n')}
+
+NUNCA inventes horarios que no estén en esta lista.`
                 : 'No hay horarios preconfigurados, pregunta por su disponibilidad general.'}
 
 
