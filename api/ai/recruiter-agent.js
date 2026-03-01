@@ -245,7 +245,7 @@ ${repetitionShield}
 
 [OPCIONES DE AGENDA DISPONIBLES]:
 ${currentStep.calendarOptions && currentStep.calendarOptions.length > 0
-                ? `El reclutador ha configurado los siguientes horarios para entrevistas. DEBES OFRECERLOS de forma clara usando una lista vertical numerada (ej. 🔹 Opción 1: Lunes...):\n${currentStep.calendarOptions.map((opt, i) => `🔹 Opción ${i + 1}: ${opt}`).join('\n')}`
+                ? `⚠️ REGLA ESTRICTA DE AGENDA: Tienes ESTRICTAMENTE PROHIBIDO resumir, juntar o cambiar el formato de los horarios. DEBES mostrar las opciones como una lista vertical EXACTAMENTE así:\n\n${currentStep.calendarOptions.map((opt, i) => `🔹 Opción ${i + 1}: ${opt}`).join('\n')}\n\nNUNCA combines los días en un solo párrafo ni los menciones de largo.`
                 : 'No hay horarios preconfigurados, pregunta por su disponibilidad general.'}
 
 
