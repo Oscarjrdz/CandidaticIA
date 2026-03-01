@@ -135,14 +135,28 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
         opacity: isDragging ? 0.5 : 1
     };
 
+    const stepNameLower = (step.name || '').toLowerCase();
+
+    // Dynamic background styling based on column name
+    let containerBgClass = "bg-slate-50/50 dark:bg-slate-900/30 border-slate-200/50 dark:border-slate-800/50";
+    let headerBgClass = "bg-white/40 dark:bg-slate-800/20";
+
+    if (stepNameLower.includes('citados')) {
+        containerBgClass = "bg-green-500/10 dark:bg-green-500/20 border-green-500/20 dark:border-green-500/30";
+        headerBgClass = "bg-green-500/20 dark:bg-green-500/30";
+    } else if (stepNameLower.includes('no interesa')) {
+        containerBgClass = "bg-red-500/5 dark:bg-red-500/10 border-red-500/10 dark:border-red-500/20";
+        headerBgClass = "bg-red-500/10 dark:bg-red-500/20";
+    }
+
     return (
         <div
             ref={setNodeRef}
             style={style}
-            className="flex-shrink-0 w-80 flex flex-col h-full bg-slate-50/50 dark:bg-slate-900/30 rounded-[40px] border border-slate-200/50 dark:border-slate-800/50 overflow-hidden"
+            className={`flex-shrink-0 w-80 flex flex-col h-full rounded-[40px] border overflow-hidden ${containerBgClass}`}
         >
             <div
-                className="p-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/50 bg-white/40 dark:bg-slate-800/20 backdrop-blur-sm"
+                className={`p-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/50 backdrop-blur-sm ${headerBgClass}`}
             >
                 <div className="flex items-center gap-3" {...attributes} {...listeners}>
                     <div className={`w-2 h-2 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)] ${step.aiConfig?.enabled ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`}></div>

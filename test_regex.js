@@ -1,13 +1,14 @@
-const text = "¡Listo Oscar rodriguez! ⏬ Te propongo entrevista el día **[LUNES 23 DE FEBRERO]** a las **[8:00 DE LA MAÑANA]**. ¿Te queda bien? ��";
-const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
-const match = text.match(splitRegex);
+const text = "¡Perfecto! 🎉 Queda agendada tu entrevista para el martes 3 de marzo a las 8:00 AM. En breve te contactamos para confirmar los detalles finales. ¡Muchas gracias! 🌸";
 
-if (match) {
-    const splitIdx = match.index;
-    const part1 = text.substring(0, splitIdx).trim();
-    const part2 = text.substring(splitIdx).trim();
-    console.log("part1:", part1);
-    console.log("part2:", part2);
-} else {
-    console.log("No match");
-}
+const isCitaConfirmation = text.toLowerCase().includes('queda agendada') ||
+    text.toLowerCase().includes('entrevista agendada');
+
+const dateRegex = /para el\s+([a-zA-Z0-9\s]+)\s+a\s+las/i;
+const timeRegex = /a\s+las\s+([0-9:]+\s*(?:AM|PM|am|pm|hrs))/i;
+
+const dateMatch = text.match(dateRegex);
+const timeMatch = text.match(timeRegex);
+
+console.log("isCitaConfirmation:", isCitaConfirmation);
+console.log("Date:", dateMatch ? dateMatch[1] : null);
+console.log("Time:", timeMatch ? timeMatch[1] : null);

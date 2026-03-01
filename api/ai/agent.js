@@ -776,6 +776,26 @@ ${safeDnaLines}
                     }
                 }
 
+                // 🛡️ [CITA STEP SAFEGUARD]: Veto the move if date/time are not extracted
+                const isCitaStep = (currentStep?.name || '').toLowerCase().includes('cita');
+                if (isCitaStep && hasMoveTag && !hasExitTag) {
+                    const mergedMeta = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
+                    if (!mergedMeta.citaFecha || !mergedMeta.citaHora) {
+                        console.log(`[RECRUITER BRAIN] 🛡️ Vetoing MOVE in Cita step. Missing citaFecha or citaHora.`);
+                        hasMoveTag = false;
+                        inferredAcceptance = false;
+
+                        // If the bot didn't explicitly ask for a day, append a prompt
+                        if (responseTextVal && !responseTextVal.toLowerCase().includes('día') && !responseTextVal.toLowerCase().includes('hora')) {
+                            const callToAction = "¿Qué día y hora te quedan mejor de las opciones marcadas?";
+                            // Only append if it's not already near the end
+                            if (!responseTextVal.includes(callToAction)) {
+                                responseTextVal = `${responseTextVal.trim()} ${callToAction}`;
+                            }
+                        }
+                    }
+                }
+
                 if (hasMoveTag || hasExitTag) {
                     let currentIndex = project.steps.findIndex(s => s.id === activeStepId);
                     if (currentIndex === -1) currentIndex = 0;
