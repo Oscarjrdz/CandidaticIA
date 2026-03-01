@@ -517,7 +517,13 @@ ${safeDnaLines}
 
                 // --- MULTI-VACANCY REJECTION SHIELD ---
                 let skipRecruiterInference = false;
-                intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.content || '').join('\n'));
+
+                // 🚀 PERFORMANCE OPTIMIZATION: Only run the intent classifier if we have multiple vacancies
+                if (project.vacancyIds && project.vacancyIds.length > 0) {
+                    intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.content || '').join('\n'));
+                } else {
+                    intent = 'UNKNOWN';
+                }
 
                 if ((intent === 'REJECTION' || intent === 'PIVOT') && project.vacancyIds && project.vacancyIds.length > 0) {
                     const isPivot = intent === 'PIVOT';
@@ -863,7 +869,7 @@ ${safeDnaLines}
                                     console.error('Error enviando pre-move:', e.message);
                                 });
                                 await saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() });
-                                await new Promise(r => setTimeout(r, 1500));
+                                await new Promise(r => setTimeout(r, 600));
                             } else if (isCitaStep) {
                                 console.log(`[RECRUITER BRAIN] 🤫 Silenciando speech final del paso Cita por regla de UX.`);
                             }
@@ -943,7 +949,7 @@ ${safeDnaLines}
 
                                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
                                         if (cMessagesToSend.length > 1 && i < cMessagesToSend.length - 1) {
-                                            await new Promise(r => setTimeout(r, 1500));
+                                            await new Promise(r => setTimeout(r, 600));
                                         }
                                     }
 
@@ -1315,9 +1321,9 @@ ${safeDnaLines}
                     for (let i = 0; i < messagesToSend.length; i++) {
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
                         if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
-                            // ⏳ STRICT DELAY: Wait 1.5 full seconds after the massive vacancy blob
+                            // ⏳ STRICT DELAY: Wait 600ms after the massive vacancy blob
                             // before hitting the UltraMsg API again, or the webhook drops the second tiny message.
-                            await new Promise(r => setTimeout(r, 1500));
+                            await new Promise(r => setTimeout(r, 600));
                         }
                     }
 
@@ -1327,7 +1333,7 @@ ${safeDnaLines}
                     for (let i = 0; i < messagesToSend.length; i++) {
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i }).catch(() => { });
                         if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
-                            await new Promise(r => setTimeout(r, 1500));
+                            await new Promise(r => setTimeout(r, 600));
                         }
                     }
                     console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId}`);
