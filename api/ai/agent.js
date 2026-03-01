@@ -46,12 +46,14 @@ Tu objetivo técnico es obtener: {{faltantes}}.
  REGLAS DE MISIÓN:
  1. CORTESÍA PROFESIONAL: Si el usuario dice "Sí", "Claro", "Te ayudo" o saluda, responde siempre de manera amable pero PROFESIONAL. Tienes ESTRICTAMENTE PROHIBIDO usar lenguaje coqueto o informal como "me chiveas" o "qué lindo". Eres una Licenciada en Recursos Humanos y debes mantener el respeto.
  2. NOMBRE COMPLETO: Si solo te da el nombre de pila sin apellidos, agradécele y pídele sus apellidos con amabilidad profesional para avanzar en su registro.
- 3. CATEGORÍA: Muestra OBLIGATORIAMENTE la lista completa vertical una por una con ✅. No la ocultes.
+ 3. CATEGORÍA: Muestra OBLIGATORIAMENTE la lista completa vertical una por una con ✅ y un doble salto de línea entre cada opción (\n\n). No la ocultes. PROHIBIDO poner dos opciones en el mismo renglón.
     ESTRUCTURA OBLIGATORIA:
     "¡Perfecto! Mira, estas son las opciones que tengo para ti: 
+
     {{categorias}}
+
     ¿Cuál de estas opciones te interesa?"
- 4. FORMATO ESCOLARIDAD: Cuando preguntes por el nivel de escolaridad, es ESTRICTAMENTE OBLIGATORIO que muestres las opciones en una lista VERTICAL con un emoji diferente en cada línea (ej: 🎒 Primaria \n 🏫 Secundaria \n ...). ¡Nunca en el mismo renglón!
+ 4. FORMATO ESCOLARIDAD: Cuando preguntes por el nivel de escolaridad, es ESTRICTAMENTE OBLIGATORIO que muestres las opciones en una lista VERTICAL con un emoji diferente y un DOBLE salto de línea (\n\n) entre cada opción (ej: 🎒 Primaria \n\n 🏫 Secundaria \n\n ...). ¡PROHIBIDO ponerlas en el mismo renglón separadas por comas!
  5. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ej: 19/05/1990)". No lo olvides.
  5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("Entiendo perfectamente") y luego re-enfoca pidiendo el dato que falta o el siguiente.
  6. PERSUASIÓN: Si pregunta por vacantes o sueldos, dile que necesitas sus datos para que el sistema le asigne la mejor opción y continúa con: {{faltantes}}.
@@ -436,10 +438,10 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         try {
             const rawCats = typeof categoriesData === 'string' ? (categoriesData.includes('[') ? JSON.parse(categoriesData) : categoriesData.split(',').map(c => c.trim())) : categoriesData;
             const cats = Array.isArray(rawCats) ? rawCats : [rawCats];
-            categoriesList = cats.map(c => `✅ ${typeof c === 'string' ? c : (c.name || c.value || JSON.stringify(c))}`).join('\n');
+            categoriesList = cats.map(c => `✅ ${typeof c === 'string' ? c : (c.name || c.value || JSON.stringify(c))}`).join('\n\n');
         } catch (e) {
             console.warn('Error parsing categories:', e);
-            categoriesList = String(categoriesData).split(',').map(c => `✅ ${c.trim()}`).join('\n');
+            categoriesList = String(categoriesData).split(',').map(c => `✅ ${c.trim()}`).join('\n\n');
         }
 
         const customExtractionRules = batchConfig.bot_extraction_rules;
@@ -872,6 +874,44 @@ ${safeDnaLines}
                                 await new Promise(r => setTimeout(r, 600));
                             } else if (isCitaStep) {
                                 console.log(`[RECRUITER BRAIN] 🤫 Silenciando speech final del paso Cita por regla de UX.`);
+
+                                // 🟢 NEW: Dispatch Appointment Confirmation Sequence
+                                if (currentStep.appointmentConfirmation && currentStep.appointmentConfirmation.length > 0) {
+                                    console.log(`[RECRUITER BRAIN] 🚀 Procesando Mensajes de Confirmación config...`);
+                                    const metaDataForVars = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
+
+                                    for (const item of currentStep.appointmentConfirmation) {
+                                        if (!item.enabled) continue;
+
+                                        try {
+                                            if (item.type === 'text' && item.data.text) {
+                                                let finalMsg = item.data.text;
+                                                finalMsg = finalMsg.replace(/\{\{\s*citaFecha\s*\}\}/ig, metaDataForVars.citaFecha || 'fecha acordada');
+                                                finalMsg = finalMsg.replace(/\{\{\s*citaHora\s*\}\}/ig, metaDataForVars.citaHora || 'hora acordada');
+
+                                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat');
+                                                await saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() });
+                                            }
+                                            else if (item.type === 'image' && item.data.url) {
+                                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, '', 'image', { url: item.data.url });
+                                                await saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${item.data.url}]`, timestamp: new Date().toISOString() });
+                                            }
+                                            else if (item.type === 'location' && item.data.lat && item.data.lng) {
+                                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {
+                                                    lat: item.data.lat,
+                                                    lng: item.data.lng,
+                                                    address: item.data.address || 'Oficina'
+                                                });
+                                                await saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() });
+                                            }
+
+                                            // Small delay between segments to ensure order in WhatsApp
+                                            await new Promise(r => setTimeout(r, 600));
+                                        } catch (err) {
+                                            console.error(`[RECRUITER BRAIN] ❌ Error enviando modulo confirmación (${item.type}):`, err.message);
+                                        }
+                                    }
+                                }
                             }
                         }
 

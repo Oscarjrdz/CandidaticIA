@@ -14,6 +14,7 @@ import MagicSearch from './MagicSearch';
 import ChatWindow from './ChatWindow';
 import VacancyEditorModal from './VacancyEditorModal';
 import InteractiveCalendar from './InteractiveCalendar';
+import InteractiveConfirmationMap from './InteractiveConfirmationMap';
 import { formatPhone, formatRelativeDate, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 
@@ -178,18 +179,34 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                 <div className="flex items-center gap-1">
                     {/* Calendar Config Trigger (Only for CITA step) */}
                     {step.name?.trim().toLowerCase() === 'cita' && (
-                        <button
-                            onClick={(e) => {
-                                e.preventDefault(); e.stopPropagation();
-                                onEdit(step.id, 'calendar');
-                            }}
-                            className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.calendarOptions?.length > 0
-                                ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                                : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
-                            title="Configurar Horarios Disponibles"
-                        >
-                            <Calendar className="w-3.5 h-3.5" />
-                        </button>
+                        <>
+                            <button
+                                onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation();
+                                    onEdit(step.id, 'calendar');
+                                }}
+                                className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.calendarOptions?.length > 0
+                                    ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                                    : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
+                                title="Configurar Horarios Disponibles"
+                            >
+                                <Calendar className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Appointment Confirmation Trigger (Only for CITA step) */}
+                            <button
+                                onClick={(e) => {
+                                    e.preventDefault(); e.stopPropagation();
+                                    onEdit(step.id, 'confirmation');
+                                }}
+                                className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.appointmentConfirmation?.length > 0
+                                    ? 'text-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                                    : 'text-slate-300 hover:text-purple-500 hover:bg-purple-50'}`}
+                                title="Configurar Mensaje de Confirmación de Cita"
+                            >
+                                <MapPin className="w-3.5 h-3.5" />
+                            </button>
+                        </>
                     )}
 
                     {/* Edit Vacancy Shortcut */}
@@ -382,8 +399,12 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [isOptimizing, setIsOptimizing] = useState(false);
 
     // Calendar Step Config
-    const [openCalendarConfig, setOpenCalendarConfig] = useState(null); // { stepId: '...', projectId: '...' }
+    const [openCalendarConfig, setOpenCalendarConfig] = useState(null);
     const [calendarOptions, setCalendarOptions] = useState([]);
+
+    // Appointment Confirmation Config
+    const [openConfirmationConfig, setOpenConfirmationConfig] = useState(null);
+    const [confirmationItems, setConfirmationItems] = useState([]);
     const [newCalendarOption, setNewCalendarOption] = useState('');
 
     // AI Search integration
@@ -714,6 +735,13 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             setOpenCalendarConfig({ stepId, projectId: activeProject.id });
             setCalendarOptions(step.calendarOptions || []);
             setNewCalendarOption('');
+            return;
+        }
+
+        if (mode === 'confirmation') {
+            // Open Appointment Confirmation Config Modal
+            setOpenConfirmationConfig({ stepId, projectId: activeProject.id });
+            setConfirmationItems(step.appointmentConfirmation || []);
             return;
         }
 
@@ -1361,6 +1389,59 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                         className="bg-[#10a37f] hover:bg-[#0e906f] text-white rounded-xl px-10 py-3 shadow-xl shadow-[#10a37f]/20 font-black tracking-widest text-sm transition-all hover:scale-105"
                                     >
                                         Guardar y Activar
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Appointment Confirmation Config Modal */}
+                {openConfirmationConfig && activeProject && (
+                    <div className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                        <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200/50 dark:border-slate-800 flex flex-col max-h-[90vh]">
+                            <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
+                                <div className="flex items-start gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/50">
+                                    <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-2xl">
+                                        <MapPin className="w-8 h-8 text-purple-500" />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Confirmación de Cita</h3>
+                                        <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                                            Paso: {activeProject.steps.find(s => s.id === openConfirmationConfig.stepId)?.name}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setOpenConfirmationConfig(null)}
+                                        className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <InteractiveConfirmationMap
+                                    options={confirmationItems}
+                                    onChange={setConfirmationItems}
+                                />
+
+                                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800/50">
+                                    <button
+                                        onClick={() => setOpenConfirmationConfig(null)}
+                                        className="px-4 py-2 text-slate-500 hover:text-slate-700 font-bold text-sm uppercase tracking-widest"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <Button
+                                        onClick={() => {
+                                            const updatedSteps = activeProject.steps.map(s =>
+                                                s.id === openConfirmationConfig.stepId ? { ...s, appointmentConfirmation: confirmationItems } : s
+                                            );
+                                            saveStepsUpdate(updatedSteps, 'Mensaje de confirmación guardado');
+                                            setOpenConfirmationConfig(null);
+                                        }}
+                                        className="bg-purple-500 hover:bg-purple-600 text-white rounded-xl px-6 py-2 shadow-lg shadow-purple-500/20 font-black tracking-widest text-sm transition-all hover:scale-105"
+                                    >
+                                        Guardar Mensajes
                                     </Button>
                                 </div>
                             </div>
