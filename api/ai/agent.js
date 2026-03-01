@@ -629,7 +629,8 @@ ${safeDnaLines}
                             console.log(`[RECRUITER BRAIN] 📅 Extracted Calendar Data: Fecha=${citaFecha}, Hora=${citaHora}`);
                         }
 
-                        console.log(`[RECRUITER BRAIN] 🧬 Extracted data merged: `, aiResult.extracted_data);
+                        console.log(`[RECRUITER BRAIN] 🧬 Extracted data merged: `, JSON.stringify(aiResult.extracted_data, null, 2));
+                        console.log(`[CITA_DIAGNOSTIC] Move Triggered?: ${aiResult?.thought_process?.includes('move')}, mergedMeta.citaFecha=${candidateUpdates.projectMetadata?.citaFecha}, mergedMeta.citaHora=${candidateUpdates.projectMetadata?.citaHora}`);
                     }
 
                     const rawUQ = aiResult?.unanswered_question;
