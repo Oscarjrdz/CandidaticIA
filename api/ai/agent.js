@@ -736,10 +736,7 @@ ${safeDnaLines}
                 if (!hasMoveTag) {
                     const lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
                     const botText = (lastBotMsg?.content || '').toLowerCase();
-                    const isInterviewInvite = botText.includes('agendar tu entrevista') ||
-                        botText.includes('agendar una entrevista') ||
-                        botText.includes('agendamos tu entrevista') ||
-                        botText.includes('te queda bien');
+                    const isInterviewInvite = /agendar|agendamos|te queda bien|estamos de acuerdo/i.test(botText);
 
                     const isUserAffirmative = /^(si|sí|claro|por supuesto|obvio|va|dale|ok|okay|sipi|simon|simón|me parece bien|está bien|perfecto|excelente|adelante)/i.test(aggregatedText.trim());
 
@@ -767,7 +764,7 @@ ${safeDnaLines}
                         inferredAcceptance = true;
 
                         // Attempt to extract date and time from the text as fallback
-                        const dateRegex = /para el\s+([a-zA-Z0-9\s]+?)\s+a\s+las/i;
+                        const dateRegex = /(?:para el|el d[íi]a)\s+([a-zA-Z0-9\s]+?)\s+a\s+las/i;
                         const timeRegex = /a\s+las\s+([0-9:]+\s*(?:AM|PM|am|pm|hrs))/i;
 
                         const textDateMatch = aiResult?.response_text?.match(dateRegex);
@@ -792,8 +789,8 @@ ${safeDnaLines}
 
                     // Fallback to extract from historical context if somehow lost
                     if (!mergedMeta.citaFecha || !mergedMeta.citaHora || mergedMeta.citaFecha === 'null' || mergedMeta.citaHora === 'null') {
-                        const allContext = historyForGpt.map(h => h.content).join(' ');
-                        const dateFallback = allContext.match(/para el\s+([a-zA-Z0-9\s]+?)\s+a\s+las/i);
+                        const allContext = historyForGpt.map(h => typeof h.content === 'string' ? h.content : JSON.stringify(h.content)).join(' ');
+                        const dateFallback = allContext.match(/(?:para el|el d[íi]a)\s+([a-zA-Z0-9\s]+?)\s+a\s+las/i);
                         const timeFallback = allContext.match(/a\s+las\s+([0-9:]+\s*(?:AM|PM|am|pm|hrs))/i);
                         if (dateFallback && !mergedMeta.citaFecha) mergedMeta.citaFecha = dateFallback[1].trim();
                         if (timeFallback && !mergedMeta.citaHora) mergedMeta.citaHora = timeFallback[1].trim();
@@ -874,192 +871,208 @@ ${safeDnaLines}
                                 await new Promise(r => setTimeout(r, 600));
                             } else if (isCitaStep) {
                                 console.log(`[RECRUITER BRAIN] 🤫 Silenciando speech final del paso Cita por regla de UX.`);
+                            }
+                        }
 
-                                // 🟢 NEW: Dispatch Appointment Confirmation Sequence
-                                if (currentStep.appointmentConfirmation && currentStep.appointmentConfirmation.length > 0) {
-                                    console.log(`[RECRUITER BRAIN] 🚀 Procesando Mensajes de Confirmación config...`);
-                                    const metaDataForVars = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
+                        // 🟢 NEW: Dispatch Appointment Confirmation Sequence regardless of cleanSpeech
+                        const originStepNameForConfirm = (currentStep?.name || '').toLowerCase();
+                        const isCitaStepConfirm = originStepNameForConfirm.includes('cita');
 
-                                    for (const item of currentStep.appointmentConfirmation) {
-                                        if (!item.enabled) continue;
+                        console.log(`[RECRUITER BRAIN] 🔎 Evaluando módulo de confirmación: originStepNameForConfirm="${originStepNameForConfirm}", isCitaStepConfirm=${isCitaStepConfirm}`);
 
-                                        try {
-                                            if (item.type === 'text' && item.data.text) {
-                                                let finalMsg = item.data.text;
-                                                finalMsg = finalMsg.replace(/\{\{\s*citaFecha\s*\}\}/ig, metaDataForVars.citaFecha || 'fecha acordada');
-                                                finalMsg = finalMsg.replace(/\{\{\s*citaHora\s*\}\}/ig, metaDataForVars.citaHora || 'hora acordada');
+                        if (isCitaStepConfirm) {
+                            const confArray = currentStep.appointmentConfirmation || [];
+                            console.log(`[RECRUITER BRAIN] 🔎 Módulos de confirmación configurados para este paso Citas: ${confArray.length}`);
 
-                                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat');
-                                                await saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() });
-                                            }
-                                            else if (item.type === 'image' && item.data.url) {
-                                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, '', 'image', { url: item.data.url });
-                                                await saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${item.data.url}]`, timestamp: new Date().toISOString() });
-                                            }
-                                            else if (item.type === 'location' && item.data.lat && item.data.lng) {
-                                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {
-                                                    lat: item.data.lat,
-                                                    lng: item.data.lng,
-                                                    address: item.data.address || 'Oficina'
-                                                });
-                                                await saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() });
-                                            }
+                            if (confArray.length > 0) {
+                                console.log(`[RECRUITER BRAIN] 🚀 Procesando Mensajes de Confirmación config...`);
+                                const metaDataForVars = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
 
-                                            // Small delay between segments to ensure order in WhatsApp
-                                            await new Promise(r => setTimeout(r, 600));
-                                        } catch (err) {
-                                            console.error(`[RECRUITER BRAIN] ❌ Error enviando modulo confirmación (${item.type}):`, err.message);
+                                for (const item of confArray) {
+                                    console.log(`[RECRUITER BRAIN] 🔎 Evaluando item de confirmación tipo: ${item.type}, enabled: ${item.enabled}`);
+                                    if (!item.enabled) continue;
+
+                                    try {
+                                        if (item.type === 'text' && item.data.text) {
+                                            let finalMsg = item.data.text;
+                                            finalMsg = finalMsg.replace(/\{\{\s*(?:nombre|name)\s*\}\}/ig, candidateData.nombreReal || candidateData.nombre || 'Candidato');
+                                            finalMsg = finalMsg.replace(/\{\{\s*citaFecha\s*\}\}/ig, metaDataForVars.citaFecha || 'fecha acordada');
+                                            finalMsg = finalMsg.replace(/\{\{\s*citaHora\s*\}\}/ig, metaDataForVars.citaHora || 'hora acordada');
+
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat');
+                                            await saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() });
                                         }
+                                        else if (item.type === 'image' && item.data.url) {
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, '', 'image', { url: item.data.url });
+                                            await saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${item.data.url}]`, timestamp: new Date().toISOString() });
+                                        }
+                                        else if (item.type === 'location' && item.data.lat && item.data.lng) {
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {
+                                                lat: item.data.lat,
+                                                lng: item.data.lng,
+                                                address: item.data.address || 'Oficina'
+                                            });
+                                            await saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() });
+                                        }
+
+                                        // Small delay between segments to ensure order in WhatsApp
+                                        await new Promise(r => setTimeout(r, 600));
+                                    } catch (err) {
+                                        console.error(`[RECRUITER BRAIN] ❌ Error enviando modulo confirmación (${item.type}):`, err.message);
                                     }
                                 }
                             }
                         }
+                    }
 
-                        await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
-                        candidateUpdates.stepId = nextStep.id;
-                        candidateUpdates.projectId = activeProjectId; // Keep them in project
+                    await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
+                    candidateUpdates.stepId = nextStep.id;
+                    candidateUpdates.projectId = activeProjectId; // Keep them in project
 
-                        // 🔄 SEQUENTIAL: sticker first, then chained AI
-                        // Running in parallel risks Vercel serverless killing chainedAI before OpenAI responds
-                        try {
-                            const redis = getRedisClient();
-                            const stepNameLower = isExitMove ? 'exit' : (currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_'));
-                            const specificKeys = [];
-                            if (isExitMove) specificKeys.push('bot_bridge_exit', 'bot_bridge_no_interesa');
-                            if (stepNameLower && !isExitMove) specificKeys.push(`bot_bridge_${stepNameLower}`);
-                            if (!isExitMove) specificKeys.push(`bot_bridge_${activeStepId}`, 'bot_step_move_sticker');
+                    // 🔄 SEQUENTIAL: sticker first, then chained AI
+                    // Running in parallel risks Vercel serverless killing chainedAI before OpenAI responds
+                    try {
+                        const redis = getRedisClient();
+                        const stepNameLower = isExitMove ? 'exit' : (currentStep?.name?.toLowerCase().trim().replace(/\s+/g, '_'));
+                        const specificKeys = [];
+                        if (isExitMove) specificKeys.push('bot_bridge_exit', 'bot_bridge_no_interesa');
+                        if (stepNameLower && !isExitMove) specificKeys.push(`bot_bridge_${stepNameLower}`);
+                        if (!isExitMove) specificKeys.push(`bot_bridge_${activeStepId}`, 'bot_step_move_sticker');
 
-                            let bridgeKey = null;
-                            for (const key of specificKeys) {
-                                if (await redis?.exists(key)) { bridgeKey = key; break; }
+                        let bridgeKey = null;
+                        for (const key of specificKeys) {
+                            if (await redis?.exists(key)) { bridgeKey = key; break; }
+                        }
+
+                        if (bridgeKey) {
+                            const bridgeSticker = await redis?.get(bridgeKey);
+                            if (bridgeSticker) {
+                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
                             }
-
-                            if (bridgeKey) {
-                                const bridgeSticker = await redis?.get(bridgeKey);
-                                if (bridgeSticker) {
-                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
-                                }
-                            } else {
-                                console.log(`[RECRUITER BRAIN]Bridge: No sticker for ${isExitMove ? 'exit' : stepNameLower}, skipping.`);
-                            }
-                        } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail: `, e.message); }
-
-                        // Now trigger next step's AI
-                        if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
-                            try {
-                                // 🧹 CLEAN HISTORY for the new step to prevent acceptance leakage from previous step
-                                const historyForNextStep = [
-                                    ...historyForGpt.filter(h => h.role === 'user').slice(-3), // Keep some context but limited
-                                    { role: 'user', content: `[SISTEMA]: El candidato acaba de avanzar al paso "${nextStep.name}".Este es tu primer contacto en este paso.Sigue tu OBJETIVO DE PASO.` }
-                                ];
-                                if (cleanSpeech && cleanSpeech.length > 0) {
-                                    historyForNextStep.splice(-1, 0, { role: 'assistant', content: cleanSpeech });
-                                }
-
-                                const nextAiResult = await processRecruiterMessage(
-                                    { ...candidateData, ...candidateUpdates },
-                                    project, nextStep, historyForNextStep, config,
-                                    activeAiConfig.openaiApiKey,
-                                    candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : currentIdx
-                                );
-
-                                if (nextAiResult?.response_text) {
-                                    let cMessagesToSend = [];
-                                    const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
-                                    const match = nextAiResult.response_text.match(splitRegex);
-
-                                    if (match && match.index > 0) {
-                                        const splitIdx = match.index;
-                                        const part1 = nextAiResult.response_text.substring(0, splitIdx).trim();
-                                        const part2 = nextAiResult.response_text.substring(splitIdx).trim();
-
-                                        if (part1 && part1.length > 0) cMessagesToSend.push(part1);
-                                        if (part2 && part2.length > 0) cMessagesToSend.push(part2);
-                                    } else {
-                                        if (nextAiResult.response_text && nextAiResult.response_text.trim().length > 0) {
-                                            cMessagesToSend.push(nextAiResult.response_text.trim());
-                                        }
-                                    }
-
-                                    for (let i = 0; i < cMessagesToSend.length; i++) {
-                                        // Filter out nested [SILENCIO] leakage in chained step
-                                        const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
-                                        const msgClean = String(cMessagesToSend[i]).trim();
-                                        if (!msgClean || filterRegex.test(msgClean)) continue;
-
-                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
-                                        if (cMessagesToSend.length > 1 && i < cMessagesToSend.length - 1) {
-                                            await new Promise(r => setTimeout(r, 600));
-                                        }
-                                    }
-
-                                    await saveMessage(candidateId, { from: 'me', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
-                                    console.log(`[RECRUITER BRAIN] ✅ Chained AI sent sequentially for step: ${nextStep.name} `);
-                                } else {
-                                    console.warn(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text for step: ${nextStep.name} `);
-                                }
-                            } catch (e) { console.error(`[RECRUITER BRAIN] Chain Fail: `, e.message); }
                         } else {
-                            console.log(`[RECRUITER BRAIN] Next step '${nextStep.name}' has no aiConfig enabled — skipping chained AI.`);
+                            console.log(`[RECRUITER BRAIN]Bridge: No sticker for ${isExitMove ? 'exit' : stepNameLower}, skipping.`);
                         }
+                    } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail: `, e.message); }
+
+                    // Now trigger next step's AI
+                    if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
+                        try {
+                            // 🧹 CLEAN HISTORY for the new step to prevent acceptance leakage from previous step
+                            const historyForNextStep = [
+                                ...historyForGpt.filter(h => h.role === 'user').slice(-3), // Keep some context but limited
+                                { role: 'user', content: `[SISTEMA]: El candidato acaba de avanzar al paso "${nextStep.name}".Este es tu primer contacto en este paso.Sigue tu OBJETIVO DE PASO.` }
+                            ];
+                            if (cleanSpeech && cleanSpeech.length > 0) {
+                                historyForNextStep.splice(-1, 0, { role: 'assistant', content: cleanSpeech });
+                            }
+
+                            const nextAiResult = await processRecruiterMessage(
+                                { ...candidateData, ...candidateUpdates },
+                                project, nextStep, historyForNextStep, config,
+                                activeAiConfig.openaiApiKey,
+                                candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : currentIdx
+                            );
+
+                            if (nextAiResult?.response_text) {
+                                let cMessagesToSend = [];
+                                const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
+                                const match = nextAiResult.response_text.match(splitRegex);
+
+                                if (match && match.index > 0) {
+                                    const splitIdx = match.index;
+                                    const part1 = nextAiResult.response_text.substring(0, splitIdx).trim();
+                                    const part2 = nextAiResult.response_text.substring(splitIdx).trim();
+
+                                    if (part1 && part1.length > 0) cMessagesToSend.push(part1);
+                                    if (part2 && part2.length > 0) cMessagesToSend.push(part2);
+                                } else {
+                                    if (nextAiResult.response_text && nextAiResult.response_text.trim().length > 0) {
+                                        cMessagesToSend.push(nextAiResult.response_text.trim());
+                                    }
+                                }
+
+                                for (let i = 0; i < cMessagesToSend.length; i++) {
+                                    // Filter out nested [SILENCIO] leakage in chained step
+                                    const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
+                                    const msgClean = String(cMessagesToSend[i]).trim();
+                                    if (!msgClean || filterRegex.test(msgClean)) continue;
+
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
+                                    if (cMessagesToSend.length > 1 && i < cMessagesToSend.length - 1) {
+                                        await new Promise(r => setTimeout(r, 600));
+                                    }
+                                }
+
+                                await saveMessage(candidateId, { from: 'me', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
+                                console.log(`[RECRUITER BRAIN] ✅ Chained AI sent sequentially for step: ${nextStep.name} `);
+                            } else {
+                                console.warn(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text for step: ${nextStep.name} `);
+                            }
+                        } catch (e) {
+                            console.error(`[RECRUITER BRAIN] Chain Fail: `, e.message);
+                        }
+                    } else {
+                        console.log(`[RECRUITER BRAIN] Next step '${nextStep.name}' has no aiConfig enabled — skipping chained AI.`);
                     }
                 }
             }
         }
+    } catch (err) {
+        console.error(`[RECRUITER BRAIN] Error procesando mensaje de reclutador:`, err.message);
+    }
 
+    // --- BIFURCATION POINT: Silence Shield / Recruiter / GPT Host / Gemini ---
+    let isBridgeActive = false;
+    let isHostMode = false;
 
-        // --- BIFURCATION POINT: Silence Shield / Recruiter / GPT Host / Gemini ---
-        let isBridgeActive = false;
-        let isHostMode = false;
+    // 🛡️ [SILENCE SHIELD REMOVED]: Since follow-up system is gone, we no longer muzzle Brenda after completion.
+    // We now allow GPT Host or Capturista Brain to handle social interactions naturally.
 
-        // 🛡️ [SILENCE SHIELD REMOVED]: Since follow-up system is gone, we no longer muzzle Brenda after completion.
-        // We now allow GPT Host or Capturista Brain to handle social interactions naturally.
+    const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? parseInt(candidateData.bridge_counter || 0) : 0;
+    candidateUpdates.bridge_counter = bridgeCounter + 1; // Now correctly persisted in candidateUpdates
 
-        const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? parseInt(candidateData.bridge_counter || 0) : 0;
-        candidateUpdates.bridge_counter = bridgeCounter + 1; // Now correctly persisted in candidateUpdates
+    // 2. GPT HOST (OpenAI Social Brain) - Triggers after 2 messages of silence
+    const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
+    if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
+        console.log(`[HANDOVER] 🚀 Handing off to GPT HOST(OpenAI) for candidate ${candidateId}`);
+        isHostMode = true;
+        try {
+            const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
+            const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt} \n[ADN]: ${JSON.stringify(candidateData)} `, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
 
-        // 2. GPT HOST (OpenAI Social Brain) - Triggers after 2 messages of silence
-        const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
-        if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
-            console.log(`[HANDOVER] 🚀 Handing off to GPT HOST(OpenAI) for candidate ${candidateId}`);
-            isHostMode = true;
-            try {
-                const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
-                const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt} \n[ADN]: ${JSON.stringify(candidateData)} `, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
-
-                if (gptResponse?.content) {
-                    const textContent = gptResponse.content.replace(/\*/g, '');
-                    aiResult = {
-                        response_text: textContent,
-                        thought_process: "GPT Host Response",
-                        reaction: (/\b(gracias|ti)\b/i.test(textContent)) ? '👍' : null,
-                        gratitude_reached: false,
-                        close_conversation: false
-                    };
-                    responseTextVal = textContent;
-                }
-            } catch (e) {
-                console.error('[GPT Host] error:', e);
-                isHostMode = false; // Fallback to Gemini if OpenAI fails
+            if (gptResponse?.content) {
+                const textContent = gptResponse.content.replace(/\*/g, '');
+                aiResult = {
+                    response_text: textContent,
+                    thought_process: "GPT Host Response",
+                    reaction: (/\b(gracias|ti)\b/i.test(textContent)) ? '👍' : null,
+                    gratitude_reached: false,
+                    close_conversation: false
+                };
+                responseTextVal = textContent;
             }
+        } catch (e) {
+            console.error('[GPT Host] error:', e);
+            isHostMode = false; // Fallback to Gemini if OpenAI fails
         }
+    }
 
-        let handoverTriggered = false;
-        // 3. CAPTURISTA BRAIN (GPT-4o-mini consolidated)
-        if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
-            try {
-                const gptStartTime = Date.now();
+    let handoverTriggered = false;
+    // 3. CAPTURISTA BRAIN (GPT-4o-mini consolidated)
+    if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
+        try {
+            const gptStartTime = Date.now();
 
-                // 🏎️ [FORCE STATUS]: If speaking now, they are no longer NEW.
-                if (isNewFlag) {
-                    candidateUpdates.esNuevo = 'NO';
-                    await updateCandidate(candidateId, { esNuevo: 'NO' });
-                }
-                // Build Instructions
-                const extractionRules = batchConfig.bot_extraction_rules || DEFAULT_EXTRACTION_RULES;
-                systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, categoriesList)}`;
+            // 🏎️ [FORCE STATUS]: If speaking now, they are no longer NEW.
+            if (isNewFlag) {
+                candidateUpdates.esNuevo = 'NO';
+                await updateCandidate(candidateId, { esNuevo: 'NO' });
+            }
+            // Build Instructions
+            const extractionRules = batchConfig.bot_extraction_rules || DEFAULT_EXTRACTION_RULES;
+            systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, categoriesList)}`;
 
-                systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
+            systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
 {
   "response_text": "Texto para el usuario",
   "extracted_data": { 
@@ -1088,355 +1101,356 @@ ${safeDnaLines}
 - PROHIBICIÓN DE COMPORTAMIENTO INAPROPIADO: ESTÁ ESTRICTAMENTE PROHIBIDO usar frases como "Me chiveas", "Ay, qué lindo", "Hermoso". Mantén un tono sumamente profesional.
 - Si el usuario dice "Ya te lo dije" o similar, NO repitas la misma pregunta; revisa bien el mensaje anterior o el ADN y discúlpate de forma profesional antes de seguir.
 
+[REGLA ANTI-REDUNDANCIA OBLIGATORIA (MUY IMPORTANTE)]:
+- NUNCA preguntes al candidato por un dato que acabas de extraer exitosamente en el campo "extracted_data" de este mismo JSON. 
+- Por ejemplo: Si el usuario te acaba de decir "Vivo en Escobedo" y tú lo vas a poner en "extracted_data.municipio", TU "response_text" DEBE confirmar amablemente que guardaste Escobedo y avanzar DIRECTAMENTE a preguntar por el SIGUIENTE dato faltante (si lo hay). 
+- ¡PROHIBIDO contestar: "Perfecto Escobedo, ¿en qué municipio vives?"! Eso es un error grave.
+
 [REGLAS DE HOMOGENEIZACIÓN (ESTRICTAS)]:
 - **Municipio**: Devuelve ÚNICAMENTE el nombre oficial del municipio (ej: "Escobedo", "San Nicolás de los Garza") sin direcciones completas ni calles.
 - **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado. (Ej: "Secu" o "Secundaria trunca" -> "Secundaria").
 - **Categoría**: Si es "Ayudante" mantén "Ayudante". Si opera maquinaria -> "Montacarguista".\n`;
 
-                const isGenericStart = isNewFlag && /^(hola|buen[oa]s|info|vacantes?|empleos?|trabajos?|ola|q tal|que tal|\s*)$/i.test(aggregatedText.trim());
-                let bypassGpt = false;
+            const isGenericStart = isNewFlag && /^(hola|buen[oa]s|info|vacantes?|empleos?|trabajos?|ola|q tal|que tal|\s*)$/i.test(aggregatedText.trim());
+            let bypassGpt = false;
 
-                if (isNewFlag) {
-                    if (isGenericStart && auditForMode.missingLabels.length > 0 && !customPrompt) {
-                        bypassGpt = true;
-                    } else {
-                        const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
-                        systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate como ${welcomeName} y solicita el Nombre y Apellidos. ✨🌸\n`;
-                    }
-                } else if (auditForMode.paso1Status !== 'COMPLETO') {
-                    candidateUpdates.esNuevo = 'NO';
-                    let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
-
-                    const cerebro1Rules = baseRules
-                        .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
-                        .replace(/{{categorias}}/g, categoriesList)
-                        .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
-                    systemInstruction += `\n${cerebro1Rules}\n`;
-                }
-
-                // Call Magic GPT (Dynamic Model)
-                const selectedModel = batchConfig.bot_ia_model || 'gpt-4o-mini';
-                let gptResult = null;
-
-                if (bypassGpt) {
-                    const welcomeName = customPrompt ? 'tu reclutadora' : 'la Lic. Brenda Rodríguez';
-                    const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
-                    const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
-                    gptResult = {
-                        content: JSON.stringify({
-                            response_text: `¡Hola! ${gEmoji} Soy ${welcomeName} de Candidatic. Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`,
-                            extracted_data: {},
-                            reaction: '✨',
-                            thought_process: "AUTO_GREETING_BYPASS: Fast initial response for generic greeting."
-                        }),
-                        usage: { total_tokens: 0 }
-                    };
-                    console.log(`[GPT BRAIN] ⚡ Fast-tracked initial greeting for candidate ${candidateId} (LLM Bypassed - 0ms)`);
+            if (isNewFlag) {
+                if (isGenericStart && auditForMode.missingLabels.length > 0 && !customPrompt) {
+                    bypassGpt = true;
                 } else {
-                    gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" });
+                    const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
+                    systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate como ${welcomeName} y solicita el Nombre y Apellidos. ✨🌸\n`;
                 }
+            } else if (auditForMode.paso1Status !== 'COMPLETO') {
+                candidateUpdates.esNuevo = 'NO';
+                let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
 
-                if (gptResult?.content) {
-                    try {
-                        let jsonMatch = gptResult.content.match(/\{[\s\S]*\}/);
-                        const cleanJson = jsonMatch ? jsonMatch[0] : gptResult.content;
-                        aiResult = JSON.parse(cleanJson);
-                        if (!bypassGpt) {
-                            recordAITelemetry(candidateId, 'consolidated_brain', {
-                                model: selectedModel,
-                                latency: Date.now() - gptStartTime,
-                                tokens: gptResult.usage?.total_tokens || 0
-                            });
-                        }
-                        responseTextVal = aiResult.response_text;
-                    } catch (err) {
-                        console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
-                        throw new Error('GPT returned invalid JSON');
-                    }
-                }
+                const cerebro1Rules = baseRules
+                    .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
+                    .replace(/{{categorias}}/g, categoriesList)
+                    .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
+                systemInstruction += `\n${cerebro1Rules}\n`;
+            }
 
-                // Merge Extracted Data
-                if (aiResult?.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
-                    const ext = aiResult.extracted_data;
+            // Call Magic GPT (Dynamic Model)
+            const selectedModel = batchConfig.bot_ia_model || 'gpt-4o-mini';
+            let gptResult = null;
 
-                    if (ext.nombreReal && ext.nombreReal.trim().length > 1) {
-                        const previousName = candidateData.nombreReal || '';
-
-                        // We trust the AI validation from the prompt above
-                        ext.nombreReal = coalesceName(candidateData.nombreReal, ext.nombreReal);
-
-                        // If we got a valid gender inference and the candidate doesn't have one yet
-                        if (!candidateData.genero && ext.genero && ext.genero !== 'Desconocido') {
-                            // Keep inferred gender
-                        } else {
-                            delete ext.genero; // Don't override existing or save 'Desconocido'
-                        }
-                    } else if (ext.nombreReal !== undefined) {
-                        // Name was null, rejected by validation, or too short. Do not save.
-                        delete ext.nombreReal;
-                    }
-
-                    if (ext.fechaNacimiento) {
-                        ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
-                    }
-                    Object.assign(candidateUpdates, ext);
-                }
-
-                // Guardrail Pass
-                const freshAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
-                const guardContext = {
-                    isProfileComplete: freshAudit.paso1Status === 'COMPLETO',
-                    missingFields: freshAudit.missingLabels,
-                    lastInput: aggregatedText,
-                    isNewFlag: isNewFlag,
-                    candidateName: displayName,
-                    lastBotMessages,
-                    categoriesList
+            if (bypassGpt) {
+                const welcomeName = customPrompt ? 'tu reclutadora' : 'la Lic. Brenda Rodríguez';
+                const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
+                const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
+                gptResult = {
+                    content: JSON.stringify({
+                        response_text: `¡Hola! ${gEmoji} Soy ${welcomeName} de Candidatic. Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`,
+                        extracted_data: {},
+                        reaction: '✨',
+                        thought_process: "AUTO_GREETING_BYPASS: Fast initial response for generic greeting."
+                    }),
+                    usage: { total_tokens: 0 }
                 };
-                const validation = await AIGuard.validate(aiResult, guardContext, allMessages);
-                if (validation && validation.recovery_active) {
-                    aiResult = validation;
+                console.log(`[GPT BRAIN] ⚡ Fast-tracked initial greeting for candidate ${candidateId} (LLM Bypassed - 0ms)`);
+            } else {
+                gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" });
+            }
+
+            if (gptResult?.content) {
+                try {
+                    let jsonMatch = gptResult.content.match(/\{[\s\S]*\}/);
+                    const cleanJson = jsonMatch ? jsonMatch[0] : gptResult.content;
+                    aiResult = JSON.parse(cleanJson);
+                    if (!bypassGpt) {
+                        recordAITelemetry(candidateId, 'consolidated_brain', {
+                            model: selectedModel,
+                            latency: Date.now() - gptStartTime,
+                            tokens: gptResult.usage?.total_tokens || 0
+                        });
+                    }
                     responseTextVal = aiResult.response_text;
-                    if (aiResult.extracted_data) Object.assign(candidateUpdates, aiResult.extracted_data);
+                } catch (err) {
+                    console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
+                    throw new Error('GPT returned invalid JSON');
                 }
+            }
 
+            // Merge Extracted Data
+            if (aiResult?.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
+                const ext = aiResult.extracted_data;
 
-                // Transition Logic
-                // 🛠️ [HACK] Synchronous Gender fallback for Orchestrator
-                let tempGenero = candidateUpdates.genero || candidateData.genero;
-                if ((!tempGenero || tempGenero === 'Desconocido') && (candidateUpdates.nombreReal || candidateData.nombreReal)) {
-                    const nr = (candidateUpdates.nombreReal || candidateData.nombreReal || "").toLowerCase();
-                    if (nr.startsWith("maria") || nr.startsWith("ana ") || nr.startsWith("laura") || nr.startsWith("brenda") || nr.endsWith("a")) {
-                        tempGenero = "Mujer";
+                if (ext.nombreReal && ext.nombreReal.trim().length > 1) {
+                    const previousName = candidateData.nombreReal || '';
+
+                    // We trust the AI validation from the prompt above
+                    ext.nombreReal = coalesceName(candidateData.nombreReal, ext.nombreReal);
+
+                    // If we got a valid gender inference and the candidate doesn't have one yet
+                    if (!candidateData.genero && ext.genero && ext.genero !== 'Desconocido') {
+                        // Keep inferred gender
                     } else {
-                        tempGenero = "Hombre";
+                        delete ext.genero; // Don't override existing or save 'Desconocido'
                     }
-                    candidateUpdates.genero = tempGenero;
-                    candidateData.genero = tempGenero;
-                    await updateCandidate(candidateId, { genero: tempGenero });
+                } else if (ext.nombreReal !== undefined) {
+                    // Name was null, rejected by validation, or too short. Do not save.
+                    delete ext.nombreReal;
                 }
 
-                const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
-                isNowComplete = finalAudit.paso1Status === 'COMPLETO';
-
-                if (await Orchestrator.checkBypass(candidateData, finalAudit, batchConfig.bypass_enabled === 'true')) {
-                    const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config, msgId);
-                    if (handoverResult?.triggered) {
-                        Object.assign(candidateUpdates, { projectId: handoverResult.projectId, stepId: handoverResult.stepId });
-                        responseTextVal = null;
-                        handoverTriggered = true;
-                    }
+                if (ext.fechaNacimiento) {
+                    ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
                 }
-
-                if (!handoverTriggered && isNowComplete && !candidateData.congratulated) {
-                    responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. Pronto un reclutador te contactará. ✨🌸";
-                    candidateUpdates.congratulated = true;
-                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker');
-                }
-
-            } catch (err) {
-                console.error('❌ [GPT BRAIN FATAL] Error:', err.message);
-                const fbContext = {
-                    isProfileComplete: audit?.paso1Status === 'COMPLETO',
-                    missingFields: audit?.missingLabels || [],
-                    isNewFlag: isNewFlag,
-                    candidateName: displayName,
-                    lastBotMessages,
-                    categoriesList
-                };
-                aiResult = AIGuard.validate(null, fbContext);
-                responseTextVal = aiResult?.response_text;
-            }
-        }
-
-        // --- REACTION LOGIC ---
-        let reactionPromise = Promise.resolve();
-        if (msgId && config && aiResult?.reaction) {
-            reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
-        }
-
-        let deliveryPromise = Promise.resolve();
-        let resText = String(responseTextVal || '').trim();
-
-        // 🧹 MOVE TAG SANITIZER: Strip internal move tags from outbound messages
-        const moveTagPattern = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/gi;
-        if (moveTagPattern.test(resText)) {
-            resText = resText.replace(moveTagPattern, '').trim();
-            responseTextVal = resText || null;
-        }
-
-        if (responseTextVal) {
-            // [MEDIA RECOVERY]: If Brenda leaked the link into text but forgot the JSON field, recover it
-            if (!aiResult?.media_url || aiResult.media_url === 'null') {
-                const mediaTagPattern = /\[MEDIA_DISPONIBLE:?\s*(https?:\/\/[^\s\]]+)\]/i;
-                const tagMatch = responseTextVal.match(mediaTagPattern);
-                if (tagMatch && tagMatch[1]) {
-                    if (!aiResult) aiResult = {};
-                    aiResult.media_url = tagMatch[1];
-                } else {
-                    const mediaPattern = /https?:\/\/[^/]+\/api\/(image\?id=|media\/)([^\s\)]+)/i;
-                    const match = responseTextVal.match(mediaPattern);
-                    if (match) {
-                        if (!aiResult) aiResult = {};
-                        aiResult.media_url = match[0];
-                    }
-                }
+                Object.assign(candidateUpdates, ext);
             }
 
-            // [CLEANUP]: Sweep out ANY literal tag [MEDIA_DISPONIBLE] or [MEDIA_DISPONIBLE: url]
-            responseTextVal = responseTextVal.replace(/\[MEDIA_DISPONIBLE[^\]]*\]/gi, '').trim();
-
-            if (aiResult?.media_url && aiResult.media_url !== 'null') {
-                // Failsafe: Remove any detected URLs or Markdown images to prevent leakage
-                const urlRegex = /https?:\/\/[^\s\)]+/g;
-                const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
-                responseTextVal = responseTextVal.replace(markdownImageRegex, '').replace(urlRegex, '').replace(/\s+/g, ' ').trim();
+            // Guardrail Pass
+            const freshAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
+            const guardContext = {
+                isProfileComplete: freshAudit.paso1Status === 'COMPLETO',
+                missingFields: freshAudit.missingLabels,
+                lastInput: aggregatedText,
+                isNewFlag: isNewFlag,
+                candidateName: displayName,
+                lastBotMessages,
+                categoriesList
+            };
+            const validation = await AIGuard.validate(aiResult, guardContext, allMessages);
+            if (validation && validation.recovery_active) {
+                aiResult = validation;
+                responseTextVal = aiResult.response_text;
+                if (aiResult.extracted_data) Object.assign(candidateUpdates, aiResult.extracted_data);
             }
-        }
 
-        const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
-        const isTechnicalOrEmpty = !resText || filterRegex.test(String(resText).trim());
 
-        // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
-        if (isTechnicalOrEmpty && !aiResult?.close_conversation && !isRecruiterMode && !handoverTriggered) {
-            console.warn(`[FINAL SAFEGUARD] 🚨 Silence detected for candidate ${candidateId}. Forcing fallback.`);
-            responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
-        }
-
-        if (responseTextVal && !isTechnicalOrEmpty) {
-            deliveryPromise = (async () => {
-                let mUrl = aiResult?.media_url;
-
-                // --- MESSAGE SPLITTER LOGIC ---
-                // Visually split long vacancy presentations if the call to action is present.
-                let messagesToSend = [];
-                // More robust Regex: Grabs the start of the question and chunks everything up to the end into part2.
-                const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
-                const match = responseTextVal.match(splitRegex);
-
-                if (match) {
-                    const splitIdx = match.index;
-                    const part1 = responseTextVal.substring(0, splitIdx).trim();
-                    const part2 = responseTextVal.substring(splitIdx).trim();
-
-                    if (part1) messagesToSend.push(part1);
-                    messagesToSend.push(part2);
+            // Transition Logic
+            // 🛠️ [HACK] Synchronous Gender fallback for Orchestrator
+            let tempGenero = candidateUpdates.genero || candidateData.genero;
+            if ((!tempGenero || tempGenero === 'Desconocido') && (candidateUpdates.nombreReal || candidateData.nombreReal)) {
+                const nr = (candidateUpdates.nombreReal || candidateData.nombreReal || "").toLowerCase();
+                if (nr.startsWith("maria") || nr.startsWith("ana ") || nr.startsWith("laura") || nr.startsWith("brenda") || nr.endsWith("a")) {
+                    tempGenero = "Mujer";
                 } else {
-                    messagesToSend.push(responseTextVal);
+                    tempGenero = "Hombre";
                 }
+                candidateUpdates.genero = tempGenero;
+                candidateData.genero = tempGenero;
+                await updateCandidate(candidateId, { genero: tempGenero });
+            }
 
-                if (mUrl && mUrl !== 'null') {
-                    // Ensure absolute URL for UltraMsg
-                    if (mUrl.startsWith('/api/')) {
-                        mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
-                    } else if (mUrl.includes('candidatic.ia') && !mUrl.includes('vercel.app')) {
-                        mUrl = mUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
-                    }
-
-                    // Detect if it's a PDF
-                    let isPdf = mUrl.toLowerCase().includes('.pdf') || mUrl.includes('mime=application%2Fpdf');
-                    if (mUrl.includes('/api/image')) {
-                        try {
-                            const urlObj = new URL(mUrl, 'https://candidatic.ia');
-                            const mediaId = urlObj.searchParams.get('id');
-                            if (mediaId) {
-                                const redis = getRedisClient();
-                                if (redis) {
-                                    const metaRaw = await redis.get(`meta:image:${mediaId}`);
-                                    if (metaRaw) {
-                                        const meta = JSON.parse(metaRaw);
-                                        if (meta.mime === 'application/pdf') isPdf = true;
-                                    }
-                                }
-                            }
-                        } catch (e) { console.warn('[MEDIA DELIVERY] Deep detection failed:', e.message); }
-                    }
-
-                    const filename = isPdf ? 'Informacion.pdf' : 'Imagen.jpg';
-
-                    // Send media first.
-                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 0 });
-
-                    // Then send the text (or split texts) strictly sequentially
-                    for (let i = 0; i < messagesToSend.length; i++) {
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
-                        if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
-                            // ⏳ STRICT DELAY: Wait 600ms after the massive vacancy blob
-                            // before hitting the UltraMsg API again, or the webhook drops the second tiny message.
-                            await new Promise(r => setTimeout(r, 600));
-                        }
-                    }
-
-                    console.log(`[MEDIA DELIVERY] Sent strictly sequential text + ${isPdf ? 'PDF' : 'IMAGE'}`);
-                } else {
-                    // Text only, send sequentially
-                    for (let i = 0; i < messagesToSend.length; i++) {
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i }).catch(() => { });
-                        if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
-                            await new Promise(r => setTimeout(r, 600));
-                        }
-                    }
-                    console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId}`);
-                }
-            })();
-        }
-
-        // 🧬 [STATE SYNC] Ensure we know if they are complete even if we didn't go through Gemini
-        if (!isNowComplete) {
             const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
             isNowComplete = finalAudit.paso1Status === 'COMPLETO';
-        }
 
-        // 📝 [DEBUG LOG]: Store full trace NOW before potential timeouts in secondary deliveries
-        try {
-            const redisClient = getRedisClient();
-            if (redisClient) {
-                const trace = {
-                    v: "V_FINAL_STABLE_V1",
-                    timestamp: new Date().toISOString(),
-                    receivedMessage: aggregatedText,
-                    intent,
-                    apiUsed: isRecruiterMode ? `recruiter-agent(Step: ${activeStepId})` : 'capturista-brain',
-                    aiResult,
-                    isNowComplete
-                };
-                await redisClient.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
-                await redisClient.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
-                await redisClient.set('debug:global:last_run', JSON.stringify({
-                    candidateId,
-                    timestamp: trace.timestamp,
-                    msg: aggregatedText.substring(0, 50),
-                    hasUQ: !!aiResult?.unanswered_question
-                }), 'EX', 3600);
+            if (await Orchestrator.checkBypass(candidateData, finalAudit, batchConfig.bypass_enabled === 'true')) {
+                const handoverResult = await Orchestrator.executeHandover({ ...candidateData, ...candidateUpdates }, config, msgId);
+                if (handoverResult?.triggered) {
+                    Object.assign(candidateUpdates, { projectId: handoverResult.projectId, stepId: handoverResult.stepId });
+                    responseTextVal = null;
+                    handoverTriggered = true;
+                }
             }
-        } catch (e) {
-            console.error(`[DEBUG] Trace failed: `, e.message);
+
+            if (!handoverTriggered && isNowComplete && !candidateData.congratulated) {
+                responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. Pronto un reclutador te contactará. ✨🌸";
+                candidateUpdates.congratulated = true;
+                await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker');
+            }
+
+        } catch (err) {
+            console.error('❌ [GPT BRAIN FATAL] Error:', err.message);
+            const fbContext = {
+                isProfileComplete: audit?.paso1Status === 'COMPLETO',
+                missingFields: audit?.missingLabels || [],
+                isNewFlag: isNewFlag,
+                candidateName: displayName,
+                lastBotMessages,
+                categoriesList
+            };
+            aiResult = AIGuard.validate(null, fbContext);
+            responseTextVal = aiResult?.response_text;
         }
-
-        const finalReaction = (aiResult?.reaction && aiResult.reaction !== 'null' && aiResult.reaction !== 'undefined') ? aiResult.reaction : null;
-        let dbContentToSave = responseTextVal;
-
-        // If it's truly empty, save an invisible system space instead of ugly tags, UNLESS there's a valid reaction.
-        if (!dbContentToSave) {
-            dbContentToSave = finalReaction ? `[REACCIÓN: ${finalReaction}]` : ' ';
-        }
-
-        await Promise.allSettled([
-            deliveryPromise,
-            reactionPromise,
-            updateCandidate(candidateId, candidateUpdates),
-            saveMessage(candidateId, {
-                from: 'me',
-                content: dbContentToSave,
-                timestamp: new Date().toISOString()
-            })
-        ]);
-
-        return responseTextVal || '';
-    } catch (error) {
-        console.error('❌ [AI Agent] Fatal Error:', error);
-        return "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
     }
+
+    // --- REACTION LOGIC ---
+    let reactionPromise = Promise.resolve();
+    if (msgId && config && aiResult?.reaction) {
+        reactionPromise = sendUltraMsgReaction(config.instanceId, config.token, msgId, aiResult.reaction);
+    }
+
+    let deliveryPromise = Promise.resolve();
+    let resText = String(responseTextVal || '').trim();
+
+    // 🧹 MOVE TAG SANITIZER: Strip internal move tags from outbound messages
+    const moveTagPattern = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/gi;
+    if (moveTagPattern.test(resText)) {
+        resText = resText.replace(moveTagPattern, '').trim();
+        responseTextVal = resText || null;
+    }
+
+    if (responseTextVal) {
+        // [MEDIA RECOVERY]: If Brenda leaked the link into text but forgot the JSON field, recover it
+        if (!aiResult?.media_url || aiResult.media_url === 'null') {
+            const mediaTagPattern = /\[MEDIA_DISPONIBLE:?\s*(https?:\/\/[^\s\]]+)\]/i;
+            const tagMatch = responseTextVal.match(mediaTagPattern);
+            if (tagMatch && tagMatch[1]) {
+                if (!aiResult) aiResult = {};
+                aiResult.media_url = tagMatch[1];
+            } else {
+                const mediaPattern = /https?:\/\/[^/]+\/api\/(image\?id=|media\/)([^\s\)]+)/i;
+                const match = responseTextVal.match(mediaPattern);
+                if (match) {
+                    if (!aiResult) aiResult = {};
+                    aiResult.media_url = match[0];
+                }
+            }
+        }
+
+        // [CLEANUP]: Sweep out ANY literal tag [MEDIA_DISPONIBLE] or [MEDIA_DISPONIBLE: url]
+        responseTextVal = responseTextVal.replace(/\[MEDIA_DISPONIBLE[^\]]*\]/gi, '').trim();
+
+        if (aiResult?.media_url && aiResult.media_url !== 'null') {
+            // Failsafe: Remove any detected URLs or Markdown images to prevent leakage
+            const urlRegex = /https?:\/\/[^\s\)]+/g;
+            const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
+            responseTextVal = responseTextVal.replace(markdownImageRegex, '').replace(urlRegex, '').replace(/\s+/g, ' ').trim();
+        }
+    }
+
+    const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
+    const isTechnicalOrEmpty = !resText || filterRegex.test(String(resText).trim());
+
+    // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
+    if (isTechnicalOrEmpty && !aiResult?.close_conversation && !isRecruiterMode && !handoverTriggered) {
+        console.warn(`[FINAL SAFEGUARD] 🚨 Silence detected for candidate ${candidateId}. Forcing fallback.`);
+        responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
+    }
+
+    if (responseTextVal && !isTechnicalOrEmpty) {
+        deliveryPromise = (async () => {
+            let mUrl = aiResult?.media_url;
+
+            // --- MESSAGE SPLITTER LOGIC ---
+            // Visually split long vacancy presentations if the call to action is present.
+            let messagesToSend = [];
+            // More robust Regex: Grabs the start of the question and chunks everything up to the end into part2.
+            const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
+            const match = responseTextVal.match(splitRegex);
+
+            if (match) {
+                const splitIdx = match.index;
+                const part1 = responseTextVal.substring(0, splitIdx).trim();
+                const part2 = responseTextVal.substring(splitIdx).trim();
+
+                if (part1) messagesToSend.push(part1);
+                messagesToSend.push(part2);
+            } else {
+                messagesToSend.push(responseTextVal);
+            }
+
+            if (mUrl && mUrl !== 'null') {
+                // Ensure absolute URL for UltraMsg
+                if (mUrl.startsWith('/api/')) {
+                    mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
+                } else if (mUrl.includes('candidatic.ia') && !mUrl.includes('vercel.app')) {
+                    mUrl = mUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
+                }
+
+                // Detect if it's a PDF
+                let isPdf = mUrl.toLowerCase().includes('.pdf') || mUrl.includes('mime=application%2Fpdf');
+                if (mUrl.includes('/api/image')) {
+                    try {
+                        const urlObj = new URL(mUrl, 'https://candidatic.ia');
+                        const mediaId = urlObj.searchParams.get('id');
+                        if (mediaId) {
+                            const redis = getRedisClient();
+                            if (redis) {
+                                const metaRaw = await redis.get(`meta:image:${mediaId}`);
+                                if (metaRaw) {
+                                    const meta = JSON.parse(metaRaw);
+                                    if (meta.mime === 'application/pdf') isPdf = true;
+                                }
+                            }
+                        }
+                    } catch (e) { console.warn('[MEDIA DELIVERY] Deep detection failed:', e.message); }
+                }
+
+                const filename = isPdf ? 'Informacion.pdf' : 'Imagen.jpg';
+
+                // Send media first.
+                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 0 });
+
+                // Then send the text (or split texts) strictly sequentially
+                for (let i = 0; i < messagesToSend.length; i++) {
+                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
+                    if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
+                        // ⏳ STRICT DELAY: Wait 600ms after the massive vacancy blob
+                        // before hitting the UltraMsg API again, or the webhook drops the second tiny message.
+                        await new Promise(r => setTimeout(r, 600));
+                    }
+                }
+
+                console.log(`[MEDIA DELIVERY] Sent strictly sequential text + ${isPdf ? 'PDF' : 'IMAGE'}`);
+            } else {
+                // Text only, send sequentially
+                for (let i = 0; i < messagesToSend.length; i++) {
+                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i }).catch(() => { });
+                    if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
+                        await new Promise(r => setTimeout(r, 600));
+                    }
+                }
+                console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId}`);
+            }
+        })();
+    }
+
+    // 🧬 [STATE SYNC] Ensure we know if they are complete even if we didn't go through Gemini
+    if (!isNowComplete) {
+        const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
+        isNowComplete = finalAudit.paso1Status === 'COMPLETO';
+    }
+
+    // 📝 [DEBUG LOG]: Store full trace NOW before potential timeouts in secondary deliveries
+    try {
+        const redisClient = getRedisClient();
+        if (redisClient) {
+            const trace = {
+                v: "V_FINAL_STABLE_V1",
+                timestamp: new Date().toISOString(),
+                receivedMessage: aggregatedText,
+                intent,
+                apiUsed: isRecruiterMode ? `recruiter-agent(Step: ${activeStepId})` : 'capturista-brain',
+                aiResult,
+                isNowComplete
+            };
+            await redisClient.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
+            await redisClient.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
+            await redisClient.set('debug:global:last_run', JSON.stringify({
+                candidateId,
+                timestamp: trace.timestamp,
+                msg: aggregatedText.substring(0, 50),
+                hasUQ: !!aiResult?.unanswered_question
+            }), 'EX', 3600);
+        }
+    } catch (e) {
+        console.error(`[DEBUG] Trace failed: `, e.message);
+    }
+
+    const finalReaction = (aiResult?.reaction && aiResult.reaction !== 'null' && aiResult.reaction !== 'undefined') ? aiResult.reaction : null;
+    let dbContentToSave = responseTextVal;
+
+    // If it's truly empty, save an invisible system space instead of ugly tags, UNLESS there's a valid reaction.
+    if (!dbContentToSave) {
+        dbContentToSave = finalReaction ? `[REACCIÓN: ${finalReaction}]` : ' ';
+    }
+
+    await Promise.allSettled([
+        deliveryPromise,
+        reactionPromise,
+        updateCandidate(candidateId, candidateUpdates),
+        saveMessage(candidateId, {
+            from: 'me',
+            content: dbContentToSave,
+            timestamp: new Date().toISOString()
+        })
+    ]);
+
+    return responseTextVal || '';
 };
 
 async function sendFallback(cand, text) {
