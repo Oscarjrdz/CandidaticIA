@@ -16,7 +16,8 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, MessageSquare, MapPin, Image as ImageIcon, Type, Link2, Map } from 'lucide-react';
+import { GripVertical, MessageSquare, MapPin, Image as ImageIcon, Type, Map, Loader2, UploadCloud, Trash2 } from 'lucide-react';
+import { useToast } from '../hooks/useToast';
 
 const DEFAULT_ITEMS = [
     { id: 'item-text', type: 'text', enabled: true, data: { text: '¡Excelente! Te confirmo los detalles de tu entrevista:' } },
@@ -25,6 +26,57 @@ const DEFAULT_ITEMS = [
 ];
 
 const SortableItem = ({ item, isDragging, onUpdate, onToggle }) => {
+    const { showToast } = useToast();
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = React.useRef(null);
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            showToast('El archivo debe ser JPG, PNG o WebP', 'error');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('El archivo no debe pesar más de 5MB', 'error');
+            return;
+        }
+
+        setIsUploading(true);
+        try {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async () => {
+                const base64Data = reader.result;
+
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: base64Data, type: 'image' })
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    const ext = `.${file.name.split('.').pop()}`;
+                    const docUrl = `${window.location.origin}${data.url}&ext=${ext.replace('.', '')}`;
+                    onUpdate(item.id, { url: docUrl });
+                    showToast('Imagen cargada exitosamente', 'success');
+                } else {
+                    showToast(data.error || 'Error al subir la imagen', 'error');
+                }
+                setIsUploading(false);
+                if (e.target) e.target.value = '';
+            };
+        } catch (error) {
+            console.error('Upload Error:', error);
+            showToast('Error de conexión al subir la imagen', 'error');
+            setIsUploading(false);
+            if (e.target) e.target.value = '';
+        }
+    };
+
     const {
         attributes,
         listeners,
@@ -141,20 +193,63 @@ const SortableItem = ({ item, isDragging, onUpdate, onToggle }) => {
                         )}
 
                         {item.type === 'image' && (
-                            <div className="space-y-1">
+                            <div className="space-y-3">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                    <Link2 className="w-3 h-3" /> URL de la Imagen
+                                    <ImageIcon className="w-3 h-3" /> Subir Mapa o Croquis
                                 </label>
+
                                 <input
-                                    type="text"
-                                    value={item.data.url || ''}
-                                    onChange={(e) => onUpdate(item.id, { url: e.target.value })}
-                                    className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                                    placeholder="https://..."
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    accept="image/jpeg,image/png,image/webp"
+                                    onChange={handleFileUpload}
                                 />
-                                {item.data.url && (
-                                    <div className="mt-2 h-24 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 overflow-hidden flex items-center justify-center">
-                                        <img src={item.data.url} alt="Preview" className="h-full object-contain" onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.innerHTML = '<span class="text-xs text-slate-400 py-4">URL inválida o sin acceso</span>'; }} />
+
+                                {!item.data.url ? (
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={isUploading}
+                                        className="w-full flex flex-col items-center justify-center p-6 bg-slate-50 dark:bg-slate-900/50 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl hover:border-purple-300 dark:hover:border-purple-500/50 transition-colors group disabled:opacity-50"
+                                    >
+                                        {isUploading ? (
+                                            <Loader2 className="w-8 h-8 text-purple-400 animate-spin mb-2" />
+                                        ) : (
+                                            <UploadCloud className="w-8 h-8 text-slate-300 group-hover:text-purple-400 transition-colors mb-2" />
+                                        )}
+                                        <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                                            {isUploading ? 'Subiendo imagen...' : 'Clic para seleccionar imagen'}
+                                        </p>
+                                        {!isUploading && <p className="text-[10px] text-slate-400 mt-1">JPG, PNG, WebP (Máx. 5MB)</p>}
+                                    </button>
+                                ) : (
+                                    <div className="relative group rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                        <img
+                                            src={item.data.url}
+                                            alt="Preview"
+                                            className="w-full h-40 object-contain p-2"
+                                            onError={(e) => {
+                                                e.target.style.display = 'none';
+                                                e.target.parentElement.innerHTML = '<div class="w-full h-40 flex items-center justify-center"><span class="text-xs text-red-400 font-bold">Error al cargar la imagen</span></div>';
+                                            }}
+                                        />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
+                                            <button
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={isUploading}
+                                                className="px-4 py-2 bg-white text-slate-800 text-xs font-bold rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-2"
+                                            >
+                                                {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                                                {isUploading ? 'Subiendo...' : 'Reemplazar'}
+                                            </button>
+                                            <button
+                                                onClick={() => onUpdate(item.id, { url: '' })}
+                                                className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                                title="Eliminar imagen"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
