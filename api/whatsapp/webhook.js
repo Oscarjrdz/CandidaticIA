@@ -240,8 +240,9 @@ export default async function handler(req, res) {
                 if (phone === adminNumber && (messageType === 'image' || messageType === 'video' || messageType === 'document')) {
                     const mediaUrl = messageData.media || messageData.body || messageData.file;
                     if (mediaUrl && (body?.toLowerCase().includes('#screen') || body?.toLowerCase().includes('screen'))) {
-                        await downloadDevScreenshot(mediaUrl, phone);
-                        await sendMessage(adminNumber, `📸 Screenshot recibido en dev_inbox. La IA puede revisarlo ahora.`);
+                        const redis = getRedisClient();
+                        await redis.set('dev_last_screenshot', mediaUrl); // Save URL for the local AI to pull
+                        await sendMessage(adminNumber, `📸 Screenshot recibido en la nube. La IA lo está descargando a tu Mac ahora mismo.`);
                         return res.status(200).send('dev_screenshot_captured');
                     }
                 }
