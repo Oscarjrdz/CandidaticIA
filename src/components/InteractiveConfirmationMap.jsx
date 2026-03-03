@@ -22,7 +22,7 @@ import { useToast } from '../hooks/useToast';
 const DEFAULT_ITEMS = [
     { id: 'item-text', type: 'text', enabled: true, data: { text: '¡Excelente! Te confirmo los detalles de tu entrevista:' } },
     { id: 'item-location', type: 'location', enabled: true, data: { address: 'Oficinas Centrales', lat: '19.4326', lng: '-99.1332' } },
-    { id: 'item-image', type: 'image', enabled: true, data: { url: 'https://example.com/mapa-acceso.jpg' } }
+    { id: 'item-image', type: 'image', enabled: true, data: { url: '' } }
 ];
 
 const SortableItem = ({ item, isDragging, onUpdate, onToggle }) => {
@@ -230,7 +230,12 @@ const SortableItem = ({ item, isDragging, onUpdate, onToggle }) => {
                                             className="w-full h-40 object-contain p-2"
                                             onError={(e) => {
                                                 e.target.style.display = 'none';
-                                                e.target.parentElement.innerHTML = '<div class="w-full h-40 flex items-center justify-center"><span class="text-xs text-red-400 font-bold">Error al cargar la imagen</span></div>';
+                                                if (!e.target.nextElementSibling?.classList.contains('error-fallback')) {
+                                                    const fallback = document.createElement('div');
+                                                    fallback.className = 'error-fallback w-full h-40 flex items-center justify-center';
+                                                    fallback.innerHTML = '<span class="text-xs text-red-400 font-bold">Error al cargar la imagen</span>';
+                                                    e.target.parentNode.insertBefore(fallback, e.target.nextSibling);
+                                                }
                                             }}
                                         />
                                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
