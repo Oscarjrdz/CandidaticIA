@@ -1087,6 +1087,7 @@ ${safeDnaLines}
 
 [RECONOCIMIENTO DE TURNO Y REGLAS DE NOMBRE]: 
 - Si el usuario provee su nombre o apellidos, extráelo en "extracted_data.nombreReal" formatiendo a Title Case (Ej: "juan perez" -> "Juan Perez").
+- ⚠️ REGLA DE COMBINACIÓN DE NOMBRES: Si el candidato YA tiene un nombre guardado en su [ADN] (ej: "Oscar") y ahora te da sus apellidos ("Rodriguez"), DEBES combinarlos y devolver el nombre COMPLETO (Ej: "Oscar Rodriguez"). NUNCA devuelvas solo el apellido si ya tenías el nombre, porque reemplazará sus datos y causará un error.
 - REGLA ESTRICTA DE NOMBRES: NUNCA extraigas apodos, frases de cortesía o afirmaciones como "Si", "Claro", "sin problema", "buenas noches" como nombre. Si el texto no es un nombre real válido, NO LO EXTRAIGAS.
 - GÉNERO (OBLIGATORIO Y SILENCIOSO): Está estrictamente prohibido preguntarle al candidato por su género. Sin embargo, SIEMPRE debes deducirlo del nombre del candidato o contexto del chat. Si en el [CONTEXTO DEL CANDIDATO (ADN)] el candidato ya tiene un nombre (o si acabas de extraer uno), DEBES incluir SIEMPRE y OBLIGATORIAMENTE el campo "genero" en tu "extracted_data" con el valor "Hombre", "Mujer" o "Desconocido". NUNCA lo omitas si ya sabes el nombre.
 - GÉNERO (OBLIGATORIO Y SILENCIOSO): Está estrictamente prohibido preguntarle al candidato por su género. Sin embargo, SIEMPRE debes deducirlo del nombre del candidato o contexto del chat. Si en el [CONTEXTO DEL CANDIDATO (ADN)] el candidato ya tiene un nombre (o si acabas de extraer uno), DEBES incluir SIEMPRE y OBLIGATORIAMENTE el campo "genero" en tu "extracted_data" con el valor "Hombre", "Mujer" o "Desconocido". NUNCA lo omitas si ya sabes el nombre.
@@ -1199,6 +1200,23 @@ ${safeDnaLines}
                         ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
                     }
                     Object.assign(candidateUpdates, ext);
+
+                    // 🧬 NEW: Programmatic Name Combination Fallback
+                    // If the AI spits out a single word (like "Rodriguez") but we already had a single word ("Oscar"),
+                    // the AI failed the prompt instruction. We programmatically combine them here before saving.
+                    if (candidateUpdates.nombreReal) {
+                        const newName = candidateUpdates.nombreReal.trim();
+                        const oldName = candidateData.nombreReal ? candidateData.nombreReal.trim() : '';
+
+                        const newWords = newName.split(/\s+/).filter(w => w.length > 0);
+                        const oldWords = oldName.split(/\s+/).filter(w => w.length > 0);
+
+                        // If AI gave 1 word, and we had 1 word, and they are different -> combine them.
+                        if (newWords.length === 1 && oldWords.length === 1 && newName.toLowerCase() !== oldName.toLowerCase()) {
+                            console.log(`[RECRUITER BRAIN] 🧬 Programmatic Name Fix: Combining '${oldName}' + '${newName}'`);
+                            candidateUpdates.nombreReal = `${oldName} ${newName}`;
+                        }
+                    }
                 }
 
                 // Guardrail Pass
@@ -1208,7 +1226,7 @@ ${safeDnaLines}
                     missingFields: freshAudit.missingLabels,
                     lastInput: aggregatedText,
                     isNewFlag: isNewFlag,
-                    candidateName: displayName,
+                    candidateName: candidateUpdates.nombreReal || candidateData.nombreReal || displayName, // Updated to prioritize candidateUpdates.nombreReal
                     lastBotMessages,
                     categoriesList
                 };
