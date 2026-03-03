@@ -1143,9 +1143,12 @@ ${safeDnaLines}
 {
   "response_text": "Texto para el usuario",
   "extracted_data": { 
-    "nombreReal": "Valor en Title Case o null si es basura/cortesía", 
+    "nombreReal": "Nombre en Title Case o null si no lo dio", 
     "genero": "Hombre | Mujer | Desconocido",
-    ... 
+    "fechaNacimiento": "DD/MM/YYYY o null",
+    "municipio": "Nombre oficial o null",
+    "categoria": "Opción elegida o null",
+    "escolaridad": "Primaria | Secundaria | Preparatoria | Licenciatura | Técnica | Posgrado o null"
   },
   "reaction": "Emoji o null",
   "thought_process": "Breve nota interna"

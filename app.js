@@ -8,14 +8,16 @@ async function run() {
         console.log("Global str:", globalStr);
         if (globalStr) {
             const global = JSON.parse(globalStr);
-            console.log("Found recent run for candidate:", global.candidateId);
-            const logs = await r.lrange(`debug:agent:logs:${global.candidateId}`, 0, 0);
-            if (logs.length > 0) {
-                console.log("LAST AI EXECUTION:");
-                const parsed = JSON.parse(logs[0]);
-                console.log(JSON.stringify(parsed, null, 2));
-            } else {
-                console.log("No logs found for candidate.");
+            const candId = global.candidateId;
+            console.log("Found recent run for candidate:", candId);
+            const logs = await r.lrange(`debug:agent:logs:${candId}`, 0, 5);
+            for (let i = 0; i < logs.length; i++) {
+                const parsed = JSON.parse(logs[i]);
+                console.log(`\n--- TRACE [${i}] ---`);
+                console.log("receivedMessage:", parsed.receivedMessage);
+                console.log("extracted_data:", JSON.stringify(parsed.aiResult?.extracted_data));
+                console.log("response_text:", parsed.aiResult?.response_text);
+
             }
         }
     } catch (e) {
