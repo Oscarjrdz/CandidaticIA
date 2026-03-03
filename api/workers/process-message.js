@@ -61,9 +61,9 @@ export async function runTurboEngine(candidateId, from) {
         }
 
         try {
-            // 🚀 2. BURST DE-BOUNCE: Wait 100ms for rapid-fire messages to accumulate
+            // 🚀 2. BURST DE-BOUNCE: Wait 20ms for rapid-fire messages to accumulate
             console.log(`[Serverless Engine] ⏳ De-bouncing burst for ${candidateId}...`);
-            await new Promise(r => setTimeout(r, 100));
+            await new Promise(r => setTimeout(r, 20));
 
             // 🚀 3. DRAIN WAITLIST
             await drainWaitlist(candidateId);
@@ -77,6 +77,10 @@ export async function runTurboEngine(candidateId, from) {
         console.error('❌ Worker Critical Error:', error);
         return { success: false, error: error.message };
     }
+}
+// 🚀 TURBO MODE: Silence all synchronous Vercel console I/O unless actively debugging
+if (process.env.DEBUG_MODE !== 'true') {
+    console.log = function () { };
 }
 
 export default async function handler(req, res) {

@@ -111,7 +111,8 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 const sanitizedPayload = { ...payload };
                 if (sanitizedPayload.token) sanitizedPayload.token = '***_masked_***';
 
-                await redis.set(debugKey, JSON.stringify({
+                // Fire and forget to save latency
+                redis.set(debugKey, JSON.stringify({
                     timestamp: new Date().toISOString(),
                     duration,
                     status: response.status,
@@ -119,13 +120,13 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                     endpoint: endpoint,
                     fullPayload: sanitizedPayload,
                     result: response.data
-                }), 'EX', 3600);
+                }), 'EX', 3600).catch(() => { });
             }
 
             if (response.status === 200) {
                 try {
                     const { incrementMessageStats } = await import('../utils/storage.js');
-                    await incrementMessageStats('outgoing');
+                    incrementMessageStats('outgoing').catch(() => { }); // Fire and forget
                 } catch (e) { }
             }
 
