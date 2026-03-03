@@ -167,7 +167,22 @@ function coalesceName(existing, incoming) {
     if (e.toLowerCase().includes(i.toLowerCase())) return existing;
     if (i.toLowerCase().includes(e.toLowerCase())) return incoming;
 
-    // Join with space if they seem to be parts (e.g. "Oscar" + "Rodriguez")
+    // 🧬 SMART REPLACEMENT: If the user provides a completely new full name (2+ words)
+    // and it shares at least one significant word with the old name (e.g., "Oscar"), 
+    // it's a correction, not an addition. Overwrite it.
+    const eWords = e.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    const iWords = i.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+
+    if (iWords.length >= 2) {
+        // Did they share a word? (e.g. "oscar rodriguez" vs "oscar martinez")
+        const sharedWord = eWords.some(ew => i.toLowerCase().includes(ew));
+        if (sharedWord || iWords.length > eWords.length) {
+            console.log(`[RECRUITER BRAIN] 🧬 Smart Name Correction: Replacing '${e}' with '${i}'`);
+            return incoming;
+        }
+    }
+
+    // Fallback: Join with space if they seem to be disjoint parts (e.g. "Oscar" + "Rodriguez")
     return `${e} ${i}`;
 }
 
@@ -801,7 +816,7 @@ ${safeDnaLines}
                         inferredAcceptance = false;
                         isCitaConfirmation = false; // Reset to ensure regular chat dispatcher runs!
 
-                        // If the bot didn't explicitly ask for a day, append a prompt
+                        // If the bot didn't explicitly ask for a day or time, append a prompt
                         const lowerResponse = (responseTextVal || "").toLowerCase();
                         if (!lowerResponse.includes('día') && !lowerResponse.includes('hora')) {
                             // Determine exactly what is missing for a pinpoint fallback
@@ -815,9 +830,12 @@ ${safeDnaLines}
                             // Initialize if null to forcefully break silence caused by AIGuard
                             if (!responseTextVal) responseTextVal = "";
 
-                            // Only append if it's not already near the end
+                            // Ensure we don't duplicate the CTA if the AI managed to output it via FAQ engine merging
                             if (!responseTextVal.includes(callToAction)) {
-                                responseTextVal = `${responseTextVal.trim()}\n\n${callToAction}`.trim();
+                                // 🩹 FAQ RADAR FIX: If responseTextVal has an FAQ answer, add a double newline barrier
+                                const separator = responseTextVal.length > 0 ? '\n\n' : '';
+                                responseTextVal = `${responseTextVal.trim()}${separator}${callToAction}`.trim();
+                                console.log(`[RECRUITER BRAIN] 🩹 Appended Cita Fallback to response: "${callToAction}"`);
                             }
                         }
                     } else {
