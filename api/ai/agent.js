@@ -120,38 +120,66 @@ function normalizeBirthDate(input) {
         /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/,
     ];
 
-    for (const pattern of patterns) {
-        const match = cleaned.match(pattern);
-        if (match) {
-            let [, day, month, year] = match;
+    let day, month, year;
+    let matched = false;
 
-            // Convert 2-digit year to 4-digit
-            if (year.length === 2) {
-                const yy = parseInt(year);
-                year = yy >= 40 ? `19${year}` : `20${year}`;
-            }
+    // 1. Try Natural Spanish Date (e.g. "19 de mayo de 1988" or "19 mayo 88")
+    const textPattern = /^(\d{1,2})\s*(?:de\s+)?([a-zA-Z]+)\s*(?:de\s+)?(\d{2,4})$/i;
+    const textMatch = cleaned.match(textPattern);
 
-            // Pad day and month with leading zeros
-            day = day.padStart(2, '0');
-            month = month.padStart(2, '0');
-
-            const d = parseInt(day);
-            const m = parseInt(month);
-            const y = parseInt(year);
-
-            // Basic Range Validation
-            if (d < 1 || d > 31 || m < 1 || m > 12 || y < 1900 || y > new Date().getFullYear()) {
-                return { isValid: false, date: null };
-            }
-
-            // Correctness check (Leap Year/Days in month)
-            const testDate = new Date(y, m - 1, d);
-            if (testDate.getDate() !== d || testDate.getMonth() !== m - 1) {
-                return { isValid: false, date: null };
-            }
-
-            return { isValid: true, date: `${day}/${month}/${year}` };
+    if (textMatch) {
+        const meses = {
+            'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04', 'mayo': '05', 'junio': '06',
+            'julio': '07', 'agosto': '08', 'septiembre': '09', 'setiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
+        };
+        const mText = textMatch[2].toLowerCase();
+        if (meses[mText]) {
+            day = textMatch[1];
+            month = meses[mText];
+            year = textMatch[3];
+            matched = true;
         }
+    }
+
+    // 2. Try Numeric Patterns
+    if (!matched) {
+        for (const pattern of patterns) {
+            const match = cleaned.match(pattern);
+            if (match) {
+                [, day, month, year] = match;
+                matched = true;
+                break;
+            }
+        }
+    }
+
+    if (matched) {
+        // Convert 2-digit year to 4-digit
+        if (year.length === 2) {
+            const yy = parseInt(year);
+            year = yy >= 40 ? `19${year}` : `20${year}`;
+        }
+
+        // Pad day and month with leading zeros
+        day = day.padStart(2, '0');
+        month = month.padStart(2, '0');
+
+        const d = parseInt(day);
+        const m = parseInt(month);
+        const y = parseInt(year);
+
+        // Basic Range Validation
+        if (d < 1 || d > 31 || m < 1 || m > 12 || y < 1900 || y > new Date().getFullYear()) {
+            return { isValid: false, date: null };
+        }
+
+        // Correctness check (Leap Year/Days in month)
+        const testDate = new Date(y, m - 1, d);
+        if (testDate.getDate() !== d || testDate.getMonth() !== m - 1) {
+            return { isValid: false, date: null };
+        }
+
+        return { isValid: true, date: `${day}/${month}/${year}` };
     }
 
     return { isValid: false, date: null };
@@ -1162,8 +1190,8 @@ ${safeDnaLines}
                     systemInstruction += `\n${cerebro1Rules}\n`;
                 }
 
-                // Call Magic GPT (Dynamic Model)
-                const selectedModel = batchConfig.bot_ia_model || 'gpt-4o-mini';
+                // Call Magic GPT (Force 4o-mini for max speed on basic extractions)
+                const selectedModel = 'gpt-4o-mini';
                 let gptResult = null;
 
                 if (bypassGpt) {
