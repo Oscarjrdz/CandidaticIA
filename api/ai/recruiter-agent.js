@@ -363,7 +363,7 @@ ${alternatives.length > 0
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
             systemPrompt,
-            'gpt-4o-mini', // Downgraded globally to gpt-4o-mini for maximum speed
+            'gpt-4o', // Reverted to 4o because gpt-4o-mini ignores complex formatting rules and negative constraints
             customApiKey,
             { type: 'json_object' },
             multimodalDocuments

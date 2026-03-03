@@ -32,7 +32,7 @@ export const getUltraMsgConfig = async () => {
 export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     try {
         let endpoint = type;
-        if (!['chat', 'image', 'video', 'document', 'sticker'].includes(endpoint)) endpoint = 'chat';
+        if (!['chat', 'image', 'video', 'document', 'sticker', 'location'].includes(endpoint)) endpoint = 'chat';
 
         let formattedTo = String(to).trim();
         if (!formattedTo.includes('@')) {
@@ -75,6 +75,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 break;
             case 'sticker':
                 payload.sticker = body;
+                break;
+            case 'location':
+                payload.address = extraParams.address || body;
+                payload.lat = extraParams.lat;
+                payload.lng = extraParams.lng;
                 break;
             default:
                 const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
