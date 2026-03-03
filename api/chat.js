@@ -40,15 +40,6 @@ export default async function handler(req, res) {
             const timestamp = new Date().toISOString();
             const msgId = `msg_${Date.now()}`;
 
-            // 🏎️ [MANUAL PRESENCE] - Start typing ASAP for the agent
-            const manualPresence = (async () => {
-                const config = await getUltraMsgConfig();
-                if (config && candidate?.whatsapp) {
-                    const { sendUltraMsgPresence } = await import('./whatsapp/utils.js');
-                    await sendUltraMsgPresence(config.instanceId, config.token, candidate.whatsapp, 'composing');
-                }
-            })();
-            await manualPresence; // Await the promise returned by the IIFE
 
             // 1. Transactional Save
             const msgToSave = {

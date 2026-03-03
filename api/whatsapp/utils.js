@@ -150,42 +150,6 @@ export const getUltraMsgContact = async (instanceId, token, chatId) => {
     } catch (e) { return null; }
 };
 
-export const markUltraMsgAsRead = async (instanceId, token, chatId) => {
-    try {
-        let formattedChatId = String(chatId).trim();
-        if (!formattedChatId.includes('@')) {
-            formattedChatId = `${formattedChatId.replace(/\D/g, '')}@c.us`;
-        }
-        const url = `https://api.ultramsg.com/${instanceId}/chats/read`;
-        const params = new URLSearchParams();
-        params.append('token', token);
-        params.append('chatId', formattedChatId);
-        const response = await axios.post(url, params, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            timeout: 5000
-        });
-        return response.data;
-    } catch (e) { return null; }
-};
-
-export const sendUltraMsgPresence = async (instanceId, token, chatId, presence = 'composing') => {
-    try {
-        let formattedChatId = String(chatId).trim();
-        if (!formattedChatId.includes('@')) {
-            formattedChatId = `${formattedChatId.replace(/\D/g, '')}@c.us`;
-        }
-        const url = `https://api.ultramsg.com/${instanceId}/chats/presence`;
-        const params = new URLSearchParams();
-        params.append('token', token);
-        params.append('chatId', formattedChatId);
-        params.append('presence', presence);
-        axios.post(url, params, {
-            timeout: 3000,
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        }).catch(() => { });
-        return { success: true };
-    } catch (e) { return null; }
-};
 
 export const sendUltraMsgReaction = async (instanceId, token, msgId, emoji) => {
     try {

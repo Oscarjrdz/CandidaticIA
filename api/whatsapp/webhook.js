@@ -23,7 +23,7 @@ import {
     markMessageAsDone
 } from '../utils/storage.js';
 import { processMessage } from '../ai/agent.js';
-import { getUltraMsgConfig, getUltraMsgContact, markUltraMsgAsRead, sendUltraMsgPresence } from './utils.js';
+import { getUltraMsgConfig, getUltraMsgContact } from './utils.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { sendMessage } from '../utils/messenger.js';
 import { notifyNewCandidate } from '../utils/sse-notify.js';
@@ -260,17 +260,6 @@ export default async function handler(req, res) {
                     statsType: 'incoming'
                 });
 
-                // --- PRESENCE ---
-                const presenceUpdate = (async () => {
-                    const config = await configPromise;
-                    if (config) {
-                        try {
-                            await markUltraMsgAsRead(config.instanceId, config.token, from);
-                            await sendUltraMsgPresence(config.instanceId, config.token, from, 'composing');
-                        } catch (e) { }
-                    }
-                })();
-
                 // --- AI PROCESSING (Turbo Mode - Async Queue) ---
                 const aiPromise = (async () => {
                     try {
@@ -307,7 +296,7 @@ export default async function handler(req, res) {
 
                 // 🔥 Keep Vercel container alive by awaiting all side-effects BEFORE responding.
                 // UltraMsg may retry if this takes >5s, but our Redis deduplication lock will catch and ignore it.
-                await Promise.allSettled([miscPromise, presenceUpdate, aiPromise]);
+                await Promise.allSettled([miscPromise, aiPromise]);
 
                 return res.status(200).send('success');
 

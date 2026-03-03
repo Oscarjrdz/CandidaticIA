@@ -17,7 +17,7 @@ import {
     recordVacancyInteraction,
     updateProjectCandidateMeta
 } from '../utils/storage.js';
-import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgPresence, sendUltraMsgReaction } from '../whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
 import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { getOpenAIResponse } from '../utils/openai.js';
@@ -224,11 +224,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         ]);
 
         if (!candidateData) return 'ERROR: No se encontró al candidato';
-
-        // 🏎️ [EARLY PRESENCE]: Signal typing status immediately to reduce perceived latency
-        if (config && candidateData.whatsapp) {
-            sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => { });
-        }
 
         // 0. Initialize Candidate Updates accumulator
         const candidateUpdates = {

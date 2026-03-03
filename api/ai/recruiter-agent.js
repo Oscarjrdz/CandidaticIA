@@ -363,7 +363,7 @@ ${alternatives.length > 0
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
             systemPrompt,
-            'gpt-4o', // Upgraded to 4o to support Multimodal Image reading
+            'gpt-4o-mini', // Downgraded globally to gpt-4o-mini for maximum speed
             customApiKey,
             { type: 'json_object' },
             multimodalDocuments
