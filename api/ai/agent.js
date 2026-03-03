@@ -963,7 +963,7 @@ ${safeDnaLines}
                                     try {
                                         // Incremental priority for guaranteed order
                                         const p = i + 1;
-                                        if (item.type === 'text' && item.data.text) {
+                                        if (item.type === 'text' && item.data?.text) {
                                             let finalMsg = item.data.text;
                                             finalMsg = finalMsg.replace(/\{\{\s*(?:nombre|name)\s*\}\}/ig, candidateData.nombreReal || candidateData.nombre || 'Candidato');
                                             finalMsg = finalMsg.replace(/\{\{\s*citaFecha\s*\}\}/ig, metaDataForVars.citaFecha || 'fecha acordada');
@@ -972,11 +972,11 @@ ${safeDnaLines}
                                             confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat', { priority: p }));
                                             confirmPromises.push(saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() }));
                                         }
-                                        else if (item.type === 'image' && item.data.url) {
+                                        else if (item.type === 'image' && item.data?.url) {
                                             confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.url, 'image', { priority: p }));
                                             confirmPromises.push(saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${item.data.url}]`, timestamp: new Date().toISOString() }));
                                         }
-                                        else if (item.type === 'location' && item.data.lat && item.data.lng) {
+                                        else if (item.type === 'location' && item.data?.lat && item.data?.lng) {
                                             confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {
                                                 lat: item.data.lat,
                                                 lng: item.data.lng,
@@ -986,7 +986,7 @@ ${safeDnaLines}
                                             confirmPromises.push(saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() }));
                                         }
                                     } catch (err) {
-                                        console.error(`[RECRUITER BRAIN] ❌ Error preparando modulo confirmación (${item.type}):`, err.message);
+                                        console.error(`[RECRUITER BRAIN] ❌ Error preparando modulo confirmación (${item?.type}):`, err.message);
                                     }
                                 }
                                 await Promise.allSettled(confirmPromises);
@@ -1020,7 +1020,10 @@ ${safeDnaLines}
                         } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail: `, e.message); }
 
                         // Now trigger next step's AI
-                        if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt) {
+                        const nextStepNameLower = (nextStep?.name || '').toLowerCase();
+                        const isTerminalStep = nextStepNameLower.includes('citado') || nextStepNameLower.includes('no interesa') || isExitMove;
+
+                        if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt && !isTerminalStep) {
                             try {
                                 // 🧹 CLEAN HISTORY for the new step to prevent acceptance leakage from previous step
                                 const historyForNextStep = [
