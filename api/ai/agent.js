@@ -555,6 +555,8 @@ ${safeDnaLines}
                 activeVacancyId = project.vacancyId;
             }
 
+            let recruiterTriggeredMove = false;
+
             if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
                 console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
                 isRecruiterMode = true;
@@ -934,6 +936,7 @@ ${safeDnaLines}
                         // 🟢 OPTIMISTIC LOCKING: Move candidate in DB right now before the heavy dispatch
                         // so if a concurrent message comes in, it's evaluated in the next step context
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
+                        recruiterTriggeredMove = true;
                         candidateUpdates.stepId = nextStep.id;
                         candidateUpdates.projectId = activeProjectId; // Keep them in project
 
@@ -1356,11 +1359,12 @@ ${safeDnaLines}
         let resText = String(responseTextVal || '').trim();
 
         // 🧹 MOVE TAG SANITIZER: Strip internal move tags from outbound messages
-        const moveTagPattern = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/gi;
+        const moveTagPattern = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/i;
+        const moveTagPatternGlobal = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/gi;
         const hasMoveIntent = moveTagPattern.test(String(aiResult?.thought_process || '')) || moveTagPattern.test(resText);
 
         if (moveTagPattern.test(resText)) {
-            resText = resText.replace(moveTagPattern, '').trim();
+            resText = resText.replace(moveTagPatternGlobal, '').trim();
             responseTextVal = resText || null;
         }
 
@@ -1397,7 +1401,7 @@ ${safeDnaLines}
         const isTechnicalOrEmpty = !resText || filterRegex.test(String(resText).trim());
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
-        if (isTechnicalOrEmpty && !hasMoveIntent && !aiResult?.close_conversation && !handoverTriggered) {
+        if (isTechnicalOrEmpty && (!hasMoveIntent && !recruiterTriggeredMove) && !aiResult?.close_conversation && !handoverTriggered) {
             console.warn(`[FINAL SAFEGUARD] 🚨 Silence detected for candidate ${candidateId}. Forcing fallback.`);
             if (isRecruiterMode) {
                 // If the AI sent an FAQ Media URL but hallucinated the text away, safely append a generic CTA
