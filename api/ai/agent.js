@@ -1358,9 +1358,19 @@ ${safeDnaLines}
         const isTechnicalOrEmpty = !resText || filterRegex.test(String(resText).trim());
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
-        if (isTechnicalOrEmpty && !aiResult?.close_conversation && !isRecruiterMode && !handoverTriggered) {
+        if (isTechnicalOrEmpty && !aiResult?.close_conversation && !handoverTriggered) {
             console.warn(`[FINAL SAFEGUARD] 🚨 Silence detected for candidate ${candidateId}. Forcing fallback.`);
-            responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
+            if (isRecruiterMode) {
+                // If the AI sent an FAQ Media URL but hallucinated the text away, safely append a generic CTA
+                const hasMedia = aiResult?.media_url && aiResult.media_url !== 'null';
+                if (hasMedia) {
+                    responseTextVal = "Aquí está la información. 😉 ¿Te gustaría que te agende una cita para entrevista?";
+                } else {
+                    responseTextVal = "¡Disculpa! Tuve un error de red. 😅 ¿Quieres que reserve tu cita para entrevista?";
+                }
+            } else {
+                responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
+            }
         }
 
         if (responseTextVal && !isTechnicalOrEmpty) {
