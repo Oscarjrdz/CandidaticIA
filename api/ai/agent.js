@@ -1357,6 +1357,8 @@ ${safeDnaLines}
 
         // 🧹 MOVE TAG SANITIZER: Strip internal move tags from outbound messages
         const moveTagPattern = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/gi;
+        const hasMoveIntent = moveTagPattern.test(String(aiResult?.thought_process || '')) || moveTagPattern.test(resText);
+
         if (moveTagPattern.test(resText)) {
             resText = resText.replace(moveTagPattern, '').trim();
             responseTextVal = resText || null;
@@ -1395,7 +1397,7 @@ ${safeDnaLines}
         const isTechnicalOrEmpty = !resText || filterRegex.test(String(resText).trim());
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
-        if (isTechnicalOrEmpty && !aiResult?.close_conversation && !handoverTriggered) {
+        if (isTechnicalOrEmpty && !hasMoveIntent && !aiResult?.close_conversation && !handoverTriggered) {
             console.warn(`[FINAL SAFEGUARD] 🚨 Silence detected for candidate ${candidateId}. Forcing fallback.`);
             if (isRecruiterMode) {
                 // If the AI sent an FAQ Media URL but hallucinated the text away, safely append a generic CTA
