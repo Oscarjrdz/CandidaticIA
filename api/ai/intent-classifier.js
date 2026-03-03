@@ -40,7 +40,7 @@ CATEGORÍAS:
 4. QUERY: Preguntas sobre vacantes, sueldos, procesos o dudas técnicas.
 5. ACCEPTANCE: El candidato ACEPTA la propuesta, vacante o cita. Puede ser explícito o implícito (ej: preguntar dirección/horario tras propuesta).
 6. REJECTION: El candidato rechaza explícitamente la vacante o propuesta actual.
-7. PIVOT: El candidato pide explícitamente ver una vacante diferente.
+7. PIVOT: El candidato pide explícitamente ver una vacante diferente. (PROHIBIDO usar PIVOT si el candidato solo pide cambiar el DÍA o la HORA de su entrevista, eso es QUERY o ACCEPTANCE).
 8. CLOSURE: Despedidas, agradecimientos finales o frases de cortesía.
 
 ULTIMO MENSAJE: "${lastMessage}"

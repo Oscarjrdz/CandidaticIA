@@ -1410,7 +1410,7 @@ ${safeDnaLines}
             }
         }
 
-        if (responseTextVal && !isTechnicalOrEmpty) {
+        if (responseTextVal) {
             deliveryPromise = (async () => {
                 let mUrl = aiResult?.media_url;
 

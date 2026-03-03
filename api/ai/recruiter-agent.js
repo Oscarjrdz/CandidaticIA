@@ -209,9 +209,11 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         // 5. REPETITION SHIELD (HARD PRE-DETECTION)
         const descriptionClean = (vacancyContext.messageDescription || '').toLowerCase().trim();
         const hasSentDescription = descriptionClean && forwardHistoryText.toLowerCase().includes(descriptionClean.substring(0, 100));
-        const repetitionShield = hasSentDescription
-            ? `\n🚨 [ESCUDO DE REPETICIÓN ACTIVO]: El historial muestra que YA enviaste la descripción de la vacante. PROHIBIDO volver a enviarla completa. Si el candidato pregunta algo, responde solo la duda de forma concisa.\n`
-            : "";
+
+        let repetitionShield = "";
+        if (hasSentDescription) {
+            repetitionShield = `\n🚨 [ESCUDO DE REPETICIÓN ACTIVO]: El historial muestra que YA enviaste la descripción de la vacante. Tienes ESTRICTAMENTE PROHIBIDO volver a enviarla o resumirla. Si el candidato pregunta algo, responde SOLO la duda corta y avanza al [OBJETIVO ACTUAL DE ESTE PASO]. Si el candidato dice "Sí" a agendar, IGNORA el contexto de vacantes y ENFÓCATE AL 100% EN DAR LOS DÍAS/HORARIOS.\n`;
+        }
 
         // 6. Construir Instruction Maestra
         // Extract answered FAQs and expose as a dedicated section with priority
