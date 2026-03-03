@@ -250,7 +250,7 @@ ${repetitionShield}
 ${currentStep.calendarOptions && currentStep.calendarOptions.length > 0
                 ? `⚠️ REGLA ESTRICTA DE AGENDA (FLUJO DE TRES PASOS): Tienes ESTRICTAMENTE PROHIBIDO soltar horarios de golpe y PROHIBIDO cerrar la cita sin confirmar. DEBES seguir esta secuencia exacta:
 
-PASO 1 (OFRECER DÍAS): Si aún no elige día, agrupa los horarios disponibles y ofrece SOLO los días como opciones numeradas. 
+PASO 1 (OFRECER DÍAS): Si aún no elige día, agrupa TODOS los horarios disponibles y ofrece ESTRICTAMENTE TODOS LOS DÍAS DISPONIBLES como opciones numeradas. TIENES PROHIBIDO OMITIR DÍAS, INCLUSO SI SON FINES DE SEMANA O ESTÁN MUY LEJOS. DEBES MOSTRAR LA LISTA COMPLETA. 
 🚨 REGLA VISUAL DE DÍAS: DEBES ENVIAR CADA OPCIÓN EN UN RENGLÓN DISTINTO. Tienes ESTRICTAMENTE PROHIBIDO poner dos días en el mismo renglón (ej. "el lunes 2 y martes 3").
 Ejemplo de formato que DEBES seguir:
 "¡Excelente! Tengo estos días disponibles para tu entrevista: 
