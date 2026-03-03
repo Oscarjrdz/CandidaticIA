@@ -28,6 +28,7 @@ import { FEATURES } from '../utils/feature-flags.js';
 import { sendMessage } from '../utils/messenger.js';
 import { notifyNewCandidate } from '../utils/sse-notify.js';
 import { logTelemetry } from '../utils/telemetry.js';
+import { downloadDevScreenshot } from '../utils/image-downloader.js';
 // 🚀 TURBO MODE: Silence all synchronous Vercel console I/O unless actively debugging
 if (process.env.DEBUG_MODE !== 'true') {
     console.log = function () { };
@@ -232,6 +233,16 @@ export default async function handler(req, res) {
                             await sendMessage(adminNumber, `✅ ¡Sticker de festejo (fin de perfil) guardado! ✨🎉`);
                             return res.status(200).send('celebration_sticker_captured');
                         }
+                    }
+                }
+
+                // --- DEV SCREENSHOT CAPTURE ---
+                if (phone === adminNumber && (messageType === 'image' || messageType === 'video' || messageType === 'document')) {
+                    const mediaUrl = messageData.media || messageData.body || messageData.file;
+                    if (mediaUrl && (body?.toLowerCase().includes('#screen') || body?.toLowerCase().includes('screen'))) {
+                        await downloadDevScreenshot(mediaUrl, phone);
+                        await sendMessage(adminNumber, `📸 Screenshot recibido en dev_inbox. La IA puede revisarlo ahora.`);
+                        return res.status(200).send('dev_screenshot_captured');
                     }
                 }
 
