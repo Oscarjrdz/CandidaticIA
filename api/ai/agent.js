@@ -802,10 +802,17 @@ ${safeDnaLines}
 
                         // If the bot didn't explicitly ask for a day, append a prompt
                         if (responseTextVal && !responseTextVal.toLowerCase().includes('día') && !responseTextVal.toLowerCase().includes('hora')) {
-                            const callToAction = "¿Qué día y hora te quedan mejor de las opciones marcadas?";
+                            // Determine exactly what is missing for a pinpoint fallback
+                            let callToAction = "¿Qué día de la semana prefieres de las opciones que te mencioné?"; // Default day missing
+                            if (mergedMeta.citaFecha && (!mergedMeta.citaHora || mergedMeta.citaHora === 'null')) {
+                                callToAction = `Perfecto, para el ${mergedMeta.citaFecha}. ¿A qué hora te gustaría asistir de los horarios disponibles?`;
+                            } else if (!mergedMeta.citaFecha || mergedMeta.citaFecha === 'null') {
+                                callToAction = "¿Qué día te queda mejor para agendar tu cita?";
+                            }
+
                             // Only append if it's not already near the end
                             if (!responseTextVal.includes(callToAction)) {
-                                responseTextVal = `${responseTextVal.trim()} ${callToAction}`;
+                                responseTextVal = `${responseTextVal.trim()}\n\n${callToAction}`;
                             }
                         }
                     } else {
@@ -869,6 +876,12 @@ ${safeDnaLines}
                             }
                         }
 
+                        // 🟢 OPTIMISTIC LOCKING: Move candidate in DB right now before the heavy dispatch
+                        // so if a concurrent message comes in, it's evaluated in the next step context
+                        await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
+                        candidateUpdates.stepId = nextStep.id;
+                        candidateUpdates.projectId = activeProjectId; // Keep them in project
+
                         // 🟢 NEW: Dispatch Appointment Confirmation Sequence regardless of cleanSpeech
                         const originStepNameForConfirm = (currentStep?.name || '').toLowerCase();
                         const isCitaStepConfirm = originStepNameForConfirm.includes('cita');
@@ -918,10 +931,6 @@ ${safeDnaLines}
                                 }
                             }
                         }
-
-                        await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
-                        candidateUpdates.stepId = nextStep.id;
-                        candidateUpdates.projectId = activeProjectId; // Keep them in project
 
                         // 🔄 SEQUENTIAL: sticker first, then chained AI
                         // Running in parallel risks Vercel serverless killing chainedAI before OpenAI responds
