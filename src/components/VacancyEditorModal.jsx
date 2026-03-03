@@ -418,6 +418,18 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
 
         setIsUploadingFaq(true);
         try {
+            const customName = window.prompt(
+                "Ingresa el nombre público con el que Brenda enviará este archivo:",
+                file.name
+            );
+
+            // If user clicked Cancel on the prompt
+            if (customName === null) {
+                setIsUploadingFaq(false);
+                setUploadingFaqId(null);
+                return;
+            }
+
             const reader = new FileReader();
             const base64Promise = new Promise(resolve => {
                 reader.onloadend = () => resolve(reader.result);
@@ -428,7 +440,7 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
             const res = await fetch('/api/upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: base64 })
+                body: JSON.stringify({ image: base64, filename: customName })
             });
             const data = await res.json();
 

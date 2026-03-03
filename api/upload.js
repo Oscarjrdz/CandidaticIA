@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { image, type: requestedType } = req.body; // Expects base64 string
+        const { image, type: requestedType, filename } = req.body; // Expects base64 string
 
         if (!image) {
             return res.status(400).json({ error: 'No image data provided' });
@@ -42,6 +42,7 @@ export default async function handler(req, res) {
         pipeline.set(key, base64Data, 'EX', 30 * 24 * 60 * 60);
         pipeline.set(metaKey, JSON.stringify({
             mime,
+            filename: filename || (mime === 'application/pdf' ? 'Informacion.pdf' : 'Imagen.jpg'),
             size: base64Data.length,
             createdAt: new Date().toISOString()
         }), 'EX', 30 * 24 * 60 * 60);
