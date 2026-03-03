@@ -17,6 +17,7 @@ import {
     addToWaitlist,
     getWaitlist,
     getCandidateById,
+    deleteCandidate,
     getUsers,
     saveUser,
     saveWebhookTransaction,
@@ -179,6 +180,30 @@ export default async function handler(req, res) {
                     const isPending = allUsers.find(u => u.whatsapp.includes(phone) && u.status === 'Pending');
                     if (isPending && phone !== '8116038195') return res.status(200).send('pending_user_ignored');
                 } catch (e) { }
+
+                // --- 🌪️ RESET COMMAND INTERCEPTOR ---
+                const upperBody = body?.toUpperCase().trim() || '';
+                if (upperBody.startsWith('RESET')) {
+                    let targetPhone = phone; // Default: Reset own number
+
+                    if (phone === adminNumber) {
+                        // Admin can pass a number: "RESET 8120313481" or "RESET+528120313481"
+                        const extractedDigits = upperBody.replace('RESET', '').replace(/\D/g, '');
+                        if (extractedDigits && extractedDigits.length >= 10) {
+                            targetPhone = extractedDigits;
+                        }
+                    }
+
+                    const targetCandId = await getCandidateIdByPhone(targetPhone);
+                    if (targetCandId) {
+                        await deleteCandidate(targetCandId);
+                        console.log(`[WEBHOOK/RESET] 💥 Data wiped for candidate ${targetCandId} (${targetPhone}) via WhatsApp command.`);
+                        await sendMessage(phone, `✅ *RESET COMPLETADO*\nEl historial y perfil del número \`${targetPhone}\` han sido borrados.\n\nEscribe "Hola" para reiniciar el flujo como un candidato nuevo.`);
+                    } else {
+                        await sendMessage(phone, `⚠️ *Aviso*: El número \`${targetPhone}\` no existe en la base de datos o ya fue reseteado.`);
+                    }
+                    return res.status(200).send('reset_processed');
+                }
 
                 // --- CANDIDATE LOOKUP ---
                 let candidateId = await getCandidateIdByPhone(phone);
