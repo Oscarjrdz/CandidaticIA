@@ -1430,7 +1430,7 @@ ${safeDnaLines}
                 // Visually split long vacancy presentations if the call to action is present.
                 let messagesToSend = [];
                 // More robust Regex: Grabs the start of the question and chunks everything up to the end into part2.
-                const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
+                const splitRegex = /(¿Te gustaría que te agende.*?entrevista.*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
                 const match = responseTextVal.match(splitRegex);
 
                 if (match) {
