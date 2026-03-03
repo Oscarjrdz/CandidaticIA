@@ -30,6 +30,11 @@ import { Orchestrator } from '../utils/orchestrator.js';
 import { MediaEngine } from '../utils/media-engine.js';
 import { intelligentExtract } from '../utils/intelligent-extractor.js';
 
+// 🚀 TURBO MODE: Silence all synchronous Vercel console I/O unless actively debugging
+if (process.env.DEBUG_MODE !== 'true') {
+    console.log = function () { };
+}
+
 export const DEFAULT_EXTRACTION_RULES = `
 [EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad.
 1. REFINAR: Si el dato en [ESTADO] es incompleto, fusiónalo con el nuevo.
