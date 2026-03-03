@@ -748,7 +748,7 @@ ${safeDnaLines}
 
                     // Check THIS bot text for confirmation of appointment
                     const thisBotText = (aiResult?.response_text || '').toLowerCase();
-                    const isCitaConfirmation = thisBotText.includes('queda agendada') ||
+                    let isCitaConfirmation = thisBotText.includes('queda agendada') ||
                         thisBotText.includes('entrevista agendada') ||
                         thisBotText.includes('confirmada tu entrevista');
 
@@ -799,9 +799,11 @@ ${safeDnaLines}
                         console.log(`[RECRUITER BRAIN] 🛡️ Vetoing MOVE in Cita step. Missing citaFecha or citaHora. Data:`, mergedMeta);
                         hasMoveTag = false;
                         inferredAcceptance = false;
+                        isCitaConfirmation = false; // Reset to ensure regular chat dispatcher runs!
 
                         // If the bot didn't explicitly ask for a day, append a prompt
-                        if (responseTextVal && !responseTextVal.toLowerCase().includes('día') && !responseTextVal.toLowerCase().includes('hora')) {
+                        const lowerResponse = (responseTextVal || "").toLowerCase();
+                        if (!lowerResponse.includes('día') && !lowerResponse.includes('hora')) {
                             // Determine exactly what is missing for a pinpoint fallback
                             let callToAction = "¿Qué día de la semana prefieres de las opciones que te mencioné?"; // Default day missing
                             if (mergedMeta.citaFecha && (!mergedMeta.citaHora || mergedMeta.citaHora === 'null')) {
@@ -810,9 +812,12 @@ ${safeDnaLines}
                                 callToAction = "¿Qué día te queda mejor para agendar tu cita?";
                             }
 
+                            // Initialize if null to forcefully break silence caused by AIGuard
+                            if (!responseTextVal) responseTextVal = "";
+
                             // Only append if it's not already near the end
                             if (!responseTextVal.includes(callToAction)) {
-                                responseTextVal = `${responseTextVal.trim()}\n\n${callToAction}`;
+                                responseTextVal = `${responseTextVal.trim()}\n\n${callToAction}`.trim();
                             }
                         }
                     } else {
