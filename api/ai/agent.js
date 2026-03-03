@@ -939,7 +939,7 @@ ${safeDnaLines}
                                             await saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() });
                                         }
                                         else if (item.type === 'image' && item.data.url) {
-                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, '', 'image', { url: item.data.url });
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.url, 'image');
                                             await saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${item.data.url}]`, timestamp: new Date().toISOString() });
                                         }
                                         else if (item.type === 'location' && item.data.lat && item.data.lng) {
