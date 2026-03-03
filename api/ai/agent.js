@@ -922,11 +922,10 @@ ${safeDnaLines}
 
                             if (cleanSpeech.length > 0 && !isCitaStep) {
                                 console.log(`[RECRUITER BRAIN] 🗣️ Enviando mensaje final del paso actual: "${cleanSpeech}"`);
-                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 }).catch((e) => {
+                                sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 }).catch((e) => {
                                     console.error('Error enviando pre-move:', e.message);
                                 });
-                                await saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() });
-                                await new Promise(r => setTimeout(r, 600));
+                                saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() }).catch(() => { });
                             } else if (isCitaStep) {
                                 console.log(`[RECRUITER BRAIN] 🤫 Silenciando speech final del paso Cita por regla de UX.`);
                             }
@@ -952,39 +951,43 @@ ${safeDnaLines}
                                 console.log(`[RECRUITER BRAIN] 🚀 Procesando Mensajes de Confirmación config...`);
                                 const metaDataForVars = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
 
-                                for (const item of confArray) {
+                                const confirmPromises = [];
+                                for (let i = 0; i < confArray.length; i++) {
+                                    const item = confArray[i];
                                     console.log(`[RECRUITER BRAIN] 🔎 Evaluando item de confirmación tipo: ${item.type}, enabled: ${item.enabled}`);
                                     if (!item.enabled) continue;
 
                                     try {
+                                        // Incremental priority for guaranteed order
+                                        const p = i + 1;
                                         if (item.type === 'text' && item.data.text) {
                                             let finalMsg = item.data.text;
                                             finalMsg = finalMsg.replace(/\{\{\s*(?:nombre|name)\s*\}\}/ig, candidateData.nombreReal || candidateData.nombre || 'Candidato');
                                             finalMsg = finalMsg.replace(/\{\{\s*citaFecha\s*\}\}/ig, metaDataForVars.citaFecha || 'fecha acordada');
                                             finalMsg = finalMsg.replace(/\{\{\s*citaHora\s*\}\}/ig, metaDataForVars.citaHora || 'hora acordada');
 
-                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat');
-                                            await saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() });
+                                            confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat', { priority: p }));
+                                            confirmPromises.push(saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() }));
                                         }
                                         else if (item.type === 'image' && item.data.url) {
-                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.url, 'image');
-                                            await saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${item.data.url}]`, timestamp: new Date().toISOString() });
+                                            confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.url, 'image', { priority: p }));
+                                            confirmPromises.push(saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${item.data.url}]`, timestamp: new Date().toISOString() }));
                                         }
                                         else if (item.type === 'location' && item.data.lat && item.data.lng) {
-                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {
+                                            confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {
                                                 lat: item.data.lat,
                                                 lng: item.data.lng,
-                                                address: item.data.address || 'Oficina'
-                                            });
-                                            await saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() });
+                                                address: item.data.address || 'Oficina',
+                                                priority: p
+                                            }));
+                                            confirmPromises.push(saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() }));
                                         }
-
-                                        // Small delay between segments to ensure order in WhatsApp
-                                        await new Promise(r => setTimeout(r, 600));
                                     } catch (err) {
-                                        console.error(`[RECRUITER BRAIN] ❌ Error enviando modulo confirmación (${item.type}):`, err.message);
+                                        console.error(`[RECRUITER BRAIN] ❌ Error preparando modulo confirmación (${item.type}):`, err.message);
                                     }
                                 }
+                                await Promise.allSettled(confirmPromises);
+                                console.log(`[RECRUITER BRAIN] 🏎️ Módulos de confirmación disparados en paralelo.`);
                             }
                         }
 
@@ -1050,17 +1053,18 @@ ${safeDnaLines}
                                         }
                                     }
 
+                                    const chainPromises = [];
+                                    const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
+
                                     for (let i = 0; i < cMessagesToSend.length; i++) {
                                         // Filter out nested [SILENCIO] leakage in chained step
-                                        const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
                                         const msgClean = String(cMessagesToSend[i]).trim();
                                         if (!msgClean || filterRegex.test(msgClean)) continue;
 
-                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
-                                        if (cMessagesToSend.length > 1 && i < cMessagesToSend.length - 1) {
-                                            await new Promise(r => setTimeout(r, 600));
-                                        }
+                                        chainPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { }));
                                     }
+
+                                    await Promise.allSettled(chainPromises);
 
                                     await saveMessage(candidateId, { from: 'me', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
                                     console.log(`[RECRUITER BRAIN] ✅ Chained AI sent sequentially for step: ${nextStep.name} `);
@@ -1458,28 +1462,24 @@ ${safeDnaLines}
                     const filename = isPdf ? 'Informacion.pdf' : 'Imagen.jpg';
 
                     // Send media first.
-                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 0 });
+                    const promises = [];
+                    promises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 }));
 
-                    // Then send the text (or split texts) strictly sequentially
+                    // Then send the text (or split texts)
                     for (let i = 0; i < messagesToSend.length; i++) {
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
-                        if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
-                            // ⏳ STRICT DELAY: Wait 600ms after the massive vacancy blob
-                            // before hitting the UltraMsg API again, or the webhook drops the second tiny message.
-                            await new Promise(r => setTimeout(r, 600));
-                        }
+                        promises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 2 }).catch(() => { }));
                     }
 
-                    console.log(`[MEDIA DELIVERY] Sent strictly sequential text + ${isPdf ? 'PDF' : 'IMAGE'}`);
+                    await Promise.allSettled(promises);
+                    console.log(`[MEDIA DELIVERY] Sent strictly sequential text + ${isPdf ? 'PDF' : 'IMAGE'} (Parallelized HTTP)`);
                 } else {
-                    // Text only, send sequentially
+                    // Text only, send parallelized with priority
+                    const promises = [];
                     for (let i = 0; i < messagesToSend.length; i++) {
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i }).catch(() => { });
-                        if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
-                            await new Promise(r => setTimeout(r, 600));
-                        }
+                        promises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { }));
                     }
-                    console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId}`);
+                    await Promise.allSettled(promises);
+                    console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId} (Parallelized HTTP)`);
                 }
             })();
         }
