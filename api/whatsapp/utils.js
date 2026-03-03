@@ -51,7 +51,10 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'image':
                 let imgUrl = body;
                 if (isHttp && imgUrl.includes('/api/image?id=')) {
-                    imgUrl = imgUrl.replace(/\/api\/image\?id=([^&]+).*/, '/api/media/$1.jpg');
+                    // Force production domain and correct image route instead of non-existent /api/media
+                    imgUrl = imgUrl.replace(/^https?:\/\/[^\/]+(\/api\/image\?id=)([^&]+).*/, 'https://candidatic.ia/api/image?id=$2&ext=.jpg');
+                    // Also handle cases where origin was somehow missing but contains the API path
+                    if (imgUrl.startsWith('/api/')) imgUrl = `https://candidatic.ia${imgUrl}`;
                 } else if (isHttp) {
                     imgUrl = imgUrl.includes('?') ? `${imgUrl}&ext=.jpg` : `${imgUrl}?ext=.jpg`;
                 }
@@ -65,8 +68,9 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'document':
                 let docUrl = body;
                 if (isHttp && docUrl.includes('/api/image?id=')) {
-                    // Transform to clean path: /api/media/ID.pdf
-                    docUrl = docUrl.replace(/\/api\/image\?id=([^&]+).*/, '/api/media/$1.pdf');
+                    // Force production domain and correct image route for PDFs
+                    docUrl = docUrl.replace(/^https?:\/\/[^\/]+(\/api\/image\?id=)([^&]+).*/, 'https://candidatic.ia/api/image?id=$2&ext=.pdf');
+                    if (docUrl.startsWith('/api/')) docUrl = `https://candidatic.ia${docUrl}`;
                 } else if (isHttp && !docUrl.includes('.pdf')) {
                     docUrl = docUrl.includes('?') ? `${docUrl}&ext=.pdf` : `${docUrl}?ext=.pdf`;
                 }
