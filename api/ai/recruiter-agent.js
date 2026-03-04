@@ -259,9 +259,9 @@ Ejemplo de formato que DEBES seguir:
 
 ¿Qué día prefieres?"
 
-PASO 2 (OFRECER HORARIOS): CUANDO el candidato ya eligió un día explícitamente, ofrécele SOLO las horas disponibles para ese día exacto en viñetas (🔹 Opción 1: 08:00 AM).
+PASO 2 (OFRECER HORARIOS): CUANDO el candidato ya eligió un día explícitamente, tienes ESTRICTAMENTE PROHIBIDO preguntarle a qué hora puede de forma libre. DEBES buscar en la lista de "horarios brutos" al final de este prompt, extraer SOLO las horas exactas correspondientes a ese día, y ofrecerlas en viñetas (🔹 Opción 1: 08:00 AM).
 🚨 REGLA VISUAL DE HORAS: DEBES ENVIAR CADA HORA EN UN RENGLÓN DISTINTO.
-Ejemplo:
+Ejemplo de formato OBLIGATORIO:
 "Perfecto, para el Lunes 2 de Marzo tengo estas opciones de horario para ti:
 
 🔹 Opción 1: 08:00 AM
