@@ -1025,9 +1025,9 @@ ${safeDnaLines}
 
                         if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt && !isTerminalStep) {
                             try {
-                                // 🧹 CLEAN HISTORY for the new step to prevent acceptance leakage from previous step
+                                // 🧹 CLEAN HISTORY for the new step. Keep both user and assistant roles so the AI knows which FAQs were already answered.
                                 const historyForNextStep = [
-                                    ...historyForGpt.filter(h => h.role === 'user').slice(-3), // Keep some context but limited
+                                    ...historyForGpt.slice(-4), // Keep last 4 messages (context aware)
                                     { role: 'user', content: `[SISTEMA]: El candidato acaba de avanzar al paso "${nextStep.name}".Este es tu primer contacto en este paso.Sigue tu OBJETIVO DE PASO.` }
                                 ];
                                 if (cleanSpeech && cleanSpeech.length > 0) {
@@ -1043,7 +1043,7 @@ ${safeDnaLines}
 
                                 if (nextAiResult?.response_text) {
                                     let cMessagesToSend = [];
-                                    const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
+                                    const splitRegex = /(¿Te gustaría que te agende.*?entrevista.*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
                                     const match = nextAiResult.response_text.match(splitRegex);
 
                                     if (match && match.index > 0) {
