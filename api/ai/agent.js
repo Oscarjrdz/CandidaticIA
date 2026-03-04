@@ -827,9 +827,9 @@ ${safeDnaLines}
                     }
                 }
 
-                // 🛡️ [CITA STEP SAFEGUARD]: Veto the move if date/time are not extracted
+                // 🛡️ [CITA STEP SAFEGUARD & CALENDAR RENDERER]
                 const isCitaStep = (currentStep?.name || '').toLowerCase().includes('cita');
-                if (isCitaStep && hasMoveTag && !hasExitTag) {
+                if (isCitaStep && !hasExitTag) {
                     const mergedMeta = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
 
                     // Fallback to extract from historical context if somehow lost
@@ -848,13 +848,17 @@ ${safeDnaLines}
                     const isInvalidFecha = !mergedMeta.citaFecha || mergedMeta.citaFecha === 'null' || String(mergedMeta.citaFecha).includes('YYYY') || String(mergedMeta.citaFecha).includes('N/A');
                     const isInvalidHora = !mergedMeta.citaHora || mergedMeta.citaHora === 'null' || String(mergedMeta.citaHora).includes('string') || String(mergedMeta.citaHora).includes('N/A');
 
-                    if (isInvalidFecha || isInvalidHora) {
+                    // 1) VETO LOGIC: If AI tries to move without both pieces of data, BLOCK IT.
+                    if (hasMoveTag && (isInvalidFecha || isInvalidHora)) {
                         console.log(`[RECRUITER BRAIN] 🛡️ Vetoing MOVE in Cita step. Invalid citaFecha or citaHora. Data:`, mergedMeta);
                         hasMoveTag = false;
                         inferredAcceptance = false;
-                        isCitaConfirmation = false; // Reset to ensure regular chat dispatcher runs!
+                        isCitaConfirmation = false;
+                    }
 
-                        // If the bot didn't explicitly ask for a day or time, append a prompt
+                    // 2) FALLBACK RENDERER: If we are missing data, force the question/calendar array.
+                    // This must run even if hasMoveTag is false!
+                    if (isInvalidFecha || isInvalidHora) {
                         const lowerResponse = (responseTextVal || "").toLowerCase();
                         const isMissingDayOrHour = (!lowerResponse.includes('día') && !lowerResponse.includes('hora'));
                         const aiHallucinatedHourQuestion = !isInvalidFecha && isInvalidHora && lowerResponse.includes('hora') && !lowerResponse.includes('opci');
