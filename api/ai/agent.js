@@ -845,8 +845,11 @@ ${safeDnaLines}
                         }
                     }
 
-                    if (!mergedMeta.citaFecha || !mergedMeta.citaHora || mergedMeta.citaFecha === 'null' || mergedMeta.citaHora === 'null') {
-                        console.log(`[RECRUITER BRAIN] 🛡️ Vetoing MOVE in Cita step. Missing citaFecha or citaHora. Data:`, mergedMeta);
+                    const isInvalidFecha = !mergedMeta.citaFecha || mergedMeta.citaFecha === 'null' || String(mergedMeta.citaFecha).includes('YYYY') || String(mergedMeta.citaFecha).includes('N/A');
+                    const isInvalidHora = !mergedMeta.citaHora || mergedMeta.citaHora === 'null' || String(mergedMeta.citaHora).includes('string') || String(mergedMeta.citaHora).includes('N/A');
+
+                    if (isInvalidFecha || isInvalidHora) {
+                        console.log(`[RECRUITER BRAIN] 🛡️ Vetoing MOVE in Cita step. Invalid citaFecha or citaHora. Data:`, mergedMeta);
                         hasMoveTag = false;
                         inferredAcceptance = false;
                         isCitaConfirmation = false; // Reset to ensure regular chat dispatcher runs!
@@ -854,13 +857,13 @@ ${safeDnaLines}
                         // If the bot didn't explicitly ask for a day or time, append a prompt
                         const lowerResponse = (responseTextVal || "").toLowerCase();
                         const isMissingDayOrHour = (!lowerResponse.includes('día') && !lowerResponse.includes('hora'));
-                        const aiHallucinatedHourQuestion = mergedMeta.citaFecha && (!mergedMeta.citaHora || mergedMeta.citaHora === 'null') && lowerResponse.includes('hora') && !lowerResponse.includes('opci');
+                        const aiHallucinatedHourQuestion = !isInvalidFecha && isInvalidHora && lowerResponse.includes('hora') && !lowerResponse.includes('opci');
 
                         if (isMissingDayOrHour || aiHallucinatedHourQuestion) {
                             // Determine exactly what is missing for a pinpoint fallback
                             let callToAction = "¿Qué día de la semana prefieres de las opciones que te mencioné?"; // Default day missing
 
-                            if (mergedMeta.citaFecha && (!mergedMeta.citaHora || mergedMeta.citaHora === 'null')) {
+                            if (!isInvalidFecha && isInvalidHora) {
                                 // 🩹 AGENT FALLBACK FIX: Don't ask an open question if we know the date.
                                 // Instead, manually render the available hours for that date to prevent GPT-4o-mini from hallucinating an open question.
                                 let availableHoursForDate = [];
