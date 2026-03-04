@@ -867,15 +867,30 @@ ${safeDnaLines}
                                 // 🩹 AGENT FALLBACK FIX: Don't ask an open question if we know the date.
                                 // Instead, manually render the available hours for that date to prevent GPT-4o-mini from hallucinating an open question.
                                 let availableHoursForDate = [];
+
+                                console.log(`[AGENT FALLBACK DEBUG] 🛑 TRIGGERED: mergedMeta.citaFecha=${mergedMeta.citaFecha} | currentStep=${currentStep?.name}`);
+
                                 if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
                                     // Match calendar options containing the date string (YYYY-MM-DD or parsed equivalents)
                                     const dateStr = String(mergedMeta.citaFecha).trim();
+
+                                    console.log(`[AGENT FALLBACK DEBUG] 📅 Searching for: "${dateStr}" in ${currentStep.calendarOptions.length} raw options...`);
+
                                     availableHoursForDate = currentStep.calendarOptions
-                                        .filter(opt => opt.includes(dateStr))
+                                        .filter(opt => {
+                                            const match = opt.includes(dateStr);
+                                            // LOG EVERY EVALUATION
+                                            console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: ${match}`);
+                                            return match;
+                                        })
                                         .map(opt => {
                                             const parts = opt.split('@');
                                             return parts.length > 1 ? parts[1].trim() : opt;
                                         });
+
+                                    console.log(`[AGENT FALLBACK DEBUG] ✅ Final Available Hours: ${JSON.stringify(availableHoursForDate)}`);
+                                } else {
+                                    console.warn(`[AGENT FALLBACK DEBUG] ❌ ERROR: currentStep.calendarOptions is missing or not an array!`);
                                 }
 
                                 if (availableHoursForDate.length > 0) {
