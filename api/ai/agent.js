@@ -1475,27 +1475,27 @@ ${safeDnaLines}
 
                     const filename = extractedFilename || (isPdf ? 'Informacion.pdf' : 'Imagen.jpg');
 
-                    const promises = [];
-                    // Stagger delivery text -> media -> CTA priority
+                    // Stagger delivery text -> media -> CTA priority (Strict sequential await to guarantee WhatsApp arrival order)
                     if (messagesToSend.length > 1) {
-                        promises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 1 }).catch(() => { }));
-                        promises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 2 }));
-                        promises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[1], 'chat', { priority: 3 }).catch(() => { }));
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 1 }).catch(() => { });
+                        await new Promise(r => setTimeout(r, 600)); // Network spacing
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 2 }).catch(() => { });
+                        await new Promise(r => setTimeout(r, 600));
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[1], 'chat', { priority: 3 }).catch(() => { });
                     } else {
-                        promises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 }));
-                        promises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 2 }).catch(() => { }));
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 }).catch(() => { });
+                        await new Promise(r => setTimeout(r, 600));
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 2 }).catch(() => { });
                     }
 
-                    await Promise.allSettled(promises);
                     console.log(`[MEDIA DELIVERY] Sent strictly sequential staggered flow + ${isPdf ? 'PDF' : 'IMAGE'}`);
                 } else {
-                    // Text only, send parallelized with priority
-                    const promises = [];
+                    // Text only, send sequentially to guarantee order
                     for (let i = 0; i < messagesToSend.length; i++) {
-                        promises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { }));
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
+                        if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 400));
                     }
-                    await Promise.allSettled(promises);
-                    console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId} (Parallelized HTTP)`);
+                    console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId} (Sequential HTTP)`);
                 }
             })();
         }
