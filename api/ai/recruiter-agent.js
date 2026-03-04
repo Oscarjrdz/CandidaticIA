@@ -259,10 +259,13 @@ Ejemplo de formato que DEBES seguir:
 
 ¿Qué día prefieres?"
 
-PASO 2 (OFRECER HORARIOS): CUANDO el candidato ya eligió un día explícitamente (ej. "el lunes"), tienes ESTRICTAMENTE PROHIBIDO preguntarle de forma libre a qué hora puede. 
-🚨 PASO CRÍTICO DE EXTRACCIÓN: Primero, convierte mentalmente su respuesta ("lunes") a la fecha exacta en el calendario (ej. "2026-03-02"). Luego, busca esa fecha en la lista de "horarios brutos" que tienes al final de este prompt, extrae SOLO las horas exactas correspondientes a ese día, y preséntalas en opciones numeradas (🔹 1: 08:00 AM).
-🚨 REGLA VISUAL DE HORAS: DEBES ENVIAR CADA HORA EN UN RENGLÓN DISTINTO Y NUNCA MEZCLAR VARIOS DÍAS.
-Ejemplo de formato OBLIGATORIO:
+PASO 2 (OFRECER HORARIOS): CUANDO el candidato ya eligió un día explícitamente (ej. "el domingo"), tienes ESTRICTAMENTE PROHIBIDO preguntarle a qué hora le queda mejor de forma libre, bajo pena de error crítico. 
+🚨 PASO CRÍTICO DE EXTRACCIÓN Y RESPUESTA (NO LO SALTES): 
+1. Transforma el día que eligió el candidato (ej. "Domingo") en la fecha cruda YYYY-MM-DD.
+2. Revisa la lista EXACTA de "horarios brutos" que viene al final de este mensaje.
+3. Encuentra TODOS los renglones correspondientes a esa fecha.
+4. Muestra EN TU MENSAJE las horas que encontraste como opciones (ej. 🔹 1: 08:00 AM, 🔹 2: 10:00 AM). ES OBLIGATORIO MOSTRAR LAS OPCIONES NUMERADAS. SI NO MUESTRAS LAS HORAS Y SOLO PREGUNTAS A QUÉ HORA, ESTARÁS ROMPIENDO EL SISTEMA.
+Ejemplo de formato OBLIGATORIO para tu respuesta:
 "Perfecto, para el Lunes 2 de Marzo tengo estas opciones de horario para ti:
 
 🔹 Opción 1: 08:00 AM
