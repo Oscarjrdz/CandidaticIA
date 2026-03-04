@@ -853,7 +853,10 @@ ${safeDnaLines}
 
                         // If the bot didn't explicitly ask for a day or time, append a prompt
                         const lowerResponse = (responseTextVal || "").toLowerCase();
-                        if (!lowerResponse.includes('día') && !lowerResponse.includes('hora')) {
+                        const isMissingDayOrHour = (!lowerResponse.includes('día') && !lowerResponse.includes('hora'));
+                        const aiHallucinatedHourQuestion = mergedMeta.citaFecha && (!mergedMeta.citaHora || mergedMeta.citaHora === 'null') && lowerResponse.includes('hora') && !lowerResponse.includes('opci');
+
+                        if (isMissingDayOrHour || aiHallucinatedHourQuestion) {
                             // Determine exactly what is missing for a pinpoint fallback
                             let callToAction = "¿Qué día de la semana prefieres de las opciones que te mencioné?"; // Default day missing
 
@@ -875,6 +878,12 @@ ${safeDnaLines}
                                 if (availableHoursForDate.length > 0) {
                                     const formattedHours = availableHoursForDate.map((h, i) => `🔹 Opción ${i + 1}: ${h}`).join('\n\n');
                                     callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo estas opciones de horario para ti:\n\n${formattedHours}\n\n¿Cuál prefieres?`;
+
+                                    // Wipe out the AI's hallucinated response entirely to prevent confusing duplicated questions
+                                    if (aiHallucinatedHourQuestion && !responseTextVal.includes('comedor') && !responseTextVal.includes('transporte') && !responseTextVal.includes('sueldo')) {
+                                        // Only wipe if it doesn't contain a FAQ response. If it contains a FAQ, we just append it.
+                                        responseTextVal = "";
+                                    }
                                 } else {
                                     // Safe fallback if literal string match fails
                                     callToAction = `Perfecto, para el ${mergedMeta.citaFecha}. ¿A qué hora te gustaría asistir de los horarios disponibles?`;
