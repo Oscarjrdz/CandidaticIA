@@ -1034,12 +1034,18 @@ ${safeDnaLines}
                                     historyForNextStep.splice(-1, 0, { role: 'assistant', content: cleanSpeech });
                                 }
 
+                                console.log(`[CHAINED AI DEBUG] 🚀 Triggering for step: ${nextStep.name}`);
+                                console.log(`[CHAINED AI DEBUG] Calendar Options:`, nextStep.calendarOptions);
+                                console.log(`[CHAINED AI DEBUG] History Payload:`, JSON.stringify(historyForNextStep));
+
                                 const nextAiResult = await processRecruiterMessage(
                                     { ...candidateData, ...candidateUpdates },
                                     project, nextStep, historyForNextStep, config,
                                     activeAiConfig.openaiApiKey,
                                     candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : currentIdx
                                 );
+
+                                console.log(`[CHAINED AI DEBUG] 🧠 Raw AI Output:`, nextAiResult);
 
                                 if (nextAiResult?.response_text) {
                                     let cMessagesToSend = [];
