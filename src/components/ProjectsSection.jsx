@@ -562,7 +562,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             console.log('🔄 Real-time Update Received:', updatedCandidate);
             // If the updated candidate belongs to the active project, refresh the list
             // Use String() cast to ensure comparison works even if types differ (string vs int)
-            const updateProjId = String(updatedCandidate.updates?.projectId || '');
+            const updateProjId = String(updatedCandidate.updates?.projectId || updatedCandidate.projectId || '');
             const activeProjId = String(activeProject?.id || '');
 
             if (activeProject && updateProjId === activeProjId) {
@@ -570,7 +570,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 fetchProjectCandidates(activeProject.id);
             }
         }
-    }, [updatedCandidate]);
+    }, [updatedCandidate, activeProject]);
 
     useEffect(() => {
         if (newCandidate) {
