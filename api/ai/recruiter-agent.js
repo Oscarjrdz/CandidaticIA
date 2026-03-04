@@ -42,7 +42,13 @@ unanswered_question: "¿Puedo llevar el pelo largo?"
 
 [FORMATO DE RESPUESTA - JSON OBLIGATORIO]:
 {
-    "extracted_data": { "categoria": "string|null", "municipio": "string|null", "escolaridad": "string|null", "citaFecha": "string|null", "citaHora": "string|null" },
+    "extracted_data": { 
+        "categoria": "string|null", 
+        "municipio": "string|null", 
+        "escolaridad": "string|null", 
+        "citaFecha": "YYYY-MM-DD|null (⚠️ RETÉN SIEMPRE EL VALOR DEL [ADN] SI YA EXISTE Y NO SE CAMBIÓ)",
+        "citaHora": "string|null (⚠️ RETÉN SIEMPRE EL VALOR DEL [ADN] SI YA EXISTE Y NO SE CAMBIÓ)" 
+    },
     "thought_process": "Razonamiento interno.",
     "response_text": "Tu respuesta cálida de Brenda.",
     "media_url": "SI la respuesta oficial usada incluye [MEDIA_DISPONIBLE: url], EXTRAE ESA URL EXACTA AQUÍ. De lo contrario, null.",

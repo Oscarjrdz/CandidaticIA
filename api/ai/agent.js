@@ -856,8 +856,29 @@ ${safeDnaLines}
                         if (!lowerResponse.includes('día') && !lowerResponse.includes('hora')) {
                             // Determine exactly what is missing for a pinpoint fallback
                             let callToAction = "¿Qué día de la semana prefieres de las opciones que te mencioné?"; // Default day missing
+
                             if (mergedMeta.citaFecha && (!mergedMeta.citaHora || mergedMeta.citaHora === 'null')) {
-                                callToAction = `Perfecto, para el ${mergedMeta.citaFecha}. ¿A qué hora te gustaría asistir de los horarios disponibles?`;
+                                // 🩹 AGENT FALLBACK FIX: Don't ask an open question if we know the date.
+                                // Instead, manually render the available hours for that date to prevent GPT-4o-mini from hallucinating an open question.
+                                let availableHoursForDate = [];
+                                if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
+                                    // Match calendar options containing the date string (YYYY-MM-DD or parsed equivalents)
+                                    const dateStr = String(mergedMeta.citaFecha).trim();
+                                    availableHoursForDate = currentStep.calendarOptions
+                                        .filter(opt => opt.includes(dateStr))
+                                        .map(opt => {
+                                            const parts = opt.split('@');
+                                            return parts.length > 1 ? parts[1].trim() : opt;
+                                        });
+                                }
+
+                                if (availableHoursForDate.length > 0) {
+                                    const formattedHours = availableHoursForDate.map((h, i) => `🔹 Opción ${i + 1}: ${h}`).join('\n\n');
+                                    callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo estas opciones de horario para ti:\n\n${formattedHours}\n\n¿Cuál prefieres?`;
+                                } else {
+                                    // Safe fallback if literal string match fails
+                                    callToAction = `Perfecto, para el ${mergedMeta.citaFecha}. ¿A qué hora te gustaría asistir de los horarios disponibles?`;
+                                }
                             } else if (!mergedMeta.citaFecha || mergedMeta.citaFecha === 'null') {
                                 callToAction = "¿Qué día te queda mejor para agendar tu cita?";
                             }
@@ -866,7 +887,7 @@ ${safeDnaLines}
                             if (!responseTextVal) responseTextVal = "";
 
                             // Ensure we don't duplicate the CTA if the AI managed to output it via FAQ engine merging
-                            if (!responseTextVal.includes(callToAction)) {
+                            if (!responseTextVal.includes(callToAction) && !responseTextVal.includes("opciones de horario")) {
                                 // 🩹 FAQ RADAR FIX: If responseTextVal has an FAQ answer, add a double newline barrier
                                 const separator = responseTextVal.length > 0 ? '\n\n' : '';
                                 responseTextVal = `${responseTextVal.trim()}${separator}${callToAction}`.trim();
@@ -1154,7 +1175,9 @@ ${safeDnaLines}
     "fechaNacimiento": "DD/MM/YYYY o null",
     "municipio": "Nombre oficial o null",
     "categoria": "Opción elegida o null",
-    "escolaridad": "Primaria | Secundaria | Preparatoria | Licenciatura | Técnica | Posgrado o null"
+    "escolaridad": "Primaria | Secundaria | Preparatoria | Licenciatura | Técnica | Posgrado o null",
+    "citaFecha": "YYYY-MM-DD o null",
+    "citaHora": "string (ej. 08:00 AM) o null"
   },
   "reaction": "Emoji o null",
   "thought_process": "Breve nota interna"
@@ -1164,7 +1187,8 @@ ${safeDnaLines}
 - Si el usuario provee su nombre o apellidos, extráelo en "extracted_data.nombreReal" formatiendo a Title Case (Ej: "juan perez" -> "Juan Perez").
 - ⚠️ REGLA DE COMBINACIÓN DE NOMBRES: Si el candidato YA tiene un nombre guardado en su [ADN] (ej: "Oscar") y ahora te da sus apellidos ("Rodriguez"), DEBES combinarlos y devolver el nombre COMPLETO (Ej: "Oscar Rodriguez"). NUNCA devuelvas solo el apellido si ya tenías el nombre, porque reemplazará sus datos y causará un error.
 - REGLA ESTRICTA DE NOMBRES: NUNCA extraigas apodos, frases de cortesía o afirmaciones como "Si", "Claro", "sin problema", "buenas noches" como nombre. Si el texto no es un nombre real válido, NO LO EXTRAIGAS.
-- GÉNERO (OBLIGATORIO Y SILENCIOSO): Está estrictamente prohibido preguntarle al candidato por su género. Sin embargo, SIEMPRE debes deducirlo del nombre del candidato o contexto del chat. Si en el [CONTEXTO DEL CANDIDATO (ADN)] el candidato ya tiene un nombre (o si acabas de extraer uno), DEBES incluir SIEMPRE y OBLIGATORIAMENTE el campo "genero" en tu "extracted_data" con el valor "Hombre", "Mujer" o "Desconocido". NUNCA lo omitas si ya sabes el nombre.
+- 🕒 REGLA DE RETENCIÓN DE AGENDA: Si el candidato YA tiene "citaFecha" o "citaHora" en su [ADN], OBLIGATORIAMENTE debes re-escribir ese mismo valor en tu "extracted_data" a menos que el candidato pida explícitamente cambiar la fecha/hora. NUNCA devuelvas "null" para citaFecha/citaHora si el [ADN] ya lo tenía lleno, porque borrarás el progreso de la cita si el usuario te hace una pregunta intermedia.
+- FECHAS CRÍTICAS: "citaFecha" DEBE ser estrictamente formato "YYYY-MM-DD" para coincidir con la base de datos interna. Transforma menciones como "el lunes" a la fecha exacta correspondiente a la próxima ocurrencia de ese día.
 - GÉNERO (OBLIGATORIO Y SILENCIOSO): Está estrictamente prohibido preguntarle al candidato por su género. Sin embargo, SIEMPRE debes deducirlo del nombre del candidato o contexto del chat. Si en el [CONTEXTO DEL CANDIDATO (ADN)] el candidato ya tiene un nombre (o si acabas de extraer uno), DEBES incluir SIEMPRE y OBLIGATORIAMENTE el campo "genero" en tu "extracted_data" con el valor "Hombre", "Mujer" o "Desconocido". NUNCA lo omitas si ya sabes el nombre.
 - ESCOLARIDAD (FORMATO OBLIGATORIO): Si vas a preguntarle al candidato por su Escolaridad, TIENES QUE ENVIAR ESTO EXACTAMENTE ASÍ EN UNA LISTA VERTICAL (un renglón por opción):
 🎒 Primaria
