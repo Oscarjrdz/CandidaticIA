@@ -34,6 +34,35 @@ if (process.env.DEBUG_MODE !== 'true') {
     console.log = function () { };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 📐 SHARED MESSAGE FORMATTER — applies to all recruiter/bot response texts
+// ─────────────────────────────────────────────────────────────────────────────
+const _DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+const _MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const _NUM_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
+
+function formatRecruiterMessage(text) {
+    if (!text) return text;
+    // ⏰ HOURS MESSAGE: "Perfecto, para el YYYY-MM-DD tengo estas opciones..."
+    if (/Perfecto.{0,60}\d{4}-\d{2}-\d{2}/i.test(text)) {
+        text = text.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_, y, m, d) => {
+            const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+            const mn = _MONTH_NAMES[date.getMonth()];
+            return `${_DAY_NAMES[date.getDay()]} ${parseInt(d)} de ${mn.charAt(0).toUpperCase() + mn.slice(1)}`;
+        });
+        let slotIdx = 0;
+        text = text.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${_NUM_EMOJIS[slotIdx++] || `${slotIdx}.`} `);
+        text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
+    }
+    // ✅ CATEGORIES LIST: normalize inline items to vertical
+    if (text.includes('✅')) {
+        text = text.replace(/( {1,4}✅)/g, '\n✅');
+        text = text.replace(/(✅[^\n]+)\s{0,4}(¿[Cc]uál)/g, '$1\n\n$2');
+    }
+    return text;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const DEFAULT_EXTRACTION_RULES = `
 [EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad.
 1. REFINAR: Si el dato en [ESTADO] es incompleto, fusiónalo con el nuevo.
@@ -610,11 +639,13 @@ ${safeDnaLines}
                     );
 
                     if (aiResult?.response_text) {
-                        // 🧹 Strip any leaked unanswered_question text the AI may have appended to response_text
+                        // 🧹 Strip leaked unanswered_question text
                         responseTextVal = aiResult.response_text
                             .replace(/\n?unanswered_question:\s*.+/gi, '')
                             .replace(/\n?\"unanswered_question\":\s*\".+\"/gi, '')
                             .trim();
+                        // 📐 Apply shared formatter (hours format, ✅ list normalization)
+                        responseTextVal = formatRecruiterMessage(responseTextVal);
                         aiResult.response_text = responseTextVal;
                     }
 
@@ -1323,15 +1354,7 @@ ${safeDnaLines}
                                 tokens: gptResult.usage?.total_tokens || 0
                             });
                         }
-                        responseTextVal = aiResult.response_text;
-
-                        // 📐 NORMALIZE INLINE LISTS: If GPT concatenated ✅ items on one line, split them vertically
-                        if (responseTextVal && responseTextVal.includes('✅')) {
-                            // Split inline ✅ items into separate lines
-                            responseTextVal = responseTextVal.replace(/( {1,4}✅)/g, '\n✅');
-                            // Ensure closing question gets a blank line before it
-                            responseTextVal = responseTextVal.replace(/(✅[^\n]+)\s{0,4}(¿[Cc]uál)/g, '$1\n\n$2');
-                        }
+                        responseTextVal = formatRecruiterMessage(aiResult.response_text);
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
                         throw new Error('GPT returned invalid JSON');
