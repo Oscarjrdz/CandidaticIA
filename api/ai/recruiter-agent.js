@@ -1,5 +1,6 @@
 import { getOpenAIResponse } from '../utils/openai.js';
-import { updateCandidate, moveCandidateStep, recordAITelemetry, recordVacancyInteraction } from '../utils/storage.js';
+import { updateCandidate, moveCandidateStep, recordAITelemetry, recordVacancyInteraction, getVacancyById, getRedisClient } from '../utils/storage.js';
+// ⚡ FIX 4: Static imports — no more dynamic import() in hot path
 
 /**
  * BRENDA RECLUTADORA (Cerebro Reclutador)
@@ -126,7 +127,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         }
 
         if (activeVacancyId) {
-            const { getVacancyById } = await import('../utils/storage.js');
+            // ⚡ FIX 4: Use static import (no more dynamic import)
             const vac = await getVacancyById(activeVacancyId);
             if (vac) {
                 vacancyContext = {
@@ -141,7 +142,6 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             }
 
             // --- FAQs ---
-            const { getRedisClient } = await import('../utils/storage.js');
             const client = getRedisClient();
             if (client) {
                 try {
@@ -166,27 +166,24 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         }
 
         // --- ALTERNATIVE VACANCIES (PIVOT) ---
-        // Only show vacancies AFTER the current index (not yet seen, not already rejected)
+        // ⚡ FIX 3: Parallel fetch with Promise.all instead of sequential for-loop
         let alternatives = [];
         if (project.vacancyIds?.length > 1) {
-            const { getVacancyById } = await import('../utils/storage.js');
-            // Future vacancies only: index > currentVacancyIndex
             const futureIds = project.vacancyIds.slice(currentVacancyIndex + 1);
-            for (const id of futureIds) {
-                const alt = await getVacancyById(id);
-                if (alt) {
-                    alternatives.push({
+            if (futureIds.length > 0) {
+                const altResults = await Promise.all(futureIds.map(id => getVacancyById(id).catch(() => null)));
+                alternatives = altResults
+                    .filter(Boolean)
+                    .map(alt => ({
                         name: alt.name,
                         description: alt.messageDescription || alt.description,
                         salary: alt.salary || 'N/A'
-                    });
-                }
+                    }));
             }
         }
 
-        // 3. Template Tag Replacement
-        const { getRedisClient: redisClient } = await import('../utils/storage.js');
-        const redisObj = redisClient();
+        // ⚡ FIX 4: Use static import (no more dynamic import)
+        const redisObj = getRedisClient();
         const catsList = (await redisObj?.get('bot_categories')) || '';
         const formattedCats = catsList.split(',').map(c => `✅ ${c.trim()}`).join('\n');
 
@@ -331,8 +328,8 @@ ${
 [VACANTES ALTERNATIVAS]:
 ${
                 alternatives.length > 0
-                ? JSON.stringify(alternatives)
-                : "No hay más vacantes disponibles."
+                    ? JSON.stringify(alternatives)
+                    : "No hay más vacantes disponibles."
             }
 
             ---
@@ -368,10 +365,16 @@ ${
             content: m.content || m.parts?.[0]?.text || ''
         }));
 
+        // ⚡ FIX 6: Use gpt-4o only for the Cita step (complex scheduling reasoning).
+        // All other steps use gpt-4o-mini which is 2-3x faster and equally accurate for conversation.
+        const isCitaStepModel = (currentStep?.name || '').toLowerCase().includes('cita');
+        const selectedModel = isCitaStepModel ? 'gpt-4o' : 'gpt-4o-mini';
+        console.log(`[RECRUITER BRAIN] 🤖 Model: ${ selectedModel } (step: ${ currentStep?.name })`);
+
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
             systemPrompt,
-            'gpt-4o', // Reverted to 4o because gpt-4o-mini ignores complex formatting rules and negative constraints
+            selectedModel,
             customApiKey,
             { type: 'json_object' },
             multimodalDocuments

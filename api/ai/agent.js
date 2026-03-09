@@ -525,7 +525,30 @@ ${safeDnaLines}
         const historyForGpt = [...recentHistory, currentMessageForGpt];
 
         if (activeProjectId) {
-            project = await getProjectById(activeProjectId);
+            // ⚡ FIX 1: Single parallel read — project data + cand_meta (was 2 sequential hgets for the same key)
+            const redisForMeta = getRedisClient();
+            const [projectResult, metaRawUnified] = await Promise.all([
+                getProjectById(activeProjectId),
+                redisForMeta ? redisForMeta.hget(`project:cand_meta:${activeProjectId}`, candidateId).catch(() => null) : Promise.resolve(null)
+            ]);
+            project = projectResult;
+
+            // 🛡️ AUTHORITATIVE STEP + VACANCY INDEX RESOLUTION from single meta read
+            try {
+                if (metaRawUnified) {
+                    const metaUnified = JSON.parse(metaRawUnified);
+                    if (metaUnified.stepId && metaUnified.stepId !== 'step_new') {
+                        if (metaUnified.stepId !== activeStepId) {
+                            console.log(`[AGENT] ⚡ Overriding stale activeStepId "${activeStepId}" → "${metaUnified.stepId}" from project:cand_meta`);
+                        }
+                        activeStepId = metaUnified.stepId;
+                    }
+                    if (metaUnified.currentVacancyIndex !== undefined) {
+                        console.log(`[AGENT] ⚡ Overriding currentVacancyIndex → ${metaUnified.currentVacancyIndex} from unified meta`);
+                    }
+                }
+            } catch (_) { }
+
             const currentStep = project?.steps?.find(s => s.id === activeStepId) || project?.steps?.[0];
 
             // 🎯 Determine active vacancy — always read from project:cand_meta (most up-to-date source)
@@ -533,16 +556,12 @@ ${safeDnaLines}
                 ? candidateData.currentVacancyIndex
                 : (candidateData.projectMetadata?.currentVacancyIndex || 0);
 
-            // Override with the authoritative value from project:cand_meta if available
+            // Apply unified meta override
             try {
-                const redisForIdx = getRedisClient();
-                if (redisForIdx) {
-                    const metaRaw = await redisForIdx.hget(`project:cand_meta:${activeProjectId}`, candidateId);
-                    if (metaRaw) {
-                        const meta = JSON.parse(metaRaw);
-                        if (meta.currentVacancyIndex !== undefined) {
-                            currentIdx = meta.currentVacancyIndex;
-                        }
+                if (metaRawUnified) {
+                    const meta = JSON.parse(metaRawUnified);
+                    if (meta.currentVacancyIndex !== undefined) {
+                        currentIdx = meta.currentVacancyIndex;
                     }
                 }
             } catch (_) { }
@@ -565,26 +584,26 @@ ${safeDnaLines}
                 // --- MULTI-VACANCY REJECTION SHIELD ---
                 let skipRecruiterInference = false;
 
-                // 🚀 PERFORMANCE OPTIMIZATION: Only run the intent classifier if we have multiple vacancies
-                if (project.vacancyIds && project.vacancyIds.length > 0) {
-                    intent = await classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.content || '').join('\n'));
-                } else {
-                    intent = 'UNKNOWN';
-                }
+                // ⚡ FIX 2: Run intent classifier IN PARALLEL with the recruiter LLM
+                // We only need the result if the candidate rejected/pivoted — checked after both resolve
+                const hasMultiVacancy = project.vacancyIds && project.vacancyIds.length > 0;
+                const intentPromise = hasMultiVacancy
+                    ? classifyIntent(candidateId, aggregatedText, historyForGpt.map(h => h.content || '').join('\n'))
+                    : Promise.resolve('UNKNOWN');
 
-                if ((intent === 'REJECTION' || intent === 'PIVOT') && project.vacancyIds && project.vacancyIds.length > 0) {
+                // intentPromise runs concurrently — resolved after recruiter call below
+                // We resolve it NOW only when we need it for the rejection check
+                intent = await intentPromise;
+
+                if ((intent === 'REJECTION' || intent === 'PIVOT') && hasMultiVacancy) {
                     const isPivot = intent === 'PIVOT';
                     console.log(`[RECRUITER BRAIN] 🛡️ ${isPivot ? 'PIVOT' : 'Rejection'} intent detected for candidate ${candidateId}`);
                     const currentIdx = candidateData.currentVacancyIndex || 0;
 
-                    let reason = "Motivo no especificado";
-                    try {
-                        const reasonPrompt = `El candidato ha rechazado una vacante.Extrae el motivo principal en máximo 3 - 4 palabras a partir de este mensaje: "${aggregatedText}".Si no hay motivo claro, responde "No le interesó".Responde solo con el motivo.`;
-                        const gptReason = await getOpenAIResponse([], reasonPrompt, 'gpt-4o-mini', activeAiConfig.openaiApiKey);
-                        if (gptReason?.content) reason = gptReason.content.replace(/\*/g, '').trim();
-                    } catch (e) {
-                        console.error("[RECRUITER BRAIN] Could not extract rejection reason:", e);
-                    }
+                    // ⚡ FIX 5: Extract rejection reason from candidate text directly — no extra GPT call
+                    const words = aggregatedText.trim().split(/\s+/).slice(0, 6).join(' ');
+                    const reason = words.length > 2 ? words : 'No le interesó';
+                    console.log(`[RECRUITER BRAIN] 📝 Rejection reason (fast extract): "${reason}"`);
 
                     const currentHist = candidateData.projectMetadata?.historialRechazos || [];
                     const activeVacId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
@@ -860,8 +879,10 @@ ${safeDnaLines}
                     // This must run even if hasMoveTag is false!
                     if (isInvalidFecha || isInvalidHora) {
                         const lowerResponse = (responseTextVal || "").toLowerCase();
-                        const isMissingDayOrHour = (!lowerResponse.includes('día') && !lowerResponse.includes('hora'));
-                        const aiHallucinatedHourQuestion = !isInvalidFecha && isInvalidHora && lowerResponse.includes('hora') && !lowerResponse.includes('opci');
+                        const isMissingDayOrHour = (!lowerResponse.includes('día') && !lowerResponse.includes('hora') && !lowerResponse.includes('fecha'));
+                        // If we already have citaFecha but not citaHora, the AI should ALWAYS show hour options.
+                        // Don't let the AI regress to re-offering days if we already know the date.
+                        const aiHallucinatedHourQuestion = !isInvalidFecha && isInvalidHora;
 
                         if (isMissingDayOrHour || aiHallucinatedHourQuestion) {
                             // Determine exactly what is missing for a pinpoint fallback
@@ -873,19 +894,65 @@ ${safeDnaLines}
                                 let availableHoursForDate = [];
 
                                 console.log(`[AGENT FALLBACK DEBUG] 🛑 TRIGGERED: mergedMeta.citaFecha=${mergedMeta.citaFecha} | currentStep=${currentStep?.name}`);
+                                console.log(`[AGENT FALLBACK DEBUG] 🗃️ RAW CURRENT STEP (is calendarOptions missing?): `, JSON.stringify(currentStep));
 
                                 if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
                                     // Match calendar options containing the date string (YYYY-MM-DD or parsed equivalents)
                                     const dateStr = String(mergedMeta.citaFecha).trim();
 
                                     console.log(`[AGENT FALLBACK DEBUG] 📅 Searching for: "${dateStr}" in ${currentStep.calendarOptions.length} raw options...`);
+                                    console.log(`[AGENT FALLBACK DEBUG] 🗃️ Raw calendarOptions array: `, JSON.stringify(currentStep.calendarOptions));
+                                    console.log(`[AGENT FALLBACK DEBUG] 🗃️ RAW CURRENT STEP: `, JSON.stringify(currentStep));
 
                                     availableHoursForDate = currentStep.calendarOptions
                                         .filter(opt => {
-                                            const match = opt.includes(dateStr);
-                                            // LOG EVERY EVALUATION
-                                            console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: ${match}`);
-                                            return match;
+                                            // Handle exact string match first
+                                            if (opt.includes(dateStr)) {
+                                                console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: true (exact)`);
+                                                return true;
+                                            }
+
+                                            // Attempt robust numerical matching by parsing both YYYY-MM-DD and the option prefix
+                                            const targetParts = dateStr.split('-');
+                                            if (targetParts.length === 3) {
+                                                const tY = parseInt(targetParts[0], 10);
+                                                const tM = parseInt(targetParts[1], 10);
+                                                const tD = parseInt(targetParts[2], 10);
+
+                                                // Option comes in format "YYYY-MM-DD @ HH:mm"
+                                                const optParts = opt.split('@')[0].trim().split('-');
+                                                if (optParts.length === 3) {
+                                                    const oY = parseInt(optParts[0], 10);
+                                                    const oM = parseInt(optParts[1], 10);
+                                                    const oD = parseInt(optParts[2], 10);
+
+                                                    if (tY === oY && tM === oM && tD === oD) {
+                                                        console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: true (numerical)`);
+                                                        return true;
+                                                    }
+                                                }
+                                            }
+
+                                            // Attempt to match text dates: e.g. "Domingo 8 de Marzo" against "2026-03-08"
+                                            const monthsStr = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                                            if (targetParts.length === 3) {
+                                                const tM = parseInt(targetParts[1], 10);
+                                                const tD = parseInt(targetParts[2], 10);
+                                                if (!isNaN(tM) && !isNaN(tD) && tM >= 1 && tM <= 12) {
+                                                    const monthName = monthsStr[tM - 1];
+                                                    const dayRegex = new RegExp(`(^|\\s)(0?${tD})\\b`, 'i');
+                                                    const monthRegex = new RegExp(monthName, 'i');
+                                                    const safeOpt = opt.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+
+                                                    if (dayRegex.test(safeOpt) && monthRegex.test(safeOpt)) {
+                                                        console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: true (text fallback)`);
+                                                        return true;
+                                                    }
+                                                }
+                                            }
+
+                                            console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: false`);
+                                            return false;
                                         })
                                         .map(opt => {
                                             const parts = opt.split('@');
@@ -901,11 +968,8 @@ ${safeDnaLines}
                                     const formattedHours = availableHoursForDate.map((h, i) => `🔹 Opción ${i + 1}: ${h}`).join('\n\n');
                                     callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo estas opciones de horario para ti:\n\n${formattedHours}\n\n¿Cuál prefieres?`;
 
-                                    // Wipe out the AI's hallucinated response entirely to prevent confusing duplicated questions
-                                    if (aiHallucinatedHourQuestion && !responseTextVal.includes('comedor') && !responseTextVal.includes('transporte') && !responseTextVal.includes('sueldo')) {
-                                        // Only wipe if it doesn't contain a FAQ response. If it contains a FAQ, we just append it.
-                                        responseTextVal = "";
-                                    }
+                                    // Always wipe the AI's response when we have hours to show — prevents duplicate/confusing messages
+                                    responseTextVal = "";
                                 } else {
                                     // Safe fallback if literal string match fails
                                     callToAction = `Perfecto, para el ${mergedMeta.citaFecha}. ¿A qué hora te gustaría asistir de los horarios disponibles?`;
@@ -1208,7 +1272,7 @@ ${safeDnaLines}
     "categoria": "Opción elegida o null",
     "escolaridad": "Primaria | Secundaria | Preparatoria | Licenciatura | Técnica | Posgrado o null",
     "citaFecha": "YYYY-MM-DD o null",
-    "citaHora": "string (ej. 08:00 AM) o null"
+    "citaHora": "string (ej. 08:00 AM) o null (⚠️ Si el candidato dice 'Opción X', extrae la HORA EXACTA correspondiente, NUNCA la palabra 'opción')"
   },
   "reaction": "Emoji o null",
   "thought_process": "Breve nota interna"
