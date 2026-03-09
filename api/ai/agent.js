@@ -1058,34 +1058,51 @@ ${safeDnaLines}
 
                                 if (nextAiResult?.response_text) {
                                     let cMessagesToSend = [];
-                                    const splitRegex = /(¿Te gustaría que te agende.*?entrevista.*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
-                                    const match = nextAiResult.response_text.match(splitRegex);
+                                    let chainText = nextAiResult.response_text;
 
-                                    if (match && match.index > 0) {
-                                        const splitIdx = match.index;
-                                        const part1 = nextAiResult.response_text.substring(0, splitIdx).trim();
-                                        const part2 = nextAiResult.response_text.substring(splitIdx).trim();
+                                    // 📅 INTERVIEW DATES FORMATTER: Detect and reformat the cita dates message
+                                    const isDateMsg = /^[¡!]?Listo\b/i.test(chainText.trim());
+                                    if (isDateMsg) {
+                                        // Normalize intro phrase first
+                                        chainText = chainText.replace(/Tengo entrevistas disponibles (?:para el|(?:los días)?):?/gi, 'Tengo entrevistas disponibles los días:');
+                                        // Add 📅 emoji after each numbered date line
+                                        chainText = chainText.replace(/([\d️⃣🔢]+\s+[A-Za-zÀ-ú]+ \d+ de [A-Za-zÀ-ú]+)(?!\s*📅)/g, '$1 📅');
+                                        // Split greeting from "Tengo entrevistas..." onto own line
+                                        chainText = chainText.replace(/(¡Listo[^!¡\n]*!?\s*[⏬⬇️]*)\s+(Tengo\b)/i, '$1\n$2');
 
-                                        if (part1 && part1.length > 0) cMessagesToSend.push(part1);
-                                        if (part2 && part2.length > 0) cMessagesToSend.push(part2);
+                                        // Split off the closing question (¿Qué día...?)
+                                        const qdiaMatch = chainText.match(/(¿Qu[eé] d[ií]a[^?]*\?)/i);
+                                        if (qdiaMatch && qdiaMatch.index > 0) {
+                                            const body = chainText.substring(0, qdiaMatch.index).trim();
+                                            const question = chainText.substring(qdiaMatch.index).trim();
+                                            if (body) cMessagesToSend.push(body);
+                                            cMessagesToSend.push(question);
+                                        } else {
+                                            cMessagesToSend.push(chainText.trim());
+                                        }
                                     } else {
-                                        if (nextAiResult.response_text && nextAiResult.response_text.trim().length > 0) {
-                                            cMessagesToSend.push(nextAiResult.response_text.trim());
+                                        const splitRegex = /(¿Te gustaría que te agende.*?entrevista.*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
+                                        const match = chainText.match(splitRegex);
+
+                                        if (match && match.index > 0) {
+                                            const part1 = chainText.substring(0, match.index).trim();
+                                            const part2 = chainText.substring(match.index).trim();
+                                            if (part1) cMessagesToSend.push(part1);
+                                            if (part2) cMessagesToSend.push(part2);
+                                        } else {
+                                            if (chainText.trim()) cMessagesToSend.push(chainText.trim());
                                         }
                                     }
 
-                                    const chainPromises = [];
                                     const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
 
+                                    // Sequential send with delay for correct WhatsApp bubble separation
                                     for (let i = 0; i < cMessagesToSend.length; i++) {
-                                        // Filter out nested [SILENCIO] leakage in chained step
                                         const msgClean = String(cMessagesToSend[i]).trim();
                                         if (!msgClean || filterRegex.test(msgClean)) continue;
-
-                                        chainPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { }));
+                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
+                                        if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));
                                     }
-
-                                    await Promise.allSettled(chainPromises);
 
                                     await saveMessage(candidateId, { from: 'me', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
                                 } else {
