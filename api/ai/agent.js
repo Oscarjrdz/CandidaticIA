@@ -1277,6 +1277,12 @@ ${safeDnaLines}
                             });
                         }
                         responseTextVal = aiResult.response_text;
+
+                        // 📐 NORMALIZE INLINE LISTS: If GPT concatenated ✅ items on one line, split them vertically
+                        if (responseTextVal && responseTextVal.includes('✅')) {
+                            // Match cases where ✅ items aren't separated by \n (e.g. "✅ Foo  ✅ Bar  ✅ Baz")
+                            responseTextVal = responseTextVal.replace(/( {1,4}✅)/g, '\n✅');
+                        }
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
                         throw new Error('GPT returned invalid JSON');
