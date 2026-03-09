@@ -1452,7 +1452,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 {/* Calendar Config Modal */}
                 {openCalendarConfig && activeProject && (
                     <div className="fixed inset-0 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-                        <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border border-slate-200/50 dark:border-slate-800 flex flex-col max-h-[90vh]">
+                        <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-slate-200/50 dark:border-slate-800 flex flex-col max-h-[90vh]">
                             <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                                 <div className="flex items-start gap-4 pb-4 border-b border-slate-100 dark:border-slate-800/50">
                                     <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl">

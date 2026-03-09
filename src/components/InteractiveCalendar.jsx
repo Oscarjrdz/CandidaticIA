@@ -262,16 +262,16 @@ export default function InteractiveCalendar({ options = [], onChange }) {
                     <div className="flex-1 flex flex-col h-full animate-in fade-in slide-in-from-right-4 duration-300">
                         {/* ✨ Date header + delete entire date button */}
                         <div className="mb-4 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                                <CalendarIcon className="w-5 h-5" />
-                                <h4 className="font-bold text-lg">
+                            <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 min-w-0">
+                                <CalendarIcon className="w-5 h-5 flex-shrink-0" />
+                                <h4 className="font-bold text-base whitespace-nowrap">
                                     {selectedDate.getDate()} {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}
                                 </h4>
                             </div>
                             {slotsForSelected.length > 0 && (
                                 <button
                                     onClick={() => removeEntireDate(selectedDateStr)}
-                                    className="flex items-center gap-1 text-xs font-bold text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 py-1 rounded-lg transition-all"
+                                    className="flex items-center gap-1 text-xs font-bold text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 px-2 py-1 rounded-lg transition-all whitespace-nowrap flex-shrink-0"
                                     title="Eliminar este día completo"
                                 >
                                     <Trash2 className="w-3.5 h-3.5" />
