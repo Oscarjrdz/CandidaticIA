@@ -1201,8 +1201,16 @@ ${safeDnaLines}
 - fechaNacimiento: formato DD/MM/YYYY. Acepta año de 2 dígitos (83 → 1983).
 - citaFecha: formato YYYY-MM-DD. Si ya está en el ADN, RETÉN ese valor siempre.
 - genero: Infiere del nombre. Nunca lo preguntes al candidato.
-- FORMATO CATEGORÍAS: Siempre en lista VERTICAL, una por renglón con ✅. NUNCA en párrafo o separadas por comas.
-- FORMATO ESCOLARIDAD: Siempre en lista VERTICAL con un emoji diferente por opción y doble salto de línea entre cada una:\n  🎒 Primaria\n  🏫 Secundaria\n  🎓 Preparatoria\n  📚 Licenciatura\n  🛠️ Técnica\n  🧠 Posgrado\n`;
+- FORMATO CATEGORÍAS: Siempre en lista VERTICAL, una por renglón con ✅ y salto de línea real entre cada opción. NUNCA en párrafo ni separadas por espacios.
+- FORMATO ESCOLARIDAD: Siempre en lista VERTICAL con emoji y salto de línea real entre cada opción:
+🎒 Primaria
+🏫 Secundaria
+🎓 Preparatoria
+📚 Licenciatura
+🛠️ Técnica
+🧠 Posgrado
+- ⚡ PRIORIDAD MENSAJES ROMÁNTICOS/PERSONALES: Si el mensaje del candidato es un halago, piropo, pregunta personal sobre ti ("¿Tienes novio?", "Eres hermosa", "Me gustas") → usa OBLIGATORIAMENTE tus [REGLAS DE LIGUE] del prompt. NO muestres la lista completa de categorías. Solo al final agrega una línea breve como "¿Cuál categoría te va más?" o similar sin la lista.
+`;
                 }
 
 
