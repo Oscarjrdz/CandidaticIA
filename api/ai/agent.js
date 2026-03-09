@@ -1280,8 +1280,10 @@ ${safeDnaLines}
 
                         // 📐 NORMALIZE INLINE LISTS: If GPT concatenated ✅ items on one line, split them vertically
                         if (responseTextVal && responseTextVal.includes('✅')) {
-                            // Match cases where ✅ items aren't separated by \n (e.g. "✅ Foo  ✅ Bar  ✅ Baz")
+                            // Split inline ✅ items into separate lines
                             responseTextVal = responseTextVal.replace(/( {1,4}✅)/g, '\n✅');
+                            // Ensure closing question gets a blank line before it
+                            responseTextVal = responseTextVal.replace(/(✅[^\n]+)\s{0,4}(¿[Cc]uál)/g, '$1\n\n$2');
                         }
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
