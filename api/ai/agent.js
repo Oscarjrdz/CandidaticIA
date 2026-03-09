@@ -1080,6 +1080,36 @@ ${safeDnaLines}
                                         } else {
                                             cMessagesToSend.push(chainText.trim());
                                         }
+                                    } else if (/Perfecto.{0,40}\d{4}-\d{2}-\d{2}/i.test(chainText)) {
+                                        // ⏰ HOURS FORMATTER: Detect and reformat the time-slot selection message
+                                        const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
+                                        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                                        const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+                                        // Convert YYYY-MM-DD → "Lunes 9 de Marzo"
+                                        chainText = chainText.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_, y, m, d) => {
+                                            const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+                                            const mn = monthNames[date.getMonth()];
+                                            return `${dayNames[date.getDay()]} ${parseInt(d)} de ${mn.charAt(0).toUpperCase() + mn.slice(1)}`;
+                                        });
+
+                                        // Replace 🔹 Opción N: with number emojis
+                                        let slotIdx = 0;
+                                        chainText = chainText.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${numberEmojis[slotIdx++] || `${slotIdx}.`} `);
+
+                                        // Add ⏰ after each time slot (HH:MM AM/PM pattern)
+                                        chainText = chainText.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
+
+                                        // Split closing question using lastIndexOf('¿')
+                                        const qIdx = chainText.lastIndexOf('\xbf');
+                                        if (qIdx > 0) {
+                                            const body = chainText.substring(0, qIdx).trim();
+                                            const question = chainText.substring(qIdx).trim();
+                                            if (body) cMessagesToSend.push(body);
+                                            if (question) cMessagesToSend.push(question);
+                                        } else {
+                                            cMessagesToSend.push(chainText.trim());
+                                        }
                                     } else {
                                         const splitRegex = /(¿Te gustaría que te agende.*?entrevista.*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
                                         const match = chainText.match(splitRegex);
