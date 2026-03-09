@@ -1151,6 +1151,7 @@ ${safeDnaLines}
                 const extractionRules = batchConfig.bot_extraction_rules || DEFAULT_EXTRACTION_RULES;
                 systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, categoriesList)}`;
 
+                // JSON format schema — always required so the code can parse the response
                 systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
 {
   "response_text": "Texto para el usuario",
@@ -1162,40 +1163,48 @@ ${safeDnaLines}
     "categoria": "Opción elegida o null",
     "escolaridad": "Primaria | Secundaria | Preparatoria | Licenciatura | Técnica | Posgrado o null",
     "citaFecha": "YYYY-MM-DD o null",
-    "citaHora": "string (ej. 08:00 AM) o null (⚠️ Si el candidato dice 'Opción X', extrae la HORA EXACTA correspondiente, NUNCA la palabra 'opción')"
+    "citaHora": "string (ej. 08:00 AM) o null"
   },
   "reaction": "Emoji o null",
   "thought_process": "Breve nota interna"
-}
+}`;
 
+                if (!customPrompt) {
+                    // Extended behavior rules — only for bots without a custom prompt
+                    // (custom prompts define their own behavior, these would conflict)
+                    systemInstruction += `
 [RECONOCIMIENTO DE TURNO Y REGLAS DE NOMBRE]: 
 - Si el usuario provee su nombre o apellidos, extráelo en "extracted_data.nombreReal" formatiendo a Title Case (Ej: "juan perez" -> "Juan Perez").
 - ⚠️ REGLA DE COMBINACIÓN DE NOMBRES: Si el candidato YA tiene un nombre guardado en su [ADN] (ej: "Oscar") y ahora te da sus apellidos ("Rodriguez"), DEBES combinarlos y devolver el nombre COMPLETO (Ej: "Oscar Rodriguez"). NUNCA devuelvas solo el apellido si ya tenías el nombre, porque reemplazará sus datos y causará un error.
 - REGLA ESTRICTA DE NOMBRES: NUNCA extraigas apodos, frases de cortesía o afirmaciones como "Si", "Claro", "sin problema", "buenas noches" como nombre. Si el texto no es un nombre real válido, NO LO EXTRAIGAS.
-- 🕒 REGLA DE RETENCIÓN DE AGENDA: Si el candidato YA tiene "citaFecha" o "citaHora" en su [ADN], OBLIGATORIAMENTE debes re-escribir ese mismo valor en tu "extracted_data" a menos que el candidato pida explícitamente cambiar la fecha/hora. NUNCA devuelvas "null" para citaFecha/citaHora si el [ADN] ya lo tenía lleno, porque borrarás el progreso de la cita si el usuario te hace una pregunta intermedia.
-- FECHAS CRÍTICAS: "citaFecha" DEBE ser estrictamente formato "YYYY-MM-DD" para coincidir con la base de datos interna. Transforma menciones como "el lunes" a la fecha exacta correspondiente a la próxima ocurrencia de ese día.
-- GÉNERO (OBLIGATORIO Y SILENCIOSO): Está estrictamente prohibido preguntarle al candidato por su género. Sin embargo, SIEMPRE debes deducirlo del nombre del candidato o contexto del chat. Si en el [CONTEXTO DEL CANDIDATO (ADN)] el candidato ya tiene un nombre (o si acabas de extraer uno), DEBES incluir SIEMPRE y OBLIGATORIAMENTE el campo "genero" en tu "extracted_data" con el valor "Hombre", "Mujer" o "Desconocido". NUNCA lo omitas si ya sabes el nombre.
-- ESCOLARIDAD (FORMATO OBLIGATORIO): Si vas a preguntarle al candidato por su Escolaridad, TIENES QUE ENVIAR ESTO EXACTAMENTE ASÍ EN UNA LISTA VERTICAL (un renglón por opción):
-🎒 Primaria
-🏫 Secundaria
-🎓 Preparatoria
-📚 Licenciatura
-🛠️ Técnica
-🧠 Posgrado
-- Si el usuario sólo te da un nombre sin apellidos (ej: "Oscar"), extráelo y PREGUNTA POR SUS APELLIDOS amablemente para poder completar su registro.
-- CRÍTICO: Tú eres la Licenciada Brenda Rodríguez. EL USUARIO ES OTRA PERSONA. NUNCA, BAJO NINGUNA CIRCUNSTANCIA, extraigas "Brenda" o "Brenda Rodríguez" como si fuera el nombre del usuario.
-- PROHIBICIÓN DE COMPORTAMIENTO INAPROPIADO: ESTÁ ESTRICTAMENTE PROHIBIDO usar frases como "Me chiveas", "Ay, qué lindo", "Hermoso". Mantén un tono sumamente profesional.
-- Si el usuario dice "Ya te lo dije" o similar, NO repitas la misma pregunta; revisa bien el mensaje anterior o el ADN y discúlpate de forma profesional antes de seguir.
+- 🕒 REGLA DE RETENCIÓN DE AGENDA: Si el candidato YA tiene "citaFecha" o "citaHora" en su [ADN], OBLIGATORIAMENTE debes re-escribir ese mismo valor en tu "extracted_data" a menos que el candidato pida explícitamente cambiar la fecha/hora.
+- FECHAS CRÍTICAS: "citaFecha" DEBE ser estrictamente formato "YYYY-MM-DD". Transforma menciones como "el lunes" a la fecha exacta correspondiente.
+- GÉNERO (OBLIGATORIO Y SILENCIOSO): Está estrictamente prohibido preguntarle al candidato por su género. Sin embargo, SIEMPRE debes deducirlo del nombre del candidato o contexto del chat.
+- ESCOLARIDAD (FORMATO OBLIGATORIO): Cuando preguntes por escolaridad, muestra opciones en lista VERTICAL con emojis.
+- Si el usuario sólo te da un nombre sin apellidos (ej: "Oscar"), extráelo y PREGUNTA POR SUS APELLIDOS.
+- CRÍTICO: Tú eres la Licenciada Brenda Rodríguez. EL USUARIO ES OTRA PERSONA. NUNCA extraigas "Brenda" o "Brenda Rodríguez" como nombre del usuario.
 
-[REGLA ANTI-REDUNDANCIA OBLIGATORIA (MUY IMPORTANTE)]:
-- NUNCA preguntes al candidato por un dato que acabas de extraer exitosamente en el campo "extracted_data" de este mismo JSON. 
-- Por ejemplo: Si el usuario te acaba de decir "Vivo en Escobedo" y tú lo vas a poner en "extracted_data.municipio", TU "response_text" DEBE confirmar amablemente que guardaste Escobedo y avanzar DIRECTAMENTE a preguntar por el SIGUIENTE dato faltante (si lo hay). 
-- ¡PROHIBIDO contestar: "Perfecto Escobedo, ¿en qué municipio vives?"! Eso es un error grave.
+[REGLA ANTI-REDUNDANCIA OBLIGATORIA]:
+- NUNCA preguntes al candidato por un dato que acabas de extraer exitosamente en el campo "extracted_data" de este mismo JSON.
 
 [REGLAS DE HOMOGENEIZACIÓN (ESTRICTAS)]:
-- **Municipio**: Devuelve ÚNICAMENTE el nombre oficial del municipio (ej: "Escobedo", "San Nicolás de los Garza") sin direcciones completas ni calles.
-- **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado. (Ej: "Secu" o "Secundaria trunca" -> "Secundaria").
+- **Municipio**: Devuelve ÚNICAMENTE el nombre oficial del municipio sin direcciones completas ni calles.
+- **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado.
 - **Categoría**: Si es "Ayudante" mantén "Ayudante". Si opera maquinaria -> "Montacarguista".\n`;
+                } else {
+                    // Slim rules for custom prompt bots — only critical extraction guardrails
+                    systemInstruction += `
+[REGLAS CRÍTICAS DE EXTRACCIÓN]:
+- nombreReal: Title Case. Si el candidato ya tiene nombre y da apellido, combínalos (NO devuelvas solo el apellido).
+- NUNCA extraigas "Brenda" o "Brenda Rodríguez" como nombre del candidato.
+- NUNCA extraigas saludos o frases de cortesía como nombre ("Sí", "Claro", "buenas noches").
+- fechaNacimiento: formato DD/MM/YYYY. Acepta año de 2 dígitos (83 → 1983).
+- citaFecha: formato YYYY-MM-DD. Si ya está en el ADN, RETÉN ese valor siempre.
+- genero: Infiere del nombre. Nunca lo preguntes al candidato.\n`;
+                }
+
+
+
 
                 const isGenericStart = isNewFlag && /^(hola|buen[oa]s|info|vacantes?|empleos?|trabajos?|ola|q tal|que tal|\s*)$/i.test(aggregatedText.trim());
                 let bypassGpt = false;
@@ -1209,13 +1218,19 @@ ${safeDnaLines}
                     }
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
                     candidateUpdates.esNuevo = 'NO';
-                    let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
 
-                    const cerebro1Rules = baseRules
-                        .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
-                        .replace(/{{categorias}}/g, categoriesList)
-                        .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
-                    systemInstruction += `\n${cerebro1Rules}\n`;
+                    if (customPrompt) {
+                        // Custom prompt already has all behavior rules — only inject the dynamic context
+                        const missingList = auditForMode.missingLabels.join(', ');
+                        systemInstruction += `\n[CONTEXTO DE MISIÓN]: Datos aún faltantes del candidato: ${missingList}. Categorías disponibles:\n${categoriesList}\n`;
+                    } else {
+                        let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
+                        const cerebro1Rules = baseRules
+                            .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
+                            .replace(/{{categorias}}/g, categoriesList)
+                            .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
+                        systemInstruction += `\n${cerebro1Rules}\n`;
+                    }
                 }
 
                 // Call Magic GPT (Force 4o-mini for max speed on basic extractions)
