@@ -1200,7 +1200,9 @@ ${safeDnaLines}
 - NUNCA extraigas saludos o frases de cortesía como nombre ("Sí", "Claro", "buenas noches").
 - fechaNacimiento: formato DD/MM/YYYY. Acepta año de 2 dígitos (83 → 1983).
 - citaFecha: formato YYYY-MM-DD. Si ya está en el ADN, RETÉN ese valor siempre.
-- genero: Infiere del nombre. Nunca lo preguntes al candidato.\n`;
+- genero: Infiere del nombre. Nunca lo preguntes al candidato.
+- FORMATO CATEGORÍAS: Siempre en lista VERTICAL, una por renglón con ✅. NUNCA en párrafo o separadas por comas.
+- FORMATO ESCOLARIDAD: Siempre en lista VERTICAL con un emoji diferente por opción y doble salto de línea entre cada una:\n  🎒 Primaria\n  🏫 Secundaria\n  🎓 Preparatoria\n  📚 Licenciatura\n  🛠️ Técnica\n  🧠 Posgrado\n`;
                 }
 
 
