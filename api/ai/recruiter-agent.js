@@ -1,6 +1,5 @@
 import { getOpenAIResponse } from '../utils/openai.js';
 import { updateCandidate, moveCandidateStep, recordAITelemetry, recordVacancyInteraction, getVacancyById, getRedisClient } from '../utils/storage.js';
-// ⚡ FIX 4: Static imports — no more dynamic import() in hot path
 
 /**
  * BRENDA RECLUTADORA (Cerebro Reclutador)
@@ -64,7 +63,6 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
     const candidateId = candidateData.id;
 
     try {
-        console.log(`[RECRUITER BRAIN] 🧠 Processing candidate ${candidateId} in step: ${currentStep.name}`);
 
         const stepPrompt = currentStep.aiConfig?.prompt || 'Continúa la conversación amablemente.';
 
@@ -114,7 +112,6 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             : (candidateData.currentVacancyIndex !== undefined
                 ? candidateData.currentVacancyIndex
                 : (candidateData.projectMetadata?.currentVacancyIndex || 0));
-        console.log(`[RECRUITER BRAIN] 📍 vacancyIndex=${currentVacancyIndex} (override=${vacancyIndexOverride})`);
         let activeVacancyId = null;
 
         // Migración hacia atrás (soporta project.vacancyId o project.vacancyIds)
@@ -127,7 +124,6 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         }
 
         if (activeVacancyId) {
-            // ⚡ FIX 4: Use static import (no more dynamic import)
             const vac = await getVacancyById(activeVacancyId);
             if (vac) {
                 vacancyContext = {
@@ -166,7 +162,6 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         }
 
         // --- ALTERNATIVE VACANCIES (PIVOT) ---
-        // ⚡ FIX 3: Parallel fetch with Promise.all instead of sequential for-loop
         let alternatives = [];
         if (project.vacancyIds?.length > 1) {
             const futureIds = project.vacancyIds.slice(currentVacancyIndex + 1);
@@ -182,7 +177,6 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             }
         }
 
-        // ⚡ FIX 4: Use static import (no more dynamic import)
         const redisObj = getRedisClient();
         const catsList = (await redisObj?.get('bot_categories')) || '';
         const formattedCats = catsList.split(',').map(c => `✅ ${c.trim()}`).join('\n');
@@ -225,11 +219,8 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         delete vacancyContextForJson.faqs; // Remove from JSON blob — shown in its own section
 
         // --- DEBUG DIAGNOSTIC ---
-        console.log(`[FAQ DEBUG] 🎯 Candidate: ${candidateData.id} | Project: ${project.id} | ActiveVacancyId: ${activeVacancyId}`);
         if (!faqsForPrompt) {
-            console.log(`[FAQ DEBUG] ⚠️ No official FAQs found for vacancy ${activeVacancyId}`);
         } else {
-            console.log(`[FAQ DEBUG] ✅ Injected FAQs:\n${faqsForPrompt}`);
         }
 
         // ⚡ FIX: Compute future calendar options BEFORE the template literal (IIFEs with regex inside template strings break the parser)
@@ -373,7 +364,6 @@ ${alternatives.length > 0
         // All other steps use gpt-4o-mini which is 2-3x faster and equally accurate for conversation.
         const isCitaStepModel = (currentStep?.name || '').toLowerCase().includes('cita');
         const selectedModel = isCitaStepModel ? 'gpt-4o' : 'gpt-4o-mini';
-        console.log(`[RECRUITER BRAIN] 🤖 Model: ${selectedModel} (step: ${currentStep?.name})`);
 
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
@@ -388,7 +378,6 @@ ${alternatives.length > 0
             throw new Error('GPT Response empty');
         }
 
-        console.log(`[RECRUITER BRAIN] 🤖 GPT Response for ${candidateId}: `, gptResponse.content);
 
         let cleanContent = gptResponse.content.trim();
         // 4. Parsear respuesta
@@ -414,15 +403,12 @@ ${alternatives.length > 0
 
         // Diagnostic: log unanswered_question result
         if (aiResult.unanswered_question && aiResult.unanswered_question !== 'null') {
-            console.log(`[FAQ Engine] 📡 unanswered_question captured: "${aiResult.unanswered_question}"`);
         } else {
-            console.log(`[FAQ Engine] ✅ No unanswered question. Values: ${JSON.stringify(aiResult.unanswered_question)}`);
         }
 
         // 5. Lógica de Movimiento { move } y Rastreo de Vacantes
         if (activeVacancyId) {
             if (aiResult.thought_process?.includes('{ move }')) {
-                console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished detected for candidate ${candidateId}.Recording ACCEPTED.`);
                 // El candidato aceptó la propuesta/cita de la vacante actual
                 await recordVacancyInteraction(candidateId, project.id, activeVacancyId, 'ACCEPTED', 'Progreso de etapa');
             } else {

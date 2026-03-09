@@ -1,7 +1,6 @@
 // [PREMIUM ARCHITECTURE] V_FINAL_STABLE_V1 - Zero-Silence Infrastructure Active
 /* global process */
 import { processUnansweredQuestion } from './faq-engine.js';
-import axios from "axios";
 import {
     getRedisClient,
     getMessages,
@@ -210,7 +209,6 @@ function coalesceName(existing, incoming) {
         // Did they share a word? (e.g. "oscar rodriguez" vs "oscar martinez")
         const sharedWord = eWords.some(ew => i.toLowerCase().includes(ew));
         if (sharedWord || iWords.length > eWords.length) {
-            console.log(`[RECRUITER BRAIN] 🧬 Smart Name Correction: Replacing '${e}' with '${i}'`);
             return incoming;
         }
     }
@@ -285,7 +283,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
         // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
         if (candidateData.blocked === true) {
-            console.log(`[BLOCK SHIELD] Skipping processMessage for blocked candidate: ${candidateId} `);
             return null;
         }
 
@@ -300,7 +297,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             ? incomingMessage.split(/ \| |\n/)
             : [incomingMessage];
 
-        console.log(`[DEBUG AGENT ENTRY]Candidate: ${candidateId} | Messages: ${allMessages.length} `);
 
 
         for (const msg of messagesToProcess) {
@@ -382,17 +378,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
 
         const customFields = batchConfig.custom_fields ? JSON.parse(batchConfig.custom_fields) : [];
-        const auditRaw = auditProfile(candidateData, customFields);
 
-        // 🛡️ [GENDER SUPPRESSION]: Filter Gender from missing fields list. Prohibited from proactive asking.
-        let audit = {
-            ...auditRaw,
-            missingLabels: auditRaw.missingLabels.filter(l => l !== 'Género' && l !== 'genero'),
-            missingValues: auditRaw.missingValues.filter(v => v !== 'genero')
-        };
-        audit.paso1Status = audit.missingLabels.length === 0 ? 'COMPLETO' : 'INCOMPLETO';
-
-        // 🧬 [AUTO-GENDER PRE-PASS]: If name exists but gender doesn't, infer it NOW
+        // 🧬 [AUTO-GENDER PRE-PASS]: Infer gender from name before audit
         if (candidateData.nombreReal && !candidateData.genero) {
             const inferred = inferGender(candidateData.nombreReal);
             if (inferred) {
@@ -401,11 +388,10 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             }
         }
 
-        // Re-audit AFTER premium extraction and early inference
+        // Single audit pass after gender inference
         const finalAudit = auditProfile(candidateData, customFields);
-
-        // 🛡️ [PERFECT SYNC]: Update master audit and mode audit with suppressed final state
-        audit = {
+        // 🛡️ [GENDER SUPPRESSION]: Filter Gender from missing fields list
+        let audit = {
             ...finalAudit,
             missingLabels: finalAudit.missingLabels.filter(l => l !== 'Género' && l !== 'genero'),
             missingValues: finalAudit.missingValues.filter(v => v !== 'genero')
@@ -417,20 +403,16 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         let systemInstruction = getIdentityLayer(customPrompt);
 
         // --- GRACE & SILENCE ARCHITECTURE ---
-        let isProfileComplete = audit.paso1Status === 'COMPLETO';
+        const isProfileComplete = audit.paso1Status === 'COMPLETO';
         const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
-        // (minSinceLastBot already calculated at line 312)
         const isLongSilence = minSinceLastBot >= 5;
-
-        //const isProfileComplete = audit.paso1Status === 'COMPLETO';
-        const currentHasGratitude = hasGratitude;
         const currentIsSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
 
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
 - ¿Es Primer Contacto?: ${isNewFlag && !botHasSpoken ? 'SÍ (Presentarse)' : 'NO (Ya saludaste)'}
 - [CHARLA_ACTIVA]: ${botHasSpoken ? 'TRUE (Omitir presentaciones formales)' : 'FALSE'}
-- Gratitud Alcanzada: ${currentHasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
+- Gratitud Alcanzada: ${hasGratitude ? 'SÍ (Ya te dio las gracias)' : 'NO (Aún no te agradece)'}
 - Silencio Operativo: ${currentIsSilenced ? 'SÍ (La charla estaba cerrada)' : 'NO (Charla activa)'}
 \n[REGLA CRÍTICA]: SI [PERFIL COMPLETADO] ES SÍ, NO pidas datos proactivamente. Sin embargo, SI el usuario provee información nueva o corrige un dato (ej. "quiero cambiar mi nombre"), PROCÉSALO en extracted_data y confirma el cambio amablemente.`;
 
@@ -441,31 +423,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 [SUFICIENCIA DE NOMBRE]: Si ya tienes un nombre y UN apellido, EL NOMBRE ESTÁ COMPLETO. No preguntes por más apellidos.`;
         }
 
-        // Use Nitro Cached Config
-        const aiConfigJson = batchConfig.ai_config;
-
-        // 🧨 RESET COMMAND (STRICT GUARDED)
-        if (incomingMessage === 'RESET' && process.env.NODE_ENV !== 'production') {
-            if (candidateData && candidateData.whatsapp) {
-                const phone = candidateData.whatsapp;
-                const id = candidateId;
-                await redis.del(`candidate:${id}`);
-                await redis.hdel('candidatic:phone_index', phone);
-                if (config) {
-                    await sendUltraMsgMessage(config.instanceId, config.token, phone, "🧨 DATOS BORRADOS. Eres un usuario nuevo. Di 'Hola' para empezar.");
-                }
-                return 'RESET_DONE';
-            }
-        }
-
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos.SI NO SABES EL NOMBRE REAL(Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
-
-        if (aiConfigJson) {
-            // Config parsed from Redis
-        }
-
-        const userText = aggregatedText;
         const currentMessageForGpt = {
             role: 'user',
             content: aggregatedText
@@ -483,7 +442,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
             const cats = Array.isArray(rawCats) ? rawCats : [rawCats];
             categoriesList = cats.map(c => `✅ ${typeof c === 'string' ? c : (c.name || c.value || JSON.stringify(c))}`).join('\n\n');
         } catch (e) {
-            console.warn('Error parsing categories:', e);
             categoriesList = String(categoriesData).split(',').map(c => `✅ ${c.trim()}`).join('\n\n');
         }
 
@@ -533,43 +491,26 @@ ${safeDnaLines}
             ]);
             project = projectResult;
 
-            // 🛡️ AUTHORITATIVE STEP + VACANCY INDEX RESOLUTION from single meta read
-            try {
-                if (metaRawUnified) {
-                    const metaUnified = JSON.parse(metaRawUnified);
-                    if (metaUnified.stepId && metaUnified.stepId !== 'step_new') {
-                        if (metaUnified.stepId !== activeStepId) {
-                            console.log(`[AGENT] ⚡ Overriding stale activeStepId "${activeStepId}" → "${metaUnified.stepId}" from project:cand_meta`);
-                        }
-                        activeStepId = metaUnified.stepId;
-                    }
-                    if (metaUnified.currentVacancyIndex !== undefined) {
-                        console.log(`[AGENT] ⚡ Overriding currentVacancyIndex → ${metaUnified.currentVacancyIndex} from unified meta`);
-                    }
-                }
-            } catch (_) { }
+            // Single parse of metaRawUnified — used for both stepId and currentVacancyIndex
+            let parsedMeta = null;
+            try { if (metaRawUnified) parsedMeta = JSON.parse(metaRawUnified); } catch (_) { }
+
+            if (parsedMeta?.stepId && parsedMeta.stepId !== 'step_new') {
+                activeStepId = parsedMeta.stepId;
+            }
 
             const currentStep = project?.steps?.find(s => s.id === activeStepId) || project?.steps?.[0];
 
-            // 🎯 Determine active vacancy — always read from project:cand_meta (most up-to-date source)
-            let currentIdx = candidateData.currentVacancyIndex !== undefined
-                ? candidateData.currentVacancyIndex
-                : (candidateData.projectMetadata?.currentVacancyIndex || 0);
-
-            // Apply unified meta override
-            try {
-                if (metaRawUnified) {
-                    const meta = JSON.parse(metaRawUnified);
-                    if (meta.currentVacancyIndex !== undefined) {
-                        currentIdx = meta.currentVacancyIndex;
-                    }
-                }
-            } catch (_) { }
+            // Active vacancy index — prefer project:cand_meta (most authoritative source)
+            let currentIdx = parsedMeta?.currentVacancyIndex !== undefined
+                ? parsedMeta.currentVacancyIndex
+                : (candidateData.currentVacancyIndex !== undefined
+                    ? candidateData.currentVacancyIndex
+                    : (candidateData.projectMetadata?.currentVacancyIndex || 0));
 
             let activeVacancyId = null;
             if (project?.vacancyIds && project.vacancyIds.length > 0) {
                 activeVacancyId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
-                console.log(`[FAQ] activeVacancyId resolved: index = ${currentIdx} → ${activeVacancyId} `);
             } else if (project?.vacancyId) {
                 activeVacancyId = project.vacancyId;
             }
@@ -577,7 +518,6 @@ ${safeDnaLines}
             let recruiterTriggeredMove = false;
 
             if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
-                console.log(`[BIFURCATION] 🚀 Handing off to RECRUITER BRAIN for candidate ${candidateId}`);
                 isRecruiterMode = true;
                 const activeAiConfig = batchConfig.ai_config ? (typeof batchConfig.ai_config === 'string' ? JSON.parse(batchConfig.ai_config) : batchConfig.ai_config) : {};
 
@@ -597,13 +537,11 @@ ${safeDnaLines}
 
                 if ((intent === 'REJECTION' || intent === 'PIVOT') && hasMultiVacancy) {
                     const isPivot = intent === 'PIVOT';
-                    console.log(`[RECRUITER BRAIN] 🛡️ ${isPivot ? 'PIVOT' : 'Rejection'} intent detected for candidate ${candidateId}`);
                     const currentIdx = candidateData.currentVacancyIndex || 0;
 
                     // ⚡ FIX 5: Extract rejection reason from candidate text directly — no extra GPT call
                     const words = aggregatedText.trim().split(/\s+/).slice(0, 6).join(' ');
                     const reason = words.length > 2 ? words : 'No le interesó';
-                    console.log(`[RECRUITER BRAIN] 📝 Rejection reason (fast extract): "${reason}"`);
 
                     const currentHist = candidateData.projectMetadata?.historialRechazos || [];
                     const activeVacId = project.vacancyIds[Math.min(currentIdx, project.vacancyIds.length - 1)];
@@ -628,7 +566,6 @@ ${safeDnaLines}
                     });
 
                     if (currentIdx + 1 >= project.vacancyIds.length) {
-                        console.log(`[RECRUITER BRAIN] 🏁 All vacancies rejected.Moving to Exit Flow.`);
                         // Instead of just silencing, we prepare to fire a move:exit
                         aiResult = {
                             thought_process: "ALL_VACANCIES_REJECTED { move: exit }",
@@ -638,7 +575,6 @@ ${safeDnaLines}
                         };
                         skipRecruiterInference = true;
                     } else {
-                        console.log(`[RECRUITER BRAIN] 🚦 Moving to next vacancy(Index: ${currentIdx + 1}/${project.vacancyIds.length})`);
                     }
                 }
 
@@ -661,7 +597,6 @@ ${safeDnaLines}
                                 content: `[SISTEMA INTERNO]: El candidato rechazó la vacante anterior.Ahora preséntale la siguiente vacante disponible(índice ${newIdx}).Es la primera vez que la ve.NO asumas que la rechaza — apreséntatela con entusiasmo y espera su respuesta.`
                             }
                         ];
-                        console.log(`[RECRUITER BRAIN] 🔄 Vacancy transition context injected for index ${newIdx}`);
                     }
 
                     aiResult = await processRecruiterMessage(
@@ -698,11 +633,8 @@ ${safeDnaLines}
                             }
                             if (citaFecha && citaFecha !== 'null') candidateUpdates.projectMetadata.citaFecha = citaFecha;
                             if (citaHora && citaHora !== 'null') candidateUpdates.projectMetadata.citaHora = citaHora;
-                            console.log(`[RECRUITER BRAIN] 📅 Extracted Calendar Data: Fecha=${citaFecha}, Hora=${citaHora}`);
                         }
 
-                        console.log(`[RECRUITER BRAIN] 🧬 Extracted data merged: `, JSON.stringify(aiResult.extracted_data, null, 2));
-                        console.log(`[CITA_DIAGNOSTIC] Move Triggered?: ${aiResult?.thought_process?.includes('move')}, mergedMeta.citaFecha=${candidateUpdates.projectMetadata?.citaFecha}, mergedMeta.citaHora=${candidateUpdates.projectMetadata?.citaHora}`);
                     }
 
                     const rawUQ = aiResult?.unanswered_question;
@@ -715,33 +647,27 @@ ${safeDnaLines}
                         const updatedIdx = candidateUpdates.currentVacancyIndex;
                         const safeUpdatedIdx = Math.min(updatedIdx, project.vacancyIds.length - 1);
                         activeVacancyId = project.vacancyIds[safeUpdatedIdx];
-                        console.log(`[FAQ Engine] 🔄 activeVacancyId recalculated to index ${updatedIdx}: ${activeVacancyId} `);
                     }
 
                     // 🎯 FAQ RADAR: Save to FAQ engine regardless — unanswered OR answered
                     const openAiKey = activeAiConfig.openaiApiKey || process.env.OPENAI_API_KEY;
                     if (activeVacancyId && openAiKey) {
-                        const { processUnansweredQuestion } = await import('./faq-engine.js');
                         if (unansweredQ) {
-                            console.log(`[FAQ Engine] 📡 Capturing UNANSWERED: "${unansweredQ}" → vacancy ${activeVacancyId}`);
                             await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
                             processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, openAiKey)
-                                .then(() => console.log(`[FAQ Engine] ✅ Unanswered question saved`))
-                                .catch(e => console.error('[FAQ Engine] ❌ Cluster Error (unanswered):', e));
+                                .catch(() => { });
                         } else {
                             const lastUserMsg = historyForGpt.filter(h => h.role === 'user').slice(-1)[0];
                             const userText = lastUserMsg?.content || '';
                             const questionPatterns = /[?¿]|cuál|cómo|cuánto|cuándo|dónde|qué|quién|hacen|tienen|hay|incluye|es|son|dan|pagan|trabaj|horario|sueldo|salario|uniforme|transporte|beneficio|requisito|antidop/i;
                             const isQuestion = questionPatterns.test(userText) && userText.length > 5;
                             if (isQuestion && responseTextVal) {
-                                console.log(`[FAQ Engine] 📝 Recording ANSWERED question: "${userText}"`);
                                 processUnansweredQuestion(activeVacancyId, userText, responseTextVal, openAiKey)
-                                    .then(() => console.log(`[FAQ Engine] ✅ Answered question saved to FAQ log`))
-                                    .catch(e => console.error('[FAQ Engine] ❌ Cluster Error (answered):', e));
+
+                                    .catch(() => { });
                             }
                         }
                     } else {
-                        console.warn(`[FAQ Engine] ⚠️ Skipped — missing vacancyId(${activeVacancyId}) or openAiKey`);
                     }
                 }
 
@@ -762,7 +688,6 @@ ${safeDnaLines}
                     hasMoveTag = true;
                     // Keep just the string `{ move }` or `{ move: exit }`
                     const innerContent = advanceBracketsMatch[0];
-                    console.log(`[RECRUITER BRAIN] 🏷️ Found MOVE tag payload:`, innerContent);
 
                     // If it specifically says exit or no_interesa
                     if (/move:\s*(exit|no_interesa|no interesa)/i.test(innerContent)) {
@@ -789,7 +714,6 @@ ${safeDnaLines}
                         }
                         if (dateMatch && dateMatch[1]) candidateUpdates.projectMetadata.citaFecha = dateMatch[1].trim();
                         if (timeMatch && timeMatch[1]) candidateUpdates.projectMetadata.citaHora = timeMatch[1].trim();
-                        console.log(`[RECRUITER BRAIN] 📅 Extracted Calendar Payloads from tag: Fecha=${candidateUpdates.projectMetadata.citaFecha}, Hora=${candidateUpdates.projectMetadata.citaHora}`);
                     }
                 }
 
@@ -810,7 +734,6 @@ ${safeDnaLines}
                     const isFiltro = originStepName.includes('filtro') || originStepName.includes('inicio') || originStepName.includes('contacto');
 
                     if ((isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative)) || (isFiltro && isUserAffirmative)) {
-                        console.log(`[RECRUITER BRAIN] 🛡️ Contextual Acceptance detected (Bot invited/Filtro, User said Yes)! Forcing { move }.`);
                         hasMoveTag = true;
                         inferredAcceptance = true;
                     }
@@ -822,7 +745,6 @@ ${safeDnaLines}
                         thisBotText.includes('confirmada tu entrevista');
 
                     if (!hasMoveTag && isCitaConfirmation) {
-                        console.log(`[RECRUITER BRAIN] 🛡️ Contextual Scheduling Confirmation detected directly in bot text! Forcing move to Citados.`);
                         hasMoveTag = true;
                         extractedMoveTarget = "Citados";
                         inferredAcceptance = true;
@@ -841,7 +763,6 @@ ${safeDnaLines}
                             if (textDateMatch) candidateUpdates.projectMetadata.citaFecha = textDateMatch[1].trim();
                             if (textTimeMatch) candidateUpdates.projectMetadata.citaHora = textTimeMatch[1].trim();
 
-                            console.log(`[RECRUITER BRAIN] 📅 Extracted Text Payloads: Fecha=${candidateUpdates.projectMetadata.citaFecha}, Hora=${candidateUpdates.projectMetadata.citaHora}`);
                         }
                     }
                 }
@@ -869,7 +790,6 @@ ${safeDnaLines}
 
                     // 1) VETO LOGIC: If AI tries to move without both pieces of data, BLOCK IT.
                     if (hasMoveTag && (isInvalidFecha || isInvalidHora)) {
-                        console.log(`[RECRUITER BRAIN] 🛡️ Vetoing MOVE in Cita step. Invalid citaFecha or citaHora. Data:`, mergedMeta);
                         hasMoveTag = false;
                         inferredAcceptance = false;
                         isCitaConfirmation = false;
@@ -893,22 +813,16 @@ ${safeDnaLines}
                                 // Instead, manually render the available hours for that date to prevent GPT-4o-mini from hallucinating an open question.
                                 let availableHoursForDate = [];
 
-                                console.log(`[AGENT FALLBACK DEBUG] 🛑 TRIGGERED: mergedMeta.citaFecha=${mergedMeta.citaFecha} | currentStep=${currentStep?.name}`);
-                                console.log(`[AGENT FALLBACK DEBUG] 🗃️ RAW CURRENT STEP (is calendarOptions missing?): `, JSON.stringify(currentStep));
 
                                 if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
                                     // Match calendar options containing the date string (YYYY-MM-DD or parsed equivalents)
                                     const dateStr = String(mergedMeta.citaFecha).trim();
 
-                                    console.log(`[AGENT FALLBACK DEBUG] 📅 Searching for: "${dateStr}" in ${currentStep.calendarOptions.length} raw options...`);
-                                    console.log(`[AGENT FALLBACK DEBUG] 🗃️ Raw calendarOptions array: `, JSON.stringify(currentStep.calendarOptions));
-                                    console.log(`[AGENT FALLBACK DEBUG] 🗃️ RAW CURRENT STEP: `, JSON.stringify(currentStep));
 
                                     availableHoursForDate = currentStep.calendarOptions
                                         .filter(opt => {
                                             // Handle exact string match first
                                             if (opt.includes(dateStr)) {
-                                                console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: true (exact)`);
                                                 return true;
                                             }
 
@@ -927,7 +841,6 @@ ${safeDnaLines}
                                                     const oD = parseInt(optParts[2], 10);
 
                                                     if (tY === oY && tM === oM && tD === oD) {
-                                                        console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: true (numerical)`);
                                                         return true;
                                                     }
                                                 }
@@ -945,13 +858,11 @@ ${safeDnaLines}
                                                     const safeOpt = opt.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
 
                                                     if (dayRegex.test(safeOpt) && monthRegex.test(safeOpt)) {
-                                                        console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: true (text fallback)`);
                                                         return true;
                                                     }
                                                 }
                                             }
 
-                                            console.log(`[AGENT FALLBACK DEBUG] 🔍 Checking "${opt}" vs "${dateStr}" => Match: false`);
                                             return false;
                                         })
                                         .map(opt => {
@@ -959,9 +870,7 @@ ${safeDnaLines}
                                             return parts.length > 1 ? parts[1].trim() : opt;
                                         });
 
-                                    console.log(`[AGENT FALLBACK DEBUG] ✅ Final Available Hours: ${JSON.stringify(availableHoursForDate)}`);
                                 } else {
-                                    console.warn(`[AGENT FALLBACK DEBUG] ❌ ERROR: currentStep.calendarOptions is missing or not an array!`);
                                 }
 
                                 if (availableHoursForDate.length > 0) {
@@ -986,11 +895,9 @@ ${safeDnaLines}
                                 // 🩹 FAQ RADAR FIX: If responseTextVal has an FAQ answer, add a double newline barrier
                                 const separator = responseTextVal.length > 0 ? '\n\n' : '';
                                 responseTextVal = `${responseTextVal.trim()}${separator}${callToAction}`.trim();
-                                console.log(`[RECRUITER BRAIN] 🩹 Appended Cita Fallback to response: "${callToAction}"`);
                             }
                         }
                     } else {
-                        console.log(`[RECRUITER BRAIN] ✅ CITA SAFEGUARD PASSED: Fecha=${mergedMeta.citaFecha}, Hora=${mergedMeta.citaHora}`);
                     }
                 }
 
@@ -1014,7 +921,6 @@ ${safeDnaLines}
                         );
                         // If it didn't find the exact target, default to linear next step
                         if (!nextStep) {
-                            console.warn(`[RECRUITER BRAIN] ⚠️ AI requested step "${extractedMoveTarget}" but it was not found. Defaulting to next linear step.`);
                             nextStep = project.steps[currentIndex + 1];
                         }
                     } else {
@@ -1023,7 +929,6 @@ ${safeDnaLines}
                     }
 
                     if (nextStep) {
-                        console.log(`[RECRUITER BRAIN] 🚀 Moving to step: ${nextStep.name} (Exit: ${isExitMove})`);
                         const recruiterFinalSpeech = responseTextVal;
                         responseTextVal = null;
                         let cleanSpeech = '';
@@ -1039,13 +944,11 @@ ${safeDnaLines}
                             const isCitaStep = originStepName.includes('cita');
 
                             if (cleanSpeech.length > 0 && !isCitaStep) {
-                                console.log(`[RECRUITER BRAIN] 🗣️ Enviando mensaje final del paso actual: "${cleanSpeech}"`);
                                 sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 }).catch((e) => {
                                     console.error('Error enviando pre-move:', e.message);
                                 });
                                 saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() }).catch(() => { });
                             } else if (isCitaStep) {
-                                console.log(`[RECRUITER BRAIN] 🤫 Silenciando speech final del paso Cita por regla de UX.`);
                             }
                         }
 
@@ -1060,20 +963,16 @@ ${safeDnaLines}
                         const originStepNameForConfirm = (currentStep?.name || '').toLowerCase();
                         const isCitaStepConfirm = originStepNameForConfirm.includes('cita');
 
-                        console.log(`[RECRUITER BRAIN] 🔎 Evaluando módulo de confirmación: originStepNameForConfirm="${originStepNameForConfirm}", isCitaStepConfirm=${isCitaStepConfirm}`);
 
                         if (isCitaStepConfirm) {
                             const confArray = currentStep.appointmentConfirmation || [];
-                            console.log(`[RECRUITER BRAIN] 🔎 Módulos de confirmación configurados para este paso Citas: ${confArray.length}`);
 
                             if (confArray.length > 0) {
-                                console.log(`[RECRUITER BRAIN] 🚀 Procesando Mensajes de Confirmación config...`);
                                 const metaDataForVars = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
 
                                 const confirmPromises = [];
                                 for (let i = 0; i < confArray.length; i++) {
                                     const item = confArray[i];
-                                    console.log(`[RECRUITER BRAIN] 🔎 Evaluando item de confirmación tipo: ${item.type}, enabled: ${item.enabled}`);
                                     if (!item.enabled) continue;
 
                                     try {
@@ -1106,7 +1005,6 @@ ${safeDnaLines}
                                     }
                                 }
                                 await Promise.allSettled(confirmPromises);
-                                console.log(`[RECRUITER BRAIN] 🏎️ Módulos de confirmación disparados en paralelo.`);
                             }
                         }
 
@@ -1131,7 +1029,6 @@ ${safeDnaLines}
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
                                 }
                             } else {
-                                console.log(`[RECRUITER BRAIN]Bridge: No sticker for ${isExitMove ? 'exit' : stepNameLower}, skipping.`);
                             }
                         } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail: `, e.message); }
 
@@ -1150,9 +1047,6 @@ ${safeDnaLines}
                                     historyForNextStep.splice(-1, 0, { role: 'assistant', content: cleanSpeech });
                                 }
 
-                                console.log(`[CHAINED AI DEBUG] 🚀 Triggering for step: ${nextStep.name}`);
-                                console.log(`[CHAINED AI DEBUG] Calendar Options:`, nextStep.calendarOptions);
-                                console.log(`[CHAINED AI DEBUG] History Payload:`, JSON.stringify(historyForNextStep));
 
                                 const nextAiResult = await processRecruiterMessage(
                                     { ...candidateData, ...candidateUpdates },
@@ -1161,7 +1055,6 @@ ${safeDnaLines}
                                     candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : currentIdx
                                 );
 
-                                console.log(`[CHAINED AI DEBUG] 🧠 Raw AI Output:`, nextAiResult);
 
                                 if (nextAiResult?.response_text) {
                                     let cMessagesToSend = [];
@@ -1195,15 +1088,12 @@ ${safeDnaLines}
                                     await Promise.allSettled(chainPromises);
 
                                     await saveMessage(candidateId, { from: 'me', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
-                                    console.log(`[RECRUITER BRAIN] ✅ Chained AI sent sequentially for step: ${nextStep.name} `);
                                 } else {
-                                    console.warn(`[RECRUITER BRAIN] ⚠️ Chained AI returned no response_text for step: ${nextStep.name} `);
                                 }
                             } catch (e) {
                                 console.error(`[RECRUITER BRAIN] Chain Fail: `, e.message);
                             }
                         } else {
-                            console.log(`[RECRUITER BRAIN] Next step '${nextStep.name}' has no aiConfig enabled — skipping chained AI.`);
                         }
                     }
                 }
@@ -1223,7 +1113,6 @@ ${safeDnaLines}
         // 2. GPT HOST (OpenAI Social Brain) - Triggers after 2 messages of silence
         const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
         if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
-            console.log(`[HANDOVER] 🚀 Handing off to GPT HOST(OpenAI) for candidate ${candidateId}`);
             isHostMode = true;
             try {
                 const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
@@ -1345,7 +1234,6 @@ ${safeDnaLines}
                         }),
                         usage: { total_tokens: 0 }
                     };
-                    console.log(`[GPT BRAIN] ⚡ Fast-tracked initial greeting for candidate ${candidateId} (LLM Bypassed - 0ms)`);
                 } else {
                     gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" });
                 }
@@ -1407,7 +1295,6 @@ ${safeDnaLines}
 
                         // If AI gave 1 word, and we had 1 word, and they are different -> combine them.
                         if (newWords.length === 1 && oldWords.length === 1 && newName.toLowerCase() !== oldName.toLowerCase()) {
-                            console.log(`[RECRUITER BRAIN] 🧬 Programmatic Name Fix: Combining '${oldName}' + '${newName}'`);
                             candidateUpdates.nombreReal = `${oldName} ${newName}`;
                         }
                     }
@@ -1533,7 +1420,6 @@ ${safeDnaLines}
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
         if (isTechnicalOrEmpty && (!hasMoveIntent && !recruiterTriggeredMove) && !aiResult?.close_conversation && !handoverTriggered) {
-            console.warn(`[FINAL SAFEGUARD] 🚨 Silence detected for candidate ${candidateId}. Forcing fallback.`);
             if (isRecruiterMode) {
                 // If the AI sent an FAQ Media URL but hallucinated the text away, safely append a generic CTA
                 const hasMedia = aiResult?.media_url && aiResult.media_url !== 'null';
@@ -1613,14 +1499,12 @@ ${safeDnaLines}
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 2 }).catch(() => { });
                     }
 
-                    console.log(`[MEDIA DELIVERY] Sent strictly sequential staggered flow + ${isPdf ? 'PDF' : 'IMAGE'}`);
                 } else {
                     // Text only, send sequentially to guarantee order
                     for (let i = 0; i < messagesToSend.length; i++) {
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
                         if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 400));
                     }
-                    console.log(`[TEXT DELIVERY] Sent ${messagesToSend.length} part(s) text: ${candidateId} (Sequential HTTP)`);
                 }
             })();
         }
