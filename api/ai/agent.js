@@ -1487,7 +1487,7 @@ ${safeDnaLines}
                     categoriesList
                 };
                 aiResult = AIGuard.validate(null, fbContext);
-                responseTextVal = aiResult?.response_text;
+                responseTextVal = formatRecruiterMessage(aiResult?.response_text);
             }
         }
 
@@ -1498,6 +1498,8 @@ ${safeDnaLines}
         }
 
         let deliveryPromise = Promise.resolve();
+        // 📐 LAST-MILE FORMATTER: Ensure formatting is applied regardless of which code path built responseTextVal
+        if (responseTextVal) responseTextVal = formatRecruiterMessage(responseTextVal);
         let resText = String(responseTextVal || '').trim();
 
         // 🧹 MOVE TAG SANITIZER: Strip internal move tags from outbound messages
