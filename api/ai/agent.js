@@ -1111,6 +1111,7 @@ ${safeDnaLines}
         candidateUpdates.bridge_counter = bridgeCounter + 1; // Now correctly persisted in candidateUpdates
 
         // 2. GPT HOST (OpenAI Social Brain) - Triggers after 2 messages of silence
+        const aiConfigJson = batchConfig.ai_config;
         const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
         if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
             isHostMode = true;
