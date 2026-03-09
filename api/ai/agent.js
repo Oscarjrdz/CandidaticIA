@@ -53,6 +53,11 @@ function formatRecruiterMessage(text) {
         let slotIdx = 0;
         text = text.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${_NUM_EMOJIS[slotIdx++] || `${slotIdx}.`} `);
         text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
+        // Split closing ¿Cuál prefieres? as separate bubble
+        const _qIdx = text.lastIndexOf('\xbf');
+        if (_qIdx > 0) {
+            text = text.substring(0, _qIdx).trim() + '\n\x00SPLIT\x00' + text.substring(_qIdx).trim();
+        }
     }
     // 🗓️ CONFIRMATION MESSAGE: "Ok [name], entonces agendamos..."
     if (/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos/i.test(text)) {
