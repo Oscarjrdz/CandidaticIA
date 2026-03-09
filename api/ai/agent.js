@@ -61,6 +61,13 @@ function formatRecruiterMessage(text) {
     }
     // 🗓️ CONFIRMATION MESSAGE: "Ok [name], entonces agendamos..."
     if (/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos/i.test(text)) {
+        // If there's FAQ text BEFORE "Ok [name], entonces agendamos..." → split it off as msg 1
+        const confirmStart = text.search(/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos/i);
+        if (confirmStart > 0) {
+            const faqPart = text.substring(0, confirmStart).trim();
+            const confirmPart = text.substring(confirmStart).trim();
+            text = faqPart + '\n\x00SPLIT\x00' + confirmPart;
+        }
         // Bold + 📅 the day-date span: "el día martes 10 de marzo"
         text = text.replace(
             /(el d[ií]a\s+)([a-záéíóúüñ]+\s+\d{1,2}\s+de\s+[a-záéíóúüñ]+)/gi,
@@ -71,7 +78,7 @@ function formatRecruiterMessage(text) {
             /(a las\s+)(\d{1,2}:\d{2}\s*(?:AM|PM))/gi,
             (_, prefix, time) => `${prefix}⏰ *${time}*`
         );
-        // Split "¿estamos de acuerdo?" as separate message
+        // Split "¿estamos de acuerdo?" as separate message (msg 3)
         const qIdx = text.lastIndexOf('\xbf');
         if (qIdx > 0) {
             const body = text.substring(0, qIdx).trim();
