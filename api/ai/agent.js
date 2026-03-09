@@ -1537,7 +1537,7 @@ ${safeDnaLines}
                     // Text only, send sequentially to guarantee order
                     for (let i = 0; i < messagesToSend.length; i++) {
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
-                        if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 400));
+                        if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));
                     }
                 }
             })();
