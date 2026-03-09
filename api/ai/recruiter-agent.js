@@ -350,7 +350,7 @@ ${alternatives.length > 0
         // ⚡ Recruiter uses 500 max_tokens (enough for JSON response). Cita step keeps 600 for longer scheduling reasoning.
         const isCitaStepModel = (currentStep?.name || '').toLowerCase().includes('cita');
         const selectedModel = isCitaStepModel ? 'gpt-4o' : 'gpt-4o-mini';
-        const selectedMaxTokens = isCitaStepModel ? 600 : 500;
+        const selectedMaxTokens = isCitaStepModel ? 900 : 500;
 
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
