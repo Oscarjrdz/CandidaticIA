@@ -54,10 +54,25 @@ function formatRecruiterMessage(text) {
         text = text.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${_NUM_EMOJIS[slotIdx++] || `${slotIdx}.`} `);
         text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
     }
-    // ✅ CATEGORIES LIST: normalize inline items to vertical
-    if (text.includes('✅')) {
-        text = text.replace(/( {1,4}✅)/g, '\n✅');
-        text = text.replace(/(✅[^\n]+)\s{0,4}(¿[Cc]uál)/g, '$1\n\n$2');
+    // 🗓️ CONFIRMATION MESSAGE: "Ok [name], entonces agendamos..."
+    if (/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos/i.test(text)) {
+        // Bold + 📅 the day-date span: "el día martes 10 de marzo"
+        text = text.replace(
+            /(el d[ií]a\s+)([a-záéíóúüñ]+\s+\d{1,2}\s+de\s+[a-záéíóúüñ]+)/gi,
+            (_, prefix, dateSpan) => `${prefix}📅 *${dateSpan.charAt(0).toUpperCase() + dateSpan.slice(1)}*`
+        );
+        // Bold + ⏰ the time span: "a las 11:00 AM"
+        text = text.replace(
+            /(a las\s+)(\d{1,2}:\d{2}\s*(?:AM|PM))/gi,
+            (_, prefix, time) => `${prefix}⏰ *${time}*`
+        );
+        // Split "¿estamos de acuerdo?" as separate message
+        const qIdx = text.lastIndexOf('\xbf');
+        if (qIdx > 0) {
+            const body = text.substring(0, qIdx).trim();
+            const question = text.substring(qIdx).trim() + ' 🤝✨';
+            text = body + '\n\x00SPLIT\x00' + question;
+        }
     }
     return text;
 }
@@ -1542,21 +1557,26 @@ ${safeDnaLines}
                 let mUrl = aiResult?.media_url;
 
                 // --- MESSAGE SPLITTER LOGIC ---
-                // Visually split long vacancy presentations if the call to action is present.
                 let messagesToSend = [];
-                // More robust Regex: Grabs the start of the question and chunks everything up to the end into part2.
-                const splitRegex = /(¿Te gustaría que te agende.*?entrevista.*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
-                const match = responseTextVal.match(splitRegex);
 
-                if (match) {
-                    const splitIdx = match.index;
-                    const part1 = responseTextVal.substring(0, splitIdx).trim();
-                    const part2 = responseTextVal.substring(splitIdx).trim();
-
-                    if (part1) messagesToSend.push(part1);
-                    messagesToSend.push(part2);
+                // 1️⃣ Handle SPLIT sentinel from formatRecruiterMessage (confirmation & special splits)
+                const SENTINEL = '\x00SPLIT\x00';
+                if (responseTextVal.includes(SENTINEL)) {
+                    responseTextVal.split(SENTINEL).forEach(p => { if (p.trim()) messagesToSend.push(p.trim()); });
                 } else {
-                    messagesToSend.push(responseTextVal);
+                    // 2️⃣ Regex-based split for scheduling CTAs
+                    const splitRegex = /(¿Te gustaría que te agende.*?entrevista.*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
+                    const match = responseTextVal.match(splitRegex);
+
+                    if (match) {
+                        const splitIdx = match.index;
+                        const part1 = responseTextVal.substring(0, splitIdx).trim();
+                        const part2 = responseTextVal.substring(splitIdx).trim();
+                        if (part1) messagesToSend.push(part1);
+                        messagesToSend.push(part2);
+                    } else {
+                        messagesToSend.push(responseTextVal);
+                    }
                 }
 
                 if (mUrl && mUrl !== 'null') {
