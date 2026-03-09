@@ -47,7 +47,7 @@ unanswered_question: "¿Puedo llevar el pelo largo?"
         "municipio": "string|null", 
         "escolaridad": "string|null", 
         "citaFecha": "YYYY-MM-DD|null (⚠️ RETÉN SIEMPRE EL VALOR DEL [ADN] SI YA EXISTE Y NO SE CAMBIÓ)",
-        "citaHora": "string|null (⚠️ RETÉN SIEMPRE EL VALOR DEL [ADN] SI YA EXISTE Y NO SE CAMBIÓ)" 
+        "citaHora": "string|null (⚠️ RETÉN SIEMPRE EL VALOR DEL [ADN] SI YA EXISTE. Si el candidato elige por número ej. 'opción 3', extrae la HORA EXACTA correspondiente, NUNCA la palabra 'opción')" 
     },
     "thought_process": "Razonamiento interno.",
     "response_text": "Tu respuesta cálida de Brenda.",
@@ -88,6 +88,8 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 - Escolaridad: ${candidateData.escolaridad || 'N/A'}
 - Proyecto Actual: ${project.name}
 - Paso Actual: ${currentStep.name}
+- Fecha de Cita: ${candidateData.projectMetadata?.citaFecha || 'No definida'}
+- Hora de Cita: ${candidateData.projectMetadata?.citaHora || 'No definida'}
 
 [TIEMPO REAL]:
 - Hoy es: ${currentData.day}, ${currentData.date}
@@ -251,8 +253,9 @@ ${adnContext}
 ${repetitionShield}
 
 [OPCIONES DE AGENDA DISPONIBLES]:
-${currentStep.calendarOptions && currentStep.calendarOptions.length > 0
-                ? `⚠️ REGLA ESTRICTA DE AGENDA (FLUJO DE TRES PASOS): Tienes ESTRICTAMENTE PROHIBIDO soltar horarios de golpe y PROHIBIDO cerrar la cita sin confirmar. DEBES seguir esta secuencia exacta:
+${(() => {
+                const _todayMx = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }); const _futureOpts = (currentStep.calendarOptions || []).filter(o => { const _m = o.match(/^(\d{4}-\d{2}-\d{2})/); return _m ? _m[1] >= _todayMx : true; }); return _futureOpts.length > 0
+                    ? `⚠️ REGLA ESTRICTA DE AGENDA (FLUJO DE TRES PASOS): Tienes ESTRICTAMENTE PROHIBIDO soltar horarios de golpe y PROHIBIDO cerrar la cita sin confirmar. DEBES seguir esta secuencia exacta:
 
 PASO 1 (OFRECER DÍAS): Si aún no elige día, agrupa TODOS los horarios disponibles y ofrece ESTRICTAMENTE TODOS LOS DÍAS DISPONIBLES como opciones numeradas. TIENES PROHIBIDO OMITIR DÍAS, INCLUSO SI SON FINES DE SEMANA (SÁBADO/DOMINGO) O ESTÁN MUY LEJOS EN EL FUTURO. DEBES MOSTRAR LA LISTA COMPLETA EXACTAMENTE COMO VIENE EN LOS "HORARIOS BRUTOS". 
 🚨 REGLA VISUAL DE DÍAS: DEBES ENVIAR CADA OPCIÓN EN UN RENGLÓN DISTINTO. Tienes ESTRICTAMENTE PROHIBIDO poner dos días en el mismo renglón (ej. "el lunes 2 y martes 3").
@@ -265,13 +268,13 @@ Ejemplo de formato que DEBES seguir:
 
 ¿Qué día prefieres?"
 
-PASO 2 (OFRECER HORARIOS): CUANDO el candidato ya eligió un día explícitamente (ej. "el domingo"), tienes ESTRICTAMENTE PROHIBIDO preguntarle a qué hora le queda mejor de forma libre, bajo pena de error crítico. 
-🚨 PASO CRÍTICO DE EXTRACCIÓN Y RESPUESTA (NO LO SALTES): 
-1. Transforma el día que eligió el candidato (ej. "Domingo") en la fecha cruda YYYY-MM-DD.
-2. Revisa la lista EXACTA de "horarios brutos" que viene al final de este mensaje.
-3. Encuentra TODOS los renglones correspondientes a esa fecha.
-4. Muestra EN TU MENSAJE las horas que encontraste como opciones (ej. 🔹 1: 08:00 AM, 🔹 2: 10:00 AM). ES OBLIGATORIO MOSTRAR LAS OPCIONES NUMERADAS. SI NO MUESTRAS LAS HORAS Y SOLO PREGUNTAS A QUÉ HORA, ESTARÁS ROMPIENDO EL SISTEMA.
-Ejemplo de formato OBLIGATORIO para tu respuesta:
+PASO 2 (OFRECER HORARIOS): CUANDO el candidato ya eligió un día explícitamente (ej. "el domingo"), tienes ESTRICTAMENTE PROHIBIDO preguntarle a qué hora le queda mejor de forma libre. 
+🚨 PASO CRÍTICO DE EXTRACCIÓN Y RESPUESTA (NO LO SALTES):
+1. **OBLIGATORIO PARA JSON**: Transforma el día que eligió el candidato en la fecha cruda YYYY-MM-DD y asegúrate de GUARDARLA en el campo 'citaFecha' del JSON. SI NO GUARDAS citaFecha, CAUSARÁS UN ERROR CRÍTICO.
+2. Revisa la lista EXACTA de "horarios brutos" que viene al final de este mensaje (el formato es 'YYYY-MM-DD @ HH:mm AM/PM').
+3. Encuentra TODOS los renglones que correspondan a la fecha que sacaste ("YYYY-MM-DD").
+4. Muestra EN TU MENSAJE las horas disponibles para ese día como opciones numeradas (ej. 🔹 Opción 1: 08:00 AM, 🔹 Opción 2: 10:00 AM). TIENES ESTRICTAMENTE PROHIBIDO INVENTAR HORARIOS MÁS ALLÁ DE LOS QUE APARECEN EN LA LISTA CRUDA PARA ESE DÍA ESPECÍFICO.
+Ejemplo de formato OBLIGATORIO para tu respuesta (reemplazando YYYY-MM-DD por algo natural como "Lunes 2 de Marzo"):
 "Perfecto, para el Lunes 2 de Marzo tengo estas opciones de horario para ti:
 
 🔹 Opción 1: 08:00 AM
@@ -287,12 +290,14 @@ Ejemplo EXACTO de tu mensaje en este paso:
 SOLO CUANDO el candidato responda con una afirmación ("Sí", "Ok", "Perfecto") a ESA pregunta del PASO 3, entonces (y solo entonces) disparas el tag "{ move }" en tu thought_process (y guardas silencio en response_text).
 
 Estos son todos tus horarios brutos disponibles (YYYY-MM-DD @ HH:mm):
-${currentStep.calendarOptions.map((opt) => `- ${opt}`).join('\n')}
+${_futureOpts.map((opt) => `- ${opt}`).join('\n')}
 
-NUNCA inventes horarios que no estén en esta lista.`
-                : 'No hay horarios preconfigurados, pregunta por su disponibilidad general.'}
+NUNCA inventes horarios que no estén en esta lista.` : 'No hay horarios preconfigurados, pregunta por su disponibilidad general.';
+            })()
 
-${!(currentStep.calendarOptions && currentStep.calendarOptions.length > 0) ? `
+${
+            (() => {
+                const _todayMx2 = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' }); const _hasFuture = (currentStep.calendarOptions || []).some(o => { const _m = o.match(/^(\d{4}-\d{2}-\d{2})/); return _m ? _m[1] >= _todayMx2 : true; }); return !_hasFuture ? `
 [OPCIONES DE CIERRE DE ENTREVISTA (USO ALEATORIO)]:
 - ¿Te gustaría que te agende una cita para entrevista?
 - ¿Te puedo agendar una cita de entrevista?
@@ -324,15 +329,17 @@ ${!(currentStep.calendarOptions && currentStep.calendarOptions.length > 0) ? `
 `}
 
 [VACANTES ALTERNATIVAS]:
-${alternatives.length > 0
+${
+                alternatives.length > 0
                 ? JSON.stringify(alternatives)
-                : "No hay más vacantes disponibles."}
+                : "No hay más vacantes disponibles."
+            }
 
----
-[OBJETIVO ACTUAL DE ESTE PASO]:
-"${finalPrompt}"
----
-`;
+            ---
+                [OBJETIVO ACTUAL DE ESTE PASO]:
+            "${finalPrompt}"
+            ---
+                `;
 
         // --- TEXTUAL KNOWLEDGE BASE SUPPORT ---
         let multimodalDocuments = null; // No longer passing raw images to avoid 10s latency blocks
@@ -341,7 +348,7 @@ ${alternatives.length > 0
             let iDoc = 1;
             for (const doc of vacancyContext.documents) {
                 if (doc.extractedText) {
-                    systemPrompt += `\n[DOCUMENTO ADJUNTO ${iDoc} ("${doc.name}")]:\n${doc.extractedText}\n`;
+                    systemPrompt += `\n[DOCUMENTO ADJUNTO ${ iDoc } ("${doc.name}")]: \n${ doc.extractedText } \n`;
                     hasHardcodedTextDocuments = true;
                     iDoc++;
                 }
@@ -349,7 +356,7 @@ ${alternatives.length > 0
                 // payloads directly to gpt-4o on every turn causes 5s-10s blockages and Vercel timeouts.
             }
             if (hasHardcodedTextDocuments) {
-                systemPrompt += `\n\n[BASE DE CONOCIMIENTO TEXTUAL ADJUNTA]:\nTienes información extraída previamente de adjuntos mostrada arriba. **ESTA DEBE SER TU ÚNICA FUENTE DE VERDAD** para dudas técnicas que dependan de ella.\n`;
+                systemPrompt += `\n\n[BASE DE CONOCIMIENTO TEXTUAL ADJUNTA]: \nTienes información extraída previamente de adjuntos mostrada arriba. ** ESTA DEBE SER TU ÚNICA FUENTE DE VERDAD ** para dudas técnicas que dependan de ella.\n`;
             }
         }
 
@@ -374,62 +381,63 @@ ${alternatives.length > 0
             throw new Error('GPT Response empty');
         }
 
-        console.log(`[RECRUITER BRAIN] 🤖 GPT Response for ${candidateId}: `, gptResponse.content);
+        console.log(`[RECRUITER BRAIN] 🤖 GPT Response for ${ candidateId }: `, gptResponse.content);
 
         let cleanContent = gptResponse.content.trim();
         // 4. Parsear respuesta
         let aiResult;
         try {
             const sanitized = gptResponse.content
-                .replace(/^```json\s*/i, '')  // Remove opening ```json
-                .replace(/^```\s*/i, '')       // Remove opening ```
-                .replace(/```\s*$/i, '')       // Remove closing ```
+                .replace(/^```json\s * /i, '')  / / Remove opening```json
+                .replace(/^```\s * /i, '')       / / Remove opening```
+                .replace(/```\s * $ / i, '')       // Remove closing ```
                 .trim();
-            aiResult = JSON.parse(sanitized);
+aiResult = JSON.parse(sanitized);
         } catch (e) {
-            console.error('[RECRUITER BRAIN] JSON Parse Error:', e);
-            aiResult = {
-                response_text: gptResponse.content.replace(/\*/g, ''),
-                thought_process: 'Fallback: JSON parse failed.',
-                extracted_data: {},
-                gratitude_reached: false,
-                close_conversation: false,
-                unanswered_question: null
-            };
-        }
+    console.error('[RECRUITER BRAIN] JSON Parse Error:', e);
+    aiResult = {
+        response_text: gptResponse.content.replace(/\*/g, ''),
+        thought_process: 'Fallback: JSON parse failed.',
+        extracted_data: {},
+        gratitude_reached: false,
+        close_conversation: false,
+        unanswered_question: null
+    };
+}
 
-        // Diagnostic: log unanswered_question result
-        if (aiResult.unanswered_question && aiResult.unanswered_question !== 'null') {
-            console.log(`[FAQ Engine] 📡 unanswered_question captured: "${aiResult.unanswered_question}"`);
-        } else {
-            console.log(`[FAQ Engine] ✅ No unanswered question. Values: ${JSON.stringify(aiResult.unanswered_question)}`);
-        }
+// Diagnostic: log unanswered_question result
+if (aiResult.unanswered_question && aiResult.unanswered_question !== 'null') {
+    console.log(`[FAQ Engine] 📡 unanswered_question captured: "${aiResult.unanswered_question}"`);
+} else {
+    console.log(`[FAQ Engine] ✅ No unanswered question. Values: ${JSON.stringify(aiResult.unanswered_question)}`);
+}
 
-        // 5. Lógica de Movimiento { move } y Rastreo de Vacantes
-        if (activeVacancyId) {
-            if (aiResult.thought_process?.includes('{ move }')) {
-                console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished detected for candidate ${candidateId}.Recording ACCEPTED.`);
-                // El candidato aceptó la propuesta/cita de la vacante actual
-                await recordVacancyInteraction(candidateId, project.id, activeVacancyId, 'ACCEPTED', 'Progreso de etapa');
-            } else {
-                // Si no se movió, significa que la vacante está siendo DISCUTIDA o MOSTRADA
-                // Registramos SHOWN solo si es el primer acercamiento (esto puede afinarse revisando el history, 
-                // pero por robustez, un zadd con mismo ID/score sobreescribe limpiamente sin duplicar infinitamente)
-                await recordVacancyInteraction(candidateId, project.id, activeVacancyId, 'SHOWN', 'Presentación/Resolución de dudas');
-            }
-        }
+// 5. Lógica de Movimiento { move } y Rastreo de Vacantes
+if (activeVacancyId) {
+    if (aiResult.thought_process?.includes('{ move }')) {
+        console.log(`[RECRUITER BRAIN] ⚡ Mission Accomplished detected for candidate ${candidateId}.Recording ACCEPTED.`);
+        // El candidato aceptó la propuesta/cita de la vacante actual
+        await recordVacancyInteraction(candidateId, project.id, activeVacancyId, 'ACCEPTED', 'Progreso de etapa');
+    } else {
+        // Si no se movió, significa que la vacante está siendo DISCUTIDA o MOSTRADA
+        // Registramos SHOWN solo si es el primer acercamiento (esto puede afinarse revisando el history, 
+        // pero por robustez, un zadd con mismo ID/score sobreescribe limpiamente sin duplicar infinitamente)
+        await recordVacancyInteraction(candidateId, project.id, activeVacancyId, 'SHOWN', 'Presentación/Resolución de dudas');
+    }
+}
 
-        // 6. Telemetría
-        const duration = Date.now() - startTime;
-        recordAITelemetry(candidateId, 'recruiter_inference', {
-            model: 'gpt-4o-mini-recruiter',
-            latency: duration
-        }).catch(() => { });
+// 6. Telemetría
+const duration = Date.now() - startTime;
+recordAITelemetry(candidateId, 'recruiter_inference', {
+    model: 'gpt-4o-mini-recruiter',
+    latency: duration,
+    aiResult: aiResult
+}).catch(() => { });
 
-        return aiResult;
+return aiResult;
 
     } catch (error) {
-        console.error('[RECRUITER BRAIN] ❌ Critical Error:', error.message);
-        throw error;
-    }
+    console.error('[RECRUITER BRAIN] ❌ Critical Error:', error.message);
+    throw error;
+}
 };
