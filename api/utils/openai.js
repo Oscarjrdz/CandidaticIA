@@ -4,7 +4,7 @@ import { getRedisClient } from './storage.js';
 /**
  * OpenAI Adapter - The "Host" Brain
  */
-export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gpt-4o', explicitApiKey = null, responseFormat = null, multimodalSystemContent = null) {
+export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gpt-4o', explicitApiKey = null, responseFormat = null, multimodalSystemContent = null, maxTokens = 800) {
     try {
         const redis = getRedisClient();
         let apiKey = explicitApiKey ? explicitApiKey.trim() : process.env.OPENAI_API_KEY;
@@ -61,7 +61,7 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
             model: model,
             messages: formattedMessages,
             temperature: 0.75,
-            max_tokens: 800
+            max_tokens: maxTokens
         };
 
         if (responseFormat) {
