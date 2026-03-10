@@ -86,6 +86,19 @@ function formatRecruiterMessage(text) {
             text = body + '\n\x00SPLIT\x00' + question;
         }
     }
+    // 📩 GENERIC LAST-QUESTION SPLIT: If substantial FAQ answer (>60 chars) precedes a closing ¿...? question,
+    // split them into separate bubbles — covers all Cita return questions (¿Qué día?, ¿Cuál horario?, etc.)
+    if (!text.includes('\x00SPLIT\x00')) {
+        const lastQ = text.lastIndexOf('\xbf');
+        if (lastQ > 60) {
+            const bodyPart = text.substring(0, lastQ).trim();
+            const questionPart = text.substring(lastQ).trim();
+            // Only split if there's real body content (not just a greeting) before the question
+            if (bodyPart.length > 40 && questionPart.length > 5) {
+                text = bodyPart + '\n\x00SPLIT\x00' + questionPart;
+            }
+        }
+    }
     return text;
 }
 // ─────────────────────────────────────────────────────────────────────────────
