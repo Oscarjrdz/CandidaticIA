@@ -90,11 +90,11 @@ function formatRecruiterMessage(text) {
     // split them into separate bubbles — covers all Cita return questions (¿Qué día?, ¿Cuál horario?, etc.)
     if (!text.includes('[MSG_SPLIT]')) {
         const lastQ = text.lastIndexOf('\xbf');
-        if (lastQ > 90) {
+        if (lastQ > 50) {
             const bodyPart = text.substring(0, lastQ).trim();
             const questionPart = text.substring(lastQ).trim();
-            // Only split if substantial FAQ body (not just a greeting) before the question
-            if (bodyPart.length > 90 && questionPart.length > 5) {
+            // Split if body has real content (>50 chars) — catches FAQ answers, flirty replies, NOT bare greetings
+            if (bodyPart.length > 50 && questionPart.length > 5) {
                 text = bodyPart + '[MSG_SPLIT]' + questionPart;
             }
         }
