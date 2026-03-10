@@ -1612,9 +1612,19 @@ ${safeDnaLines}
                     const match = responseTextVal.match(splitRegex);
 
                     if (match) {
-                        const splitIdx = match.index;
-                        const part1 = responseTextVal.substring(0, splitIdx).trim();
-                        const part2 = responseTextVal.substring(splitIdx).trim();
+                        // Use natural sentence boundary instead of raw CTA start
+                        const beforeCta = responseTextVal.substring(0, match.index);
+                        const lastBang = beforeCta.lastIndexOf('!');
+                        const lastDot = beforeCta.lastIndexOf('.');
+                        const naturalEnd = Math.max(lastBang, lastDot);
+                        let splitAt = naturalEnd > 25 ? naturalEnd + 1 : match.index;
+                        // Advance past trailing emojis/spaces
+                        if (naturalEnd > 25) {
+                            while (splitAt < beforeCta.length &&
+                                (beforeCta.charCodeAt(splitAt) > 127 || beforeCta[splitAt] === ' ')) splitAt++;
+                        }
+                        const part1 = responseTextVal.substring(0, splitAt).trim();
+                        const part2 = responseTextVal.substring(splitAt).trim();
                         if (part1) messagesToSend.push(part1);
                         messagesToSend.push(part2);
                     } else {
