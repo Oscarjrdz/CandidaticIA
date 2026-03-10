@@ -47,7 +47,8 @@ export default function InteractiveCalendar({ options = [], onChange }) {
     const addTimeSlot = () => {
         if (!selectedDate || !timeInput.trim()) return;
 
-        const dateStr = selectedDate.toISOString().split('T')[0];
+        // [FIX]: Ensure date mapping uses local timezone string (YYYY-MM-DD) instead of UTC shift
+        const dateStr = selectedDate.toLocaleDateString('en-CA');
         const updatedMap = { ...dateMap };
         if (!updatedMap[dateStr]) updatedMap[dateStr] = [];
 
@@ -85,7 +86,7 @@ export default function InteractiveCalendar({ options = [], onChange }) {
         const updatedMap = { ...dateMap };
         delete updatedMap[dateStr];
         // If we just deleted the currently selected date, deselect it
-        if (selectedDate && selectedDate.toISOString().split('T')[0] === dateStr) {
+        if (selectedDate && selectedDate.toLocaleDateString('en-CA') === dateStr) {
             setSelectedDate(null);
         }
         handleSaveNewOptions(updatedMap, legacyOptions);
@@ -149,8 +150,8 @@ export default function InteractiveCalendar({ options = [], onChange }) {
 
         for (let day = 1; day <= daysInMonth; day++) {
             const date = new Date(year, month, day);
-            const dateStr = date.toISOString().split('T')[0];
-            const isSelected = selectedDate && selectedDate.toISOString().split('T')[0] === dateStr;
+            const dateStr = date.toLocaleDateString('en-CA');
+            const isSelected = selectedDate && selectedDate.toLocaleDateString('en-CA') === dateStr;
             const isToday = dateStr === todayStr;
             const hasSlots = dateMap[dateStr] && dateMap[dateStr].length > 0;
             const slotCount = hasSlots ? dateMap[dateStr].length : 0;
@@ -180,7 +181,7 @@ export default function InteractiveCalendar({ options = [], onChange }) {
         return days;
     };
 
-    const selectedDateStr = selectedDate ? selectedDate.toISOString().split('T')[0] : null;
+    const selectedDateStr = selectedDate ? selectedDate.toLocaleDateString('en-CA') : null;
     const slotsForSelected = selectedDateStr ? (dateMap[selectedDateStr] || []) : [];
 
     return (

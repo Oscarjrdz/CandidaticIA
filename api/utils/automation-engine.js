@@ -308,6 +308,37 @@ REGLAS DE ORO:
 
                 } catch (e) {
                     logs.push(`⚠️[PIPELINE] Error con candidato ${cand.nombre}: ${e.message} `);
+
+                    // 🛡️ FAILSAFE: Si OpenAI falla o hay error de parsing, garantizamos la vacante
+                    try {
+                        console.warn(`[AUTOMATION-ENGINE] ⚠️ Failsafe auto-trigger firing for ${cand.nombre}! Error:`, e.message);
+                        let candidateFirstName = (cand.nombreReal || cand.nombre || 'Candidato').split(' ')[0];
+                        let p = `¡Mira ${candidateFirstName}! Te comparto la vacante que encontré para ti: ⏬\n\n${vacancyContext.messageDescription || vacancyContext.description || ''}`;
+
+                        await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, p, 'chat', { priority: 0 });
+
+                        const { updateCandidate, saveMessage } = await import('./storage.js');
+                        await updateCandidate(cand.id, {
+                            lastBotMessageAt: new Date().toISOString(),
+                            ultimoMensaje: new Date().toISOString()
+                        });
+
+                        await redis.set(metaKey, 'true', 'EX', 3600 * 24 * 30);
+
+                        await saveMessage(cand.id, {
+                            from: 'bot',
+                            content: p,
+                            type: 'text',
+                            timestamp: new Date().toISOString(),
+                            meta: { pipelineStep: step.id, projectId: proj.id, failsafe: true }
+                        });
+
+                        totalSent++;
+                        const limit = manualConfig ? 5 : 1;
+                        if (totalSent >= limit) return { sent: totalSent, logs };
+                    } catch (failsafeErr) {
+                        logs.push(`❌[PIPELINE FAILSAFE ENGINE] Catastrophic failure for ${cand.nombre}: ${failsafeErr.message}`);
+                    }
                 }
             }
         }

@@ -29,12 +29,14 @@ Aquí tienes la lista de temas (topics) existentes:
 ${JSON.stringify(existingTopics, null, 2)}
 
 Tu tarea es:
-1. Si la nueva pregunta significa lo mismo o pertenece claramente a uno de los temas existentes, devuelve el "id" de ese tema.
-2. Si es una pregunta sobre un tema totalmente nuevo, devuelve "id": null, y sugiere un titulo corto y representativo en "new_topic" (máximo 4 palabras).
+1. REGLA DE EXCLUSIÓN CRÍTICA: Si la pregunta NO es sobre la vacante en sí (ej. sueldo, actividades, ubicación, prestaciones), sino sobre el proceso de entrevista (ej. "horarios para agendar", "días disponibles para cita", "¿a qué hora es?", "¿qué día voy?"), sobre el uso del bot, o es un cambio de paso ("ya llegué", "me equivoqué de opción"), DEBES descartarla y devolver "ignore": true.
+2. Si NO debe ignorarse y significa lo mismo o pertenece claramente a uno de los temas existentes, devuelve el "id" de ese tema.
+3. Si NO debe ignorarse y es una pregunta sobre un tema totalmente nuevo, devuelve "id": null, y sugiere un titulo corto y representativo en "new_topic" (máximo 4 palabras).
 
 IMPORTANTE: El campo "new_topic" DEBE estar siempre en ESPAÑOL.
 Responde ÚNICAMENTE en JSON con el siguiente formato:
 {
+  "ignore": true o false,
   "id": "el-id-existente-o-null",
   "new_topic": "El Nuevo Tema o null"
 }
@@ -54,6 +56,11 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
         });
 
         const parsed = response.data.choices[0].message.content ? JSON.parse(response.data.choices[0].message.content) : {};
+
+        if (parsed.ignore === true) {
+            console.log(`[FAQ Engine] ⏭️ Ignorando pregunta no relacionada a la vacante: "${question}"`);
+            return;
+        }
 
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
@@ -139,13 +146,14 @@ PREGUNTAS A CLASIFICAR:
 ${JSON.stringify(allQuestions, null, 2)}
 
 TU TAREA:
-Asigna cada pregunta al ID del tema que mejor le corresponda. 
-Si una pregunta no encaja en NINGUNO de los temas actuales, asígnala a null.
+1. REGLA DE EXCLUSIÓN CRÍTICA: Si la pregunta NO es sobre la vacante (sino sobre agendar entrevistas, pedir horarios/días, usar el chatbot o cambios de paso), ignórala devolviendo "topicId": "IGNORE".
+2. Para el resto, asigna la pregunta al ID del tema existente que mejor le corresponda. 
+3. Si la pregunta es válida sobre la vacante pero no hay un tema que coincida, asígnala a null.
 
 RESPONDE ÚNICAMENTE CON UN ARRAY DE OBJETOS JSON:
 {
   "mappings": [
-    { "q": "texto de la pregunta", "topicId": "id-del-tema o null" },
+    { "q": "texto de la pregunta", "topicId": "id-del-tema, null o 'IGNORE'" },
     ...
   ]
 }`;
@@ -175,7 +183,9 @@ RESPONDE ÚNICAMENTE CON UN ARRAY DE OBJETOS JSON:
         const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
 
         mappings.forEach(m => {
-            if (m.topicId) {
+            if (m.topicId === 'IGNORE') {
+                return; // Silently drop
+            } else if (m.topicId) {
                 const target = newFaqs.find(f => f.id === m.topicId);
                 if (target) {
                     target.originalQuestions.push(m.q);

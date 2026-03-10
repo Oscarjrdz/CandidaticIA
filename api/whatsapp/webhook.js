@@ -23,13 +23,11 @@ import {
     saveWebhookTransaction,
     markMessageAsDone
 } from '../utils/storage.js';
-import { processMessage } from '../ai/agent.js';
 import { getUltraMsgConfig, getUltraMsgContact } from './utils.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { sendMessage } from '../utils/messenger.js';
 import { notifyNewCandidate } from '../utils/sse-notify.js';
 import { logTelemetry } from '../utils/telemetry.js';
-import { downloadDevScreenshot } from '../utils/image-downloader.js';
 // 🚀 TURBO MODE: Silence all synchronous Vercel console I/O unless actively debugging
 if (process.env.DEBUG_MODE !== 'true') {
     console.log = function () { };
@@ -87,7 +85,7 @@ export default async function handler(req, res) {
 
             try {
                 // --- ADMIN COMMANDS ---
-                const adminNumber = '5218116038195';
+                const adminNumber = process.env.ADMIN_NUMBER || '5218116038195';
                 const redis = getRedisClient();
 
                 if (phone === adminNumber) {

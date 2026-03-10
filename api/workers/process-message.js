@@ -1,6 +1,12 @@
 import { processMessage } from '../ai/agent.js';
-import { getCandidateById, getWaitlist, markMessageAsDone, unlockCandidate, isCandidateLocked } from '../utils/storage.js';
 import { logTelemetry } from '../utils/telemetry.js';
+import {
+    getWaitlist,
+    isCandidateLocked,
+    unlockCandidate,
+    markMessageAsDone,
+    getCandidateById
+} from '../utils/storage.js';
 
 /**
  * 🚀 SERVERLESS TURBO ENGINE
@@ -10,13 +16,8 @@ import { logTelemetry } from '../utils/telemetry.js';
 async function drainWaitlist(candidateId) {
     let loopSafety = 0;
     while (loopSafety < 10) {
-        const rawPendingMsgs = await getWaitlist(candidateId);
-        if (!rawPendingMsgs || rawPendingMsgs.length === 0) break;
-
-        const pendingMsgs = rawPendingMsgs.map(m => {
-            try { return typeof m === 'string' ? JSON.parse(m) : m; }
-            catch (e) { return { text: m }; }
-        });
+        const pendingMsgs = await getWaitlist(candidateId);
+        if (!pendingMsgs || pendingMsgs.length === 0) break;
 
         const aggregatedText = pendingMsgs.map(m => {
             const val = m.text?.url || m.text || m;
@@ -25,17 +26,18 @@ async function drainWaitlist(candidateId) {
 
         const msgIds = pendingMsgs.map(m => m.msgId).filter(id => id);
 
-        console.log(`[Serverless Engine] 🌪️ Draining burst for ${candidateId}. Count: ${pendingMsgs.length}`);
+        console.log(`[Serverless Engine] 🌪️ Draining burst for ${candidateId}. Count: ${pendingMsgs.length}. Text: ${aggregatedText}`);
 
         try {
             await logTelemetry('processing_start', { candidateId, count: pendingMsgs.length });
+
             await processMessage(candidateId, aggregatedText, msgIds[0] || null);
             await logTelemetry('ai_complete', { candidateId });
             await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));
 
-            // 🧹 CLEANUP: Only clear waitlist after success (Safety Net)
+            // 🧹 CLEANUP: Only clear processed waitlist items (Safety Net)
             const { clearWaitlist } = await import('../utils/storage.js');
-            await clearWaitlist(candidateId);
+            await clearWaitlist(candidateId, pendingMsgs.length);
 
             console.log(`[Serverless Engine] ✅ Completed burst of ${pendingMsgs.length} messages.`);
         } catch (procErr) {

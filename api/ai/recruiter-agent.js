@@ -211,10 +211,12 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         }
 
         // ⚡ FIX: Compute future calendar options BEFORE the template literal (IIFEs with regex inside template strings break the parser)
+        // [FIX]: Ensure timezone doesn't offset the date. 'en-CA' inherently formats as YYYY-MM-DD.
         const _todayMxDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
         const futureCalendarOptions = (currentStep.calendarOptions || []).filter(opt => {
             const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
-            return m ? m[1] >= _todayMxDate : true;
+            if (!m) return true;
+            return m[1] >= _todayMxDate;
         });
         const hasFutureCalendarOptions = futureCalendarOptions.length > 0;
 
@@ -269,7 +271,10 @@ PASO 3 (CONFIRMACIÓN FINAL - CRÍTICO): CUANDO el candidato ya eligió LA HORA,
 Ejemplo EXACTO de tu mensaje en este paso:
 "Ok Oscar, entonces agendamos tu cita para entrevista el día Martes 3 de Marzo a las 08:00 AM, ¿estamos de acuerdo?"
 
-SOLO CUANDO el candidato responda con una afirmación ("Sí", "Ok", "Perfecto") a ESA pregunta del PASO 3, entonces (y solo entonces) disparas el tag "{ move }" en tu thought_process (y guardas silencio en response_text).
+SOLO CUANDO el candidato responda con una afirmación ("Sí", "Ok", "Perfecto") a ESA pregunta del PASO 3, entonces (y solo entonces) disparas el tag "{ move }" en tu thought_process Y escribes un mensaje cálido y breve de confirmación en response_text.
+Ejemplo EXACTO de tu response_text al disparar { move }:
+"¡Perfecto, Oscar! ✅ Tu cita queda agendada para el Martes 3 de Marzo a las 08:00 AM. ¡Te esperamos! 🌟"
+⚠️ NUNCA dejes response_text vacío al disparar { move }. Siempre confirma con entusiasmo.
 
 Estos son todos tus horarios brutos disponibles (YYYY-MM-DD @ HH:mm):
 ${futureCalendarOptions.map((opt) => `- ${opt}`).join('\n')}

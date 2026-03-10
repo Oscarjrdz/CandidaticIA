@@ -221,36 +221,25 @@ export class Orchestrator {
         ]);
 
         // Phase 6: Instant Automations Trigger (Send Vacancy Immediately)
+        // 🔥 CRITICAL FIX: DO NOT AWAIT runAIAutomations AND DO NOT RUN IT IN THE SAME NODE PROCESS!
+        // Two consecutive GPT calls (Extraction + Automation) exceed Vercel's 15s serverless timeout.
+        // Even Promise.resolve() doesn't bypass this, as Vercel holds the connection open until Event Loop is empty.
+        // Best approach: Fire a detached HTTP webhook to our own serverless endpoint with a micro-timeout
+        // so `agent.js` can continue immediately and Node connection to UltraMsg terminates.
         try {
-            logTrace(`⚙️ Triggering real-time project automations for ${targetProjectId}...`);
-            await runAIAutomations(true, { projectId: targetProjectId, stepId: firstStep.id, targetCandidateId: candidateId });
+            logTrace(`⚙️ Triggering detached background worker for ${targetProjectId}...`);
+            const workerPayload = { targetProjectId, stepId: firstStep.id, candidateId };
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://candidatic-ia.vercel.app';
 
-            // Failsafe: Si el motor de automatización falló por concurrencia u otro bloqueo interno,
-            // garantizamos la entrega de la vacante disparando directamente el prompt configurado.
-            const metaKey = `pipeline:${targetProjectId}:${firstStep.id}:${candidateId}:processed`;
-            const isProcessed = await redis.get(metaKey);
+            // Fire and Forget (Do not await)
+            fetch(`${apiUrl}/api/workers/run-automations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(workerPayload)
+            }).catch(e => {
+                console.error('[ORCHESTRATOR] Background Hook Failed (expected if timeout disconnected):', e.message);
+            });
 
-            if (!isProcessed && firstStep.aiConfig?.prompt) {
-                console.warn('[ORCHESTRATOR] ⚠️ Failsafe auto-trigger firing! Engine bypassed.');
-                const { getVacancyById } = await import('./storage.js');
-                const vId = Array.isArray(project.vacancyIds) && project.vacancyIds.length > 0 ? project.vacancyIds[0] : project.vacancyId;
-                const v = await getVacancyById(vId);
-                const vacCtx = {
-                    name: v?.name || '',
-                    messageDescription: v?.messageDescription || v?.description || '',
-                    description: v?.description || '',
-                    salary: v?.salary_range || 'N/A',
-                    schedule: v?.schedule || 'N/A'
-                };
-
-                // SEND THE ACTUAL HUMAN MESSAGE, NOT THE RAW AI PROMPT
-                let candidateFirstName = (candidateData.nombreReal || candidateData.nombre || 'Candidato').split(' ')[0];
-                let p = `¡Mira ${candidateFirstName}! Te comparto la vacante que encontré para ti: ⏬\n\n${vacCtx.messageDescription}`;
-
-                await sendUltraMsgMessage(config.instanceId, config.token, phone, p, 'chat', { priority: 0 });
-                await redis.set(metaKey, 'true', 'EX', 3600 * 24 * 30);
-                await saveMessage(candidateId, { from: 'bot', content: p, timestamp: new Date().toISOString(), meta: { pipelineStep: firstStep.id } });
-            }
         } catch (e) {
             console.error('[ORCHESTRATOR] Auto-trigger failed:', e.message);
         }

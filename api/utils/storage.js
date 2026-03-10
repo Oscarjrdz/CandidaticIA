@@ -357,6 +357,9 @@ export const auditProfile = (c, customFields = []) => {
     // 2. Audit Custom Fields
     if (customFields && customFields.length > 0) {
         for (const cf of customFields) {
+            // Prevent duplicating fields that are already in CORE_REQUIRED_FIELDS
+            if (CORE_REQUIRED_FIELDS.some(core => core.value === cf.value)) continue;
+
             const rawVal = c[cf.value];
             const val = String(rawVal || '').toLowerCase().trim();
             const isInvalid = !rawVal || val.includes('proporcionado');
@@ -731,13 +734,19 @@ export const getWaitlist = async (candidateId) => {
     }
 };
 
-// 🧹 CLEANUP: Only call this AFTER successful processing
-export const clearWaitlist = async (candidateId) => {
+// 🧹 CLEANUP: Removes only the messages that were successfully processed
+export const clearWaitlist = async (candidateId, processedCount = 0) => {
     const client = getRedisClient();
     if (!client || !candidateId) return;
     const key = `${KEYS.CANDIDATE_WAITLIST_PREFIX}${candidateId}`;
     try {
-        await client.del(key);
+        if (processedCount > 0) {
+            // Remove exactly the number of messages we processed from the LEFT (oldest)
+            // LTRIM start end. If we processed 1, we want to keep index 1 to -1.
+            await client.ltrim(key, processedCount, -1);
+        } else {
+            await client.del(key);
+        }
     } catch (e) {
         console.error('❌ [Storage] clearWaitlist Error:', e);
     }

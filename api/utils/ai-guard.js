@@ -69,6 +69,29 @@ export class AIGuard {
         // Ensure extracted data is preserved
         aiResult.extracted_data = extracted;
 
+        // 6. 🌸 Compliment Intercept (Successful LLM Response)
+        // If the LLM successfully generated a response but the user was flirting, it often sounds robotic (e.g., "Eso suena divertido, pero...").
+        // We override the robotic preamble with a natural flirty AI-Guard phrase.
+        const isCompliment = lastInput && /hermosa|guapa|linda|bella|preciosa|chula|hermoso|guapo|novio|salir conmigo|casamos/i.test(lastInput.toLowerCase());
+        if (isCompliment && aiResult.response_text && !aiResult.response_text.includes('cosas preguntas')) {
+            let cleanedText = aiResult.response_text
+                .replace(/^(?:Gracias por|Eso suena|Entiendo|Me halagas|Agradezco|Vamos a|No es posible|Soy una IA|Soy un asistente|soy un bot)[^\.]*(?:\.|,)/i, '')
+                .trim();
+
+            // Strip trailing connectors uncapitalized
+            cleanedText = cleanedText.replace(/^(?:pero|así que|entonces|sin embargo)\b/i, '').trim();
+            cleanedText = cleanedText.replace(/^[,.\s]+/, '').trim();
+
+            // Capitalize first letter
+            if (cleanedText.length > 0) {
+                cleanedText = cleanedText.charAt(0).toUpperCase() + cleanedText.slice(1);
+            }
+
+            // Only prepend if the LLM didn't already output a huge block (like the categories list)
+            // Or if it did, just confidently prepend it.
+            aiResult.response_text = `¡Ay, qué cosas preguntas! 🤭✨ Pero enfoquémonos en encontrar el mejor empleo para ti...\n\n${cleanedText}`;
+        }
+
         return aiResult;
     }
 
@@ -169,7 +192,12 @@ export class AIGuard {
 
                 // 🎡 [SPECIAL CATEGORY RECOVERY]: If missing field is Category, force the list injection
                 if (isCategory) {
-                    recoveryText = `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖: \n\n${categoriesList || '[Error: No hay categorías en el sistema]'}\n\n¿Cuál eliges? 🤭✨`;
+                    const singleSpacedCats = (categoriesList || '[Error: No hay categorías]').replace(/\n\n/g, '\n');
+                    const isComplimentCtx = lastInput && /hermosa|guapa|linda|bella|preciosa|chula|hermoso|guapo|novio|salir conmigo|casamos/i.test(lastInput.toLowerCase());
+                    const categoryMsg = isComplimentCtx
+                        ? `¡Ay, qué cosas preguntas! 🤭✨ ... Pero primero, ayúdame a completar tu perfil para buscar el mejor empleo para ti:\n${singleSpacedCats}\n¿Cuál eliges? 🤭✨`
+                        : `Para que ya quedes en nuestro sistema, mira estas son las opciones que tengo para ti 💖:\n${singleSpacedCats}\n¿Cuál eliges? 🤭✨`;
+                    recoveryText = categoryMsg;
                 }
 
                 // 🎓 [SPECIAL ESCOLARIDAD RECOVERY]: If missing field is Escolaridad, show emoji list
@@ -180,14 +208,24 @@ export class AIGuard {
             }
         }
 
-        const isCompliment = lastInput && /hermosa|guapa|linda|bella|preciosa|chula|hermoso|guapo/i.test(lastInput.toLowerCase());
-        const complimentResponse = isCompliment ? "¡Ay, qué lindo! 🤭✨ me chiveas... " : "";
+        const isCompliment = lastInput && /hermosa|guapa|linda|bella|preciosa|chula|hermoso|guapo|novio|salir conmigo|casamos/i.test(lastInput.toLowerCase());
+        const complimentResponse = (isCompliment && !recoveryText.includes('qué cosas preguntas')) ? "¡Ay, qué lindo! 🤭✨ me chiveas... " : "";
+
+        // 🛡️ [INQUIRY RECOVERY]: If user asks about job details but guard forces a fallback, prepend explanation
+        const isJobInquiry = lastInput && /(?:[?¿]|\b)(d[oó]nde|cu[aá]ndo|cu[aá]nto|qu[eé]|c[oó]mo|hay|tienen|pagan|trabajo|vacantes|entrevistas?|sueldo|salario|pago|horario|ubicaci[oó]n|requisitos?)\b/i.test(lastInput.toLowerCase());
+        let inquiryResponse = "";
+        if (isJobInquiry && !isCompliment) {
+            inquiryResponse = "¡Claro! 😊 Para darte información exacta sobre vacantes o entrevistas, primero necesito completar tu registro.\n\n";
+            // Strip random joyous templates that don't match the tone of answering a question
+            recoveryText = recoveryText.replace(/^.*?(¿Me podrías|Para avanzar|Para que ya|Me hace falta|Dime|necesito el dato|Cuál es).*/i, '$1');
+            recoveryText = recoveryText.charAt(0).toUpperCase() + recoveryText.slice(1);
+        }
 
         const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
         const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
         const greetingReturn = lastInput && /hola|buen(as)? (dia|tarde|noche)|que tal/i.test(lastInput.toLowerCase()) ? `¡Hola! ${gEmoji} ` : "";
         return {
-            response_text: `${greetingReturn}${complimentResponse}${recoveryText}`,
+            response_text: `${greetingReturn}${inquiryResponse}${complimentResponse}${recoveryText}`,
             thought_process: `RECOVERY_TRIGGERED: ${reason}. Manual fallback due to AI failure.`,
             reaction: isNewFlag ? '✨' : null, // Only react on first message to reduce spark spam
             extracted_data: extracted, // 🧬 CRITICAL: Keep what the AI *did* manage to extract

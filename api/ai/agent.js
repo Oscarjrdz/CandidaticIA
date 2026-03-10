@@ -41,15 +41,30 @@ const _DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viern
 const _MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const _NUM_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
 
+function isEmoji(str) {
+    if (!str) return false;
+    return /\p{Emoji}/u.test(str);
+}
+
+// 📅 HELPER: Translates "2026-03-10" to "Martes 10 de Marzo"
+function humanizeDate(dateStr) {
+    if (!dateStr || dateStr.includes('null') || dateStr.includes('N/A')) return dateStr;
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        const date = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        const dayMatch = _DAY_NAMES[date.getDay()];
+        const monMatch = _MONTH_NAMES[date.getMonth()];
+        if (dayMatch && monMatch) {
+            return `${dayMatch} ${parseInt(parts[2])} de ${monMatch.charAt(0).toUpperCase() + monMatch.slice(1)}`;
+        }
+    }
+    return dateStr;
+}
+
 function formatRecruiterMessage(text) {
     if (!text) return text;
     // ⏰ HOURS MESSAGE: "Perfecto, para el YYYY-MM-DD tengo estas opciones..."
     if (/Perfecto.{0,60}\d{4}-\d{2}-\d{2}/i.test(text)) {
-        text = text.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_, y, m, d) => {
-            const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-            const mn = _MONTH_NAMES[date.getMonth()];
-            return `${_DAY_NAMES[date.getDay()]} ${parseInt(d)} de ${mn.charAt(0).toUpperCase() + mn.slice(1)}`;
-        });
         let slotIdx = 0;
         text = text.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${_NUM_EMOJIS[slotIdx++] || `${slotIdx}.`} `);
         text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
@@ -60,7 +75,7 @@ function formatRecruiterMessage(text) {
         }
     }
     // 🗓️ CONFIRMATION MESSAGE: "Ok [name], entonces agendamos..."
-    if (/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos/i.test(text)) {
+    if (/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos|agendamos tu cita|confirmamos tu cita|apartamos tu cita|reserve tu lugar/i.test(text)) {
         // If there's FAQ text BEFORE "Ok [name], entonces agendamos..." → split it off as msg 1
         const confirmStart = text.search(/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos/i);
         if (confirmStart > 0) {
@@ -73,18 +88,20 @@ function formatRecruiterMessage(text) {
             /(el d[ií]a\s+)([a-záéíóúüñ]+\s+\d{1,2}\s+de\s+[a-záéíóúüñ]+)/gi,
             (_, prefix, dateSpan) => `${prefix}📅 *${dateSpan.charAt(0).toUpperCase() + dateSpan.slice(1)}*`
         );
-        // Bold + ⏰ the time span: "a las 11:00 AM"
         text = text.replace(
             /(a las\s+)(\d{1,2}:\d{2}\s*(?:AM|PM))/gi,
             (_, prefix, time) => `${prefix}⏰ *${time}*`
         );
-        // Split "¿estamos de acuerdo?" as separate message (msg 3)
-        const qIdx = text.lastIndexOf('\xbf');
-        if (qIdx > 0) {
-            const body = text.substring(0, qIdx).trim();
-            const question = text.substring(qIdx).trim() + ' 🤝✨';
-            text = body + '[MSG_SPLIT]' + question;
-        }
+
+        // Strip out duplicated splits and emojis completely before rebuilding
+        text = text.replace(/\[MSG_SPLIT\]/g, ' ').replace(/🤝✨/g, '');
+        // Wipe duplicate "¿estamos de acuerdo?" if GPT wrote it itself
+        text = text.replace(/¿estamos de acuerdo\??/gi, '').trim();
+
+        // Remove trailing commas/dots
+        if (text.endsWith(',') || text.endsWith('.')) text = text.substring(0, text.length - 1);
+
+        text = text + ',[MSG_SPLIT]¿estamos de acuerdo? 🤝✨';
     }
     // 📩 GENERIC LAST-QUESTION SPLIT: If substantial FAQ answer (>60 chars) precedes a closing ¿...? question,
     // split them into separate bubbles — covers all Cita return questions (¿Qué día?, ¿Cuál horario?, etc.)
@@ -101,7 +118,7 @@ function formatRecruiterMessage(text) {
                 // Advance past any trailing emojis and spaces (they belong with msg1)
                 let splitAt = naturalEnd + 1;
                 while (splitAt < beforeQ.length &&
-                    (beforeQ.charCodeAt(splitAt) > 127 || beforeQ[splitAt] === ' ')) {
+                    (isEmoji(beforeQ[splitAt]) || beforeQ[splitAt] === ' ')) {
                     splitAt++;
                 }
                 const bodyPart = text.substring(0, splitAt).trim();
@@ -143,9 +160,10 @@ Tu objetivo técnico es obtener: {{faltantes}}.
  5. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ej: 19/05/1990)". No lo olvides.
  5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("Entiendo perfectamente") y luego re-enfoca pidiendo el dato que falta o el siguiente.
  6. PERSUASIÓN (PREGUNTAS DE VACANTES/SUELDO/LUGAR/ENTREVISTAS): Cuando el candidato pregunta algo como "¿Dónde son?", "¿Cuándo son las entrevistas?", "¿Cuánto pagan?", DEBES: (a) Responder BREVEMENTE con algo real y positivo (ej: "Las entrevistas son en la zona metropolitana de Monterrey, te confirmamos la dirección exacta cuando completemos tu registro 😊"), y (b) Redirigir amablemente al dato faltante: {{faltantes}}. NUNCA ignores la pregunta ni la respondas con la lista de categorías en lugar de una respuesta real.
- 7. LENGUAJE: PROHIBIDO decir "base de datos" o "robot". Di "nuestro sistema" o "tu registro en la plataforma".
- 8. CORTESÍA INICIAL: Si te saluda, salúdalo de vuelta amablemente antes de pedir el dato.
- 9. PREGUNTAS PERSONALES: Eres Brenda Rodríguez de Monterrey. Mantén siempre el perfil estrictamente profesional si preguntan cosas personales y regresa al tema de reclutamiento. PROHIBIDO DECIR QUE ERES UN BOT.`;
+ 7. ORDEN ESTRICTO: Siempre debes pedir el PRIMER dato de la lista de {{faltantes}}. ¡PROHIBIDO saltarte al segundo dato si el candidato evadió la pregunta o no respondió con el primero!
+ 8. LENGUAJE: PROHIBIDO decir "base de datos" o "robot". Di "nuestro sistema" o "tu registro en la plataforma".
+ 9. CORTESÍA INICIAL: Si te saluda, salúdalo de vuelta amablemente antes de pedir el dato.
+ 10. PREGUNTAS PERSONALES: Eres Brenda Rodríguez de Monterrey. Mantén siempre el perfil estrictamente profesional si preguntan cosas personales y regresa al tema de reclutamiento. PROHIBIDO DECIR QUE ERES UN BOT.`;
 
 export const DEFAULT_SYSTEM_PROMPT = `
 [PERSONALIDAD]:
@@ -743,8 +761,13 @@ ${safeDnaLines}
                                 .catch(() => { });
                         } else {
                             const lastUserMsg = historyForGpt.filter(h => h.role === 'user').slice(-1)[0];
-                            const userText = lastUserMsg?.content || '';
-                            const questionPatterns = /[?¿]|cuál|cómo|cuánto|cuándo|dónde|qué|quién|hacen|tienen|hay|incluye|es|son|dan|pagan|trabaj|horario|sueldo|salario|uniforme|transporte|beneficio|requisito|antidop/i;
+                            let userText = lastUserMsg?.content || '';
+                            try {
+                                const parsed = JSON.parse(userText);
+                                if (parsed && parsed.text) userText = parsed.text;
+                            } catch (e) { /* ignore, it's raw text */ }
+
+                            const questionPatterns = /[?¿]|cuál|cómo|cuánto|cuándo|dónde|qué|quién|hacen|tienen|hay|incluye|\bes\b|\bson\b|dan|pagan|trabaj|horario|sueldo|salario|uniforme|transporte|beneficio|requisito|antidop/i;
                             const isQuestion = questionPatterns.test(userText) && userText.length > 5;
                             if (isQuestion && responseTextVal) {
                                 processUnansweredQuestion(activeVacancyId, userText, responseTextVal, openAiKey)
@@ -962,8 +985,11 @@ ${safeDnaLines}
                                     const formattedHours = availableHoursForDate.map((h, i) => `🔹 Opción ${i + 1}: ${h}`).join('\n\n');
                                     callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo estas opciones de horario para ti:\n\n${formattedHours}\n\n¿Cuál prefieres?`;
 
-                                    // Always wipe the AI's response when we have hours to show — prevents duplicate/confusing messages
-                                    responseTextVal = "";
+                                    // 🩹 INQUIRY FIX: Do NOT wipe responseTextVal if the AI provided a legitimate FAQ answer / job inquiry response (like "Sí tenemos vales").
+                                    // Make sure we only wipe it if it was hallucinating its own hours array.
+                                    if (responseTextVal && /opciones|horario|perfecto/i.test(responseTextVal) && responseTextVal.includes('1️⃣')) {
+                                        responseTextVal = "";
+                                    }
                                 } else {
                                     // Safe fallback if literal string match fails
                                     callToAction = `Perfecto, para el ${mergedMeta.citaFecha}. ¿A qué hora te gustaría asistir de los horarios disponibles?`;
@@ -1028,12 +1054,13 @@ ${safeDnaLines}
                             const originStepName = (currentStep?.name || '').toLowerCase();
                             const isCitaStep = originStepName.includes('cita');
 
-                            if (cleanSpeech.length > 0 && !isCitaStep) {
+                            if (cleanSpeech.length > 0) {
+                                // ✅ [CITA UX FIX]: Send the AI's warm confirmation ("¡Perfecto, tu cita queda agendada!") before moving.
+                                // Previously this was suppressed for isCitaStep, which caused an empty response and triggered the error fallback.
                                 sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 }).catch((e) => {
                                     console.error('Error enviando pre-move:', e.message);
                                 });
                                 saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() }).catch(() => { });
-                            } else if (isCitaStep) {
                             }
                         }
 
@@ -1065,8 +1092,10 @@ ${safeDnaLines}
                                         const p = i + 1;
                                         if (item.type === 'text' && item.data?.text) {
                                             let finalMsg = item.data.text;
+                                            const humanDate = humanizeDate(metaDataForVars.citaFecha);
+
                                             finalMsg = finalMsg.replace(/\{\{\s*(?:nombre|name)\s*\}\}/ig, candidateData.nombreReal || candidateData.nombre || 'Candidato');
-                                            finalMsg = finalMsg.replace(/\{\{\s*citaFecha\s*\}\}/ig, metaDataForVars.citaFecha || 'fecha acordada');
+                                            finalMsg = finalMsg.replace(/\{\{\s*citaFecha\s*\}\}/ig, humanDate || 'fecha acordada');
                                             finalMsg = finalMsg.replace(/\{\{\s*citaHora\s*\}\}/ig, metaDataForVars.citaHora || 'hora acordada');
 
                                             confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat', { priority: p }));
@@ -1148,62 +1177,26 @@ ${safeDnaLines}
                                     // 📅 INTERVIEW DATES FORMATTER: Detect and reformat the cita dates message
                                     const isDateMsg = /^[¡!]?Listo\b/i.test(chainText.trim());
                                     if (isDateMsg) {
-                                        // Normalize intro phrase first
                                         chainText = chainText.replace(/Tengo entrevistas disponibles (?:para el|(?:los días)?):?/gi, 'Tengo entrevistas disponibles los días:');
-                                        // Add 📅 emoji after each numbered date line
                                         chainText = chainText.replace(/([\d️⃣🔢]+\s+[A-Za-zÀ-ú]+ \d+ de [A-Za-zÀ-ú]+)(?!\s*📅)/g, '$1 📅');
-                                        // Split greeting from "Tengo entrevistas..." onto own line
                                         chainText = chainText.replace(/(¡Listo[^!¡\n]*!?\s*[⏬⬇️]*)\s+(Tengo\b)/i, '$1\n$2');
+                                    }
 
-                                        // Split off the closing question (¿Qué día...?)
-                                        const qdiaMatch = chainText.match(/(¿Qu[eé] d[ií]a[^?]*\?)/i);
-                                        if (qdiaMatch && qdiaMatch.index > 0) {
-                                            const body = chainText.substring(0, qdiaMatch.index).trim();
-                                            const question = chainText.substring(qdiaMatch.index).trim();
-                                            if (body) cMessagesToSend.push(body);
-                                            cMessagesToSend.push(question);
-                                        } else {
-                                            cMessagesToSend.push(chainText.trim());
-                                        }
-                                    } else if (/Perfecto.{0,40}\d{4}-\d{2}-\d{2}/i.test(chainText)) {
-                                        // ⏰ HOURS FORMATTER: Detect and reformat the time-slot selection message
-                                        const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
-                                        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-                                        const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                                    // 📐 DRY: Appy shared formatting logic (replaces ~50 duplicate lines)
+                                    chainText = formatRecruiterMessage(chainText);
 
-                                        // Convert YYYY-MM-DD → "Lunes 9 de Marzo"
-                                        chainText = chainText.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_, y, m, d) => {
-                                            const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-                                            const mn = monthNames[date.getMonth()];
-                                            return `${dayNames[date.getDay()]} ${parseInt(d)} de ${mn.charAt(0).toUpperCase() + mn.slice(1)}`;
-                                        });
-
-                                        // Replace 🔹 Opción N: with number emojis
-                                        let slotIdx = 0;
-                                        chainText = chainText.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${numberEmojis[slotIdx++] || `${slotIdx}.`} `);
-
-                                        // Add ⏰ after each time slot (HH:MM AM/PM pattern)
-                                        chainText = chainText.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
-
-                                        // Split closing question using lastIndexOf('¿')
-                                        const qIdx = chainText.lastIndexOf('\xbf');
-                                        if (qIdx > 0) {
-                                            const body = chainText.substring(0, qIdx).trim();
-                                            const question = chainText.substring(qIdx).trim();
-                                            if (body) cMessagesToSend.push(body);
-                                            if (question) cMessagesToSend.push(question);
-                                        } else {
-                                            cMessagesToSend.push(chainText.trim());
-                                        }
+                                    // Interpret [MSG_SPLIT] injected by formatRecruiterMessage
+                                    if (chainText.includes('[MSG_SPLIT]')) {
+                                        chainText.split('[MSG_SPLIT]').forEach(p => { if (p.trim()) cMessagesToSend.push(p.trim()); });
                                     } else {
                                         const splitRegex = /(¿Te gustaría que (?:te )?agende.*?(?:entrevista|cita).*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
                                         const match = chainText.match(splitRegex);
 
-                                        if (match && match.index > 0) {
-                                            const part1 = chainText.substring(0, match.index).trim();
-                                            const part2 = chainText.substring(match.index).trim();
-                                            if (part1) cMessagesToSend.push(part1);
-                                            if (part2) cMessagesToSend.push(part2);
+                                        if (match) {
+                                            const beforeCta = chainText.substring(0, match.index);
+                                            const cta = chainText.substring(match.index);
+                                            if (beforeCta.trim()) cMessagesToSend.push(beforeCta.trim());
+                                            cMessagesToSend.push(cta.trim());
                                         } else {
                                             if (chainText.trim()) cMessagesToSend.push(chainText.trim());
                                         }
@@ -1213,13 +1206,18 @@ ${safeDnaLines}
 
                                     // Sequential send with delay for correct WhatsApp bubble separation
                                     for (let i = 0; i < cMessagesToSend.length; i++) {
-                                        const msgClean = String(cMessagesToSend[i]).trim();
+                                        let msgClean = String(cMessagesToSend[i]).trim();
                                         if (!msgClean || filterRegex.test(msgClean)) continue;
+
+                                        // Ensure MSG_SPLIT is cleanly removed before sending if it didn't trigger a split earlier
+                                        msgClean = msgClean.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
+
                                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
                                         if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));
                                     }
 
-                                    await saveMessage(candidateId, { from: 'me', content: nextAiResult.response_text, timestamp: new Date().toISOString() });
+                                    const safeLogText = (nextAiResult.response_text || '').replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
+                                    await saveMessage(candidateId, { from: 'me', content: safeLogText, timestamp: new Date().toISOString() });
                                 } else {
                                 }
                             } catch (e) {
@@ -1372,6 +1370,10 @@ ${safeDnaLines}
                             .replace(/{{categorias}}/g, categoriesList)
                             .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
                         systemInstruction += `\n${cerebro1Rules}\n`;
+                    }
+
+                    if (auditForMode.missingLabels.length > 0) {
+                        systemInstruction += `\n[INSTRUCCIÓN CRÍTICA FINAL]: El perfil está INCOMPLETO. Aún necesitas obtener: ${auditForMode.missingLabels.join(', ')}. TIENES PROHIBIDO despedirte o cerrar la conversación. OBLIGATORIAMENTE tu mensaje debe terminar con una pregunta para obtener el dato principal: ${auditForMode.missingLabels[0]}.\n`;
                     }
                 }
 
@@ -1579,14 +1581,14 @@ ${safeDnaLines}
         const isTechnicalOrEmpty = !resText || filterRegex.test(String(resText).trim());
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
-        if (isTechnicalOrEmpty && (!hasMoveIntent && !recruiterTriggeredMove) && !aiResult?.close_conversation && !handoverTriggered) {
+        if (isTechnicalOrEmpty && !hasMoveIntent && !recruiterTriggeredMove && !aiResult?.close_conversation && !handoverTriggered) {
             if (isRecruiterMode) {
                 // If the AI sent an FAQ Media URL but hallucinated the text away, safely append a generic CTA
                 const hasMedia = aiResult?.media_url && aiResult.media_url !== 'null';
                 if (hasMedia) {
                     responseTextVal = "Aquí está la información. 😉 ¿Te gustaría que te agende una cita para entrevista?";
                 } else {
-                    responseTextVal = "¡Disculpa! Tuve un error de red. 😅 ¿Quieres que reserve tu cita para entrevista?";
+                    responseTextVal = "¡Disculpa! Hubo un pequeño inconveniente. 😅 ¿Quieres que reserve tu cita para entrevista?";
                 }
             } else {
                 responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
@@ -1621,7 +1623,7 @@ ${safeDnaLines}
                         // Advance past trailing emojis/spaces
                         if (naturalEnd > 25) {
                             while (splitAt < beforeCta.length &&
-                                (beforeCta.charCodeAt(splitAt) > 127 || beforeCta[splitAt] === ' ')) splitAt++;
+                                (isEmoji(beforeCta[splitAt]) || beforeCta[splitAt] === ' ')) splitAt++;
                         }
                         const part1 = responseTextVal.substring(0, splitAt).trim();
                         const part2 = responseTextVal.substring(splitAt).trim();
@@ -1721,9 +1723,10 @@ ${safeDnaLines}
         const finalReaction = (aiResult?.reaction && aiResult.reaction !== 'null' && aiResult.reaction !== 'undefined') ? aiResult.reaction : null;
         let dbContentToSave = responseTextVal;
 
-        // If it's truly empty, save an invisible system space instead of ugly tags, UNLESS there's a valid reaction.
         if (!dbContentToSave) {
             dbContentToSave = finalReaction ? `[REACCIÓN: ${finalReaction}]` : ' ';
+        } else {
+            dbContentToSave = dbContentToSave.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
         }
 
         await Promise.allSettled([
@@ -1740,7 +1743,11 @@ ${safeDnaLines}
         return responseTextVal || '';
     } catch (error) {
         console.error('❌ [AI Agent] Fatal Error:', error);
-        return "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
+        const fallbackMsg = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
+        if (candidateData && candidateData.whatsapp) {
+            await sendFallback(candidateData, fallbackMsg).catch(() => { });
+        }
+        return fallbackMsg;
     }
 };
 

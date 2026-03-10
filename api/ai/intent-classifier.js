@@ -36,8 +36,8 @@ Analiza el último mensaje del usuario y el contexto para clasificarlo en una IN
 CATEGORÍAS:
 1. ATTENTION: Saludos cortos, llamados de atención o inicio de contacto.
 2. SMALL_TALK: Socialización, piropos, bromas o preguntas personales.
-3. DATA_GIVE: Entrega de información personal o profesional.
-4. QUERY: Preguntas sobre vacantes, sueldos, procesos o dudas técnicas.
+3. DATA_GIVE: Entrega de información personal, escolaridad, municipio, fechas o respuestas directas a lo que el bot preguntó. (Ej: "Secu", "Escobedo", "19 de mayo").
+4. QUERY: Preguntas hechas POR EL USUARIO sobre vacantes, sueldos, procesos, dudas técnicas. (Si el usuario solo responde con 1 o 2 palabras a una pregunta del bot, es DATA_GIVE, NO QUERY).
 5. ACCEPTANCE: El candidato ACEPTA la propuesta, vacante o cita. Puede ser explícito o implícito (ej: preguntar dirección/horario tras propuesta).
 6. REJECTION: El candidato rechaza explícitamente la vacante o propuesta actual.
 7. PIVOT: El candidato pide explícitamente ver una vacante diferente. (PROHIBIDO usar PIVOT si el candidato solo pide cambiar el DÍA o la HORA de su entrevista, eso es QUERY o ACCEPTANCE).
