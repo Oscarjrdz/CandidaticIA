@@ -56,7 +56,7 @@ function formatRecruiterMessage(text) {
         // Split closing ¿Cuál prefieres? as separate bubble
         const _qIdx = text.lastIndexOf('\xbf');
         if (_qIdx > 0) {
-            text = text.substring(0, _qIdx).trim() + '\n\x00SPLIT\x00' + text.substring(_qIdx).trim();
+            text = text.substring(0, _qIdx).trim() + '[MSG_SPLIT]' + text.substring(_qIdx).trim();
         }
     }
     // 🗓️ CONFIRMATION MESSAGE: "Ok [name], entonces agendamos..."
@@ -66,7 +66,7 @@ function formatRecruiterMessage(text) {
         if (confirmStart > 0) {
             const faqPart = text.substring(0, confirmStart).trim();
             const confirmPart = text.substring(confirmStart).trim();
-            text = faqPart + '\n\x00SPLIT\x00' + confirmPart;
+            text = faqPart + '[MSG_SPLIT]' + confirmPart;
         }
         // Bold + 📅 the day-date span: "el día martes 10 de marzo"
         text = text.replace(
@@ -83,19 +83,19 @@ function formatRecruiterMessage(text) {
         if (qIdx > 0) {
             const body = text.substring(0, qIdx).trim();
             const question = text.substring(qIdx).trim() + ' 🤝✨';
-            text = body + '\n\x00SPLIT\x00' + question;
+            text = body + '[MSG_SPLIT]' + question;
         }
     }
     // 📩 GENERIC LAST-QUESTION SPLIT: If substantial FAQ answer (>60 chars) precedes a closing ¿...? question,
     // split them into separate bubbles — covers all Cita return questions (¿Qué día?, ¿Cuál horario?, etc.)
-    if (!text.includes('\x00SPLIT\x00')) {
+    if (!text.includes('[MSG_SPLIT]')) {
         const lastQ = text.lastIndexOf('\xbf');
-        if (lastQ > 60) {
+        if (lastQ > 90) {
             const bodyPart = text.substring(0, lastQ).trim();
             const questionPart = text.substring(lastQ).trim();
-            // Only split if there's real body content (not just a greeting) before the question
-            if (bodyPart.length > 40 && questionPart.length > 5) {
-                text = bodyPart + '\n\x00SPLIT\x00' + questionPart;
+            // Only split if substantial FAQ body (not just a greeting) before the question
+            if (bodyPart.length > 90 && questionPart.length > 5) {
+                text = bodyPart + '[MSG_SPLIT]' + questionPart;
             }
         }
     }
@@ -159,7 +159,8 @@ Usa frases como: "¡Hola! 👋 Qué gusto saludarte", "¡Hola, hola! 👋 Soy la
 - FECHAS: Siempre usa el ejemplo (19/05/1990).
 - NO digas "base de datos", di "tu registro" o "nuestro sistema".
 
-[REGLA DE ADN]: Confía en [ESTADO DEL CANDIDATO(ADN)] como verdad absoluta.
+- NOMBRES: NUNCA uses el municipio, ciudad, colonia o cualquier dato diferente al nombre como forma de dirigirte al candidato. Siempre usa su nombre real del [ESTADO]. Si aún no tienes su nombre, no uses ningún dato de reemplazo.
+- CONFIRMACIÓN DE DATOS: Cuando el candidato te da un municipio/ciudad, confirma el dato con frases como "¡Perfecto, registrado! 🌟" o "Listo, anotado 😊" — NUNCA repitas como saludo el nombre de la ciudad.
 `;
 
 export const DEFAULT_ASSISTANT_PROMPT = `
@@ -1587,10 +1588,12 @@ ${safeDnaLines}
                 let messagesToSend = [];
 
                 // 1️⃣ Handle SPLIT sentinel from formatRecruiterMessage (confirmation & special splits)
-                const SENTINEL = '\x00SPLIT\x00';
+                const SENTINEL = '[MSG_SPLIT]';
                 if (responseTextVal.includes(SENTINEL)) {
                     responseTextVal.split(SENTINEL).forEach(p => { if (p.trim()) messagesToSend.push(p.trim()); });
                 } else {
+                    // Strip any leaked sentinel residue before sending, then try regex split
+                    responseTextVal = responseTextVal.replace(/\[MSG_SPLIT\]/g, ' ').trim();
                     // 2️⃣ Regex-based split for scheduling CTAs
                     const splitRegex = /(¿Te gustaría que (?:te )?agende.*?(?:entrevista|cita).*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
                     const match = responseTextVal.match(splitRegex);
