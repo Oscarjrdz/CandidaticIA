@@ -91,11 +91,24 @@ function formatRecruiterMessage(text) {
     if (!text.includes('[MSG_SPLIT]')) {
         const lastQ = text.lastIndexOf('\xbf');
         if (lastQ > 50) {
-            const bodyPart = text.substring(0, lastQ).trim();
-            const questionPart = text.substring(lastQ).trim();
-            // Split if body has real content (>50 chars) — catches FAQ answers, flirty replies, NOT bare greetings
-            if (bodyPart.length > 50 && questionPart.length > 5) {
-                text = bodyPart + '[MSG_SPLIT]' + questionPart;
+            const beforeQ = text.substring(0, lastQ);
+            // Find last natural sentence end (! or .) before the ¿
+            const lastBang = beforeQ.lastIndexOf('!');
+            const lastDot = beforeQ.lastIndexOf('.');
+            const naturalEnd = Math.max(lastBang, lastDot);
+
+            if (naturalEnd > 25) {
+                // Advance past any trailing emojis and spaces (they belong with msg1)
+                let splitAt = naturalEnd + 1;
+                while (splitAt < beforeQ.length &&
+                    (beforeQ.charCodeAt(splitAt) > 127 || beforeQ[splitAt] === ' ')) {
+                    splitAt++;
+                }
+                const bodyPart = text.substring(0, splitAt).trim();
+                const questionPart = text.substring(splitAt).trim();
+                if (bodyPart.length > 20 && questionPart.length > 5) {
+                    text = bodyPart + '[MSG_SPLIT]' + questionPart;
+                }
             }
         }
     }
