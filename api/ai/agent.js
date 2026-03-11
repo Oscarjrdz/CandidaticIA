@@ -1735,36 +1735,23 @@ ${safeDnaLines}
 
         // ── ESCOLARIDAD SAFETY NET ────────────────────────────────────────────────
         // Deterministic fallback: if GPT failed to extract escolaridad but the user's
-        // message contains a known keyword, save it directly without relying on GPT.
+        // message contains a known keyword/abbreviation, save it directly.
         if (!candidateUpdates.escolaridad && !candidateData.escolaridad) {
-            const _ESC_MAP = {
-                primaria: 'Primaria',
-                secundaria: 'Secundaria',
-                secundari: 'Secundaria',
-                preparatoria: 'Preparatoria',
-                prep: 'Preparatoria',
-                bachillerato: 'Preparatoria',
-                prepa: 'Preparatoria',
-                licenciatura: 'Licenciatura',
-                universidad: 'Licenciatura',
-                profesional: 'Licenciatura',
-                técnica: 'Técnica',
-                tecnica: 'Técnica',
-                técnico: 'Técnica',
-                tecnico: 'Técnico',
-                carrera: 'Técnica',
-                posgrado: 'Posgrado',
-                maestría: 'Posgrado',
-                maestria: 'Posgrado',
-                doctorado: 'Posgrado'
-            };
-            const escMatch = aggregatedText.toLowerCase().match(
-                /\b(primaria|secundaria|preparatoria|prepa|bachillerato|prep|universidad|licenciatura|profesional|t[eé]cnic[ao]|carrera|posgrado|maestr[ií]a|doctorado)\b/i
-            );
-            if (escMatch) {
-                const key = escMatch[1].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                const mapped = _ESC_MAP[key] || Object.entries(_ESC_MAP).find(([k]) => key.startsWith(k))?.[1];
-                if (mapped) candidateUpdates.escolaridad = mapped;
+            const _ESC_DIRECT = [
+                [/\b(primaria|prima|prim)\b/i, 'Primaria'],
+                [/\b(secundaria|secund|secu|sec)\b/i, 'Secundaria'],
+                [/\b(preparatoria|bachillerato|prepa|prep)\b/i, 'Preparatoria'],
+                [/\b(licenciatura|licenc|lic)\b/i, 'Licenciatura'],
+                [/\b(universidad)\b/i, 'Licenciatura'],
+                [/\b(t[eé]cnic[ao]|tecnica|tecnico|carrera t[eé]cnica)\b/i, 'Técnica'],
+                [/\b(posgrado|maestr[ií]a|maestria|doctorado)\b/i, 'Posgrado']
+            ];
+            const msgLower = aggregatedText.toLowerCase();
+            for (const [pattern, nivel] of _ESC_DIRECT) {
+                if (pattern.test(msgLower)) {
+                    candidateUpdates.escolaridad = nivel;
+                    break;
+                }
             }
         }
 
