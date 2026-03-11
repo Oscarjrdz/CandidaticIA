@@ -50,9 +50,6 @@
     "functions": {
         "api/**/*.js": {
             "maxDuration": 60
-        },
-        "api/gateway/connect.js": {
-            "maxDuration": 60
         }
     },
     "crons": [

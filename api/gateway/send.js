@@ -8,10 +8,6 @@
  * Supported types: chat | image | document | sticker | location
  */
 
-import makeWASocket, {
-    fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore
-} from '@whiskeysockets/baileys';
 import {
     getInstance, validateToken, makeRedisAuthState,
     saveMessageToHistory, updateInstance, GW_STATE
@@ -34,7 +30,7 @@ export default async function handler(req, res) {
         const instanceId = urlParts[4] || req.query?.instanceId;
         const msgType = urlParts[6] || req.query?.type || 'chat';
 
-        const { token, to, body, caption, filename, lat, lng, address, priority } = req.body || {};
+        const { token, to, body, caption, filename, lat, lng, address } = req.body || {};
 
         // ── Validation ────────────────────────────────────────────────────────
         if (!instanceId) return res.status(400).json({ success: false, error: 'instanceId requerido.' });
@@ -54,6 +50,13 @@ export default async function handler(req, res) {
             });
         }
 
+        // ── Dynamic import — Baileys never bundled by Vercel esbuild ──────────
+        const {
+            default: makeWASocket,
+            fetchLatestBaileysVersion,
+            makeCacheableSignalKeyStore
+        } = await import('@whiskeysockets/baileys');
+
         // ── Get active socket or recreate ─────────────────────────────────────
         const { state, saveCreds } = await makeRedisAuthState(instanceId);
         const { version } = await fetchLatestBaileysVersion();
@@ -62,10 +65,10 @@ export default async function handler(req, res) {
             version,
             auth: {
                 creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, console)
+                keys: makeCacheableSignalKeyStore(state.keys, { level: () => {} })
             },
             printQRInTerminal: false,
-            browser: ['Candidatic Gateway', 'Chrome', '1.0.0'],
+            browser: ['Candidatic Gateway', 'Chrome', '120.0'],
             syncFullHistory: false
         });
 
