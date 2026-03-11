@@ -229,23 +229,9 @@ const InstanceCard = ({ instance, fullToken, onDelete, onRefresh, showToast }) =
     const stateConf = STATE_CONFIG[liveStatus.state] || STATE_CONFIG.DISCONNECTED;
     const StateIcon = stateConf.icon;
 
-    // Poll status every 10s
-    useEffect(() => {
-        const poll = setInterval(async () => {
-            try {
-                const res = await api.getStatus(instance.instanceId);
-                if (res.success) {
-                    setLiveStatus({
-                        state: res.state,
-                        messagesIn: res.messagesIn || 0,
-                        messagesOut: res.messagesOut || 0,
-                        phone: res.phone
-                    });
-                }
-            } catch {}
-        }, 10000);
-        return () => clearInterval(poll);
-    }, [instance.instanceId]);
+    // ⚠️ NO auto-polling — was causing cascading re-renders across the whole app.
+    // Status refreshes when user clicks "Actualizar" manually or when QR modal closes.
+
 
     const handleDelete = async () => {
         if (!window.confirm(`¿Eliminar la instancia "${instance.name}"? Esta acción no se puede deshacer.`)) return;
