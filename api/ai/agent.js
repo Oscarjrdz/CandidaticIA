@@ -842,19 +842,23 @@ ${safeDnaLines}
                             return;
                         }
 
-                        // 2. Send intro + each vacancy's messageDescription
-                        const introMsg = `¡Claro, ${candFirstName}! 🌟 Déjame mostrarte lo que tenemos disponible ahora mismo:`;
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, introMsg, 'chat', { priority: 1 });
-                        saveMessage(candidateId, { from: 'me', content: introMsg, timestamp: new Date().toISOString() }).catch(() => {});
-
-                        for (let i = 0; i < vacancyIds.length; i++) {
-                            await new Promise(r => setTimeout(r, 700));
-                            const vac = await getVacancyById(vacancyIds[i]);
+                        // 2. Build compact vacancy list: name + company + category only
+                        const vacancyLines = [];
+                        for (const vid of vacancyIds) {
+                            const vac = await getVacancyById(vid);
                             if (!vac) continue;
-                            const vacMsg = vac.messageDescription || vac.description || `📌 ${vac.name} — ${vac.company}`;
-                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, vacMsg, 'chat', { priority: 1 });
-                            saveMessage(candidateId, { from: 'me', content: vacMsg, timestamp: new Date().toISOString() }).catch(() => {});
+                            vacancyLines.push(`📌 *${vac.name}*\n🏢 ${vac.company}${vac.category ? `\n📂 ${vac.category}` : ''}`);
                         }
+
+                        if (!vacancyLines.length) {
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp,
+                                `¡Claro, ${candFirstName}! 😊 En este momento estamos actualizando nuestras vacantes. ¡Te avisaré en cuanto tengamos algo nuevo! 🌟`, 'chat');
+                            return;
+                        }
+
+                        const listMsg = `¡Claro, ${candFirstName}! 🌟 Estas son nuestras vacantes disponibles:\n\n${vacancyLines.join('\n\n')}`;
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, listMsg, 'chat', { priority: 1 });
+                        saveMessage(candidateId, { from: 'me', content: listMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
                         // 3. Close with a hook
                         await new Promise(r => setTimeout(r, 700));
