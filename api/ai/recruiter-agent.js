@@ -220,6 +220,13 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         });
         const hasFutureCalendarOptions = futureCalendarOptions.length > 0;
 
+        // ── ESCOLARIDAD PRE-MISSION ───────────────────────────────────────────────
+        // If escolaridad is missing, inject a top-priority instruction so the
+        // recruiter asks for it BEFORE presenting vacancies.
+        const escolaridadMission = !candidateData.escolaridad
+            ? `\n[⚠️ MISIÓN URGENTE - PASO PREVIO OBLIGATORIO]:\nEl candidato NO tiene escolaridad registrada. DEBES capturarla ANTES de hablar de vacantes.\n- Si el candidato NO la dio en este mensaje: pregúntala con esta lista VERTICAL (con salto de línea real entre cada opción):\n🎒 Primaria\n🏫 Secundaria\n🎓 Preparatoria\n📚 Licenciatura\n🛠️ Técnica\n🧠 Posgrado\n- Si el candidato YA la dio (ej: "secu", "prepa", "licenciatura"): extráela en extracted_data.escolaridad y CONTINÚA con el objetivo del paso.`
+            : '';
+
         let systemPrompt = `
 [FUENTES DE VERDAD - CONSULTAR ANTES DE RESPONDER]:
 
@@ -235,6 +242,7 @@ ${JSON.stringify(vacancyContextForJson)}
 ${RECRUITER_IDENTITY}
 
 ${adnContext}
+${escolaridadMission}
 ${repetitionShield}
 
 [OPCIONES DE AGENDA DISPONIBLES]:
