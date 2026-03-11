@@ -178,6 +178,22 @@ function formatRecruiterMessage(text) {
 
         text = text + ',[MSG_SPLIT]¿estamos de acuerdo? 🤝✨';
     }
+    // 🎯 FAQ CLOSING QUESTION SAFETY NET: If the bot answered an FAQ but forgot the
+    // scheduling question, inject it as a second bubble.
+    // Conditions: long enough to be a real FAQ answer, no existing ¿ question,
+    // not a handover/greeting/vacancy description/escolaridad/date list.
+    if (!text.includes('[MSG_SPLIT]') && !text.includes('\xbf')) {
+        const isFaqAnswer = text.length > 80
+            && !/(?:seleccionado|OMG|está PERFECTO|escolaridad|Primaria|🎒|🏫|📚|🛠|🧠)/i.test(text)
+            && !/(?:📅\s*1️⃣|1️⃣\s*Lunes|1️⃣\s*Martes|1️⃣\s*Miércoles|1️⃣\s*Jueves)/i.test(text)
+            && !/(?:\d{1,2}:\d{2}\s*(?:AM|PM))/i.test(text)   // no horario list
+            && !/(?:ESTAMOS CONTRATANDO|vacante que encontré|comparto la vacante)/i.test(text) // not vacancy intro
+            && !/(?:Hola.*soy.*Lic|Para comenzar|buen[ao]s)/i.test(text);  // not greeting
+        if (isFaqAnswer) {
+            text = text.trimEnd() + '[MSG_SPLIT]¿Te gustaría agendar tu entrevista? 😊';
+        }
+    }
+
     // 📩 GENERIC LAST-QUESTION SPLIT: If substantial FAQ answer (>60 chars) precedes a closing ¿...? question,
     // split them into separate bubbles — covers all Cita return questions (¿Qué día?, ¿Cuál horario?, etc.)
     if (!text.includes('[MSG_SPLIT]')) {
