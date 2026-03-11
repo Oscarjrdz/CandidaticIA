@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut,
-    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical
+    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi
 } from 'lucide-react';
 import {
     DndContext,
@@ -36,6 +36,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
     { id: 'post-maker', label: 'Post Maker', icon: Layout, position: 'top' },
     { id: 'users', label: 'Usuarios', icon: User, position: 'top' },
+    { id: 'gateway', label: 'Gateway WA', icon: Wifi, position: 'top' },
     { id: 'settings', label: 'Settings', icon: Settings, position: 'bottom' }
 ];
 

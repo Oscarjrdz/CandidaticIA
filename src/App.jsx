@@ -14,6 +14,7 @@ import BotIASection from './components/BotIASection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import ProjectsSection from './components/ProjectsSection';
 import ByPassSection from './components/ByPassSection';
+import GatewaySection from './components/GatewaySection';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import LoginPage from './components/LoginPage';
 import LandingPage from './components/LandingPage';
@@ -128,7 +129,8 @@ function App() {
                                 : activeSection === 'media-library' ? 'Biblioteca Multimedia'
                                   : activeSection === 'projects' ? 'Proyectos'
                                     : activeSection === 'bypass' ? 'Sistema ByPass'
-                                      : 'Configuración'}
+                                      : activeSection === 'gateway' ? 'Gateway WhatsApp'
+                                        : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
@@ -138,7 +140,8 @@ function App() {
                           : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                             : activeSection === 'projects' ? 'Gestión y organización de proyectos'
                               : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos a proyectos'
-                                : 'Configuración del Sistema'
+                                : activeSection === 'gateway' ? 'Gestión de instancias WhatsApp independientes'
+                                  : 'Configuración del Sistema'
                   }
                 </p>
               </div>
@@ -200,6 +203,8 @@ function App() {
             <ProjectsSection showToast={showToast} />
           ) : activeSection === 'bypass' ? (
             <ByPassSection showToast={showToast} />
+          ) : activeSection === 'gateway' ? (
+            <GatewaySection showToast={showToast} />
           ) : (
             <SettingsSection
               instanceId={instanceId}
