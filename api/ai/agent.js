@@ -134,6 +134,10 @@ function formatRecruiterMessage(text) {
     // Normalize any header variant GPT uses → canonical "Tengo entrevistas los días:"
     text = text.replace(/Tengo entrevistas disponibles (?:para el|los d[ií]as):/gi, 'Tengo entrevistas los días:');
     text = text.replace(/Tengo entrevistas (?:disponibles\s+)?(?:para el|el):/gi, 'Tengo entrevistas los días:');
+    // Strip stray "para el:" or "para:" that GPT appends after the header
+    // e.g. "Tengo entrevistas los días: para el:" → "Tengo entrevistas los días:"
+    text = text.replace(/(Tengo entrevistas los d[ií]as:)\s*para\s+el:/gi, '$1');
+    text = text.replace(/(Tengo entrevistas los d[ií]as:)\s*para:/gi, '$1');
 
     // ⏰ HOURS MESSAGE: detect when GPT lists time slots (may use 🔹 or number emojis)
     // Trigger is broader: GPT humanizes dates so outputs no YYYY-MM-DD.
