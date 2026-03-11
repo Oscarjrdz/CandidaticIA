@@ -1472,9 +1472,20 @@ ${safeDnaLines}
                                 await new Promise(r => setTimeout(r, 600));
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, farewellPart2, 'chat', { priority: 1 });
                                 saveMessage(candidateId, { from: 'me', content: farewellPart2, timestamp: new Date().toISOString() }).catch(() => {});
-                                // Clear vacancy linkage so candidate is no longer tied to a specific vacancy
+                                // Clear vacancy linkage — both top-level AND projectMetadata (where the UI column reads from)
                                 candidateUpdates.currentVacancyName = null;
                                 candidateUpdates.currentVacancyIndex = null;
+                                // Also wipe inside projectMetadata so the Kanban/table column clears
+                                if (!candidateUpdates.projectMetadata) {
+                                    candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
+                                }
+                                candidateUpdates.projectMetadata.currentVacancyName = null;
+                                candidateUpdates.projectMetadata.currentVacancyIndex = null;
+                                // Sync projectMetadata store explicitly
+                                updateProjectCandidateMeta(activeProjectId, candidateId, {
+                                    currentVacancyName: null,
+                                    currentVacancyIndex: null
+                                }).catch(() => {});
                             } catch (e) { console.error('[RECRUITER BRAIN] Farewell msg error:', e.message); }
                         }
 
