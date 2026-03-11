@@ -1336,13 +1336,14 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                         onKeyDown={(e) => {
                             if (e.key === 'Escape') setOpenStepConfig(null);
                         }}
-                        tabIndex={0}
-                        ref={(el) => el && el.focus()} // auto focus for keydown
                         onClick={(e) => {
                             if (e.target === e.currentTarget) setOpenStepConfig(null);
                         }}
                     >
-                        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-4xl border border-slate-200 dark:border-slate-800 overflow-hidden relative">
+                        <div
+                            className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-4xl border border-slate-200 dark:border-slate-800 overflow-hidden relative"
+                            onMouseDown={(e) => e.stopPropagation()}
+                        >
                             {/* X Close Button */}
                             <button
                                 onClick={() => setOpenStepConfig(null)}
@@ -1386,8 +1387,9 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                         <textarea
                                             value={stepPrompt}
                                             onChange={(e) => setStepPrompt(e.target.value)}
-                                            className="w-full bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-2xl p-5 text-base focus:ring-4 focus:ring-[#10a37f]/20 focus:border-[#10a37f] outline-none resize-none min-h-[400px]"
+                                            className="w-full bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-200 dark:border-slate-700 rounded-2xl p-5 text-base focus:ring-4 focus:ring-[#10a37f]/20 focus:border-[#10a37f] outline-none resize-none min-h-[400px] select-text cursor-text"
                                             placeholder="Ej: Saluda a {{Candidato}} y pregúntale si le interesa la vacante de {{Vacante}}..."
+                                            onMouseDown={(e) => e.stopPropagation()}
                                         />
                                     </div>
                                 </div>
