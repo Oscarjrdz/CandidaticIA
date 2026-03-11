@@ -1206,51 +1206,51 @@ ${safeDnaLines}
 
                             if (confArray.length > 0) {
                                 const metaDataForVars = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
+                                const humanDate = humanizeDate(metaDataForVars.citaFecha);
 
-                                const confirmPromises = [];
+                                // ✅ SEQUENTIAL with stagger — guarantees WhatsApp arrival order
                                 for (let i = 0; i < confArray.length; i++) {
                                     const item = confArray[i];
                                     if (!item.enabled) continue;
 
                                     try {
-                                        // Incremental priority for guaranteed order
-                                        const p = i + 1;
                                         if (item.type === 'text' && item.data?.text) {
                                             let finalMsg = item.data.text;
-                                            const humanDate = humanizeDate(metaDataForVars.citaFecha);
-
                                             finalMsg = finalMsg.replace(/\{\{\s*(?:nombre|name)\s*\}\}/ig, candidateData.nombreReal || candidateData.nombre || 'Candidato');
                                             finalMsg = finalMsg.replace(/\{\{\s*citaFecha\s*\}\}/ig, humanDate || 'fecha acordada');
                                             finalMsg = finalMsg.replace(/\{\{\s*citaHora\s*\}\}/ig, metaDataForVars.citaHora || 'hora acordada');
 
-                                            confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat', { priority: p }));
-                                            confirmPromises.push(saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() }));
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat', { priority: 1 });
+                                            saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() }).catch(() => { });
                                         }
                                         else if (item.type === 'image' && item.data?.url) {
                                             let imgUrl = item.data.url;
-                                            // Resolve relative /api/ paths → absolute URL for UltraMsg
                                             if (imgUrl.startsWith('/')) {
                                                 imgUrl = `${process.env.NEXT_PUBLIC_API_URL || 'https://candidatic-ia.vercel.app'}${imgUrl}`;
                                             } else if (imgUrl.includes('candidatic.ia') && !imgUrl.includes('vercel.app')) {
                                                 imgUrl = imgUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
                                             }
-                                            confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, imgUrl, 'image', { priority: p }));
-                                            confirmPromises.push(saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${imgUrl}]`, timestamp: new Date().toISOString() }));
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, imgUrl, 'image', { priority: 1 });
+                                            saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${imgUrl}]`, timestamp: new Date().toISOString() }).catch(() => { });
                                         }
                                         else if (item.type === 'location' && item.data?.lat && item.data?.lng) {
-                                            confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {
                                                 lat: item.data.lat,
                                                 lng: item.data.lng,
                                                 address: item.data.address || 'Oficina',
-                                                priority: p
-                                            }));
-                                            confirmPromises.push(saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() }));
+                                                priority: 1
+                                            });
+                                            saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() }).catch(() => { });
+                                        }
+
+                                        // Stagger between messages to guarantee WhatsApp delivery order
+                                        if (i < confArray.length - 1) {
+                                            await new Promise(r => setTimeout(r, 800));
                                         }
                                     } catch (err) {
-                                        console.error(`[RECRUITER BRAIN] ❌ Error preparando modulo confirmación (${item?.type}):`, err.message);
+                                        console.error(`[RECRUITER BRAIN] ❌ Error enviando confirmación (${item?.type}):`, err.message);
                                     }
                                 }
-                                await Promise.allSettled(confirmPromises);
                             }
                         }
 
