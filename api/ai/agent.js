@@ -127,6 +127,12 @@ function formatRecruiterMessage(text) {
         /(?<!📅\s*)(1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)\s+(Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/gi,
         (_, num, day) => `📅 ${num} ${day}`
     );
+    // Strip stray 'o' connector words GPT inserts between date items
+    // e.g. "Martes 10 de Marzo o\n" → "Martes 10 de Marzo\n"
+    text = text.replace(/\s+\bo\b\s*(?=\n|$|📅|1️⃣|2️⃣|3️⃣)/gm, '');
+    // Also fix the header phrase
+    text = text.replace(/Tengo entrevistas disponibles para el:/gi, 'Tengo entrevistas los días:');
+    text = text.replace(/Tengo entrevistas el:/gi, 'Tengo entrevistas los días:');
 
     // ⏰ HOURS MESSAGE: detect when GPT lists time slots (may use 🔹 or number emojis)
     // Trigger is broader: GPT humanizes dates so outputs no YYYY-MM-DD.
