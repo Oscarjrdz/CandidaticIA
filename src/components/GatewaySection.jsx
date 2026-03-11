@@ -22,9 +22,9 @@ const api = {
     deleteInstance: (instanceId) => fetch(`/api/gateway/instances?instanceId=${instanceId}`, {
         method: 'DELETE'
     }).then(r => r.json()),
-    connectInstance: (instanceId, token) => fetch('/api/gateway/connect', {
+    connectInstance: (instanceId) => fetch('/api/gateway/connect', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ instanceId, token })
+        body: JSON.stringify({ instanceId })
     }).then(r => r.json()),
     getQR: (instanceId) => fetch(`/api/gateway/connect?instanceId=${instanceId}`).then(r => r.json()),
     getStatus: (instanceId) => fetch(`/api/gateway/status?instanceId=${instanceId}`).then(r => r.json()),

@@ -8,7 +8,7 @@
 
 import {
     getInstance, updateInstance, storeQR, getQR,
-    makeRedisAuthState, validateToken, saveMessageToHistory,
+    makeRedisAuthState, saveMessageToHistory,
     GW_STATE
 } from './session-engine.js';
 
@@ -38,13 +38,10 @@ export default async function handler(req, res) {
 
         // ── POST: Start connection and WAIT for QR ────────────────────────────
         if (req.method === 'POST') {
-            const { instanceId, token } = req.body || {};
-            if (!instanceId || !token) {
-                return res.status(400).json({ success: false, error: 'instanceId y token requeridos.' });
+            const { instanceId } = req.body || {};
+            if (!instanceId) {
+                return res.status(400).json({ success: false, error: 'instanceId requerido.' });
             }
-
-            const valid = await validateToken(instanceId, token);
-            if (!valid) return res.status(401).json({ success: false, error: 'Token inválido.' });
 
             const instance = await getInstance(instanceId);
             if (!instance) return res.status(404).json({ success: false, error: 'Instancia no encontrada.' });
@@ -64,10 +61,18 @@ export default async function handler(req, res) {
             const qrBase64 = await _startAndWaitForQR(instanceId, instance.webhookUrl);
 
             if (!qrBase64) {
+                // Check if we connected without QR (existing session)
+                const updated = await getInstance(instanceId);
+                if (updated?.state === GW_STATE.CONNECTED) {
+                    return res.status(200).json({
+                        success: true,
+                        state: GW_STATE.CONNECTED,
+                        phone: updated.phone
+                    });
+                }
                 return res.status(504).json({
                     success: false,
                     error: 'Timeout generando QR. Intenta de nuevo.',
-                    state: instance.state
                 });
             }
 
