@@ -122,11 +122,15 @@ function formatRecruiterMessage(text, candidateData = null) {
         }
     }
 
-    // 📅 DATE LIST: Add 📅 to numbered day lines if GPT forgot it
-    // Matches: "1️⃣ Lunes 2 de Marzo" or "2️⃣ Martes..." without a leading 📅
+    // 📅 DATE LIST: ensure number-emoji day lines have no leading 📅 (user preference)
+    // Also strip any trailing 📅 GPT appends after the date text
     text = text.replace(
-        /(?<!📅\s*)(1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)\s+(Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/gi,
-        (_, num, day) => `📅 ${num} ${day}`
+        /📅\s*(1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)/g,
+        '$1'  // remove leading 📅 before number emoji
+    );
+    text = text.replace(
+        /((1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)[^\n]*)\s*📅\s*/g,
+        '$1'  // remove trailing 📅 after date text
     );
     // Strip stray 'o' connector words GPT inserts between date items
     // e.g. "Martes 10 de Marzo o\n" or a lone "o" line → removed
