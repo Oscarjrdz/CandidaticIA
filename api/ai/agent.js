@@ -62,7 +62,7 @@ function humanizeDate(dateStr) {
     return dateStr;
 }
 
-function formatRecruiterMessage(text) {
+function formatRecruiterMessage(text, candidateData = null) {
     if (!text) return text;
 
     // 📅 HUMANIZE raw YYYY-MM-DD dates that GPT leaked into the output
@@ -197,9 +197,17 @@ function formatRecruiterMessage(text) {
     // answering a job-related FAQ (mentions salary, schedule, benefits, location, or
     // requirements). This avoids false positives on brain-data-collection messages.
     if (!text.includes('[MSG_SPLIT]') && !text.includes('\xbf')) {
-        const isJobFaqAnswer =
+        // Gate 1: Candidate must have a complete profile (nombre + municipio + escolaridad)
+        const hasCompleteProfile = !!(
+            candidateData &&
+            (candidateData.nombreReal || candidateData.nombre) &&
+            candidateData.municipio &&
+            candidateData.escolaridad
+        );
+
+        const isJobFaqAnswer = hasCompleteProfile
             // Must be long enough to be a real answer
-            text.length > 80
+            && text.length > 80
             // Must mention at least one job-specific topic (positive signal)
             && /(?:sueldo|salario|pago semanal|pago quincenal|\$\s*\d|💰|prestaciones|seguro\s+(?:médico|social|imss)|vacaciones|aguinaldo|comedor|transporte|bono|vales|uniforme|fondo de ahorro|caja de ahorro|turno|horario|jornada|hrs\b|horas de trabajo|lunes a viernes|lunes a jueves|ubicaci[oó]n|direcci[oó]n|zona\b|calzada|calle\s+\w|colonia\s+\w|planta\b|plantar|documentos|papeler[ií]a|requisitos|experiencia\s+(?:requerida|necesaria|mínima)|entrevista inmediata)/i.test(text)
             // Must NOT already have a scheduling question somewhere
@@ -828,7 +836,7 @@ ${safeDnaLines}
                             .replace(/\n?\"unanswered_question\":\s*\".+\"/gi, '')
                             .trim();
                         // 📐 Apply shared formatter (hours format, ✅ list normalization)
-                        responseTextVal = formatRecruiterMessage(responseTextVal);
+                        responseTextVal = formatRecruiterMessage(responseTextVal, candidateData);
                         aiResult.response_text = responseTextVal;
                     }
 
@@ -1314,7 +1322,7 @@ ${safeDnaLines}
                                     }
 
                                     // 📐 DRY: Appy shared formatting logic (replaces ~50 duplicate lines)
-                                    chainText = formatRecruiterMessage(chainText);
+                                    chainText = formatRecruiterMessage(chainText, candidateData);
 
                                     // Interpret [MSG_SPLIT] injected by formatRecruiterMessage
                                     if (chainText.includes('[MSG_SPLIT]')) {
@@ -1541,7 +1549,7 @@ ${safeDnaLines}
                                 tokens: gptResult.usage?.total_tokens || 0
                             });
                         }
-                        responseTextVal = formatRecruiterMessage(aiResult.response_text);
+                        responseTextVal = formatRecruiterMessage(aiResult.response_text, candidateData);
                     } catch (err) {
                         console.error('[GPT BRAIN] JSON Parse Fail:', err.message);
                         throw new Error('GPT returned invalid JSON');
@@ -1658,7 +1666,7 @@ ${safeDnaLines}
                     categoriesList
                 };
                 aiResult = AIGuard.validate(null, fbContext);
-                responseTextVal = formatRecruiterMessage(aiResult?.response_text);
+                responseTextVal = formatRecruiterMessage(aiResult?.response_text, candidateData);
             }
         }
 
@@ -1670,7 +1678,7 @@ ${safeDnaLines}
 
         let deliveryPromise = Promise.resolve();
         // 📐 LAST-MILE FORMATTER: Ensure formatting is applied regardless of which code path built responseTextVal
-        if (responseTextVal) responseTextVal = formatRecruiterMessage(responseTextVal);
+        if (responseTextVal) responseTextVal = formatRecruiterMessage(responseTextVal, candidateData);
         let resText = String(responseTextVal || '').trim();
 
         // 🧹 MOVE TAG SANITIZER: Strip internal move tags from outbound messages
