@@ -986,17 +986,26 @@ ${safeDnaLines}
                 if (!hasMoveTag) {
                     const lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
                     const botText = (lastBotMsg?.content || '').toLowerCase();
-                    const isInterviewInvite = /agendar|agendamos|te queda bien|estamos de acuerdo/i.test(botText);
+                    const isInterviewInvite = /agendar|agendamos|te queda bien|estamos de acuerdo|agendo una cita|aparte un lugar|avanzamos con tu cita|te confirmo tu cita/i.test(botText);
 
                     const isUserAffirmative = /^(si|sí|claro|por supuesto|obvio|va|dale|ok|okay|sipi|simon|simón|me parece bien|está bien|perfecto|excelente|adelante)/i.test(aggregatedText.trim());
 
                     // Let's loosen the restriction here. If the user is affirmative AND this is a step 
-                    // where Brenda might simply "accept" (Filtro Step), we can just force the move.
+                    // where Brenda might simply "accept" (Filtro Step or Citados retraction flow), we can just force the move.
                     const originStepName = (currentStep?.name || '').toLowerCase();
                     const isFiltro = originStepName.includes('filtro') || originStepName.includes('inicio') || originStepName.includes('contacto');
+                    const isCitadosStep = originStepName.includes('citado');
 
                     if ((isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative)) || (isFiltro && isUserAffirmative)) {
                         hasMoveTag = true;
+                        inferredAcceptance = true;
+                    }
+
+                    // 🎯 CITADOS RETRACTION ACCEPTANCE: If in Citados and bot offered a new vacancy
+                    // and candidate said Sí → move to Cita step
+                    if (!hasMoveTag && isCitadosStep && isUserAffirmative && isInterviewInvite) {
+                        hasMoveTag = true;
+                        extractedMoveTarget = 'Cita';
                         inferredAcceptance = true;
                     }
 
@@ -1229,6 +1238,18 @@ ${safeDnaLines}
                         recruiterTriggeredMove = true;
                         candidateUpdates.stepId = nextStep.id;
                         candidateUpdates.projectId = activeProjectId; // Keep them in project
+
+                        // 🔄 CITADOS→CITA RESET: When retraction from Citados sends candidate back to Cita
+                        // for a new vacancy, clear the old appointment data so the scheduling flow starts fresh.
+                        const fromCitados = (currentStep?.name || '').toLowerCase().includes('citado');
+                        const toCita = (nextStep?.name || '').toLowerCase().includes('cita') && !nextStep.name.toLowerCase().includes('citado');
+                        if (fromCitados && toCita) {
+                            if (!candidateUpdates.projectMetadata) {
+                                candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
+                            }
+                            candidateUpdates.projectMetadata.citaFecha = null;
+                            candidateUpdates.projectMetadata.citaHora = null;
+                        }
 
                         // 🔔 PRE-SCHEDULE REMINDERS: Register reminder timestamps in Redis Sorted Set
                         // (fire-and-forget — never block the main confirmation flow)
