@@ -20,6 +20,10 @@
             "destination": "/api/gateway/send"
         },
         {
+            "source": "/api/gateway/webhook/:instanceId",
+            "destination": "/api/gateway/webhook"
+        },
+        {
             "source": "/api/:path*",
             "destination": "/api/:path*"
         }
