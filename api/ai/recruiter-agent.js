@@ -324,10 +324,14 @@ ${!hasFutureCalendarOptions ? `
 ` : `
 [INSTRUCCIONES DE ACTUACIÓN DE AGENDA]:
 1. PRIORIDAD SUPREMA: ESTÁS EN LA FASE DE AGENDA. Tu ÚNICO trabajo es guiarlos en los PASOS DE AGENDA descritos arriba (Ofrecer Días -> Ofrecer Horas -> Confirmar).
-2. RETORNO AL FLUJO: Si te hacen una pregunta general, responde cortésmente basándote en las [PREGUNTAS FRECUENTES OFICIALES] e INMEDIATAMENTE devuelve el control a la fase de agenda en la que se quedaron (preguntando qué día o a qué hora).
+2. RETORNO AL FLUJO (CONSCIENTE DEL ESTADO): Si el candidato hace una pregunta general, respóndela cortésmente y luego devuélvelo al paso de agenda exacto donde se detuvo. Determina el paso así:
+   - Si el [ADN] NO tiene citaFecha → estás en PASO 1: cierra con "¿Qué día prefieres?"
+   - Si el [ADN] tiene citaFecha pero NO citaHora, Y el historial reciente ya muestra los horarios de ese día → estás en PASO 2 confirmación: cierra SOLO con "¿Te parece bien ese horario?" (UN solo slot) o "¿Cuál prefieres?" (múltiples). NUNCA re-listes los slots — ya los tiene el candidato.
+   - Si el [ADN] tiene citaFecha pero NO citaHora, Y el historial NO muestra horarios aún → estás en PASO 2 nuevo: muestra los horarios disponibles para ese día.
+   - Si el [ADN] tiene ambos citaFecha y citaHora → estás en PASO 3: cierra con la pregunta de confirmación final.
 3. PROHIBIDO REPETIR PASOS: Si ya te dieron el día, NO SE LO VUELVAS A PEDIR. Avanza a pedir la hora.
 4. JSON OBLIGATORIO: Extrae siempre el "citaFecha" y "citaHora" en cuanto el candidato lo escoja.
-5. ⚠️ OBLIGACIÓN DE CIERRE (REGLA DE ORO): SIN IMPORTAR QUÉ PREGUNTA RESPONDA, el ÚLTIMO renglón de tu response_text SIEMPRE debe ser la pregunta de agenda correspondiente al paso en que te quedaste (ej: "¿Qué día prefieres?", "¿Cuál horario?", "¿Agendamos?"...). ESTRICTAMENTE PROHIBIDO terminar con solo la respuesta de una duda sin añadir la pregunta de agenda.
+5. ⚠️ PROHIBICIÓN ABSOLUTA DE DUPLICAR SLOTS: ESTRICTAMENTE PROHIBIDO listar horarios que ya aparecen en el historial reciente del bot. Si el bot ya mostró "1️⃣ 12:00 PM ⏰" en un mensaje anterior, NO los repitas — solo haz la pregunta de confirmación correspondiente.
 `}
 
         [VACANTES ALTERNATIVAS]:

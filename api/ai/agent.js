@@ -82,6 +82,19 @@ function formatRecruiterMessage(text, candidateData = null) {
         }
     }
 
+    // 🛡️ FAQ+DUPLICATE-SLOT GUARD: When GPT correctly answered an FAQ and asked
+    // "¿Te parece bien ese horario?" but then also appended a redundant slot listing
+    // (e.g. "Perfecto, para el Jueves 12... tengo estas opciones de horario: 1️⃣ 12:00 PM...")
+    // → strip everything from the duplicate block onwards.
+    {
+        const hasConfirmQuestion = /Te parece bien ese horario|¿Te parece bien.*horario/i.test(text);
+        const dupSlotIdx = text.search(/(?:\n|^)\s*(?:Perfecto[,.]?\s+)?[Pp]ara el\s+.{5,40}\s+tengo estas opciones de horario/im);
+        if (hasConfirmQuestion && dupSlotIdx > 20) {
+            text = text.substring(0, dupSlotIdx).trim();
+        }
+    }
+
+
     // 🎓 ESCOLARIDAD LIST: Force vertical format OR inject if GPT forgot the list entirely
     const ESC_LIST = '\n🎒 Primaria\n🏫 Secundaria\n🎓 Preparatoria\n📚 Licenciatura\n🛠️ Técnica\n🧠 Posgrado';
     const hasAnyEscEmoji = /(?:🎒|🏫|📚|🛠|🧠)/.test(text);
