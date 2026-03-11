@@ -1209,12 +1209,17 @@ ${safeDnaLines}
                             const isCitaStep = originStepName.includes('cita');
 
                             if (cleanSpeech.length > 0) {
-                                // ✅ [CITA UX FIX]: Send the AI's warm confirmation ("¡Perfecto, tu cita queda agendada!") before moving.
-                                // Previously this was suppressed for isCitaStep, which caused an empty response and triggered the error fallback.
-                                sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 }).catch((e) => {
+                                // ✅ [CITA UX FIX]: AWAIT the AI's warm confirmation so it always
+                                // arrives BEFORE the module confirmation messages (papelería, image, location).
+                                // Previously this was fire-and-forget, causing module messages to overtake it.
+                                try {
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 });
+                                } catch (e) {
                                     console.error('Error enviando pre-move:', e.message);
-                                });
+                                }
                                 saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() }).catch(() => { });
+                                // 🕐 Small stagger so WhatsApp sequences this bubble before module messages
+                                await new Promise(r => setTimeout(r, 300));
                             }
                         }
 
