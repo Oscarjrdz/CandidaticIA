@@ -772,6 +772,16 @@ ${safeDnaLines}
 
             let recruiterTriggeredMove = false;
 
+            // 🤫 NO INTERESA SILENCE: if candidate is in 'no interesa' and sends a farewell, stay silent
+            const currentStepNameLower = (currentStep?.name || '').toLowerCase();
+            const isNoInteresaStep = currentStepNameLower.includes('no interesa');
+            const FAREWELL_PATTERNS = /^(adiós|adios|hasta luego|bye|chao|gracias|ok gracias|okas|oks|hasta pronto|nos vemos|cuídate|cuidate|hasta la próxima|hasta la proxima|salud[o]?s?|saludos|buen[ao]s? días|buen[ao]s? tarde|buen[ao]s? noche|buenas|k|q|ok|👋|🙋|😊|graciass|graciaas)\s*[!.]*$/i;
+            const isFarewellMessage = FAREWELL_PATTERNS.test(aggregatedText.trim());
+            if (isNoInteresaStep && isFarewellMessage) {
+                console.log(`[RECRUITER BRAIN] No Interesa step — farewell detected, staying silent for ${candidateId}`);
+                return; // Silent
+            }
+
             if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
                 isRecruiterMode = true;
                 const activeAiConfig = batchConfig.ai_config ? (typeof batchConfig.ai_config === 'string' ? JSON.parse(batchConfig.ai_config) : batchConfig.ai_config) : {};
@@ -1346,8 +1356,26 @@ ${safeDnaLines}
                             }
                         } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail: `, e.message); }
 
-                        // Now trigger next step's AI
+                        // 🚪 NO INTERESA ARRIVAL: Send farewell message + clear vacancy linkage
                         const nextStepNameLower = (nextStep?.name || '').toLowerCase();
+                        if (nextStepNameLower.includes('no interesa') || isExitMove) {
+                            try {
+                                const candFirstName = (candidateData.nombreReal || candidateData.nombre || 'amig@').split(' ')[0];
+                                const farewellPart1 = `Entiendo perfectamente, ${candFirstName} 🙏 Lamento que ninguna de nuestras oportunidades haya encajado contigo en este momento.`;
+                                const farewellPart2 = `Si en algún momento algo cambia y te interesa explorar una nueva vacante, aquí estaré para ayudarte. ¡Mucho éxito en tu búsqueda! 🍀👋`;
+                                await new Promise(r => setTimeout(r, 600));
+                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, farewellPart1, 'chat', { priority: 1 });
+                                saveMessage(candidateId, { from: 'me', content: farewellPart1, timestamp: new Date().toISOString() }).catch(() => {});
+                                await new Promise(r => setTimeout(r, 600));
+                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, farewellPart2, 'chat', { priority: 1 });
+                                saveMessage(candidateId, { from: 'me', content: farewellPart2, timestamp: new Date().toISOString() }).catch(() => {});
+                                // Clear vacancy linkage so candidate is no longer tied to a specific vacancy
+                                candidateUpdates.currentVacancyName = null;
+                                candidateUpdates.currentVacancyIndex = null;
+                            } catch (e) { console.error('[RECRUITER BRAIN] Farewell msg error:', e.message); }
+                        }
+
+                        // Now trigger next step's AI
                         const isTerminalStep = nextStepNameLower.includes('citado') || nextStepNameLower.includes('no interesa') || isExitMove;
 
                         if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt && !isTerminalStep) {
