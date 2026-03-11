@@ -2,7 +2,8 @@ import {
     saveProject, getProjects, getProjectById, deleteProject,
     addCandidateToProject, removeCandidateFromProject, getProjectCandidates,
     addProjectSearch, getProjectSearches,
-    updateProjectSteps, moveCandidateStep, reorderProjects
+    updateProjectSteps, moveCandidateStep, reorderProjects,
+    getRedisClient
 } from './utils/storage.js';
 
 export default async function handler(req, res) {
@@ -26,14 +27,24 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true, searches });
             }
             if (req.query.action === 'getTemplate') {
+                const redis = getRedisClient();
+                // 1st priority: persistent snapshot saved in Redis (survives project deletion)
+                if (redis) {
+                    try {
+                        const saved = await redis.get('projects:master_template');
+                        if (saved) {
+                            const steps = JSON.parse(saved);
+                            return res.status(200).json({ success: true, steps });
+                        }
+                    } catch (e) { console.warn('[Template] Redis read failed, falling back to live projects'); }
+                }
+                // Fallback: find AISIN by name, then project with most steps
                 const projects = await getProjects();
-                // Pin AISIN as the golden template. Fallback to most-steps project if AISIN doesn't exist.
                 const template = projects.find(p =>
                     p.name?.toLowerCase().includes('aisin')
                 ) || projects.reduce((prev, current) => {
                     return (prev?.steps?.length || 0) > (current?.steps?.length || 0) ? prev : current;
                 }, null);
-
                 const steps = template?.steps || [];
                 return res.status(200).json({ success: true, steps });
             }
@@ -53,6 +64,19 @@ export default async function handler(req, res) {
                 query, resultsCount, origin, vacancyId, vacancyIds,
                 stepId, steps, projectIds
             } = body;
+
+            if (action === 'saveTemplate') {
+                // Saves a project's steps as the permanent master template in Redis
+                const pid = body.projectId;
+                if (!pid) return res.status(400).json({ success: false, error: 'Project ID required for saveTemplate' });
+                const src = await getProjectById(pid);
+                if (!src || !src.steps) return res.status(404).json({ success: false, error: 'Project not found' });
+                const redis = getRedisClient();
+                if (!redis) return res.status(500).json({ success: false, error: 'Redis unavailable' });
+                await redis.set('projects:master_template', JSON.stringify(src.steps));
+                console.log(`[Template] Saved master template from project "${src.name}" (${src.steps.length} steps)`);
+                return res.status(200).json({ success: true, message: `Template saved from "${src.name}"`, stepsCount: src.steps.length });
+            }
 
             if (action === 'saveSearch') {
                 const pid = bodyProjectId || id;
