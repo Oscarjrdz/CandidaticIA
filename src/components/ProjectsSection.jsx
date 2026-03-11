@@ -397,6 +397,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [editingProject, setEditingProject] = useState(null);
     const [selectedVacancyIds, setSelectedVacancyIds] = useState([]); // Array de IDs de vacantes vinculadas
     const [templateSteps, setTemplateSteps] = useState([]);
+    const [loadingTemplate, setLoadingTemplate] = useState(false);
 
     // Fechas ocultadas visualmente y en estado (se pasan vacías o default si el back las requiere)
     const [startDate, setStartDate] = useState('');
@@ -527,17 +528,19 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     };
 
     const fetchTemplate = async () => {
+        setLoadingTemplate(true);
         try {
             const res = await fetch('/api/projects?action=getTemplate');
             const data = await res.json();
             if (data.success) setTemplateSteps(data.steps || []);
         } catch (e) { setTemplateSteps([]); }
+        finally { setLoadingTemplate(false); }
     };
 
-    const handleOpenNewProjectModal = () => {
+    const handleOpenNewProjectModal = async () => {
         resetForm();
-        fetchTemplate();
         setShowCreateModal(true);
+        await fetchTemplate();
     };
 
     const handleCreateProject = async () => {
@@ -1925,10 +1928,11 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                         <div className="flex gap-4 pt-4 relative">
                             <button className="flex-1 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:text-white font-black uppercase tracking-widest text-[10px]" onClick={() => setShowCreateModal(false)}>Volver</button>
                             <Button
-                                className="flex-1 h-14 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow-xl shadow-blue-600/30 transform active:scale-95 transition-all text-sm uppercase tracking-tighter"
+                                className={`flex-1 h-14 rounded-2xl text-white font-black shadow-xl transform active:scale-95 transition-all text-sm uppercase tracking-tighter ${loadingTemplate ? 'bg-slate-400 cursor-wait' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30'}`}
                                 onClick={handleCreateProject}
+                                disabled={loadingTemplate}
                             >
-                                {editingProject ? 'Guardar Cambios' : 'Iniciar Proyecto'}
+                                {loadingTemplate ? 'Cargando template...' : (editingProject ? 'Guardar Cambios' : 'Iniciar Proyecto')}
                             </Button>
                         </div>
                     </Card>
