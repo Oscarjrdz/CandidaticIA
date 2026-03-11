@@ -63,6 +63,20 @@ function humanizeDate(dateStr) {
 
 function formatRecruiterMessage(text) {
     if (!text) return text;
+
+    // 🎓 ESCOLARIDAD LIST: Force vertical when GPT puts all options on one line
+    if (/(?:🎒|🏫|🎓|📚|🛠|🧠).{0,25}(?:🎒|🏫|🎓|📚|🛠|🧠)/.test(text)) {
+        text = text
+            .replace(/\s*🎒\s*Primaria/gi,      '\n\n🎒 Primaria')
+            .replace(/\s*🏫\s*Secundaria/gi,     '\n\n🏫 Secundaria')
+            .replace(/\s*🎓\s*Preparatoria/gi,   '\n\n🎓 Preparatoria')
+            .replace(/\s*📚\s*Licenciatura/gi,   '\n\n📚 Licenciatura')
+            .replace(/\s*🛠️?\s*T[eé]cnica/gi,   '\n\n🛠️ Técnica')
+            .replace(/\s*🧠\s*Posgrado/gi,       '\n\n🧠 Posgrado')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    }
+
     // ⏰ HOURS MESSAGE: "Perfecto, para el YYYY-MM-DD tengo estas opciones..."
     if (/Perfecto.{0,60}\d{4}-\d{2}-\d{2}/i.test(text)) {
         let slotIdx = 0;
