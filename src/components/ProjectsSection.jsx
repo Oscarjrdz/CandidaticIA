@@ -4,7 +4,7 @@ import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     GraduationCap, MapPin, MessageSquare, ExternalLink, FolderKanban,
     Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase, Plus, Calendar,
-    Bot, Settings, Power, X, Loader2, Rocket, Copy
+    Bot, Settings, Power, X, Loader2, Rocket, Copy, Bell
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -15,6 +15,7 @@ import ChatWindow from './ChatWindow';
 import VacancyEditorModal from './VacancyEditorModal';
 import InteractiveCalendar from './InteractiveCalendar';
 import InteractiveConfirmationMap from './InteractiveConfirmationMap';
+import ScheduledRemindersModal from './ScheduledRemindersModal';
 import { formatPhone, formatRelativeDate, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 
@@ -207,6 +208,22 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                                 <MapPin className="w-3.5 h-3.5" />
                             </button>
                         </>
+                    )}
+
+                    {/* Scheduled Reminders Trigger (CITADOS step) */}
+                    {step.name?.trim().toLowerCase() === 'citados' && (
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault(); e.stopPropagation();
+                                onEdit(step.id, 'reminders');
+                            }}
+                            className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.scheduledReminders?.length > 0
+                                ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20'
+                                : 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'}`}
+                            title="Mensajes Programados (recordatorios)"
+                        >
+                            <Bell className="w-3.5 h-3.5" />
+                        </button>
                     )}
 
                     {/* Edit Vacancy Shortcut */}
@@ -406,6 +423,9 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [openConfirmationConfig, setOpenConfirmationConfig] = useState(null);
     const [confirmationItems, setConfirmationItems] = useState([]);
     const [newCalendarOption, setNewCalendarOption] = useState('');
+
+    // Scheduled Reminders Config
+    const [openRemindersConfig, setOpenRemindersConfig] = useState(null);
 
     // AI Search integration
     const [showAISearch, setShowAISearch] = useState(false);
@@ -742,6 +762,11 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             // Open Appointment Confirmation Config Modal
             setOpenConfirmationConfig({ stepId, projectId: activeProject.id });
             setConfirmationItems(step.appointmentConfirmation || []);
+            return;
+        }
+
+        if (mode === 'reminders') {
+            setOpenRemindersConfig({ stepId, projectId: activeProject.id });
             return;
         }
 
@@ -1448,6 +1473,25 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                         </div>
                     </div>
                 )}
+
+                {/* Scheduled Reminders Modal */}
+                {openRemindersConfig && activeProject && (() => {
+                    const step = activeProject.steps.find(s => s.id === openRemindersConfig.stepId);
+                    if (!step) return null;
+                    return (
+                        <ScheduledRemindersModal
+                            step={step}
+                            onClose={() => setOpenRemindersConfig(null)}
+                            onSave={(reminders) => {
+                                const updatedSteps = activeProject.steps.map(s =>
+                                    s.id === openRemindersConfig.stepId ? { ...s, scheduledReminders: reminders } : s
+                                );
+                                saveStepsUpdate(updatedSteps, 'Recordatorios guardados');
+                                setOpenRemindersConfig(null);
+                            }}
+                        />
+                    );
+                })()}
 
                 {/* Calendar Config Modal */}
                 {openCalendarConfig && activeProject && (

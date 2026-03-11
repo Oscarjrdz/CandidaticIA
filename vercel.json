@@ -62,6 +62,10 @@
             "schedule": "* * * * *"
         },
         {
+            "path": "/api/cron/send-reminders",
+            "schedule": "*/15 * * * *"
+        },
+        {
             "path": "/api/gateway/keepalive",
             "schedule": "0 * * * *"
         }

@@ -28,6 +28,7 @@ import { AIGuard } from '../utils/ai-guard.js';
 import { Orchestrator } from '../utils/orchestrator.js';
 import { MediaEngine } from '../utils/media-engine.js';
 import { intelligentExtract } from '../utils/intelligent-extractor.js';
+import { scheduleRemindersForCandidate } from '../utils/reminder-scheduler.js';
 
 // 🚀 TURBO MODE: Silence all synchronous Vercel console I/O unless actively debugging
 if (process.env.DEBUG_MODE !== 'true') {
@@ -1171,6 +1172,19 @@ ${safeDnaLines}
                         recruiterTriggeredMove = true;
                         candidateUpdates.stepId = nextStep.id;
                         candidateUpdates.projectId = activeProjectId; // Keep them in project
+
+                        // 🔔 PRE-SCHEDULE REMINDERS: Register reminder timestamps in Redis Sorted Set
+                        // (fire-and-forget — never block the main confirmation flow)
+                        const _metaForReminders = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
+                        if (nextStep.scheduledReminders?.length && _metaForReminders.citaFecha && _metaForReminders.citaHora) {
+                            scheduleRemindersForCandidate({
+                                candidateId,
+                                projectId: activeProjectId,
+                                stepId: nextStep.id,
+                                citaFecha: _metaForReminders.citaFecha,
+                                citaHora: _metaForReminders.citaHora
+                            }).catch(e => console.error('[REMINDER] Pre-schedule error:', e.message));
+                        }
 
                         // 🟢 NEW: Dispatch Appointment Confirmation Sequence regardless of cleanSpeech
                         const originStepNameForConfirm = (currentStep?.name || '').toLowerCase();
