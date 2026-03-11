@@ -326,6 +326,7 @@ ${!hasFutureCalendarOptions ? `
 2. RETORNO AL FLUJO: Si te hacen una pregunta general, responde cortésmente basándote en las [PREGUNTAS FRECUENTES OFICIALES] e INMEDIATAMENTE devuelve el control a la fase de agenda en la que se quedaron (preguntando qué día o a qué hora).
 3. PROHIBIDO REPETIR PASOS: Si ya te dieron el día, NO SE LO VUELVAS A PEDIR. Avanza a pedir la hora.
 4. JSON OBLIGATORIO: Extrae siempre el "citaFecha" y "citaHora" en cuanto el candidato lo escoja.
+5. ⚠️ OBLIGACIÓN DE CIERRE (REGLA DE ORO): SIN IMPORTAR QUÉ PREGUNTA RESPONDA, el ÚLTIMO renglón de tu response_text SIEMPRE debe ser la pregunta de agenda correspondiente al paso en que te quedaste (ej: "¿Qué día prefieres?", "¿Cuál horario?", "¿Agendamos?"...). ESTRICTAMENTE PROHIBIDO terminar con solo la respuesta de una duda sin añadir la pregunta de agenda.
 `}
 
         [VACANTES ALTERNATIVAS]:
