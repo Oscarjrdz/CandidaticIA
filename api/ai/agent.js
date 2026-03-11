@@ -68,14 +68,15 @@ function formatRecruiterMessage(text) {
     text = text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => humanizeDate(`${y}-${m}-${d}`));
 
     // 📋 COMBINED DAYS+HORARIO: If GPT merged PASO 1 (days list) and PASO 2 (horarios)
-    // into one message, detect the break point and split as two bubbles.
+    // into one message, STRIP the horario part — user must pick a day first.
     {
-        const hasDayList  = /(?:📅|1️⃣|2️⃣).{0,30}(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/i.test(text);
-        const hasHorario  = /tengo entrevistas? a las|estas opciones de horario/i.test(text);
-        if (hasDayList && hasHorario && !text.includes('[MSG_SPLIT]')) {
-            const splitIdx = text.search(/(?:\n|^)(?:Perfecto|Para el).{0,60}(?:tengo entrevistas? a las|estas opciones)/im);
-            if (splitIdx > 20) {
-                text = text.substring(0, splitIdx).trim() + '[MSG_SPLIT]' + text.substring(splitIdx).trim();
+        const hasDayList = /(?:📅|1️⃣|2️⃣).{0,30}(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/i.test(text);
+        const hasHorario = /tengo entrevistas? a las|estas opciones de horario/i.test(text);
+        if (hasDayList && hasHorario) {
+            // Find where the horario section starts and cut everything after it
+            const cutIdx = text.search(/(?:\n|.{0,5})(?:Perfecto|Para el)[^\n]*(?:tengo entrevistas? a las|estas opciones de horario)/im);
+            if (cutIdx > 20) {
+                text = text.substring(0, cutIdx).trim();
             }
         }
     }
@@ -101,8 +102,8 @@ function formatRecruiterMessage(text) {
     );
 
     // ⏰ HOURS MESSAGE: detect when GPT lists time slots (may use 🔹 or number emojis)
-    // Trigger is broader now because GPT humanizes dates (no YYYY-MM-DD in output).
-    const hasTimeSlots = /(?:🔹\s*Opci[oó]n\s*\d+|\d️⃣|\btengo entrevistas? a las\b)/i.test(text)
+    // Trigger is broader: GPT humanizes dates so outputs no YYYY-MM-DD.
+    const hasTimeSlots = /(?:🔹\s*Opci[oó]n\s*\d+|\btengo entrevistas? a las\b|estas opciones de horario)/i.test(text)
         || (/\d{1,2}:\d{2}\s*(?:AM|PM)/i.test(text) && /(?:1️⃣|2️⃣|🔹)/i.test(text));
     if (hasTimeSlots) {
         let slotIdx = 0;
@@ -110,6 +111,11 @@ function formatRecruiterMessage(text) {
         text = text.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${_NUM_EMOJIS[slotIdx++] || `${slotIdx}.`} `);
         // ⏰ after every time if missing
         text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
+        // Single slot → replace 'Cuál prefieres' with 'Te parece bien'
+        const timeCount = (text.match(/\d{1,2}:\d{2}\s*(?:AM|PM)/gi) || []).length;
+        if (timeCount === 1) {
+            text = text.replace(/¿Cu[aá]l prefieres?\??\s*/gi, '¿Te parece bien ese horario?');
+        }
         // Split closing question as separate bubble
         const _qIdx = text.lastIndexOf('\xbf');
         if (_qIdx > 0) {
