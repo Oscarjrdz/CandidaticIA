@@ -82,26 +82,26 @@ function formatRecruiterMessage(text) {
     }
 
     // 🎓 ESCOLARIDAD LIST: Force vertical format OR inject if GPT forgot the list entirely
-    const ESC_LIST = '\n\n🎒 Primaria\n\n🏫 Secundaria\n\n🎓 Preparatoria\n\n📚 Licenciatura\n\n🛠️ Técnica\n\n🧠 Posgrado';
+    const ESC_LIST = '\n🎒 Primaria\n🏫 Secundaria\n🎓 Preparatoria\n📚 Licenciatura\n🛠️ Técnica\n🧠 Posgrado';
     const hasAnyEscEmoji = /(?:🎒|🏫|📚|🛠|🧠)/.test(text);
     const asksAboutEsc   = /(?:nivel de estudios|escolaridad|nivel escolar)/i.test(text);
 
     if (hasAnyEscEmoji) {
         // GPT included options but possibly inline — force vertical spacing
         text = text
-            .replace(/\s*🎒\s*Primaria/gi,      '\n\n🎒 Primaria')
-            .replace(/\s*🏫\s*Secundaria/gi,     '\n\n🏫 Secundaria')
-            .replace(/\s*🎓\s*Preparatoria/gi,   '\n\n🎓 Preparatoria')
-            .replace(/\s*📚\s*Licenciatura/gi,   '\n\n📚 Licenciatura')
-            .replace(/\s*🛠️?\s*T[eé]cnica/gi,   '\n\n🛠️ Técnica')
-            .replace(/\s*🧠\s*Posgrado/gi,       '\n\n🧠 Posgrado')
-            .replace(/\n{3,}/g, '\n\n')
+            .replace(/\s*🎒\s*Primaria/gi,      '\n🎒 Primaria')
+            .replace(/\s*🏫\s*Secundaria/gi,     '\n🏫 Secundaria')
+            .replace(/\s*🎓\s*Preparatoria/gi,   '\n🎓 Preparatoria')
+            .replace(/\s*📚\s*Licenciatura/gi,   '\n📚 Licenciatura')
+            .replace(/\s*🛠️?\s*T[eé]cnica/gi,   '\n🛠️ Técnica')
+            .replace(/\s*🧠\s*Posgrado/gi,       '\n🧠 Posgrado')
+            .replace(/\n{3,}/g, '\n')
             .trim();
     } else if (asksAboutEsc) {
         // GPT asked but forgot the list — inject it before the closing question
         const lastQ = text.lastIndexOf('\xbf');        // last ¿
         if (lastQ > 0) {
-            text = text.substring(0, lastQ).trimEnd() + ESC_LIST + '\n\n' + text.substring(lastQ).trim();
+            text = text.substring(0, lastQ).trimEnd() + ESC_LIST + '\n' + text.substring(lastQ).trim();
         } else {
             // no closing question found — just append the list
             text = text.trimEnd() + ESC_LIST;
