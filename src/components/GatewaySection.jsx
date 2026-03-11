@@ -319,13 +319,6 @@ const InstanceCard = ({ instance, fullToken, onDelete, onRefresh, showToast }) =
                     <CopyField label="Instance ID" value={instance.instanceId} />
                     <CopyField label="Token" value={fullToken || instance.token} masked={true} />
                     {instance.webhookUrl && <CopyField label="Webhook URL" value={instance.webhookUrl} />}
-
-                    <div className="mt-3 p-3 bg-black/5 dark:bg-white/5 rounded-xl">
-                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mb-2">Endpoint de envío (compatible UltraMsg)</p>
-                        <code className="text-xs text-blue-600 dark:text-blue-400 font-mono break-all">
-                            POST /api/gateway/send/{instance.instanceId}/messages/chat
-                        </code>
-                    </div>
                 </div>
             )}
 
