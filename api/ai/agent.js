@@ -192,14 +192,20 @@ function formatRecruiterMessage(text) {
     // 🎯 FAQ CLOSING QUESTION SAFETY NET: If the bot answered an FAQ but forgot the
     // scheduling question, inject it as a second bubble.
     // Conditions: long enough to be a real FAQ answer, no existing ¿ question,
-    // not a handover/greeting/vacancy description/escolaridad/date list.
+    // not a handover/greeting/vacancy description/escolaridad/date list,
+    // and NOT a data-collection question (fecha, municipio, nombre, etc.)
     if (!text.includes('[MSG_SPLIT]') && !text.includes('\xbf')) {
         const isFaqAnswer = text.length > 80
             && !/(?:seleccionado|OMG|está PERFECTO|escolaridad|Primaria|🎒|🏫|📚|🛠|🧠)/i.test(text)
             && !/(?:📅\s*1️⃣|1️⃣\s*Lunes|1️⃣\s*Martes|1️⃣\s*Miércoles|1️⃣\s*Jueves)/i.test(text)
             && !/(?:\d{1,2}:\d{2}\s*(?:AM|PM))/i.test(text)   // no horario list
             && !/(?:ESTAMOS CONTRATANDO|vacante que encontré|comparto la vacante)/i.test(text) // not vacancy intro
-            && !/(?:Hola.*soy.*Lic|Para comenzar|buen[ao]s)/i.test(text);  // not greeting
+            && !/(?:Hola.*soy.*Lic|Para comenzar|buen[ao]s)/i.test(text)  // not greeting
+            // 🚫 Exclude data-collection questions (initial brain profile phase)
+            && !/(?:fecha de nacimiento|cu[aá]ndo naciste|d[ií]a de nacimiento)/i.test(text)
+            && !/(?:municipio|estado|ciudad)\b.*\?/i.test(text)
+            && !/(?:necesito saber|dime tu|me dices|cu[eé]ntame|en qu[eé] categor)/i.test(text)
+            && !text.includes('(ej. ');   // never append to messages that already show an example
         if (isFaqAnswer) {
             text = text.trimEnd() + '[MSG_SPLIT]¿Te gustaría agendar tu entrevista? 😊';
         }
