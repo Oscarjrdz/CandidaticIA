@@ -120,6 +120,30 @@ export const getQR = async (instanceId) => {
     return await redis.get(`gateway:qr:${instanceId}`);
 };
 
+// Clear QR from Redis
+export const clearQR = async (instanceId) => {
+    const redis = getRedisClient();
+    if (!redis) return;
+    await redis.del(`gateway:qr:${instanceId}`);
+};
+
+// Clear ALL Baileys auth keys for this instance — forces fresh QR on next connect
+export const clearAuthState = async (instanceId) => {
+    const redis = getRedisClient();
+    if (!redis) return;
+    const KEY = `gateway:auth:${instanceId}`;
+    // Scan and delete all auth keys for this instance
+    try {
+        const keys = await redis.keys(`${KEY}:*`);
+        if (keys && keys.length > 0) {
+            await redis.del(...keys);
+        }
+    } catch {
+        // Fallback: at minimum delete the creds key
+        await redis.del(`${KEY}:creds`);
+    }
+};
+
 // ─── Auth State for Baileys ───────────────────────────────────────────────────
 
 export const makeRedisAuthState = async (instanceId) => {

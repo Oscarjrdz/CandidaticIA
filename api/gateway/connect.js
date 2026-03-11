@@ -11,7 +11,7 @@
  */
 
 import {
-    getInstance, updateInstance, storeQR, getQR,
+    getInstance, updateInstance, storeQR, getQR, clearQR, clearAuthState,
     makeRedisAuthState, saveMessageToHistory,
     GW_STATE
 } from './session-engine.js';
@@ -60,6 +60,10 @@ export default async function handler(req, res) {
             }
 
             await updateInstance(instanceId, { state: GW_STATE.QR_PENDING });
+
+            // Clear stale credentials so Baileys generates a fresh QR
+            await clearAuthState(instanceId);
+            await clearQR(instanceId);
 
             // Wait for CONNECTED (or timeout at 55s)
             const result = await _connectAndWait(instanceId, instance.webhookUrl);
