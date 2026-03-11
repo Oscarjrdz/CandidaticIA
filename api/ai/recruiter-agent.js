@@ -277,7 +277,7 @@ PASO 2 (OFRECER HORARIOS): CUANDO el candidato ya eligió un día explícitament
 3. Encuentra TODOS los renglones que correspondan a la fecha que sacaste ("YYYY-MM-DD").
 4. Muestra EN TU MENSAJE las horas disponibles para ese día. TIENES ESTRICTAMENTE PROHIBIDO INVENTAR HORARIOS MÁS ALLÁ DE LOS QUE APARECEN EN LA LISTA CRUDA PARA ESE DÍA ESPECÍFICO.
 🕐 REGLA DE SINGULARES VS PLURAL:
-- Si solo hay UN horario ese día → di: "Para el [fecha] tengo entrevista a las:\n\n1️⃣ 08:00 AM ⏰\n\n¿Te acomoda ese horario?"
+- Si solo hay UN horario ese día → di: "Para el [fecha] tengo entrevista a las:\n\n1️⃣ 08:00 AM ⏰\n\n¿Te parece bien ese horario?"
 - Si hay DOS O MÁS horarios → di: "Para el [fecha] tengo entrevistas a las:\n\n1️⃣ 08:00 AM ⏰\n\n2️⃣ 08:30 AM ⏰\n\n¿Cuál prefieres?"
 USA SIEMPRE emojis de número (1️⃣, 2️⃣...) y el emoji ⏰ después de cada hora. ESTRICTAMENTE PROHIBIDO usar 🔹 o "Opción N:".
 
