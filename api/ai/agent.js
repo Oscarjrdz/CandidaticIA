@@ -144,9 +144,13 @@ function formatRecruiterMessage(text) {
         text = text.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${_NUM_EMOJIS[slotIdx++] || `${slotIdx}.`} `);
         // ⏰ after every time if missing
         text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
-        // Single slot → replace 'Cuál prefieres' with 'Te parece bien'
+        // Single slot → fix header + closing question
         const timeCount = (text.match(/\d{1,2}:\d{2}\s*(?:AM|PM)/gi) || []).length;
         if (timeCount === 1) {
+            text = text.replace(
+                /(?:Perfecto,?\s+)?[Pp]ara el\s+(.+?)\s+tengo estas opciones de horario(?:\s+para ti)?:/gi,
+                'Para el $1 tengo entrevista a las:'
+            );
             text = text.replace(/¿Cu[aá]l prefieres?\??\s*/gi, '¿Te parece bien ese horario?');
         }
         // Split closing question as separate bubble
