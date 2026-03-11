@@ -131,13 +131,18 @@ function formatRecruiterMessage(text, candidateData = null) {
     // Strip stray 'o' connector words GPT inserts between date items
     // e.g. "Martes 10 de Marzo o\n" → "Martes 10 de Marzo\n"
     text = text.replace(/\s+\bo\b\s*(?=\n|$)/gm, '');
-    // Normalize any header variant GPT uses → canonical "Tengo entrevistas los días:"
-    text = text.replace(/Tengo entrevistas disponibles (?:para el|los d[ií]as):/gi, 'Tengo entrevistas los días:');
-    text = text.replace(/Tengo entrevistas (?:disponibles\s+)?(?:para el|el):/gi, 'Tengo entrevistas los días:');
-    // Strip stray "para el:" or "para:" that GPT appends after the header
-    // e.g. "Tengo entrevistas los días: para el:" → "Tengo entrevistas los días:"
-    text = text.replace(/(Tengo entrevistas los d[ií]as:)\s*para\s+el:/gi, '$1');
-    text = text.replace(/(Tengo entrevistas los d[ií]as:)\s*para:/gi, '$1');
+    // Normalize ALL header variants GPT uses → canonical "Tengo entrevistas los días:"
+    // Covers: "disponibles para el:", "para los días:", "para los siguientes días:", "el:", etc.
+    text = text.replace(
+        /Tengo entrevistas?\s+(?:disponibles?\s+)?(?:para\s+(?:la\s+semana\s+de\s+)?(?:los?\s+)?(?:siguientes?\s+)?)?d[ií]as?:/gi,
+        'Tengo entrevistas los días:'
+    );
+    text = text.replace(
+        /Tengo entrevistas?\s+(?:disponibles?\s+)?(?:para\s+el|el)\s*:/gi,
+        'Tengo entrevistas los días:'
+    );
+    // Post-strip: remove any leftover "para el:" / "para los:" / "para:" after canonical header
+    text = text.replace(/(Tengo entrevistas los d[ií]as:)\s*para\s+(?:los?\s+)?(?:siguientes?\s+)?(?:d[ií]as?|el)?:?/gi, '$1');
 
     // ⏰ HOURS MESSAGE: detect when GPT lists time slots (may use 🔹 or number emojis)
     // Trigger is broader: GPT humanizes dates so outputs no YYYY-MM-DD.
