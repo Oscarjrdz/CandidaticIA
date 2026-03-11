@@ -1441,7 +1441,9 @@ ${safeDnaLines}
                     if (ext.fechaNacimiento) {
                         ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
                     }
-                    Object.assign(candidateUpdates, ext);
+                    Object.assign(candidateUpdates, Object.fromEntries(
+                        Object.entries(ext).filter(([_, v]) => v !== null && v !== undefined && v !== 'null' && v !== 'N/A')
+                    ));
 
                     // 🧬 NEW: Programmatic Name Combination Fallback
                     // If the AI spits out a single word (like "Rodriguez") but we already had a single word ("Oscar"),
