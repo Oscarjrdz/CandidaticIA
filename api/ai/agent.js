@@ -1477,7 +1477,9 @@ ${safeDnaLines}
                 if (validation && validation.recovery_active) {
                     aiResult = validation;
                     responseTextVal = aiResult.response_text;
-                    if (aiResult.extracted_data) Object.assign(candidateUpdates, aiResult.extracted_data);
+                    if (aiResult.extracted_data) Object.assign(candidateUpdates, Object.fromEntries(
+                        Object.entries(aiResult.extracted_data).filter(([_, v]) => v !== null && v !== undefined && v !== 'null' && v !== 'N/A')
+                    ));
                 }
 
 
