@@ -72,47 +72,58 @@ const CopyField = ({ label, value, masked }) => {
     );
 };
 
-const QRModal = ({ instanceId, token, onClose }) => {
+const QRModal = ({ instanceId, onClose }) => {
     const [qrData, setQrData] = useState(null);
     const [state, setState] = useState('CONNECTING');
     const [phone, setPhone] = useState(null);
     const [error, setError] = useState(null);
     const pollRef = useRef(null);
-
-    // Poll GET /connect for state updates after QR is shown
-    const pollState = useCallback(async () => {
-        try {
-            const res = await api.getQR(instanceId);
-            setState(res.state || 'QR_PENDING');
-            if (res.qr) setQrData(res.qr);
-            if (res.phone) setPhone(res.phone);
-            if (res.state === 'CONNECTED') clearInterval(pollRef.current);
-        } catch {}
-    }, [instanceId]);
+    const mountedRef = useRef(true);
 
     useEffect(() => {
-        // POST to connect — response contains the QR directly
-        api.connectInstance(instanceId, token)
+        mountedRef.current = true;
+
+        // 1. Fire POST to start Baileys — keeps socket alive up to 55s in background
+        api.connectInstance(instanceId)
             .then(res => {
+                if (!mountedRef.current) return;
                 if (res.state === 'CONNECTED') {
                     setState('CONNECTED');
                     setPhone(res.phone);
+                    clearInterval(pollRef.current);
+                } else if (res.error && !qrData) {
+                    // Only show error if we never got a QR
+                    setError(res.error);
+                    setState('ERROR');
+                    clearInterval(pollRef.current);
+                }
+            })
+            .catch(() => { /* POST errors are handled by GET polling */ });
+
+        // 2. Simultaneously poll GET /connect every 3s for QR image and state
+        const poll = async () => {
+            try {
+                const res = await api.getQR(instanceId);
+                if (!mountedRef.current) return;
+                if (res.state === 'CONNECTED') {
+                    setState('CONNECTED');
+                    setPhone(res.phone);
+                    clearInterval(pollRef.current);
                 } else if (res.qr) {
                     setState('QR_PENDING');
                     setQrData(res.qr);
-                    // Poll for CONNECTED event after user scans
-                    pollRef.current = setInterval(pollState, 4000);
-                } else {
-                    setError(res.error || 'No se pudo generar el QR. Intenta de nuevo.');
-                    setState('ERROR');
                 }
-            })
-            .catch(() => {
-                setError('Error de conexión. Intenta de nuevo.');
-                setState('ERROR');
-            });
-        return () => clearInterval(pollRef.current);
-    }, [instanceId, token, pollState]);
+            } catch {}
+        };
+
+        poll(); // Immediate first check
+        pollRef.current = setInterval(poll, 3000);
+
+        return () => {
+            mountedRef.current = false;
+            clearInterval(pollRef.current);
+        };
+    }, [instanceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
@@ -415,7 +426,6 @@ const InstanceCard = ({ instance, fullToken, onDelete, onRefresh, showToast }) =
             {showQR && (
                 <QRModal
                     instanceId={instance.instanceId}
-                    token={fullToken || instance.token}
                     onClose={() => { setShowQR(false); onRefresh(); }}
                 />
             )}
