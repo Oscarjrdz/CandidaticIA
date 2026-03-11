@@ -77,6 +77,13 @@ function formatRecruiterMessage(text) {
             .trim();
     }
 
+    // 📅 DATE LIST: Add 📅 to numbered day lines if GPT forgot it
+    // Matches: "1️⃣ Lunes 2 de Marzo" or "2️⃣ Martes..." without a leading 📅
+    text = text.replace(
+        /(?<!📅\s*)(1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)\s+(Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/gi,
+        (_, num, day) => `📅 ${num} ${day}`
+    );
+
     // ⏰ HOURS MESSAGE: "Perfecto, para el YYYY-MM-DD tengo estas opciones..."
     if (/Perfecto.{0,60}\d{4}-\d{2}-\d{2}/i.test(text)) {
         let slotIdx = 0;
