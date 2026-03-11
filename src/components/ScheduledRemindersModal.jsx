@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { X, Bell, Plus, Trash2, Clock, ChevronDown } from 'lucide-react';
 
 const PRESET_HOURS = [
-    { label: '24 horas antes', value: 24 },
-    { label: '12 horas antes', value: 12 },
-    { label: '2 horas antes', value: 2 },
     { label: '1 hora antes', value: 1 },
+    { label: '2 horas antes', value: 2 },
+    { label: '12 horas antes', value: 12 },
+    { label: '24 horas antes', value: 24 },
+    { label: '48 horas antes', value: 48 },
+    { label: '72 horas antes', value: 72 },
 ];
 
 const TEMPLATE_VARS = ['{{nombre}}', '{{citaFecha}}', '{{citaHora}}'];
@@ -24,8 +26,10 @@ const ScheduledRemindersModal = ({ step, onSave, onClose }) => {
     const addReminder = () => {
         setReminders(prev => [...prev, {
             id: generateId(),
+            triggerMode: 'hours_before',   // 'hours_before' | 'exact_time'
             hoursBefor: 24,
-            message: 'Hola {{nombre}} 👋, te recordamos que mañana tienes entrevista el {{citaFecha}} a las {{citaHora}}. ¡Te esperamos! 🌟',
+            exactTime: '08:00',            // HH:MM used when triggerMode = 'exact_time'
+            message: 'Hola {{nombre}} 👋, te recordamos que tienes entrevista el {{citaFecha}} a las {{citaHora}}. ¡Te esperamos! 🌟',
             enabled: true
         }]);
     };
@@ -83,13 +87,15 @@ const ScheduledRemindersModal = ({ step, onSave, onClose }) => {
                     <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/50 rounded-2xl p-4">
                         <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
                             <span className="font-bold">¿Cómo funciona?</span> Cuando un candidato sea movido a este paso con una cita confirmada,
-                            se programarán estos mensajes para enviarse automáticamente N horas antes de la entrevista vía WhatsApp.
+                            se programarán estos mensajes para enviarse automáticamente vía WhatsApp — ya sea N horas antes de la entrevista
+                            o a una hora exacta del día de la cita.
                         </p>
                     </div>
 
                     {/* Reminder list */}
                     {reminders.map((reminder) => {
                         const textareaRef = React.createRef();
+                        const isExact = reminder.triggerMode === 'exact_time';
                         return (
                             <div
                                 key={reminder.id}
@@ -124,27 +130,68 @@ const ScheduledRemindersModal = ({ step, onSave, onClose }) => {
                                     </div>
                                 </div>
 
-                                {/* Hours before */}
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Horas antes de la cita</label>
-                                    <div className="flex items-center gap-2">
-                                        <div className="relative flex-1">
-                                            <select
-                                                value={reminder.hoursBefor}
-                                                onChange={(e) => updateReminder(reminder.id, 'hoursBefor', Number(e.target.value))}
-                                                className="w-full appearance-none bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-amber-400 outline-none pr-8"
-                                            >
-                                                {PRESET_HOURS.map(p => (
-                                                    <option key={p.value} value={p.value}>{p.label}</option>
-                                                ))}
-                                                <option value="48">48 horas antes</option>
-                                                <option value="72">72 horas antes</option>
-                                            </select>
-                                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                                        </div>
-                                        <span className="text-xs text-slate-400 whitespace-nowrap">antes del evento</span>
+                                {/* Trigger mode toggle */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cuándo enviar</label>
+                                    <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/50">
+                                        <button
+                                            onClick={() => updateReminder(reminder.id, 'triggerMode', 'hours_before')}
+                                            className={`flex-1 py-2 text-xs font-bold transition-colors ${!isExact
+                                                ? 'bg-amber-500 text-white'
+                                                : 'text-slate-500 dark:text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-900/10'
+                                            }`}
+                                        >
+                                            ⏳ Horas antes
+                                        </button>
+                                        <button
+                                            onClick={() => updateReminder(reminder.id, 'triggerMode', 'exact_time')}
+                                            className={`flex-1 py-2 text-xs font-bold transition-colors border-l border-slate-200 dark:border-slate-700 ${isExact
+                                                ? 'bg-amber-500 text-white'
+                                                : 'text-slate-500 dark:text-slate-400 hover:bg-amber-50 dark:hover:bg-amber-900/10'
+                                            }`}
+                                        >
+                                            🕐 Hora exacta del día
+                                        </button>
                                     </div>
                                 </div>
+
+                                {/* Trigger config */}
+                                {!isExact ? (
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Horas antes de la cita</label>
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative flex-1">
+                                                <select
+                                                    value={reminder.hoursBefor}
+                                                    onChange={(e) => updateReminder(reminder.id, 'hoursBefor', Number(e.target.value))}
+                                                    className="w-full appearance-none bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-amber-400 outline-none pr-8"
+                                                >
+                                                    {PRESET_HOURS.map(p => (
+                                                        <option key={p.value} value={p.value}>{p.label}</option>
+                                                    ))}
+                                                </select>
+                                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+                                            </div>
+                                            <span className="text-xs text-slate-400 whitespace-nowrap">antes del evento</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hora exacta del día de la cita</label>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="time"
+                                                value={reminder.exactTime || '08:00'}
+                                                onChange={(e) => updateReminder(reminder.id, 'exactTime', e.target.value)}
+                                                className="flex-1 bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-amber-400 outline-none"
+                                            />
+                                            <span className="text-xs text-slate-400 whitespace-nowrap">el día de la cita</span>
+                                        </div>
+                                        <p className="text-[9px] text-slate-400">
+                                            Se enviará a esta hora exacta el mismo día de la entrevista.
+                                        </p>
+                                    </div>
+                                )}
 
                                 {/* Message */}
                                 <div className="space-y-1">
@@ -169,7 +216,7 @@ const ScheduledRemindersModal = ({ step, onSave, onClose }) => {
                                         onChange={(e) => updateReminder(reminder.id, 'message', e.target.value)}
                                         rows={3}
                                         className="w-full bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400 outline-none resize-none"
-                                        placeholder="Ej: Hola {{nombre}}, tu entrevista es mañana {{citaFecha}} a las {{citaHora}} 🕐"
+                                        placeholder="Ej: Hola {{nombre}}, tu entrevista es hoy {{citaFecha}} a las {{citaHora}} 🕐"
                                     />
                                     <p className="text-[9px] text-slate-400">
                                         Variables disponibles: <code>{'{{nombre}}'}</code>, <code>{'{{citaFecha}}'}</code>, <code>{'{{citaHora}}'}</code>

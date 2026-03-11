@@ -67,22 +67,40 @@ export async function scheduleRemindersForCandidate({ candidateId, projectId, st
         for (const reminder of reminders) {
             if (!reminder.enabled || !reminder.message) continue;
 
-            const hoursBefor = Number(reminder.hoursBefor) || 0;
-            const triggerMs = appointmentMs - (hoursBefor * 3600 * 1000);
+            let triggerMs;
+
+            if (reminder.triggerMode === 'exact_time' && reminder.exactTime) {
+                // 🕐 EXACT TIME MODE: Fire at a specific HH:MM on the appointment day (CST)
+                const [hStr, mStr] = reminder.exactTime.split(':');
+                const h = parseInt(hStr, 10);
+                const m = parseInt(mStr, 10);
+                if (isNaN(h) || isNaN(m)) {
+                    console.warn(`[REMINDER-SCHEDULER] Invalid exactTime "${reminder.exactTime}" for reminder ${reminder.id}. Skipping.`);
+                    continue;
+                }
+                const dateStr = `${citaFecha}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00-06:00`;
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) {
+                    console.warn(`[REMINDER-SCHEDULER] Could not build exact time date for ${citaFecha} ${reminder.exactTime}. Skipping.`);
+                    continue;
+                }
+                triggerMs = d.getTime();
+                console.log(`[REMINDER-SCHEDULER] Exact-time reminder "${reminder.id}" for candidate ${candidateId} at ${d.toISOString()} (${reminder.exactTime} on ${citaFecha})`);
+            } else {
+                // ⏳ HOURS BEFORE MODE (default / backwards-compatible)
+                const hoursBefor = Number(reminder.hoursBefor) || 0;
+                triggerMs = appointmentMs - (hoursBefor * 3600 * 1000);
+                console.log(`[REMINDER-SCHEDULER] Hours-before reminder "${reminder.id}" for candidate ${candidateId} at ${new Date(triggerMs).toISOString()} (${hoursBefor}h before appointment)`);
+            }
 
             if (triggerMs <= now) {
-                // Trigger time already passed — skip
                 console.warn(`[REMINDER-SCHEDULER] Trigger time in the past for reminder ${reminder.id}. Skipping.`);
                 continue;
             }
 
             // Member encodes all lookup info — pipe-separated
             const member = `${projectId}|${stepId}|${candidateId}|${reminder.id}|${citaFecha}`;
-
-            // Add to sorted set with trigger timestamp as score
             pipeline.zadd(REDIS_ZSET_KEY, triggerMs, member);
-
-            console.log(`[REMINDER-SCHEDULER] Scheduled reminder "${reminder.id}" for candidate ${candidateId} at ${new Date(triggerMs).toISOString()} (${hoursBefor}h before appointment)`);
         }
 
         await pipeline.exec();
