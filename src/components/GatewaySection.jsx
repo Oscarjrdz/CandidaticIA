@@ -522,13 +522,6 @@ export default function GatewaySection({ showToast }) {
                 </div>
             </div>
 
-            {/* API Reference Pill */}
-            <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl text-xs">
-                <div className="shrink-0 px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded font-bold font-mono">POST</div>
-                <code className="font-mono text-gray-600 dark:text-gray-300 flex-1">/api/gateway/send/<span className="text-blue-500">{'{instanceId}'}</span>/messages/chat</code>
-                <span className="text-gray-400 hidden sm:block">Compatible UltraMsg ✓</span>
-            </div>
-
             {/* Create Form */}
             <CreateInstanceForm onCreated={handleCreated} showToast={showToast} />
 
