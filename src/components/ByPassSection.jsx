@@ -125,6 +125,7 @@ const ByPassSection = ({ showToast }) => {
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [systemActive, setSystemActive] = useState(false);
+    const [dragOverIndex, setDragOverIndex] = useState(null);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -320,6 +321,20 @@ const ByPassSection = ({ showToast }) => {
         }
     };
 
+    const handleReorder = async (newRules) => {
+        setRules(newRules);
+        try {
+            await fetch('/api/bypass', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderedIds: newRules.map(r => r.id) })
+            });
+        } catch (e) {
+            console.error('Reorder error:', e);
+            showToast('Error al guardar el orden', 'error');
+        }
+    };
+
     const toggleArrayItem = (field, value) => {
         setFormData(prev => {
             const current = prev[field] || [];
@@ -386,58 +401,110 @@ const ByPassSection = ({ showToast }) => {
                     <p className="text-slate-400 mt-2 font-bold italic">Configura tu primer radar para automatizar tu flujo.</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-6">
-                    {rules.map((rule) => {
+                <div className="space-y-2">
+                    {/* Priority header */}
+                    <div className="flex items-center gap-3 px-4 pb-1">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest w-8 text-center">#</span>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex-1">Regla de Bypass</span>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Proyecto Destino</span>
+                    </div>
+
+                    {rules.map((rule, index) => {
                         const targetProject = projects.find(p => p.id === rule.projectId);
                         return (
-                            <Card key={rule.id} className="group relative overflow-hidden rounded-[32px] border-2 border-slate-50 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm hover:shadow-xl hover:border-blue-500/50 transition-all duration-300 p-6">
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`p-3.5 rounded-2xl flex items-center justify-center transition-all duration-500 ${rule.active ? 'bg-blue-600 shadow-lg shadow-blue-500/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                                            <Target className={`w-5 h-5 ${rule.active ? 'text-white' : 'text-slate-400'}`} />
-                                        </div>
-                                        <div>
-                                            <h4 className="text-base font-black text-slate-900 dark:text-white truncate max-w-[140px] tracking-tight">{rule.name}</h4>
-                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                                <div className={`w-1.5 h-1.5 rounded-full ${rule.active ? 'bg-blue-500' : 'bg-slate-400'}`} />
-                                                <span className={`text-[9px] font-black uppercase tracking-widest ${rule.active ? 'text-blue-500' : 'text-slate-400'}`}>
-                                                    {rule.active ? 'Online' : 'Pausado'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-1 xl:opacity-0 group-hover:opacity-100 transition-all translate-x-3 group-hover:translate-x-0">
-                                        <button
-                                            onClick={() => handleToggleActive(rule)}
-                                            className={`
-                                                relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none mr-2
-                                                ${rule.active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-700'}
-                                            `}
-                                        >
-                                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${rule.active ? 'translate-x-5' : 'translate-x-1'}`} />
-                                        </button>
-                                        <button onClick={() => handleEdit(rule)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl hover:text-blue-600 transition-all"><Pencil className="w-4 h-4" /></button>
-                                        <button onClick={() => handleDelete(rule.id)} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl hover:text-red-500 transition-all"><Trash2 className="w-4 h-4" /></button>
+                            <div
+                                key={rule.id}
+                                draggable
+                                onDragStart={(e) => {
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    e.dataTransfer.setData('text/plain', String(index));
+                                }}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = 'move';
+                                    setDragOverIndex(index);
+                                }}
+                                onDragLeave={() => setDragOverIndex(null)}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    setDragOverIndex(null);
+                                    const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                                    if (fromIdx === index) return;
+                                    const next = [...rules];
+                                    const [moved] = next.splice(fromIdx, 1);
+                                    next.splice(index, 0, moved);
+                                    handleReorder(next);
+                                }}
+                                onDragEnd={() => setDragOverIndex(null)}
+                                className={`group flex items-center gap-3 p-4 bg-white dark:bg-slate-900 rounded-2xl border-2 transition-all cursor-grab active:cursor-grabbing select-none ${
+                                    dragOverIndex === index
+                                        ? 'border-blue-400 shadow-lg shadow-blue-500/10 scale-[1.01]'
+                                        : rule.active
+                                        ? 'border-slate-100 dark:border-slate-800 hover:border-blue-200'
+                                        : 'border-slate-100 dark:border-slate-800 opacity-60'
+                                }`}
+                            >
+                                {/* Priority number */}
+                                <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center flex-shrink-0">
+                                    <span className="text-xs font-black text-blue-600 dark:text-blue-400">{index + 1}</span>
+                                </div>
+
+                                {/* Drag handle */}
+                                <div className="flex flex-col gap-[3px] opacity-30 group-hover:opacity-60 transition-opacity flex-shrink-0">
+                                    <div className="w-3.5 h-0.5 bg-slate-500 rounded-full" />
+                                    <div className="w-3.5 h-0.5 bg-slate-500 rounded-full" />
+                                    <div className="w-3.5 h-0.5 bg-slate-500 rounded-full" />
+                                </div>
+
+                                {/* Status dot */}
+                                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${rule.active ? 'bg-green-500' : 'bg-slate-300'}`} />
+
+                                {/* Rule name + tags */}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-black text-slate-800 dark:text-white truncate">{rule.name}</p>
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {rule.categories?.map(c => (
+                                            <span key={c} className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-[8px] font-black text-blue-600 dark:text-blue-400 rounded border border-blue-100/50 dark:border-blue-800/20">{c.toUpperCase()}</span>
+                                        ))}
+                                        <span className="px-1.5 py-0.5 bg-slate-50 dark:bg-slate-800 text-[8px] font-black text-slate-400 rounded border border-slate-100 dark:border-slate-700">{rule.minAge || 0}-{rule.maxAge || 99} años</span>
+                                        {rule.gender && rule.gender !== 'Cualquiera' && (
+                                            <span className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-[8px] font-black text-purple-600 dark:text-purple-400 rounded border border-purple-100/50">{rule.gender}</span>
+                                        )}
                                     </div>
                                 </div>
-                                <div className="space-y-4">
-                                    <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700/50">
-                                        <div className="p-2 bg-white dark:bg-slate-900 rounded-lg shadow-sm">
-                                            <GitMerge className="w-4 h-4 text-blue-500" />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Destino</span>
-                                            <p className="text-xs font-black text-slate-800 dark:text-slate-200 truncate">{targetProject ? targetProject.name : 'No Asignado'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {rule.categories?.map(c => <span key={c} className="px-2.5 py-1 bg-blue-50/50 dark:bg-blue-900/10 text-[9px] font-black text-blue-600 dark:text-blue-400 rounded-lg border border-blue-100/50 dark:border-blue-800/10">{c.toUpperCase()}</span>)}
-                                        <span className="px-2.5 py-1 bg-slate-50 dark:bg-slate-800 text-[9px] font-black text-slate-500 rounded-lg border border-slate-100 dark:border-slate-700 shadow-sm">{rule.minAge || 0}-{rule.maxAge || 99} AÑOS</span>
-                                    </div>
+
+                                {/* Destination project */}
+                                <div className="flex items-center gap-2 flex-shrink-0 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                                    <GitMerge className="w-3.5 h-3.5 text-blue-400" />
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 max-w-[120px] truncate">
+                                        {targetProject?.name || 'Sin asignar'}
+                                    </span>
                                 </div>
-                            </Card>
-                        )
+
+                                {/* Actions */}
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                    <button
+                                        onClick={() => handleToggleActive(rule)}
+                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                                            rule.active ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-700'
+                                        }`}
+                                    >
+                                        <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${rule.active ? 'translate-x-5' : 'translate-x-1'}`} />
+                                    </button>
+                                    <button onClick={() => handleEdit(rule)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl hover:text-blue-600 transition-all">
+                                        <Pencil className="w-4 h-4" />
+                                    </button>
+                                    <button onClick={() => handleDelete(rule.id)} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl hover:text-red-500 transition-all">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            </div>
+                        );
                     })}
+
+                    <p className="text-[9px] text-slate-400 text-center pt-2 font-bold uppercase tracking-widest">
+                        ↕ Arrastra para cambiar la prioridad — si un candidato aplica a varias reglas, se mete al proyecto de la #1
+                    </p>
                 </div>
             )}
 

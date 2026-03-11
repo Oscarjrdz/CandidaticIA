@@ -82,7 +82,22 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, message: 'Deleted' });
         }
 
-        res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
+        // PATCH: Reorder rules (drag-and-drop priority)
+        if (req.method === 'PATCH') {
+            const { orderedIds } = req.body || {};
+            if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+                return res.status(400).json({ success: false, error: 'orderedIds array required' });
+            }
+            // Overwrite scores: score = index (0 = highest priority)
+            const pipeline = redis.pipeline();
+            orderedIds.forEach((id, idx) => {
+                pipeline.zadd(KEYS.BYPASS_LIST, idx, id);
+            });
+            await pipeline.exec();
+            return res.status(200).json({ success: true, message: `Reordered ${orderedIds.length} rules` });
+        }
+
+        res.setHeader('Allow', ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
         return res.status(405).end(`Method ${req.method} Not Allowed`);
 
     } catch (error) {
