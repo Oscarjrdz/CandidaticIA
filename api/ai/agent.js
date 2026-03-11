@@ -64,6 +64,22 @@ function humanizeDate(dateStr) {
 function formatRecruiterMessage(text) {
     if (!text) return text;
 
+    // 📅 HUMANIZE raw YYYY-MM-DD dates that GPT leaked into the output
+    text = text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => humanizeDate(`${y}-${m}-${d}`));
+
+    // 📋 COMBINED DAYS+HORARIO: If GPT merged PASO 1 (days list) and PASO 2 (horarios)
+    // into one message, detect the break point and split as two bubbles.
+    {
+        const hasDayList  = /(?:📅|1️⃣|2️⃣).{0,30}(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/i.test(text);
+        const hasHorario  = /tengo entrevistas? a las|estas opciones de horario/i.test(text);
+        if (hasDayList && hasHorario && !text.includes('[MSG_SPLIT]')) {
+            const splitIdx = text.search(/(?:\n|^)(?:Perfecto|Para el).{0,60}(?:tengo entrevistas? a las|estas opciones)/im);
+            if (splitIdx > 20) {
+                text = text.substring(0, splitIdx).trim() + '[MSG_SPLIT]' + text.substring(splitIdx).trim();
+            }
+        }
+    }
+
     // 🎓 ESCOLARIDAD LIST: Force vertical when GPT puts all options on one line
     if (/(?:🎒|🏫|🎓|📚|🛠|🧠).{0,25}(?:🎒|🏫|🎓|📚|🛠|🧠)/.test(text)) {
         text = text
