@@ -108,6 +108,19 @@ function formatRecruiterMessage(text) {
         }
     }
 
+    // 🎂 FECHA DE NACIMIENTO: Inject example format if GPT forgot it
+    if (/fecha de nacimiento|cu[aá]ndo naciste|d[ií]a de nacimiento/i.test(text)
+        && !/(?:ej\.|ejemplo|DD\/|por ejemplo|\d{2}\/\d{2}\/\d{4})/i.test(text)) {
+        // Append example before the closing question mark if present
+        const lastQ = text.lastIndexOf('\xbf');
+        const example = ' (ej. 19/05/1983)';
+        if (lastQ > 0) {
+            text = text.substring(0, lastQ).trimEnd() + example + ' ' + text.substring(lastQ).trim();
+        } else {
+            text = text.trimEnd() + example;
+        }
+    }
+
     // 📅 DATE LIST: Add 📅 to numbered day lines if GPT forgot it
     // Matches: "1️⃣ Lunes 2 de Marzo" or "2️⃣ Martes..." without a leading 📅
     text = text.replace(
