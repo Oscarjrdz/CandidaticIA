@@ -129,20 +129,22 @@ function formatRecruiterMessage(text, candidateData = null) {
         (_, num, day) => `📅 ${num} ${day}`
     );
     // Strip stray 'o' connector words GPT inserts between date items
-    // e.g. "Martes 10 de Marzo o\n" → "Martes 10 de Marzo\n"
-    text = text.replace(/\s+\bo\b\s*(?=\n|$)/gm, '');
+    // e.g. "Martes 10 de Marzo o\n" or a lone "o" line → removed
+    text = text.replace(/[^\S\n]*\bo\b\s*(?=\n|$)/gm, '');   // "o" at end of line
+    text = text.replace(/^\s*o\s*$/gm, '');                    // "o" alone on its own line
     // Normalize ALL header variants GPT uses → canonical "Tengo entrevistas los días:"
-    // Covers: "disponibles para el:", "para los días:", "para los siguientes días:", "el:", etc.
+    // KEY FIX: "los?" and "siguientes?" are OUTSIDE the "para" group so they're consumed
+    // whether or not GPT included "para":
+    //   "disponibles los días:"          → "los días:" ✓
+    //   "disponibles para los días:"     → "los días:" ✓
+    //   "disponibles para los siguientes días:" → "los días:" ✓
+    //   "para el:" / "el:"              → "los días:" ✓
     text = text.replace(
-        /Tengo entrevistas?\s+(?:disponibles?\s+)?(?:para\s+(?:la\s+semana\s+de\s+)?(?:los?\s+)?(?:siguientes?\s+)?)?d[ií]as?:/gi,
+        /Tengo entrevistas?\s+(?:disponibles?\s+)?(?:(?:para|de)\s+)?(?:la\s+semana\s+de\s+)?(?:los?\s+)?(?:siguientes?\s+)?(?:d[ií]as?|el)\s*:/gi,
         'Tengo entrevistas los días:'
     );
-    text = text.replace(
-        /Tengo entrevistas?\s+(?:disponibles?\s+)?(?:para\s+el|el)\s*:/gi,
-        'Tengo entrevistas los días:'
-    );
-    // Post-strip: remove any leftover "para el:" / "para los:" / "para:" after canonical header
-    text = text.replace(/(Tengo entrevistas los d[ií]as:)\s*para\s+(?:los?\s+)?(?:siguientes?\s+)?(?:d[ií]as?|el)?:?/gi, '$1');
+    // Post-strip: remove any leftover "para los [siguientes] [días]:" after canonical header
+    text = text.replace(/(Tengo entrevistas los d[ií]as:)\s*para\s+(?:los?\s+)?(?:siguientes?\s+)?(?:d[ií]as?|el)?\s*:?/gi, '$1');
 
     // ⏰ HOURS MESSAGE: detect when GPT lists time slots (may use 🔹 or number emojis)
     // Trigger is broader: GPT humanizes dates so outputs no YYYY-MM-DD.
