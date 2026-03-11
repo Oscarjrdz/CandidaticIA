@@ -81,8 +81,13 @@ function formatRecruiterMessage(text) {
         }
     }
 
-    // 🎓 ESCOLARIDAD LIST: Force vertical when GPT puts all options on one line
-    if (/(?:🎒|🏫|🎓|📚|🛠|🧠).{0,25}(?:🎒|🏫|🎓|📚|🛠|🧠)/.test(text)) {
+    // 🎓 ESCOLARIDAD LIST: Force vertical format OR inject if GPT forgot the list entirely
+    const ESC_LIST = '\n\n🎒 Primaria\n\n🏫 Secundaria\n\n🎓 Preparatoria\n\n📚 Licenciatura\n\n🛠️ Técnica\n\n🧠 Posgrado';
+    const hasAnyEscEmoji = /(?:🎒|🏫|📚|🛠|🧠)/.test(text);
+    const asksAboutEsc   = /(?:nivel de estudios|escolaridad|nivel escolar)/i.test(text);
+
+    if (hasAnyEscEmoji) {
+        // GPT included options but possibly inline — force vertical spacing
         text = text
             .replace(/\s*🎒\s*Primaria/gi,      '\n\n🎒 Primaria')
             .replace(/\s*🏫\s*Secundaria/gi,     '\n\n🏫 Secundaria')
@@ -92,6 +97,15 @@ function formatRecruiterMessage(text) {
             .replace(/\s*🧠\s*Posgrado/gi,       '\n\n🧠 Posgrado')
             .replace(/\n{3,}/g, '\n\n')
             .trim();
+    } else if (asksAboutEsc) {
+        // GPT asked but forgot the list — inject it before the closing question
+        const lastQ = text.lastIndexOf('\xbf');        // last ¿
+        if (lastQ > 0) {
+            text = text.substring(0, lastQ).trimEnd() + ESC_LIST + '\n\n' + text.substring(lastQ).trim();
+        } else {
+            // no closing question found — just append the list
+            text = text.trimEnd() + ESC_LIST;
+        }
     }
 
     // 📅 DATE LIST: Add 📅 to numbered day lines if GPT forgot it
