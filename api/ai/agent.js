@@ -84,12 +84,17 @@ function formatRecruiterMessage(text) {
         (_, num, day) => `📅 ${num} ${day}`
     );
 
-    // ⏰ HOURS MESSAGE: "Perfecto, para el YYYY-MM-DD tengo estas opciones..."
-    if (/Perfecto.{0,60}\d{4}-\d{2}-\d{2}/i.test(text)) {
+    // ⏰ HOURS MESSAGE: detect when GPT lists time slots (may use 🔹 or number emojis)
+    // Trigger is broader now because GPT humanizes dates (no YYYY-MM-DD in output).
+    const hasTimeSlots = /(?:🔹\s*Opci[oó]n\s*\d+|\d️⃣|\btengo entrevistas? a las\b)/i.test(text)
+        || (/\d{1,2}:\d{2}\s*(?:AM|PM)/i.test(text) && /(?:1️⃣|2️⃣|🔹)/i.test(text));
+    if (hasTimeSlots) {
         let slotIdx = 0;
+        // 🔹 Opción N: → 1️⃣, 2️⃣...
         text = text.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${_NUM_EMOJIS[slotIdx++] || `${slotIdx}.`} `);
+        // ⏰ after every time if missing
         text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
-        // Split closing ¿Cuál prefieres? as separate bubble
+        // Split closing question as separate bubble
         const _qIdx = text.lastIndexOf('\xbf');
         if (_qIdx > 0) {
             text = text.substring(0, _qIdx).trim() + '[MSG_SPLIT]' + text.substring(_qIdx).trim();
