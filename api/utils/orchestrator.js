@@ -189,7 +189,11 @@ export class Orchestrator {
         }
 
         // 2. ATOMIC TRANSACTION: State Migration
+        // CRITICAL: candidateData here already has the MERGED extract (escolaridad, etc.)
+        // from agent.js: executeHandover({ ...candidateData, ...candidateUpdates }, ...)
+        // So we pass ALL of it to updateCandidate, not just the project fields.
         await updateCandidate(candidateId, {
+            ...candidateData,                                         // Preserves escolaridad + all freshly extracted fields
             projectId: targetProjectId,
             stepId: firstStep.id,
             congrats_sent_at: new Date().toISOString(),
