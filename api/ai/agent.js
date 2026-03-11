@@ -122,15 +122,14 @@ function formatRecruiterMessage(text, candidateData = null) {
         }
     }
 
-    // 📅 DATE LIST: ensure number-emoji day lines have no leading 📅 (user preference)
-    // Also strip any trailing 📅 GPT appends after the date text
+    // 📅 DATE LIST: Remove LEADING 📅 (before number emoji), KEEP/ADD TRAILING 📅 (after date)
+    // Target format: "1️⃣ Miércoles 11 de Marzo 📅"
+    // Step 1: strip any 📅 that appears right before a number emoji
+    text = text.replace(/📅\s*(1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)/g, '$1');
+    // Step 2: for each date line that has a number emoji but no trailing 📅, add one
     text = text.replace(
-        /📅\s*(1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)/g,
-        '$1'  // remove leading 📅 before number emoji
-    );
-    text = text.replace(
-        /((1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)[^\n]*)\s*📅\s*/g,
-        '$1'  // remove trailing 📅 after date text
+        /^((1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣)\s+(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)[^\n📅]*?)(?!\s*📅)\s*$/gm,
+        '$1 📅'
     );
     // Strip stray 'o' connector words GPT inserts between date items
     // e.g. "Martes 10 de Marzo o\n" or a lone "o" line → removed
