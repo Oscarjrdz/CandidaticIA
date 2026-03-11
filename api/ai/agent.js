@@ -772,14 +772,113 @@ ${safeDnaLines}
 
             let recruiterTriggeredMove = false;
 
-            // 🤫 NO INTERESA SILENCE: if candidate is in 'no interesa' and sends a farewell, stay silent
+            // 🤫 NO INTERESA SILENCE + REACTIVATION
             const currentStepNameLower = (currentStep?.name || '').toLowerCase();
             const isNoInteresaStep = currentStepNameLower.includes('no interesa');
-            const FAREWELL_PATTERNS = /^(adiós|adios|hasta luego|bye|chao|gracias|ok gracias|okas|oks|hasta pronto|nos vemos|cuídate|cuidate|hasta la próxima|hasta la proxima|salud[o]?s?|saludos|buen[ao]s? días|buen[ao]s? tarde|buen[ao]s? noche|buenas|k|q|ok|👋|🙋|😊|graciass|graciaas)\s*[!.]*$/i;
-            const isFarewellMessage = FAREWELL_PATTERNS.test(aggregatedText.trim());
-            if (isNoInteresaStep && isFarewellMessage) {
-                console.log(`[RECRUITER BRAIN] No Interesa step — farewell detected, staying silent for ${candidateId}`);
-                return; // Silent
+
+            if (isNoInteresaStep) {
+                const FAREWELL_PATTERNS = /^(adiós|adios|hasta luego|bye|chao|gracias|ok gracias|okas|oks|hasta pronto|nos vemos|cuídate|cuidate|hasta la próxima|hasta la proxima|salud[o]?s?|saludos|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche|buenas|k|q|ok|👋|🙋|😊|graciass|graciaas)\s*[!.]*$/i;
+                const REACTIVATION_YES = /^(s[ií]|claro|ok dale|dale|por fa|porfa|me interesa|s[ií] quiero|me gustar[íi]a|s[ií] por favor|adelante|ándale|andale|quiero|me interesa s[ií]|va|sale|si claro)\s*[!.]*$/i;
+
+                const isFarewellMessage = FAREWELL_PATTERNS.test(aggregatedText.trim());
+                const isReactivationYes = REACTIVATION_YES.test(aggregatedText.trim());
+
+                if (isFarewellMessage) {
+                    console.error(`[RECRUITER BRAIN] No Interesa — farewell detected, staying silent for ${candidateId}`);
+                    return; // Silent
+                }
+
+                if (isReactivationYes) {
+                    console.error(`[RECRUITER BRAIN] No Interesa — candidate wants to see vacancies, running bypass match for ${candidateId}`);
+                    try {
+                        const candFirstName = (candidateData.nombreReal || candidateData.nombre || 'Claro').split(' ')[0];
+
+                        // 1. Run bypass rules to find the best matching project
+                        const { getActiveBypassRules, getProjects: getAllProjects } = await import('../utils/storage.js');
+                        const allProjects = await getAllProjects();
+                        const rules = await getActiveBypassRules();
+
+                        let targetProject = null;
+
+                        // Evaluate bypass rules (same logic as Orchestrator)
+                        const normalizeStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                        const cAge = parseInt(candidateData.edad);
+                        const cGender = normalizeStr(candidateData.genero);
+                        const cCat = normalizeStr(candidateData.categoria);
+                        const cMun = normalizeStr(candidateData.municipio);
+                        const cEsc = normalizeStr(candidateData.escolaridad);
+
+                        for (const rule of rules) {
+                            if (!isNaN(cAge)) {
+                                if (rule.minAge && cAge < parseInt(rule.minAge)) continue;
+                                if (rule.maxAge && cAge > parseInt(rule.maxAge)) continue;
+                            }
+                            const rGender = normalizeStr(rule.gender || 'Cualquiera');
+                            if (rGender !== 'cualquiera' && cGender !== rGender) continue;
+
+                            if (rule.categories?.length > 0) {
+                                const catMatch = rule.categories.some(rc => { const r = normalizeStr(rc); return r.includes(cCat) || cCat.includes(r); });
+                                if (!catMatch) continue;
+                            }
+                            if (rule.municipios?.length > 0) {
+                                const munMatch = rule.municipios.some(rm => { const r = normalizeStr(rm); return r.includes(cMun) || cMun.includes(r); });
+                                if (!munMatch) continue;
+                            }
+                            if (rule.escolaridades?.length > 0) {
+                                const escMatch = rule.escolaridades.some(re => { const r = normalizeStr(re); return r.includes(cEsc) || cEsc.includes(r); });
+                                if (!escMatch) continue;
+                            }
+                            targetProject = allProjects.find(p => p.id === rule.projectId) || null;
+                            if (targetProject) break;
+                        }
+
+                        // Fallback to current project if no bypass match
+                        if (!targetProject) targetProject = project;
+
+                        const vacancyIds = targetProject?.vacancyIds || [];
+                        if (!vacancyIds.length) {
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp,
+                                `¡Claro, ${candFirstName}! 😊 En este momento estamos actualizando nuestras vacantes. Te avisaré en cuanto tengamos algo nuevo. ¡Gracias por tu interés! 🌟`, 'chat');
+                            return;
+                        }
+
+                        // 2. Send intro + each vacancy's messageDescription
+                        const introMsg = `¡Claro, ${candFirstName}! 🌟 Déjame mostrarte lo que tenemos disponible ahora mismo:`;
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, introMsg, 'chat', { priority: 1 });
+                        saveMessage(candidateId, { from: 'me', content: introMsg, timestamp: new Date().toISOString() }).catch(() => {});
+
+                        for (let i = 0; i < vacancyIds.length; i++) {
+                            await new Promise(r => setTimeout(r, 700));
+                            const vac = await getVacancyById(vacancyIds[i]);
+                            if (!vac) continue;
+                            const vacMsg = vac.messageDescription || vac.description || `📌 ${vac.name} — ${vac.company}`;
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, vacMsg, 'chat', { priority: 1 });
+                            saveMessage(candidateId, { from: 'me', content: vacMsg, timestamp: new Date().toISOString() }).catch(() => {});
+                        }
+
+                        // 3. Close with a hook
+                        await new Promise(r => setTimeout(r, 700));
+                        const closingMsg = `¿Alguna de estas opciones te llama la atención? 😊`;
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, closingMsg, 'chat', { priority: 1 });
+                        saveMessage(candidateId, { from: 'me', content: closingMsg, timestamp: new Date().toISOString() }).catch(() => {});
+
+                        // 4. Move candidate to first step of matched project to restart flow
+                        const firstStep = targetProject.steps?.[0];
+                        if (firstStep) {
+                            await moveCandidateStep(targetProject.id, candidateId, firstStep.id);
+                            await updateCandidate(candidateId, {
+                                projectId: targetProject.id,
+                                stepId: firstStep.id,
+                                currentVacancyIndex: 0,
+                                currentVacancyName: null
+                            });
+                        }
+                    } catch (e) {
+                        console.error('[RECRUITER BRAIN] Reactivation error:', e.message);
+                    }
+                    return;
+                }
+                // If not farewell and not a clear 'yes' — let the AI handle it (reactivation prompt)
             }
 
             if (currentStep?.aiConfig?.enabled && currentStep.aiConfig.prompt) {
