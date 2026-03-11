@@ -1784,7 +1784,19 @@ ${safeDnaLines}
                         ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
                     }
                     Object.assign(candidateUpdates, Object.fromEntries(
-                        Object.entries(ext).filter(([_, v]) => v !== null && v !== undefined && v !== 'null' && v !== 'N/A')
+                        Object.entries(ext).filter(([k, v]) => {
+                            if (v === null || v === undefined) return false;
+                            const str = String(v).trim();
+                            if (str === '' || str === 'null' || str === 'N/A' || str === 'proporcionado' || str.length < 2) return false;
+                            // 🛡️ PROFILE GUARD: Never blank out a field the candidate already filled.
+                            // Only overwrite if the candidate doesn't have the value yet.
+                            const profileFields = ['categoria', 'municipio', 'escolaridad', 'fechaNacimiento', 'nombreReal'];
+                            if (profileFields.includes(k) && candidateData[k] && String(candidateData[k]).trim().length > 2) {
+                                // Allow update only if new value is substantively different (not empty/junk)
+                                return str.length >= 3;
+                            }
+                            return true;
+                        }).map(([k, v]) => [k, v])
                     ));
 
                     // 🧬 NEW: Programmatic Name Combination Fallback
