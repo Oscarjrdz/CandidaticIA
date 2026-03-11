@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Wifi, WifiOff, Plus, Trash2, RefreshCw, Copy, CheckCircle,
     AlertCircle, Clock, MessageSquare, ArrowDownCircle, ArrowUpCircle,
-    Smartphone, Globe, Eye, EyeOff, ChevronDown, ChevronUp, QrCode
+    Smartphone, Globe, Eye, EyeOff, ChevronDown, ChevronUp, QrCode, Pencil, Save, X
 } from 'lucide-react';
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -219,6 +219,9 @@ const InstanceCard = ({ instance, fullToken, onDelete, onRefresh, showToast }) =
     const [showHistory, setShowHistory] = useState(false);
     const [expanded, setExpanded] = useState(false);
     const [deleting, setDeleting] = useState(false);
+    const [editingWebhook, setEditingWebhook] = useState(false);
+    const [webhookDraft, setWebhookDraft] = useState(instance.webhookUrl || '');
+    const [savingWebhook, setSavingWebhook] = useState(false);
     const [liveStatus, setLiveStatus] = useState({
         state: instance.state,
         messagesIn: instance.messagesIn || 0,
@@ -232,6 +235,28 @@ const InstanceCard = ({ instance, fullToken, onDelete, onRefresh, showToast }) =
     // ⚠️ NO auto-polling — was causing cascading re-renders across the whole app.
     // Status refreshes when user clicks "Actualizar" manually or when QR modal closes.
 
+
+    const handleSaveWebhook = async () => {
+        setSavingWebhook(true);
+        try {
+            const res = await fetch(`/api/gateway/instances?instanceId=${instance.instanceId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ webhookUrl: webhookDraft.trim() })
+            }).then(r => r.json());
+            if (res.success) {
+                showToast('Webhook actualizado ✅', 'success');
+                instance.webhookUrl = webhookDraft.trim();
+                setEditingWebhook(false);
+            } else {
+                showToast(res.error || 'Error al guardar', 'error');
+            }
+        } catch {
+            showToast('Error de conexión', 'error');
+        } finally {
+            setSavingWebhook(false);
+        }
+    };
 
     const handleDelete = async () => {
         if (!window.confirm(`¿Eliminar la instancia "${instance.name}"? Esta acción no se puede deshacer.`)) return;
@@ -318,7 +343,53 @@ const InstanceCard = ({ instance, fullToken, onDelete, onRefresh, showToast }) =
                 <div className="px-5 pb-5 space-y-3 border-t border-black/5 dark:border-white/5 pt-4">
                     <CopyField label="Instance ID" value={instance.instanceId} />
                     <CopyField label="Token" value={fullToken || instance.token} masked={true} />
-                    {instance.webhookUrl && <CopyField label="Webhook URL" value={instance.webhookUrl} />}
+
+                    {/* Webhook URL — editable */}
+                    <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Webhook URL</label>
+                            {!editingWebhook ? (
+                                <button
+                                    onClick={() => { setWebhookDraft(instance.webhookUrl || ''); setEditingWebhook(true); }}
+                                    className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors"
+                                >
+                                    <Pencil className="w-3 h-3" /> Editar
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => setEditingWebhook(false)}
+                                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                                >
+                                    <X className="w-3 h-3" /> Cancelar
+                                </button>
+                            )}
+                        </div>
+                        {editingWebhook ? (
+                            <div className="flex gap-2">
+                                <input
+                                    type="url"
+                                    value={webhookDraft}
+                                    onChange={e => setWebhookDraft(e.target.value)}
+                                    placeholder="https://tu-servidor.com/api/webhook"
+                                    className="flex-1 px-3 py-2 text-xs bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-700 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <button
+                                    onClick={handleSaveWebhook}
+                                    disabled={savingWebhook}
+                                    className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+                                >
+                                    {savingWebhook ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                    Guardar
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                <span className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate block">
+                                    {instance.webhookUrl || <span className="italic text-gray-400">Sin webhook configurado</span>}
+                                </span>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 

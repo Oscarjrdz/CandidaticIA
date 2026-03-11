@@ -5,12 +5,12 @@
  */
 
 import {
-    createInstance, getAllInstances, deleteInstance, getInstance
+    createInstance, getAllInstances, deleteInstance, getInstance, updateInstance
 } from './session-engine.js';
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, PATCH, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') return res.status(200).end();
 
@@ -60,7 +60,22 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, message: 'Instancia eliminada.' });
         }
 
+        // ── PATCH — Update webhook URL / name ─────────────────────────────────
+        if (req.method === 'PATCH') {
+            const { instanceId } = req.query;
+            if (!instanceId) return res.status(400).json({ success: false, error: 'instanceId requerido.' });
+            const existing = await getInstance(instanceId);
+            if (!existing) return res.status(404).json({ success: false, error: 'Instancia no encontrada.' });
+            const { webhookUrl, name } = req.body || {};
+            const updates = {};
+            if (webhookUrl !== undefined) updates.webhookUrl = webhookUrl.trim();
+            if (name?.trim()) updates.name = name.trim();
+            const updated = await updateInstance(instanceId, updates);
+            return res.status(200).json({ success: true, instance: { ...updated, token: updated.token ? `${updated.token.substring(0, 8)}••••••••` : null } });
+        }
+
         return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+
 
     } catch (err) {
         console.error('[GATEWAY /instances]', err.message);
