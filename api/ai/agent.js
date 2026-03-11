@@ -65,6 +65,18 @@ function humanizeDate(dateStr) {
 function formatRecruiterMessage(text, candidateData = null) {
     if (!text) return text;
 
+    // 🧹 WHITESPACE CLEANUP: Collapse 3+ consecutive blank lines → max 1 blank line
+    text = text.replace(/\n{3,}/g, '\n\n');
+
+    // 😊 ORPHAN EMOJI CLEANUP: A line that contains ONLY emojis (no letters/digits)
+    // gets merged onto the previous line so it doesn't create a distracting gap.
+    text = text.replace(/\n(\s*[\p{Emoji}\s]+\s*)\n/gu, (match, emojiLine) => {
+        const clean = emojiLine.trim();
+        // Only merge if the line is purely emojis (no words)
+        if (clean && !/[a-zA-ZÀ-ÿ0-9]/.test(clean)) return ` ${clean}\n`;
+        return match;
+    });
+
     // 📅 HUMANIZE raw YYYY-MM-DD dates that GPT leaked into the output
     text = text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => humanizeDate(`${y}-${m}-${d}`));
 
