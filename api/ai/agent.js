@@ -1203,8 +1203,15 @@ ${safeDnaLines}
                                             confirmPromises.push(saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() }));
                                         }
                                         else if (item.type === 'image' && item.data?.url) {
-                                            confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.url, 'image', { priority: p }));
-                                            confirmPromises.push(saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${item.data.url}]`, timestamp: new Date().toISOString() }));
+                                            let imgUrl = item.data.url;
+                                            // Resolve relative /api/ paths → absolute URL for UltraMsg
+                                            if (imgUrl.startsWith('/')) {
+                                                imgUrl = `${process.env.NEXT_PUBLIC_API_URL || 'https://candidatic-ia.vercel.app'}${imgUrl}`;
+                                            } else if (imgUrl.includes('candidatic.ia') && !imgUrl.includes('vercel.app')) {
+                                                imgUrl = imgUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
+                                            }
+                                            confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, imgUrl, 'image', { priority: p }));
+                                            confirmPromises.push(saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${imgUrl}]`, timestamp: new Date().toISOString() }));
                                         }
                                         else if (item.type === 'location' && item.data?.lat && item.data?.lng) {
                                             confirmPromises.push(sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {

@@ -19,6 +19,22 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, MessageSquare, MapPin, Image as ImageIcon, Type, Map, Loader2, UploadCloud, Trash2 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 
+// Normalize any stored URL back to a relative path for browser display.
+// Handles: old localhost URLs, wrong domain, or already-relative paths.
+function resolveImageSrc(url) {
+    if (!url) return '';
+    try {
+        const parsed = new URL(url);
+        // If it's pointing to /api/image, use the relative path (works on any domain)
+        if (parsed.pathname.startsWith('/api/')) {
+            return `${parsed.pathname}${parsed.search}`;
+        }
+    } catch {
+        // Not a full URL → already relative, use as-is
+    }
+    return url;
+}
+
 const DEFAULT_ITEMS = [
     { id: 'item-text', type: 'text', enabled: true, data: { text: '¡Excelente! Te confirmo los detalles de tu entrevista:' } },
     { id: 'item-location', type: 'location', enabled: true, data: { address: 'Oficinas Centrales', lat: '19.4326', lng: '-99.1332' } },
@@ -60,7 +76,8 @@ const SortableItem = ({ item, isDragging, onUpdate, onToggle }) => {
 
                 if (data.success) {
                     const ext = `.${file.name.split('.').pop()}`;
-                    const docUrl = `${window.location.origin}${data.url}&ext=${ext.replace('.', '')}`;
+                    // Store as RELATIVE path so it works regardless of origin (dev/prod/localhost)
+                    const docUrl = `${data.url}&ext=${ext.replace('.', '')}`;
                     onUpdate(item.id, { url: docUrl });
                     showToast('Imagen cargada exitosamente', 'success');
                 } else {
@@ -225,7 +242,7 @@ const SortableItem = ({ item, isDragging, onUpdate, onToggle }) => {
                                 ) : (
                                     <div className="relative group rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 overflow-hidden">
                                         <img
-                                            src={item.data.url}
+                                            src={resolveImageSrc(item.data.url)}
                                             alt="Preview"
                                             className="w-full h-40 object-contain p-2"
                                             onError={(e) => {
