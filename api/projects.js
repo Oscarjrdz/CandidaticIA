@@ -146,7 +146,40 @@ export default async function handler(req, res) {
                 }
 
                 const success = await updateProjectSteps(pid, steps);
+
+                // 🔄 AUTO-SYNC TEMPLATE: If this project is the pinned live-sync project, update master template too
+                if (success) {
+                    try {
+                        const redis = getRedisClient();
+                        if (redis) {
+                            const syncPid = await redis.get('projects:template_live_sync');
+                            if (syncPid && syncPid === pid) {
+                                await redis.set('projects:master_template', JSON.stringify(steps));
+                                console.log(`[Template] Auto-synced master template from project ${pid} (${steps.length} steps)`);
+                            }
+                        }
+                    } catch (e) { console.warn('[Template] Auto-sync failed:', e.message); }
+                }
+
                 return res.status(200).json({ success, message: success ? 'Steps updated' : 'Project not found' });
+            }
+
+            if (action === 'enableTemplateSync') {
+                const pid = bodyProjectId || body.projectId;
+                if (!pid) return res.status(400).json({ success: false, error: 'Project ID required' });
+                const redis = getRedisClient();
+                if (!redis) return res.status(500).json({ success: false, error: 'Redis unavailable' });
+                await redis.set('projects:template_live_sync', pid);
+                console.log(`[Template] Live-sync ENABLED for project ${pid}`);
+                return res.status(200).json({ success: true, message: `Auto-sync activado para proyecto ${pid}` });
+            }
+
+            if (action === 'disableTemplateSync') {
+                const redis = getRedisClient();
+                if (!redis) return res.status(500).json({ success: false, error: 'Redis unavailable' });
+                await redis.del('projects:template_live_sync');
+                console.log('[Template] Live-sync DISABLED');
+                return res.status(200).json({ success: true, message: 'Auto-sync desactivado' });
             }
 
             if (action === 'reorderProjects') {
