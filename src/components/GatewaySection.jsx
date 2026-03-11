@@ -74,29 +74,45 @@ const CopyField = ({ label, value, masked }) => {
 
 const QRModal = ({ instanceId, token, onClose }) => {
     const [qrData, setQrData] = useState(null);
-    const [state, setState] = useState('QR_PENDING');
+    const [state, setState] = useState('CONNECTING');
     const [phone, setPhone] = useState(null);
+    const [error, setError] = useState(null);
     const pollRef = useRef(null);
 
-    const fetchQR = useCallback(async () => {
+    // Poll GET /connect for state updates after QR is shown
+    const pollState = useCallback(async () => {
         try {
             const res = await api.getQR(instanceId);
             setState(res.state || 'QR_PENDING');
-            setQrData(res.qr || null);
-            setPhone(res.phone || null);
-            if (res.state === 'CONNECTED') {
-                clearInterval(pollRef.current);
-            }
+            if (res.qr) setQrData(res.qr);
+            if (res.phone) setPhone(res.phone);
+            if (res.state === 'CONNECTED') clearInterval(pollRef.current);
         } catch {}
     }, [instanceId]);
 
     useEffect(() => {
-        // Trigger connect
-        api.connectInstance(instanceId, token).catch(() => {});
-        fetchQR();
-        pollRef.current = setInterval(fetchQR, 5000);
+        // POST to connect — response contains the QR directly
+        api.connectInstance(instanceId, token)
+            .then(res => {
+                if (res.state === 'CONNECTED') {
+                    setState('CONNECTED');
+                    setPhone(res.phone);
+                } else if (res.qr) {
+                    setState('QR_PENDING');
+                    setQrData(res.qr);
+                    // Poll for CONNECTED event after user scans
+                    pollRef.current = setInterval(pollState, 4000);
+                } else {
+                    setError(res.error || 'No se pudo generar el QR. Intenta de nuevo.');
+                    setState('ERROR');
+                }
+            })
+            .catch(() => {
+                setError('Error de conexión. Intenta de nuevo.');
+                setState('ERROR');
+            });
         return () => clearInterval(pollRef.current);
-    }, [instanceId, token, fetchQR]);
+    }, [instanceId, token, pollState]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
@@ -113,11 +129,19 @@ const QRModal = ({ instanceId, token, onClose }) => {
                         <p className="text-sm text-gray-500 dark:text-gray-400">
                             Número: <span className="font-mono font-bold text-emerald-600">{phone}</span>
                         </p>
-                        <button
-                            onClick={onClose}
-                            className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold transition-colors"
-                        >
+                        <button onClick={onClose} className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-semibold transition-colors">
                             Listo
+                        </button>
+                    </div>
+                ) : state === 'ERROR' ? (
+                    <div className="space-y-4">
+                        <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto">
+                            <AlertCircle className="w-8 h-8 text-red-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900 dark:text-white">Error de conexión</h3>
+                        <p className="text-sm text-red-500">{error}</p>
+                        <button onClick={onClose} className="w-full py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 rounded-xl text-sm transition-colors hover:bg-gray-50">
+                            Cerrar
                         </button>
                     </div>
                 ) : (
@@ -136,19 +160,13 @@ const QRModal = ({ instanceId, token, onClose }) => {
                             ) : (
                                 <div className="flex flex-col items-center gap-3">
                                     <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                    <span className="text-xs text-gray-400">Generando QR...</span>
-                                </div>
-                            )}
-                            {/* Refresh indicator */}
-                            {qrData && (
-                                <div className="absolute bottom-2 right-2 bg-black/50 rounded-full p-1">
-                                    <RefreshCw className="w-3 h-3 text-white animate-spin" style={{ animationDuration: '3s' }} />
+                                    <span className="text-xs text-gray-400">{state === 'CONNECTING' ? 'Conectando...' : 'Generando QR...'}</span>
                                 </div>
                             )}
                         </div>
 
                         <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
-                            ⏱ El QR se actualiza cada 60 segundos automáticamente
+                            ⏱ Puede tardar hasta 30 segundos en aparecer
                         </p>
 
                         <button onClick={onClose} className="w-full py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
@@ -509,9 +527,16 @@ const CreateInstanceForm = ({ onCreated, showToast }) => {
 };
 
 // ─── Main Section ─────────────────────────────────────────────────────────────
+
+// Token storage — persists across page refreshes
+const GW_TOKENS_KEY = 'gw_tokens';
+const loadStoredTokens = () => { try { return JSON.parse(localStorage.getItem(GW_TOKENS_KEY) || '{}'); } catch { return {}; } };
+const saveStoredTokens = (tokens) => { try { localStorage.setItem(GW_TOKENS_KEY, JSON.stringify(tokens)); } catch {} };
+
 export default function GatewaySection({ showToast }) {
     const [instances, setInstances] = useState([]);
-    const [newInstanceTokens, setNewInstanceTokens] = useState({}); // Store full token on creation
+    // Full tokens: loaded from localStorage, updated on new instance creation
+    const [instanceTokens, setInstanceTokens] = useState(loadStoredTokens);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -532,8 +557,10 @@ export default function GatewaySection({ showToast }) {
     useEffect(() => { loadInstances(); }, [loadInstances]);
 
     const handleCreated = (newInstance) => {
-        // Store full token (only available at creation time)
-        setNewInstanceTokens(prev => ({ ...prev, [newInstance.instanceId]: newInstance.token }));
+        // Store full token in localStorage — survives page refresh
+        const updated = { ...loadStoredTokens(), [newInstance.instanceId]: newInstance.token };
+        saveStoredTokens(updated);
+        setInstanceTokens(updated);
         setInstances(prev => [newInstance, ...prev]);
     };
 
@@ -541,7 +568,10 @@ export default function GatewaySection({ showToast }) {
         const res = await api.deleteInstance(instanceId);
         if (res.success) {
             setInstances(prev => prev.filter(i => i.instanceId !== instanceId));
-            setNewInstanceTokens(prev => { const n = { ...prev }; delete n[instanceId]; return n; });
+            const updated = { ...loadStoredTokens() };
+            delete updated[instanceId];
+            saveStoredTokens(updated);
+            setInstanceTokens(updated);
         }
         return res;
     };
@@ -626,7 +656,7 @@ export default function GatewaySection({ showToast }) {
                         <InstanceCard
                             key={instance.instanceId}
                             instance={instance}
-                            fullToken={newInstanceTokens[instance.instanceId]}
+                            fullToken={instanceTokens[instance.instanceId]}
                             onDelete={handleDelete}
                             onRefresh={() => loadInstances(true)}
                             showToast={showToast}
