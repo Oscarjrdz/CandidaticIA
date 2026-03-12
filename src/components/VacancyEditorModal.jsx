@@ -795,10 +795,21 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                                             }`}>
                                                 <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 leading-none">
                                                     🤖 Auditoría: Brenda Respondió
-                                                    {selectedQuestion[faq.id] != null && <span className="text-[8px] bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded font-black ml-1">← Respuesta al tema</span>}
                                                 </p>
                                                 <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium leading-snug max-w-full">
-                                                    {(faq.lastAiResponse || 'Consultando base de datos oficial...').replace(/\[MSG_SPLIT\]/g, ' ')}
+                                                    {(() => {
+                                                        // If a question is selected, try to find its specific response
+                                                        if (selectedQuestion[faq.id] != null) {
+                                                            const dedupedList = deduplicateQuestions(faq.originalQuestions);
+                                                            const selected = dedupedList[selectedQuestion[faq.id]];
+                                                            if (selected) {
+                                                                const key = selected.text.trim().toLowerCase();
+                                                                const perQ = faq.questionResponses?.[key];
+                                                                if (perQ) return perQ.replace(/\[MSG_SPLIT\]/g, ' ');
+                                                            }
+                                                        }
+                                                        return (faq.lastAiResponse || 'Consultando base de datos oficial...').replace(/\[MSG_SPLIT\]/g, ' ');
+                                                    })()}
                                                 </p>
                                             </div>
                                         </div>

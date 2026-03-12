@@ -73,6 +73,9 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
                 }
                 faqs[index].lastAskedAt = new Date().toISOString();
                 faqs[index].lastAiResponse = responseText;
+                // Store per-question response
+                if (!faqs[index].questionResponses) faqs[index].questionResponses = {};
+                faqs[index].questionResponses[question.trim().toLowerCase()] = responseText;
             } else {
                 faqs.push({
                     id: generateId(),
@@ -81,6 +84,7 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
                     frequency: 1,
                     officialAnswer: null,
                     lastAiResponse: responseText,
+                    questionResponses: { [question.trim().toLowerCase()]: responseText },
                     lastAskedAt: new Date().toISOString()
                 });
             }
@@ -92,6 +96,7 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
                 frequency: 1,
                 officialAnswer: null,
                 lastAiResponse: responseText,
+                questionResponses: { [question.trim().toLowerCase()]: responseText },
                 lastAskedAt: new Date().toISOString()
             });
         }
