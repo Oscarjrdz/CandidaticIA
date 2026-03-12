@@ -69,6 +69,21 @@ export class AIGuard {
         // Ensure extracted data is preserved
         aiResult.extracted_data = extracted;
 
+        // 7. 🔍 JOB INQUIRY INTERCEPT (SUCCESS PATH): If profile is incomplete and user asked
+        // about vacancies or interviews, override the AI response with a purposeful redirect.
+        // This runs even when the AI gave a valid response, because the AI often ignores the question.
+        if (!isProfileComplete && lastInput) {
+            const isJobInquiry = /(?:[?¿]|\b)(vacantes?|entrevistas?|sueldo|salario|pagan|horario|turnos|d[oó]nde\s+(?:son|est[aá]|queda)|ubicaci[oó]n|tienes\s+trabajo|hay\s+trabajo)/i.test(lastInput);
+            if (isJobInquiry) {
+                const firstMissing = safeMissing[0] || 'nombre completo';
+                const isInterviewQ = /entrevistas?|d[oó]nde|ubicaci[oó]n/i.test(lastInput);
+                const interceptText = isInterviewQ
+                    ? `Para darte información de las entrevistas primero debo tener tu ${firstMissing}, ¿me lo compartes? 😊`
+                    : `¡Sí! 😊 Tenemos vacantes, pero primero dime tu ${firstMissing}. ✨`;
+                aiResult.response_text = interceptText;
+            }
+        }
+
         // 6. 🌸 Compliment Intercept (Successful LLM Response)
         // If the LLM successfully generated a response but the user was flirting, it often sounds robotic (e.g., "Eso suena divertido, pero...").
         // We override the robotic preamble with a natural flirty AI-Guard phrase.
