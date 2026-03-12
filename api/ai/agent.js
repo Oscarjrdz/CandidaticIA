@@ -1008,8 +1008,12 @@ ${safeDnaLines}
                     const mdStr = candidateData.projectMetadata;
                     const parsedMd = (typeof mdStr === 'string' && mdStr.trim() !== '') ? JSON.parse(mdStr) : (mdStr || {});
                     const mergedMeta = { ...parsedMd, ...(candidateUpdates.projectMetadata || {}) };
-                    const hasCitaConfirmed = mergedMeta?.citaFecha && mergedMeta?.citaHora
-                        && mergedMeta.citaFecha !== 'null' && mergedMeta.citaHora !== 'null';
+                    // Also check the last bot messages as fallback (in case DB flush was async)
+                    const lastBotHasCita = (lastBotMessages || []).some(m => /tu cita queda agendada|te esperamos el|agendada para el/i.test(m));
+                    const hasCitaConfirmed = lastBotHasCita || (
+                        mergedMeta?.citaFecha && mergedMeta?.citaHora
+                        && mergedMeta.citaFecha !== 'null' && mergedMeta.citaHora !== 'null'
+                    );
                     const FAREWELL_RE = /^(bye|adiós|adios|hasta luego|chao|gracias|ok gracias|graciass|hasta pronto|nos vemos|cuídate|cuidate|hasta la próxima|hasta la proxima|hasta pronto|👋|🙋|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche)\s*[!.?]*$/i;
                     if (hasCitaConfirmed && FAREWELL_RE.test(aggregatedText.trim())) {
                         const candFirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || 'tú').split(' ')[0];
@@ -1974,9 +1978,9 @@ ${safeDnaLines}
                 }
 
                 // 🔍 JOB INQUIRY INTERCEPT: If candidate asked about vacancies/interviews before
-                // completing profile, replace with the proper inquiry-aware response even if validation failed.
-                if (responseTextVal && freshAudit.paso1Status !== 'COMPLETO') {
-                    const isJobInquiry = /(?:[?¿]|\b)(vacantes?|entrevistas?|sueldo|salario|pagan|horario|turnos|d[oó]nde|ubicaci[oó]n)/i.test(aggregatedText || '');
+                // completing profile, always reply with the inquiry-aware response (even if AI was silent).
+                if (freshAudit.paso1Status !== 'COMPLETO') {
+                    const isJobInquiry = /(?:[?¿]|\b)(vacantes?|entrevistas?|sueldo|salario|pagan|horario|turnos|d[oó]nde|ubicaci[oó]n|tienes\s+trabajo|hay\s+trabajo|ofrecen|qu[eé]\s+ofrecen)/i.test(aggregatedText || '');
                     if (isJobInquiry) {
                         const firstMissing = freshAudit.missingLabels?.[0] || 'nombre completo';
                         const isInterviewQ = /entrevistas?|d[oó]nde|ubicaci[oó]n/i.test(aggregatedText || '');
