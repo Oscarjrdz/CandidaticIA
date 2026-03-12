@@ -77,9 +77,9 @@ function formatRecruiterMessage(text, candidateData = null) {
     text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
 
     // 📅 SINGLE-DATE QUESTION FIX: "¿Qué día te queda mejor?" only makes sense with multiple dates.
-    // If the message has only ONE date (no numbered list), use the singular form instead.
-    const hasNumberedList = /(?:1️⃣|2️⃣|3️⃣)/.test(text);
-    if (!hasNumberedList) {
+    // If there's only ONE date (1️⃣ but no 2️⃣/3️⃣), or no numbered list at all, use the singular form.
+    const hasMultipleDates = /2️⃣|3️⃣|4️⃣|5️⃣/.test(text);
+    if (!hasMultipleDates) {
         text = text.replace(/¿Qué día te queda mejor\??/gi, '¿Te queda bien ese día?');
     }
 
