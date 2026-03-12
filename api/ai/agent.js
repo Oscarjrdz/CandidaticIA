@@ -830,13 +830,16 @@ ${safeDnaLines}
 
                 const isFarewellMessage = FAREWELL_PATTERNS.test(aggregatedText.trim());
                 const isReactivationYes = REACTIVATION_YES.test(aggregatedText.trim());
+                // Vacancy question also triggers compact list (not just "Sí")
+                const VACANCY_Q_RE = /(?:qu[eé]\s+vacantes?|qu[eé]\s+(?:opciones?|puestos?|trabajo|empleos?)\s+(?:tienen?|hay|tienen?|ofrecen?)|tienen?\s+vacantes?|hay\s+vacantes?)/i;
+                const isVacancyQuestion = VACANCY_Q_RE.test(aggregatedText.trim());
 
                 if (isFarewellMessage) {
                     console.error(`[RECRUITER BRAIN] No Interesa — farewell detected, staying silent for ${candidateId}`);
                     return; // Silent
                 }
 
-                if (isReactivationYes) {
+                if (isReactivationYes || isVacancyQuestion) {
                     console.error(`[RECRUITER BRAIN] No Interesa — candidate wants to see vacancies, running bypass match for ${candidateId}`);
                     try {
                         const candFirstName = (candidateData.nombreReal || candidateData.nombre || 'Claro').split(' ')[0];
