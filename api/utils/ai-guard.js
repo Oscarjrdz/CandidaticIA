@@ -221,8 +221,7 @@ export class AIGuard {
         let inquiryResponse = "";
         if (isJobInquiry && !isCompliment) {
             // Build a coherent combined message: acknowledge + transition
-            const connector2 = firstMissing.toLowerCase().includes('apellido') || firstMissing.toLowerCase() === 'nombre completo' ? 'tu' : 'tu';
-            recoveryText = `¡Claro! 😊 Tenemos vacantes disponibles con muy buenas condiciones. Para darte la información de la opción que más encaje contigo, primero necesito completar tu registro rápido. ¿Me podrías decir ${connector2} ${firstMissing}? ✨`;
+            recoveryText = `¡Sí! 😊 Tenemos vacantes disponibles. ¿Me dices tu ${firstMissing}? ✨`;
             inquiryResponse = "";
         }
 
