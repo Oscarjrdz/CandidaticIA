@@ -1011,6 +1011,14 @@ ${safeDnaLines}
                     const unansweredQ = rawUQ && rawUQ !== 'null' && rawUQ !== 'undefined' && String(rawUQ).trim().length > 3
                         ? String(rawUQ).trim() : null;
 
+                    // 🛡️ RADAR GUARD: AI set unanswered_question but forgot the response_text.
+                    // Enforce the exact fallback text defined in RECRUITER_IDENTITY so the bot
+                    // never goes silent on a question — keeps conversation open without presupposing any next step.
+                    if (unansweredQ && !responseTextVal) {
+                        responseTextVal = 'Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨';
+                        aiResult.response_text = responseTextVal;
+                    }
+
                     // 🔄 RECALCULATE activeVacancyId: if we just rotated to a new vacancy this turn,
                     // use the NEW index so questions are filed under the correct vacancy
                     if (candidateUpdates.currentVacancyIndex !== undefined && project?.vacancyIds?.length > 0) {
@@ -1949,8 +1957,9 @@ ${safeDnaLines}
                 if (hasMedia) {
                     responseTextVal = "Aquí está la información. 😉 ¿Te gustaría que te agende una cita de entrevista?";
                 } else if (recruiterClosedSilently) {
-                    // Unknown FAQ — be honest, redirect to interview
-                    responseTextVal = "Esa información no la tengo a la mano 😅, pero en la entrevista te la dan completa. ¿Te agendo una cita? 😊";
+                    // Unknown / unanswered question — use the designed RADAR DE DUDAS fallback text,
+                    // same as RECRUITER_IDENTITY defines, keeps conversation open without pushing to cita.
+                    responseTextVal = 'Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨';
                 } else {
                     responseTextVal = "¡Disculpa! Hubo un pequeño inconveniente. 😅 ¿Quieres que reserve tu cita para entrevista?";
                 }
