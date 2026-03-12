@@ -69,6 +69,8 @@ function formatRecruiterMessage(text, candidateData = null) {
     text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
     // Also strip single-star italic (*text*) that may appear in dates
     text = text.replace(/\*([^*\n]+)\*/g, '$1');
+    // 🔤 VOCABULARIO: Reemplaza 'resides'→'vives' determinísticamente
+    text = text.replace(/\bresides\b/gi, 'vives').replace(/\breside\b/gi, 'vive');
     // 🧹 WHITESPACE CLEANUP: Collapse 3+ consecutive blank lines → max 1 blank line
     text = text.replace(/\n{3,}/g, '\n\n');
 
@@ -327,8 +329,12 @@ function formatRecruiterMessage(text, candidateData = null) {
                 const bodyPart = text.substring(0, splitAt).trim();
                 // Strip any orphan emojis/whitespace the AI placed between the answer and the ¿ question
                 let questionPart = text.substring(splitAt).replace(/^[\p{Emoji}\p{Emoji_Modifier}\p{Emoji_Component}\s]+(?=[¿¡])/gu, '').trim();
-                if (bodyPart.length > 20 && questionPart.length > 5) {
-                    text = bodyPart + '[MSG_SPLIT]' + questionPart;
+                if (bodyPart.length > 20 && questionPart.length > 20) {
+                    // Don't split very short polite connectors (¿Me lo compartes? ¿Me ayudas? etc.)
+                    const isShortConnector = /^¿(Me|Te|Nos|Puedes|Podrías|Me lo|Te lo)[\s\w]{0,25}\?/.test(questionPart);
+                    if (!isShortConnector) {
+                        text = bodyPart + '[MSG_SPLIT]' + questionPart;
+                    }
                 }
             }
         }
