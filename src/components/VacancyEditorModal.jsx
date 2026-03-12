@@ -9,22 +9,30 @@ import { useToast } from '../hooks/useToast';
 const sanitizeQuestion = (q) => {
     if (typeof q !== 'string') return String(q);
     const t = q.trim();
-    // If it looks like a JSON object, try to extract the "text" field
     if (t.startsWith('{') || t.startsWith('[')) {
         try {
             const parsed = JSON.parse(t);
             if (parsed?.text) return parsed.text;
-        } catch (_) { /* not JSON, use as-is */ }
-        // Also handle pipe-concatenated objects: "{...} | {...}"
+        } catch (_) { /* not JSON */ }
         if (t.includes(' | ')) {
             const parts = t.split(' | ');
-            const texts = parts.map(p => {
-                try { const o = JSON.parse(p.trim()); return o?.text || p.trim(); } catch (_) { return p.trim(); }
-            }).filter(Boolean);
-            if (texts.length) return texts[0]; // show first only
+            const texts = parts.map(p => { try { const o = JSON.parse(p.trim()); return o?.text || p.trim(); } catch (_) { return p.trim(); } }).filter(Boolean);
+            if (texts.length) return texts[0];
         }
     }
     return t;
+};
+
+// Deduplicate originalQuestions: group identical (case-insensitive trim) and return [{text, count}]
+const deduplicateQuestions = (questions) => {
+    const map = new Map();
+    (questions || []).forEach(q => {
+        const clean = sanitizeQuestion(q);
+        const key = clean.trim().toLowerCase();
+        if (map.has(key)) { map.get(key).count++; }
+        else { map.set(key, { text: clean, raw: q, count: 1 }); }
+    });
+    return Array.from(map.values());
 };
 
 const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
@@ -32,6 +40,8 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
 
     const [saving, setSaving] = useState(false);
     const [loadingData, setLoadingData] = useState(false);
+    // Selected question per FAQ card to preview the AI response
+    const [selectedQuestion, setSelectedQuestion] = useState({});
 
     // Form State
     const [formData, setFormData] = useState({
@@ -735,33 +745,56 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-2 mb-3 relative z-10">
-                                            <div className="bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800/50">
+                                        <div className="bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800/50">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 font-sans leading-none">
                                                     🔍 Dudas Recabadas
                                                 </p>
-                                                <ul className="space-y-1 list-none overflow-y-auto pr-1">
-                                                    {(faq.originalQuestions || []).map((q, idx) => (
-                                                        <li key={idx} className="flex items-center justify-between group/q text-[11px] text-gray-600 dark:text-gray-400 italic pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 transition-all hover:bg-gray-100/50 dark:hover:bg-gray-800/50 rounded-r-lg py-0.5 leading-snug">
-                                                            <span className="truncate flex-1" title={sanitizeQuestion(q)}>"{sanitizeQuestion(q)}"</span>
-                                                            <div className="flex items-center opacity-0 group-hover/q:opacity-100 transition-all ml-1 flex-shrink-0">
-                                                                <button
-                                                                    onClick={() => handleSplitFaq(faq.id, q)}
-                                                                    className="p-1 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-900 rounded-md transition-all"
-                                                                    title="Separar esta duda en un nuevo tema"
-                                                                >
-                                                                    <Plus className="w-3 h-3" />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleRemoveQuestion(faq.id, q)}
-                                                                    className="p-1 hover:text-red-500 hover:bg-white dark:hover:bg-gray-900 rounded-md transition-all"
-                                                                    title="Eliminar esta pregunta"
-                                                                >
-                                                                    <Trash2 className="w-3 h-3" />
-                                                                </button>
-                                                            </div>
-                                                        </li>
-                                                    ))}
+                                                <ul className="space-y-0.5 list-none max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+                                                    {deduplicateQuestions(faq.originalQuestions).map(({ text, raw, count }, idx) => {
+                                                        const isSelected = selectedQuestion[faq.id] === idx;
+                                                        return (
+                                                            <li
+                                                                key={idx}
+                                                                className={`flex items-center justify-between group/q text-[11px] italic pl-3 border-l-2 rounded-r-lg py-0.5 leading-snug cursor-pointer transition-all ${
+                                                                    isSelected
+                                                                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
+                                                                        : 'border-indigo-200 dark:border-indigo-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-gray-800/50'
+                                                                }`}
+                                                                onClick={() => setSelectedQuestion(prev => ({ ...prev, [faq.id]: isSelected ? null : idx }))}
+                                                            >
+                                                                <span className="truncate flex-1" title={text}>
+                                                                    "{text}"
+                                                                    {count > 1 && <span className="ml-1.5 px-1 py-0.5 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 text-[9px] font-black rounded not-italic">×{count}</span>}
+                                                                </span>
+                                                                <div className="flex items-center opacity-0 group-hover/q:opacity-100 transition-all ml-1 flex-shrink-0">
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleSplitFaq(faq.id, raw); }}
+                                                                        className="p-1 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-900 rounded-md transition-all"
+                                                                        title="Separar esta duda en un nuevo tema"
+                                                                    >
+                                                                        <Plus className="w-3 h-3" />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleRemoveQuestion(faq.id, raw); }}
+                                                                        className="p-1 hover:text-red-500 hover:bg-white dark:hover:bg-gray-900 rounded-md transition-all"
+                                                                        title="Eliminar esta pregunta"
+                                                                    >
+                                                                        <Trash2 className="w-3 h-3" />
+                                                                    </button>
+                                                                </div>
+                                                            </li>
+                                                        );
+                                                    })}
                                                 </ul>
+                                                {/* Inline response preview when a question is selected */}
+                                                {selectedQuestion[faq.id] != null && faq.lastAiResponse && (
+                                                    <div className="mt-2 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800/50">
+                                                        <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-1">💬 Brenda respondió:</p>
+                                                        <p className="text-[11px] text-indigo-800 dark:text-indigo-300 leading-snug">
+                                                            {faq.lastAiResponse.replace(/\[MSG_SPLIT\]/g, ' ').substring(0, 200)}{faq.lastAiResponse.length > 200 ? '…' : ''}
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="bg-blue-50/50 dark:bg-blue-900/10 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900/20">
