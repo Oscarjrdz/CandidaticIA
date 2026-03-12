@@ -5,6 +5,28 @@ import Input from './ui/Input';
 import Modal from './ui/Modal';
 import { useToast } from '../hooks/useToast';
 
+// Sanitize FAQ question strings — they may be stored as raw JSON objects
+const sanitizeQuestion = (q) => {
+    if (typeof q !== 'string') return String(q);
+    const t = q.trim();
+    // If it looks like a JSON object, try to extract the "text" field
+    if (t.startsWith('{') || t.startsWith('[')) {
+        try {
+            const parsed = JSON.parse(t);
+            if (parsed?.text) return parsed.text;
+        } catch (_) { /* not JSON, use as-is */ }
+        // Also handle pipe-concatenated objects: "{...} | {...}"
+        if (t.includes(' | ')) {
+            const parts = t.split(' | ');
+            const texts = parts.map(p => {
+                try { const o = JSON.parse(p.trim()); return o?.text || p.trim(); } catch (_) { return p.trim(); }
+            }).filter(Boolean);
+            if (texts.length) return texts[0]; // show first only
+        }
+    }
+    return t;
+};
+
 const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
     const { toast, showToast, hideToast, ToastComponent } = useToast();
 
@@ -717,10 +739,10 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 font-sans leading-none">
                                                     🔍 Dudas Recabadas
                                                 </p>
-                                                <ul className="space-y-1 list-none max-h-[120px] overflow-y-auto pr-1">
+                                                <ul className="space-y-1 list-none overflow-y-auto pr-1">
                                                     {(faq.originalQuestions || []).map((q, idx) => (
                                                         <li key={idx} className="flex items-center justify-between group/q text-[11px] text-gray-600 dark:text-gray-400 italic pl-3 border-l-2 border-indigo-200 dark:border-indigo-800 transition-all hover:bg-gray-100/50 dark:hover:bg-gray-800/50 rounded-r-lg py-0.5 leading-snug">
-                                                            <span className="truncate flex-1" title={q}>"{q}"</span>
+                                                            <span className="truncate flex-1" title={sanitizeQuestion(q)}>"{sanitizeQuestion(q)}"</span>
                                                             <div className="flex items-center opacity-0 group-hover/q:opacity-100 transition-all ml-1 flex-shrink-0">
                                                                 <button
                                                                     onClick={() => handleSplitFaq(faq.id, q)}
