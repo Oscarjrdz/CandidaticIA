@@ -261,11 +261,11 @@ export default async function handler(req, res) {
 
                 // --- DEV SCREENSHOT CAPTURE ---
                 if (phone === adminNumber && (messageType === 'image' || messageType === 'video' || messageType === 'document')) {
-                    const mediaUrl = messageData.media || messageData.body || messageData.file;
-                    if (mediaUrl && (body?.toLowerCase().includes('#screen') || body?.toLowerCase().includes('screen'))) {
+                    const mediaUrl = messageData.media || messageData.file; // Only use actual media fields, never body
+                    if (mediaUrl?.startsWith('http') && body?.toLowerCase().includes('screen')) {
                         const redis = getRedisClient();
-                        await redis.set('dev_last_screenshot', mediaUrl); // Save URL for the local AI to pull
-                        await sendMessage(adminNumber, `📸 Screenshot recibido en la nube. La IA lo está descargando a tu Mac ahora mismo.`);
+                        await redis.set('dev_last_screenshot', mediaUrl, 'EX', 86400); // Keep 24h
+                        await sendMessage(adminNumber, `📸 Screenshot guardado. La IA puede consultarlo ahora.`);
                         return res.status(200).send('dev_screenshot_captured');
                     }
                 }
