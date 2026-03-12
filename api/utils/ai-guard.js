@@ -77,9 +77,22 @@ export class AIGuard {
             if (isJobInquiry) {
                 const firstMissing = safeMissing[0] || 'nombre completo';
                 const isInterviewQ = /entrevistas?|d[oó]nde|ubicaci[oó]n/i.test(lastInput);
-                const interceptText = isInterviewQ
-                    ? `Para darte información de las entrevistas primero debo tener tu ${firstMissing}, ¿me lo compartes? 😊`
-                    : `¡Sí! 😊 Tenemos vacantes, pero primero dime tu ${firstMissing}. ✨`;
+
+                // Detect if user greeted so we can include a greeting in the reply
+                const hasGreeting = /\b(hola|buenas|buenos|buen[ao]\s+d[ií]a|buen[ao]s?\s+tarde|buen[ao]s?\s+noche|saludos|qué\s+tal)\b/i.test(lastInput);
+                const greetingPrefix = hasGreeting ? '¡Hola! 👋 ' : '';
+
+                const vacancyVariants = [
+                    `${greetingPrefix}¡Claro, tenemos vacantes disponibles! 😊 Para darte información personalizada, primero necesito tu ${firstMissing}. ¿Me lo dices? ✨`,
+                    `${greetingPrefix}Con gusto te informo sobre nuestras vacantes. 😊 Solo dame tu ${firstMissing} primero para continuar. 🌸`,
+                    `${greetingPrefix}¡Tenemos vacantes! ✨ Pero antes de darte detalles, dime tu ${firstMissing}. 😊`,
+                ];
+                const interviewVariants = [
+                    `${greetingPrefix}Con mucho gusto te doy información sobre las entrevistas. 😊 Primero dime tu ${firstMissing}, ¿me lo compartes? ✨`,
+                    `${greetingPrefix}Las entrevistas son presenciales. 📍 Antes de darte la dirección, necesito tu ${firstMissing}. ¿Cuál es? 😊`,
+                ];
+                const variants = isInterviewQ ? interviewVariants : vacancyVariants;
+                const interceptText = variants[Math.floor(Math.random() * variants.length)];
                 aiResult.response_text = interceptText;
             }
         }
