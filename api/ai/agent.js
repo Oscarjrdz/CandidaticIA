@@ -994,6 +994,34 @@ ${safeDnaLines}
                     }
                 }
 
+                // 🎟️ CITA-CONFIRMED FAREWELL GUARD: If the candidate already has a confirmed
+                // appointment (citaFecha + citaHora) and sends a farewell/thanks message,
+                // do NOT run the recruiter AI — it may return { move: exit } and wrongly
+                // trigger the No Interesa flow. Just respond with a warm farewell.
+                {
+                    const mergedMeta = { ...candidateData.projectMetadata, ...candidateUpdates.projectMetadata };
+                    const hasCitaConfirmed = mergedMeta?.citaFecha && mergedMeta?.citaHora
+                        && mergedMeta.citaFecha !== 'null' && mergedMeta.citaHora !== 'null';
+                    const FAREWELL_RE = /^(bye|adiós|adios|hasta luego|chao|gracias|ok gracias|graciass|hasta pronto|nos vemos|cuídate|cuidate|hasta la próxima|hasta la proxima|hasta pronto|👋|🙋|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche)\s*[!.?]*$/i;
+                    if (hasCitaConfirmed && FAREWELL_RE.test(aggregatedText.trim())) {
+                        const candFirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || 'tú').split(' ')[0];
+                        const humanCitaFecha = mergedMeta.citaFecha.includes('-')
+                            ? (() => {
+                                const p = mergedMeta.citaFecha.split('-');
+                                if (p.length === 3) {
+                                    const D = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                                    const M = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                                    const d = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+                                    return `${D[d.getDay()]} ${d.getDate()} de ${M[d.getMonth()]}`;
+                                }
+                                return mergedMeta.citaFecha;
+                            })()
+                            : mergedMeta.citaFecha;
+                        responseTextVal = `¡Hasta pronto, ${candFirstName}! 🌸 Recuerda que te esperamos el ${humanCitaFecha} a las ${mergedMeta.citaHora}. ¡Mucho éxito! 👋`;
+                        skipRecruiterInference = true;
+                    }
+                }
+
                 if (!skipRecruiterInference) {
                     const updatedDataForAgent = { ...candidateData, ...candidateUpdates, projectMetadata: { ...candidateData.projectMetadata, currentVacancyIndex: candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : candidateData.projectMetadata?.currentVacancyIndex } };
 
