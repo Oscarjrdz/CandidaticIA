@@ -179,14 +179,18 @@ export class AIGuard {
                 const maybeExample = isDate ? ' (ej: 19/05/1990)' : '';
 
                 const templates = [
-                    `¡Excelente! ✨ ${firstName ? firstName + ', p' : 'P'}ara avanzar con tu registro, ¿me podrías proporcionar ${connector} ${firstMissing}${maybeExample}? 😉🌸`,
-                    `${firstName ? '¡' + firstName + '! ✨ ' : ''}Me hace falta saber ${connector} ${firstMissing}${maybeExample} para tener tu perfil listo. 🤭 ¿Me ayudas con eso? ✨`,
-                    `¡Casi lo tenemos! 💖 ${firstName ? firstName + ', n' : 'N'}ecesito el dato de ${connector} ${firstMissing}${maybeExample} para encontrarte la mejor vacante hoy mismo. 😉✨`,
+                    // Neutral openers — safe for ALL cases including first message
                     `¿Me podrías decir ${connector} ${firstMissing}${maybeExample}? ✨ Es un paso importante para el proceso. 🌸`,
-                    `¡Qué alegría! 🌟 Para que ya quedes en nuestro sistema, dime ${connector} ${firstMissing}${maybeExample}. 🤭✨`,
-                    `¡Vas excelente! ✨ ${firstName ? firstName + ', d' : 'D'}ime ${connector} ${firstMissing}${maybeExample} para decirte qué vacantes tenemos disponibles. 🌸`,
-                    `Oye, ${firstName || 'un detalle'}, ¿cuál es ${connector} ${firstMissing}${maybeExample}? ✨ Me sirve mucho para tu registro. 😉`,
-                    `¡Perfecto! 💖 Ya casi acabamos. ¿Me pasas ${connector} ${firstMissing}${maybeExample}? ✨🌸`
+                    `Para iniciar, ¿me pasas ${connector} ${firstMissing}${maybeExample}? 😉`,
+                    `Cuéntame, ¿cuál es ${connector} ${firstMissing}${maybeExample}? ✨`,
+                    `Necesito ${connector} ${firstMissing}${maybeExample} para continuar con tu registro. 🌸 ¿Me lo dices?`,
+                    // Progress-implying openers — only when candidate already shared something (firstName exists)
+                    ...(firstName ? [
+                        `¡Vas excelente! ✨ ${firstName}, dime ${connector} ${firstMissing}${maybeExample} para decirte qué vacantes tenemos disponibles. 🌸`,
+                        `¡Casi lo tenemos, ${firstName}! 💖 Solo falta ${connector} ${firstMissing}${maybeExample}. 😉✨`,
+                        `¡Qué alegría, ${firstName}! 🌟 Para quedar en nuestro sistema, dime ${connector} ${firstMissing}${maybeExample}. 🤭✨`,
+                        `¡Perfecto, ${firstName}! 💖 Ya casi acabamos. ¿Me pasas ${connector} ${firstMissing}${maybeExample}? ✨🌸`
+                    ] : [])
                 ];
                 recoveryText = templates[Math.floor(Math.random() * templates.length)];
 
@@ -211,14 +215,15 @@ export class AIGuard {
         const isCompliment = lastInput && /hermosa|guapa|linda|bella|preciosa|chula|hermoso|guapo|novio|salir conmigo|casamos/i.test(lastInput.toLowerCase());
         const complimentResponse = (isCompliment && !recoveryText.includes('qué cosas preguntas')) ? "¡Ay, qué lindo! 🤭✨ me chiveas... " : "";
 
-        // 🛡️ [INQUIRY RECOVERY]: If user asks about job details but guard forces a fallback, prepend explanation
+        // 🛡️ [INQUIRY RECOVERY]: If user asks about job details but guard forces a fallback,
+        // give a coherent response that acknowledges the question then transitions to data capture.
         const isJobInquiry = lastInput && /(?:[?¿]|\b)(d[oó]nde|cu[aá]ndo|cu[aá]nto|qu[eé]|c[oó]mo|hay|tienen|pagan|trabajo|vacantes|entrevistas?|sueldo|salario|pago|horario|ubicaci[oó]n|requisitos?)\b/i.test(lastInput.toLowerCase());
         let inquiryResponse = "";
         if (isJobInquiry && !isCompliment) {
-            inquiryResponse = "¡Claro! 😊 Para darte información exacta sobre vacantes o entrevistas, primero necesito completar tu registro.\n\n";
-            // Strip random joyous templates that don't match the tone of answering a question
-            recoveryText = recoveryText.replace(/^.*?(¿Me podrías|Para avanzar|Para que ya|Me hace falta|Dime|necesito el dato|Cuál es).*/i, '$1');
-            recoveryText = recoveryText.charAt(0).toUpperCase() + recoveryText.slice(1);
+            // Build a coherent combined message: acknowledge + transition
+            const connector2 = firstMissing.toLowerCase().includes('apellido') || firstMissing.toLowerCase() === 'nombre completo' ? 'tu' : 'tu';
+            recoveryText = `¡Claro! 😊 Tenemos vacantes disponibles con muy buenas condiciones. Para darte la información de la opción que más encaje contigo, primero necesito completar tu registro rápido. ¿Me podrías decir ${connector2} ${firstMissing}? ✨`;
+            inquiryResponse = "";
         }
 
         const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
