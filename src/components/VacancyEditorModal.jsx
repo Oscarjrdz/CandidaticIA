@@ -786,23 +786,19 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                                                         );
                                                     })}
                                                 </ul>
-                                                {/* Inline response preview when a question is selected */}
-                                                {selectedQuestion[faq.id] != null && faq.lastAiResponse && (
-                                                    <div className="mt-2 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-200 dark:border-indigo-800/50">
-                                                        <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-1">💬 Brenda respondió:</p>
-                                                        <p className="text-[11px] text-indigo-800 dark:text-indigo-300 leading-snug">
-                                                            {faq.lastAiResponse.replace(/\[MSG_SPLIT\]/g, ' ').substring(0, 200)}{faq.lastAiResponse.length > 200 ? '…' : ''}
-                                                        </p>
-                                                    </div>
-                                                )}
                                             </div>
 
-                                            <div className="bg-blue-50/50 dark:bg-blue-900/10 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900/20">
+                                            <div className={`bg-blue-50/50 dark:bg-blue-900/10 p-2.5 rounded-xl border transition-all duration-300 ${
+                                                selectedQuestion[faq.id] != null
+                                                    ? 'border-blue-400 dark:border-blue-600 ring-2 ring-blue-200 dark:ring-blue-800/50'
+                                                    : 'border-blue-100 dark:border-blue-900/20'
+                                            }`}>
                                                 <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 leading-none">
                                                     🤖 Auditoría: Brenda Respondió
+                                                    {selectedQuestion[faq.id] != null && <span className="text-[8px] bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded font-black ml-1">← Respuesta al tema</span>}
                                                 </p>
                                                 <p className="text-[11px] text-blue-800 dark:text-blue-300 font-medium leading-snug max-w-full">
-                                                    {faq.lastAiResponse || 'Consultando base de datos oficial...'}
+                                                    {(faq.lastAiResponse || 'Consultando base de datos oficial...').replace(/\[MSG_SPLIT\]/g, ' ')}
                                                 </p>
                                             </div>
                                         </div>
