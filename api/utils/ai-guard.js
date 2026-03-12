@@ -137,7 +137,13 @@ export class AIGuard {
             recoveryText = templates[Math.floor(Math.random() * templates.length)];
         } else {
             // Use freshly extracted data if available, fallback to existing DB candidateName
-            const currentName = extracted.nombreReal || candidateName || '';
+            let currentName = extracted.nombreReal || candidateName || '';
+            
+            // 🛡️ AIGUARD NAME FIX: Ignore greetings/affirmations extracted as a name by mistake
+            const lowerCurrentName = currentName.trim().toLowerCase();
+            const BAD_NAMES = ['hola', 'buenas', 'buenas tardes', 'buenas noches', 'buenos dias', 'buenos días', 'si', 'sí', 'claro', 'gracias', 'ok', 'vale'];
+            if (BAD_NAMES.includes(lowerCurrentName)) currentName = '';
+            
             const nameWords = currentName.trim().split(/\s+/).filter(w => w.length > 0).length;
             const firstName = nameWords > 0 ? currentName.trim().split(/\s+/)[0] : null;
 
@@ -206,7 +212,8 @@ export class AIGuard {
 
                 // 🎓 [SPECIAL ESCOLARIDAD RECOVERY]: If missing field is Escolaridad, show emoji list
                 const isEscolaridad = missingKey.includes('escolaridad');
-                if (isEscolaridad) {
+                const isJobInquiry = lastInput && /(?:[?¿]|\b)(d[oó]nde|cu[aá]ndo|cu[aá]nto|qu[eé]|c[oó]mo|hay|tienen|pagan|trabajo|vacantes|entrevistas?|sueldo|salario|pago|horario|ubicaci[oó]n|requisitos?)\b/i.test(lastInput.toLowerCase());
+                if (isEscolaridad && !isJobInquiry) {
                     recoveryText = `¡Súper! ✨ Ya casi termino tu perfil. ¿Me podrías indicar cuál es tu grado máximo de estudios? 🎓\n\n🎒 Primaria\n🏫 Secundaria\n🎓 Preparatoria\n📚 Licenciatura\n🛠️ Técnica\n🧠 Posgrado`;
                 }
             }
@@ -218,21 +225,20 @@ export class AIGuard {
         // 🛡️ [INQUIRY RECOVERY]: If user asks about job details but guard forces a fallback,
         // give a coherent response that acknowledges the question then transitions to data capture.
         const isJobInquiry = lastInput && /(?:[?¿]|\b)(d[oó]nde|cu[aá]ndo|cu[aá]nto|qu[eé]|c[oó]mo|hay|tienen|pagan|trabajo|vacantes|entrevistas?|sueldo|salario|pago|horario|ubicaci[oó]n|requisitos?)\b/i.test(lastInput.toLowerCase());
-        let inquiryResponse = "";
         if (isJobInquiry && !isCompliment) {
             // Build a coherent combined message: acknowledge + transition
-            const isInterviewQ = /entrevista/i.test(lastInput);
-            recoveryText = isInterviewQ
+            const isInterviewQ = /entrevistas?|d[oó]nde|ubicaci[oó]n/i.test(lastInput);
+            const inquiryResp = isInterviewQ
                 ? `Para darte información de las entrevistas primero debo tener tu ${firstMissing}, ¿me lo compartes? 😊`
                 : `¡Sí! 😊 Tenemos vacantes, pero primero dime tu ${firstMissing}. ✨`;
-            inquiryResponse = "";
+            recoveryText = inquiryResp; 
         }
 
         const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
         const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
         const greetingReturn = lastInput && /hola|buen(as)? (dia|tarde|noche)|que tal/i.test(lastInput.toLowerCase()) ? `¡Hola! ${gEmoji} ` : "";
         return {
-            response_text: `${greetingReturn}${inquiryResponse}${complimentResponse}${recoveryText}`,
+            response_text: `${greetingReturn}${complimentResponse}${recoveryText}`,
             thought_process: `RECOVERY_TRIGGERED: ${reason}. Manual fallback due to AI failure.`,
             reaction: isNewFlag ? '✨' : null, // Only react on first message to reduce spark spam
             extracted_data: extracted, // 🧬 CRITICAL: Keep what the AI *did* manage to extract

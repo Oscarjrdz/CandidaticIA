@@ -148,14 +148,8 @@ function formatRecruiterMessage(text, candidateData = null) {
     // 🎂 FECHA DE NACIMIENTO: Inject example format if GPT forgot it
     if (/fecha de nacimiento|cu[aá]ndo naciste|d[ií]a de nacimiento/i.test(text)
         && !/(?:ej\.|ejemplo|DD\/|por ejemplo|\d{2}\/\d{2}\/\d{4})/i.test(text)) {
-        // Append example before the closing question mark if present
-        const lastQ = text.lastIndexOf('\xbf');
-        const example = ' (ej. 19/05/1983)';
-        if (lastQ > 0) {
-            text = text.substring(0, lastQ).trimEnd() + example + ' ' + text.substring(lastQ).trim();
-        } else {
-            text = text.trimEnd() + example;
-        }
+        // Append example cleanly after the text rather than interrupting the sentence
+        text = text.trimEnd() + '\n\n(ej. 19/05/1983)';
     }
 
     // 📅 DATE LIST: Remove LEADING 📅 (before number emoji), KEEP/ADD TRAILING 📅 (after date)
@@ -1007,7 +1001,13 @@ ${safeDnaLines}
                 // do NOT run the recruiter AI — it may return { move: exit } and wrongly
                 // trigger the No Interesa flow. Just respond with a warm farewell.
                 {
-                    const mergedMeta = { ...candidateData.projectMetadata, ...candidateUpdates.projectMetadata };
+                    // 🎟️ CITA-CONFIRMED FAREWELL GUARD: If the candidate already has a confirmed
+                    // appointment (citaFecha + citaHora) and sends a farewell/thanks message,
+                    // do NOT run the recruiter AI — it may return { move: exit } and wrongly
+                    // trigger the No Interesa flow. Just respond with a warm farewell.
+                    const mdStr = candidateData.projectMetadata;
+                    const parsedMd = (typeof mdStr === 'string' && mdStr.trim() !== '') ? JSON.parse(mdStr) : (mdStr || {});
+                    const mergedMeta = { ...parsedMd, ...(candidateUpdates.projectMetadata || {}) };
                     const hasCitaConfirmed = mergedMeta?.citaFecha && mergedMeta?.citaHora
                         && mergedMeta.citaFecha !== 'null' && mergedMeta.citaHora !== 'null';
                     const FAREWELL_RE = /^(bye|adiós|adios|hasta luego|chao|gracias|ok gracias|graciass|hasta pronto|nos vemos|cuídate|cuidate|hasta la próxima|hasta la proxima|hasta pronto|👋|🙋|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche)\s*[!.?]*$/i;
@@ -1028,6 +1028,15 @@ ${safeDnaLines}
                         responseTextVal = `¡Hasta pronto, ${candFirstName}! 🌸 Recuerda que te esperamos el ${humanCitaFecha} a las ${mergedMeta.citaHora}. ¡Mucho éxito! 👋`;
                         skipRecruiterInference = true;
                     }
+                }
+
+                // 🩹 FAQ MUTE FIX: If the bot previously said "déjame consultarlo" and the user just says "Ok" or "Gracias", mute the AI to allow human intervention
+                const _lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
+                const _botText = (_lastBotMsg?.content || '').toLowerCase();
+                const _isJustThanksOrOk = /^(gracias|muchas gracias|mil gracias|perfecto|ok|okay|vale|gracias a ti|excelente|va|si|sí)\s*$/i.test(aggregatedText.trim().replace(/[^\w\sñáéíóúü]/gi, ''));
+                if (_botText.includes('déjame consultarlo') && _isJustThanksOrOk) {
+                    skipRecruiterInference = true;
+                    responseTextVal = ""; // Silence the bot
                 }
 
                 if (!skipRecruiterInference) {
@@ -1172,6 +1181,18 @@ ${safeDnaLines}
                         // Auto-detect if target was exit
                         if (extractedMoveTarget.toLowerCase().includes('no interesa') || extractedMoveTarget.toLowerCase() === 'exit') {
                             hasExitTag = true;
+                        }
+                    }
+
+                    // 🛡️ FALSE REJECTION SHIELD: If they are in "Citados", ignore exit triggers caused by a simple "gracias" or positive sentiment
+                    if (hasExitTag) {
+                        const originStepNameExit = (currentStep?.name || '').toLowerCase();
+                        if (originStepNameExit.includes('citado')) {
+                            const isJustThanksOrOk = /^(gracias|muchas gracias|mil gracias|perfecto|ok|okay|vale|gracias a ti|excelente|va|si|sí)\s*$/i.test(aggregatedText.trim().replace(/[^\w\sñáéíóúü]/gi, ''));
+                            if (isJustThanksOrOk) {
+                                hasExitTag = false;
+                                extractedMoveTarget = null;
+                            }
                         }
                     }
 
@@ -1364,6 +1385,13 @@ ${safeDnaLines}
                                 }
                             } else if (!mergedMeta.citaFecha || mergedMeta.citaFecha === 'null') {
                                 callToAction = "¿Qué día te queda mejor para agendar tu cita?";
+                                // 🩹 REDUNDANT DAY QUESTION FIX: If the bot already provided exactly one day option, change the CTA to a yes/no question
+                                if (responseTextVal && /Tengo entrevistas los días:/i.test(responseTextVal)) {
+                                    const dayMatches = responseTextVal.match(/1️⃣/g);
+                                    if (dayMatches && dayMatches.length === 1 && !responseTextVal.includes('2️⃣')) {
+                                        callToAction = "¿Te queda bien este día?";
+                                    }
+                                }
                             }
 
                             // Initialize if null to forcefully break silence caused by AIGuard
@@ -1638,7 +1666,7 @@ ${safeDnaLines}
                                     if (chainText.includes('[MSG_SPLIT]')) {
                                         chainText.split('[MSG_SPLIT]').forEach(p => { if (p.trim()) cMessagesToSend.push(p.trim()); });
                                     } else {
-                                        const splitRegex = /(¿Te gustaría que (?:te )?agende.*?(?:entrevista|cita).*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
+                                        const splitRegex = /(¿Te gustaría que (?:te )?agende.*?(?:entrevista|cita).*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te queda bien este día\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
                                         const match = chainText.match(splitRegex);
 
                                         if (match) {
@@ -1769,7 +1797,7 @@ ${safeDnaLines}
 [REGLAS DE HOMOGENEIZACIÓN (ESTRICTAS)]:
 - **Municipio**: Devuelve ÚNICAMENTE el nombre oficial del municipio sin direcciones completas ni calles.
 - **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado.
-- **Categoría**: Si es "Ayudante" mantén "Ayudante". Si opera maquinaria -> "Montacarguista".\n`;
+- **Categoría**: Si el candidato escribe "Ayudante", extrae estrictamente "Ayudante General" u otra categoría que haga *match exacto* a la lista. Si opera maquinaria -> "Montacarguista".\n`;
                 } else {
                     // Slim rules for custom prompt bots — only critical extraction guardrails
                     systemInstruction += `
@@ -1946,13 +1974,12 @@ ${safeDnaLines}
                 }
 
                 // 🔍 JOB INQUIRY INTERCEPT: If candidate asked about vacancies/interviews before
-                // completing profile, and the AI responded without acknowledging the question,
-                // replace with the proper inquiry-aware response.
-                if (responseTextVal && !validation?.recovery_active && freshAudit.paso1Status !== 'COMPLETO') {
+                // completing profile, replace with the proper inquiry-aware response even if validation failed.
+                if (responseTextVal && freshAudit.paso1Status !== 'COMPLETO') {
                     const isJobInquiry = /(?:[?¿]|\b)(vacantes?|entrevistas?|sueldo|salario|pagan|horario|turnos|d[oó]nde|ubicaci[oó]n)/i.test(aggregatedText || '');
                     if (isJobInquiry) {
                         const firstMissing = freshAudit.missingLabels?.[0] || 'nombre completo';
-                        const isInterviewQ = /entrevista/i.test(aggregatedText || '');
+                        const isInterviewQ = /entrevistas?|d[oó]nde|ubicaci[oó]n/i.test(aggregatedText || '');
                         responseTextVal = isInterviewQ
                             ? `Para darte información de las entrevistas primero debo tener tu ${firstMissing}, ¿me lo compartes? 😊`
                             : `¡Sí! 😊 Tenemos vacantes, pero primero dime tu ${firstMissing}. ✨`;
@@ -2098,7 +2125,7 @@ ${safeDnaLines}
                     // Strip any leaked sentinel residue before sending, then try regex split
                     responseTextVal = responseTextVal.replace(/\[MSG_SPLIT\]/g, ' ').trim();
                     // 2️⃣ Regex-based split for scheduling CTAs
-                    const splitRegex = /(¿Te gustaría que (?:te )?agende.*?(?:entrevista|cita).*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
+                    const splitRegex = /(¿Te gustaría que (?:te )?agende.*?(?:entrevista|cita).*?\?|¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??|¿Te queda bien este día\??|¿Te puedo agendar|¿Deseas que programe|¿Te interesa que asegure|¿Te confirmo tu cita|¿Quieres que reserve|¿Procedo a agendar|¿Te aparto una cita|¿Avanzamos con|¿Autorizas que agende)/i;
                     const match = responseTextVal.match(splitRegex);
 
                     if (match) {
