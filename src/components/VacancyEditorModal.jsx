@@ -744,7 +744,7 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                                             </button>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-[1fr_1.5fr] gap-2 mb-3 relative z-10">
+                                        <div className="grid grid-cols-2 gap-2 mb-3 relative z-10">
                                         <div className="bg-gray-50 dark:bg-gray-900/50 p-2.5 rounded-xl border border-gray-100 dark:border-gray-800/50">
                                                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5 font-sans leading-none">
                                                     🔍 Dudas Recabadas
@@ -762,7 +762,7 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                                                                 }`}
                                                                 onClick={() => setSelectedQuestion(prev => ({ ...prev, [faq.id]: isSelected ? null : idx }))}
                                                             >
-                                                                <span className="truncate flex-1" title={text}>
+                                                                <span className="truncate flex-1 min-w-0" title={text}>
                                                                     "{text}"
                                                                     {count > 1 && <span className="ml-1.5 px-1 py-0.5 bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 text-[9px] font-black rounded not-italic">×{count}</span>}
                                                                 </span>
