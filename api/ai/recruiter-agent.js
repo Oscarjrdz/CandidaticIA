@@ -373,10 +373,10 @@ ${alternatives.length > 0
             content: m.content || m.parts?.[0]?.text || ''
         }));
 
-        // ⚡ Recruiter uses 500 max_tokens (enough for JSON response). Cita step keeps 600 for longer scheduling reasoning.
+        // ⚡ All steps use gpt-4o-mini for speed. Cita keeps 700 tokens for scheduling reasoning.
         const isCitaStepModel = (currentStep?.name || '').toLowerCase().includes('cita');
-        const selectedModel = isCitaStepModel ? 'gpt-4o' : 'gpt-4o-mini';
-        const selectedMaxTokens = isCitaStepModel ? 900 : 500;
+        const selectedModel = 'gpt-4o-mini';
+        const selectedMaxTokens = isCitaStepModel ? 700 : 500;
 
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
