@@ -223,7 +223,7 @@ export class AIGuard {
             // Build a coherent combined message: acknowledge + transition
             const isInterviewQ = /entrevista/i.test(lastInput);
             recoveryText = isInterviewQ
-                ? `¡Las entrevistas se coordinan personalmente! 😊 Pero primero dime tu ${firstMissing}. ✨`
+                ? `Para darte información de las entrevistas primero debo tener tu ${firstMissing}, ¿me lo compartes? 😊`
                 : `¡Sí! 😊 Tenemos vacantes, pero primero dime tu ${firstMissing}. ✨`;
             inquiryResponse = "";
         }
