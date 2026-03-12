@@ -69,11 +69,11 @@ function formatRecruiterMessage(text, candidateData = null) {
     text = text.replace(/\n{3,}/g, '\n\n');
 
     // 😊 ORPHAN EMOJI CLEANUP: A line that contains ONLY emojis (no letters/digits)
-    // gets merged onto the previous line so it doesn't create a distracting gap.
-    text = text.replace(/\n(\s*[\p{Emoji}\s]+\s*)\n/gu, (match, emojiLine) => {
+    // gets merged onto the previous line. Handles both single (\n) and double (\n\n) gaps.
+    text = text.replace(/\n{1,2}(\s*[\p{Emoji}\s]+\s*)\n{1,2}/gu, (match, emojiLine) => {
         const clean = emojiLine.trim();
         // Only merge if the line is purely emojis (no words)
-        if (clean && !/[a-zA-ZÀ-ÿ0-9]/.test(clean)) return ` ${clean}\n`;
+        if (clean && !/[a-zA-ZÀ-ÿ0-9]/.test(clean)) return ` ${clean}\n\n`;
         return match;
     });
 
