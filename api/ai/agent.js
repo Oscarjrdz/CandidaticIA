@@ -89,6 +89,12 @@ function formatRecruiterMessage(text, candidateData = null) {
         if (clean && !/[a-zA-ZÀ-ÿ0-9]/.test(clean)) return ` ${clean}\n\n`;
         return match;
     });
+    // 😊 TRAILING ORPHAN EMOJI: emoji-only line at the very END of message → merge onto previous line
+    text = text.replace(/\n{1,2}([\p{Emoji}\s]+)\s*$/gu, (match, emojiLine) => {
+        const clean = emojiLine.trim();
+        if (clean && !/[a-zA-ZÀ-ÿ0-9]/.test(clean)) return ` ${clean}`;
+        return match;
+    });
 
     // 📅 HUMANIZE raw YYYY-MM-DD dates that GPT leaked into the output
     text = text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => humanizeDate(`${y}-${m}-${d}`));
