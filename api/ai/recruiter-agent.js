@@ -293,7 +293,18 @@ Ejemplo EXACTO de tu response_text al disparar { move }:
 ⚠️ NUNCA dejes response_text vacío al disparar { move }. Siempre confirma con entusiasmo.
 
 Estos son todos tus horarios brutos disponibles (YYYY-MM-DD @ HH:mm):
-${futureCalendarOptions.map((opt) => `- ${opt}`).join('\n')}
+${futureCalendarOptions.map((opt) => {
+    // Pre-compute the human day name so the AI doesn't have to calculate it (prevents day-name errors)
+    const dateMatch = opt.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (dateMatch) {
+        const _DAYS_ES = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        const _MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        const d = new Date(parseInt(dateMatch[1]), parseInt(dateMatch[2]) - 1, parseInt(dateMatch[3]));
+        const humanDay = `${_DAYS_ES[d.getDay()]} ${d.getDate()} de ${_MONTHS_ES[d.getMonth()]}`;
+        return `- ${opt}  ← ${humanDay}`;
+    }
+    return `- ${opt}`;
+}).join('\n')}
 
 NUNCA inventes horarios que no estén en esta lista.`
                 : 'No hay horarios preconfigurados, pregunta por su disponibilidad general.'}
