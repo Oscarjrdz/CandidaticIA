@@ -893,12 +893,17 @@ ${safeDnaLines}
                             return;
                         }
 
-                        // 2. Build compact vacancy list: name + company + category only
+                        // 2. Build compact vacancy list: numbered with name + company + category
+                        const NUM_LIST = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
                         const vacancyLines = [];
+                        let vIdx = 0;
                         for (const vid of vacancyIds) {
                             const vac = await getVacancyById(vid);
                             if (!vac) continue;
-                            vacancyLines.push(`📌 *${vac.name}*\n🏢 ${vac.company}${vac.category ? `\n📂 ${vac.category}` : ''}`);
+                            const num = NUM_LIST[vIdx] || `${vIdx + 1}.`;
+                            const line = `${num} ${vac.name}\n   🏢 ${vac.company || 'Candidatic'}${vac.category ? `\n   📂 ${vac.category}` : ''}`;
+                            vacancyLines.push(line);
+                            vIdx++;
                         }
 
                         if (!vacancyLines.length) {
