@@ -1846,6 +1846,20 @@ ${safeDnaLines}
                     ));
                 }
 
+                // 🔍 JOB INQUIRY INTERCEPT: If candidate asked about vacancies/interviews before
+                // completing profile, and the AI responded without acknowledging the question,
+                // replace with the proper inquiry-aware response.
+                if (responseTextVal && !validation?.recovery_active && freshAudit.paso1Status !== 'COMPLETO') {
+                    const isJobInquiry = /(?:[?¿]|\b)(vacantes?|entrevistas?|sueldo|salario|pagan|horario|turnos|d[oó]nde|ubicaci[oó]n)/i.test(aggregatedText || '');
+                    if (isJobInquiry) {
+                        const firstMissing = freshAudit.missingLabels?.[0] || 'nombre completo';
+                        const isInterviewQ = /entrevista/i.test(aggregatedText || '');
+                        responseTextVal = isInterviewQ
+                            ? `Para darte información de las entrevistas primero debo tener tu ${firstMissing}, ¿me lo compartes? 😊`
+                            : `¡Sí! 😊 Tenemos vacantes, pero primero dime tu ${firstMissing}. ✨`;
+                    }
+                }
+
 
                 // Transition Logic
                 // 🛠️ [HACK] Synchronous Gender fallback for Orchestrator
