@@ -221,7 +221,10 @@ export class AIGuard {
         let inquiryResponse = "";
         if (isJobInquiry && !isCompliment) {
             // Build a coherent combined message: acknowledge + transition
-            recoveryText = `¡Sí! 😊 Tenemos vacantes, pero primero dime tu ${firstMissing}. ✨`;
+            const isInterviewQ = /entrevista/i.test(lastInput);
+            recoveryText = isInterviewQ
+                ? `¡Las entrevistas se coordinan personalmente! 😊 Pero primero dime tu ${firstMissing}. ✨`
+                : `¡Sí! 😊 Tenemos vacantes, pero primero dime tu ${firstMissing}. ✨`;
             inquiryResponse = "";
         }
 
