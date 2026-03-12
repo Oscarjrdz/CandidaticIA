@@ -63,13 +63,15 @@ function humanizeDate(dateStr) {
 }
 
 function formatRecruiterMessage(text, candidateData = null) {
-    if (!text) return text;
+    if (!text || typeof text !== 'string') return text;
 
+    // 🧹 STEP 0: Strip markdown bold (**text**) — AI sometimes wraps dates in bold which breaks all downstream regex
+    text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
+    // Also strip single-star italic (*text*) that may appear in dates
+    text = text.replace(/\*([^*\n]+)\*/g, '$1');
     // 🧹 WHITESPACE CLEANUP: Collapse 3+ consecutive blank lines → max 1 blank line
     text = text.replace(/\n{3,}/g, '\n\n');
 
-    // ✂️ MARKDOWN BOLD STRIP: AI sometimes wraps dates/names in **bold** despite the no-asterisks rule.
-    // Strip all **text** → text programmatically so it never reaches WhatsApp.
     text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
 
     // 📅 SINGLE-DATE QUESTION FIX: "¿Qué día te queda mejor?" only makes sense with multiple dates.
