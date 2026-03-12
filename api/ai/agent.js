@@ -1939,12 +1939,18 @@ ${safeDnaLines}
         const isTechnicalOrEmpty = !resText || filterRegex.test(String(resText).trim());
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
-        if (isTechnicalOrEmpty && !hasMoveIntent && !recruiterTriggeredMove && !aiResult?.close_conversation && !handoverTriggered) {
+        // Special case: in recruiter mode, close_conversation:true with empty response = bot silence on a FAQ question.
+        // We must still send a fallback in that case.
+        const recruiterClosedSilently = isRecruiterMode && isTechnicalOrEmpty && aiResult?.close_conversation && !hasMoveIntent && !recruiterTriggeredMove && !handoverTriggered;
+        if ((isTechnicalOrEmpty && !hasMoveIntent && !recruiterTriggeredMove && !aiResult?.close_conversation && !handoverTriggered) || recruiterClosedSilently) {
             if (isRecruiterMode) {
                 // If the AI sent an FAQ Media URL but hallucinated the text away, safely append a generic CTA
                 const hasMedia = aiResult?.media_url && aiResult.media_url !== 'null';
                 if (hasMedia) {
-                    responseTextVal = "Aquí está la información. 😉 ¿Te gustaría que te agende una cita para entrevista?";
+                    responseTextVal = "Aquí está la información. 😉 ¿Te gustaría que te agende una cita de entrevista?";
+                } else if (recruiterClosedSilently) {
+                    // Unknown FAQ — be honest, redirect to interview
+                    responseTextVal = "Esa información no la tengo a la mano 😅, pero en la entrevista te la dan completa. ¿Te agendo una cita? 😊";
                 } else {
                     responseTextVal = "¡Disculpa! Hubo un pequeño inconveniente. 😅 ¿Quieres que reserve tu cita para entrevista?";
                 }
