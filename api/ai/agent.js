@@ -1991,7 +1991,13 @@ ${safeDnaLines}
                         // Use natural sentence boundary instead of raw CTA start
                         const beforeCta = responseTextVal.substring(0, match.index);
                         const lastBang = beforeCta.lastIndexOf('!');
-                        const lastDot = beforeCta.lastIndexOf('.');
+                        let lastDot = beforeCta.lastIndexOf('.');
+                        // 🛡️ ABBREVIATION GUARD: Don't split at "Lic.", "Dr.", "Ing.", etc.
+                        // If the word before the dot is ≤4 chars, it's an abbreviation — skip it.
+                        if (lastDot > 0) {
+                            const wordBeforeDot = beforeCta.substring(0, lastDot).split(/[\s,]/).pop() || '';
+                            if (wordBeforeDot.length <= 4) lastDot = -1; // Treat as non-sentence-end
+                        }
                         const naturalEnd = Math.max(lastBang, lastDot);
                         let splitAt = naturalEnd > 25 ? naturalEnd + 1 : match.index;
                         // Advance past trailing emojis/spaces
