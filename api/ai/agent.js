@@ -68,6 +68,17 @@ function formatRecruiterMessage(text, candidateData = null) {
     // 🧹 WHITESPACE CLEANUP: Collapse 3+ consecutive blank lines → max 1 blank line
     text = text.replace(/\n{3,}/g, '\n\n');
 
+    // ✂️ MARKDOWN BOLD STRIP: AI sometimes wraps dates/names in **bold** despite the no-asterisks rule.
+    // Strip all **text** → text programmatically so it never reaches WhatsApp.
+    text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
+
+    // 📅 SINGLE-DATE QUESTION FIX: "¿Qué día te queda mejor?" only makes sense with multiple dates.
+    // If the message has only ONE date (no numbered list), use the singular form instead.
+    const hasNumberedList = /(?:1️⃣|2️⃣|3️⃣)/.test(text);
+    if (!hasNumberedList) {
+        text = text.replace(/¿Qué día te queda mejor\??/gi, '¿Te queda bien ese día?');
+    }
+
     // 😊 ORPHAN EMOJI CLEANUP: A line that contains ONLY emojis (no letters/digits)
     // gets merged onto the previous line. Handles both single (\n) and double (\n\n) gaps.
     text = text.replace(/\n{1,2}(\s*[\p{Emoji}\s]+\s*)\n{1,2}/gu, (match, emojiLine) => {
