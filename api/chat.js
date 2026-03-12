@@ -87,8 +87,7 @@ export default async function handler(req, res) {
                 }
 
                 if (sendResult) {
-
-                    if (sendResult.sent === 'true' || sendResult.id) {
+                    if (sendResult.success) {
                         // PERSIST TO REDIS
                         await updateCandidate(candidateId, {
                             ultimoMensajeBot: timestamp,
@@ -98,14 +97,14 @@ export default async function handler(req, res) {
                         // Update the message in the Redis list
                         const updatedData = {
                             status: 'sent',
-                            ultraMsgId: sendResult.id
+                            ultraMsgId: sendResult.data?.id
                         };
                         await updateMessageStatus(candidateId, msgToSave.id, 'sent', updatedData);
 
                         msgToSave.status = 'sent';
-                        msgToSave.ultraMsgId = sendResult.id;
+                        msgToSave.ultraMsgId = sendResult.data?.id;
                     } else {
-                        throw new Error(`UltraMSG Error: ${sendResult.message || JSON.stringify(sendResult)}`);
+                        throw new Error(`UltraMSG Error: ${sendResult.error || JSON.stringify(sendResult.data)}`);
                     }
                 }
             } catch (sendErr) {
