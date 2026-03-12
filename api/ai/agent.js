@@ -185,6 +185,42 @@ function formatRecruiterMessage(text, candidateData = null) {
     // Post-strip: remove any leftover "para los [siguientes] [días]:" after canonical header
     text = text.replace(/(Tengo entrevistas los d[ií]as:)\s*para\s+(?:los?\s+)?(?:siguientes?\s+)?(?:d[ií]as?|el)?\s*:?/gi, '$1');
 
+    // 🗓️ INLINE DATES → NUMBERED LIST (UNIVERSAL): If dates follow the canonical header as prose
+    // (e.g. "Tengo entrevistas los días: Martes 12 de Marzo, Jueves 14 de Marzo"),
+    // or AI wrote "disponibles para el Martes..." without a header,
+    // convert to 1️⃣ Martes 12 de Marzo 📅 format.
+    {
+        const NUM_UNI = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣'];
+        const DAY_RE = /(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/i;
+
+        // Case A: after canonical header on same line or next line
+        text = text.replace(
+            /(Tengo entrevistas los d[ií]as:)\s*\n?((?:(?!1️⃣|2️⃣)[^\n?¿⏬])+)/i,
+            (match, header, datesStr) => {
+                if (/1️⃣|2️⃣/.test(datesStr)) return match; // already a numbered list
+                const dates = datesStr.split(/,\s*|\s+y\s+/)
+                    .map(d => d.trim())
+                    .filter(d => DAY_RE.test(d));
+                if (dates.length === 0) return match;
+                return header + '\n' + dates.map((d, i) => `${NUM_UNI[i] || `${i+1}.`} ${d} 📅`).join('\n');
+            }
+        );
+
+        // Case B: AI wrote "disponibles para el [Day Date]" without the header word
+        // e.g. "Tengo entrevistas disponibles para el Martes 12 de Marzo"
+        text = text.replace(
+            /Tengo entrevistas?\s+(?:disponibles?\s+)?para\s+el\s+((?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)[^.\n?¿]+)/gi,
+            (match, dateStr) => {
+                // Split in case there are multiple dates comma-separated
+                const dates = dateStr.split(/,\s*|\s+y\s+/)
+                    .map(d => d.trim())
+                    .filter(d => DAY_RE.test(d));
+                if (dates.length === 0) return match;
+                return 'Tengo entrevistas los días:\n' + dates.map((d, i) => `${NUM_UNI[i] || `${i+1}.`} ${d} 📅`).join('\n');
+            }
+        );
+    }
+
     // ⏰ HOURS MESSAGE: detect when GPT lists time slots (may use 🔹 or number emojis)
     // Trigger is broader: GPT humanizes dates so outputs no YYYY-MM-DD.
     const hasTimeSlots = /(?:🔹\s*Opci[oó]n\s*\d+|\btengo entrevistas? a las\b|estas opciones de horario)/i.test(text)
