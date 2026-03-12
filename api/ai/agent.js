@@ -1518,7 +1518,8 @@ ${safeDnaLines}
 
                         // 🟢 NEW: Dispatch Appointment Confirmation Sequence regardless of cleanSpeech
                         const originStepNameForConfirm = (currentStep?.name || '').toLowerCase();
-                        const isCitaStepConfirm = originStepNameForConfirm.includes('cita');
+                        // ⚠️ Must exclude 'citado' — 'citado'.includes('cita') === true which would re-fire confirmation on every Citado message
+                        const isCitaStepConfirm = originStepNameForConfirm.includes('cita') && !originStepNameForConfirm.includes('citado');
 
 
                         if (isCitaStepConfirm) {
