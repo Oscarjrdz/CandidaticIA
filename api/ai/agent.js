@@ -1539,10 +1539,25 @@ ${safeDnaLines}
                                     // 📅 INTERVIEW DATES FORMATTER: Detect and reformat the cita dates message
                                     const isDateMsg = /^[¡!]?Listo\b/i.test(chainText.trim());
                                     if (isDateMsg) {
-                                        chainText = chainText.replace(/Tengo entrevistas disponibles (?:para el|(?:los días)?):?/gi, 'Tengo entrevistas disponibles los días:');
-                                        chainText = chainText.replace(/([\d️⃣🔢]+\s+[A-Za-zÀ-ú]+ \d+ de [A-Za-zÀ-ú]+)(?!\s*📅)/g, '$1 📅');
+                                        // Step 1: Normalize header
+                                        chainText = chainText.replace(/Tengo entrevistas disponibles (?:para el|(?:los días)?):?/gi, 'Tengo entrevistas los días:');
                                         chainText = chainText.replace(/(¡Listo[^!¡\n]*!?\s*[⏬⬇️]*)\s+(Tengo\b)/i, '$1\n$2');
+
+                                        // Step 2: If dates are inline prose (no 1️⃣/2️⃣), convert to numbered list
+                                        const NUM_D = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣'];
+                                        chainText = chainText.replace(
+                                            /(Tengo entrevistas los d[ií]as:)\s*([^\n?¿⏬]+)/i,
+                                            (match, header, datesStr) => {
+                                                if (/1️⃣|2️⃣/.test(datesStr)) return match; // already formatted
+                                                const dates = datesStr.split(/,\s*|\s+y\s+/)
+                                                    .map(d => d.trim())
+                                                    .filter(d => /(?:Lunes|Martes|Mi[eé]rcoles|Jueves|Viernes|S[aá]bado|Domingo)/i.test(d));
+                                                if (dates.length === 0) return match;
+                                                return header + '\n' + dates.map((d, i) => `${NUM_D[i] || `${i+1}.`} ${d} 📅`).join('\n');
+                                            }
+                                        );
                                     }
+
 
                                     // 📐 DRY: Appy shared formatting logic (replaces ~50 duplicate lines)
                                     chainText = formatRecruiterMessage(chainText, candidateData);
