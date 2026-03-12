@@ -276,7 +276,8 @@ function formatRecruiterMessage(text, candidateData = null) {
                     splitAt++;
                 }
                 const bodyPart = text.substring(0, splitAt).trim();
-                const questionPart = text.substring(splitAt).trim();
+                // Strip any orphan emojis/whitespace the AI placed between the answer and the ¿ question
+                let questionPart = text.substring(splitAt).replace(/^[\p{Emoji}\p{Emoji_Modifier}\p{Emoji_Component}\s]+(?=[¿¡])/gu, '').trim();
                 if (bodyPart.length > 20 && questionPart.length > 5) {
                     text = bodyPart + '[MSG_SPLIT]' + questionPart;
                 }
