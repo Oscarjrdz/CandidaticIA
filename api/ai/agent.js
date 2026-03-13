@@ -1851,7 +1851,19 @@ ${safeDnaLines}
                         bypassGpt = true;
                     } else {
                         const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
-                        systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate como ${welcomeName} y solicita el Nombre y Apellidos. ✨🌸\n`;
+                        // If it's a specific question (not just "hola"), inject full CEREBRO1 rules
+                        // so the PERSUASIÓN rule applies and the question is answered before asking for name
+                        const isSpecificQuestion = !isGenericStart && /\?|vacante|empleo|trabajo|sueldo|horario|turno|beneficio|pagan|salar/i.test(aggregatedText);
+                        if (isSpecificQuestion && !customPrompt && auditForMode.missingLabels.length > 0) {
+                            let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
+                            const cerebro1Rules = baseRules
+                                .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
+                                .replace(/{{categorias}}/g, categoriesList)
+                                .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
+                            systemInstruction += `\n[MISION: BIENVENIDA CON PREGUNTA]: Es el primer mensaje. Primero preséntate como ${welcomeName}. Luego responde brevemente la pregunta del candidato con info real. Al final pide el dato faltante: ${auditForMode.missingLabels[0]}.\n${cerebro1Rules}\n`;
+                        } else {
+                            systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate como ${welcomeName} y solicita el Nombre y Apellidos. ✨🌸\n`;
+                        }
                     }
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
                     candidateUpdates.esNuevo = 'NO';
