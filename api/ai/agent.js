@@ -1119,6 +1119,33 @@ ${safeDnaLines}
                         // 📐 Apply shared formatter (hours format, ✅ list normalization)
                         responseTextVal = formatRecruiterMessage(responseTextVal, candidateData);
                         aiResult.response_text = responseTextVal;
+
+                        // 📅 FAQ CTA DATE INJECTION: When formatRecruiterMessage appended generic cita CTA,
+                        // replace it with one that also shows the available interview days from the step calendar.
+                        const _hasFaqCta = responseTextVal.includes('[MSG_SPLIT]¿Te gustaría agendar tu entrevista?');
+                        if (_hasFaqCta && currentStep?.calendarOptions?.length > 0) {
+                            const _todayMx = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+                            const NUMS_EMJ = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣'];
+                            const DAYS_ES2 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                            const MONTHS_ES2 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                            const _futureOpts = currentStep.calendarOptions.filter(opt => {
+                                const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
+                                return m ? m[1] >= _todayMx : true;
+                            });
+                            if (_futureOpts.length > 0) {
+                                const _dateLines = _futureOpts.map((opt, i) => {
+                                    const dm = opt.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                                    if (!dm) return `${NUMS_EMJ[i] || `${i+1}.`} ${opt} 📅`;
+                                    const d = new Date(parseInt(dm[1]), parseInt(dm[2]) - 1, parseInt(dm[3]));
+                                    return `${NUMS_EMJ[i] || `${i+1}.`} ${DAYS_ES2[d.getDay()]} ${d.getDate()} de ${MONTHS_ES2[d.getMonth()]} 📅`;
+                                }).join('\n');
+                                const _ctaWithDates = _futureOpts.length === 1
+                                    ? `Tengo entrevistas los días:\n${_dateLines}\n¿Te queda bien ese día? 😊`
+                                    : `Tengo entrevistas los días:\n${_dateLines}\n¿Cuál te queda mejor? 😊`;
+                                responseTextVal = responseTextVal.replace('[MSG_SPLIT]¿Te gustaría agendar tu entrevista? 😊', `[MSG_SPLIT]${_ctaWithDates}`);
+                                aiResult.response_text = responseTextVal;
+                            }
+                        }
                     }
 
                     // 🧠 EXTRACTION SYNC (RECRUITER MODE)
