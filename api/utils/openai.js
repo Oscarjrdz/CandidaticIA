@@ -60,7 +60,7 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
         const payload = {
             model: model,
             messages: formattedMessages,
-            temperature: 0.75,
+            temperature: 0.8,
             max_tokens: maxTokens
         };
 
