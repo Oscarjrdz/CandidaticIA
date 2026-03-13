@@ -156,8 +156,11 @@ function formatRecruiterMessage(text, candidateData = null) {
     }
 
     // 🎂 FECHA DE NACIMIENTO: Inject example format if GPT forgot it
+    // Only inject when actually ASKING for the date (has ?), not when confirming it ('ya tengo tu fecha')
     if (/fecha de nacimiento|cu[aá]ndo naciste|d[ií]a de nacimiento/i.test(text)
-        && !/(?:ej\.|ejemplo|DD\/|por ejemplo|\d{2}\/\d{2}\/\d{4})/i.test(text)) {
+        && !/(?:ej\.|ejemplo|DD\/|por ejemplo|\d{2}\/\d{2}\/\d{4})/i.test(text)
+        && !/ya tengo|tengo tu|ya registr|ya anot/i.test(text)
+        && text.includes('?')) {
         // Append example cleanly after the text rather than interrupting the sentence
         text = text.trimEnd() + '\n\n(ej. 19/05/1983)';
     }
