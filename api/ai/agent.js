@@ -1061,6 +1061,24 @@ ${safeDnaLines}
                     responseTextVal = ""; // Silence the bot
                 }
 
+                // 🗓️ CITA AFFIRMATIVE GUARD: If the bot previously asked "¿Te gustaría agendar?" and the
+                // candidate responds with an affirmative ("Sí", "Dale", "Claro", etc.), inject a clear CITA_INTENT
+                // instruction into the recruiter prompt so it moves to scheduling instead of going silent.
+                if (!skipRecruiterInference) {
+                    const _botAskedCita = /agendar.*cita|cita.*entrevista|reserv.*cita|aparto.*cita|programar.*entrevista|agendar.*entrevista|quieres.*cita|gustar[ií]a.*agendar/i.test(_botText);
+                    const _isAffirmative = /^(s[ií]|claro|dale|por favor|porfa|por fa|ándale|andale|v[aá]|adelante|ok dale|sale|va|quiero|me interesa|s[ií] quiero|perfecto|s[ií] por favor)\s*[!.]*$/i.test(aggregatedText.trim());
+                    if (_botAskedCita && _isAffirmative) {
+                        // Inject a strong cita intent flag so the recruiter AI advances to scheduling step
+                        historyForGpt = [
+                            ...historyForGpt.slice(0, -1),
+                            {
+                                role: 'user',
+                                content: `[CONFIRMACIÓN CITA]: El candidato acaba de confirmar que SÍ quiere agendar su entrevista. OBLIGATORIO: Avanza al paso de agendar cita y presenta las fechas disponibles. No repitas la pregunta de si quiere agendar.`
+                            }
+                        ];
+                    }
+                }
+
                 if (!skipRecruiterInference) {
                     const updatedDataForAgent = { ...candidateData, ...candidateUpdates, projectMetadata: { ...candidateData.projectMetadata, currentVacancyIndex: candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : candidateData.projectMetadata?.currentVacancyIndex } };
 
