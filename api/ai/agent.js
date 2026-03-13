@@ -1052,23 +1052,21 @@ ${safeDnaLines}
                     }
                 }
 
-                // 🩹 FAQ MUTE FIX: If the bot previously said "déjame consultarlo" and the user just says "Ok" or "Gracias", mute the AI to allow human intervention
+                // 🩹 FAQ MUTE FIX: If the bot previously said "déjame consultarlo" and the user just says "Ok" or "Gracias", mute the AI
                 const _lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
                 const _botText = (_lastBotMsg?.content || '').toLowerCase();
                 const _isJustThanksOrOk = /^(gracias|muchas gracias|mil gracias|perfecto|ok|okay|vale|gracias a ti|excelente|va|si|sí)\s*$/i.test(aggregatedText.trim().replace(/[^\w\sñáéíóúü]/gi, ''));
                 if (_botText.includes('déjame consultarlo') && _isJustThanksOrOk) {
                     skipRecruiterInference = true;
-                    responseTextVal = ""; // Silence the bot
+                    responseTextVal = "";
                 }
 
-                // 🗓️ CITA AFFIRMATIVE GUARD: If the bot previously asked "¿Te gustaría agendar?" and the
-                // candidate responds with an affirmative ("Sí", "Dale", "Claro", etc.), inject a clear CITA_INTENT
-                // instruction into the recruiter prompt so it moves to scheduling instead of going silent.
+                // 🗓️ CITA AFFIRMATIVE GUARD: Only fires when bot explicitly offered to schedule — NOT on day/hour confirmations
                 if (!skipRecruiterInference) {
-                    const _botAskedCita = /agendar.*cita|cita.*entrevista|reserv.*cita|aparto.*cita|programar.*entrevista|agendar.*entrevista|quieres.*cita|gustar[ií]a.*agendar/i.test(_botText);
+                    const _botAskedCita = /gustar[ií]a.*(?:agendar|reservar).*(?:cita|entrevista)|te\s+agend[eo]\s+una\s+cita|quieres\s+que\s+(?:te\s+)?agende|puedo\s+agendarte\s+una\s+cita/i.test(_botText)
+                        && !/queda\s+bien\s+ese\s+d[ií]a|cu[aá]l\s+(?:te\s+)?(?:queda\s+mejor|prefer|hora)|a\s+qu[eé]\s+hora|qu[eé]\s+hora\s+prefer/i.test(_botText);
                     const _isAffirmative = /^(s[ií]|claro|dale|por favor|porfa|por fa|ándale|andale|v[aá]|adelante|ok dale|sale|va|quiero|me interesa|s[ií] quiero|perfecto|s[ií] por favor)\s*[!.]*$/i.test(aggregatedText.trim());
                     if (_botAskedCita && _isAffirmative) {
-                        // Inject a strong cita intent flag so the recruiter AI advances to scheduling step
                         historyForGpt = [
                             ...historyForGpt.slice(0, -1),
                             {
