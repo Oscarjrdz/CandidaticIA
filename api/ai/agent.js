@@ -1039,7 +1039,47 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
                     await updateCandidate(candidateId, { ultimoMensaje: new Date().toISOString() });
                     return greetText;
                 }
-                // If SHOWING / RECHECK_VACANCIES (correction) → fall through to normal flow
+                // 🎯 SHOWING STATE: Candidate picks a vacancy by number or name from the re-engagement list
+                // Parse the selection, inject vacancy context into candidateData, clear key, then fall through.
+                } else if (reengageState === 'SHOWING') {
+                    const vacancies = await getReengageVacancies(candidateData);
+                    if (vacancies.length > 0) {
+                        // Try to parse which vacancy they picked: "la 1", "1", "primera", name, etc.
+                        const txt = msgText;
+                        let pickedIdx = -1;
+                        const numMatch = txt.match(/\b([1-9])\b/);
+                        if (/\bprimera?\b/i.test(txt) || /\b1\b/.test(txt))  pickedIdx = 0;
+                        else if (/\bsegunda?\b/i.test(txt) || /\b2\b/.test(txt)) pickedIdx = 1;
+                        else if (/\btercera?\b/i.test(txt) || /\b3\b/.test(txt)) pickedIdx = 2;
+                        else if (numMatch) pickedIdx = parseInt(numMatch[1]) - 1;
+                        else {
+                            // Try name match
+                            pickedIdx = vacancies.findIndex(v =>
+                                txt.includes((v.name || '').toLowerCase().substring(0, 5))
+                            );
+                        }
+
+                        if (pickedIdx >= 0 && pickedIdx < vacancies.length) {
+                            const pickedVacancy = vacancies[pickedIdx];
+                            // Inject into candidateData so recruiter sees it
+                            candidateData.currentVacancyIndex = pickedIdx;
+                            candidateData.currentVacancyName = pickedVacancy.name;
+                            if (candidateData.projectMetadata) {
+                                candidateData.projectMetadata.currentVacancyIndex = pickedIdx;
+                                candidateData.projectMetadata.currentVacancyName = pickedVacancy.name;
+                            }
+                            // Persist to Redis so recruiter can read it
+                            await updateCandidate(candidateId, {
+                                currentVacancyIndex: pickedIdx,
+                                currentVacancyName: pickedVacancy.name,
+                            });
+                            // Clear SHOWING → recruiter flow takes over with correct vacancy context
+                            await redis?.del(reengageKey);
+                            console.log(`[REENGAGE SHOWING] Candidate picked vacancy ${pickedIdx}: ${pickedVacancy.name}`);
+                        }
+                    }
+                    // Fall through to normal recruiter flow regardless (recruiter may handle name clarification)
+                // If RECHECK_VACANCIES → fall through to normal flow
             }
         }
 
