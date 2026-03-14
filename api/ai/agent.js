@@ -232,6 +232,37 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
             .replace(/\s*🧠\s*Posgrado/gi,       '\n🧠 Posgrado')
             .replace(/\n{3,}/g, '\n')
             .trim();
+
+        // Double newline before the FIRST escolaridad emoji (space between header and list)
+        text = text.replace(/([^\n])\n(🎒|🏫|🎓|📚|🛠|🧠)/, '$1\n\n$2');
+
+        // Detach any question stuck to the last escolaridad item on the same line
+        // e.g. "🧠 Posgrado ¿Cuál es tu escolaridad?" → "🧠 Posgrado\n¿Cuál es tu escolaridad?"
+        text = text.replace(/((?:🎒|🏫|🎓|📚|🛠️?|🧠)\s*[^\n?¿]+?)\s+(¿[^\n?]+\?)/g, '$1\n$2');
+
+        // Split the escolaridad closing question into a 2nd bubble + inject candidate name
+        const lastEscIdx = Math.max(
+            text.lastIndexOf('🧠'), text.lastIndexOf('📚'),
+            text.lastIndexOf('🛠'), text.lastIndexOf('🎓'),
+            text.lastIndexOf('🏫'), text.lastIndexOf('🎒')
+        );
+        if (lastEscIdx !== -1) {
+            const afterEsc = text.substring(lastEscIdx);
+            const escQMatch = afterEsc.match(/(\n+|\s{1,})((?:¿)[^?!]*(?:escolaridad|nivel de estudios|nivel escolar|estudios)[^?!]*\?)/i);
+            if (escQMatch) {
+                const globalIdx = lastEscIdx + escQMatch.index + escQMatch[1].length;
+                const beforeQ = text.substring(0, globalIdx).trimEnd();
+                let question = text.substring(globalIdx).trim();
+                // Inject first name before the closing ?
+                if (candidateData?.nombreReal) {
+                    const firstName = candidateData.nombreReal.trim().split(/\s+/)[0];
+                    if (firstName && firstName.length > 1) {
+                        question = question.replace(/(\?)([\s\p{Emoji}\s]*)$/u, (_, q, trail) => ` ${firstName}${q}${trail || ''}`);
+                    }
+                }
+                text = `${beforeQ}[MSG_SPLIT]${question}`;
+            }
+        }
     } else if (asksAboutEsc) {
         // GPT asked but forgot the list — inject it before the closing question
         const lastQ = text.lastIndexOf('\xbf');        // last ¿
