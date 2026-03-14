@@ -107,7 +107,14 @@ const _CTA_VARIANTS = [
     '¿Te agendo una cita de entrevista? 🌟',
     '¿Te aparto una cita para entrevista? ✨',
     '¿Quieres que programe tu entrevista? 🌸',
-    '¿Te puedo agendar tu entrevista? 😊'
+    '¿Te puedo agendar tu entrevista? 😊',
+    '¿Avanzamos con tu cita de entrevista? 🚀',
+    '¿Te confirmo tu cita de entrevista? 💼',
+    '¿Procedo a agendar tu entrevista? 🙌',
+    '¿Te reservo un lugar para la entrevista? ⭐',
+    '¿Aseguro tu cita de entrevista? 🎯',
+    '¿Quieres que te separe la entrevista? 🤩',
+    '¿Te interesa que ya quede apartada tu cita? 🌺',
 ];
 const _AMBIGUITY_VARIANTS = [
     'Solo por confirmar, ¿te gustaría agendar tu entrevista? 😊',
@@ -466,7 +473,14 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         const _isFallback     = /excelente pregunta|déjame consultarlo|darte el dato exacto/i.test(text);
 
         if (!_alreadyHasCta && !_isDataCapture && !_isVacancyIntro && !_isDateList && !_isConfirmation && text.length > 5) {
-            const _ctaText = _CTA_VARIANTS[(stepContext.ctaVariantIdx || 0) % _CTA_VARIANTS.length];
+            let _ctaText = _CTA_VARIANTS[(stepContext.ctaVariantIdx || 0) % _CTA_VARIANTS.length];
+            // Inject first name before the closing ? for a personal touch
+            if (candidateData?.nombreReal) {
+                const _fn = candidateData.nombreReal.trim().split(/\s+/)[0];
+                if (_fn && _fn.length > 1) {
+                    _ctaText = _ctaText.replace(/(\?)([\s\p{Emoji}\s]*)$/u, (_, q, trail) => ` ${_fn}${q}${trail || ''}`);
+                }
+            }
             text = text.trimEnd() + `[MSG_SPLIT]${_ctaText}`;
         }
     }
