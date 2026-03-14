@@ -28,24 +28,38 @@ async function drainWaitlist(candidateId) {
 
         const msgIds = pendingMsgs.map(m => m.msgId).filter(id => id);
 
-        console.log(`[Serverless Engine] 🌪️ Draining burst for ${candidateId}. Count: ${pendingMsgs.length}. Text: ${aggregatedText}`);
+        console.error(`[Serverless Engine] 🌪️ Draining burst for ${candidateId}. Count: ${pendingMsgs.length}.`);
 
-        try {
-            await logTelemetry('processing_start', { candidateId, count: pendingMsgs.length });
+        // 🔁 Retry logic: up to 2 attempts with 2s backoff
+        // Without this, a cold-start LLM failure leaves the message in the waitlist
+        // and the user has to send it again to get a response.
+        let attempts = 0;
+        let success = false;
+        while (attempts < 2 && !success) {
+            try {
+                if (attempts > 0) {
+                    console.error(`[Serverless Engine] 🔁 Retry attempt ${attempts} for ${candidateId}...`);
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+                await logTelemetry('processing_start', { candidateId, count: pendingMsgs.length, attempt: attempts });
+                await processMessage(candidateId, aggregatedText, msgIds[0] || null);
+                await logTelemetry('ai_complete', { candidateId });
+                await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));
 
-            await processMessage(candidateId, aggregatedText, msgIds[0] || null);
-            await logTelemetry('ai_complete', { candidateId });
-            await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));
+                // 🧹 CLEANUP: Only clear processed waitlist items (Safety Net)
+                const { clearWaitlist } = await import('../utils/storage.js');
+                await clearWaitlist(candidateId, pendingMsgs.length);
 
-            // 🧹 CLEANUP: Only clear processed waitlist items (Safety Net)
-            const { clearWaitlist } = await import('../utils/storage.js');
-            await clearWaitlist(candidateId, pendingMsgs.length);
-
-            console.log(`[Serverless Engine] ✅ Completed burst of ${pendingMsgs.length} messages.`);
-        } catch (procErr) {
-            console.error(`[Serverless Engine] ❌ Error in burst processing:`, procErr.message);
-            break;
+                console.error(`[Serverless Engine] ✅ Completed burst of ${pendingMsgs.length} messages.`);
+                success = true;
+            } catch (procErr) {
+                attempts++;
+                console.error(`[Serverless Engine] ❌ Error (attempt ${attempts}):`, procErr.message);
+                if (attempts >= 2) break; // Give up after 2 attempts, leave in waitlist for next trigger
+            }
         }
+
+        if (!success) break;
 
         loopSafety++;
         const more = await getWaitlist(candidateId);
