@@ -286,6 +286,34 @@ async function startBaileys(instanceId, webhookUrl) {
 
 app.get('/health', (_, res) => res.json({ ok: true, sockets: activeSockets.size }));
 
+// Send message via active socket (called by Vercel messenger.js)
+app.post('/send/:instanceId', async (req, res) => {
+    const { instanceId } = req.params;
+    const { to, body, type = 'chat', caption, filename, lat, lng } = req.body || {};
+    if (!to || (!body && type === 'chat')) return res.status(400).json({ success: false, error: 'Missing to/body' });
+
+    const socket = activeSockets.get(instanceId);
+    if (!socket) return res.status(503).json({ success: false, error: 'Socket not connected' });
+
+    try {
+        const jid = String(to).replace(/\D/g, '') + '@c.us';
+        let sentMsg;
+        switch (type) {
+            case 'image':    sentMsg = await socket.sendMessage(jid, { image: { url: body }, caption: caption || '' }); break;
+            case 'document': sentMsg = await socket.sendMessage(jid, { document: { url: body }, fileName: filename || 'doc.pdf', mimetype: 'application/pdf' }); break;
+            case 'sticker':  sentMsg = await socket.sendMessage(jid, { sticker: { url: body } }); break;
+            case 'location': sentMsg = await socket.sendMessage(jid, { location: { degreesLatitude: lat, degreesLongitude: lng } }); break;
+            default:         sentMsg = await socket.sendMessage(jid, { text: body });
+        }
+        const instance = await getInstance(instanceId);
+        if (instance) await updateInstance(instanceId, { messagesOut: (instance.messagesOut || 0) + 1 });
+        return res.json({ success: true, msgId: sentMsg?.key?.id });
+    } catch (err) {
+        console.error(`[GW:${instanceId}] /send error:`, err.message);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // Diagnostics — test if Railway can reach WhatsApp servers
 app.get('/diag', async (_, res) => {
     const results = {};

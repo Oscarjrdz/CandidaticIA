@@ -52,48 +52,23 @@ export const sendMessage = async (number, message, type = 'chat', extraParams = 
 // ─── Internal: Send via our own Gateway ────────────────────────────────────────
 async function _sendViaGateway(instanceId, phone, message, type = 'chat', extraParams = {}) {
     try {
-        const baseUrl = process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}`
-            : (process.env.NEXTAUTH_URL || 'https://candidatic-ia.vercel.app');
-
         const { getInstance } = await import('../gateway/session-engine.js');
         const instance = await getInstance(instanceId);
-        if (!instance?.token) throw new Error(`Gateway instance ${instanceId} not found or no token`);
+        if (!instance) throw new Error(`Gateway instance ${instanceId} not found`);
 
-        const body = {};
-        body.token = instance.token;
-        body.to = phone;
-
-        // Map message types
-        switch (type) {
-            case 'image':
-                body.body = message;
-                if (extraParams.caption) body.caption = extraParams.caption;
-                break;
-            case 'document':
-                body.body = message;
-                body.filename = extraParams.filename || 'documento.pdf';
-                break;
-            case 'sticker':
-                body.body = message;
-                break;
-            case 'location':
-                body.lat = extraParams.lat;
-                body.lng = extraParams.lng;
-                body.address = extraParams.address;
-                break;
-            default: // chat
-                body.body = message;
-        }
-
-        const msgType = ['image', 'document', 'sticker', 'location'].includes(type) ? type : 'chat';
-        const url = `${baseUrl}/api/gateway/send/${instanceId}/messages/${msgType}`;
+        // Call the Railway gateway server's /send endpoint (uses the active socket)
+        // gatewayUrl is set on the instance, or falls back to env var
+        const gwBaseUrl = instance.gatewayUrl
+            || process.env.GATEWAY_SERVER_URL
+            || 'https://candidaticia-production.up.railway.app';
 
         const { default: axios } = await import('axios');
-        const result = await axios.post(url, body, {
-            headers: { 'Content-Type': 'application/json' },
-            timeout: 30000
-        });
+        const result = await axios.post(`${gwBaseUrl}/send/${instanceId}`, {
+            to: phone,
+            body: message,
+            type,
+            ...extraParams
+        }, { timeout: 30000 });
 
         if (result.data?.success) {
             return { success: true, data: result.data, via: 'gateway', instanceId };
@@ -111,3 +86,4 @@ async function _sendViaGateway(instanceId, phone, message, type = 'chat', extraP
         return { success: false, error: err.message };
     }
 }
+
