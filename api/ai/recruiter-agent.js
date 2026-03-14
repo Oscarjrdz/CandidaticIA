@@ -192,8 +192,22 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             .join('\n');
 
         // 5. REPETITION SHIELD (HARD PRE-DETECTION)
-        const descriptionClean = (vacancyContext.messageDescription || '').toLowerCase().trim();
-        const hasSentDescription = descriptionClean && forwardHistoryText.toLowerCase().includes(descriptionClean.substring(0, 100));
+        const descriptionClean = (vacancyContext.messageDescription || vacancyContext.description || '').toLowerCase().trim();
+        const historyLower = forwardHistoryText.toLowerCase();
+
+        // Multi-probe: check beginning, 1/3 point, and 2/3 point of the description
+        const probeLen = 80;
+        const probe1 = descriptionClean.substring(0, probeLen);
+        const probe2 = descriptionClean.substring(Math.floor(descriptionClean.length / 3), Math.floor(descriptionClean.length / 3) + probeLen);
+        const probe3 = descriptionClean.substring(Math.floor(descriptionClean.length * 2 / 3), Math.floor(descriptionClean.length * 2 / 3) + probeLen);
+
+        const hasSentDescription = descriptionClean.length > 50 && (
+            (probe1.length > 20 && historyLower.includes(probe1)) ||
+            (probe2.length > 20 && historyLower.includes(probe2)) ||
+            (probe3.length > 20 && historyLower.includes(probe3)) ||
+            // Fallback: any long bot message in history (>150 chars) → vacancy was already pitched
+            recentHistory.some(m => (m.role === 'assistant' || m.role === 'model') && (m.content || '').length > 150)
+        );
 
         let repetitionShield = "";
         if (hasSentDescription) {
