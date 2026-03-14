@@ -2246,7 +2246,8 @@ ${safeDnaLines}
 
                 // 🔍 JOB INQUIRY INTERCEPT: If candidate asked about vacancies/interviews before
                 // completing profile, always reply with the inquiry-aware response (even if AI was silent).
-                if (freshAudit.paso1Status !== 'COMPLETO') {
+                // 🛑 BUT ONLY if there's no custom prompt, otherwise we let the custom prompt handle the inquiry.
+                if (freshAudit.paso1Status !== 'COMPLETO' && !customPrompt) {
                     const isJobInquiry = /(?:[?¿]|\b)(vacantes?|entrevistas?|sueldo|salario|pagan|horario|turnos|d[oó]nde|ubicaci[oó]n|tienes\s+trabajo|hay\s+trabajo|ofrecen|qu[eé]\s+ofrecen)/i.test(aggregatedText || '');
                     if (isJobInquiry) {
                         const firstMissing = freshAudit.missingLabels?.[0] || 'nombre completo';
