@@ -14,21 +14,26 @@ const STATE_CONFIG = {
 };
 
 // ─── API Helpers ───────────────────────────────────────────────────────────────
+const GW = import.meta.env.VITE_GATEWAY_URL || 'https://candidaticia-production.up.railway.app';
+
 const api = {
-    listInstances: () => fetch('/api/gateway/instances').then(r => r.json()),
-    createInstance: (body) => fetch('/api/gateway/instances', {
+    listInstances: () => fetch(`${GW}/instances`).then(r => r.json()),
+    createInstance: (body) => fetch(`${GW}/instances`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(r => r.json()),
-    deleteInstance: (instanceId) => fetch(`/api/gateway/instances?instanceId=${instanceId}`, {
+    deleteInstance: (instanceId) => fetch(`${GW}/instances/${instanceId}`, {
         method: 'DELETE'
     }).then(r => r.json()),
-    connectInstance: (instanceId) => fetch('/api/gateway/connect', {
+    connectInstance: (instanceId) => fetch(`${GW}/connect/${instanceId}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instanceId })
     }).then(r => r.json()),
-    getQR: (instanceId) => fetch(`/api/gateway/connect?instanceId=${instanceId}`).then(r => r.json()),
-    getStatus: (instanceId) => fetch(`/api/gateway/status?instanceId=${instanceId}`).then(r => r.json()),
-    getHistory: (instanceId, token) => fetch(`/api/gateway/history?instanceId=${instanceId}&token=${token}&limit=50`).then(r => r.json()),
+    getQR: (instanceId) => fetch(`${GW}/qr/${instanceId}`).then(r => r.json()),
+    getStatus: (instanceId) => fetch(`${GW}/status/${instanceId}`).then(r => r.json()),
+    getHistory: (instanceId, token) => fetch(`${GW}/history/${instanceId}?token=${token}&limit=50`).then(r => r.json()),
+    updateInstance: (instanceId, body) => fetch(`${GW}/instances/${instanceId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(r => r.json()),
 };
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
