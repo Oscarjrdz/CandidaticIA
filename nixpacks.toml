@@ -1,8 +1,12 @@
 # nixpacks.toml — Railway build configuration for Candidatic Gateway
-# Skips the Vite frontend build (not needed for the gateway server)
+# Forces Node.js 20 (required by @whiskeysockets/baileys)
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
 
 [phases.build]
 cmds = []
 
 [start]
 cmd = "node gateway-server.js"
+
