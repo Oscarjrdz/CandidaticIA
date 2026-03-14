@@ -259,7 +259,7 @@ async function startBaileys(instanceId, webhookUrl) {
                 const inst = await getInstance(instanceId);
                 if (inst) await updateInstance(instanceId, { messagesIn: (inst.messagesIn || 0) + 1 });
 
-                const wh = webhookUrl || inst?.webhookUrl || CANDIDATIC_WEBHOOK;
+            const wh = inst?.webhookUrl || webhookUrl || CANDIDATIC_WEBHOOK;
                 if (wh) {
                     try {
                         const { default: axios } = await import('axios');
@@ -530,7 +530,7 @@ function _listenMessages(socket, instanceId, webhookUrl) {
             await saveHistory(instanceId, { direction: 'in', from, body, msgId: msg.key.id });
             const inst = await getInstance(instanceId);
             if (inst) await updateInstance(instanceId, { messagesIn: (inst.messagesIn || 0) + 1 });
-            const wh = webhookUrl || inst?.webhookUrl || CANDIDATIC_WEBHOOK;
+            const wh = inst?.webhookUrl || webhookUrl || CANDIDATIC_WEBHOOK;
             if (wh) {
                 try {
                     const { default: axios } = await import('axios');
