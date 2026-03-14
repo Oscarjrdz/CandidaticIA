@@ -27,7 +27,9 @@ import IORedis from 'ioredis';
 
 // ─── Redis ────────────────────────────────────────────────────────────────────
 const redis = new IORedis(process.env.REDIS_URL || '', {
-    maxRetriesPerRequest: 3,
+    maxRetriesPerRequest: 1,
+    connectTimeout: 5000,
+    commandTimeout: 5000,
     lazyConnect: false,
 });
 
@@ -344,18 +346,23 @@ app.get('/diag', async (_, res) => {
 
 // List instances
 app.get('/instances', async (req, res) => {
-    const instances = await getAllInstances();
-    const safe = instances.map(i => ({ ...i, token: i.token ? `${i.token.substring(0, 8)}••••` : null }));
-    res.json({ success: true, instances: safe });
+    try {
+        const instances = await getAllInstances();
+        const safe = instances.map(i => ({ ...i, token: i.token ? `${i.token.substring(0, 8)}••••` : null }));
+        res.json({ success: true, instances: safe });
+    } catch (e) { console.error('[GW] /instances error:', e.message); res.status(500).json({ success: false, error: e.message }); }
 });
 
 // Create instance
 app.post('/instances', async (req, res) => {
-    const { name, webhookUrl } = req.body || {};
-    if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required.' });
-    const instance = await createInstance({ name, webhookUrl });
-    res.status(201).json({ success: true, instance });
+    try {
+        const { name, webhookUrl } = req.body || {};
+        if (!name?.trim()) return res.status(400).json({ success: false, error: 'Name required.' });
+        const instance = await createInstance({ name, webhookUrl });
+        res.status(201).json({ success: true, instance });
+    } catch (e) { console.error('[GW] POST /instances error:', e.message); res.status(500).json({ success: false, error: e.message }); }
 });
+
 
 // Delete instance
 app.delete('/instances/:instanceId', async (req, res) => {
