@@ -134,8 +134,23 @@ const activeSockets = new Map();
 // pendingQR: instanceId → { resolveQR, rejectQR } so connect endpoint is notified immediately
 const pendingQR = new Map();
 
-// Stable Baileys version — avoids fetchLatestBaileysVersion() external call which can be slow/fail
-const BAILEYS_VERSION = [2, 3000, 1017531287];
+// Stable fallback Baileys version in case fetch fails
+const BAILEYS_VERSION_FALLBACK = [2, 3000, 1017531287];
+
+async function getBaileysVersion() {
+    try {
+        const { fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys');
+        const result = await Promise.race([
+            fetchLatestBaileysVersion(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000))
+        ]);
+        console.log(`[GW] Baileys version: ${result.version}`);
+        return result.version;
+    } catch {
+        console.warn('[GW] fetchLatestBaileysVersion failed, using fallback version');
+        return BAILEYS_VERSION_FALLBACK;
+    }
+}
 
 async function startBaileys(instanceId, webhookUrl) {
     if (activeSockets.has(instanceId)) {
@@ -154,10 +169,11 @@ async function startBaileys(instanceId, webhookUrl) {
             makeCacheableSignalKeyStore
         } = await import('@whiskeysockets/baileys');
 
+        const version = await getBaileysVersion();
         const { state, saveCreds } = await makeRedisAuthState(instanceId);
 
         const socket = makeWASocket({
-            version: BAILEYS_VERSION,
+            version,
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, { level: () => {} })
@@ -303,6 +319,20 @@ app.post('/connect/:instanceId', async (req, res) => {
     if (instance.state === 'CONNECTED' && activeSockets.has(instanceId)) {
         return res.json({ success: true, state: 'CONNECTED', phone: instance.phone });
     }
+
+    // Clear stale auth so WhatsApp always sees a fresh QR session
+    try {
+        const authKeys = await redis.keys(`gateway:auth:${instanceId}:*`);
+        if (authKeys.length) await redis.del(...authKeys);
+        await redis.del(`gateway:qr:${instanceId}`);
+        console.log(`[GW:${instanceId}] Auth state cleared for fresh QR`);
+    } catch (e) {
+        console.warn(`[GW:${instanceId}] Could not clear auth:`, e.message);
+    }
+
+    // Also clear from activeSockets in case there's a dead socket
+    const deadSocket = activeSockets.get(instanceId);
+    if (deadSocket) { try { deadSocket.end?.(); } catch {} activeSockets.delete(instanceId); }
 
     // Promise that resolves when Baileys emits QR or 'open'
     const qrPromise = new Promise((resolveQR, rejectQR) => {
