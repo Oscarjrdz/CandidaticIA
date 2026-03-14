@@ -94,13 +94,19 @@ async function saveHistory(instanceId, entry) {
 }
 
 // Auth state for Baileys stored in Redis
+// ⚠️ Must use BufferJSON from Baileys — plain JSON.parse/stringify loses Buffer types
+//    (noiseKey, signedIdentityKey, etc. become plain objects → aesEncryptGCM crashes)
 async function makeRedisAuthState(instanceId) {
     const KEY = `gateway:auth:${instanceId}`;
-    const read  = async (k) => { const v = await redis.get(`${KEY}:${k}`); return v ? JSON.parse(v) : null; };
-    const write = async (k, d) => redis.set(`${KEY}:${k}`, JSON.stringify(d), 'EX', SESSION_TTL);
+    const { initAuthCreds, proto, BufferJSON } = await import('@whiskeysockets/baileys');
+
+    const read  = async (k) => {
+        const v = await redis.get(`${KEY}:${k}`);
+        return v ? JSON.parse(v, BufferJSON.reviver) : null;
+    };
+    const write = async (k, d) => redis.set(`${KEY}:${k}`, JSON.stringify(d, BufferJSON.replacer), 'EX', SESSION_TTL);
     const remove = async (k) => redis.del(`${KEY}:${k}`);
 
-    const { initAuthCreds, proto } = await import('@whiskeysockets/baileys');
     let creds = await read('creds');
     if (!creds) creds = initAuthCreds();
 
@@ -128,6 +134,7 @@ async function makeRedisAuthState(instanceId) {
         saveCreds: () => write('creds', creds)
     };
 }
+
 
 // ─── Active sockets map ───────────────────────────────────────────────────────
 const activeSockets = new Map();
