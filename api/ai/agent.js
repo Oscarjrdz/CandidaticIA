@@ -247,22 +247,41 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // GPT sometimes writes all categories inline: "✅ A ✅ B ✅ C"
     // We split every ✅ onto a new line so WhatsApp shows them vertically.
     if (/✅/.test(text)) {
-        // Insert newline before every ✅ that is NOT already at the start of a line
+        // 1️⃣ Double newline after the header line ending with ":"
+        // e.g. "Aquí te muestro las opciones disponibles:✨\n✅ A" → "disponibles:✨\n\n✅ A"
+        text = text.replace(/(disponibles?[^:\n]*:|opciones?[^:\n]*:|opciones[^:\n]*💖)\s*\n/gi, '$1\n\n');
+
+        // 2️⃣ Insert newline before every ✅ that is NOT already at the start of a line
         text = text.replace(/([^\n])✅/g, '$1\n✅');
-        // Collapse triple+ newlines introduced by the above
+
+        // 3️⃣ Detach any text/question AFTER the last category name on the same line
+        // e.g. "✅ Montacarguistas ¿Cuál eliges?" → "✅ Montacarguistas\n¿Cuál eliges?"
+        text = text.replace(/(✅\s*[^\n✅?¿]+?)\s+(¿[^\n?]+\?)/g, '$1\n$2');
+
+        // 4️⃣ Collapse triple+ newlines
         text = text.replace(/\n{3,}/g, '\n\n').trim();
 
         // 💬 CATEGORY QUESTION SPLIT: Move the closing choice question to a 2nd bubble.
-        // Matches patterns like "¿Cuál eliges?", "¿Cuál te interesa?", "¿Cuál prefieres?",
-        // "¿Cuál es la tuya?", "¿Con cuál te quedas?", etc. — must appear AFTER the last ✅.
+        // Works whether the question is on its own line OR inline after the last item (fixed above).
         const lastCheckIdx = text.lastIndexOf('✅');
         if (lastCheckIdx !== -1) {
             const afterList = text.substring(lastCheckIdx);
-            const catQMatch = afterList.match(/(\n+)((?:¿|¡)[^?!]*(?:eliges?|prefieres?|interesa|llama la atención|quedas?|va más|apunta|te va)[^?!]*[?!])/i);
+            // Match newline(s) OR just whitespace before the question
+            const catQMatch = afterList.match(/(\n+|\s{1,})((?:¿|¡)[^?!]*(?:eliges?|prefieres?|interesa|llama la atenci[oó]n|quedas?|va m[aá]s|apunta|te va|escoges?|escoge)[^?!]*[?!])/i);
             if (catQMatch) {
-                const globalIdx = lastCheckIdx + catQMatch.index + catQMatch[1].length; // start of the question
+                const globalIdx = lastCheckIdx + catQMatch.index + catQMatch[1].length;
                 const beforeQ = text.substring(0, globalIdx).trimEnd();
-                const question = text.substring(globalIdx).trim();
+                let question = text.substring(globalIdx).trim();
+
+                // 5️⃣ Inject candidate first name into the question if available
+                if (candidateData?.nombreReal) {
+                    const firstName = candidateData.nombreReal.trim().split(/\s+/)[0];
+                    if (firstName && firstName.length > 1) {
+                        // "¿Cuál eliges?" → "¿Cuál eliges, Oscar?"
+                        question = question.replace(/([?!])\s*$/, `, ${firstName}$1`);
+                    }
+                }
+
                 text = `${beforeQ}[MSG_SPLIT]${question}`;
             }
         }
