@@ -425,8 +425,8 @@ app.post('/pair/:instanceId', async (req, res) => {
         if (authKeys.length) await redis.del(...authKeys);
         await redis.del(`gateway:qr:${instanceId}`, `gateway:paircode:${instanceId}`);
     } catch (e) { console.warn(`[GW:${instanceId}] clear auth error:`, e.message); }
-    const dead = activeSockets.get(instanceId);
-    if (dead) { try { dead.end?.(); } catch {} activeSockets.delete(instanceId); }
+    // Remove stale reference WITHOUT calling .end() to avoid the stale close event race
+    activeSockets.delete(instanceId);
 
     // Start Baileys in pairing-code mode (no QR printed)
     const pairPromise = new Promise((resolve, reject) => {
@@ -470,6 +470,8 @@ app.post('/pair/:instanceId', async (req, res) => {
                 if (connection === 'close') {
                     const code = lastDisconnect?.error?.output?.statusCode;
                     const loggedOut = code === DisconnectReason.loggedOut;
+                    // Identity check — only act if this socket is still the current one
+                    if (activeSockets.get(instanceId) !== socket) return;
                     await updateInstance(instanceId, { state: loggedOut ? 'DISCONNECTED' : 'ERROR' });
                     activeSockets.delete(instanceId);
                     const pending = pendingQR.get(instanceId);
