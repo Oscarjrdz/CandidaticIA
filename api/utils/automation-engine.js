@@ -212,7 +212,7 @@ async function processProjectPipelines(redis, openAiKey, config, logs, manualCon
 
                 // Context Injection (Case Insensitive)
                 promptText = promptText
-                    .replace(/{{Candidato}}/gi, cand.nombreReal || cand.nombre || 'Candidato')
+                    .replace(/{{Candidato}}/gi, (cand.nombreReal || cand.nombre || 'Candidato').split(' ')[0])
                     .replace(/{{Vacante}}/gi, vacancyContext.name)
                     .replace(/{{Vacante\.MessageDescription}}/gi, vacancyContext.messageDescription || vacancyContext.description || '')
                     .replace(/{{Vacante\.Descripcion}}/gi, vacancyContext.description || '')
@@ -234,6 +234,7 @@ REGLAS DE ORO:
 5. Tu respuesta debe ser natural, sonar humana y respetar la brevedad/longitud configurada en tu instrucción.
 6. CÓDIGO INTERNO: Si consideras que el candidato ya cumplió el objetivo de este paso (ej. aceptó la entrevista), incluye el tag [MOVE] en tu respuesta.
 7. OBLIGACIÓN DE CIERRE (MANDATORIO): Si la instrucción maestra incluye invitar a entrevista o mandar fechas, SIEMPRE termina tu mensaje textualmente con la pregunta "¿Te gustaría agendar una entrevista?" o "¿Te queda bien?". NUNCA termines con frases abiertas como "Si tienes dudas avísame".
+8. NOMBRE: SIEMPRE dirige al candidato por su PRIMER NOMBRE únicamente. NUNCA uses nombre completo ni apellidos cuando lo saludes o menciones.
 `;
                 try {
                     const messageHistory = [
