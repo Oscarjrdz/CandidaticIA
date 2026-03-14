@@ -14,7 +14,9 @@ import {
     moveCandidateStep,
     addCandidateToProject,
     recordVacancyInteraction,
-    updateProjectCandidateMeta
+    updateProjectCandidateMeta,
+    getActiveBypassRules,
+    getProjects
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgReaction } from '../whatsapp/utils.js';
 import { getSchemaByField } from '../utils/schema-registry.js';
@@ -732,6 +734,77 @@ const getIdentityLayer = (customPrompt = null) => {
     return customPrompt || DEFAULT_SYSTEM_PROMPT;
 };
 
+/**
+ * 🔄 RE-ENGAGEMENT: Find all vacancies from bypass projects the candidate qualifies for RIGHT NOW.
+ * Uses the same matching engine as Orchestrator.executeHandover but collects ALL matches.
+ */
+const getReengageVacancies = async (candidateData) => {
+    try {
+        const normalizeStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const rules = await getActiveBypassRules();
+        const projects = await getProjects();
+
+        const qualifyingVacancyIds = new Set();
+
+        for (const rule of rules) {
+            // Age Check
+            const cAge = parseInt(candidateData.edad);
+            if (!isNaN(cAge)) {
+                if (rule.minAge && cAge < parseInt(rule.minAge)) continue;
+                if (rule.maxAge && cAge > parseInt(rule.maxAge)) continue;
+            }
+            // Gender Check
+            const cGender = normalizeStr(candidateData.genero);
+            const rGender = normalizeStr(rule.gender || 'Cualquiera');
+            if (rGender !== 'cualquiera' && cGender !== rGender) continue;
+            // Category Check
+            const cCat = normalizeStr(candidateData.categoria);
+            if (rule.categories && rule.categories.length > 0) {
+                const ok = rule.categories.some(rc => {
+                    const rCat = normalizeStr(rc);
+                    return rCat.includes(cCat) || cCat.includes(rCat);
+                });
+                if (!ok) continue;
+            }
+            // Municipio Check
+            const cMun = normalizeStr(candidateData.municipio);
+            if (rule.municipios && rule.municipios.length > 0) {
+                const ok = rule.municipios.some(rm => {
+                    const rMun = normalizeStr(rm);
+                    return rMun.includes(cMun) || cMun.includes(rMun);
+                });
+                if (!ok) continue;
+            }
+            // Escolaridad Check
+            const cEsc = normalizeStr(candidateData.escolaridad);
+            if (rule.escolaridades && rule.escolaridades.length > 0) {
+                const ok = rule.escolaridades.some(re => {
+                    const rEsc = normalizeStr(re);
+                    return rEsc.includes(cEsc) || cEsc.includes(rEsc);
+                });
+                if (!ok) continue;
+            }
+            // MATCH: collect ALL vacancyIds from matching project
+            const matchedProject = projects.find(p => p.id === rule.projectId);
+            if (matchedProject) {
+                const vIds = Array.isArray(matchedProject.vacancyIds) ? matchedProject.vacancyIds : (matchedProject.vacancyId ? [matchedProject.vacancyId] : []);
+                vIds.forEach(id => qualifyingVacancyIds.add(id));
+            }
+        }
+
+        // Resolve vacancy details
+        const resolved = await Promise.all(
+            [...qualifyingVacancyIds].map(id => getVacancyById(id).catch(() => null))
+        );
+        return resolved.filter(Boolean);
+    } catch (e) {
+        console.error('[REENGAGE] getReengageVacancies error:', e);
+        return [];
+    }
+};
+
+
+
 export const processMessage = async (candidateId, incomingMessage, msgId = null) => {
     const startTime = Date.now();
     try {
@@ -779,6 +852,101 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // 🛡️ [BLOCK SHIELD]: Force silence if candidate is blocked
         if (candidateData.blocked === true) {
             return null;
+        }
+
+        // 🔄 [RE-ENGAGEMENT FLOW]: Intercept candidates who said NO INTERESA and message again
+        {
+            const reengageKey = `reengagement:${candidateId}`;
+            const reengageState = await redis?.get(reengageKey);
+            const isNoInteresa = /no.?interesa/i.test(candidateData.stepId || '') ||
+                /no.?interesa/i.test(candidateData.status || '');
+
+            const msgText = (typeof incomingMessage === 'string' ? incomingMessage : '').toLowerCase().trim();
+            const saidYes = /\b(si|sí|yes|claro|dale|quiero|me interesa|por favor|ándale|andale|sip|órale|orale)\b/.test(msgText);
+            const saidNo = /\b(no|nel|nope|paso|no gracias|no quiero|ahorita no|todavía no)\b/.test(msgText) && !saidYes;
+
+            if (isNoInteresa || reengageState) {
+                const firstName = getFirstName(candidateData.nombreReal) || 'candidato';
+
+                if (reengageState === 'ASKED') {
+                    if (saidYes) {
+                        // ── Phase 2: Candidate said YES ──────────────────────────────────────
+                        const vacancies = await getReengageVacancies(candidateData);
+                        const config = await getUltraMsgConfig();
+                        const phone = candidateData.whatsapp;
+
+                        if (vacancies.length === 0) {
+                            // No qualifying vacancies found → honest response
+                            const noVacMsg = `En este momento no tenemos vacantes disponibles que se ajusten exactamente a tu perfil, ${firstName}. 😔 Pero en cuanto llegue algo para ti, ¡serás el primero en saberlo! 🌟`;
+                            await sendUltraMsgMessage(config.instanceId, config.token, phone, noVacMsg, 'chat');
+                            await saveMessage(candidateId, { from: 'bot', content: noVacMsg, timestamp: new Date().toISOString() });
+                            await redis?.del(reengageKey);
+                            return noVacMsg;
+                        }
+
+                        // Build list bubble
+                        const _NUM_EMOJIS_RE = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                        const listLines = vacancies.map((v, i) => {
+                            const num = _NUM_EMOJIS_RE[i] || `${i+1}.`;
+                            const salary = v.salarioDia ? ` – $${v.salarioDia}/día` : '';
+                            return `${num} ${v.name}${salary}`;
+                        }).join('\n');
+                        const listMsg = `¡Claro que sí! Actualmente tenemos estas opciones disponibles:\n\n${listLines}`;
+                        const ctaMsg = `¿Cuál te interesa ${firstName}?`;
+
+                        await sendUltraMsgMessage(config.instanceId, config.token, phone, listMsg, 'chat', { priority: 0 });
+                        await saveMessage(candidateId, { from: 'bot', content: listMsg, timestamp: new Date().toISOString() });
+                        await new Promise(r => setTimeout(r, 1500));
+                        await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaMsg, 'chat', { priority: 1 });
+                        await saveMessage(candidateId, { from: 'bot', content: ctaMsg, timestamp: new Date().toISOString() });
+
+                        await redis?.set(reengageKey, 'SHOWING', 'EX', 604800); // 7 days
+                        return listMsg;
+
+                    } else if (saidNo) {
+                        // ── Phase 2b: Candidate said NO ─────────────────────────────────────
+                        const config = await getUltraMsgConfig();
+                        const closeMsg = `¡Perfecto! No hay problema, ${firstName}. 😊 Aquí estaré cuando necesites algo. ¡Mucho éxito! 🍀`;
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, closeMsg, 'chat');
+                        await saveMessage(candidateId, { from: 'bot', content: closeMsg, timestamp: new Date().toISOString() });
+                        await redis?.del(reengageKey);
+                        return closeMsg;
+                    }
+                    // If not clearly yes/no, fall through to normal GPT response (ambiguous)
+
+                } else if (!reengageState && isNoInteresa) {
+                    // ── Phase 1: First message after NO INTERESA ─────────────────────────
+                    // Let GPT handle the greeting naturally, then send deterministic CTA bubble
+                    const customPromptForGreeting = batchConfig?.bot_ia_prompt || '';
+                    const greetInstruction = `
+Eres Lic. Brenda Rodríguez, reclutadora. El candidato ${firstName} estuvo interesado antes pero dijo que no le interesaba una vacante.
+Ahora te acaba de escribir. RESPONDE brevemente y con calidez a lo que te dice (saludo, pregunta, lo que sea).
+SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO menciones vacantes, NO pidas datos. Solo sé amable y humana.
+    `.trim();
+
+                    const greetMessages = [
+                        { role: 'user', content: typeof incomingMessage === 'string' ? incomingMessage : 'Hola' }
+                    ];
+
+                    const greetResponse = await getOpenAIResponse(greetInstruction, greetMessages, { max_tokens: 120 });
+                    const greetText = (greetResponse || `¡Hola ${firstName}! ✨ ¡Qué gusto saber de ti! 😊`).trim();
+
+                    const config = await getUltraMsgConfig();
+                    const phone = candidateData.whatsapp;
+                    const ctaBubble = `¿Te gustaría conocer las vacantes que tenemos disponibles para ti?`;
+
+                    await sendUltraMsgMessage(config.instanceId, config.token, phone, greetText, 'chat', { priority: 0 });
+                    await saveMessage(candidateId, { from: 'bot', content: greetText, timestamp: new Date().toISOString() });
+                    await new Promise(r => setTimeout(r, 2000));
+                    await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaBubble, 'chat', { priority: 1 });
+                    await saveMessage(candidateId, { from: 'bot', content: ctaBubble, timestamp: new Date().toISOString() });
+
+                    await redis?.set(reengageKey, 'ASKED', 'EX', 604800); // 7 days
+                    await updateCandidate(candidateId, { ultimoMensaje: new Date().toISOString() });
+                    return greetText;
+                }
+                // If SHOWING state (chose vacancy) → fall through to normal flow so profile/vacancy selection works
+            }
         }
 
         const validMessages = allMessages.filter(m => m.content && (m.from === 'user' || m.from === 'bot' || m.from === 'me'));
