@@ -895,7 +895,7 @@ ${safeDnaLines}
         let responseTextVal = null;
         let project = null;
         let activeStepNameLower = ''; // hoisted so delivery section can read it
-        const historyForGpt = [...recentHistory, currentMessageForGpt];
+        let historyForGpt = [...recentHistory, currentMessageForGpt];
 
         if (activeProjectId) {
             // ⚡ FIX 1: Single parallel read — project data + cand_meta (was 2 sequential hgets for the same key)
@@ -1471,7 +1471,7 @@ ${safeDnaLines}
                         // ⛔ PIVOT EXCEPTION: If the last bot message was asking about a new vacancy
                         // ("¿Te gustaría conocerla?"), the Sí is clearly about seeing the vacancy —
                         // not scheduling. Let the LLM response go through untouched.
-                        const _isPivotContext = /te gustar[ií]a conocerla|quieres conocerla|conocer la vacante|conocerla\?/i.test(botText);
+                        const _isPivotContext = /te gustar[ií]a conocerla|quieres conocerla|conocer la vacante|conocerla\?|te la presento|cuente de ella|conocer esta opci[oó]n|saber m[aá]s/i.test(botText);
                         if (!_isPivotContext) {
                             // Use sequential variant (global counter) for ambiguity re-ask
                             const _ambIdx = await getCTAIndex(redis, candidateId);
