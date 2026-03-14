@@ -243,6 +243,16 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         }
     }
 
+    // 📋 CATEGORY LIST: Force vertical format — each ✅ item on its own line
+    // GPT sometimes writes all categories inline: "✅ A ✅ B ✅ C"
+    // We split every ✅ onto a new line so WhatsApp shows them vertically.
+    if (/✅/.test(text)) {
+        // Insert newline before every ✅ that is NOT already at the start of a line
+        text = text.replace(/([^\n])✅/g, '$1\n✅');
+        // Collapse triple+ newlines introduced by the above
+        text = text.replace(/\n{3,}/g, '\n\n').trim();
+    }
+
     // 🎂 FECHA DE NACIMIENTO: Inject example format if GPT forgot it
     // Only inject when actually ASKING for the date (has ?), not when confirming it ('ya tengo tu fecha')
     if (/fecha de nacimiento|cu[aá]ndo naciste|d[ií]a de nacimiento/i.test(text)
