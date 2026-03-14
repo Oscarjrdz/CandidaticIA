@@ -549,6 +549,26 @@ app.get('/status/:instanceId', async (req, res) => {
     res.json({ success: true, state: instance.state, phone: instance.phone, messagesIn: instance.messagesIn, messagesOut: instance.messagesOut });
 });
 
+// Force-reset auth state + disconnect socket (for fresh re-pairing after cred corruption)
+app.post('/reset/:instanceId', async (req, res) => {
+    const { instanceId } = req.params;
+    const instance = await getInstance(instanceId);
+    if (!instance) return res.status(404).json({ success: false, error: 'Not found.' });
+
+    // Kill active socket
+    const sock = activeSockets.get(instanceId);
+    if (sock) { try { sock.end?.(); } catch {} activeSockets.delete(instanceId); }
+
+    // Clear ALL Redis auth keys for this instance
+    const authKeys = await redis.keys(`gateway:auth:${instanceId}:*`);
+    if (authKeys.length) await redis.del(...authKeys);
+    await redis.del(`gateway:qr:${instanceId}`, `gateway:paircode:${instanceId}`);
+    await updateInstance(instanceId, { state: 'DISCONNECTED', phone: null });
+
+    console.log(`[GW:${instanceId}] 🔄 Auth reset complete — ready for fresh pairing`);
+    res.json({ success: true, message: 'Auth cleared. Use /connect or /pair to reconnect.' });
+});
+
 // History
 app.get('/history/:instanceId', async (req, res) => {
     const { instanceId } = req.params;
