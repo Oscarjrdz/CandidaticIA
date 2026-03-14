@@ -1710,7 +1710,6 @@ ${safeDnaLines}
                 let hasMoveTag = false;
                 let hasExitTag = false;
                 let extractedMoveTarget = null;
-                let isHandlingPivot = false; // set true when candidate confirms a pivot — blocks citaPending auto-move
 
                 if (advanceBracketsMatch && advanceBracketsMatch[0]) {
                     hasMoveTag = true;
@@ -1798,11 +1797,17 @@ ${safeDnaLines}
                         clearCitaPendingFlag(redis, candidateId).catch(() => {});
                         hasMoveTag = true;
                         inferredAcceptance = true;
-                    } else if (isFiltro && isUserAffirmative && _citaPending && !isHandlingPivot) {
-                        // Candidate explicitly confirmed after seeing the CTA
-                        clearCitaPendingFlag(redis, candidateId).catch(() => {});
-                        hasMoveTag = true;
-                        inferredAcceptance = true;
+                    } else if (isFiltro && isUserAffirmative && _citaPending) {
+                        // 🛡️ PIVOT GUARD: If the last bot message was offering a new vacancy pivot,
+                        // the candidate's "sí" is for SEEING the vacancy — NOT for scheduling.
+                        // Block the premature move and let the LLM present the new vacancy instead.
+                        const _lastBotWasPivot = /te gustar[ií]a conocerla|quieres conocerla|conocer la vacante|Te la presento|cuent[ae] de ella|conocer esta opci[oó]n|saber m[aá]s|te interesa conocer/i.test(botText);
+                        if (!_lastBotWasPivot) {
+                            // Candidate explicitly confirmed after seeing the CTA
+                            clearCitaPendingFlag(redis, candidateId).catch(() => {});
+                            hasMoveTag = true;
+                            inferredAcceptance = true;
+                        }
                     } else if (isFiltro && isUserAffirmative && !_citaPending && !hasMoveTag) {
                         // 🎯 Capa 5: AMBIGUITY GUARD — candidate said Sí but we never sent the CTA yet
                         // ⛔ PIVOT EXCEPTION: If the last bot message was asking about a new vacancy
