@@ -2146,7 +2146,18 @@ ${safeDnaLines}
                     }
 
                     if (auditForMode.missingLabels.length > 0) {
-                        systemInstruction += `\n[INSTRUCCIÓN CRÍTICA FINAL]: El perfil está INCOMPLETO. Aún necesitas obtener: ${auditForMode.missingLabels.join(', ')}. TIENES PROHIBIDO despedirte o cerrar la conversación. OBLIGATORIAMENTE tu mensaje debe terminar con una pregunta para obtener el dato principal: ${auditForMode.missingLabels[0]}.\n`;
+                        if (customPrompt) {
+                            // 🛑 SOFT NOTE for custom prompt bots: Let the prompt handle how to address
+                            // the topic (vacancies, interviews, etc.), just remind to end with the missing field.
+                            const isVacancyQ = /vacante|empleo|trabajo|sueldo|salario|horario|entrevista/i.test(aggregatedText);
+                            if (isVacancyQ) {
+                                systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Sigue las instrucciones de tu prompt sobre cómo responder este tipo de preguntas. Asegúrate de terminar con la pregunta del dato faltante: ${auditForMode.missingLabels[0]}.\n`;
+                            } else {
+                                systemInstruction += `\n[NOTA DE CONTEXTO]: Dato pendiente de obtener: ${auditForMode.missingLabels[0]}. Termina tu mensaje con esa pregunta.\n`;
+                            }
+                        } else {
+                            systemInstruction += `\n[INSTRUCCIÓN CRÍTICA FINAL]: El perfil está INCOMPLETO. Aún necesitas obtener: ${auditForMode.missingLabels.join(', ')}. TIENES PROHIBIDO despedirte o cerrar la conversación. OBLIGATORIAMENTE tu mensaje debe terminar con una pregunta para obtener el dato principal: ${auditForMode.missingLabels[0]}.\n`;
+                        }
                     }
                 }
 
