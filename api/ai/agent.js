@@ -2414,10 +2414,15 @@ ${safeDnaLines}
                         const lastBang = beforeCta.lastIndexOf('!');
                         let lastDot = beforeCta.lastIndexOf('.');
                         // 🛡️ ABBREVIATION GUARD: Don't split at "Lic.", "Dr.", "Ing.", etc.
-                        // If the word before the dot is ≤4 chars, it's an abbreviation — skip it.
-                        if (lastDot > 0) {
+                        // If the word before the dot is ≤4 chars or starts with capital and ≤ 5 chars (like "Mtra."), it's likely an abbreviation.
+                        while (lastDot > 0) {
                             const wordBeforeDot = beforeCta.substring(0, lastDot).split(/[\s,]/).pop() || '';
-                            if (wordBeforeDot.length <= 4) lastDot = -1; // Treat as non-sentence-end
+                            if (wordBeforeDot.length <= 5) {
+                                // It's an abbreviation, look for the previous dot
+                                lastDot = beforeCta.lastIndexOf('.', lastDot - 1);
+                            } else {
+                                break; // Valid sentence end found
+                            }
                         }
                         const naturalEnd = Math.max(lastBang, lastDot);
                         let splitAt = naturalEnd > 25 ? naturalEnd + 1 : match.index;
