@@ -130,12 +130,20 @@ async function makeRedisAuthState(instanceId) {
 }
 
 // ─── Active sockets map ───────────────────────────────────────────────────────
-// instanceId → Baileys socket (kept in memory for the lifetime of the process)
 const activeSockets = new Map();
+// pendingQR: instanceId → { resolveQR, rejectQR } so connect endpoint is notified immediately
+const pendingQR = new Map();
+
+// Stable Baileys version — avoids fetchLatestBaileysVersion() external call which can be slow/fail
+const BAILEYS_VERSION = [2, 3000, 1017531287];
 
 async function startBaileys(instanceId, webhookUrl) {
     if (activeSockets.has(instanceId)) {
         console.log(`[GW] Socket already active for ${instanceId}`);
+        // If a connect endpoint is waiting, resolve with existing state
+        const fresh = await getInstance(instanceId);
+        const pending = pendingQR.get(instanceId);
+        if (pending && fresh?.state === 'CONNECTED') { pending.resolveQR({ connected: true, phone: fresh.phone }); pendingQR.delete(instanceId); }
         return;
     }
 
@@ -143,24 +151,23 @@ async function startBaileys(instanceId, webhookUrl) {
         const {
             default: makeWASocket,
             DisconnectReason,
-            fetchLatestBaileysVersion,
             makeCacheableSignalKeyStore
         } = await import('@whiskeysockets/baileys');
 
-        const { version } = await fetchLatestBaileysVersion();
         const { state, saveCreds } = await makeRedisAuthState(instanceId);
 
         const socket = makeWASocket({
-            version,
+            version: BAILEYS_VERSION,
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, { level: () => {} })
             },
-            printQRInTerminal: false,
+            printQRInTerminal: true,
             browser: ['Candidatic Gateway', 'Chrome', '120.0'],
             syncFullHistory: false,
-            connectTimeoutMs: 30000,
+            connectTimeoutMs: 40000,
             keepAliveIntervalMs: 15000,
+            defaultQueryTimeoutMs: 30000,
         });
 
         activeSockets.set(instanceId, socket);
@@ -172,8 +179,14 @@ async function startBaileys(instanceId, webhookUrl) {
                     const base64 = await qrcode.toDataURL(qr, { width: 256, margin: 2 });
                     await redis.set(`gateway:qr:${instanceId}`, base64, 'EX', QR_TTL);
                     await updateInstance(instanceId, { state: 'QR_PENDING' });
+                    console.log(`[GW:${instanceId}] 📱 QR generated and stored in Redis`);
+                    // Signal any waiting connect endpoint
+                    const pending = pendingQR.get(instanceId);
+                    if (pending) { pending.resolveQR({ qr: base64 }); pendingQR.delete(instanceId); }
                 } catch (e) {
                     console.error(`[GW:${instanceId}] QR error:`, e.message);
+                    const pending = pendingQR.get(instanceId);
+                    if (pending) { pending.rejectQR(e); pendingQR.delete(instanceId); }
                 }
             }
 
@@ -182,6 +195,9 @@ async function startBaileys(instanceId, webhookUrl) {
                 await updateInstance(instanceId, { state: 'CONNECTED', phone, connectedAt: new Date().toISOString() });
                 await redis.del(`gateway:qr:${instanceId}`);
                 console.log(`[GW:${instanceId}] ✅ Connected — ${phone}`);
+                // Signal if still pending (connected without QR scan — session resumed)
+                const pending = pendingQR.get(instanceId);
+                if (pending) { pending.resolveQR({ connected: true, phone }); pendingQR.delete(instanceId); }
             }
 
             if (connection === 'close') {
@@ -193,7 +209,8 @@ async function startBaileys(instanceId, webhookUrl) {
                 });
                 activeSockets.delete(instanceId);
                 console.log(`[GW:${instanceId}] ❌ Closed (code ${code}). loggedOut=${loggedOut}`);
-                // Auto-reconnect if not logged out
+                const pending = pendingQR.get(instanceId);
+                if (pending) { pending.rejectQR(new Error(`Connection closed (code ${code})`)); pendingQR.delete(instanceId); }
                 if (!loggedOut) {
                     console.log(`[GW:${instanceId}] 🔄 Reconnecting in 5s...`);
                     setTimeout(() => startBaileys(instanceId, webhookUrl).catch(console.error), 5000);
@@ -212,7 +229,6 @@ async function startBaileys(instanceId, webhookUrl) {
                 const inst = await getInstance(instanceId);
                 if (inst) await updateInstance(instanceId, { messagesIn: (inst.messagesIn || 0) + 1 });
 
-                // Forward to Candidatic webhook
                 const wh = webhookUrl || inst?.webhookUrl || CANDIDATIC_WEBHOOK;
                 if (wh) {
                     try {
@@ -229,8 +245,10 @@ async function startBaileys(instanceId, webhookUrl) {
         });
 
     } catch (err) {
-        console.error(`[GW:${instanceId}] startBaileys error:`, err.message);
+        console.error(`[GW:${instanceId}] startBaileys error:`, err.message, err.stack);
         activeSockets.delete(instanceId);
+        const pending = pendingQR.get(instanceId);
+        if (pending) { pending.rejectQR(err); pendingQR.delete(instanceId); }
     }
 }
 
@@ -276,33 +294,40 @@ app.patch('/instances/:instanceId', async (req, res) => {
     res.json({ success: true, instance: { ...updated, token: `${updated.token.substring(0, 8)}••••` } });
 });
 
-// Connect — start socket + return QR
+// Connect — start socket + return QR (promise-based, no polling)
 app.post('/connect/:instanceId', async (req, res) => {
     const { instanceId } = req.params;
     const instance = await getInstance(instanceId);
     if (!instance) return res.status(404).json({ success: false, error: 'Not found.' });
 
-    if (instance.state === 'CONNECTED') {
+    if (instance.state === 'CONNECTED' && activeSockets.has(instanceId)) {
         return res.json({ success: true, state: 'CONNECTED', phone: instance.phone });
     }
 
-    // Start socket (async — won't block response)
-    startBaileys(instanceId, instance.webhookUrl).catch(console.error);
+    // Promise that resolves when Baileys emits QR or 'open'
+    const qrPromise = new Promise((resolveQR, rejectQR) => {
+        pendingQR.set(instanceId, { resolveQR, rejectQR });
+    });
 
-    // Wait up to 25s for QR to appear in Redis
-    let qr = null;
-    for (let i = 0; i < 25; i++) {
-        await new Promise(r => setTimeout(r, 1000));
-        const fresh = await getInstance(instanceId);
-        if (fresh?.state === 'CONNECTED') {
-            return res.json({ success: true, state: 'CONNECTED', phone: fresh.phone });
+    // Start Baileys (non-blocking)
+    startBaileys(instanceId, instance.webhookUrl).catch(err => {
+        const pending = pendingQR.get(instanceId);
+        if (pending) { pending.rejectQR(err); pendingQR.delete(instanceId); }
+    });
+
+    try {
+        const result = await Promise.race([
+            qrPromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('QR timeout after 45s')), 45000))
+        ]);
+        if (result.connected) {
+            return res.json({ success: true, state: 'CONNECTED', phone: result.phone });
         }
-        qr = await redis.get(`gateway:qr:${instanceId}`);
-        if (qr) break;
+        return res.json({ success: true, state: 'QR_PENDING', qr: result.qr });
+    } catch (err) {
+        pendingQR.delete(instanceId);
+        return res.status(504).json({ success: false, error: err.message || 'QR timeout — try again.' });
     }
-
-    if (!qr) return res.status(504).json({ success: false, error: 'QR timeout — try again.' });
-    res.json({ success: true, state: 'QR_PENDING', qr });
 });
 
 // Poll QR / state
