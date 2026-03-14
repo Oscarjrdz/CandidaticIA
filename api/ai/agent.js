@@ -876,11 +876,26 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                         const phone = candidateData.whatsapp;
 
                         if (vacancies.length === 0) {
-                            // No qualifying vacancies found → honest response
-                            const noVacMsg = `En este momento no tenemos vacantes disponibles que se ajusten exactamente a tu perfil, ${firstName}. 😔 Pero en cuanto llegue algo para ti, ¡serás el primero en saberlo! 🌟`;
-                            await sendUltraMsgMessage(config.instanceId, config.token, phone, noVacMsg, 'chat');
+                            // No qualifying vacancies → show profile summary and ask to confirm
+                            const profileLines = [
+                                candidateData.nombreReal ? `📛 Nombre: ${candidateData.nombreReal}` : null,
+                                candidateData.municipio   ? `📍 Municipio: ${candidateData.municipio}` : null,
+                                candidateData.escolaridad ? `🎓 Escolaridad: ${candidateData.escolaridad}` : null,
+                                candidateData.categoria   ? `💼 Categoría: ${candidateData.categoria}` : null,
+                                candidateData.edad        ? `🎂 Edad: ${candidateData.edad} años` : null,
+                                candidateData.genero      ? `🧑 Género: ${candidateData.genero}` : null,
+                            ].filter(Boolean).join('\n');
+
+                            const noVacMsg = `¡${firstName}, quiero ayudarte! Pero revisé nuestras opciones y no encontré una vacante que encaje con tu perfil actual. 🤔`;
+                            const profileMsg = `Déjame confirmar que tenemos tus datos bien guardados:\n\n${profileLines}\n\n¿Todo está correcto? ✅`;
+
+                            await sendUltraMsgMessage(config.instanceId, config.token, phone, noVacMsg, 'chat', { priority: 0 });
                             await saveMessage(candidateId, { from: 'bot', content: noVacMsg, timestamp: new Date().toISOString() });
-                            await redis?.del(reengageKey);
+                            await new Promise(r => setTimeout(r, 1800));
+                            await sendUltraMsgMessage(config.instanceId, config.token, phone, profileMsg, 'chat', { priority: 1 });
+                            await saveMessage(candidateId, { from: 'bot', content: profileMsg, timestamp: new Date().toISOString() });
+
+                            await redis?.set(reengageKey, 'CONFIRMING_PROFILE', 'EX', 604800);
                             return noVacMsg;
                         }
 
@@ -900,7 +915,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                         await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaMsg, 'chat', { priority: 1 });
                         await saveMessage(candidateId, { from: 'bot', content: ctaMsg, timestamp: new Date().toISOString() });
 
-                        await redis?.set(reengageKey, 'SHOWING', 'EX', 604800); // 7 days
+                        await redis?.set(reengageKey, 'SHOWING', 'EX', 604800);
                         return listMsg;
 
                     } else if (saidNo) {
@@ -914,10 +929,60 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                     }
                     // If not clearly yes/no, fall through to normal GPT response (ambiguous)
 
+                } else if (reengageState === 'CONFIRMING_PROFILE') {
+                    // ── Phase 3a: Profile confirmation response ──────────────────────────
+                    if (saidYes) {
+                        // Candidate confirmed profile is correct → friendly close
+                        const config = await getUltraMsgConfig();
+                        const closeMsg = `¡Perfecto ${firstName}! En cuanto llegue algo que se ajuste a tu perfil, ¡serás el primero en saberlo! 🌟 ¡Mucho éxito! 🍀`;
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, closeMsg, 'chat');
+                        await saveMessage(candidateId, { from: 'bot', content: closeMsg, timestamp: new Date().toISOString() });
+                        await redis?.del(reengageKey);
+                        return closeMsg;
+                    } else {
+                        // Candidate wants to correct something → let GPT capture the new data,
+                        // then on NEXT message we re-check vacancies
+                        await redis?.set(reengageKey, 'RECHECK_VACANCIES', 'EX', 604800);
+                        // Fall through to normal agent flow so GPT extracts and saves the correction
+                    }
+
+                } else if (reengageState === 'RECHECK_VACANCIES') {
+                    // ── Phase 3b: After data was corrected, re-evaluate vacancies ────────
+                    // candidateData is fresh (already updated by GPT in previous turn)
+                    const vacancies = await getReengageVacancies(candidateData);
+                    const config = await getUltraMsgConfig();
+                    const phone = candidateData.whatsapp;
+
+                    if (vacancies.length > 0) {
+                        const _NUM_EMOJIS_R2 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                        const listLines2 = vacancies.map((v, i) => {
+                            const num = _NUM_EMOJIS_R2[i] || `${i+1}.`;
+                            const company = v.company ? ` – ${v.company}` : '';
+                            return `${num} ${v.name}${company}`;
+                        }).join('\n');
+                        const goodNewsMsg = `¡Tengo buenas noticias ${firstName}! Con tus datos actualizados encontré estas opciones para ti:\n\n${listLines2}`;
+                        const ctaMsg2 = `¿Cuál te interesa ${firstName}?`;
+
+                        await sendUltraMsgMessage(config.instanceId, config.token, phone, goodNewsMsg, 'chat', { priority: 0 });
+                        await saveMessage(candidateId, { from: 'bot', content: goodNewsMsg, timestamp: new Date().toISOString() });
+                        await new Promise(r => setTimeout(r, 1500));
+                        await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaMsg2, 'chat', { priority: 1 });
+                        await saveMessage(candidateId, { from: 'bot', content: ctaMsg2, timestamp: new Date().toISOString() });
+
+                        await redis?.set(reengageKey, 'SHOWING', 'EX', 604800);
+                        return goodNewsMsg;
+                    } else {
+                        // Still no match after correction
+                        const stillNoMsg = `Gracias por actualizarlo, ${firstName}. Por ahora no tenemos vacantes para ese perfil en tu zona, pero en cuanto llegue algo ¡serás el primero en saberlo! 🍀`;
+                        await sendUltraMsgMessage(config.instanceId, config.token, phone, stillNoMsg, 'chat');
+                        await saveMessage(candidateId, { from: 'bot', content: stillNoMsg, timestamp: new Date().toISOString() });
+                        await redis?.del(reengageKey);
+                        return stillNoMsg;
+                    }
+
                 } else if (!reengageState && isNoInteresa) {
                     // ── Phase 1: First message after NO INTERESA ─────────────────────────
                     // Let GPT handle the greeting naturally, then send deterministic CTA bubble
-                    const customPromptForGreeting = batchConfig?.bot_ia_prompt || '';
                     const greetInstruction = `
 Eres Lic. Brenda Rodríguez, reclutadora. El candidato ${firstName} estuvo interesado antes pero dijo que no le interesaba una vacante.
 Ahora te acaba de escribir. RESPONDE brevemente y con calidez a lo que te dice (saludo, pregunta, lo que sea).
@@ -941,11 +1006,11 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
                     await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaBubble, 'chat', { priority: 1 });
                     await saveMessage(candidateId, { from: 'bot', content: ctaBubble, timestamp: new Date().toISOString() });
 
-                    await redis?.set(reengageKey, 'ASKED', 'EX', 604800); // 7 days
+                    await redis?.set(reengageKey, 'ASKED', 'EX', 604800);
                     await updateCandidate(candidateId, { ultimoMensaje: new Date().toISOString() });
                     return greetText;
                 }
-                // If SHOWING state (chose vacancy) → fall through to normal flow so profile/vacancy selection works
+                // If SHOWING / RECHECK_VACANCIES (correction) → fall through to normal flow
             }
         }
 
