@@ -252,13 +252,20 @@ REGLAS DE ORO:
                     // Send WhatsApp (Clean with Splitting)
                     const splitRegex = /(¿Te gustaría agendar.*?entrevista.*?\?|¿Te queda bien\??)/i;
                     let messagesToSend = [cleanResponse];
+                    const ctaFirstName = (cand.nombreReal || cand.nombre || '').split(' ')[0];
 
                     if (splitRegex.test(cleanResponse)) {
                         const parts = cleanResponse.split(splitRegex);
                         if (parts.length >= 3) {
+                            let ctaMsg = (parts[1] + (parts[2] || '')).trim();
+                            // Inject first name before the closing ? in the CTA bubble
+                            // "¿Te gustaría agendar...? 😊" → "¿Te gustaría agendar... Oscar? 😊"
+                            if (ctaFirstName) {
+                                ctaMsg = ctaMsg.replace(/(\?)([\s\p{Emoji}\s]*)$/u, (_, q, trail) => ` ${ctaFirstName}${q}${trail || ''}`);
+                            }
                             messagesToSend = [
                                 parts[0].trim(),
-                                (parts[1] + (parts[2] || '')).trim()
+                                ctaMsg
                             ].filter(Boolean);
                         }
                     }
