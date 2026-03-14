@@ -251,6 +251,21 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         text = text.replace(/([^\n])✅/g, '$1\n✅');
         // Collapse triple+ newlines introduced by the above
         text = text.replace(/\n{3,}/g, '\n\n').trim();
+
+        // 💬 CATEGORY QUESTION SPLIT: Move the closing choice question to a 2nd bubble.
+        // Matches patterns like "¿Cuál eliges?", "¿Cuál te interesa?", "¿Cuál prefieres?",
+        // "¿Cuál es la tuya?", "¿Con cuál te quedas?", etc. — must appear AFTER the last ✅.
+        const lastCheckIdx = text.lastIndexOf('✅');
+        if (lastCheckIdx !== -1) {
+            const afterList = text.substring(lastCheckIdx);
+            const catQMatch = afterList.match(/(\n+)((?:¿|¡)[^?!]*(?:eliges?|prefieres?|interesa|llama la atención|quedas?|va más|apunta|te va)[^?!]*[?!])/i);
+            if (catQMatch) {
+                const globalIdx = lastCheckIdx + catQMatch.index + catQMatch[1].length; // start of the question
+                const beforeQ = text.substring(0, globalIdx).trimEnd();
+                const question = text.substring(globalIdx).trim();
+                text = `${beforeQ}[MSG_SPLIT]${question}`;
+            }
+        }
     }
 
     // 🎂 FECHA DE NACIMIENTO: Inject example format if GPT forgot it
