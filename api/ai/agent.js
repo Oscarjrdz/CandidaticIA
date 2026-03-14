@@ -1533,6 +1533,11 @@ ${safeDnaLines}
                             // Candidate confirmed — present next vacancy. Clear flag and let LLM run
                             // BUT with a system note that forces presentation of the new vacancy.
                             await clearPivotPendingFlag(redis, candidateId);
+                            // 🛡️ PIVOT-CITA CONFLICT FIX: Also clear _citaPending so the downstream
+                            // isFiltro+isUserAffirmative+_citaPending guard doesn't treat "sí" as
+                            // scheduling acceptance and prematurely move the candidate to next step.
+                            clearCitaPendingFlag(redis, candidateId).catch(() => {});
+                            isHandlingPivot = true;
                             historyForGpt = [
                                 ...historyForGpt.slice(0, -1),
                                 {
@@ -1705,6 +1710,7 @@ ${safeDnaLines}
                 let hasMoveTag = false;
                 let hasExitTag = false;
                 let extractedMoveTarget = null;
+                let isHandlingPivot = false; // set true when candidate confirms a pivot — blocks citaPending auto-move
 
                 if (advanceBracketsMatch && advanceBracketsMatch[0]) {
                     hasMoveTag = true;
@@ -1792,7 +1798,7 @@ ${safeDnaLines}
                         clearCitaPendingFlag(redis, candidateId).catch(() => {});
                         hasMoveTag = true;
                         inferredAcceptance = true;
-                    } else if (isFiltro && isUserAffirmative && _citaPending) {
+                    } else if (isFiltro && isUserAffirmative && _citaPending && !isHandlingPivot) {
                         // Candidate explicitly confirmed after seeing the CTA
                         clearCitaPendingFlag(redis, candidateId).catch(() => {});
                         hasMoveTag = true;
