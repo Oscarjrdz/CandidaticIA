@@ -278,7 +278,7 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                     const firstName = candidateData.nombreReal.trim().split(/\s+/)[0];
                     if (firstName && firstName.length > 1) {
                         // "¿Cuál eliges?" → "¿Cuál eliges, Oscar?"
-                        question = question.replace(/([?!])\s*$/, `, ${firstName}$1`);
+                        question = question.replace(/([?!])\s*$/, ` ${firstName}$1`);
                     }
                 }
 
