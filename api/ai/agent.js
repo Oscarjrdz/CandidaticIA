@@ -1278,6 +1278,7 @@ ${safeDnaLines}
         let responseTextVal = null;
         let project = null;
         let activeStepNameLower = ''; // hoisted so delivery section can read it
+        let recruiterTriggeredMove = false; // hoisted — used in final delivery safeguard (lines ~2789)
         let historyForGpt = [...recentHistory, currentMessageForGpt];
 
         if (activeProjectId) {
@@ -1314,7 +1315,7 @@ ${safeDnaLines}
                 activeVacancyId = project.vacancyId;
             }
 
-            let recruiterTriggeredMove = false;
+            recruiterTriggeredMove = false; // reset per-call inside block
 
             // 🤫 NO INTERESA SILENCE + REACTIVATION
             const currentStepNameLower = (currentStep?.name || '').toLowerCase();
