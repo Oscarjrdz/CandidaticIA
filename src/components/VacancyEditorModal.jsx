@@ -331,11 +331,17 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ faqId, officialAnswer, mediaUrl })
             });
-            if (res.ok) {
-                showToast('Respuesta oficial guardada e inyectada a la IA', 'success');
-                loadFaqs(vacancyId);
+            const data = await res.json();
+            if (res.ok && data.success) {
+                // ✅ Directly patch the local state — skip loadFaqs() which has merge race conditions
+                setFaqs(prev => prev.map(f =>
+                    f.id === faqId
+                        ? { ...f, officialAnswer: officialAnswer ?? f.officialAnswer, mediaUrl: mediaUrl ?? f.mediaUrl }
+                        : f
+                ));
+                showToast('Respuesta oficial guardada ✅', 'success');
             } else {
-                showToast('Error al guardar respuesta', 'error');
+                showToast(data?.error || 'Error al guardar respuesta', 'error');
             }
         } catch (error) {
             console.error('Error saving FAQ:', error);
@@ -853,14 +859,12 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                                                     </div>
                                                     <input
                                                         type="text"
-                                                        value={faq.officialAnswer || ''}
+                                                        value={faq.officialAnswer ?? faq.lastAiResponse ?? ''}
                                                         onChange={(e) => {
-                                                            const newFaqs = [...faqs];
-                                                            const idx = newFaqs.findIndex(f => f.id === faq.id);
-                                                            if (idx > -1) {
-                                                                newFaqs[idx].officialAnswer = e.target.value;
-                                                                setFaqs(newFaqs);
-                                                            }
+                                                            // ✅ Immutable update — creates NEW object, avoids stale-state bug
+                                                            setFaqs(prev => prev.map(f =>
+                                                                f.id === faq.id ? { ...f, officialAnswer: e.target.value } : f
+                                                            ));
                                                         }}
                                                         placeholder="Entrena a Brenda para que sepa responder exactamente esto..."
                                                         className="w-full pl-9 pr-10 py-2 text-xs bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all shadow-inner"
@@ -884,9 +888,14 @@ const VacancyEditorModal = ({ isOpen, onClose, vacancyId, onSaveSuccess }) => {
                                                     )}
                                                 </div>
                                                 <button
-                                                    onClick={() => handleSaveFaq(faq.id, faq.officialAnswer, faq.mediaUrl)}
+                                                    onClick={() => {
+                                                        // ✅ Read LATEST value from state — use lastAiResponse as fallback when officialAnswer is still null
+                                                        const latest = faqs.find(f => f.id === faq.id);
+                                                        const answerToSave = latest?.officialAnswer ?? latest?.lastAiResponse ?? null;
+                                                        handleSaveFaq(faq.id, answerToSave, latest?.mediaUrl);
+                                                    }}
                                                     className="px-5 py-2 bg-indigo-600 hover:bg-black text-white text-[10px] font-black uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-indigo-500/20 hover:shadow-none translate-y-0 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:translate-y-0 disabled:shadow-none"
-                                                    disabled={!faq.officialAnswer?.trim() && !faq.mediaUrl}
+                                                    disabled={!(faq.officialAnswer ?? faq.lastAiResponse)?.trim() && !faq.mediaUrl}
                                                 >
                                                     Enseñar
                                                 </button>

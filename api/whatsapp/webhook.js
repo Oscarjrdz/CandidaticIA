@@ -28,6 +28,9 @@ import { FEATURES } from '../utils/feature-flags.js';
 import { sendMessage } from '../utils/messenger.js';
 import { notifyNewCandidate } from '../utils/sse-notify.js';
 import { logTelemetry } from '../utils/telemetry.js';
+
+export const maxDuration = 60; // Extend Vercel timeout to prevent LLM latency silence
+
 // 🚀 TURBO MODE: Silence all synchronous Vercel console I/O unless actively debugging
 if (process.env.DEBUG_MODE !== 'true') {
     console.log = function () { };

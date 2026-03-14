@@ -62,7 +62,76 @@ function humanizeDate(dateStr) {
     return dateStr;
 }
 
-function formatRecruiterMessage(text, candidateData = null) {
+// ─── CITA_PENDING FLAG HELPERS (Redis-backed confirmation state) ───────────────
+// When Brenda sends the scheduling CTA, we set a Redis TTL flag.
+// On the candidate's NEXT message we check the flag to decide if the
+// affirmative is a genuine cita confirmation or just ambient chatter.
+const CITA_PENDING_TTL = 600; // 10 minutes
+async function setCitaPendingFlag(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.set(`cita_pending:${candidateId}`, '1', 'EX', CITA_PENDING_TTL); } catch (_) {}
+}
+async function getCitaPendingFlag(redis, candidateId) {
+    if (!redis || !candidateId) return false;
+    try { return (await redis.get(`cita_pending:${candidateId}`)) === '1'; } catch (_) { return false; }
+}
+async function clearCitaPendingFlag(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.del(`cita_pending:${candidateId}`); } catch (_) {}
+}
+// ――― PIVOT_PENDING FLAG HELPERS ――――――――――――――――――――――――――――――――――――――――――――――――――――――――――
+// When Brenda sends the pivot tease ("tengo otra opción"), we set this flag.
+// On the candidate’s NEXT message, if affirmative, we present the next vacancy
+// directly WITHOUT running the LLM (avoiding the “no hay más vacantes” hallucination).
+// cita_pending is CLEARED on pivot so the Ambiguity Guard doesn’t intercept the “Sí”.
+const PIVOT_PENDING_TTL = 900; // 15 minutes
+async function setPivotPendingFlag(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.set(`pivot_pending:${candidateId}`, '1', 'EX', PIVOT_PENDING_TTL); } catch (_) {}
+}
+async function getPivotPendingFlag(redis, candidateId) {
+    if (!redis || !candidateId) return false;
+    try { return (await redis.get(`pivot_pending:${candidateId}`)) === '1'; } catch (_) { return false; }
+}
+async function clearPivotPendingFlag(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.del(`pivot_pending:${candidateId}`); } catch (_) {}
+}
+// ─── CTA VARIANT COUNTER (sequential rotation per candidate) ─────────────────
+// Single shared counter across ALL second-bubble categories so the candidate
+// never sees the same closing question twice in a row.
+const _CTA_VARIANTS = [
+    '¿Te gustaría agendar tu entrevista? 😊',
+    '¿Te agendo una cita de entrevista? 🌟',
+    '¿Te aparto una cita para entrevista? ✨',
+    '¿Quieres que programe tu entrevista? 🌸',
+    '¿Te puedo agendar tu entrevista? 😊'
+];
+const _AMBIGUITY_VARIANTS = [
+    'Solo por confirmar, ¿te gustaría agendar tu entrevista? 😊',
+    'Disculpa, ¿me confirmas si quieres que te agende la entrevista? 🌸',
+    'Antes de avanzar, ¿quieres que agendemos tu cita de entrevista? ✨',
+    'Solo para confirmar, ¿te agendo la cita de entrevista? 🌟',
+    '¿Me confirmas que quieres agendar tu entrevista? 😊'
+];
+const _PIVOT_B2_VARIANTS = [
+    '¿Te gustaría conocerla? 🌸',
+    '¿Te la presento? 😊',
+    '¿Quieres que te cuente de ella? ✨',
+    '¿Te interesa conocer esta opción? 🌟',
+    '¿Te gustaría saber más? 😊'
+];
+async function getCTAIndex(redis, candidateId) {
+    if (!redis || !candidateId) return 0;
+    try { return parseInt((await redis.get(`cta_idx:${candidateId}`)) || '0'); } catch (_) { return 0; }
+}
+async function incrCTAIndex(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.incr(`cta_idx:${candidateId}`); } catch (_) {}
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     if (!text || typeof text !== 'string') return text;
 
     // 🧹 STEP 0: Strip markdown bold (**text**) — AI sometimes wraps dates in bold which breaks all downstream regex
@@ -73,6 +142,25 @@ function formatRecruiterMessage(text, candidateData = null) {
     text = text.replace(/\bresides\b/gi, 'vives').replace(/\breside\b/gi, 'vive');
     // 🧹 WHITESPACE CLEANUP: Collapse 3+ consecutive blank lines → max 1 blank line
     text = text.replace(/\n{3,}/g, '\n\n');
+
+    // 🚫 OPEN-DOOR PHRASE STRIP: Remove any "si tienes más dudas aquí estoy" style endings.
+    // Applied as multiple simple patterns — one per phrase family — so accented chars work correctly.
+    const _OPEN_DOOR_PATTERNS = [
+        /[,.]?\s*si\s+tienes?\s+(?:m[aá]s\s+)?(?:alguna\s+)?(?:dudas?|preguntas?|consultas?)[^.!?]*/gi,
+        /[,.]?\s*(?:no\s+dudes?\s+en\s+(?:preguntar|escribirme?|avisarme?|contactarme?|decirme))[^.!?]*/gi,
+        /[,.]?\s*estoy\s+aqu[íi]\s+(?:para|si)\s+(?:tienes?|necesitas?|surge)[^.!?]*/gi,
+        /[,.]?\s*aqu[íi]\s+estoy\s+(?:para|si)[^.!?]*/gi,
+        /[,.]?\s*(?:cualquier|para\s+cualquier)\s+(?:duda|pregunta|consulta)[^.!?]*(?:estoy|avísame|escríbeme)[^.!?]*/gi,
+        /[,.]?\s*quedo\s+a\s+tu[s]?\s+(?:[oó]rdenes?|disposici[oó]n)[^.!?]*/gi,
+        /[,.]?\s*con\s+gusto\s+(?:te\s+)?(?:atiendo|resuelvo|ayudo)\s+(?:m[aá]s\s+)?(?:dudas?|preguntas?)[^.!?]*/gi,
+        /[,.]?\s*estamos?\s+(?:aqu[íi]|en\s+contacto)\s+para\s+(?:cualquier|lo\s+que\s+necesites?)[^.!?]*/gi,
+        /[,.]?\s*para\s+(?:cualquier|m[aá]s)\s+(?:dudas?|preguntas?|informaci[oó]n)[^.!?]*(?:estoy|escríbeme|avísame|contacta)[^.!?]*/gi,
+        /[,.]?\s*si\s+necesitas?\s+(?:algo\s+m[aá]s|m[aá]s\s+info|m[aá]s\s+informaci[oó]n)[^.!?]*/gi,
+    ];
+    for (const p of _OPEN_DOOR_PATTERNS) {
+        text = text.replace(p, '');
+    }
+    text = text.replace(/\s{2,}/g, ' ').trim();
 
     text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
 
@@ -282,11 +370,27 @@ function formatRecruiterMessage(text, candidateData = null) {
 
         text = text + ',[MSG_SPLIT]¿estamos de acuerdo? 🤝✨';
     }
-    // 🎯 FAQ CLOSING QUESTION SAFETY NET: ONLY fires when the message is clearly
-    // answering a job-related FAQ (mentions salary, schedule, benefits, location, or
-    // requirements). This avoids false positives on brain-data-collection messages.
-    if (!text.includes('[MSG_SPLIT]') && !text.includes('\xbf')) {
-        // Gate 1: Candidate must have a complete profile (nombre + municipio + escolaridad)
+    // 🎯 INICIO PASO CTA GUARANTEE (Capa 1 — Más amplia que el Safety Net)
+    // In Inicio/Filtro steps, EVERY substantive response must end with the
+    // scheduling CTA in a SEPARATE BUBBLE — regardless of topic.
+    // This is the broadest net: no topic keywords required.
+    if (stepContext.isInicio && !text.includes('[MSG_SPLIT]')) {
+        const _alreadyHasCta  = /¿Te gustar[ií]a agendar|¿te gustar[ií]a que te agende|¿te puedo agendar|¿procedo a agendar|¿avanzamos con|¿autorizas que agende|¿deseas que programe|¿quieres que reserve/i.test(text);
+        const _isDataCapture  = /escolaridad|nivel de estudios|en qu[eé]\s+(?:municipio|ciudad|lugar)|c[oó]mo te llamas|cu[aá]l es tu nombre|cu[aá]ntos a[nñ]os|fecha de nacimiento/i.test(text);
+        const _isVacancyIntro = /ESTAMOS CONTRATANDO|vacante que encontr[eé]|comparto la vacante|te interesa la vacante|una vacante disponible/i.test(text);
+        const _isDateList     = /Tengo entrevistas los d[ií]as|1️⃣.*📅|tengo entrevistas? a las|\d{1,2}:\d{2}\s*(?:AM|PM)/i.test(text);
+        const _isConfirmation = /tu cita queda agendada|estamos de acuerdo|cita agendada/i.test(text);
+        const _isFallback     = /excelente pregunta|déjame consultarlo|darte el dato exacto/i.test(text);
+
+        if (!_alreadyHasCta && !_isDataCapture && !_isVacancyIntro && !_isDateList && !_isConfirmation && text.length > 5) {
+            const _ctaText = _CTA_VARIANTS[(stepContext.ctaVariantIdx || 0) % _CTA_VARIANTS.length];
+            text = text.trimEnd() + `[MSG_SPLIT]${_ctaText}`;
+        }
+    }
+
+    // 🎯 FAQ CLOSING QUESTION SAFETY NET (Capa 1b — Backup for non-Inicio steps)
+    // Only fires for non-Inicio steps when FAQ topic keywords are detected.
+    if (!stepContext.isInicio && !text.includes('[MSG_SPLIT]') && !text.includes('\xbf')) {
         const hasCompleteProfile = !!(
             candidateData &&
             (candidateData.nombreReal || candidateData.nombre) &&
@@ -295,15 +399,10 @@ function formatRecruiterMessage(text, candidateData = null) {
         );
 
         const isJobFaqAnswer = hasCompleteProfile
-            // Must be long enough to be a real answer
             && text.length > 80
-            // Must mention at least one job-specific topic (positive signal)
             && /(?:sueldo|salario|pago semanal|pago quincenal|\$\s*\d|💰|prestaciones|seguro\s+(?:médico|social|imss)|vacaciones|aguinaldo|comedor|transporte|bono|vales|uniforme|fondo de ahorro|caja de ahorro|turno|horario|jornada|hrs\b|horas de trabajo|lunes a viernes|lunes a jueves|ubicaci[oó]n|direcci[oó]n|zona\b|calzada|calle\s+\w|colonia\s+\w|planta\b|plantar|documentos|papeler[ií]a|requisitos|experiencia\s+(?:requerida|necesaria|mínima)|entrevista inmediata)/i.test(text)
-            // Must NOT already have a scheduling question somewhere
             && !/(?:agendar|te\s+gustar[ií]a|entrevista\s*\?)/i.test(text)
-            // Not a schedule/date list message
             && !/(?:📅\s*1️⃣|tengo entrevistas los d[ií]as|\d{1,2}:\d{2}\s*(?:AM|PM))/i.test(text)
-            // Not vacancy intro / confirmation
             && !/(?:ESTAMOS CONTRATANDO|vacante que encontré|comparto la vacante|tu cita queda agendada)/i.test(text);
 
         if (isJobFaqAnswer) {
@@ -795,6 +894,7 @@ ${safeDnaLines}
         let isRecruiterMode = false;
         let responseTextVal = null;
         let project = null;
+        let activeStepNameLower = ''; // hoisted so delivery section can read it
         const historyForGpt = [...recentHistory, currentMessageForGpt];
 
         if (activeProjectId) {
@@ -815,6 +915,7 @@ ${safeDnaLines}
             }
 
             const currentStep = project?.steps?.find(s => s.id === activeStepId) || project?.steps?.[0];
+            activeStepNameLower = (currentStep?.name || '').toLowerCase();
 
             // Active vacancy index — prefer project:cand_meta (most authoritative source)
             let currentIdx = parsedMeta?.currentVacancyIndex !== undefined
@@ -1002,7 +1103,7 @@ ${safeDnaLines}
                     });
 
                     if (currentIdx + 1 >= project.vacancyIds.length) {
-                        // Instead of just silencing, we prepare to fire a move:exit
+                        // All vacancies exhausted → fire move:exit
                         aiResult = {
                             thought_process: "ALL_VACANCIES_REJECTED { move: exit }",
                             response_text: null,
@@ -1011,6 +1112,33 @@ ${safeDnaLines}
                         };
                         skipRecruiterInference = true;
                     } else {
+                        // ✅ More vacancies available — send PIVOT message in two bubbles
+                        // Bubble 1: empathic acknowledgement + tease of next vacancy
+                        // Bubble 2: "¿Te gustaría conocerla?" — clear yes/no question, no ambiguity
+                        const _PIVOT_MSGS = [
+                            '¡Entendido, no hay problema! 😊 De hecho, tengo otra opción que podría interesarte más 👀✨',
+                            '¡Está bien, lo entiendo! Pero espera... tengo otra vacante disponible que podría ser justo lo que buscas. 🌟',
+                            '¡Sin problema! Curiosamente tengo otra posición disponible que puede encajarte mejor. 😊✨'
+                        ];
+                        const _pivotMsg = _PIVOT_MSGS[Math.floor(Math.random() * _PIVOT_MSGS.length)];
+                        // Use sequential variant for Burbuja 2 (same counter as CTA)
+                        const _pivotB2Idx = await getCTAIndex(redis, candidateId);
+                        const _pivotB2 = _PIVOT_B2_VARIANTS[_pivotB2Idx % _PIVOT_B2_VARIANTS.length];
+                        incrCTAIndex(redis, candidateId).catch(() => {}); // Advance counter
+                        // Send both bubbles immediately, then skip the LLM this turn
+                        responseTextVal = `${_pivotMsg}[MSG_SPLIT]${_pivotB2}`;
+                        aiResult = {
+                            thought_process: 'PIVOT_TO_NEXT_VACANCY — sent teaser, awaiting candidate confirmation',
+                            response_text: responseTextVal,
+                            close_conversation: false
+                        };
+                        skipRecruiterInference = true;
+                        // ✅ Set pivot_pending so the next "Sí" presents the vacancy directly
+                        // Clear cita_pending so Ambiguity Guard doesn’t intercept that "Sí"
+                        await Promise.all([
+                            setPivotPendingFlag(redis, candidateId),
+                            clearCitaPendingFlag(redis, candidateId)
+                        ]).catch(() => {});
                     }
                 }
 
@@ -1059,6 +1187,44 @@ ${safeDnaLines}
                 if (_botText.includes('déjame consultarlo') && _isJustThanksOrOk) {
                     skipRecruiterInference = true;
                     responseTextVal = "";
+                }
+
+                // 🔀 PIVOT PENDING GUARD: If we just sent a tease about another vacancy and
+                // the candidate says "Sí", bypass LLM confusion and inject a forced context
+                // so the recruiter presents the next vacancy immediately.
+                if (!skipRecruiterInference) {
+                    const _isPivotPending = await getPivotPendingFlag(redis, candidateId);
+                    if (_isPivotPending) {
+                        const _isAffirmativePivot = /^(s[ií]|claro|dale|ok|va|sí quiero|si quiero|me interesa|por favor|porfa|adelante|quiero saber|dime|cuéntame|cuentame|muéstramela|muestramela|cual es|que vacante)/i.test(aggregatedText.trim());
+                        const _isNegativePivot = /^(no|no gracias|ya no|no quiero|no me interesa|no ma)/i.test(aggregatedText.trim());
+
+                        if (_isAffirmativePivot) {
+                            // Candidate confirmed — present next vacancy. Clear flag and let LLM run
+                            // BUT with a system note that forces presentation of the new vacancy.
+                            await clearPivotPendingFlag(redis, candidateId);
+                            historyForGpt = [
+                                ...historyForGpt.slice(0, -1),
+                                {
+                                    role: 'user',
+                                    content: `[NUEVA VACANTE CONFIRMADA]: El candidato acaba de aceptar ver la siguiente vacante disponible. OBLIGATORIO: Preséntale la vacante actual completa (nombre, empresa, sueldo, horario, beneficios) y pregúntale si le interesa. NO menciones la vacante anterior. Actúa como si fuera la primera vez que le presentas esta vacante.`
+                                }
+                            ];
+                            console.log(`[PIVOT GUARD] ✅ Candidate confirmed next vacancy. Forcing presentation.`);
+                        } else if (_isNegativePivot) {
+                            // Candidate rejected pivot — clear flag, let exit flow handle it
+                            await clearPivotPendingFlag(redis, candidateId);
+                            console.log(`[PIVOT GUARD] ❌ Candidate rejected pivot.`);
+                        } else {
+                            // Unclear — keep pivot_pending, let LLM handle, inject note
+                            historyForGpt = [
+                                ...historyForGpt.slice(0, -1),
+                                {
+                                    role: 'user',
+                                    content: `[CONTEXTO PIVOT]: Brenda ofreció mostrar una nueva vacante disponible. El candidato respondió: "${aggregatedText}". Si la respuesta es afirmativa, preséntale la vacante actual. Si es negativa, despídete amablemente.`
+                                }
+                            ];
+                        }
+                    }
                 }
 
                 // 🗓️ CITA AFFIRMATIVE GUARD: Only fires when bot explicitly offered to schedule — NOT on day/hour confirmations
@@ -1115,35 +1281,12 @@ ${safeDnaLines}
                             .replace(/\n?\"unanswered_question\":\s*\".+\"/gi, '')
                             .trim();
                         // 📐 Apply shared formatter (hours format, ✅ list normalization)
-                        responseTextVal = formatRecruiterMessage(responseTextVal, candidateData);
+                        const _isInicioPasoFmt = /filtro|inicio|contacto/i.test(activeStepNameLower);
+                        // Read sequential CTA index for this turn (incremented at delivery)
+                        const _ctaVariantIdxFmt = await getCTAIndex(redis, candidateId);
+                        responseTextVal = formatRecruiterMessage(responseTextVal, candidateData, { isInicio: _isInicioPasoFmt, ctaVariantIdx: _ctaVariantIdxFmt });
                         aiResult.response_text = responseTextVal;
 
-                        // 📅 FAQ CTA DATE INJECTION: When formatRecruiterMessage appended generic cita CTA,
-                        // replace it with one that also shows the available interview days from the step calendar.
-                        const _hasFaqCta = responseTextVal.includes('[MSG_SPLIT]¿Te gustaría agendar tu entrevista?');
-                        if (_hasFaqCta && currentStep?.calendarOptions?.length > 0) {
-                            const _todayMx = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
-                            const NUMS_EMJ = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣'];
-                            const DAYS_ES2 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-                            const MONTHS_ES2 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                            const _futureOpts = currentStep.calendarOptions.filter(opt => {
-                                const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
-                                return m ? m[1] >= _todayMx : true;
-                            });
-                            if (_futureOpts.length > 0) {
-                                const _dateLines = _futureOpts.map((opt, i) => {
-                                    const dm = opt.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                                    if (!dm) return `${NUMS_EMJ[i] || `${i+1}.`} ${opt} 📅`;
-                                    const d = new Date(parseInt(dm[1]), parseInt(dm[2]) - 1, parseInt(dm[3]));
-                                    return `${NUMS_EMJ[i] || `${i+1}.`} ${DAYS_ES2[d.getDay()]} ${d.getDate()} de ${MONTHS_ES2[d.getMonth()]} 📅`;
-                                }).join('\n');
-                                const _ctaWithDates = _futureOpts.length === 1
-                                    ? `Tengo entrevistas los días:\n${_dateLines}\n¿Te queda bien ese día? 😊`
-                                    : `Tengo entrevistas los días:\n${_dateLines}\n¿Cuál te queda mejor? 😊`;
-                                responseTextVal = responseTextVal.replace('[MSG_SPLIT]¿Te gustaría agendar tu entrevista? 😊', `[MSG_SPLIT]${_ctaWithDates}`);
-                                aiResult.response_text = responseTextVal;
-                            }
-                        }
                     }
 
                     // 🧠 EXTRACTION SYNC (RECRUITER MODE)
@@ -1172,8 +1315,15 @@ ${safeDnaLines}
                     // 🛡️ RADAR GUARD: AI set unanswered_question but forgot the response_text.
                     // Enforce the exact fallback text defined in RECRUITER_IDENTITY so the bot
                     // never goes silent on a question — keeps conversation open without presupposing any next step.
-                    if (unansweredQ && !responseTextVal) {
+                    // ONLY enforce if it also failed to provide a valid media_url.
+                    const hasMediaInsideRadar = aiResult?.media_url && aiResult.media_url !== 'null';
+                    if (unansweredQ && !responseTextVal && !hasMediaInsideRadar) {
+                        const _isInicioPasoRadar = /filtro|inicio|contacto/i.test(activeStepNameLower);
                         responseTextVal = 'Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨';
+                        // 🎯 Capa 2: Fallback in Inicio step ALWAYS carries CTA in separate bubble
+                        if (_isInicioPasoRadar) {
+                            responseTextVal += '[MSG_SPLIT]¿Te gustaría agendar tu entrevista? 😊';
+                        }
                         aiResult.response_text = responseTextVal;
                     }
 
@@ -1227,6 +1377,24 @@ ${safeDnaLines}
 
                 if (advanceBracketsMatch && advanceBracketsMatch[0]) {
                     hasMoveTag = true;
+
+                    // 🚫 QUERY FIREWALL (Capa 0 — runs before anything else)
+                    // In Filtro/Inicio steps, a QUERY must NEVER advance the step.
+                    // A question is a question whether it has ¿? or not.
+                    // The AI sometimes hallucinates { move } when a candidate asks about the interview.
+                    const _firewallStepName = (currentStep?.name || '').toLowerCase();
+                    const _isInicioPasoFirewall = /filtro|inicio|contacto/i.test(_firewallStepName);
+                    if (_isInicioPasoFirewall && !hasExitTag) {
+                        // Guard 1: Intent classifier already said QUERY
+                        const _isQueryIntent = intent === 'QUERY';
+                        // Guard 2: Message contains question words even without punctuation
+                        const _hasQuestionWords = /\?|¿|cu[aá]ndo|c[oó]mo|d[oó]nde|me llevan|cu[aá]l|tienen|hay\s|aceptan|puedo|pueden|dan\s|pagan|dan\s|necesito|requisitos|trabaj[a-z]|queda\s|es\s+.*\?/i.test(aggregatedText.trim())
+                            && !/^(s[ií]|claro|dale|ok|va|adelante|perfecto|excelente|me interesa|si quiero|quiero|obvio)/i.test(aggregatedText.trim());
+                        if (_isQueryIntent || _hasQuestionWords) {
+                            hasMoveTag = false; // 🛑 NOT an acceptance — it's a question
+                            console.log(`[QUERY FIREWALL] Blocked false-positive move in Inicio step. intent=${intent}, msg="${aggregatedText.substring(0, 60)}"`);
+                        }
+                    }
                     // Keep just the string `{ move }` or `{ move: exit }`
                     const innerContent = advanceBracketsMatch[0];
 
@@ -1270,9 +1438,9 @@ ${safeDnaLines}
                     }
                 }
 
-                // 🛡️ CONTEXTUAL SAFETY TRIGGER (MARK STYLE)
-                // If Brenda forgets the tag but the developer-certified intent is ACCEPTANCE 
-                // AND the bot just asked to schedule, we force the move.
+                // 🛡️ CONTEXTUAL SAFETY TRIGGER — META GRADE
+                // isFiltro moves ONLY when cita_pending flag is confirmed in Redis.
+                // This prevents any ambient "Sí" from prematurely advancing the step.
                 let inferredAcceptance = false;
                 if (!hasMoveTag) {
                     const lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
@@ -1281,15 +1449,38 @@ ${safeDnaLines}
 
                     const isUserAffirmative = /^(si|sí|claro|por supuesto|obvio|va|dale|ok|okay|sipi|simon|simón|me parece bien|está bien|perfecto|excelente|adelante)/i.test(aggregatedText.trim());
 
-                    // Let's loosen the restriction here. If the user is affirmative AND this is a step 
-                    // where Brenda might simply "accept" (Filtro Step or Citados retraction flow), we can just force the move.
                     const originStepName = (currentStep?.name || '').toLowerCase();
                     const isFiltro = originStepName.includes('filtro') || originStepName.includes('inicio') || originStepName.includes('contacto');
                     const isCitadosStep = originStepName.includes('citado');
 
-                    if ((isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative)) || (isFiltro && isUserAffirmative)) {
+                    // 🔑 Capa 4: Read cita_pending from Redis
+                    const _citaPending = await getCitaPendingFlag(redis, candidateId);
+
+                    if (isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative) && _citaPending) {
+                        // Clear the flag — confirmed
+                        clearCitaPendingFlag(redis, candidateId).catch(() => {});
                         hasMoveTag = true;
                         inferredAcceptance = true;
+                    } else if (isFiltro && isUserAffirmative && _citaPending) {
+                        // Candidate explicitly confirmed after seeing the CTA
+                        clearCitaPendingFlag(redis, candidateId).catch(() => {});
+                        hasMoveTag = true;
+                        inferredAcceptance = true;
+                    } else if (isFiltro && isUserAffirmative && !_citaPending && !hasMoveTag) {
+                        // 🎯 Capa 5: AMBIGUITY GUARD — candidate said Sí but we never sent the CTA yet
+                        // ⛔ PIVOT EXCEPTION: If the last bot message was asking about a new vacancy
+                        // ("¿Te gustaría conocerla?"), the Sí is clearly about seeing the vacancy —
+                        // not scheduling. Let the LLM response go through untouched.
+                        const _isPivotContext = /te gustar[ií]a conocerla|quieres conocerla|conocer la vacante|conocerla\?/i.test(botText);
+                        if (!_isPivotContext) {
+                            // Use sequential variant (global counter) for ambiguity re-ask
+                            const _ambIdx = await getCTAIndex(redis, candidateId);
+                            responseTextVal = _AMBIGUITY_VARIANTS[_ambIdx % _AMBIGUITY_VARIANTS.length];
+                            if (aiResult) aiResult.response_text = responseTextVal;
+                            await setCitaPendingFlag(redis, candidateId);
+                            incrCTAIndex(redis, candidateId).catch(() => {}); // Advance sequential counter
+                            hasMoveTag = false; // Block move until next confirmation
+                        }
                     }
 
                     // 🎯 CITADOS RETRACTION ACCEPTANCE: If in Citados and bot offered a new vacancy
@@ -1535,7 +1726,9 @@ ${safeDnaLines}
                         await moveCandidateStep(activeProjectId, candidateId, nextStep.id);
                         recruiterTriggeredMove = true;
                         candidateUpdates.stepId = nextStep.id;
-                        candidateUpdates.projectId = activeProjectId; // Keep them in project
+                        candidateUpdates.projectId = activeProjectId;
+                        // 🧹 Clear cita_pending — candidate officially moved, flag no longer needed
+                        clearCitaPendingFlag(redis, candidateId).catch(() => {});
 
                         // 🔄 CITADOS→CITA RESET: When retraction from Citados sends candidate back to Cita
                         // for a new vacancy, clear the old appointment data so the scheduling flow starts fresh.
@@ -2122,7 +2315,8 @@ ${safeDnaLines}
         let deliveryPromise = Promise.resolve();
         // 📐 LAST-MILE FORMATTER: Ensure formatting is applied regardless of which code path built responseTextVal
         if (responseTextVal) responseTextVal = formatRecruiterMessage(responseTextVal, candidateData);
-        let resText = String(responseTextVal || '').trim();
+        // ⚠️ Compute resText AFTER formatRecruiterMessage so [MSG_SPLIT] injections are visible
+        let resText = String(responseTextVal || '').replace(/\[MSG_SPLIT\]/g, '').trim();
 
         // 🧹 MOVE TAG SANITIZER: Strip internal move tags from outbound messages
         const moveTagPattern = /[\{\[]\s*move(?::\s*(?:exit|no_interesa|\w+))?\s*[\}\]]/i;
@@ -2157,9 +2351,16 @@ ${safeDnaLines}
 
             if (aiResult?.media_url && aiResult.media_url !== 'null') {
                 // Failsafe: Remove any detected URLs or Markdown images to prevent leakage
+                // 🛡️ IMPORTANT: Temporarily protect [MSG_SPLIT] so it survives the whitespace collapse
                 const urlRegex = /https?:\/\/[^\s\)]+/g;
                 const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
-                responseTextVal = responseTextVal.replace(markdownImageRegex, '').replace(urlRegex, '').replace(/\s+/g, ' ').trim();
+                responseTextVal = responseTextVal
+                    .replace(markdownImageRegex, '')
+                    .replace(urlRegex, '')
+                    .replace(/\[MSG_SPLIT\]/g, '\u0000SPLIT\u0000') // protect sentinel
+                    .replace(/\s+/g, ' ')
+                    .replace(/\u0000SPLIT\u0000/g, '[MSG_SPLIT]') // restore sentinel
+                    .trim();
             }
         }
 
@@ -2168,12 +2369,13 @@ ${safeDnaLines}
 
         // 🛡️ [FINAL DELIVERY SAFEGUARD]: If Brenda is about to go silent but profile isn't closed, force a fallback
         // Special case: in recruiter mode, close_conversation:true with empty response = bot silence on a FAQ question.
-        // We must still send a fallback in that case.
-        const recruiterClosedSilently = isRecruiterMode && isTechnicalOrEmpty && aiResult?.close_conversation && !hasMoveIntent && !recruiterTriggeredMove && !handoverTriggered;
-        if ((isTechnicalOrEmpty && !hasMoveIntent && !recruiterTriggeredMove && !aiResult?.close_conversation && !handoverTriggered) || recruiterClosedSilently) {
+        // We must still send a fallback in that case, UNLESS there is a valid media_url being sent.
+        const hasMedia = aiResult?.media_url && aiResult.media_url !== 'null';
+        const recruiterClosedSilently = isRecruiterMode && isTechnicalOrEmpty && aiResult?.close_conversation && !hasMoveIntent && !recruiterTriggeredMove && !handoverTriggered && !hasMedia;
+        
+        if ((isTechnicalOrEmpty && !hasMoveIntent && !recruiterTriggeredMove && !aiResult?.close_conversation && !handoverTriggered && !hasMedia) || recruiterClosedSilently) {
             if (isRecruiterMode) {
                 // If the AI sent an FAQ Media URL but hallucinated the text away, safely append a generic CTA
-                const hasMedia = aiResult?.media_url && aiResult.media_url !== 'null';
                 if (hasMedia) {
                     responseTextVal = "Aquí está la información. 😉 ¿Te gustaría que te agende una cita de entrevista?";
                 } else if (recruiterClosedSilently) {
@@ -2231,6 +2433,15 @@ ${safeDnaLines}
                     } else {
                         messagesToSend.push(responseTextVal);
                     }
+                }
+
+                // 🔑 CAPA 6: If any sent message contains the CTA, set cita_pending in Redis
+                // so the NEXT affirmative from the candidate is treated as a confirmed acceptance.
+                const CTA_PATTERN = /¿te gustar[ií]a agendar|¿te agendo una cita|¿te aparto una cita|¿quieres que programe|¿te puedo agendar|solo por confirmar|me confirmas si quieres|quieres que agendemos|solo para confirmar|¿te interesa conocer esta|te gustaría conocerla|¿te la presento|¿te gustaría saber más/i;
+                const _hasCTAinBatch = messagesToSend.some(m => CTA_PATTERN.test(m));
+                if (_hasCTAinBatch && isRecruiterMode) {
+                    setCitaPendingFlag(redis, candidateId).catch(() => {});
+                    incrCTAIndex(redis, candidateId).catch(() => {}); // 🔁 Advance sequential counter
                 }
 
                 if (mUrl && mUrl !== 'null') {

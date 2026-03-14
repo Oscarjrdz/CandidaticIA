@@ -8,6 +8,8 @@ import {
     getCandidateById
 } from '../utils/storage.js';
 
+export const maxDuration = 60; // Extend Vercel timeout for LLM bursts
+
 /**
  * 🚀 SERVERLESS TURBO ENGINE
  * Processes candidate messages in bursts to handle high-frequency WhatsApp traffic.

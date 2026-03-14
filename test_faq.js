@@ -1,24 +1,21 @@
 import { getRedisClient } from './api/utils/storage.js';
-import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
-dotenv.config({ path: '.env' });
 
 async function run() {
-    console.log("Redis URL:", process.env.UPSTASH_REDIS_REST_URL);
     const client = getRedisClient();
     try {
-        const keys = await client.keys('vacancy_faq*');
-        console.log("FAQ Keys found:", keys);
+        const keys = await client.keys('*faq*');
+        console.log("Keys found:", keys);
         for (const key of keys) {
             const data = await client.get(key);
             console.log(`\n--- FAQ Data for ${key} ---`);
             try {
                 const faqs = JSON.parse(data);
                 for (const faq of faqs) {
-                    console.log(`\nTopic: ${faq.topic}`);
+                    console.log(`Topic: ${faq.topic}`);
                     console.log(`Questions: ${(faq.originalQuestions || []).join(', ')}`);
                     console.log(`Official Answer: ${faq.officialAnswer || 'NONE'}`);
                     console.log(`Media URL: ${faq.mediaUrl || 'NONE'}`);
+                    console.log(`-----------------------------`);
                 }
             } catch(e) { console.log(data); }
         }
