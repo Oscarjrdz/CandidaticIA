@@ -2185,6 +2185,10 @@ ${safeDnaLines}
                         if (nextStepNameLower.includes('no interesa') || isExitMove) {
                             // 📌 Set the noInteresa Redis marker so the re-engagement intercept can detect this candidate
                             redis?.set(`noInteresa:${candidateId}`, '1', 'EX', 60 * 60 * 24 * 180).catch(() => {}); // 180 days
+                            // 🧹 Reset any stale reengagement state from a previous cycle — otherwise
+                            // the next time the candidate messages, the intercept hits an old SHOWING/CONFIRMING_PROFILE
+                            // state and silently fails instead of starting a fresh re-engagement round.
+                            redis?.del(`reengagement:${candidateId}`).catch(() => {});
                             try {
                                 const candFirstName = (candidateData.nombreReal || candidateData.nombre || 'amig@').split(' ')[0];
                                 const farewellPart1 = `Entiendo perfectamente, ${candFirstName} 🙏 Lamento que ninguna de nuestras oportunidades haya encajado contigo en este momento.`;
