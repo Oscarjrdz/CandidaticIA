@@ -311,7 +311,7 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         if (lastCheckIdx !== -1) {
             const afterList = text.substring(lastCheckIdx);
             // Match newline(s) OR just whitespace before the question
-            const catQMatch = afterList.match(/(\n+|\s{1,})((?:¿|¡)[^?!]*(?:eliges?|prefieres?|interesa|llama la atenci[oó]n|quedas?|va m[aá]s|apunta|te va|escoges?|escoge)[^?!]*[?!])/i);
+            const catQMatch = afterList.match(/(\n+|\s{1,})((?:¿|¡)[^?!]*(?:elegir|eliges?|gustar[ií]a elegir|prefieres?|interesa|llama la atenci[oó]n|quedas?|va m[aá]s|apunta|te va|escoges?|escoge)[^?!]*[?!])/i);
             if (catQMatch) {
                 const globalIdx = lastCheckIdx + catQMatch.index + catQMatch[1].length;
                 const beforeQ = text.substring(0, globalIdx).trimEnd();
