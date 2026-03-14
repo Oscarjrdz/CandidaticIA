@@ -888,8 +888,8 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                         const _NUM_EMOJIS_RE = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
                         const listLines = vacancies.map((v, i) => {
                             const num = _NUM_EMOJIS_RE[i] || `${i+1}.`;
-                            const salary = v.salarioDia ? ` – $${v.salarioDia}/día` : '';
-                            return `${num} ${v.name}${salary}`;
+                            const company = v.company ? ` – ${v.company}` : '';
+                            return `${num} ${v.name}${company}`;
                         }).join('\n');
                         const listMsg = `¡Claro que sí! Actualmente tenemos estas opciones disponibles:\n\n${listLines}`;
                         const ctaMsg = `¿Cuál te interesa ${firstName}?`;
