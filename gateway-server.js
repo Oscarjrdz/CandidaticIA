@@ -219,6 +219,13 @@ async function startBaileys(instanceId, webhookUrl) {
             if (connection === 'close') {
                 const code = lastDisconnect?.error?.output?.statusCode;
                 const loggedOut = code === DisconnectReason.loggedOut;
+                // Only act if THIS socket is still the current active one
+                // (avoids stale close events from dead sockets polluting pendingQR)
+                const isCurrentSocket = activeSockets.get(instanceId) === socket;
+                if (!isCurrentSocket) {
+                    console.log(`[GW:${instanceId}] Stale socket closed, ignoring`);
+                    return;
+                }
                 await updateInstance(instanceId, {
                     state: loggedOut ? 'DISCONNECTED' : 'QR_PENDING',
                     ...(loggedOut ? { phone: null } : {})
@@ -358,9 +365,9 @@ app.post('/connect/:instanceId', async (req, res) => {
         console.warn(`[GW:${instanceId}] Could not clear auth:`, e.message);
     }
 
-    // Also clear from activeSockets in case there's a dead socket
-    const deadSocket = activeSockets.get(instanceId);
-    if (deadSocket) { try { deadSocket.end?.(); } catch {} activeSockets.delete(instanceId); }
+    // Remove stale socket reference WITHOUT calling .end() — calling end() fires an async
+    // close event that would race with the new pendingQR we're about to register.
+    activeSockets.delete(instanceId);
 
     // Promise that resolves when Baileys emits QR or 'open'
     const qrPromise = new Promise((resolveQR, rejectQR) => {
