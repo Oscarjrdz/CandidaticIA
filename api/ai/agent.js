@@ -254,6 +254,10 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         // 2️⃣ Insert newline before every ✅ that is NOT already at the start of a line
         text = text.replace(/([^\n])✅/g, '$1\n✅');
 
+        // 2b️⃣ Ensure double newline before the FIRST ✅ (= space between header and list)
+        // Works regardless of what GPT wrote as the header.
+        text = text.replace(/([^\n])\n(✅)/, '$1\n\n$2');
+
         // 3️⃣ Detach any text/question AFTER the last category name on the same line
         // e.g. "✅ Montacarguistas ¿Cuál eliges?" → "✅ Montacarguistas\n¿Cuál eliges?"
         text = text.replace(/(✅\s*[^\n✅?¿]+?)\s+(¿[^\n?]+\?)/g, '$1\n$2');
