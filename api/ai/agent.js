@@ -857,8 +857,11 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         // 🔄 [RE-ENGAGEMENT FLOW]: Intercept candidates who said NO INTERESA and message again
         {
             const reengageKey = `reengagement:${candidateId}`;
+            const noInteresaMarkerKey = `noInteresa:${candidateId}`;
             const reengageState = await redis?.get(reengageKey);
-            const isNoInteresa = /no.?interesa/i.test(candidateData.stepId || '') ||
+            // isNoInteresa: reads a Redis marker set when the exit move fires (reliable, step-name agnostic)
+            const noInteresaMarker = await redis?.get(noInteresaMarkerKey);
+            const isNoInteresa = !!noInteresaMarker ||
                 /no.?interesa/i.test(candidateData.status || '');
 
             const msgText = (typeof incomingMessage === 'string' ? incomingMessage : '').toLowerCase().trim();
@@ -2155,6 +2158,8 @@ ${safeDnaLines}
                         // 🚪 NO INTERESA ARRIVAL: Send farewell message + clear vacancy linkage
                         const nextStepNameLower = (nextStep?.name || '').toLowerCase();
                         if (nextStepNameLower.includes('no interesa') || isExitMove) {
+                            // 📌 Set the noInteresa Redis marker so the re-engagement intercept can detect this candidate
+                            redis?.set(`noInteresa:${candidateId}`, '1', 'EX', 60 * 60 * 24 * 180).catch(() => {}); // 180 days
                             try {
                                 const candFirstName = (candidateData.nombreReal || candidateData.nombre || 'amig@').split(' ')[0];
                                 const farewellPart1 = `Entiendo perfectamente, ${candFirstName} 🙏 Lamento que ninguna de nuestras oportunidades haya encajado contigo en este momento.`;
