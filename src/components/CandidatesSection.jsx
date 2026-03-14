@@ -742,9 +742,27 @@ const CandidatesSection = ({ showToast }) => {
                                                 })}
 
                                                 <td className="py-0.5 px-2.5">
-                                                    <div className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase italic whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
-                                                        {candidate.currentVacancyName || (candidate.projectMetadata?.currentVacancyName) || '-'}
-                                                    </div>
+                                                    {(() => {
+                                                        const vacName = candidate.currentVacancyName || candidate.projectMetadata?.currentVacancyName;
+                                                        const stepId = candidate.projectMetadata?.stepId || '';
+                                                        const isNoInteresa = !vacName && (
+                                                            /no.?interesa/i.test(stepId) ||
+                                                            /no.?interesa/i.test(candidate.status || '') ||
+                                                            /no.?interesa/i.test(candidate.projectMetadata?.stepName || '')
+                                                        );
+                                                        if (isNoInteresa) {
+                                                            return (
+                                                                <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase italic bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">
+                                                                    NO INTERESA
+                                                                </span>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <div className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase italic whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
+                                                                {vacName || '-'}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </td>
 
                                                 <td className="py-0.5 px-2.5">

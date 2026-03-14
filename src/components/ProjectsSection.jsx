@@ -317,11 +317,27 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
                     <h4 className="font-extrabold text-slate-900 dark:text-white text-[11px] truncate uppercase tracking-tight">
                         {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
                     </h4>
-                    {(candidate.currentVacancyName || candidate.projectMetadata?.currentVacancyName) && (
-                        <p className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter truncate italic mt-0.5">
-                            VACANTE: {candidate.currentVacancyName || candidate.projectMetadata.currentVacancyName}
-                        </p>
-                    )}
+                    {(() => {
+                        const vacName = candidate.currentVacancyName || candidate.projectMetadata?.currentVacancyName;
+                        const stepId = candidate.projectMetadata?.stepId || '';
+                        const stepName = candidate.projectMetadata?.stepName || '';
+                        const isNoInteresa = /no.?interesa/i.test(stepId) || /no.?interesa/i.test(stepName);
+                        if (isNoInteresa) {
+                            return (
+                                <p className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter truncate italic mt-0.5 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded w-fit">
+                                    NO INTERESA
+                                </p>
+                            );
+                        }
+                        if (vacName) {
+                            return (
+                                <p className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-tighter truncate italic mt-0.5">
+                                    VACANTE: {vacName}
+                                </p>
+                            );
+                        }
+                        return null;
+                    })()}
                     {(candidate.projectMetadata?.citaFecha || candidate.projectMetadata?.citaHora) && (
                         <div className="mt-0.5 flex items-center gap-1 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded w-fit border border-emerald-100 dark:border-emerald-800/50">
                             <Calendar className="w-2.5 h-2.5 text-emerald-500" />
