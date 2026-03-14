@@ -388,14 +388,142 @@ app.post('/connect/:instanceId', async (req, res) => {
     }
 });
 
-// Poll QR / state
+// Poll QR / state (also returns pairingCode if in pairing mode)
 app.get('/qr/:instanceId', async (req, res) => {
     const { instanceId } = req.params;
     const instance = await getInstance(instanceId);
     if (!instance) return res.status(404).json({ success: false, error: 'Not found.' });
     const qr = await redis.get(`gateway:qr:${instanceId}`);
-    res.json({ success: true, state: instance.state, qr: qr || null, phone: instance.phone });
+    const pairingCode = await redis.get(`gateway:paircode:${instanceId}`);
+    res.json({ success: true, state: instance.state, qr: qr || null, pairingCode: pairingCode || null, phone: instance.phone });
 });
+
+// ─── Pairing Code — alternative to QR, works from datacenter IPs ──────────────
+// WhatsApp > Linked Devices > Link with phone number > enter 8-digit code
+app.post('/pair/:instanceId', async (req, res) => {
+    const { instanceId } = req.params;
+    const { phone } = req.body || {};
+    if (!phone) return res.status(400).json({ success: false, error: 'phone number required (e.g. 5218112345678)' });
+
+    const instance = await getInstance(instanceId);
+    if (!instance) return res.status(404).json({ success: false, error: 'Not found.' });
+
+    if (instance.state === 'CONNECTED' && activeSockets.has(instanceId)) {
+        return res.json({ success: true, state: 'CONNECTED', phone: instance.phone });
+    }
+
+    // Clear stale auth + dead sockets
+    try {
+        const authKeys = await redis.keys(`gateway:auth:${instanceId}:*`);
+        if (authKeys.length) await redis.del(...authKeys);
+        await redis.del(`gateway:qr:${instanceId}`, `gateway:paircode:${instanceId}`);
+    } catch (e) { console.warn(`[GW:${instanceId}] clear auth error:`, e.message); }
+    const dead = activeSockets.get(instanceId);
+    if (dead) { try { dead.end?.(); } catch {} activeSockets.delete(instanceId); }
+
+    // Start Baileys in pairing-code mode (no QR printed)
+    const pairPromise = new Promise((resolve, reject) => {
+        pendingQR.set(instanceId, { resolveQR: resolve, rejectQR: reject });
+    });
+
+    (async () => {
+        try {
+            const {
+                default: makeWASocket,
+                DisconnectReason,
+                makeCacheableSignalKeyStore
+            } = await import('@whiskeysockets/baileys');
+            const version = await getBaileysVersion();
+            const { state, saveCreds } = await makeRedisAuthState(instanceId);
+
+            const socket = makeWASocket({
+                version,
+                auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, { level: () => {} }) },
+                printQRInTerminal: false,
+                browser: ['Candidatic Gateway', 'Chrome', '120.0'],
+                syncFullHistory: false,
+                connectTimeoutMs: 60000,
+                keepAliveIntervalMs: 15000,
+            });
+
+            activeSockets.set(instanceId, socket);
+            socket.ev.on('creds.update', saveCreds);
+
+            socket.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+                // Ignore QR — we only want pairing code
+                if (connection === 'open') {
+                    const ph = socket.user?.id?.split(':')[0] || null;
+                    await updateInstance(instanceId, { state: 'CONNECTED', phone: ph, connectedAt: new Date().toISOString() });
+                    await redis.del(`gateway:paircode:${instanceId}`);
+                    console.log(`[GW:${instanceId}] ✅ Paired! Connected as ${ph}`);
+                    const pending = pendingQR.get(instanceId);
+                    if (pending) { pending.resolveQR({ connected: true, phone: ph }); pendingQR.delete(instanceId); }
+                    _listenMessages(socket, instanceId, instance.webhookUrl);
+                }
+                if (connection === 'close') {
+                    const code = lastDisconnect?.error?.output?.statusCode;
+                    const loggedOut = code === DisconnectReason.loggedOut;
+                    await updateInstance(instanceId, { state: loggedOut ? 'DISCONNECTED' : 'ERROR' });
+                    activeSockets.delete(instanceId);
+                    const pending = pendingQR.get(instanceId);
+                    if (pending) { pending.rejectQR(new Error(`Pairing failed (code ${code})`)); pendingQR.delete(instanceId); }
+                }
+            });
+
+            // Request pairing code — wait until socket is ready
+            await new Promise(r => setTimeout(r, 3000));
+            const cleanPhone = String(phone).replace(/\D/g, '');
+            const code = await socket.requestPairingCode(cleanPhone);
+            // Format as XXXX-XXXX for readability
+            const formatted = code.match(/.{1,4}/g)?.join('-') || code;
+            await redis.set(`gateway:paircode:${instanceId}`, formatted, 'EX', 120);
+            await updateInstance(instanceId, { state: 'QR_PENDING' });
+            console.log(`[GW:${instanceId}] 🔑 Pairing code: ${formatted}`);
+            const pending = pendingQR.get(instanceId);
+            if (pending) { pending.resolveQR({ pairingCode: formatted }); pendingQR.delete(instanceId); }
+
+        } catch (err) {
+            console.error(`[GW:${instanceId}] pair error:`, err.message);
+            activeSockets.delete(instanceId);
+            const pending = pendingQR.get(instanceId);
+            if (pending) { pending.rejectQR(err); pendingQR.delete(instanceId); }
+        }
+    })();
+
+    try {
+        const result = await Promise.race([
+            pairPromise,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Pairing code timeout (30s)')), 30000))
+        ]);
+        if (result.connected) return res.json({ success: true, state: 'CONNECTED', phone: result.phone });
+        return res.json({ success: true, pairingCode: result.pairingCode, message: 'Ingresa este código en WhatsApp > Dispositivos vinculados > Vincular con número' });
+    } catch (err) {
+        pendingQR.delete(instanceId);
+        return res.status(504).json({ success: false, error: err.message });
+    }
+});
+
+// Internal helper: attach incoming message listener to a socket
+function _listenMessages(socket, instanceId, webhookUrl) {
+    socket.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type !== 'notify') return;
+        for (const msg of messages) {
+            if (msg.key?.fromMe || !msg.message) continue;
+            const from = msg.key.remoteJid;
+            const body = msg.message?.conversation || msg.message?.extendedTextMessage?.text || '[Media]';
+            await saveHistory(instanceId, { direction: 'in', from, body, msgId: msg.key.id });
+            const inst = await getInstance(instanceId);
+            if (inst) await updateInstance(instanceId, { messagesIn: (inst.messagesIn || 0) + 1 });
+            const wh = webhookUrl || inst?.webhookUrl || CANDIDATIC_WEBHOOK;
+            if (wh) {
+                try {
+                    const { default: axios } = await import('axios');
+                    await axios.post(wh, { instanceId, event: 'message.received', data: { from, body, msgId: msg.key.id, timestamp: new Date().toISOString() } }, { timeout: 10000 });
+                } catch (e) { console.warn(`[GW:${instanceId}] webhook failed:`, e.message); }
+            }
+        }
+    });
+}
 
 // Status
 app.get('/status/:instanceId', async (req, res) => {

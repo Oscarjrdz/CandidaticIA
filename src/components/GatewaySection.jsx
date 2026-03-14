@@ -78,57 +78,84 @@ const CopyField = ({ label, value, masked }) => {
 };
 
 const QRModal = ({ instanceId, onClose }) => {
+    const [mode, setMode] = useState('qr'); // 'qr' | 'pair'
     const [qrData, setQrData] = useState(null);
-    const [state, setState] = useState('CONNECTING');
+    const [pairingCode, setPairingCode] = useState(null);
+    const [pairPhone, setPairPhone] = useState('');
+    const [state, setState] = useState('IDLE');
     const [phone, setPhone] = useState(null);
     const [error, setError] = useState(null);
     const pollRef = useRef(null);
     const mountedRef = useRef(true);
 
-    useEffect(() => {
-        mountedRef.current = true;
+    const clearPoll = () => clearInterval(pollRef.current);
 
-        // 1. Fire POST to start Baileys — keeps socket alive up to 55s in background
+    // ── QR mode ──────────────────────────────────────────────────────────────
+    const startQR = () => {
+        setState('CONNECTING');
+        setError(null);
+        setQrData(null);
+
         api.connectInstance(instanceId)
             .then(res => {
                 if (!mountedRef.current) return;
-                if (res.state === 'CONNECTED') {
-                    setState('CONNECTED');
-                    setPhone(res.phone);
-                    clearInterval(pollRef.current);
-                } else if (res.error && !qrData) {
-                    // Only show error if we never got a QR
-                    setError(res.error);
-                    setState('ERROR');
-                    clearInterval(pollRef.current);
-                }
+                if (res.state === 'CONNECTED') { setState('CONNECTED'); setPhone(res.phone); clearPoll(); }
+                else if (res.error && !qrData) { setError(res.error); setState('ERROR'); clearPoll(); }
             })
-            .catch(() => { /* POST errors are handled by GET polling */ });
+            .catch(() => {});
 
-        // 2. Simultaneously poll GET /connect every 3s for QR image and state
         const poll = async () => {
             try {
                 const res = await api.getQR(instanceId);
                 if (!mountedRef.current) return;
-                if (res.state === 'CONNECTED') {
-                    setState('CONNECTED');
-                    setPhone(res.phone);
-                    clearInterval(pollRef.current);
-                } else if (res.qr) {
-                    setState('QR_PENDING');
-                    setQrData(res.qr);
-                }
+                if (res.state === 'CONNECTED') { setState('CONNECTED'); setPhone(res.phone); clearPoll(); }
+                else if (res.qr) { setState('QR_PENDING'); setQrData(res.qr); }
             } catch {}
         };
-
-        poll(); // Immediate first check
+        poll();
         pollRef.current = setInterval(poll, 3000);
+    };
 
-        return () => {
-            mountedRef.current = false;
-            clearInterval(pollRef.current);
-        };
-    }, [instanceId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // ── Pairing code mode ─────────────────────────────────────────────────────
+    const requestPairCode = async () => {
+        if (!pairPhone.trim()) return;
+        setState('CONNECTING');
+        setError(null);
+        setPairingCode(null);
+        clearPoll();
+        try {
+            const res = await fetch(`${GW}/pair/${instanceId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: pairPhone.replace(/\D/g, '') })
+            }).then(r => r.json());
+
+            if (!mountedRef.current) return;
+            if (res.pairingCode) {
+                setPairingCode(res.pairingCode);
+                setState('PAIR_CODE');
+                // Poll for connection
+                pollRef.current = setInterval(async () => {
+                    try {
+                        const s = await api.getStatus(instanceId);
+                        if (s.state === 'CONNECTED') { setState('CONNECTED'); setPhone(s.phone); clearPoll(); }
+                    } catch {}
+                }, 3000);
+            } else if (res.state === 'CONNECTED') {
+                setState('CONNECTED'); setPhone(res.phone);
+            } else {
+                setError(res.error || 'No se pudo obtener el código'); setState('ERROR');
+            }
+        } catch (e) {
+            if (mountedRef.current) { setError(e.message); setState('ERROR'); }
+        }
+    };
+
+    useEffect(() => {
+        mountedRef.current = true;
+        if (mode === 'qr') startQR();
+        return () => { mountedRef.current = false; clearPoll(); };
+    }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
@@ -160,7 +187,62 @@ const QRModal = ({ instanceId, onClose }) => {
                             Cerrar
                         </button>
                     </div>
+                ) : state === 'PAIR_CODE' ? (
+                    // ── Pairing code display ───────────────────────────────────────────────
+                    <div className="space-y-5">
+                        <div>
+                            <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                                <span className="text-2xl">🔑</span>
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Código de vinculación</h3>
+                            <p className="text-xs text-gray-500 mt-1">En WhatsApp → Dispositivos vinculados → Vincular con número de teléfono</p>
+                        </div>
+                        <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 border-2 border-dashed border-purple-300 dark:border-purple-700">
+                            <p className="text-4xl font-mono font-black tracking-[0.3em] text-purple-600 dark:text-purple-400">{pairingCode}</p>
+                            <p className="text-xs text-gray-400 mt-2">Expira en 2 minutos</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
+                            <span>⏳</span>
+                            <span>Esperando que ingreses el código en tu teléfono...</span>
+                        </div>
+                        <button onClick={onClose} className="w-full py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            Cancelar
+                        </button>
+                    </div>
+                ) : mode === 'pair' && state !== 'PAIR_CODE' ? (
+                    // ── Pairing phone input ────────────────────────────────────────────────
+                    <div className="space-y-5">
+                        <div>
+                            <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                                <span className="text-2xl">📱</span>
+                            </div>
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Vincular con número</h3>
+                            <p className="text-xs text-gray-500 mt-1">Sin escanear QR — ingresa el código en WhatsApp</p>
+                        </div>
+                        <div className="space-y-2 text-left">
+                            <label className="text-xs font-medium text-gray-500">Número de teléfono (con código de país)</label>
+                            <input
+                                type="tel"
+                                value={pairPhone}
+                                onChange={e => setPairPhone(e.target.value)}
+                                placeholder="ej. 5218112345678"
+                                className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm font-mono text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-400"
+                            />
+                            <p className="text-xs text-gray-400">México: 52 + 10 dígitos (sin el 1)</p>
+                        </div>
+                        <button
+                            onClick={requestPairCode}
+                            disabled={!pairPhone.trim() || state === 'CONNECTING'}
+                            className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
+                        >
+                            {state === 'CONNECTING' ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Generando código...</> : '🔑 Obtener código'}
+                        </button>
+                        <button onClick={() => { clearPoll(); setMode('qr'); setState('CONNECTING'); }} className="w-full py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors">
+                            ← Usar QR en cambio
+                        </button>
+                    </div>
                 ) : (
+                    // ── QR mode ────────────────────────────────────────────────────────────
                     <div className="space-y-5">
                         <div>
                             <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
@@ -181,9 +263,18 @@ const QRModal = ({ instanceId, onClose }) => {
                             )}
                         </div>
 
-                        <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
-                            ⏱ Puede tardar hasta 30 segundos en aparecer
-                        </p>
+                        {qrData && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg">
+                                ⚠️ Si falla el QR, usa el método de código numérico
+                            </p>
+                        )}
+
+                        <button
+                            onClick={() => { clearPoll(); setPairingCode(null); setMode('pair'); setState('IDLE'); }}
+                            className="w-full py-2.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 rounded-xl text-sm hover:bg-purple-100 transition-colors font-medium"
+                        >
+                            🔑 Usar código numérico en cambio
+                        </button>
 
                         <button onClick={onClose} className="w-full py-2.5 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                             Cancelar
@@ -194,6 +285,7 @@ const QRModal = ({ instanceId, onClose }) => {
         </div>
     );
 };
+
 
 const HistoryDrawer = ({ instanceId, token, onClose }) => {
     const [history, setHistory] = useState([]);
