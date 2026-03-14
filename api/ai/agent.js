@@ -278,7 +278,9 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                     const firstName = candidateData.nombreReal.trim().split(/\s+/)[0];
                     if (firstName && firstName.length > 1) {
                         // "¿Cuál eliges?" → "¿Cuál eliges, Oscar?"
-                        question = question.replace(/([?!])\s*$/, ` ${firstName}$1`);
+                        // Insert name before the `?` (preserving trailing emojis/spaces after it)
+                        // "¿Cuál eliges? 🤭" → "¿Cuál eliges Oscar? 🤭"
+                        question = question.replace(/(\?)(\s*[\p{Emoji}\s]*)?$/u, (_, q, trail) => ` ${firstName}${q}${trail || ''}`);
                     }
                 }
 
