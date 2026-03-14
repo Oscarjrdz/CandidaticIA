@@ -1010,8 +1010,20 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
                         { role: 'user', content: typeof incomingMessage === 'string' ? incomingMessage : 'Hola' }
                     ];
 
-                    const greetResponse = await getOpenAIResponse(greetInstruction, greetMessages, { max_tokens: 120 });
-                    const greetText = (greetResponse || `¡Hola ${firstName}! ✨ ¡Qué gusto saber de ti! 😊`).trim();
+                    let greetText = `¡Hola ${firstName}! ✨ ¡Qué gusto saber de ti! 😊`;
+                    try {
+                        // signature: getOpenAIResponse(messages, systemPrompt, model, apiKey, responseFormat, multimodal, maxTokens)
+                        const greetResponse = await getOpenAIResponse(
+                            greetMessages,      // messages array
+                            greetInstruction,   // system prompt
+                            'gpt-4o-mini',      // fast model
+                            null, null, null,
+                            120                 // maxTokens
+                        );
+                        if (greetResponse?.content) greetText = greetResponse.content.trim();
+                    } catch (e) {
+                        console.error('[RE-ENGAGE] Greeting GPT error, using fallback:', e.message);
+                    }
 
                     const config = await getUltraMsgConfig();
                     const phone = candidateData.whatsapp;
