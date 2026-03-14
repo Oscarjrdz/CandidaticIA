@@ -2150,8 +2150,11 @@ ${safeDnaLines}
                             // 🛑 SOFT NOTE for custom prompt bots: Let the prompt handle how to address
                             // the topic (vacancies, interviews, etc.), just remind to end with the missing field.
                             const isVacancyQ = /vacante|empleo|trabajo|sueldo|salario|horario|entrevista/i.test(aggregatedText);
+                            const isPersonalQ = /cu[aá]ntos a[nñ]os tienes?|qu[eé] edad tienes?|eres casada?|tienes novio?|d[oó]nde vives?|eres de aqu[íi]?|de d[oó]nde eres?|c[oó]mo te llamas?|cu[aá]l es tu nombre?|tienes hijos?|qu[eé] haces cuando|qu[eé] te gusta|cu[aá]nto ganas?|eres bonita?|eres guapa?/i.test(aggregatedText);
                             if (isVacancyQ) {
                                 systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Sigue las instrucciones de tu prompt sobre cómo responder este tipo de preguntas. Asegúrate de terminar con la pregunta del dato faltante: ${auditForMode.missingLabels[0]}.\n`;
+                            } else if (isPersonalQ) {
+                                systemInstruction += `\n[NOTA DE CONTEXTO - PREGUNTA PERSONAL]: El candidato hizo una pregunta personal sobre ti. Responde BREVEMENTE (1 línea) de forma humana, carismática y divertida siguiendo tu personalidad — puedes evadir con humor o dar una respuesta corta en personaje. Luego redirige inmediatamente hacia el dato faltante: ${auditForMode.missingLabels[0]}. NO ignores la pregunta personal.\n`;
                             } else {
                                 systemInstruction += `\n[NOTA DE CONTEXTO]: Dato pendiente de obtener: ${auditForMode.missingLabels[0]}. Termina tu mensaje con esa pregunta.\n`;
                             }
