@@ -272,6 +272,34 @@ async function startBaileys(instanceId, webhookUrl) {
 
 app.get('/health', (_, res) => res.json({ ok: true, sockets: activeSockets.size }));
 
+// Diagnostics — test if Railway can reach WhatsApp servers
+app.get('/diag', async (_, res) => {
+    const results = {};
+    try {
+        const { fetchLatestBaileysVersion } = await import('@whiskeysockets/baileys');
+        const { version } = await Promise.race([
+            fetchLatestBaileysVersion(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout after 8s')), 8000))
+        ]);
+        results.baileysVersion = version;
+        results.baileysVersionOk = true;
+    } catch (e) {
+        results.baileysVersionOk = false;
+        results.baileysVersionError = e.message;
+    }
+    try {
+        const { default: axios } = await import('axios');
+        const r = await axios.get('https://web.whatsapp.com/', { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+        results.whatsappReachable = r.status === 200;
+    } catch (e) {
+        results.whatsappReachable = false;
+        results.whatsappError = e.message;
+    }
+    results.sockets = activeSockets.size;
+    results.env = { redis: !!process.env.REDIS_URL, webhook: !!process.env.CANDIDATIC_WEBHOOK_URL };
+    res.json(results);
+});
+
 // List instances
 app.get('/instances', async (req, res) => {
     const instances = await getAllInstances();
