@@ -71,7 +71,7 @@ export default async function handler(req, res) {
         // ── Store gateway channel mapping ──────────────────────────────────────
         // This tells messenger.js to reply through this gateway instance
         const redis = getRedisClient();
-        await redis.set(GW_CHANNEL_KEY(phone), instanceId, { ex: GW_CHANNEL_TTL });
+        await redis.set(GW_CHANNEL_KEY(phone), instanceId, 'EX', GW_CHANNEL_TTL);
 
         await logTelemetry('gw_ingress', {
             instanceId, msgId, from,
