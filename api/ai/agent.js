@@ -198,6 +198,13 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // 📅 HUMANIZE raw YYYY-MM-DD dates that GPT leaked into the output
     text = text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => humanizeDate(`${y}-${m}-${d}`));
 
+    // 🔧 DATE-EXAMPLE GUARD: Strip "(ej. DD/MM/YYYY)" from messages that are NOT asking for a birth date.
+    // GPT sometimes copies this format into category or municipality questions by mistake.
+    const isBirthDateContext = /fecha|nacimiento|cumplea|cu[aá]ndo naciste|a[nñ]o|nac[íi]|d[íi]a.*mes|cuantos a[nñ]os/i.test(text);
+    if (!isBirthDateContext) {
+        text = text.replace(/\s*\(ej\.?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\)/gi, '');
+    }
+
     // 📋 COMBINED DAYS+HORARIO: If GPT merged PASO 1 (days list) and PASO 2 (horarios)
     // into one message, STRIP the horario part — user must pick a day first.
     {
@@ -2530,7 +2537,12 @@ ${safeDnaLines}
                             } else if (isPersonalQ) {
                                 systemInstruction += `\n[NOTA DE CONTEXTO - PREGUNTA PERSONAL]: El candidato hizo una pregunta personal sobre ti. Responde BREVEMENTE (1 línea) de forma humana, carismática y divertida siguiendo tu personalidad — puedes evadir con humor o dar una respuesta corta en personaje. Luego redirige inmediatamente hacia el dato faltante: ${auditForMode.missingLabels[0]}. NO ignores la pregunta personal.\n`;
                             } else {
-                                systemInstruction += `\n[INSTRUCCIÓN CRÍTICA]: El perfil NO está completo. PROHIBIDO usar mensajes de cierre ("estoy procesando", "te aviso pronto", "perfil listo", etc.). Dato pendiente: ${auditForMode.missingLabels[0]}. Tu mensaje DEBE terminar con la pregunta para obtenerlo.\n`;
+                                const nextField = auditForMode.missingLabels[0];
+                                const isEscolaridad = /escolaridad/i.test(nextField);
+                                const splitHint = isEscolaridad
+                                    ? ` Usa [MSG_SPLIT] ANTES de la lista de escolaridad para que llegue como segunda burbuja.`
+                                    : '';
+                                systemInstruction += `\n[INSTRUCCIÓN CRÍTICA]: El perfil NO está completo. PROHIBIDO usar mensajes de cierre ("estoy procesando", "te aviso pronto", "perfil listo", etc.). Dato pendiente: ${nextField}. Tu mensaje DEBE terminar con la pregunta para obtenerlo.${splitHint}\n`;
                             }
                         } else {
                             systemInstruction += `\n[INSTRUCCIÓN CRÍTICA FINAL]: El perfil está INCOMPLETO. Aún necesitas obtener: ${auditForMode.missingLabels.join(', ')}. TIENES PROHIBIDO despedirte o cerrar la conversación. OBLIGATORIAMENTE tu mensaje debe terminar con una pregunta para obtener el dato principal: ${auditForMode.missingLabels[0]}.\n`;
