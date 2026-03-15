@@ -1,5 +1,5 @@
 // [PREMIUM ARCHITECTURE] V_FINAL_STABLE_V1 - Zero-Silence Infrastructure Active
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// [GPT-ONLY] All AI inference via OpenAI GPT-4o-mini. Gemini fully removed.
 import { processUnansweredQuestion } from './faq-engine.js';
 import axios from "axios";
 import {
@@ -267,7 +267,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                 };
             });
 
-        // CRITICAL FIX: Gemini requires first message to be from 'user'
+        // CRITICAL FIX: OpenAI requires first message to be from 'user'
         // If history starts with 'model', remove leading model messages
         while (recentHistory.length > 0 && recentHistory[0].role === 'model') {
             recentHistory.shift();
@@ -391,11 +391,10 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
         systemInstruction += `\n[RECORDATORIO DE IDENTIDAD]: ${identityContext} NO confundas nombres con lugares geográficos.SI NO SABES EL NOMBRE REAL(Persona), NO LO INVENTES Y PREGÚNTALO.\n`;
 
-        let apiKey = process.env.GEMINI_API_KEY;
-        if (aiConfigJson) {
-            const parsed = typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson;
-            if (parsed.geminiApiKey) apiKey = parsed.geminiApiKey;
-        }
+        // [GPT-ONLY] API key resolved from ai_config (openaiApiKey) or env fallback
+        const apiKey = (aiConfigJson
+            ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson).openaiApiKey
+            : null) || process.env.OPENAI_API_KEY;
 
         const userText = aggregatedText;
         const currentMessageForGpt = {
@@ -613,13 +612,13 @@ ${safeDnaLines}
                     }
 
                     // 🎯 FAQ RADAR: Save to FAQ engine regardless — unanswered OR answered
-                    const geminiKey = apiKey || activeAiConfig.geminiApiKey || process.env.GEMINI_API_KEY;
-                    if (activeVacancyId && geminiKey) {
+                    const faqApiKey = activeAiConfig.openaiApiKey || process.env.OPENAI_API_KEY;
+                    if (activeVacancyId && faqApiKey) {
                         if (unansweredQ) {
                             // Question has no answer — save as unanswered
                             console.log(`[FAQ Engine] 📡 Capturing UNANSWERED: "${unansweredQ}" → vacancy ${activeVacancyId} `);
                             await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
-                            processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, geminiKey)
+                            processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, faqApiKey)
                                 .then(() => console.log(`[FAQ Engine] ✅ Unanswered question saved`))
                                 .catch(e => console.error('[FAQ Engine] ❌ Cluster Error (unanswered):', e));
                         } else {
@@ -630,7 +629,7 @@ ${safeDnaLines}
                             const isQuestion = questionPatterns.test(userText) && userText.length > 5;
                             if (isQuestion && responseTextVal) {
                                 console.log(`[FAQ Engine] 📝 Recording ANSWERED question: "${userText}"`);
-                                processUnansweredQuestion(activeVacancyId, userText, responseTextVal, geminiKey)
+                                processUnansweredQuestion(activeVacancyId, userText, responseTextVal, faqApiKey)
                                     .then(() => console.log(`[FAQ Engine] ✅ Answered question saved to FAQ log`))
                                     .catch(e => console.error('[FAQ Engine] ❌ Cluster Error (answered):', e));
                             } else {
@@ -638,7 +637,7 @@ ${safeDnaLines}
                             }
                         }
                     } else {
-                        console.warn(`[FAQ Engine] ⚠️ Skipped — missing vacancyId(${activeVacancyId}) or geminiKey`);
+                        console.warn(`[FAQ Engine] ⚠️ Skipped — missing vacancyId(${activeVacancyId}) or openaiKey`);
                     }
                 }
 
@@ -751,7 +750,7 @@ ${safeDnaLines}
         }
 
 
-        // --- BIFURCATION POINT: Silence Shield / Recruiter / GPT Host / Gemini ---
+        // --- BIFURCATION POINT: Silence Shield / Recruiter / GPT Host / GPT Capturista ---
         const bridgeCounter = (typeof candidateData.bridge_counter === 'number') ? parseInt(candidateData.bridge_counter || 0) : 0;
         let isBridgeActive = false;
         let isHostMode = false;
@@ -799,17 +798,17 @@ ${safeDnaLines}
                 }
             } catch (e) {
                 console.error('[GPT Host] error:', e);
-                isHostMode = false; // Fallback to Gemini if OpenAI fails
+                isHostMode = false; // Fallback to GPT Capturista if GPT Host fails
             }
         }
 
-        // 3. CAPTURISTA BRAIN (GEMINI) - Only if not handled by others
+        // 3. CAPTURISTA BRAIN (GPT-4o-mini) - Only if not handled by others
         if (!isRecruiterMode && !isBridgeActive && !isHostMode) {
             try {
                 // 🧠 [SMART CONTEXT]: Detect if categories were already shown to avoid spam
                 const wasCategoriesShown = lastBotMessages.some(m => m.includes('✅') && m.includes('¿Cuál eliges?'));
 
-                // FORCE JSON SCHEMA FOR GEMINI
+                // FORCE JSON SCHEMA
                 systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
 {
   "response_text": "Texto para el usuario",
@@ -853,17 +852,27 @@ ${safeDnaLines}
                 const lastBotMsgsForPrompt = lastBotMessages.slice(-4);
                 systemInstruction += `\n[MEMORIA RECIENTE]: \n${lastBotMsgsForPrompt.length > 0 ? lastBotMsgsForPrompt.map((m, i) => `${i + 1}. "${m}"`).join('\n') : '(Primer contacto)'}\n⚠️ Tu respuesta debe ser TOTALMENTE DIFERENTE a las anteriores.\n`;
 
-                const genAI = new GoogleGenerativeAI(apiKey);
-                const model = genAI.getGenerativeModel({
-                    model: "gemini-2.0-flash",
-                    systemInstruction,
-                    generationConfig: { responseMimeType: "application/json", temperature: 0.8 }
-                });
+                // 🔄 Convert history to OpenAI format
+                const openAIHistory = recentHistory.map(m => ({
+                    role: (m.role === 'model' || m.role === 'assistant') ? 'assistant' : 'user',
+                    content: m.content || m.parts?.[0]?.text || ''
+                }));
+                // Append current user message
+                openAIHistory.push({ role: 'user', content: aggregatedText });
 
-                const chat = model.startChat({ history: recentHistory });
-                const result = await chat.sendMessage(userParts);
-                const textResult = result.response.text();
-                console.log(`[GEMINI RAW] 🤖:`, textResult);
+                const capturistaApiKey = activeAiConfig.openaiApiKey || process.env.OPENAI_API_KEY;
+                const gptResult = await getOpenAIResponse(
+                    openAIHistory,
+                    systemInstruction,
+                    'gpt-4o-mini',
+                    capturistaApiKey,
+                    { type: 'json_object' },
+                    null,
+                    600
+                );
+
+                const textResult = gptResult?.content || '{}';
+                console.log(`[GPT CAPTURISTA] 🤖:`, textResult);
 
                 // 🛡️ [AI GUARDRAIL]
                 const rawJson = AIGuard.sanitizeJSON(textResult);
@@ -872,7 +881,7 @@ ${safeDnaLines}
                     missingFields: audit.missingLabels,
                     lastInput: aggregatedText,
                     isNewFlag: isNewFlag && !botHasSpoken, // 🛡️ Hardened Loop Breaker
-                    candidateName: getFirstName(realName) || realName, // Use first name for context
+                    candidateName: getFirstName(realName) || realName,
                     lastBotMessages: lastBotMessages
                 };
 
@@ -920,7 +929,7 @@ ${safeDnaLines}
                     await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker');
                 }
             } catch (e) {
-                console.error('[GEMINI BRAIN] ❌ Runtime Error:', e);
+                console.error('[GPT CAPTURISTA] ❌ Runtime Error:', e);
                 // Fallback context if loop crashed early
                 const fallbackContext = {
                     isProfileComplete: audit?.paso1Status === 'COMPLETO',
@@ -1021,7 +1030,7 @@ ${safeDnaLines}
             })();
         }
 
-        // 🧬 [STATE SYNC] Ensure we know if they are complete even if we didn't go through Gemini
+        // 🧬 [STATE SYNC] Ensure we know if they are complete even if we didn't go through GPT Capturista
         if (!isNowComplete) {
             const finalAudit = auditProfile({ ...candidateData, ...candidateUpdates }, customFields);
             isNowComplete = finalAudit.paso1Status === 'COMPLETO';
