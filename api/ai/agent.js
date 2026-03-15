@@ -504,16 +504,16 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
 
         if (isJobFaqAnswer) {
             const _faqClosings = [
-                '¿Te gustaría que te agende una cita para entrevista? 🗓️✨',
-                '¿Te apunto para una entrevista? ¡Solo toma un momento! 🚀😊',
-                '¿Quieres que reserve tu lugar para la entrevista? 🎯💼',
-                '¿Avanzamos con tu cita de entrevista? ¡Estás muy cerca! 🌟🙌',
-                '¿Te confirmo tu cita para entrevista? ¡No pierdas tu oportunidad! 💪✅',
-                '¿Procedo a agendar tu entrevista? Es el siguiente paso 🏆😄',
-                '¿Te aparto una cita para que conozcas el equipo? 🤝✨',
-                '¿Quieres que te programe la entrevista hoy mismo? 📅🔥',
-                '¿Listo para dar el siguiente paso? Te agendo la entrevista ahora 💥😎',
-                '¿Te interesa que asegure tu cita de entrevista? ¡Hay lugares disponibles! 🎉👇',
+                '🙋‍♀️ ¿Te gustaría que te agende una cita para entrevista? 🗓️✨',
+                '😊 ¿Te apunto para una entrevista? ¡Solo toma un momento! 🚀',
+                '🙋‍♀️ ¿Quieres que reserve tu lugar para la entrevista? 🎯💼',
+                '😄 ¿Avanzamos con tu cita de entrevista? ¡Estás muy cerca! 🌟🙌',
+                '🙋‍♀️ ¿Te confirmo tu cita para entrevista? ¡No pierdas tu oportunidad! 💪✅',
+                '😊 ¿Procedo a agendar tu entrevista? Es el siguiente paso 🏆',
+                '🙋‍♀️ ¿Te aparto una cita para que conozcas el equipo? 🤝✨',
+                '😄 ¿Quieres que te programe la entrevista hoy mismo? 📅🔥',
+                '🙋‍♀️ ¿Listo para dar el siguiente paso? Te agendo la entrevista ahora 💥',
+                '😊 ¿Te interesa que asegure tu cita de entrevista? ¡Hay lugares disponibles! 🎉',
             ];
             const _closing = _faqClosings[Math.floor(Math.random() * _faqClosings.length)];
             text = text.trimEnd() + '[MSG_SPLIT]' + _closing;
