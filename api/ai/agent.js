@@ -2484,7 +2484,8 @@ ${safeDnaLines}
                 let bypassGpt = false;
 
                 if (isNewFlag) {
-                    if (isGenericStart && auditForMode.missingLabels.length > 0 && !customPrompt) {
+                    if (isGenericStart && auditForMode.missingLabels.length > 0) {
+                        // Bypass works with or without customPrompt — faster (no GPT call) + 2 bubbles
                         bypassGpt = true;
                     } else {
                         const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
