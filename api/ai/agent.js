@@ -2533,7 +2533,7 @@ ${safeDnaLines}
                             const isVacancyQ = /vacante|empleo|trabajo|sueldo|salario|horario|entrevista/i.test(aggregatedText);
                             const isPersonalQ = /cu[aá]ntos a[nñ]os tienes?|qu[eé] edad tienes?|eres casada?|tienes novio?|d[oó]nde vives?|eres de aqu[íi]?|de d[oó]nde eres?|c[oó]mo te llamas?|cu[aá]l es tu nombre?|tienes hijos?|qu[eé] haces cuando|qu[eé] te gusta|cu[aá]nto ganas?|eres bonita?|eres guapa?/i.test(aggregatedText);
                             if (isVacancyQ) {
-                                systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Sigue tu prompt para responder. Usa [MSG_SPLIT] para separar en DOS mensajes: primero tu respuesta sobre vacantes, luego la pregunta del dato faltante con emoji: ${auditForMode.missingLabels[0]}.\n`;
+                                systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Sigue tu prompt para responder con tu personalidad cálida y emojis tiernos. Usa [MSG_SPLIT] para separar en DOS mensajes: primero tu respuesta sobre vacantes (con emoji), luego la pregunta del dato faltante (con emoji): ${auditForMode.missingLabels[0]}.\n`;
                             } else if (isPersonalQ) {
                                 systemInstruction += `\n[NOTA DE CONTEXTO - PREGUNTA PERSONAL]: El candidato hizo una pregunta personal sobre ti. Responde BREVEMENTE (1 línea) de forma humana, carismática y divertida siguiendo tu personalidad — puedes evadir con humor o dar una respuesta corta en personaje. Luego redirige inmediatamente hacia el dato faltante: ${auditForMode.missingLabels[0]}. NO ignores la pregunta personal.\n`;
                             } else {
