@@ -234,6 +234,9 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
             return m[1] >= _todayMxDate;
         });
         const hasFutureCalendarOptions = futureCalendarOptions.length > 0;
+        // Count unique days (for explicit count injection in prompt)
+        const _uniqueDays = [...new Set(futureCalendarOptions.map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; }).filter(Boolean))];
+        const _uniqueDayCount = _uniqueDays.length;
 
         // ── ESCOLARIDAD PRE-MISSION ───────────────────────────────────────────────
         // If escolaridad is missing, inject a top-priority instruction so the
@@ -264,7 +267,8 @@ ${repetitionShield}
 ${hasFutureCalendarOptions
                 ? `⚠️ REGLA ESTRICTA DE AGENDA (FLUJO DE TRES PASOS): Tienes ESTRICTAMENTE PROHIBIDO soltar horarios de golpe y PROHIBIDO cerrar la cita sin confirmar. DEBES seguir esta secuencia exacta:
 
-PASO 1 (OFRECER DÍAS): Si aún no elige día, agrupa TODOS los horarios disponibles y ofrece ESTRICTAMENTE TODOS LOS DÍAS DISPONIBLES como opciones numeradas. TIENES PROHIBIDO OMITIR DÍAS, INCLUSO SI SON FINES DE SEMANA (SÁBADO/DOMINGO) O ESTÁN MUY LEJOS EN EL FUTURO. DEBES MOSTRAR LA LISTA COMPLETA EXACTAMENTE COMO VIENE EN LOS "HORARIOS BRUTOS". 
+PASO 1 (OFRECER DÍAS): Si aún no elige día, agrupa TODOS los horarios disponibles y ofrece ESTRICTAMENTE TODOS LOS DÍAS DISPONIBLES como opciones numeradas. TIENES PROHIBIDO OMITIR DÍAS, INCLUSO SI SON FINES DE SEMANA (SÁBADO/DOMINGO) O ESTÁN MUY LEJOS EN EL FUTURO. DEBES MOSTRAR LA LISTA COMPLETA EXACTAMENTE COMO VIENE EN LOS "HORARIOS BRUTOS".
+🚨 CONTEO OBLIGATORIO: El sistema detecta exactamente ${_uniqueDayCount} DÍA(S) ÚNICO(S) disponibles. Tu lista DEBE tener exactamente ${_uniqueDayCount} opciones. Si listas menos de ${_uniqueDayCount}, CAUSARÁS UN ERROR CRÍTICO.
 🚨 REGLA VISUAL DE DÍAS: DEBES ENVIAR CADA OPCIÓN EN UN RENGLÓN DISTINTO. Tienes ESTRICTAMENTE PROHIBIDO poner dos días en el mismo renglón (ej. "el lunes 2 y martes 3").
 Ejemplo de formato EXACTO que DEBES seguir:
 "Listo [nombre del candidato]
@@ -402,7 +406,7 @@ ${alternatives.length > 0
         // ⚡ All steps use gpt-4o-mini for speed. Cita keeps 700 tokens for scheduling reasoning.
         const isCitaStepModel = (currentStep?.name || '').toLowerCase().includes('cita');
         const selectedModel = 'gpt-4o-mini';
-        const selectedMaxTokens = isCitaStepModel ? 700 : 500;
+        const selectedMaxTokens = isCitaStepModel ? 950 : 500;
 
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
