@@ -2558,12 +2558,14 @@ ${safeDnaLines}
                 let gptResult = null;
 
                 if (bypassGpt) {
-                    const welcomeName = customPrompt ? 'tu reclutadora' : 'la Lic. Brenda Rodríguez';
+                    const welcomeName = customPrompt ? 'tu reclutadora' : 'Brenda Rodríguez';
                     const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
                     const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
+                    const line1 = `¡Hola! ${gEmoji} Soy ${welcomeName}, reclutadora de Candidatic.`;
+                    const line2 = `¿Cómo te llamas? 😊 ¿Me das tu nombre y apellidos?`;
                     gptResult = {
                         content: JSON.stringify({
-                            response_text: `¡Hola! ${gEmoji} Soy Brenda Rodríguez, reclutadora de Candidatic. Para iniciar tu registro, ¿me das tu nombre y apellidos completos? 😊`,
+                            response_text: `${line1}[MSG_SPLIT]${line2}`,
                             extracted_data: {},
                             reaction: '✨',
                             thought_process: "AUTO_GREETING_BYPASS: Fast initial response for generic greeting."
