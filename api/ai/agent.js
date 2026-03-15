@@ -2427,9 +2427,12 @@ ${safeDnaLines}
                     candidateUpdates.esNuevo = 'NO';
                     await updateCandidate(candidateId, { esNuevo: 'NO' });
                 }
-                // Build Instructions
-                const extractionRules = batchConfig.bot_extraction_rules || DEFAULT_EXTRACTION_RULES;
-                systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, categoriesList)}`;
+                // Build Instructions — extraction rules only injected when there is NO custom prompt
+                // (custom prompt owns all behavioral rules; we only add the technical JSON schema + data)
+                if (!customPrompt) {
+                    const extractionRules = batchConfig.bot_extraction_rules || DEFAULT_EXTRACTION_RULES;
+                    systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, categoriesList)}`;
+                }
 
                 // JSON format schema — always required so the code can parse the response
                 systemInstruction += `\n[FORMATO OBLIGATORIO]: Responde SIEMPRE en JSON puro con este esquema:
@@ -2451,7 +2454,7 @@ ${safeDnaLines}
 
                 if (!customPrompt) {
                     // Extended behavior rules — only for bots without a custom prompt
-                    // (custom prompts define their own behavior, these would conflict)
+                    // (custom prompts define their own behavior, code rules would conflict)
                     systemInstruction += `
 [RECONOCIMIENTO DE TURNO Y REGLAS DE NOMBRE]: 
 - Si el usuario provee su nombre o apellidos, extráelo en "extracted_data.nombreReal" formatiendo a Title Case (Ej: "juan perez" -> "Juan Perez").
@@ -2471,27 +2474,8 @@ ${safeDnaLines}
 - **Municipio**: Devuelve ÚNICAMENTE el nombre oficial del municipio sin direcciones completas ni calles.
 - **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado.
 - **Categoría**: Si el candidato escribe "Ayudante", extrae estrictamente "Ayudante General" u otra categoría que haga *match exacto* a la lista. Si opera maquinaria -> "Montacarguista".\n`;
-                } else {
-                    // Slim rules for custom prompt bots — only critical extraction guardrails
-                    systemInstruction += `
-[REGLAS CRÍTICAS DE EXTRACCIÓN]:
-- nombreReal: Title Case. Si el candidato ya tiene nombre y da apellido, combínalos (NO devuelvas solo el apellido).
-- NUNCA extraigas "Brenda" o "Brenda Rodríguez" como nombre del candidato.
-- NUNCA extraigas saludos o frases de cortesía como nombre ("Sí", "Claro", "buenas noches").
-- fechaNacimiento: formato DD/MM/YYYY. Acepta año de 2 dígitos (83 → 1983).
-- citaFecha: formato YYYY-MM-DD. Si ya está en el ADN, RETÉN ese valor siempre.
-- genero: Infiere del nombre. Nunca lo preguntes al candidato.
-- FORMATO CATEGORÍAS: Siempre en lista VERTICAL, una por renglón con ✅ y salto de línea real entre cada opción. NUNCA en párrafo ni separadas por espacios.
-- FORMATO ESCOLARIDAD: Siempre en lista VERTICAL con emoji y salto de línea real entre cada opción:
-🎒 Primaria
-🏫 Secundaria
-🎓 Preparatoria
-📚 Licenciatura
-🛠️ Técnica
-🧠 Posgrado
-- ⚡ PRIORIDAD MENSAJES ROMÁNTICOS/PERSONALES: Si el mensaje del candidato es un halago, piropo, pregunta personal sobre ti ("¿Tienes novio?", "Eres hermosa", "Me gustas") → usa OBLIGATORIAMENTE tus [REGLAS DE LIGUE] del prompt. NO muestres la lista completa de categorías. Solo al final agrega una línea breve como "¿Cuál categoría te va más?" o similar sin la lista.
-`;
                 }
+                // When customPrompt is active: NO behavioral rules injected — the prompt owns everything.
 
 
 
