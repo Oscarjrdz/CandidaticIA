@@ -250,7 +250,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
 [PREGUNTAS FRECUENTES OFICIALES - PRIORIDAD MÁXIMA]:
 ${faqsForPrompt
-                ? `Las siguientes respuestas HAN SIDO APROBADAS. ÚSALAS para responder dudas relacionadas:\n${faqsForPrompt}`
+                ? `Las siguientes respuestas HAN SIDO APROBADAS Y DEBES COPIARLAS TEXTUALMENTE. PROHIBIDO parafrasear o inventar links. Usa EXCLUSIVAMENTE el texto aprobado:\n${faqsForPrompt}`
                 : 'No hay respuestas oficiales registradas aún. Si preguntan algo no listado aquí o abajo, usa el fallback de duda.'}
 
 [DATOS REALES DE LA VACANTE]:

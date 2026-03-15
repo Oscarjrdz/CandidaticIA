@@ -2771,8 +2771,9 @@ ${safeDnaLines}
                 const urlRegex = /https?:\/\/[^\s\)]+/g;
                 const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
                 responseTextVal = responseTextVal
-                    .replace(markdownImageRegex, '')
-                    .replace(urlRegex, '')
+                    .replace(markdownImageRegex, '')  // strip markdown images ![...](url)
+                    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // strip markdown links [text](url) → text
+                    .replace(urlRegex, '')              // strip bare https:// URLs
                     .replace(/\[MSG_SPLIT\]/g, '\u0000SPLIT\u0000') // protect sentinel
                     .replace(/[^\S\n]+/g, ' ')         // collapse horizontal whitespace only (preserve \n)
                     .replace(/\n{3,}/g, '\n\n')        // cap excessive newlines to max 2
