@@ -406,7 +406,7 @@ ${alternatives.length > 0
         // ⚡ All steps use gpt-4o-mini for speed. Cita keeps 700 tokens for scheduling reasoning.
         const isCitaStepModel = (currentStep?.name || '').toLowerCase().includes('cita');
         const selectedModel = 'gpt-4o-mini';
-        const selectedMaxTokens = isCitaStepModel ? 950 : 500;
+        const selectedMaxTokens = isCitaStepModel ? 950 : 700;
 
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
