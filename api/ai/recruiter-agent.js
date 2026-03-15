@@ -250,7 +250,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
 [PREGUNTAS FRECUENTES OFICIALES - PRIORIDAD MÁXIMA]:
 ${faqsForPrompt
-                ? `Las siguientes respuestas HAN SIDO APROBADAS Y DEBES COPIARLAS TEXTUALMENTE. PROHIBIDO parafrasear o inventar links. Usa EXCLUSIVAMENTE el texto aprobado:\n${faqsForPrompt}`
+                ? `Las siguientes respuestas HAN SIDO APROBADAS Y DEBES COPIARLAS TEXTUALMENTE EN response_text. PROHIBIDO parafrasear o poner links/urls en response_text. IMPORTANTE: si la respuesta tiene [MEDIA_DISPONIBLE: url], DEBES copiar esa url en el campo media_url del JSON (esto NO es inventar un link). Usa EXCLUSIVAMENTE el texto aprobado en response_text:\n${faqsForPrompt}`
                 : 'No hay respuestas oficiales registradas aún. Si preguntan algo no listado aquí o abajo, usa el fallback de duda.'}
 
 [DATOS REALES DE LA VACANTE]:
