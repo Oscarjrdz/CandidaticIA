@@ -2515,7 +2515,7 @@ ${safeDnaLines}
                                 .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
                             systemInstruction += `\n[MISION: BIENVENIDA CON PREGUNTA]: Es el primer mensaje. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego responde brevemente la pregunta del candidato con info real. Al final pide el dato faltante: ${auditForMode.missingLabels[0]}.\n${cerebro1Rules}\n`;
                         } else {
-                            systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego en otra línea pide el Nombre Y Apellidos completos del candidato. ✨🌸\n`;
+                            systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego en otra línea pide el Nombre Y Apellidos completos del candidato — siempre incluye al menos un emoji en esa segunda línea. ✨🌸\n`;
                         }
                     }
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
@@ -2562,7 +2562,9 @@ ${safeDnaLines}
                     const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
                     const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
                     const line1 = `¡Hola! ${gEmoji} Soy ${welcomeName}, reclutadora de Candidatic.`;
-                    const line2 = `¿Cómo te llamas? 😊 ¿Me das tu nombre y apellidos?`;
+                    const nameAskEmojis = ["😊", "🌸", "✨", "💖", "😇", "🌟"];
+                    const nEmoji = nameAskEmojis[Math.floor(Math.random() * nameAskEmojis.length)];
+                    const line2 = `¿Me puedes compartir tu Nombre y Apellidos completos? ${nEmoji}`;
                     gptResult = {
                         content: JSON.stringify({
                             response_text: `${line1}[MSG_SPLIT]${line2}`,
