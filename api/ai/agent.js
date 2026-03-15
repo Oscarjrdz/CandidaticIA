@@ -198,11 +198,13 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // 📅 HUMANIZE raw YYYY-MM-DD dates that GPT leaked into the output
     text = text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => humanizeDate(`${y}-${m}-${d}`));
 
-    // 🔧 DATE-EXAMPLE GUARD: Strip "(ej. DD/MM/YYYY)" from messages that are NOT asking for a birth date.
-    // GPT sometimes copies this format into category or municipality questions by mistake.
-    const isBirthDateContext = /fecha|nacimiento|cumplea|cu[aá]ndo naciste|a[nñ]o|nac[íi]|d[íi]a.*mes|cuantos a[nñ]os/i.test(text);
-    if (!isBirthDateContext) {
-        text = text.replace(/\s*\(ej\.?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\)/gi, '');
+    // 🔧 DATE-EXAMPLE GUARD: Strip "(ej. DD/MM/YYYY)" from segments that are NOT about birth date.
+    // Operates per [MSG_SPLIT] segment so "nacimiento" in part 1 doesn't protect part 2 (category question).
+    {
+        const _DATE_EJ_RE = /\s*\(ej\.?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\)/gi;
+        const _DATE_KEYWORDS = /fecha|nacimiento|cumplea|cu[aá]ndo naciste|nac[íi]|d[íi]a.*mes|cuantos a[nñ]os/i;
+        const _segments = text.split('[MSG_SPLIT]');
+        text = _segments.map(seg => _DATE_KEYWORDS.test(seg) ? seg : seg.replace(_DATE_EJ_RE, '')).join('[MSG_SPLIT]');
     }
 
     // 📋 COMBINED DAYS+HORARIO: If GPT merged PASO 1 (days list) and PASO 2 (horarios)
