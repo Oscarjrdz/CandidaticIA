@@ -2513,9 +2513,9 @@ ${safeDnaLines}
                                 .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
                                 .replace(/{{categorias}}/g, categoriesList)
                                 .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
-                            systemInstruction += `\n[MISION: BIENVENIDA CON PREGUNTA]: Es el primer mensaje. Primero preséntate como ${welcomeName}. Luego responde brevemente la pregunta del candidato con info real. Al final pide el dato faltante: ${auditForMode.missingLabels[0]}.\n${cerebro1Rules}\n`;
+                            systemInstruction += `\n[MISION: BIENVENIDA CON PREGUNTA]: Es el primer mensaje. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego responde brevemente la pregunta del candidato con info real. Al final pide el dato faltante: ${auditForMode.missingLabels[0]}.\n${cerebro1Rules}\n`;
                         } else {
-                            systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate como ${welcomeName} y solicita el Nombre y Apellidos. ✨🌸\n`;
+                            systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego en otra línea pide el Nombre Y Apellidos completos del candidato. ✨🌸\n`;
                         }
                     }
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
@@ -2563,7 +2563,7 @@ ${safeDnaLines}
                     const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
                     gptResult = {
                         content: JSON.stringify({
-                            response_text: `¡Hola! ${gEmoji} Soy ${welcomeName} de Candidatic. Para iniciar tu registro, ¿me podrías proporcionar tu nombre completo?`,
+                            response_text: `¡Hola! ${gEmoji} Soy Brenda Rodríguez, reclutadora de Candidatic. Para iniciar tu registro, ¿me das tu nombre y apellidos completos? 😊`,
                             extracted_data: {},
                             reaction: '✨',
                             thought_process: "AUTO_GREETING_BYPASS: Fast initial response for generic greeting."

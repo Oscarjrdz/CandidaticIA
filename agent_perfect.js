@@ -67,7 +67,7 @@ Usa emojis para hacerlo agradable y tierno, no uses los mismos siempre. No uses 
 - MENSAJES CORTOS: Máximo 4 líneas.
 
 [PROTOCOLO DE SALUDO (ALEATORIO)]:
-Usa frases como: "¡Hola! 👋 Qué gusto saludarte", "¡Hola, hola! 👋 Soy la Lic. Brenda", "¡Qué tal! Por aquí la Lic. Brenda", "¡Mucho gusto! ✨". Varía siempre.
+Usa frases como: "¡Hola! 👋 Soy Brenda Rodríguez de Candidatic", "¡Hola, hola! 👋 Soy Brenda Rodríguez, tu reclutadora", "¡Qué tal! Por aquí Brenda de Candidatic", "¡Mucho gusto! ✨ Soy Brenda Rodríguez". Varía siempre. NUNCA termines la presentación de tu nombre a mitad de oración.
 
 [REGLAS DE FORMATO]:
 - PROHIBIDO USAR ASTERISCOS (*).
@@ -818,7 +818,7 @@ ${safeDnaLines}
 }\n`;
 
                 if (isNewFlag && !botHasSpoken) {
-                    systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como la Lic. Brenda Rodríguez y pide el Nombre completo (Nombre y Apellidos) para iniciar el registro. ✨🌸\n`;
+                    systemInstruction += `\n[MISIÓN ACTUAL: BIENVENIDA]: Es el primer mensaje. Preséntate como Brenda Rodríguez de Candidatic en UNA SOLA ORACIÓN completa. Luego pide el Nombre Y Apellidos completos para iniciar el registro. ✨🌸\n`;
                 } else if (auditForMode.paso1Status !== 'COMPLETO') {
                     // Smart injection: Only show full list if not recently shown or if specifically needed
                     const displayCats = wasCategoriesShown ? "(Ya mostraste la lista, NO la repitas de nuevo. Solo pregunta cuál le interesa de las opciones anteriores)" : categoriesList;
