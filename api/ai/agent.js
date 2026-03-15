@@ -2530,7 +2530,7 @@ ${safeDnaLines}
                             } else if (isPersonalQ) {
                                 systemInstruction += `\n[NOTA DE CONTEXTO - PREGUNTA PERSONAL]: El candidato hizo una pregunta personal sobre ti. Responde BREVEMENTE (1 línea) de forma humana, carismática y divertida siguiendo tu personalidad — puedes evadir con humor o dar una respuesta corta en personaje. Luego redirige inmediatamente hacia el dato faltante: ${auditForMode.missingLabels[0]}. NO ignores la pregunta personal.\n`;
                             } else {
-                                systemInstruction += `\n[NOTA DE CONTEXTO]: Dato pendiente de obtener: ${auditForMode.missingLabels[0]}. Termina tu mensaje con esa pregunta.\n`;
+                                systemInstruction += `\n[INSTRUCCIÓN CRÍTICA]: El perfil NO está completo. PROHIBIDO usar mensajes de cierre ("estoy procesando", "te aviso pronto", "perfil listo", etc.). Dato pendiente: ${auditForMode.missingLabels[0]}. Tu mensaje DEBE terminar con la pregunta para obtenerlo.\n`;
                             }
                         } else {
                             systemInstruction += `\n[INSTRUCCIÓN CRÍTICA FINAL]: El perfil está INCOMPLETO. Aún necesitas obtener: ${auditForMode.missingLabels.join(', ')}. TIENES PROHIBIDO despedirte o cerrar la conversación. OBLIGATORIAMENTE tu mensaje debe terminar con una pregunta para obtener el dato principal: ${auditForMode.missingLabels[0]}.\n`;
