@@ -1882,46 +1882,13 @@ ${safeDnaLines}
                     };
 
                     // ── State: has the candidate already selected a date? ────────────
+                    // (Used by BRANCH B to avoid re-offering the day list when GPT already has citaFecha)
                     const _citaFechaStored = candidateData.projectMetadata?.citaFecha
                         || candidateUpdates.projectMetadata?.citaFecha;
 
-                    // ── BRANCH A: Date already chosen → candidate is picking a TIME ──
-                    if (_citaFechaStored && _uDays.includes(_citaFechaStored)) {
-                        const _hoursForStored = _futureDayOpts
-                            .filter(o => o.startsWith(_citaFechaStored))
-                            .map(o => o.replace(_citaFechaStored, '').replace(/^\s*@\s*/, '').trim())
-                            .filter(h => h.length > 0);
-
-                        if (_hoursForStored.length > 0) {
-                            const _ordNumHour = _parseOrdinal(_rawInput);
-                            let _resolvedHour = null;
-                            if (_ordNumHour === -1) _resolvedHour = _hoursForStored[_hoursForStored.length - 1];
-                            else if (_ordNumHour === -2) _resolvedHour = _hoursForStored[_hoursForStored.length - 2] || null;
-                            else if (_ordNumHour && _ordNumHour >= 1 && _ordNumHour <= _hoursForStored.length) _resolvedHour = _hoursForStored[_ordNumHour - 1];
-
-                            // Also try direct time match ("6 am", "8:00", "las 10")
-                            if (!_resolvedHour) {
-                                const _timeMatch = _rawInput.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)?)/i);
-                                if (_timeMatch) {
-                                    const _tCandidate = _timeMatch[1].trim().toLowerCase();
-                                    _resolvedHour = _hoursForStored.find(h => h.toLowerCase().includes(_tCandidate)) || null;
-                                }
-                            }
-
-                            if (_resolvedHour) {
-                                // Hour selected → inject into GPT for final confirmation + move
-                                const _dSt = new Date(parseInt(_citaFechaStored.substr(0,4)), parseInt(_citaFechaStored.substr(5,2))-1, parseInt(_citaFechaStored.substr(8,2)));
-                                const _humanFecha = `${_DN4[_dSt.getDay()]} ${_dSt.getDate()} de ${_MN4[_dSt.getMonth()]}`;
-                                historyForGpt = [
-                                    ...historyForGpt.slice(0, -1),
-                                    { role: 'user', content: `[ELECCIÓN DE HORARIO]: El candidato eligió ${_resolvedHour} del ${_humanFecha}. OBLIGATORIO: 1) Guarda citaFecha="${_citaFechaStored}" y citaHora="${_resolvedHour}" en extracted_data. 2) Confirma la cita con un mensaje cálido y dispara { move }.` }
-                                ];
-                                if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
-                                candidateUpdates.projectMetadata.citaHora = _resolvedHour;
-                            }
-                            // If no hour resolved → let GPT handle naturally
-                        }
-                    }
+                    // NOTE: Hour selection (picking a time from the list) is handled entirely by GPT
+                    // via the PASO 2/3 instructions in recruiter-agent.js. We do NOT intercept it here
+                    // to avoid race conditions when multiple user messages arrive in sequence.
 
                     // ── BRANCH B: No date chosen yet → candidate is picking a DAY ────
                     if (!skipRecruiterInference && !_citaFechaStored) {
