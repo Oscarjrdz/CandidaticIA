@@ -271,6 +271,13 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         }
     }
 
+    // 📅 CALENDAR DAYS LINE GUARD: If GPT put multiple numbered options on the same line
+    // (e.g., "1️⃣ Lunes 10 2️⃣ Martes 11"), split each onto its own line.
+    // Matches any numbered emoji (1️⃣-9️⃣) that appears after non-whitespace content mid-line.
+    if (/[1-9]️⃣/.test(text)) {
+        text = text.replace(/([^\n]) +([1-9]️⃣)/g, '$1\n\n$2');
+    }
+
     // 🏢 VACANCY BUBBLE SPLIT GUARD: If GPT responds about vacantes/entrevistas without [MSG_SPLIT],
     // force a split before the final question so it arrives as 2 separate bubbles.
     if (!text.includes('[MSG_SPLIT]') && /vacante|entrevista|oficina|ubicaci[oó]n|distintas\s+zonas/i.test(text)) {

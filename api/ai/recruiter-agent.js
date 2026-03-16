@@ -238,7 +238,18 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         const _uniqueDays = [...new Set(futureCalendarOptions.map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; }).filter(Boolean))];
         const _uniqueDayCount = _uniqueDays.length;
 
-        // ── ESCOLARIDAD PRE-MISSION ───────────────────────────────────────────────
+        // 📅 PRE-FORMAT DAY LIST: Build the exact formatted list in code so GPT just copies it.
+        // This prevents GPT from omitting days or merging them on the same line.
+        const _DAYS_ES_RA = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+        const _MONTHS_ES_RA = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        const _NUM_EMOJIS = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+        const _preFormattedDayList = _uniqueDays.map((dayStr, i) => {
+            const d = new Date(parseInt(dayStr.substr(0,4)), parseInt(dayStr.substr(5,2))-1, parseInt(dayStr.substr(8,2)));
+            const humanDay = `${_DAYS_ES_RA[d.getDay()]} ${d.getDate()} de ${_MONTHS_ES_RA[d.getMonth()]}`;
+            return `📅 ${_NUM_EMOJIS[i] || `${i+1}.`} ${humanDay}`;
+        }).join('\n\n');
+
+
         // If escolaridad is missing, inject a top-priority instruction so the
         // recruiter asks for it BEFORE presenting vacancies.
         const escolaridadMission = !candidateData.escolaridad
@@ -267,20 +278,15 @@ ${repetitionShield}
 ${hasFutureCalendarOptions
                 ? `⚠️ REGLA ESTRICTA DE AGENDA (FLUJO DE TRES PASOS): Tienes ESTRICTAMENTE PROHIBIDO soltar horarios de golpe y PROHIBIDO cerrar la cita sin confirmar. DEBES seguir esta secuencia exacta:
 
-PASO 1 (OFRECER DÍAS): Si aún no elige día, agrupa TODOS los horarios disponibles y ofrece ESTRICTAMENTE TODOS LOS DÍAS DISPONIBLES como opciones numeradas. TIENES PROHIBIDO OMITIR DÍAS, INCLUSO SI SON FINES DE SEMANA (SÁBADO/DOMINGO) O ESTÁN MUY LEJOS EN EL FUTURO. DEBES MOSTRAR LA LISTA COMPLETA EXACTAMENTE COMO VIENE EN LOS "HORARIOS BRUTOS".
-🚨 CONTEO OBLIGATORIO: El sistema detecta exactamente ${_uniqueDayCount} DÍA(S) ÚNICO(S) disponibles. Tu lista DEBE tener exactamente ${_uniqueDayCount} opciones. Si listas menos de ${_uniqueDayCount}, CAUSARÁS UN ERROR CRÍTICO.
-🚨 REGLA VISUAL DE DÍAS: DEBES ENVIAR CADA OPCIÓN EN UN RENGLÓN DISTINTO. Tienes ESTRICTAMENTE PROHIBIDO poner dos días en el mismo renglón (ej. "el lunes 2 y martes 3").
-Ejemplo de formato EXACTO que DEBES seguir:
-"Listo [nombre del candidato]
-Tengo entrevistas los días:
+PASO 1 (OFRECER DÍAS): Si aún no elige día, usa EXACTAMENTE la siguiente lista pre-generada por el sistema — PROHIBIDO cambiarla, abreviarla u omitir opciones:
 
-📅 1️⃣ Lunes 2 de Marzo
+${_preFormattedDayList}
 
-📅 2️⃣ Martes 3 de Marzo
+¿Qué día prefieres?
 
-📅 3️⃣ Jueves 5 de Marzo
+Tu mensaje DEBE comenzar con un saludo breve (ej. "Listo ${candidateData.nombreReal || 'Oscar'}"), luego "Tengo entrevistas los días:", y DESPUÉS copiar la lista completa de arriba SIN MODIFICARLA. PROHIBIDO fusionar opciones en un mismo renglón.
+🚨 CONTEO OBLIGATORIO: La lista tiene exactamente ${_uniqueDayCount} DÍA(S). Si envías menos, CAUSARÁS UN ERROR CRÍTICO.
 
-¿Qué día prefieres?"
 
 🔄 REGLA DE DESAMBIGUACIÓN (CRÍTICA): Si los horarios brutos contienen DOS O MÁS fechas con el MISMO nombre de día (ej. dos Jueves, dos Miércoles), y el candidato dice solo ese nombre de día ("jueves", "miércoles") SIN especificar cuál, tienes ESTRICTAMENTE PROHIBIDO asumir una fecha. DEBES responder preguntando cuál de los [X] [día] prefiere, listando cada fecha con su número de día completo:
 Ejemplo: "¿Cuál de los dos jueves prefieres?
