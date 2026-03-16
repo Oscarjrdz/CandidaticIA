@@ -1796,32 +1796,195 @@ ${safeDnaLines}
                     ];
                 }
 
-                // 🔢 CITA OPTION RESOLVER: Translate "opcion N" / bare number to the actual day.
-                // GPT can't resolve numbered list options to dates; we do it deterministically.
+                // ═══════════════════════════════════════════════════════════════════
+                // 📅 CITA STEP RESOLVER: Deterministic day + time selection
+                // Handles: numbers (1-6), ordinals (primero/último/penúltimo),
+                //          day names (viernes → ambiguous → sub-list),
+                //          hour selection for already-selected date.
+                // Only runs in steps with future calendarOptions.
+                // ═══════════════════════════════════════════════════════════════════
                 const _stepHasFutureDatesForOpt = (currentStep.calendarOptions || []).some(opt => {
                     const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
-                    return !m || m[1] >= _todayStrCs;
+                    return m && m[1] >= _todayStrCs;
                 });
+
                 if (!skipRecruiterInference && _stepHasFutureDatesForOpt) {
-                    const _optMatch = aggregatedText.trim().match(/^(?:opci[oó]n?\s*)?([1-9])\s*\.?$/i);
-                    if (_optMatch) {
-                        const _optNum = parseInt(_optMatch[1]);
-                        const _futureDayOpts = (currentStep.calendarOptions || []).filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return !m || m[1] >= _todayStrCs; });
-                        const _uDays = [...new Set(_futureDayOpts.map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; }).filter(Boolean))];
-                        if (_optNum >= 1 && _optNum <= _uDays.length) {
-                            const _selDate = _uDays[_optNum - 1];
-                            const _D2 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-                            const _M2 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                            const _d2 = new Date(parseInt(_selDate.substr(0,4)), parseInt(_selDate.substr(5,2))-1, parseInt(_selDate.substr(8,2)));
-                            const _humanSel = `${_D2[_d2.getDay()]} ${_d2.getDate()} de ${_M2[_d2.getMonth()]}`;
-                            historyForGpt = [
-                                ...historyForGpt.slice(0, -1),
-                                { role: 'user', content: `[ELECCIÓN DE DÍA]: El candidato eligió la opción ${_optNum} = ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles para ese día (PASO 2). NO pidas confirmación del día todavía.` }
-                            ];
+                    const _rawInput = aggregatedText.trim().toLowerCase();
+                    const _futureDayOpts = (currentStep.calendarOptions || [])
+                        .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m && m[1] >= _todayStrCs; });
+                    const _uDays = [...new Set(_futureDayOpts
+                        .map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; })
+                        .filter(Boolean)
+                    )];
+                    const _DN4 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                    const _MN4 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                    const _NE4 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                    const _fn4 = (candidateData.nombreReal || candidateData.nombre || '').split(' ')[0];
+
+                    // ── Helper: parse user input as a 1-based list index ──────────────
+                    const _parseOrdinal = (txt) => {
+                        const _cleanTxt = txt.replace(/^(?:la?\s+)?(?:opci[oó]n?\s*)?/i, '').trim();
+                        const _ordMap = {
+                            'primer': 1, 'primero': 1, 'uno': 1, '1': 1,
+                            'segundo': 2, 'dos': 2, '2': 2,
+                            'tercero': 3, 'tres': 3, '3': 3,
+                            'cuarto': 4, 'cuatro': 4, '4': 4,
+                            'quinto': 5, 'cinco': 5, '5': 5,
+                            'sexto': 6, 'seis': 6, '6': 6,
+                            'séptimo': 7, 'septimo': 7, 'siete': 7, '7': 7,
+                            'octavo': 8, 'ocho': 8, '8': 8,
+                            'noveno': 9, 'nueve': 9, '9': 9,
+                        };
+                        if (_ordMap[_cleanTxt] !== undefined) return _ordMap[_cleanTxt];
+                        if (/^[uú]ltimo?$/i.test(_cleanTxt)) return -1;   // last
+                        if (/^pen[uú]ltimo?$/i.test(_cleanTxt)) return -2; // second to last
+                        const numMatch = _cleanTxt.match(/^(\d+)\.?$/);
+                        if (numMatch) return parseInt(numMatch[1]);
+                        return null;
+                    };
+
+                    // ── Helper: build hour list for a given date ─────────────────────
+                    const _buildHourList = (dateStr, fname) => {
+                        const _hours = _futureDayOpts
+                            .filter(o => o.startsWith(dateStr))
+                            .map(o => o.replace(dateStr, '').trim())
+                            .filter(h => h.length > 0)
+                            .sort();
+                        const _d = new Date(parseInt(dateStr.substr(0,4)), parseInt(dateStr.substr(5,2))-1, parseInt(dateStr.substr(8,2)));
+                        const _humanDate = `${_DN4[_d.getDay()]} ${_d.getDate()} de ${_MN4[_d.getMonth()]}`;
+                        if (_hours.length === 0) return null; // No hours configured — let GPT handle
+
+                        const _hourLines = _hours.map((h, i) => `${_NE4[i] || `${i+1}.`} ${h} ⏰`).join('\n');
+                        return `${fname ? `${fname}, estos` : 'Estos'} son los horarios para el ${_humanDate}:\n\n${_hourLines}\n\n¿En cuál horario te queda mejor? 😊`;
+                    };
+
+                    // ── Helper: day-of-week from day name ────────────────────────────
+                    const _parseDayName = (txt) => {
+                        const _dayNames = {
+                            'lun': 1, 'lunes': 1,
+                            'mar': 2, 'martes': 2,
+                            'mie': 3, 'mié': 3, 'miercoles': 3, 'miércoles': 3,
+                            'jue': 4, 'jueves': 4,
+                            'vie': 5, 'viernes': 5,
+                            'sab': 6, 'sáb': 6, 'sabado': 6, 'sábado': 6,
+                            'dom': 0, 'domingo': 0,
+                        };
+                        const _norm = txt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+                        for (const [key, val] of Object.entries(_dayNames)) {
+                            if (_norm === key || _norm.startsWith(key + ' ') || _norm.startsWith(key + ',')) return val;
+                        }
+                        return null;
+                    };
+
+                    // ── State: has the candidate already selected a date? ────────────
+                    const _citaFechaStored = candidateData.projectMetadata?.citaFecha
+                        || candidateUpdates.projectMetadata?.citaFecha;
+
+                    // ── BRANCH A: Date already chosen → candidate is picking a TIME ──
+                    if (_citaFechaStored && _uDays.includes(_citaFechaStored)) {
+                        const _hoursForStored = _futureDayOpts
+                            .filter(o => o.startsWith(_citaFechaStored))
+                            .map(o => o.replace(_citaFechaStored, '').trim())
+                            .filter(h => h.length > 0);
+
+                        if (_hoursForStored.length > 0) {
+                            const _ordNumHour = _parseOrdinal(_rawInput);
+                            let _resolvedHour = null;
+                            if (_ordNumHour === -1) _resolvedHour = _hoursForStored[_hoursForStored.length - 1];
+                            else if (_ordNumHour === -2) _resolvedHour = _hoursForStored[_hoursForStored.length - 2] || null;
+                            else if (_ordNumHour && _ordNumHour >= 1 && _ordNumHour <= _hoursForStored.length) _resolvedHour = _hoursForStored[_ordNumHour - 1];
+
+                            // Also try direct time match ("6 am", "8:00", "las 10")
+                            if (!_resolvedHour) {
+                                const _timeMatch = _rawInput.match(/(\d{1,2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)?)/i);
+                                if (_timeMatch) {
+                                    const _tCandidate = _timeMatch[1].trim().toLowerCase();
+                                    _resolvedHour = _hoursForStored.find(h => h.toLowerCase().includes(_tCandidate)) || null;
+                                }
+                            }
+
+                            if (_resolvedHour) {
+                                // Hour selected → inject into GPT for final confirmation + move
+                                const _dSt = new Date(parseInt(_citaFechaStored.substr(0,4)), parseInt(_citaFechaStored.substr(5,2))-1, parseInt(_citaFechaStored.substr(8,2)));
+                                const _humanFecha = `${_DN4[_dSt.getDay()]} ${_dSt.getDate()} de ${_MN4[_dSt.getMonth()]}`;
+                                historyForGpt = [
+                                    ...historyForGpt.slice(0, -1),
+                                    { role: 'user', content: `[ELECCIÓN DE HORARIO]: El candidato eligió ${_resolvedHour} del ${_humanFecha}. OBLIGATORIO: 1) Guarda citaFecha="${_citaFechaStored}" y citaHora="${_resolvedHour}" en extracted_data. 2) Confirma la cita con un mensaje cálido y dispara { move }.` }
+                                ];
+                                if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
+                                candidateUpdates.projectMetadata.citaHora = _resolvedHour;
+                            }
+                            // If no hour resolved → let GPT handle naturally
+                        }
+                    }
+
+                    // ── BRANCH B: No date chosen yet → candidate is picking a DAY ────
+                    if (!skipRecruiterInference && !_citaFechaStored) {
+                        let _resolvedDayIdx = null; // index in _uDays (0-based)
+
+                        // 1) Try ordinal / number
+                        const _ordNum = _parseOrdinal(_rawInput);
+                        if (_ordNum !== null) {
+                            if (_ordNum === -1) _resolvedDayIdx = _uDays.length - 1;
+                            else if (_ordNum === -2) _resolvedDayIdx = Math.max(0, _uDays.length - 2);
+                            else if (_ordNum >= 1 && _ordNum <= _uDays.length) _resolvedDayIdx = _ordNum - 1;
+                        }
+
+                        // 2) Try day name
+                        if (_resolvedDayIdx === null) {
+                            const _dayOfWeek = _parseDayName(_rawInput);
+                            if (_dayOfWeek !== null) {
+                                const _matchingIdxs = _uDays
+                                    .map((ds, i) => {
+                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                        return d.getDay() === _dayOfWeek ? i : -1;
+                                    })
+                                    .filter(i => i !== -1);
+
+                                if (_matchingIdxs.length === 1) {
+                                    _resolvedDayIdx = _matchingIdxs[0];
+                                } else if (_matchingIdxs.length > 1) {
+                                    // AMBIGUOUS — show sub-list of matching days
+                                    skipRecruiterInference = true;
+                                    const _dayNameLabel = _DN4[_uDays.map((ds, i) => {
+                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                        return d.getDay();
+                                    })[_matchingIdxs[0]]];
+                                    const _subLines = _matchingIdxs.map((dIdx, i) => {
+                                        const ds = _uDays[dIdx];
+                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                        return `${_NE4[i] || `${i+1}.`} ${_DN4[d.getDay()]} ${d.getDate()} de ${_MN4[d.getMonth()]} 📅`;
+                                    }).join('\n');
+                                    responseTextVal = `Hay ${_matchingIdxs.length} ${_dayNameLabel.toLowerCase()}s disponibles${_fn4 ? `, ${_fn4}` : ''}. ¿Cuál de los dos?\n\n${_subLines}`;
+                                    aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:ambiguous_day_name' };
+                                }
+                            }
+                        }
+
+                        // 3) If resolved (unambiguous) → show hour list
+                        if (_resolvedDayIdx !== null && !skipRecruiterInference) {
+                            const _selDate = _uDays[_resolvedDayIdx];
+                            const _hourListMsg = _buildHourList(_selDate, _fn4);
+
+                            if (_hourListMsg) {
+                                skipRecruiterInference = true;
+                                responseTextVal = _hourListMsg;
+                                aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:day_resolved_show_hours' };
+                                // Save selected date to state
+                                if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
+                                candidateUpdates.projectMetadata.citaFecha = _selDate;
+                            } else {
+                                // Hours not configured for this day — inject into GPT
+                                const _d2 = new Date(parseInt(_selDate.substr(0,4)), parseInt(_selDate.substr(5,2))-1, parseInt(_selDate.substr(8,2)));
+                                const _humanSel = `${_DN4[_d2.getDay()]} ${_d2.getDate()} de ${_MN4[_d2.getMonth()]}`;
+                                historyForGpt = [
+                                    ...historyForGpt.slice(0, -1),
+                                    { role: 'user', content: `[ELECCIÓN DE DÍA]: El candidato eligió ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles.` }
+                                ];
+                            }
                         }
                     }
                 }
-
 
 
 
