@@ -214,6 +214,11 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     text = text.replace(/¿[Dd][oó]nde\s+vives(\s+actualmente)?\s*\?/g, '¿En qué municipio vives$1?');
     text = text.replace(/¿[Pp]odr[íi]as?\s+dec[íi]rmelo\s*\?/g, '¿En qué municipio vives actualmente?');
     text = text.replace(/¿[Mm]e\s+lo\s+(dices?|compartes?|puedes?\s+decir)\s*\?/g, '¿En qué municipio vives actualmente?');
+    // Strip vague catch-all questions when context is asking for municipio
+    if (/municipio/i.test(text)) {
+        text = text.replace(/¿[Mm]e\s+ayudas\s+con\s+eso\s*\?/g, '¿En qué municipio vives actualmente?');
+        text = text.replace(/¿[Mm]e\s+puedes?\s+(?:ayudar|decir)(?:\s+con\s+eso)?\s*\?/g, '¿En qué municipio vives actualmente?');
+    }
     // Strip parenthetical hints GPT adds to municipio questions, e.g. "(nombre del municipio)", "(ej. Monterrey)"
     text = text.replace(/(\bmunicipio\b[^?]*)\s*\([^)]{3,40}\)/gi, '$1');
 
@@ -281,14 +286,20 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // 🏢 VACANCY BUBBLE SPLIT GUARD: If GPT responds about vacantes/entrevistas without [MSG_SPLIT],
     // force a split before the final question/request so it arrives as 2 separate bubbles.
     if (!text.includes('[MSG_SPLIT]') && /vacante|entrevista|oficina|ubicaci[oó]n|distintas\s+zonas/i.test(text)) {
-        // Try Spanish question first (¿...?)
-        let _vSplitMatch = text.match(/([\s\S]*?)(\s*¿[^?]+\?)\s*$/s);
-        // Fallback: split before imperative data requests ("dime tu X", "necesito tu X", "comparte tu X")
-        if (!_vSplitMatch) {
-            _vSplitMatch = text.match(/([\s\S]*?)(\s*(?:dime|dame|comparte|necesito|podrías darme|me dices)\s+tu\s+[\w\s]{3,50}[^.]*[.!🌸💖✨🌟😊]?)\s*$/is);
-        }
-        if (_vSplitMatch && _vSplitMatch[1].trim().length > 10) {
-            text = _vSplitMatch[1].trim() + '[MSG_SPLIT]' + _vSplitMatch[2].trim();
+        // Use lastIndexOf to find the last ¿ — tolerates emojis/spaces after the closing ?
+        const _lastBrk = text.lastIndexOf('¿');
+        if (_lastBrk > 10) {
+            const _before = text.substring(0, _lastBrk).trimEnd();
+            const _question = text.substring(_lastBrk).trim();
+            if (_before.length > 10) {
+                text = _before + '[MSG_SPLIT]' + _question;
+            }
+        } else {
+            // Fallback: split before imperative data requests
+            const _imp = text.match(/([\s\S]*?)((?:dime|dame|comparte|necesito|me puedes dar)\s+tu\s+[\w\s]{3,50})/i);
+            if (_imp && _imp[1].trim().length > 10) {
+                text = _imp[1].trim() + '[MSG_SPLIT]' + _imp[2].trim() + text.substring((_imp.index || 0) + _imp[0].length);
+            }
         }
     }
 
