@@ -2459,7 +2459,8 @@ ${safeDnaLines}
   },
   "reaction": "Emoji o null",
   "thought_process": "Breve nota interna"
-}`;
+}
+SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, escribe el texto literal [MSG_SPLIT] dentro de response_text como separador. Ej: "Primera burbuja.[MSG_SPLIT]Segunda burbuja." El sistema lo divide y envía por separado.`;
 
                 if (!customPrompt) {
                     // Extended behavior rules — only for bots without a custom prompt
