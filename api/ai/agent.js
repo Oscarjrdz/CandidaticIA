@@ -230,6 +230,10 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // Strip parenthetical hints GPT adds to municipio questions, e.g. "(nombre del municipio)", "(ej. Monterrey)"
     text = text.replace(/(\bmunicipio\b[^?]*)\s*\([^)]{3,40}\)/gi, '$1');
 
+    // 💼 VACANCY QUESTION WORDING GUARD: 'favorita' doesn't fit a job context — replace with professional phrasing.
+    text = text.replace(/¿[Cc]u[aá]l\s+es\s+tu\s+favorita\s*\?/g, '¿En cuál te interesa trabajar?');
+    text = text.replace(/¿[Cc]u[aá]l\s+(?:de\s+(?:ellas|ellos|estas|estas\s+opciones)\s+)?(?:es\s+tu\s+favorita|te\s+gusta\s+m[aá]s|prefieres)\s*\?/gi, '¿En cuál te interesa trabajar?');
+
     // 🎓 ESCOLARIDAD EMOJIS NORMALIZER: Fix wrong emojis GPT uses for the education list.
     if (/Primaria|Secundaria|Preparatoria|Licenciatura|T[eé]cnica|Posgrado/i.test(text)) {
         text = text.replace(/^[^\w\n\r\[]*Primaria\b/gm,     '🎒 Primaria');
@@ -305,9 +309,9 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         }
     }
 
-    // 🏢 VACANCY BUBBLE SPLIT GUARD: If GPT responds about vacantes/entrevistas without [MSG_SPLIT],
-    // force a split before the final question/request so it arrives as 2 separate bubbles.
-    if (!text.includes('[MSG_SPLIT]') && /vacante|entrevista|oficina|ubicaci[oó]n|distintas\s+zonas/i.test(text)) {
+    // 🏢 VACANCY BUBBLE SPLIT GUARD: If GPT responds about vacantes/entrevistas OR a vacancy list (✅ items)
+    // without [MSG_SPLIT], force a split before the final question so it arrives as 2 separate bubbles.
+    if (!text.includes('[MSG_SPLIT]') && (/vacante|entrevista|oficina|ubicaci[oó]n|distintas\s+zonas/i.test(text) || (text.match(/✅/g) || []).length >= 3)) {
         // Use lastIndexOf to find the last ¿ — tolerates emojis/spaces after the closing ?
         const _lastBrk = text.lastIndexOf('¿');
         if (_lastBrk > 10) {
