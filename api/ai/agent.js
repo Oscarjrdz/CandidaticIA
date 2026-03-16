@@ -252,33 +252,33 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         } while (text !== _prev);
     }
 
-    // 📚 ESCOLARIDAD SPLIT GUARD v2: Guarantees 3 bubbles for escolaridad.
-    // Bubble 1 = intro acknowledgment, Bubble 2 = list, Bubble 3 = push nudge (separate).
+    // 📚 ESCOLARIDAD SPLIT GUARD v3: Guarantees EXACTLY 3 bubbles for escolaridad.
+    // Bubble 1 = intro, Bubble 2 = list, Bubble 3 = ONE question/nudge. No more, no less.
     {
         const _ESC_LIST_RE = /🎒\s*Primaria/;
         if (_ESC_LIST_RE.test(text)) {
-            // Step 1: Ensure MSG_SPLIT before the list
+            // Step 1: Ensure MSG_SPLIT before the list exists
             if (!text.includes('[MSG_SPLIT]')) {
                 text = text.replace(/(🎒\s*Primaria)/, '[MSG_SPLIT]$1');
             }
-            // Step 2: Find the escolaridad list part and extract its trailing question into bubble 3
             const _segs = text.split('[MSG_SPLIT]');
             const _listIdx = _segs.findIndex(s => _ESC_LIST_RE.test(s));
             if (_listIdx !== -1) {
+                // Step 2: Clean trailing question from list itself
                 const _lines = _segs[_listIdx].trimEnd().split('\n');
                 const _lastLine = (_lines[_lines.length - 1] || '').trim();
-                const _nextSeg = (_segs[_listIdx + 1] || '').trim();
-                const _nextIsQuestion = /^¿/.test(_nextSeg) || /[?？]$/.test(_nextSeg);
-                // If last line of list is a question, move it to its own bubble
-                const _isQuestion = (/[?？]$/.test(_lastLine) || /^¿/.test(_lastLine)) && _lines.length > 1;
-                if (_isQuestion) {
+                const _listEndsWithQ = (/[?？]$/.test(_lastLine) || /^¿/.test(_lastLine)) && _lines.length > 1;
+                if (_listEndsWithQ) {
                     _segs[_listIdx] = _lines.slice(0, -1).join('\n').trimEnd();
-                    _segs.splice(_listIdx + 1, 0, _lastLine);
-                } else if (!_nextIsQuestion) {
-                    // Only add nudge if there's no question bubble already after the list
-                    const _nudges = ['¿Cuál es la tuya? 🌟', '¡Elige la que más te identifica! 😊', '¿Cuál eliges? ✨'];
-                    _segs.splice(_listIdx + 1, 0, _nudges[Math.floor(Math.random() * _nudges.length)]);
                 }
+                // Step 3: Gather all segments after the list → keep exactly 1
+                const _afterList = _segs.splice(_listIdx + 1);
+                const _firstAfter = _afterList.find(s => s.trim().length > 0) || '';
+                // If no useful segment after list, add a nudge
+                const _finalNudge = _firstAfter.trim() || (
+                    _listEndsWithQ ? _lastLine : '¿Cuál es la tuya? 🌟'
+                );
+                _segs.push(_finalNudge.trim());
                 text = _segs.join('[MSG_SPLIT]');
             }
         }
