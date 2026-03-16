@@ -1795,10 +1795,15 @@ ${safeDnaLines}
 
                 const _isNegativeCs = /^(no|nel|nope|nah|para\s+nada|no\s+quiero|mejor\s+no|paso|ahorita\s+no|por\s+ahora\s+no|no\s+gracias|gracias\s+pero\s+no|no\s+me\s+interesa|no\s+puedo)\s*[.!]*$/i.test(aggregatedText.trim());
 
-                // 🛡️ STEP GUARD: Bypass only applies in Inicio/Filtro/Contacto steps.
-                // In Cita/Citados steps, the normal recruiter flow handles everything.
-                const _bypassApplicableStep = /filtro|inicio|contacto/i.test((currentStep?.name || '').toLowerCase())
-                    && !/cita|citado/i.test((currentStep?.name || '').toLowerCase());
+                // 🛡️ STEP GUARD: Bypass applies when the current step has NO future calendar slots.
+                // Robust — doesn't depend on step name. If this step HAS future dates, it's a scheduling
+                // step itself and the normal recruiter flow handles confirmation (not this bypass).
+                const _currentStepHasFutureDatesCs = (currentStep?.calendarOptions || []).some(opt => {
+                    const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
+                    return !m || m[1] >= _todayStrCs;
+                });
+                const _bypassApplicableStep = !_currentStepHasFutureDatesCs;
+
 
                 if (!skipRecruiterInference && _botAskedScheduling && _bypassApplicableStep) {
                     if (_isAffirmativeCs) {
