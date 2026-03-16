@@ -2495,7 +2495,7 @@ ${safeDnaLines}
                                     const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
                                     return `${_NE3[i] || `${i+1}.`} ${_DN3[d.getDay()]} ${d.getDate()} de ${_MN3[d.getMonth()]} 📅`;
                                 }).join('\n\n');
-                                const _dayListMsg = `Tengo entrevistas los días${_fn3 ? `, ${_fn3}` : ''}:\n\n${_dayLines3}`;
+                                const _dayListMsg = `${_fn3 ? `${_fn3}, t` : 'T'}engo entrevistas los días:\n\n${_dayLines3}`;
                                 const _dayAskMsg = `¿En cuál día te queda mejor? 😊`;
 
                                 await new Promise(r => setTimeout(r, 800));
