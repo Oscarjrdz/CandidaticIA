@@ -1795,7 +1795,12 @@ ${safeDnaLines}
 
                 const _isNegativeCs = /^(no|nel|nope|nah|para\s+nada|no\s+quiero|mejor\s+no|paso|ahorita\s+no|por\s+ahora\s+no|no\s+gracias|gracias\s+pero\s+no|no\s+me\s+interesa|no\s+puedo)\s*[.!]*$/i.test(aggregatedText.trim());
 
-                if (!skipRecruiterInference && _botAskedScheduling) {
+                // 🛡️ STEP GUARD: Bypass only applies in Inicio/Filtro/Contacto steps.
+                // In Cita/Citados steps, the normal recruiter flow handles everything.
+                const _bypassApplicableStep = /filtro|inicio|contacto/i.test((currentStep?.name || '').toLowerCase())
+                    && !/cita|citado/i.test((currentStep?.name || '').toLowerCase());
+
+                if (!skipRecruiterInference && _botAskedScheduling && _bypassApplicableStep) {
                     if (_isAffirmativeCs) {
                         // ✅ AFFIRMATIVE: Move candidate to Cita step, send day list immediately
                         skipRecruiterInference = true;
@@ -1825,12 +1830,17 @@ ${safeDnaLines}
                                 responseTextVal = `¡Con gusto${_fname ? `, ${_fname}` : ''}! Me pongo en contacto contigo para confirmar la fecha de tu entrevista. 📅`;
                             }
                             aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'BYPASS:cita_affirmative_deterministic' };
-                            // Move candidate to Cita step NOW
-                            await moveCandidateStep(activeProjectId, candidateId, _citaStep.id);
-                            recruiterTriggeredMove = true;
-                            candidateUpdates.stepId = _citaStep.id;
-                            candidateUpdates.projectId = activeProjectId;
-                            clearCitaPendingFlag(redis, candidateId).catch(() => {});
+                            // Move candidate to Cita step NOW (with error handling)
+                            try {
+                                await moveCandidateStep(activeProjectId, candidateId, _citaStep.id);
+                                recruiterTriggeredMove = true;
+                                candidateUpdates.stepId = _citaStep.id;
+                                candidateUpdates.projectId = activeProjectId;
+                                clearCitaPendingFlag(redis, candidateId).catch(() => {});
+                            } catch (_moveErr) {
+                                console.error('[CITA BYPASS] moveCandidateStep failed:', _moveErr.message);
+                                // Still send the day list — candidate will be moved on next message
+                            }
                         }
 
                     } else if (_isNegativeCs) {
@@ -1845,18 +1855,11 @@ ${safeDnaLines}
                         responseTextVal = _noResponses[Math.floor(Math.random() * _noResponses.length)];
                         aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'BYPASS:cita_negative_deterministic' };
 
-                    } else {
-                        // 🔄 OFF-TOPIC / QUESTION: Inject context hint so GPT answers THEN re-asks
-                        // (Let processRecruiterMessage handle normally — don't skip GPT)
-                        historyForGpt = [
-                            ...historyForGpt.slice(0, -1),
-                            {
-                                role: 'user',
-                                content: `[CONTEXTO]: El candidato respondió "${aggregatedText}" en lugar de confirmar la cita. Si es una duda o pregunta, resuélvela brevemente y termina preguntando nuevamente si quiere agendar. PROHIBIDO olvidar la oferta de cita.`
-                            }
-                        ];
                     }
+                    // OFF-TOPIC / QUESTION: Let GPT handle normally — do NOT inject confusing context.
+                    // (processRecruiterMessage runs unchanged)
                 }
+
 
                 // 🔢 CITA OPTION RESOLVER: Translate "opcion N" / bare number to the actual day.
                 // GPT can't resolve numbered list options to dates; we do it deterministically.
