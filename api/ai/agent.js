@@ -1824,21 +1824,21 @@ ${safeDnaLines}
 
                     // ── Helper: parse user input as a 1-based list index ──────────────
                     const _parseOrdinal = (txt) => {
-                        const _cleanTxt = txt.replace(/^(?:la?\s+)?(?:opci[oó]n?\s*)?/i, '').trim();
+                        const _cleanTxt = txt.replace(/^(?:[el]a?\s+)?(?:opci[oó]n?\s*)?/i, '').trim();
                         const _ordMap = {
-                            'primer': 1, 'primero': 1, 'uno': 1, '1': 1,
-                            'segundo': 2, 'dos': 2, '2': 2,
-                            'tercero': 3, 'tres': 3, '3': 3,
-                            'cuarto': 4, 'cuatro': 4, '4': 4,
-                            'quinto': 5, 'cinco': 5, '5': 5,
-                            'sexto': 6, 'seis': 6, '6': 6,
-                            'séptimo': 7, 'septimo': 7, 'siete': 7, '7': 7,
-                            'octavo': 8, 'ocho': 8, '8': 8,
-                            'noveno': 9, 'nueve': 9, '9': 9,
+                            'primer': 1, 'primero': 1, 'primera': 1, 'uno': 1, '1': 1,
+                            'segundo': 2, 'segunda': 2, 'dos': 2, '2': 2,
+                            'tercero': 3, 'tercera': 3, 'tres': 3, '3': 3,
+                            'cuarto': 4, 'cuarta': 4, 'cuatro': 4, '4': 4,
+                            'quinto': 5, 'quinta': 5, 'cinco': 5, '5': 5,
+                            'sexto': 6, 'sexta': 6, 'seis': 6, '6': 6,
+                            'séptimo': 7, 'séptima': 7, 'septimo': 7, 'septima': 7, 'siete': 7, '7': 7,
+                            'octavo': 8, 'octava': 8, 'ocho': 8, '8': 8,
+                            'noveno': 9, 'novena': 9, 'nueve': 9, '9': 9,
                         };
                         if (_ordMap[_cleanTxt] !== undefined) return _ordMap[_cleanTxt];
-                        if (/^[uú]ltimo?$/i.test(_cleanTxt)) return -1;   // last
-                        if (/^pen[uú]ltimo?$/i.test(_cleanTxt)) return -2; // second to last
+                        if (/^[uú]ltim[ao]?$/i.test(_cleanTxt)) return -1;   // last (m/f)
+                        if (/^pen[uú]ltim[ao]?$/i.test(_cleanTxt)) return -2; // second to last (m/f)
                         const numMatch = _cleanTxt.match(/^(\d+)\.?$/);
                         if (numMatch) return parseInt(numMatch[1]);
                         return null;
