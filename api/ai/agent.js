@@ -284,11 +284,25 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         }
     }
 
-    // 📅 CALENDAR DAYS LINE GUARD: If GPT put multiple numbered options on the same line
-    // (e.g., "1️⃣ Lunes 10 2️⃣ Martes 11"), split each onto its own line.
-    // Matches any numbered emoji (1️⃣-9️⃣) that appears after non-whitespace content mid-line.
-    if (/[1-9]️⃣/.test(text)) {
-        text = text.replace(/([^\n]) +([1-9]️⃣)/g, '$1\n\n$2');
+    // 📅 CALENDAR DAYS LINE GUARD v2: String-based to handle Unicode multi-codepoint emojis reliably.
+    // Iterates over each numbered emoji and ensures it always starts on its own line.
+    {
+        const _numEmojis = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+        for (const _em of _numEmojis) {
+            let _pos = 0;
+            while (true) {
+                const _idx = text.indexOf(_em, _pos);
+                if (_idx === -1) break;
+                // If something non-newline precedes this emoji, force a new line before it
+                const _before = text.substring(0, _idx).trimEnd();
+                if (_before.length > 0 && !_before.endsWith('\n')) {
+                    text = _before + '\n\n' + text.substring(_idx);
+                    _pos = _before.length + 2;
+                } else {
+                    _pos = _idx + _em.length;
+                }
+            }
+        }
     }
 
     // 🏢 VACANCY BUBBLE SPLIT GUARD: If GPT responds about vacantes/entrevistas without [MSG_SPLIT],
@@ -1765,7 +1779,34 @@ ${safeDnaLines}
                     const _botAskedCita = /gustar[ií]a.*(?:agendar|reservar).*(?:cita|entrevista)|te\s+agend[eo]\s+una\s+cita|quieres\s+que\s+(?:te\s+)?agende|puedo\s+agendarte\s+una\s+cita/i.test(_botText)
                         && !/queda\s+bien\s+ese\s+d[ií]a|cu[aá]l\s+(?:te\s+)?(?:queda\s+mejor|prefer|hora)|a\s+qu[eé]\s+hora|qu[eé]\s+hora\s+prefer/i.test(_botText);
                     const _isAffirmative = /^(s[ií]|claro|dale|por favor|porfa|por fa|ándale|andale|v[aá]|adelante|ok dale|sale|va|quiero|me interesa|s[ií] quiero|perfecto|s[ií] por favor)\s*[!.]*$/i.test(aggregatedText.trim());
-                    if (_botAskedCita && _isAffirmative && _stepHasFutureDates) {
+                // 🔢 CITA OPTION RESOLVER: Translate "opcion N" / bare number to the actual day.
+                // GPT can't resolve numbered list options to dates; we do it deterministically.
+                if (!skipRecruiterInference && _stepHasFutureDates) {
+                    const _optMatch = aggregatedText.trim().match(/^(?:opci[oó]n?\s*)?([1-9])\s*\.?$/i);
+                    if (_optMatch) {
+                        const _optNum = parseInt(_optMatch[1]);
+                        // Re-compute unique days locally (same logic as recruiter-agent.js)
+                        const _todayMx = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+                        const _futureDayOpts = (currentStep.calendarOptions || []).filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return !m || m[1] >= _todayMx; });
+                        const _uDays = [...new Set(_futureDayOpts.map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; }).filter(Boolean))];
+                        if (_optNum >= 1 && _optNum <= _uDays.length) {
+                            const _selDate = _uDays[_optNum - 1]; // YYYY-MM-DD
+                            const _D = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                            const _M = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                            const _d = new Date(parseInt(_selDate.substr(0,4)), parseInt(_selDate.substr(5,2))-1, parseInt(_selDate.substr(8,2)));
+                            const _humanSel = `${_D[_d.getDay()]} ${_d.getDate()} de ${_M[_d.getMonth()]}`;
+                            historyForGpt = [
+                                ...historyForGpt.slice(0, -1),
+                                {
+                                    role: 'user',
+                                    content: `[ELECCIÓN DE DÍA]: El candidato eligió la opción ${_optNum} = ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles para ese día (PASO 2). NO pidas confirmación del día todavía.`
+                                }
+                            ];
+                        }
+                    }
+                }
+
+                if (_botAskedCita && _isAffirmative && _stepHasFutureDates) {
                         historyForGpt = [
                             ...historyForGpt.slice(0, -1),
                             {
