@@ -2288,25 +2288,38 @@ ${safeDnaLines}
                                 .replace(/\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]/gi, '')
                                 .replace(/[\{\[]\s*move(?:[\s:]+\w+)?\s*[\}\]]/gi, '')
                                 .trim();
-                            // 🤫 EXCEPCIÓN UX: Si estamos en el paso "CITA", NO enviar el speech de despedida.
-                            // Solo avanzar, mandar sticker y dejar que el siguiente paso hable.
-                            const originStepName = (currentStep?.name || '').toLowerCase();
-                            const isCitaStep = originStepName.includes('cita');
+                        }
 
-                            if (cleanSpeech.length > 0) {
-                                // ✅ [CITA UX FIX]: AWAIT the AI's warm confirmation so it always
-                                // arrives BEFORE the module confirmation messages (papelería, image, location).
-                                // Previously this was fire-and-forget, causing module messages to overtake it.
-                                try {
-                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 });
-                                } catch (e) {
-                                    console.error('Error enviando pre-move:', e.message);
-                                }
-                                saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() }).catch(() => { });
-                                // 🕐 Small stagger so WhatsApp sequences this bubble before module messages
-                                await new Promise(r => setTimeout(r, 300));
+                        // 🔇 SILENT MOVE GUARD: When GPT fires { move } silently (no response_text)
+                        // and the destination is the Cita step, inject a warm transition message so
+                        // Brenda doesn't go mute after the candidate says "sí" to scheduling.
+                        if (!cleanSpeech) {
+                            const towardsCita = (nextStep?.name || '').toLowerCase().includes('cita') && !(nextStep?.name || '').toLowerCase().includes('citado');
+                            const candName = candidateData.nombreReal || candidateData.nombre || '';
+                            if (towardsCita) {
+                                const _transitions = [
+                                    `¡Perfecto${candName ? `, ${candName.split(' ')[0]}` : ''}! 🌟 Dame un momento para ver qué fechas de entrevista tenemos disponibles para ti. 🗓️`,
+                                    `¡Excelente${candName ? `, ${candName.split(' ')[0]}` : ''}! ✨ Voy a revisar las fechas disponibles para agendarte ahora. 📅`,
+                                    `¡Listo${candName ? `, ${candName.split(' ')[0]}` : ''}! 🎉 Déjame ver cuáles fechas tenemos disponibles para tu entrevista. 🗓️`
+                                ];
+                                cleanSpeech = _transitions[Math.floor(Math.random() * _transitions.length)];
                             }
                         }
+
+                        // 🤫 EXCEPCIÓN UX: Si estamos en el paso "CITA", NO enviar el speech de despedida.
+                        const originStepName = (currentStep?.name || '').toLowerCase();
+                        const isCitaStepOrigin = originStepName.includes('cita');
+
+                        if (cleanSpeech.length > 0 && !isCitaStepOrigin) {
+                            try {
+                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 });
+                            } catch (e) {
+                                console.error('Error enviando pre-move:', e.message);
+                            }
+                            saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() }).catch(() => { });
+                            await new Promise(r => setTimeout(r, 300));
+                        }
+
 
                         // 🟢 OPTIMISTIC LOCKING: Move candidate in DB right now before the heavy dispatch
                         // so if a concurrent message comes in, it's evaluated in the next step context
