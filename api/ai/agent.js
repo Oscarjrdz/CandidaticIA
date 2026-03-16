@@ -198,56 +198,82 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // 📅 HUMANIZE raw YYYY-MM-DD dates that GPT leaked into the output
     text = text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => humanizeDate(`${y}-${m}-${d}`));
 
-    // 🔧 DATE-EXAMPLE GUARD: Strip "(ej. DD/MM/YYYY)" from segments that are NOT about birth date.
-    // Operates per [MSG_SPLIT] segment so "nacimiento" in part 1 doesn't protect part 2 (category question).
+    // 🔧 DATE-EXAMPLE GUARD: Strip "(ej. DD/MM/YYYY)" from segments NOT about birth date (per-segment).
     {
         const _DATE_EJ_RE = /\s*\(ej\.?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\)/gi;
         const _DATE_KEYWORDS = /fecha|nacimiento|cumplea|cu[aá]ndo naciste|nac[íi]|d[íi]a.*mes|cuantos a[nñ]os/i;
-        const _segments = text.split('[MSG_SPLIT]');
-        text = _segments.map(seg => _DATE_KEYWORDS.test(seg) ? seg : seg.replace(_DATE_EJ_RE, '')).join('[MSG_SPLIT]');
+        text = text.split('[MSG_SPLIT]').map(seg => _DATE_KEYWORDS.test(seg) ? seg : seg.replace(_DATE_EJ_RE, '')).join('[MSG_SPLIT]');
     }
 
-    // 😊 FIRST-SEGMENT EMOJI GUARD: If a MSG_SPLIT exists and the first segment has no emoji, append one.
-    // This ensures the first bubble always feels warm regardless of GPT's output.
+    // 📝 NOMBRE Y APELLIDOS GUARD: "Nombre completo" → "Nombre y Apellidos completos" everywhere.
+    text = text.replace(/\btu\s+Nombre\s+completo\b(?!\s+y\s+Apellidos)/gi, 'tu Nombre y Apellidos completos');
+    text = text.replace(/\bNombre\s+completo\b(?!\s+y\s+Apellidos)/g, 'Nombre y Apellidos completos');
+
+    // 🏙️ MUNICIPIO WORDING GUARD: Multiple patterns → always "¿en qué municipio vives?"
+    // Catches: "¿dónde vives?", "¿Podrías decírmelo?", "¿me lo dices?", "¿me lo compartes?" in isolation.
+    text = text.replace(/¿[Dd][oó]nde\s+vives(\s+actualmente)?\s*\?/g, '¿En qué municipio vives$1?');
+    text = text.replace(/¿[Pp]odr[íi]as?\s+dec[íi]rmelo\s*\?/g, '¿En qué municipio vives actualmente?');
+    text = text.replace(/¿[Mm]e\s+lo\s+(dices?|compartes?|puedes?\s+decir)\s*\?/g, '¿En qué municipio vives actualmente?');
+
+    // 🎓 ESCOLARIDAD EMOJIS NORMALIZER: Fix wrong emojis GPT uses for the education list.
+    if (/Primaria|Secundaria|Preparatoria|Licenciatura|T[eé]cnica|Posgrado/i.test(text)) {
+        text = text.replace(/^[^\w\n\r\[]*Primaria\b/gm,     '🎒 Primaria');
+        text = text.replace(/^[^\w\n\r\[]*Secundaria\b/gm,   '🏫 Secundaria');
+        text = text.replace(/^[^\w\n\r\[]*Preparatoria\b/gm, '🎓 Preparatoria');
+        text = text.replace(/^[^\w\n\r\[]*Licenciatura\b/gm, '📚 Licenciatura');
+        text = text.replace(/^[^\w\n\r\[]*T[eé]cnica\b/gm,   '🛠️ Técnica');
+        text = text.replace(/^[^\w\n\r\[]*Posgrado\b/gm,     '🧠 Posgrado');
+    }
+
+    // 📚 ESCOLARIDAD SPLIT GUARD v2: Guarantees 3 bubbles for escolaridad.
+    // Bubble 1 = intro acknowledgment, Bubble 2 = list, Bubble 3 = push nudge (separate).
+    {
+        const _ESC_LIST_RE = /🎒\s*Primaria/;
+        if (_ESC_LIST_RE.test(text)) {
+            // Step 1: Ensure MSG_SPLIT before the list
+            if (!text.includes('[MSG_SPLIT]')) {
+                text = text.replace(/(🎒\s*Primaria)/, '[MSG_SPLIT]$1');
+            }
+            // Step 2: Find the escolaridad list part and extract its trailing question into bubble 3
+            const _segs = text.split('[MSG_SPLIT]');
+            const _listIdx = _segs.findIndex(s => _ESC_LIST_RE.test(s));
+            if (_listIdx !== -1) {
+                const _lines = _segs[_listIdx].trimEnd().split('\n');
+                const _lastLine = (_lines[_lines.length - 1] || '').trim();
+                // If last line is a question, move it to its own bubble; otherwise add a nudge
+                const _isQuestion = /[?？]$/.test(_lastLine) || /^¿/.test(_lastLine);
+                if (_isQuestion && _lines.length > 1) {
+                    _segs[_listIdx] = _lines.slice(0, -1).join('\n').trimEnd();
+                    _segs.splice(_listIdx + 1, 0, _lastLine);
+                } else if (!_isQuestion) {
+                    const _nudges = ['¿Cuál es la tuya? 🌟', '¡Elige la que más te identifica! 😊', '¿Cuál eliges? ✨'];
+                    _segs.splice(_listIdx + 1, 0, _nudges[Math.floor(Math.random() * _nudges.length)]);
+                }
+                text = _segs.join('[MSG_SPLIT]');
+            }
+        }
+    }
+
+    // 🏢 VACANCY BUBBLE SPLIT GUARD: If GPT responds about vacantes/entrevistas without [MSG_SPLIT],
+    // force a split before the final question so it arrives as 2 separate bubbles.
+    if (!text.includes('[MSG_SPLIT]') && /vacante|entrevista|oficina|ubicaci[oó]n|distintas\s+zonas/i.test(text)) {
+        // Find the last question sentence and split before it
+        const _lastQMatch = text.match(/(.*?)(\s*(?:¿[^?]+\?))(\s*)$/s);
+        if (_lastQMatch && _lastQMatch[1].trim().length > 10) {
+            text = _lastQMatch[1].trim() + '[MSG_SPLIT]' + _lastQMatch[2].trim();
+        }
+    }
+
+    // 😊 FIRST-SEGMENT EMOJI GUARD: If MSG_SPLIT exists and first segment lacks emoji, append one.
     if (text.includes('[MSG_SPLIT]')) {
         const _warmEmojis = ['😊', '✨', '🌸', '💖', '😉', '🌟', '🤭'];
         const _parts = text.split('[MSG_SPLIT]');
         const _hasEmoji = (s) => /\p{Emoji}/u.test(s.replace(/[#*0-9]\uFE0F?\u20E3/g, ''));
         if (_parts.length >= 2 && !_hasEmoji(_parts[0])) {
-            const _pick = _warmEmojis[Math.floor(Math.random() * _warmEmojis.length)];
-            _parts[0] = _parts[0].trimEnd() + ` ${_pick}`;
+            _parts[0] = _parts[0].trimEnd() + ` ${_warmEmojis[Math.floor(Math.random() * _warmEmojis.length)]}`;
         }
         text = _parts.join('[MSG_SPLIT]');
     }
-
-    // 📚 ESCOLARIDAD SPLIT GUARD: If the escolaridad list is present but has no [MSG_SPLIT] before it,
-    // inject one deterministically so the list always arrives as a separate bubble.
-    {
-        const _ESC_LIST_RE = /(🎒\s*Primaria)/;
-        if (_ESC_LIST_RE.test(text) && !text.includes('[MSG_SPLIT]')) {
-            // Find where the list starts and inject MSG_SPLIT before it
-            text = text.replace(_ESC_LIST_RE, '[MSG_SPLIT]$1');
-        }
-        // Also ensure a push nudge bubble after the list if missing
-        if (_ESC_LIST_RE.test(text)) {
-            const _parts = text.split('[MSG_SPLIT]');
-            // If there are only 2 parts (intro + list) and the last part ends with an option (no clear question push)
-            if (_parts.length === 2 && !_parts[1].includes('[MSG_SPLIT]')) {
-                const _listPart = _parts[1].trimEnd();
-                const _lastLine = _listPart.split('\n').pop() || '';
-                const _hasNudge = /\?/.test(_lastLine);
-                if (!_hasNudge) {
-                    const _nudges = ['¿Cuál es la tuya? 🌟', '¡Elige la que más te identifica! 😊', '¿Cuál eliges? ✨'];
-                    _parts[1] = _listPart + '[MSG_SPLIT]' + _nudges[Math.floor(Math.random() * _nudges.length)];
-                    text = _parts.join('[MSG_SPLIT]');
-                }
-            }
-        }
-    }
-
-    // 🏙️ MUNICIPIO WORDING GUARD: Replace vague "¿dónde vives?" with specific "¿en qué municipio vives?"
-    // to prevent candidates from giving their full address instead of just the municipality name.
-    text = text.replace(/¿[Dd][oó]nde\s+vives(\s+actualmente)?\s*\?/g, '¿En qué municipio vives$1?');
 
     // 📋 COMBINED DAYS+HORARIO: If GPT merged PASO 1 (days list) and PASO 2 (horarios)
     // into one message, STRIP the horario part — user must pick a day first.
