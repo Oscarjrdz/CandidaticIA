@@ -2476,14 +2476,14 @@ ${safeDnaLines}
                         const _nextTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
                         const _nextHasFutureDays = (nextStep.calendarOptions || []).some(opt => {
                             const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
-                            return !m || m[1] >= _nextTodayStr;
+                            return m && m[1] >= _nextTodayStr;
                         });
 
                         if (_nextHasFutureDays) {
                             try {
                                 const _futDays = [...new Set(
                                     (nextStep.calendarOptions || [])
-                                        .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return !m || m[1] >= _nextTodayStr; })
+                                        .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m && m[1] >= _nextTodayStr; })
                                         .map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; })
                                         .filter(Boolean)
                                 )];
@@ -2493,7 +2493,7 @@ ${safeDnaLines}
                                 const _fn3 = (candidateData.nombreReal || candidateData.nombre || '').split(' ')[0];
                                 const _dayLines3 = _futDays.map((ds, i) => {
                                     const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
-                                    return `📅 ${_NE3[i] || `${i+1}.`} ${_DN3[d.getDay()]} ${d.getDate()} de ${_MN3[d.getMonth()]}`;
+                                    return `${_NE3[i] || `${i+1}.`} ${_DN3[d.getDay()]} ${d.getDate()} de ${_MN3[d.getMonth()]} 📅`;
                                 }).join('\n\n');
                                 const _dayListMsg = `Tengo entrevistas los días${_fn3 ? `, ${_fn3}` : ''}:\n\n${_dayLines3}`;
                                 const _dayAskMsg = `¿En cuál día te queda mejor? 😊`;
