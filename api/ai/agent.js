@@ -2993,7 +2993,16 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             // [CLEANUP]: Sweep out ANY literal tag [MEDIA_DISPONIBLE] or [MEDIA_DISPONIBLE: url]
             responseTextVal = responseTextVal.replace(/\[MEDIA_DISPONIBLE[^\]]*\]/gi, '').trim();
 
+            // 🔄 MEDIA+FALLBACK COHERENCE FIX: When GPT found the FAQ media (media_url is set)
+            // but still used the fallback text ("Es una excelente pregunta..."), replace the
+            // text with a coherent introduction so it makes sense before the PDF/image arrives.
+            if (aiResult?.media_url && aiResult.media_url !== 'null'
+                && responseTextVal && /^Es una excelente pregunta/i.test(responseTextVal.trim())) {
+                responseTextVal = '¡Claro que sí! 📍 Aquí te comparto la información:';
+            }
+
             if (aiResult?.media_url && aiResult.media_url !== 'null') {
+
                 // Failsafe: Remove any detected URLs or Markdown images to prevent leakage
                 // 🛡️ IMPORTANT: Temporarily protect [MSG_SPLIT] so it survives the whitespace collapse
                 const urlRegex = /https?:\/\/[^\s\)]+/g;
