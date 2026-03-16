@@ -1824,7 +1824,7 @@ ${safeDnaLines}
 
                     // ── Helper: parse user input as a 1-based list index ──────────────
                     const _parseOrdinal = (txt) => {
-                        const _cleanTxt = txt.replace(/^(?:[el]a?\s+)?(?:opci[oó]n?\s*)?/i, '').trim();
+                        const _cleanTxt = txt.replace(/^(?:(?:el|la|los|las|opci[oó]n?)\s+)+/i, '').trim();
                         const _ordMap = {
                             'primer': 1, 'primero': 1, 'primera': 1, 'uno': 1, '1': 1,
                             'segundo': 2, 'segunda': 2, 'dos': 2, '2': 2,
@@ -1935,7 +1935,7 @@ ${safeDnaLines}
                             else if (_ordNum >= 1 && _ordNum <= _uDays.length) _resolvedDayIdx = _ordNum - 1;
                         }
 
-                        // 2) Try day name
+                        // 2) Try day name (with optional number disambiguation)
                         if (_resolvedDayIdx === null) {
                             const _dayOfWeek = _parseDayName(_rawInput);
                             if (_dayOfWeek !== null) {
@@ -1949,19 +1949,42 @@ ${safeDnaLines}
                                 if (_matchingIdxs.length === 1) {
                                     _resolvedDayIdx = _matchingIdxs[0];
                                 } else if (_matchingIdxs.length > 1) {
-                                    // AMBIGUOUS — show sub-list of matching days
-                                    skipRecruiterInference = true;
-                                    const _dayNameLabel = _DN4[_uDays.map((ds, i) => {
-                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
-                                        return d.getDay();
-                                    })[_matchingIdxs[0]]];
-                                    const _subLines = _matchingIdxs.map((dIdx, i) => {
-                                        const ds = _uDays[dIdx];
-                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
-                                        return `${_NE4[i] || `${i+1}.`} ${_DN4[d.getDay()]} ${d.getDate()} de ${_MN4[d.getMonth()]} 📅`;
-                                    }).join('\n');
-                                    responseTextVal = `Hay ${_matchingIdxs.length} ${_dayNameLabel.toLowerCase()}s disponibles${_fn4 ? `, ${_fn4}` : ''}. ¿Cuál de los dos?\n\n${_subLines}`;
-                                    aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:ambiguous_day_name' };
+                                    // Try to disambiguate by matching a day-of-month number in the input
+                                    // e.g. "viernes 20" → find the Friday with date=20
+                                    const _dayNumMatch = _rawInput.match(/(\d{1,2})/);
+                                    if (_dayNumMatch) {
+                                        const _dayNum = parseInt(_dayNumMatch[1]);
+                                        const _specificIdx = _matchingIdxs.find(dIdx => {
+                                            const ds = _uDays[dIdx];
+                                            const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                            return d.getDate() === _dayNum;
+                                        });
+                                        if (_specificIdx !== undefined) {
+                                            _resolvedDayIdx = _specificIdx;
+                                        } else {
+                                            // Still ambiguous — show sub-list
+                                            skipRecruiterInference = true;
+                                            const _dayNameLabel = _DN4[new Date(parseInt(_uDays[_matchingIdxs[0]].substr(0,4)), parseInt(_uDays[_matchingIdxs[0]].substr(5,2))-1, parseInt(_uDays[_matchingIdxs[0]].substr(8,2))).getDay()];
+                                            const _subLines = _matchingIdxs.map((dIdx, i) => {
+                                                const ds = _uDays[dIdx];
+                                                const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                                return `${_NE4[i] || `${i+1}.`} ${_DN4[d.getDay()]} ${d.getDate()} de ${_MN4[d.getMonth()]} 📅`;
+                                            }).join('\n');
+                                            responseTextVal = `Hay ${_matchingIdxs.length} ${_dayNameLabel.toLowerCase()}s disponibles${_fn4 ? `, ${_fn4}` : ''}. ¿Cuál de los dos?\n\n${_subLines}`;
+                                            aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:ambiguous_day_name' };
+                                        }
+                                    } else {
+                                        // No number — show sub-list
+                                        skipRecruiterInference = true;
+                                        const _dayNameLabel = _DN4[new Date(parseInt(_uDays[_matchingIdxs[0]].substr(0,4)), parseInt(_uDays[_matchingIdxs[0]].substr(5,2))-1, parseInt(_uDays[_matchingIdxs[0]].substr(8,2))).getDay()];
+                                        const _subLines = _matchingIdxs.map((dIdx, i) => {
+                                            const ds = _uDays[dIdx];
+                                            const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                            return `${_NE4[i] || `${i+1}.`} ${_DN4[d.getDay()]} ${d.getDate()} de ${_MN4[d.getMonth()]} 📅`;
+                                        }).join('\n');
+                                        responseTextVal = `Hay ${_matchingIdxs.length} ${_dayNameLabel.toLowerCase()}s disponibles${_fn4 ? `, ${_fn4}` : ''}. ¿Cuál de los dos?\n\n${_subLines}`;
+                                        aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:ambiguous_day_name' };
+                                    }
                                 }
                             }
                         }

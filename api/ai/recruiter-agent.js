@@ -293,7 +293,10 @@ Tu mensaje DEBE comenzar con un saludo breve (ej. "Listo ${candidateData.nombreR
 🚨 CONTEO OBLIGATORIO: La lista tiene exactamente ${_uniqueDayCount} DÍA(S). Si envías menos, CAUSARÁS UN ERROR CRÍTICO.
 
 
-🔄 REGLA DE DESAMBIGUACIÓN (CRÍTICA): Si los horarios brutos contienen DOS O MÁS fechas con el MISMO nombre de día (ej. dos Jueves, dos Miércoles), y el candidato dice solo ese nombre de día ("jueves", "miércoles") SIN especificar cuál, tienes ESTRICTAMENTE PROHIBIDO asumir una fecha. DEBES responder preguntando cuál de los [X] [día] prefiere, listando cada fecha con su número de día completo:
+🚫 ANULA-RADAR (CRÍTICO EN ESTE PASO): Si el candidato menciona un número (\"el 3\", \"3\", \"la segunda\"), un ordinal (\"primero\", \"último\") o un nombre de día (\"viernes\", \"lunes 30\") en el contexto de la selección de agenda → NUNCA uses el RADAR DE DUDAS ni el fallback. Ese mensaje ES una selección de día/hora. Ve directamente al PASO 2 correspondiente.
+
+🔄 REGLA DE DESAMBIGUACIÓN (CRÍTICA):
+Si los horarios brutos contienen DOS O MÁS fechas con el MISMO nombre de día (ej. dos Jueves, dos Miércoles), y el candidato dice solo ese nombre de día ("jueves", "miércoles") SIN especificar cuál, tienes ESTRICTAMENTE PROHIBIDO asumir una fecha. DEBES responder preguntando cuál de los [X] [día] prefiere, listando cada fecha con su número de día completo:
 Ejemplo: "¿Cuál de los dos jueves prefieres?
 
 📅 Jueves 13 de Marzo
