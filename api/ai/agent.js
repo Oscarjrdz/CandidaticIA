@@ -2564,7 +2564,11 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 const municipioHint = isMunicipio
                                     ? ` Al preguntar el municipio usa SIEMPRE la frase "¿en qué municipio vives?" — NUNCA "¿dónde vives?" para evitar que el candidato dé su dirección completa.`
                                     : '';
-                                systemInstruction += `\n[INSTRUCCIÓN CRÍTICA]: El perfil NO está completo. PROHIBIDO usar mensajes de cierre ("estoy procesando", "te aviso pronto", "perfil listo", etc.). Dato pendiente: ${nextField}. Tu mensaje DEBE terminar con la pregunta para obtenerlo.${splitHint}${municipioHint}\n`;
+                                const _allMissing = auditForMode.missingLabels;
+                                const _remainingNote = _allMissing.length > 1
+                                    ? ` Datos AÚN faltantes en total: ${_allMissing.join(', ')}. Si capturas "${nextField}" en este turno, debes pedir inmediatamente el siguiente: ${_allMissing[1]}. PROHIBIDO cerrar o despedirte.`
+                                    : '';
+                                systemInstruction += `\n[INSTRUCCIÓN CRÍTICA]: El perfil NO está completo. PROHIBIDO usar mensajes de cierre ("estoy procesando", "te aviso pronto", "perfil listo", "te contactaré", etc.). Dato a obtener ahora: ${nextField}. Tu mensaje DEBE terminar con la pregunta para obtenerlo.${_remainingNote}${splitHint}${municipioHint}\n`;
                             }
                         } else {
                             systemInstruction += `\n[INSTRUCCIÓN CRÍTICA FINAL]: El perfil está INCOMPLETO. Aún necesitas obtener: ${auditForMode.missingLabels.join(', ')}. TIENES PROHIBIDO despedirte o cerrar la conversación. OBLIGATORIAMENTE tu mensaje debe terminar con una pregunta para obtener el dato principal: ${auditForMode.missingLabels[0]}.\n`;
