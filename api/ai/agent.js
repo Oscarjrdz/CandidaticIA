@@ -207,6 +207,19 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         text = _segments.map(seg => _DATE_KEYWORDS.test(seg) ? seg : seg.replace(_DATE_EJ_RE, '')).join('[MSG_SPLIT]');
     }
 
+    // 😊 FIRST-SEGMENT EMOJI GUARD: If a MSG_SPLIT exists and the first segment has no emoji, append one.
+    // This ensures the first bubble always feels warm regardless of GPT's output.
+    if (text.includes('[MSG_SPLIT]')) {
+        const _warmEmojis = ['😊', '✨', '🌸', '💖', '😉', '🌟', '🤭'];
+        const _parts = text.split('[MSG_SPLIT]');
+        const _hasEmoji = (s) => /\p{Emoji}/u.test(s.replace(/[#*0-9]\uFE0F?\u20E3/g, ''));
+        if (_parts.length >= 2 && !_hasEmoji(_parts[0])) {
+            const _pick = _warmEmojis[Math.floor(Math.random() * _warmEmojis.length)];
+            _parts[0] = _parts[0].trimEnd() + ` ${_pick}`;
+        }
+        text = _parts.join('[MSG_SPLIT]');
+    }
+
     // 📋 COMBINED DAYS+HORARIO: If GPT merged PASO 1 (days list) and PASO 2 (horarios)
     // into one message, STRIP the horario part — user must pick a day first.
     {
