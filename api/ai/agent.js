@@ -2558,7 +2558,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 const nextField = auditForMode.missingLabels[0];
                                 const isEscolaridad = /escolaridad/i.test(nextField);
                                 const splitHint = isEscolaridad
-                                    ? ` Usa [MSG_SPLIT] ANTES de la lista de escolaridad para que llegue como segunda burbuja.`
+                                    ? ` Usa DOS separadores [MSG_SPLIT]: uno ANTES de la lista de escolaridad y otro DESPUÉS de la lista, terminando con un mensaje corto de empuje con emoji (ej: "¿Cuál es la tuya? 🌟" o "¡Elige la que más te identifica! 😊") para animar al candidato a contestar.`
                                     : '';
                                 systemInstruction += `\n[INSTRUCCIÓN CRÍTICA]: El perfil NO está completo. PROHIBIDO usar mensajes de cierre ("estoy procesando", "te aviso pronto", "perfil listo", etc.). Dato pendiente: ${nextField}. Tu mensaje DEBE terminar con la pregunta para obtenerlo.${splitHint}\n`;
                             }
