@@ -1771,55 +1771,123 @@ ${safeDnaLines}
                     }
                 }
 
-                // 🗓️ CITA AFFIRMATIVE GUARD: Only fires when bot explicitly offered to schedule — NOT on day/hour confirmations
-                // CRITICAL: Also only fires if THIS STEP has future calendar options. If not (Filtro/Inicio),
-                // let GPT handle the "si" naturally — it will fire { move } with a valid response_text.
-                if (!skipRecruiterInference) {
-                    const _todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
-                    const _stepHasFutureDates = (currentStep.calendarOptions || []).some(opt => {
-                        const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
-                        return !m || m[1] >= _todayStr;
-                    });
-                    const _botAskedCita = /gustar[ií]a.*(?:agendar|reservar).*(?:cita|entrevista)|te\s+agend[eo]\s+una\s+cita|quieres\s+que\s+(?:te\s+)?agende|puedo\s+agendarte\s+una\s+cita/i.test(_botText)
-                        && !/queda\s+bien\s+ese\s+d[ií]a|cu[aá]l\s+(?:te\s+)?(?:queda\s+mejor|prefer|hora)|a\s+qu[eé]\s+hora|qu[eé]\s+hora\s+prefer/i.test(_botText);
-                    const _isAffirmative = /^(s[ií]|claro|dale|por favor|porfa|por fa|ándale|andale|v[aá]|adelante|ok dale|sale|va|quiero|me interesa|s[ií] quiero|perfecto|s[ií] por favor)\s*[!.]*$/i.test(aggregatedText.trim());
+                // ═══════════════════════════════════════════════════════════════════
+                // 🗓️ CITA SCHEDULING BYPASS (100% DETERMINISTIC — NO GPT NEEDED)
+                // Handles: bot asked to schedule + candidate responds.
+                // Cases: Affirmative → move to Cita + send day list
+                //        Negative    → polite decline, stay in step
+                //        Off-topic   → let GPT handle normally
+                // This replaces the old CITA AFFIRMATIVE GUARD which relied on GPT
+                // for the move and could return empty → Disculpa! loop.
+                // ═══════════════════════════════════════════════════════════════════
+                const _todayStrCs = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+
+                // Detect if bot's last message was a scheduling offer (covers all verb variants)
+                const _botAskedScheduling = /(?:gustar[ií]a|quieres?|quier[eo]|deseas?)\s+que\s+(?:te\s+)?(?:agende|programe|confirme|reserve|aparte)|(?:te\s+)?(?:agend[eo]|program[eo]|confirm[eo]|te\s+aparto)\s+(?:una\s+)?(?:cita|entrevista)|(?:agendar|programar|confirmar|reservar)\s+(?:tu\s+)?(?:cita|entrevista)|puedo\s+(?:agendarte|programarte|confirmarte)\s+(?:una\s+)?(?:cita|entrevista)|(?:quieres?\s+que\s+(?:te\s+)?(?:reserve|aparte|programe))/i.test(_botText)
+                    && !/queda\s+bien\s+ese\s+d[ií]a|cu[aá]l\s+(?:te\s+)?(?:queda\s+mejor|prefer|hora)|a\s+qu[eé]\s+hora|qu[eé]\s+hora\s+prefer/i.test(_botText);
+
+                const _isAffirmativeCs = /^(s[ií]|claro|dale|por\s*favor|porfa|por\s*fa|[aá]ndale|andale|v[aá]|adelante|ok\s*dale|sale|va|quiero|me\s+interesa|s[ií]\s+quiero|perfecto|s[ií]\s+por\s+favor|de\s+una|obvio|claro\s+que\s+s[ií]|s[ií]\s+claro|si\s+quiero)\s*[!.]*$/i.test(aggregatedText.trim());
+
+                const _isNegativeCs = /^(no|nel|nope|nah|para\s+nada|no\s+quiero|mejor\s+no|paso|ahorita\s+no|por\s+ahora\s+no|no\s+gracias|gracias\s+pero\s+no|no\s+me\s+interesa|no\s+puedo)\s*[.!]*$/i.test(aggregatedText.trim());
+
+                if (!skipRecruiterInference && _botAskedScheduling) {
+                    if (_isAffirmativeCs) {
+                        // ✅ AFFIRMATIVE: Move candidate to Cita step, send day list immediately
+                        skipRecruiterInference = true;
+                        const _citaStep = (project.steps || []).find(s =>
+                            (s.name || '').toLowerCase().includes('cita') &&
+                            !(s.name || '').toLowerCase().includes('citado')
+                        );
+                        if (_citaStep) {
+                            // Pre-build the day list from the Cita step's calendarOptions
+                            const _futureCitaDays = [...new Set(
+                                (_citaStep.calendarOptions || [])
+                                    .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return !m || m[1] >= _todayStrCs; })
+                                    .map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; })
+                                    .filter(Boolean)
+                            )];
+                            const _DN2 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                            const _MN2 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                            const _NE2 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                            const _fname = (candidateData.nombreReal || candidateData.nombre || '').split(' ')[0];
+                            if (_futureCitaDays.length > 0) {
+                                const _dayLines = _futureCitaDays.map((ds, i) => {
+                                    const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                    return `📅 ${_NE2[i] || `${i+1}.`} ${_DN2[d.getDay()]} ${d.getDate()} de ${_MN2[d.getMonth()]}`;
+                                }).join('\n\n');
+                                responseTextVal = `Tengo entrevistas los días${_fname ? `, ${_fname}` : ''}:\n\n${_dayLines}[MSG_SPLIT]¿En cuál día te queda mejor? 😊`;
+                            } else {
+                                responseTextVal = `¡Con gusto${_fname ? `, ${_fname}` : ''}! Me pongo en contacto contigo para confirmar la fecha de tu entrevista. 📅`;
+                            }
+                            aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'BYPASS:cita_affirmative_deterministic' };
+                            // Move candidate to Cita step NOW
+                            await moveCandidateStep(activeProjectId, candidateId, _citaStep.id);
+                            recruiterTriggeredMove = true;
+                            candidateUpdates.stepId = _citaStep.id;
+                            candidateUpdates.projectId = activeProjectId;
+                            clearCitaPendingFlag(redis, candidateId).catch(() => {});
+                        }
+
+                    } else if (_isNegativeCs) {
+                        // ❌ NEGATIVE: Don't move, acknowledge politely
+                        skipRecruiterInference = true;
+                        const _fname2 = (candidateData.nombreReal || candidateData.nombre || '').split(' ')[0];
+                        const _noResponses = [
+                            `¡Sin problema${_fname2 ? `, ${_fname2}` : ''}! 😊 Si en algún momento cambias de opinión, aquí estaré para ayudarte. ¿Hay algo más que te gustaría saber sobre el puesto?`,
+                            `¡Entendido${_fname2 ? `, ${_fname2}` : ''}! No te preocupes. 😊 Si tienes alguna otra pregunta sobre la vacante, con mucho gusto te ayudo.`,
+                            `¡Claro${_fname2 ? `, ${_fname2}` : ''}! Sin presión. 😊 Quedo aquí si necesitas información adicional sobre el puesto o cualquier otra cosa.`
+                        ];
+                        responseTextVal = _noResponses[Math.floor(Math.random() * _noResponses.length)];
+                        aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'BYPASS:cita_negative_deterministic' };
+
+                    } else {
+                        // 🔄 OFF-TOPIC / QUESTION: Inject context hint so GPT answers THEN re-asks
+                        // (Let processRecruiterMessage handle normally — don't skip GPT)
+                        historyForGpt = [
+                            ...historyForGpt.slice(0, -1),
+                            {
+                                role: 'user',
+                                content: `[CONTEXTO]: El candidato respondió "${aggregatedText}" en lugar de confirmar la cita. Si es una duda o pregunta, resuélvela brevemente y termina preguntando nuevamente si quiere agendar. PROHIBIDO olvidar la oferta de cita.`
+                            }
+                        ];
+                    }
+                }
+
                 // 🔢 CITA OPTION RESOLVER: Translate "opcion N" / bare number to the actual day.
                 // GPT can't resolve numbered list options to dates; we do it deterministically.
-                if (!skipRecruiterInference && _stepHasFutureDates) {
+                const _stepHasFutureDatesForOpt = (currentStep.calendarOptions || []).some(opt => {
+                    const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
+                    return !m || m[1] >= _todayStrCs;
+                });
+                if (!skipRecruiterInference && _stepHasFutureDatesForOpt) {
                     const _optMatch = aggregatedText.trim().match(/^(?:opci[oó]n?\s*)?([1-9])\s*\.?$/i);
                     if (_optMatch) {
                         const _optNum = parseInt(_optMatch[1]);
-                        // Re-compute unique days locally (same logic as recruiter-agent.js)
-                        const _todayMx = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
-                        const _futureDayOpts = (currentStep.calendarOptions || []).filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return !m || m[1] >= _todayMx; });
+                        const _futureDayOpts = (currentStep.calendarOptions || []).filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return !m || m[1] >= _todayStrCs; });
                         const _uDays = [...new Set(_futureDayOpts.map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; }).filter(Boolean))];
                         if (_optNum >= 1 && _optNum <= _uDays.length) {
-                            const _selDate = _uDays[_optNum - 1]; // YYYY-MM-DD
-                            const _D = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-                            const _M = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                            const _d = new Date(parseInt(_selDate.substr(0,4)), parseInt(_selDate.substr(5,2))-1, parseInt(_selDate.substr(8,2)));
-                            const _humanSel = `${_D[_d.getDay()]} ${_d.getDate()} de ${_M[_d.getMonth()]}`;
+                            const _selDate = _uDays[_optNum - 1];
+                            const _D2 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                            const _M2 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                            const _d2 = new Date(parseInt(_selDate.substr(0,4)), parseInt(_selDate.substr(5,2))-1, parseInt(_selDate.substr(8,2)));
+                            const _humanSel = `${_D2[_d2.getDay()]} ${_d2.getDate()} de ${_M2[_d2.getMonth()]}`;
                             historyForGpt = [
                                 ...historyForGpt.slice(0, -1),
-                                {
-                                    role: 'user',
-                                    content: `[ELECCIÓN DE DÍA]: El candidato eligió la opción ${_optNum} = ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles para ese día (PASO 2). NO pidas confirmación del día todavía.`
-                                }
+                                { role: 'user', content: `[ELECCIÓN DE DÍA]: El candidato eligió la opción ${_optNum} = ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles para ese día (PASO 2). NO pidas confirmación del día todavía.` }
                             ];
                         }
                     }
                 }
 
-                if (_botAskedCita && _isAffirmative && _stepHasFutureDates) {
-                        historyForGpt = [
-                            ...historyForGpt.slice(0, -1),
-                            {
-                                role: 'user',
-                                content: `[CONFIRMACIÓN CITA]: El candidato acaba de confirmar que SÍ quiere agendar su entrevista. OBLIGATORIO: Avanza al paso de agendar cita y presenta las fechas disponibles. No repitas la pregunta de si quiere agendar.`
-                            }
-                        ];
-                    }
+                // When step HAS future dates AND guard confirmed → inject context for GPT
+                const _stepHasFutureDates = _stepHasFutureDatesForOpt;
+                if (!skipRecruiterInference && _stepHasFutureDates && _isAffirmativeCs && /(?:queda\s+agendada|confirmo\s+tu\s+cita|estamos\s+de\s+acuerdo|te\s+confirmo)/i.test(_botText)) {
+                    historyForGpt = [
+                        ...historyForGpt.slice(0, -1),
+                        { role: 'user', content: `[CONFIRMACIÓN CITA]: El candidato acaba de confirmar. OBLIGATORIO: Presenta las fechas disponibles. No repitas la pregunta de si quiere agendar.` }
+                    ];
                 }
+
 
                 if (!skipRecruiterInference) {
                     const updatedDataForAgent = { ...candidateData, ...candidateUpdates, projectMetadata: { ...candidateData.projectMetadata, currentVacancyIndex: candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : candidateData.projectMetadata?.currentVacancyIndex } };
@@ -2294,21 +2362,9 @@ ${safeDnaLines}
                                 .trim();
                         }
 
-                        // 🔇 SILENT MOVE GUARD: When GPT fires { move } silently (no response_text)
-                        // and the destination is the Cita step, inject a warm transition message so
-                        // Brenda doesn't go mute after the candidate says "sí" to scheduling.
-                        if (!cleanSpeech) {
-                            const towardsCita = (nextStep?.name || '').toLowerCase().includes('cita') && !(nextStep?.name || '').toLowerCase().includes('citado');
-                            const candName = candidateData.nombreReal || candidateData.nombre || '';
-                            if (towardsCita) {
-                                const _transitions = [
-                                    `¡Perfecto${candName ? `, ${candName.split(' ')[0]}` : ''}! 🌟 Dame un momento para ver qué fechas de entrevista tenemos disponibles para ti. 🗓️`,
-                                    `¡Excelente${candName ? `, ${candName.split(' ')[0]}` : ''}! ✨ Voy a revisar las fechas disponibles para agendarte ahora. 📅`,
-                                    `¡Listo${candName ? `, ${candName.split(' ')[0]}` : ''}! 🎉 Déjame ver cuáles fechas tenemos disponibles para tu entrevista. 🗓️`
-                                ];
-                                cleanSpeech = _transitions[Math.floor(Math.random() * _transitions.length)];
-                            }
-                        }
+                        // NOTE: The Inicio→Cita transition now handled by the deterministic bypass above.
+                        // If cleanSpeech is empty here (from GPT silent move), simply skip — no message needed.
+
 
                         // 🤫 EXCEPCIÓN UX: Si estamos en el paso "CITA", NO enviar el speech de despedida.
                         const originStepName = (currentStep?.name || '').toLowerCase();
