@@ -214,6 +214,8 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     text = text.replace(/¿[Dd][oó]nde\s+vives(\s+actualmente)?\s*\?/g, '¿En qué municipio vives$1?');
     text = text.replace(/¿[Pp]odr[íi]as?\s+dec[íi]rmelo\s*\?/g, '¿En qué municipio vives actualmente?');
     text = text.replace(/¿[Mm]e\s+lo\s+(dices?|compartes?|puedes?\s+decir)\s*\?/g, '¿En qué municipio vives actualmente?');
+    // Strip parenthetical hints GPT adds to municipio questions, e.g. "(nombre del municipio)", "(ej. Monterrey)"
+    text = text.replace(/(\bmunicipio\b[^?]*)\s*\([^)]{3,40}\)/gi, '$1');
 
     // 🎓 ESCOLARIDAD EMOJIS NORMALIZER: Fix wrong emojis GPT uses for the education list.
     if (/Primaria|Secundaria|Preparatoria|Licenciatura|T[eé]cnica|Posgrado/i.test(text)) {
