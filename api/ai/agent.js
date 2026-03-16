@@ -279,12 +279,16 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     }
 
     // 🏢 VACANCY BUBBLE SPLIT GUARD: If GPT responds about vacantes/entrevistas without [MSG_SPLIT],
-    // force a split before the final question so it arrives as 2 separate bubbles.
+    // force a split before the final question/request so it arrives as 2 separate bubbles.
     if (!text.includes('[MSG_SPLIT]') && /vacante|entrevista|oficina|ubicaci[oó]n|distintas\s+zonas/i.test(text)) {
-        // Find the last question sentence and split before it
-        const _lastQMatch = text.match(/(.*?)(\s*(?:¿[^?]+\?))(\s*)$/s);
-        if (_lastQMatch && _lastQMatch[1].trim().length > 10) {
-            text = _lastQMatch[1].trim() + '[MSG_SPLIT]' + _lastQMatch[2].trim();
+        // Try Spanish question first (¿...?)
+        let _vSplitMatch = text.match(/([\s\S]*?)(\s*¿[^?]+\?)\s*$/s);
+        // Fallback: split before imperative data requests ("dime tu X", "necesito tu X", "comparte tu X")
+        if (!_vSplitMatch) {
+            _vSplitMatch = text.match(/([\s\S]*?)(\s*(?:dime|dame|comparte|necesito|podrías darme|me dices)\s+tu\s+[\w\s]{3,50}[^.]*[.!🌸💖✨🌟😊]?)\s*$/is);
+        }
+        if (_vSplitMatch && _vSplitMatch[1].trim().length > 10) {
+            text = _vSplitMatch[1].trim() + '[MSG_SPLIT]' + _vSplitMatch[2].trim();
         }
     }
 
@@ -2637,7 +2641,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             if (isVacancyQ) {
                                 const _nextLabel = auditForMode.missingLabels[0];
                                 const _fechaHint = /fecha|nacimiento/i.test(_nextLabel) ? ` (ej. 19/05/1990)` : '';
-                                systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Responde en DOS burbujas con [MSG_SPLIT]: Burbuja 1 = MÁXIMO 2 líneas, cálida con emoji, reconoce la pregunta y di que primero necesitas un dato. Burbuja 2 = Pregunta DIRECTA y ESPECÍFICA (NO genérica) por: "${_nextLabel}"${_fechaHint} — con emoji. PROHIBIDO usar frases vagas como "¿me ayudas con tus datos?".\n`;
+                                systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Responde en DOS burbujas con [MSG_SPLIT]: Burbuja 1 = MÁXIMO 2 líneas, cálida con emoji, reconoce brevemente la pregunta y di que primero necesitas un dato — PROHIBIDO comenzar con halagos descontextualizados como "¡Vas excelente!", "¡Genial!", "¡Perfecto!". Burbuja 2 = Pregunta DIRECTA y ESPECÍFICA (NO genérica) por: "${_nextLabel}"${_fechaHint} — con emoji. PROHIBIDO usar frases vagas como "¿me ayudas con tus datos?".\n`;
                             } else if (isPersonalQ) {
                                 systemInstruction += `\n[NOTA DE CONTEXTO - PREGUNTA PERSONAL/LIGUE]: El candidato hizo una pregunta personal o de ligue. Usa [MSG_SPLIT] para DOS burbujas: Burbuja 1 = respuesta BREVE y coqueta en personaje (con picardía/humor), PROHIBIDO usar halagos descontextualizados como "¡Vas excelente!", "¡Genial!", "¡Perfecto!" — solo evasión divertida. Burbuja 2 = pregunta DIRECTA por el dato faltante: ${auditForMode.missingLabels[0]} — con emoji. PROHIBIDO mezclar ambas en una sola burbuja.\n`;
                             } else {
