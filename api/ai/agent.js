@@ -2471,10 +2471,48 @@ ${safeDnaLines}
                             } catch (e) { console.error('[RECRUITER BRAIN] Farewell msg error:', e.message); }
                         }
 
+                        // 📅 DETERMINISTIC DAY LIST: When moving to a scheduling step (has calendarOptions),
+                        // ALWAYS send the day list before calling the step's AI — regardless of aiConfig.
+                        const _nextTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+                        const _nextHasFutureDays = (nextStep.calendarOptions || []).some(opt => {
+                            const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
+                            return !m || m[1] >= _nextTodayStr;
+                        });
+
+                        if (_nextHasFutureDays) {
+                            try {
+                                const _futDays = [...new Set(
+                                    (nextStep.calendarOptions || [])
+                                        .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return !m || m[1] >= _nextTodayStr; })
+                                        .map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; })
+                                        .filter(Boolean)
+                                )];
+                                const _DN3 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                                const _MN3 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                                const _NE3 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                                const _fn3 = (candidateData.nombreReal || candidateData.nombre || '').split(' ')[0];
+                                const _dayLines3 = _futDays.map((ds, i) => {
+                                    const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                    return `📅 ${_NE3[i] || `${i+1}.`} ${_DN3[d.getDay()]} ${d.getDate()} de ${_MN3[d.getMonth()]}`;
+                                }).join('\n\n');
+                                const _dayListMsg = `Tengo entrevistas los días${_fn3 ? `, ${_fn3}` : ''}:\n\n${_dayLines3}`;
+                                const _dayAskMsg = `¿En cuál día te queda mejor? 😊`;
+
+                                await new Promise(r => setTimeout(r, 800));
+                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _dayListMsg, 'chat').catch(() => {});
+                                await new Promise(r => setTimeout(r, 1500));
+                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _dayAskMsg, 'chat').catch(() => {});
+                                await saveMessage(candidateId, { from: 'me', content: _dayListMsg + '\n\n' + _dayAskMsg, timestamp: new Date().toISOString() });
+                            } catch (_dlErr) {
+                                console.error('[DAY LIST] Failed to send day list on step entry:', _dlErr.message);
+                            }
+                        }
+
                         // Now trigger next step's AI
                         const isTerminalStep = nextStepNameLower.includes('citado') || nextStepNameLower.includes('no interesa') || isExitMove;
 
-                        if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt && !isTerminalStep) {
+                        if (nextStep.aiConfig?.enabled && nextStep.aiConfig.prompt && !isTerminalStep && !_nextHasFutureDays) {
+
                             try {
                                 // 🧹 CLEAN HISTORY for the new step. Keep both user and assistant roles so the AI knows which FAQs were already answered.
                                 const historyForNextStep = [
