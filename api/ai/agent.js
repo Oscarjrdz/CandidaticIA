@@ -225,6 +225,18 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         text = text.replace(/^[^\w\n\r\[]*Posgrado\b/gm,     '🧠 Posgrado');
     }
 
+    // 🔗 ESCOLARIDAD LIST CONSOLIDATOR: If GPT put [MSG_SPLIT] between list items, merge them back.
+    // Runs BEFORE the split guard so the list is always one contiguous block for processing.
+    {
+        const _ESC_ITEM_RE = /((?:🎒|🏫|🎓|📚|🛠️|🧠)[^\n]*)[ \t]*\[MSG_SPLIT\][ \t]*((?:🎒|🏫|🎓|📚|🛠️|🧠))/g;
+        // Run multiple passes until no more inter-item splits remain
+        let _prev;
+        do {
+            _prev = text;
+            text = text.replace(_ESC_ITEM_RE, '$1\n$2');
+        } while (text !== _prev);
+    }
+
     // 📚 ESCOLARIDAD SPLIT GUARD v2: Guarantees 3 bubbles for escolaridad.
     // Bubble 1 = intro acknowledgment, Bubble 2 = list, Bubble 3 = push nudge (separate).
     {
