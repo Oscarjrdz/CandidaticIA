@@ -1848,9 +1848,13 @@ ${safeDnaLines}
                     const _buildHourList = (dateStr, fname) => {
                         const _hours = _futureDayOpts
                             .filter(o => o.startsWith(dateStr))
-                            .map(o => o.replace(dateStr, '').trim())
+                            .map(o => o.replace(dateStr, '').replace(/^\s*@\s*/, '').trim())
                             .filter(h => h.length > 0)
-                            .sort();
+                            .sort((a, b) => {
+                                // Sort by actual time value, not alphabetically
+                                const toMin = t => { const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i); if (!m) return 0; let [,h,min,ap] = m; h=parseInt(h); if(ap?.toUpperCase()==='PM'&&h!==12) h+=12; if(ap?.toUpperCase()==='AM'&&h===12) h=0; return h*60+parseInt(min); };
+                                return toMin(a) - toMin(b);
+                            });
                         const _d = new Date(parseInt(dateStr.substr(0,4)), parseInt(dateStr.substr(5,2))-1, parseInt(dateStr.substr(8,2)));
                         const _humanDate = `${_DN4[_d.getDay()]} ${_d.getDate()} de ${_MN4[_d.getMonth()]}`;
                         if (_hours.length === 0) return null; // No hours configured — let GPT handle
@@ -1885,7 +1889,7 @@ ${safeDnaLines}
                     if (_citaFechaStored && _uDays.includes(_citaFechaStored)) {
                         const _hoursForStored = _futureDayOpts
                             .filter(o => o.startsWith(_citaFechaStored))
-                            .map(o => o.replace(_citaFechaStored, '').trim())
+                            .map(o => o.replace(_citaFechaStored, '').replace(/^\s*@\s*/, '').trim())
                             .filter(h => h.length > 0);
 
                         if (_hoursForStored.length > 0) {
