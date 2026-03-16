@@ -198,6 +198,14 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // 📅 HUMANIZE raw YYYY-MM-DD dates that GPT leaked into the output
     text = text.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_, y, m, d) => humanizeDate(`${y}-${m}-${d}`));
 
+    // 🚫 DESCONTEXTUALIZED PRAISE STRIP: Remove opener praises that GPT adds without context.
+    // These phrases only make sense as a confirmation, not as a response to a data/vacancy question.
+    // We strip them from the START of any segment (before the actual content).
+    {
+        const _PRAISE_RE = /^(?:¡(?:Vas\s+(?:excelente|muy\s+bien|genial|de\s+maravilla)|Lo\s+est[aá]s\s+haciendo\s+(?:genial|muy\s+bien|excelente)|Excelente\s+dato)\b[!.]?\s*)/i;
+        text = text.split('[MSG_SPLIT]').map(seg => seg.replace(_PRAISE_RE, '')).join('[MSG_SPLIT]');
+    }
+
     // 🔧 DATE-EXAMPLE GUARD: Strip "(ej. DD/MM/YYYY)" from segments NOT about birth date (per-segment).
     {
         const _DATE_EJ_RE = /\s*\(ej\.?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\)/gi;
