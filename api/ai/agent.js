@@ -240,12 +240,15 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
             if (_listIdx !== -1) {
                 const _lines = _segs[_listIdx].trimEnd().split('\n');
                 const _lastLine = (_lines[_lines.length - 1] || '').trim();
-                // If last line is a question, move it to its own bubble; otherwise add a nudge
-                const _isQuestion = /[?？]$/.test(_lastLine) || /^¿/.test(_lastLine);
-                if (_isQuestion && _lines.length > 1) {
+                const _nextSeg = (_segs[_listIdx + 1] || '').trim();
+                const _nextIsQuestion = /^¿/.test(_nextSeg) || /[?？]$/.test(_nextSeg);
+                // If last line of list is a question, move it to its own bubble
+                const _isQuestion = (/[?？]$/.test(_lastLine) || /^¿/.test(_lastLine)) && _lines.length > 1;
+                if (_isQuestion) {
                     _segs[_listIdx] = _lines.slice(0, -1).join('\n').trimEnd();
                     _segs.splice(_listIdx + 1, 0, _lastLine);
-                } else if (!_isQuestion) {
+                } else if (!_nextIsQuestion) {
+                    // Only add nudge if there's no question bubble already after the list
                     const _nudges = ['¿Cuál es la tuya? 🌟', '¡Elige la que más te identifica! 😊', '¿Cuál eliges? ✨'];
                     _segs.splice(_listIdx + 1, 0, _nudges[Math.floor(Math.random() * _nudges.length)]);
                 }
@@ -2608,7 +2611,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 const _fechaHint = /fecha|nacimiento/i.test(_nextLabel) ? ` (ej. 19/05/1990)` : '';
                                 systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Responde en DOS burbujas con [MSG_SPLIT]: Burbuja 1 = MÁXIMO 2 líneas, cálida con emoji, reconoce la pregunta y di que primero necesitas un dato. Burbuja 2 = Pregunta DIRECTA y ESPECÍFICA (NO genérica) por: "${_nextLabel}"${_fechaHint} — con emoji. PROHIBIDO usar frases vagas como "¿me ayudas con tus datos?".\n`;
                             } else if (isPersonalQ) {
-                                systemInstruction += `\n[NOTA DE CONTEXTO - PREGUNTA PERSONAL]: El candidato hizo una pregunta personal sobre ti. Responde BREVEMENTE (1 línea) de forma humana, carismática y divertida siguiendo tu personalidad — puedes evadir con humor o dar una respuesta corta en personaje. Luego redirige inmediatamente hacia el dato faltante: ${auditForMode.missingLabels[0]}. NO ignores la pregunta personal.\n`;
+                                systemInstruction += `\n[NOTA DE CONTEXTO - PREGUNTA PERSONAL/LIGUE]: El candidato hizo una pregunta personal o de ligue. Usa [MSG_SPLIT] para DOS burbujas: Burbuja 1 = respuesta BREVE y coqueta en personaje (con picardía/humor), PROHIBIDO usar halagos descontextualizados como "¡Vas excelente!", "¡Genial!", "¡Perfecto!" — solo evasión divertida. Burbuja 2 = pregunta DIRECTA por el dato faltante: ${auditForMode.missingLabels[0]} — con emoji. PROHIBIDO mezclar ambas en una sola burbuja.\n`;
                             } else {
                                 const nextField = auditForMode.missingLabels[0];
                                 const isEscolaridad = /escolaridad/i.test(nextField);
