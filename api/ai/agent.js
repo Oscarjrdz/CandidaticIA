@@ -3035,10 +3035,22 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     responseTextVal = "Aquí está la información. 😉 ¿Te gustaría que te agende una cita de entrevista?";
                 } else if (recruiterClosedSilently) {
                     // Unknown / unanswered question — use the designed RADAR DE DUDAS fallback text,
-                    // same as RECRUITER_IDENTITY defines, keeps conversation open without pushing to cita.
-                    responseTextVal = 'Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨';
+                    // Unknown / unanswered — friendly clarification variant
+                    const _clarifyOptsSilent = [
+                        'Mmm, no te entendí bien 😅 ¿Puedes repetir tu pregunta de otra forma?',
+                        'No estoy segura de entenderte, ¿me lo puedes explicar diferente? 🙏',
+                        'Ayúdame a entenderte mejor, ¿qué quieres saber exactamente? 😊'
+                    ];
+                    responseTextVal = _clarifyOptsSilent[Math.floor(Math.random() * _clarifyOptsSilent.length)];
                 } else {
-                    responseTextVal = "¡Disculpa! Hubo un pequeño inconveniente. 😅 ¿Quieres que reserve tu cita para entrevista?";
+                    // Generic error — friendly clarification variant
+                    const _clarifyOptsErr = [
+                        'Mmm, no te entendí bien 😅 ¿Puedes repetirlo de otra forma?',
+                        'No estoy segura de entenderte, ¿puedes explicarlo diferente? 🙏',
+                        'Ayúdame a entenderte mejor, ¿qué quieres saber? 😊'
+                    ];
+                    responseTextVal = _clarifyOptsErr[Math.floor(Math.random() * _clarifyOptsErr.length)];
+
                 }
             } else {
                 responseTextVal = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
