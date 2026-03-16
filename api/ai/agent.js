@@ -3012,8 +3012,8 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
         // 🚨 PREMATURE CLOSURE GUARD: If GPT generated a closing message but fields are still missing,
         // strip the closing phrase and append the question for the next missing field.
-        // This is the last line of defense before the message reaches the candidate.
-        if (responseTextVal && auditForMode && auditForMode.missingLabels && auditForMode.missingLabels.length > 0) {
+        // SKIP if isNowComplete — profile was just finished this turn and closing is intentional.
+        if (responseTextVal && auditForMode && auditForMode.missingLabels && auditForMode.missingLabels.length > 0 && !isNowComplete) {
             const _CLOSING_RE = /(?:te contactar[eé]|te escribir[eé]|nos\s+vemos|¡hasta\s+(luego|pronto|la\s+próxima)|¡bye|¡chao|te\s+aviso\s+pronto|pronto\s+un\s+reclutador|estaremos\s+en\s+contacto|listo\s+por\s+hoy|eso\s+es\s+todo\s+por\s+ahora)/i;
             if (_CLOSING_RE.test(responseTextVal)) {
                 // Remove the closing sentence
