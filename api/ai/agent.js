@@ -2566,7 +2566,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         // Bypass works with or without customPrompt — faster (no GPT call) + 2 bubbles
                         bypassGpt = true;
                     } else {
-                        const welcomeName = customPrompt ? 'tu identidad' : 'la Lic. Brenda Rodríguez';
+                        const welcomeName = 'Brenda Rodríguez';
                         // If it's a specific question (not just "hola"), inject full CEREBRO1 rules
                         // so the PERSUASIÓN rule applies and the question is answered before asking for name
                         const isSpecificQuestion = !isGenericStart && /\?|vacante|empleo|trabajo|sueldo|horario|turno|beneficio|pagan|salar/i.test(aggregatedText);
@@ -2636,7 +2636,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 let gptResult = null;
 
                 if (bypassGpt) {
-                    const welcomeName = customPrompt ? 'tu reclutadora' : 'Brenda Rodríguez';
+                    const welcomeName = 'Brenda Rodríguez';
                     const greetingEmojis = ["👋", "✨", "🌸", "😊", "😇", "💖", "🌟"];
                     const gEmoji = greetingEmojis[Math.floor(Math.random() * greetingEmojis.length)];
                     const line1 = `¡Hola! ${gEmoji} Soy ${welcomeName}, reclutadora de Candidatic.`;
