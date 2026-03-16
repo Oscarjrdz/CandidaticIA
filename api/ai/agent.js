@@ -1782,9 +1782,14 @@ ${safeDnaLines}
                 // ═══════════════════════════════════════════════════════════════════
                 const _todayStrCs = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
 
-                // Detect if bot's last message was a scheduling offer (covers all verb variants)
-                const _botAskedScheduling = /(?:gustar[ií]a|quieres?|quier[eo]|deseas?)\s+que\s+(?:te\s+)?(?:agende|programe|confirme|reserve|aparte)|(?:te\s+)?(?:agend[eo]|program[eo]|confirm[eo]|te\s+aparto)\s+(?:una\s+)?(?:cita|entrevista)|(?:agendar|programar|confirmar|reservar)\s+(?:tu\s+)?(?:cita|entrevista)|puedo\s+(?:agendarte|programarte|confirmarte)\s+(?:una\s+)?(?:cita|entrevista)|(?:quieres?\s+que\s+(?:te\s+)?(?:reserve|aparte|programe))/i.test(_botText)
+                // Detect if bot's last message was a scheduling offer.
+                // SIMPLE APPROACH: any scheduling verb + cita/entrevista keyword present → it's an offer.
+                // Covers: "gustaría agendar", "quieres que te agende", "puedo programarte", etc.
+                const _botHasSchedulingVerb = /\b(?:agendar(?:te|nos)?|programar(?:te|nos)?|confirmar(?:te|nos)?|reservar(?:te)?|apartar(?:te)?|agend[eo]|program[eo]|confirm[eo]|reserv[eo]|aparto|aparte)\b/i.test(_botText);
+                const _botHasCitaWord = /\b(?:cita|entrevista)\b/i.test(_botText);
+                const _botAskedScheduling = _botHasSchedulingVerb && _botHasCitaWord
                     && !/queda\s+bien\s+ese\s+d[ií]a|cu[aá]l\s+(?:te\s+)?(?:queda\s+mejor|prefer|hora)|a\s+qu[eé]\s+hora|qu[eé]\s+hora\s+prefer/i.test(_botText);
+
 
                 const _isAffirmativeCs = /^(s[ií]|claro|dale|por\s*favor|porfa|por\s*fa|[aá]ndale|andale|v[aá]|adelante|ok\s*dale|sale|va|quiero|me\s+interesa|s[ií]\s+quiero|perfecto|s[ií]\s+por\s+favor|de\s+una|obvio|claro\s+que\s+s[ií]|s[ií]\s+claro|si\s+quiero)\s*[!.]*$/i.test(aggregatedText.trim());
 
