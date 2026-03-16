@@ -1724,11 +1724,18 @@ ${safeDnaLines}
                 }
 
                 // 🗓️ CITA AFFIRMATIVE GUARD: Only fires when bot explicitly offered to schedule — NOT on day/hour confirmations
+                // CRITICAL: Also only fires if THIS STEP has future calendar options. If not (Filtro/Inicio),
+                // let GPT handle the "si" naturally — it will fire { move } with a valid response_text.
                 if (!skipRecruiterInference) {
+                    const _todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+                    const _stepHasFutureDates = (currentStep.calendarOptions || []).some(opt => {
+                        const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
+                        return !m || m[1] >= _todayStr;
+                    });
                     const _botAskedCita = /gustar[ií]a.*(?:agendar|reservar).*(?:cita|entrevista)|te\s+agend[eo]\s+una\s+cita|quieres\s+que\s+(?:te\s+)?agende|puedo\s+agendarte\s+una\s+cita/i.test(_botText)
                         && !/queda\s+bien\s+ese\s+d[ií]a|cu[aá]l\s+(?:te\s+)?(?:queda\s+mejor|prefer|hora)|a\s+qu[eé]\s+hora|qu[eé]\s+hora\s+prefer/i.test(_botText);
                     const _isAffirmative = /^(s[ií]|claro|dale|por favor|porfa|por fa|ándale|andale|v[aá]|adelante|ok dale|sale|va|quiero|me interesa|s[ií] quiero|perfecto|s[ií] por favor)\s*[!.]*$/i.test(aggregatedText.trim());
-                    if (_botAskedCita && _isAffirmative) {
+                    if (_botAskedCita && _isAffirmative && _stepHasFutureDates) {
                         historyForGpt = [
                             ...historyForGpt.slice(0, -1),
                             {
