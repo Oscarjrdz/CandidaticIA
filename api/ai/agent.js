@@ -1838,15 +1838,22 @@ ${safeDnaLines}
                         ];
                     }
 
-                    aiResult = await processRecruiterMessage(
-                        updatedDataForAgent,
-                        project,
-                        currentStep,
-                        historyForRecruiter,
-                        config,
-                        activeAiConfig.openaiApiKey,
-                        currentIdx  // ✅ authoritative index from project:cand_meta
-                    );
+                    try {
+                        aiResult = await processRecruiterMessage(
+                            updatedDataForAgent,
+                            project,
+                            currentStep,
+                            historyForRecruiter,
+                            config,
+                            activeAiConfig.openaiApiKey,
+                            currentIdx
+                        );
+                    } catch (_recErr) {
+                        console.error('[RECRUITER] Error on message, using radar fallback:', _recErr.message);
+                        // Soft fallback: respond as radar-de-dudas instead of showing 'Disculpa!'
+                        responseTextVal = 'Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨';
+                        aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'FALLBACK:recruiter_error' };
+                    }
 
                     if (aiResult?.response_text) {
                         // 🧹 Strip leaked unanswered_question text
