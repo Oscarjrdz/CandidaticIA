@@ -220,6 +220,35 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         text = _parts.join('[MSG_SPLIT]');
     }
 
+    // 📚 ESCOLARIDAD SPLIT GUARD: If the escolaridad list is present but has no [MSG_SPLIT] before it,
+    // inject one deterministically so the list always arrives as a separate bubble.
+    {
+        const _ESC_LIST_RE = /(🎒\s*Primaria)/;
+        if (_ESC_LIST_RE.test(text) && !text.includes('[MSG_SPLIT]')) {
+            // Find where the list starts and inject MSG_SPLIT before it
+            text = text.replace(_ESC_LIST_RE, '[MSG_SPLIT]$1');
+        }
+        // Also ensure a push nudge bubble after the list if missing
+        if (_ESC_LIST_RE.test(text)) {
+            const _parts = text.split('[MSG_SPLIT]');
+            // If there are only 2 parts (intro + list) and the last part ends with an option (no clear question push)
+            if (_parts.length === 2 && !_parts[1].includes('[MSG_SPLIT]')) {
+                const _listPart = _parts[1].trimEnd();
+                const _lastLine = _listPart.split('\n').pop() || '';
+                const _hasNudge = /\?/.test(_lastLine);
+                if (!_hasNudge) {
+                    const _nudges = ['¿Cuál es la tuya? 🌟', '¡Elige la que más te identifica! 😊', '¿Cuál eliges? ✨'];
+                    _parts[1] = _listPart + '[MSG_SPLIT]' + _nudges[Math.floor(Math.random() * _nudges.length)];
+                    text = _parts.join('[MSG_SPLIT]');
+                }
+            }
+        }
+    }
+
+    // 🏙️ MUNICIPIO WORDING GUARD: Replace vague "¿dónde vives?" with specific "¿en qué municipio vives?"
+    // to prevent candidates from giving their full address instead of just the municipality name.
+    text = text.replace(/¿[Dd][oó]nde\s+vives(\s+actualmente)?\s*\?/g, '¿En qué municipio vives$1?');
+
     // 📋 COMBINED DAYS+HORARIO: If GPT merged PASO 1 (days list) and PASO 2 (horarios)
     // into one message, STRIP the horario part — user must pick a day first.
     {
@@ -2771,6 +2800,27 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         let deliveryPromise = Promise.resolve();
         // 📐 LAST-MILE FORMATTER: Ensure formatting is applied regardless of which code path built responseTextVal
         if (responseTextVal) responseTextVal = formatRecruiterMessage(responseTextVal, candidateData);
+
+        // 🚨 PREMATURE CLOSURE GUARD: If GPT generated a closing message but fields are still missing,
+        // strip the closing phrase and append the question for the next missing field.
+        // This is the last line of defense before the message reaches the candidate.
+        if (responseTextVal && auditForMode && auditForMode.missingLabels && auditForMode.missingLabels.length > 0) {
+            const _CLOSING_RE = /(?:te contactar[eé]|te escribir[eé]|nos\s+vemos|¡hasta\s+(luego|pronto|la\s+próxima)|¡bye|¡chao|te\s+aviso\s+pronto|pronto\s+un\s+reclutador|estaremos\s+en\s+contacto|listo\s+por\s+hoy|eso\s+es\s+todo\s+por\s+ahora)/i;
+            if (_CLOSING_RE.test(responseTextVal)) {
+                // Remove the closing sentence
+                responseTextVal = responseTextVal
+                    .split(/[.!]\s+/)
+                    .filter(s => !_CLOSING_RE.test(s))
+                    .join('. ')
+                    .trim();
+                // Ensure it ends with the data question
+                const _nextMissing = auditForMode.missingLabels[0];
+                if (responseTextVal && !responseTextVal.endsWith('?')) {
+                    responseTextVal += `[MSG_SPLIT]¿Me puedes compartir tu ${_nextMissing}? 😊`;
+                }
+            }
+        }
+
         // ⚠️ Compute resText AFTER formatRecruiterMessage so [MSG_SPLIT] injections are visible
         let resText = String(responseTextVal || '').replace(/\[MSG_SPLIT\]/g, '').trim();
 
