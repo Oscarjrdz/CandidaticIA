@@ -1841,7 +1841,11 @@ ${safeDnaLines}
                 });
 
                 if (!skipRecruiterInference && _stepHasFutureDatesForOpt) {
-                    const _rawInput = aggregatedText.trim().toLowerCase();
+                    // 🔧 BURST FIX: When user sends multiple messages rapidly (e.g. "la opcion 4", "la uno", "sabado 21"),
+                    // they are aggregated with newlines. We try each line individually for ordinal/day parsing.
+                    const _rawInputFull = aggregatedText.trim().toLowerCase();
+                    const _rawInputLines = _rawInputFull.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+                    const _rawInput = _rawInputLines[0] || _rawInputFull; // Use first line for primary parsing
                     const _futureDayOpts = (currentStep.calendarOptions || [])
                         .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m && m[1] >= _todayStrCs; });
                     const _uDays = [...new Set(_futureDayOpts
@@ -1925,17 +1929,26 @@ ${safeDnaLines}
                     if (!skipRecruiterInference && !_citaFechaStored) {
                         let _resolvedDayIdx = null; // index in _uDays (0-based)
 
-                        // 1) Try ordinal / number
-                        const _ordNum = _parseOrdinal(_rawInput);
-                        if (_ordNum !== null) {
-                            if (_ordNum === -1) _resolvedDayIdx = _uDays.length - 1;
-                            else if (_ordNum === -2) _resolvedDayIdx = Math.max(0, _uDays.length - 2);
-                            else if (_ordNum >= 1 && _ordNum <= _uDays.length) _resolvedDayIdx = _ordNum - 1;
+                        // 1) Try ordinal / number — iterate through burst lines
+                        for (const _line of _rawInputLines) {
+                            const _ordNum = _parseOrdinal(_line);
+                            if (_ordNum !== null) {
+                                if (_ordNum === -1) _resolvedDayIdx = _uDays.length - 1;
+                                else if (_ordNum === -2) _resolvedDayIdx = Math.max(0, _uDays.length - 2);
+                                else if (_ordNum >= 1 && _ordNum <= _uDays.length) _resolvedDayIdx = _ordNum - 1;
+                                if (_resolvedDayIdx !== null) break;
+                            }
                         }
 
                         // 2) Try day name (with optional number disambiguation)
                         if (_resolvedDayIdx === null) {
-                            const _dayOfWeek = _parseDayName(_rawInput);
+                            // Try each burst line for day name match
+                            let _matchedLine = _rawInput;
+                            let _dayOfWeek = null;
+                            for (const _line of _rawInputLines) {
+                                _dayOfWeek = _parseDayName(_line);
+                                if (_dayOfWeek !== null) { _matchedLine = _line; break; }
+                            }
                             if (_dayOfWeek !== null) {
                                 const _matchingIdxs = _uDays
                                     .map((ds, i) => {
@@ -1949,7 +1962,7 @@ ${safeDnaLines}
                                 } else if (_matchingIdxs.length > 1) {
                                     // Try to disambiguate by matching a day-of-month number in the input
                                     // e.g. "viernes 20" → find the Friday with date=20
-                                    const _dayNumMatch = _rawInput.match(/(\d{1,2})/);
+                                    const _dayNumMatch = _matchedLine.match(/(\d{1,2})/);
                                     if (_dayNumMatch) {
                                         const _dayNum = parseInt(_dayNumMatch[1]);
                                         const _specificIdx = _matchingIdxs.find(dIdx => {
