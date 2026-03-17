@@ -1926,7 +1926,35 @@ ${safeDnaLines}
                     const _citaFechaStored = candidateData.projectMetadata?.citaFecha
                         || candidateUpdates.projectMetadata?.citaFecha;
 
-                    // ── BRANCH A: Date IS chosen → candidate is picking an HOUR ─────────────
+                    // ── BRANCH A (PASO 4): Both date AND hour chosen → candidate is confirming ─
+                    // When the user says anything affirmative ('claro señorita', 'sí', 'ok', 'dale', etc.)
+                    // after seeing the "¿Estamos de acuerdo?" message, fire { move } deterministically.
+                    const _citaHoraStoredPaso4 = candidateData.projectMetadata?.citaHora
+                        || candidateUpdates.projectMetadata?.citaHora;
+
+                    if (!skipRecruiterInference && _citaFechaStored && _citaHoraStoredPaso4) {
+                        // Broad affirmation — covers formal, informal, and colloquial Spanish
+                        const _isBroadAffirmation = /^(s[ií]|claro|dale|por\s*favor|porfa|por\s*fa|[aá]ndale|andale|v[aá]|adelante|ok\s*dale|sale|quiero|perfecto|de\s*acuerdo|est[aá]\s*bien|me\s*parece\s*bien|con\s+gusto|obvio|correcto|excelente|listo|listo|confirmado|confirmado|[aá]ndale\s+pues|s[ií]\s+claro|s[ií]\s+gracias|s[ií]\s+se[ñn]orita|claro\s+se[ñn]orita|s[ií]\s+se[ñn]or|claro\s+que\s+s[ií]|de\s+una|ok|va|va[aá]monos)\s*[!.¡]*$/i
+                            .test(aggregatedText.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+
+                        if (_isBroadAffirmation) {
+                            // Build human-readable date + hour for the final confirmation message
+                            const _storedDateP4 = _citaFechaStored;
+                            const _storedHourP4 = _citaHoraStoredPaso4;
+                            const _selD4 = new Date(parseInt(_storedDateP4.substr(0,4)), parseInt(_storedDateP4.substr(5,2))-1, parseInt(_storedDateP4.substr(8,2)));
+                            const _humanDateP4 = `${_DN4[_selD4.getDay()]} ${_selD4.getDate()} de ${_MN4[_selD4.getMonth()]}`;
+
+                            skipRecruiterInference = true;
+                            responseTextVal = `¡Perfecto${_fn4 ? `, ${_fn4}` : ''}! ✅ Tu cita queda agendada para el ${_humanDateP4} a las ${_storedHourP4}. ¡Te esperamos! 🌟`;
+                            aiResult = {
+                                response_text: responseTextVal,
+                                extracted_data: { citaFecha: _storedDateP4, citaHora: _storedHourP4 },
+                                thought_process: '{ move }'   // fires the step transition
+                            };
+                        }
+                    }
+
+                    // ── BRANCH A (PASO 2-3): Date IS chosen → candidate is picking an HOUR ────
                     // Deterministic resolver: map ordinal input to the exact time slot.
                     // This prevents GPT from skipping the PASO 3 confirmation and firing { move } prematurely.
                     if (!skipRecruiterInference && _citaFechaStored) {
