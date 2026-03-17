@@ -178,7 +178,7 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // might be asking "¿En cuál horario te queda mejor?".
     const hasMultipleDates = /2️⃣|3️⃣|4️⃣|5️⃣/.test(text);
     if (!hasMultipleDates && /¿Qué día te queda mejor\??/i.test(text)) {
-        text = text.replace(/¿Qué día te queda mejor\??/gi, '¿Te queda bien ese día?');
+        text = text.replace(/¿Qué día te queda mejor\??(?!\s*para\s*agendar)/gi, '¿Te queda bien ese día?');
     }
 
     // 😊 ORPHAN EMOJI CLEANUP: A line that contains ONLY emojis (no letters/digits)
@@ -2010,8 +2010,8 @@ ${safeDnaLines}
                                 : null;
 
                             const _injMsg = _hrsInjection
-                                ? `[ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra EXACTAMENTE estos horarios al candidato (copia verbatim, no cambies el formato):\n${_hrsInjection}\n¿En cuál horario te queda mejor? 😊`
-                                : `[ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles del sistema para esa fecha.`;
+                                ? `[SISTEMA INTERNO - ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra EXACTAMENTE estos horarios al candidato (copia verbatim, no cambies el formato):\n${_hrsInjection}\n3) Finaliza pidiendo al candidato que elija un horario de la lista. ESTÁ ESTRICTAMENTE PROHIBIDO usar "unanswered_question" aquí.`
+                                : `[SISTEMA INTERNO - ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles del sistema para esa fecha. ESTÁ ESTRICTAMENTE PROHIBIDO usar "unanswered_question" aquí.`;
 
                             historyForGpt = [
                                 ...historyForGpt.slice(0, -1),
