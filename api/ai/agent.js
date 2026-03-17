@@ -2027,7 +2027,7 @@ ${safeDnaLines}
                             if (_hrsInjection) {
                                 // 🔥 DETERMINISTIC RESPONSE: Skip GPT entirely — build the hour list ourselves
                                 skipRecruiterInference = true;
-                                responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, para el ${_humanSelDate} tengo estas opciones de horario:\n\n${_hrsInjection}\n\n¿Cuál prefieres?`;
+                                responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, para el ${_humanSelDate} tengo estas opciones de horario:\n\n${_hrsInjection}[MSG_SPLIT]¿Cuál te queda mejor? 😊`;
                                 aiResult = {
                                     response_text: responseTextVal,
                                     extracted_data: { citaFecha: _selDate },
@@ -2462,13 +2462,16 @@ ${safeDnaLines}
                                     callToAction = `Perfecto, para el ${mergedMeta.citaFecha}. ¿A qué hora te gustaría asistir de los horarios disponibles?`;
                                 }
                             } else if (!mergedMeta.citaFecha || mergedMeta.citaFecha === 'null') {
-                                callToAction = "¿Qué día te queda mejor para agendar tu cita?";
-                                // 🩹 REDUNDANT DAY QUESTION FIX: If the bot already provided exactly one day option, change the CTA to a yes/no question
+                                // 🩹 REDUNDANT DAY QUESTION FIX: If the bot already provided a day list, make the CTA a second bubble
                                 if (responseTextVal && /Tengo entrevistas los días:/i.test(responseTextVal)) {
                                     const dayMatches = responseTextVal.match(/1️⃣/g);
                                     if (dayMatches && dayMatches.length === 1 && !responseTextVal.includes('2️⃣')) {
-                                        callToAction = "¿Te queda bien este día?";
+                                        callToAction = "[MSG_SPLIT]¿Te queda bien este día? 😊";
+                                    } else {
+                                        callToAction = "[MSG_SPLIT]¿En cuál día te queda mejor? 🗓️";
                                     }
+                                } else {
+                                    callToAction = "¿Qué día te queda mejor para agendar tu cita?";
                                 }
                             }
 
