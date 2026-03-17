@@ -2174,7 +2174,9 @@ ${safeDnaLines}
                     // The AI sometimes hallucinates { move } when a candidate asks about the interview.
                     const _firewallStepName = (currentStep?.name || '').toLowerCase();
                     const _isInicioPasoFirewall = /filtro|inicio|contacto/i.test(_firewallStepName);
-                    if (_isInicioPasoFirewall && !hasExitTag) {
+                    // 🛡️ MUTE FIX: Do not run firewall if `skipRecruiterInference` is strictly true
+                    // This protects deterministic { move } injections (like Affirmative Guard) from being blocked
+                    if (_isInicioPasoFirewall && !hasExitTag && !skipRecruiterInference) {
                         // Guard 1: Intent classifier already said QUERY
                         const _isQueryIntent = intent === 'QUERY';
                         // Guard 2: Message contains question words even without punctuation
