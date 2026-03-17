@@ -461,7 +461,11 @@ ${vacancyContext.salary !== 'N/A' || vacancyContext.schedule !== 'N/A' ? `[DATOS
 ` : ''}
 [REGLAS DE AGENDA]:
 PASO 1 — Si no hay fecha elegida: muestra los días disponibles (copia la lista exacta de [DÍAS DISPONIBLES]) y pregunta cuál prefiere. Empieza con: "${_fn}, tengo entrevistas los días:"
-PASO 2 — Si ya hay fecha pero no hora: muestra los horarios de [HORARIOS DISPONIBLES] con emojis numerados y pregunta cuál prefiere.
+PASO 2 — Si ya hay fecha pero no hora: muestra los horarios de [HORARIOS DISPONIBLES] con emojis numerados. FORMATO OBLIGATORIO — cada horario en su PROPIA LÍNEA (con salto de línea real entre cada uno), usando ⏰ (no 🕐):
+1️⃣ 03:00 PM ⏰
+2️⃣ 06:30 PM ⏰
+3️⃣ 08:00 PM ⏰
+PROHIBIDO poner todos los horarios en una sola línea. Después de la lista, pregunta cuál prefiere en una línea separada.
 PASO 3 — Si ya hay fecha Y hora: confirma la cita completa y pregunta "¿estamos de acuerdo?" ANTES de disparar { move }.
 PASO 4 — Cuando el candidato confirma con Sí/Ok: incluye "{ move }" en thought_process y escribe mensaje de confirmación cálido.
 

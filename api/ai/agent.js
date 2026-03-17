@@ -571,8 +571,13 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         let slotIdx = 0;
         // 🔹 Opción N: → 1️⃣, 2️⃣...
         text = text.replace(/🔹\s*Opci[oó]n\s*\d+:\s*/gi, () => `${_NUM_EMOJIS[slotIdx++] || `${slotIdx}.`} `);
+        // 🕐🕑🕒... clock variants → ⏰
+        text = text.replace(/🕐|🕑|🕒|🕓|🕔|🕕|🕖|🕗|🕘|🕙|🕚|🕛/g, '⏰');
         // ⏰ after every time if missing
         text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
+        // 🔧 INLINE SLOT SPLITTER: If multiple slots are on the same line (GPT squishes them),
+        // split so each gets its own line: "1️⃣ 03:00 PM ⏰ 2️⃣ ..." → separate lines
+        text = text.replace(/(⏰)\s+([1-9]️⃣)/g, '⏰\n$2');
         // Single slot → fix header + closing question
         const timeCount = (text.match(/\d{1,2}:\d{2}\s*(?:AM|PM)/gi) || []).length;
         if (timeCount === 1) {
