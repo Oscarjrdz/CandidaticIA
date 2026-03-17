@@ -232,8 +232,11 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     text = text.replace(/(\bmunicipio\b[^?]*)\s*\([^)]{3,40}\)/gi, '$1');
 
     // 💼 VACANCY QUESTION WORDING GUARD: 'favorita' doesn't fit a job context — replace with professional phrasing.
-    text = text.replace(/¿[Cc]u[aá]l\s+es\s+tu\s+favorita\s*\?/g, '¿En cuál te interesa trabajar?');
-    text = text.replace(/¿[Cc]u[aá]l\s+(?:de\s+(?:ellas|ellos|estas|estas\s+opciones)\s+)?(?:es\s+tu\s+favorita|te\s+gusta\s+m[aá]s|prefieres)\s*\?/gi, '¿En cuál te interesa trabajar?');
+    // Only apply when context is vacancy selection (✅ items), NOT time slot selection (⏰ items).
+    if (/✅/.test(text) && !/⏰/.test(text)) {
+        text = text.replace(/¿[Cc]u[aá]l\s+es\s+tu\s+favorita\s*\?/g, '¿En cuál te interesa trabajar?');
+        text = text.replace(/¿[Cc]u[aá]l\s+(?:de\s+(?:ellas|ellos|estas|estas\s+opciones)\s+)?(?:es\s+tu\s+favorita|te\s+gusta\s+m[aá]s|prefieres)\s*\?/gi, '¿En cuál te interesa trabajar?');
+    }
 
     // 🎓 ESCOLARIDAD EMOJIS NORMALIZER: Fix wrong emojis GPT uses for the education list.
     if (/Primaria|Secundaria|Preparatoria|Licenciatura|T[eé]cnica|Posgrado/i.test(text)) {
@@ -2027,7 +2030,7 @@ ${safeDnaLines}
 
 
                 if (!skipRecruiterInference) {
-                    const updatedDataForAgent = { ...candidateData, ...candidateUpdates, projectMetadata: { ...candidateData.projectMetadata, currentVacancyIndex: candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : candidateData.projectMetadata?.currentVacancyIndex } };
+                    const updatedDataForAgent = { ...candidateData, ...candidateUpdates, projectMetadata: { ...candidateData.projectMetadata, ...(candidateUpdates.projectMetadata || {}), currentVacancyIndex: candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : candidateData.projectMetadata?.currentVacancyIndex } };
 
                     // 🔄 VACANCY TRANSITION CONTEXT: If we just advanced to a new vacancy due to rejection,
                     // replace the rejection message in history with a system note so GPT doesn't
@@ -2092,8 +2095,8 @@ ${safeDnaLines}
                             if (!candidateUpdates.projectMetadata) {
                                 candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
                             }
-                            if (citaFecha && citaFecha !== 'null') candidateUpdates.projectMetadata.citaFecha = citaFecha;
-                            if (citaHora && citaHora !== 'null') candidateUpdates.projectMetadata.citaHora = citaHora;
+                            if (citaFecha && citaFecha !== 'null' && citaFecha !== 'N/A') candidateUpdates.projectMetadata.citaFecha = citaFecha;
+                            if (citaHora && citaHora !== 'null' && citaHora !== 'N/A') candidateUpdates.projectMetadata.citaHora = citaHora;
                         }
 
                     }
