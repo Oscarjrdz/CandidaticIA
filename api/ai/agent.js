@@ -1992,14 +1992,34 @@ ${safeDnaLines}
                                 if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
                                 candidateUpdates.projectMetadata.citaFecha = _selDate;
                             } else {
-                                // Hours not configured for this day — inject into GPT
+                                // _buildHourList returned null — either no hours for this day or empty calendarOptions.
+                                // 1) Save citaFecha deterministically (don't rely on GPT extracted_data)
+                                if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
+                                candidateUpdates.projectMetadata.citaFecha = _selDate;
+
+                                // 2) Build the hour text inline so GPT can copy it verbatim
                                 const _d2 = new Date(parseInt(_selDate.substr(0,4)), parseInt(_selDate.substr(5,2))-1, parseInt(_selDate.substr(8,2)));
                                 const _humanSel = `${_DN4[_d2.getDay()]} ${_d2.getDate()} de ${_MN4[_d2.getMonth()]}`;
+                                const _inlineHrs = (currentStep.calendarOptions || [])
+                                    .filter(o => o.startsWith(_selDate))
+                                    .map(o => o.replace(_selDate, '').replace(/^\s*@\s*/, '').trim())
+                                    .filter(h => h.length > 0)
+                                    .sort((a, b) => {
+                                        const tm = t => { const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i); if (!m) return 0; let [,h,min,ap] = m; h=parseInt(h); if(ap?.toUpperCase()==='PM'&&h!==12) h+=12; if(ap?.toUpperCase()==='AM'&&h===12) h=0; return h*60+parseInt(min); };
+                                        return tm(a) - tm(b);
+                                    });
+                                const _hrsBlock = _inlineHrs.length > 0
+                                    ? _inlineHrs.map((h, i) => `${_NE4[i] || `${i+1}.`} ${h} ⏰`).join('\n')
+                                    : null;
+                                const _injectContent = _hrsBlock
+                                    ? `[ELECCIÓN DE DÍA]: El candidato eligió el ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra al candidato EXACTAMENTE estos horarios (cópialos verbatim):\n${_hrsBlock}\n¿Cuál te queda mejor?`
+                                    : `[ELECCIÓN DE DÍA]: El candidato eligió el ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles para esa fecha usando los horarios brutos del sistema.`;
                                 historyForGpt = [
                                     ...historyForGpt.slice(0, -1),
-                                    { role: 'user', content: `[ELECCIÓN DE DÍA]: El candidato eligió ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles.` }
+                                    { role: 'user', content: _injectContent }
                                 ];
                             }
+
                         }
                     }
                 }
