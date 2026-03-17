@@ -1732,7 +1732,16 @@ ${safeDnaLines}
 
                 // 🩹 FAQ MUTE FIX: If the bot previously said "déjame consultarlo" and the user just says "Ok" or "Gracias", mute the AI
                 const _lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
+                // For FAQ MUTE FIX: only look at the very last message
                 const _botText = (_lastBotMsg?.content || '').toLowerCase();
+                // For CITA AFFIRMATIVE GUARD: scan LAST 3 bot messages (CTA question may be
+                // before a media/PDF bubble that becomes the "last" assistant entry)
+                const _recentBotText = historyForGpt
+                    .filter(h => h.role === 'assistant' || h.role === 'model')
+                    .slice(-3)
+                    .map(h => (h.content || '').toLowerCase())
+                    .join(' ');
+
                 const _isJustThanksOrOk = /^(gracias|muchas gracias|mil gracias|perfecto|ok|okay|vale|gracias a ti|excelente|va|si|sí)\s*$/i.test(aggregatedText.trim().replace(/[^\w\sñáéíóúü]/gi, ''));
                 if (_botText.includes('déjame consultarlo') && _isJustThanksOrOk) {
                     skipRecruiterInference = true;
@@ -1791,8 +1800,8 @@ ${safeDnaLines}
                 const _todayStrCs = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
 
                 // Detect scheduling offer — covers agende, programe, confirme, reserve, aparte + cita/entrevista
-                const _botAskedCita = /\b(?:agendar(?:te)?|programar(?:te)?|confirmar(?:te)?|reservar(?:te)?|apartar(?:te)?|agend[eo]|program[eo]|confirm[eo]|reserv[eo]|aparto)\b.*\b(?:cita|entrevista)\b|\b(?:cita|entrevista)\b.*\b(?:agendar(?:te)?|programar(?:te)?|confirmar(?:te)?|reservar(?:te)?|apartar(?:te)?|agend[eo]|program[eo]|confirm[eo]|reserv[eo]|aparto)\b/i.test(_botText)
-                    && !/queda\s+bien\s+ese\s+d[ií]a|cu[aá]l\s+(?:te\s+)?(?:queda\s+mejor|prefer|hora)|a\s+qu[eé]\s+hora|qu[eé]\s+hora\s+prefer/i.test(_botText);
+                const _botAskedCita = /\b(?:agendar(?:te)?|programar(?:te)?|confirmar(?:te)?|reservar(?:te)?|apartar(?:te)?|agend[eo]|program[eo]|confirm[eo]|reserv[eo]|aparto)\b.*\b(?:cita|entrevista)\b|\b(?:cita|entrevista)\b.*\b(?:agendar(?:te)?|programar(?:te)?|confirmar(?:te)?|reservar(?:te)?|apartar(?:te)?|agend[eo]|program[eo]|confirm[eo]|reserv[eo]|aparto)\b/i.test(_recentBotText)
+                    && !/queda\s+bien\s+ese\s+d[ií]a|cu[aá]l\s+(?:te\s+)?(?:queda\s+mejor|prefer|hora)|a\s+qu[eé]\s+hora|qu[eé]\s+hora\s+prefer/i.test(_recentBotText);
 
                 const _isAffirmativeCs = /^(s[ií]|claro|dale|por\s*favor|porfa|por\s*fa|[aá]ndale|andale|v[aá]|adelante|ok\s*dale|sale|va|quiero|me\s+interesa|s[ií]\s+quiero|perfecto|s[ií]\s+por\s+favor|de\s+una|obvio|claro\s+que\s+s[ií]|s[ií]\s+claro|si\s+quiero)\s*[!.]*$/i.test(aggregatedText.trim());
 
