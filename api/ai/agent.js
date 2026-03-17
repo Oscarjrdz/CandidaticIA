@@ -1806,14 +1806,18 @@ ${safeDnaLines}
                 const _isAffirmativeCs = /^(s[ií]|claro|dale|por\s*favor|porfa|por\s*fa|[aá]ndale|andale|v[aá]|adelante|ok\s*dale|sale|va|quiero|me\s+interesa|s[ií]\s+quiero|perfecto|s[ií]\s+por\s+favor|de\s+una|obvio|claro\s+que\s+s[ií]|s[ií]\s+claro|si\s+quiero)\s*[!.]*$/i.test(aggregatedText.trim());
 
                 if (!skipRecruiterInference && _botAskedCita && _isAffirmativeCs) {
-                    // Inject confirmation context so GPT fires { move } to Cita + presents dates
-                    historyForGpt = [
-                        ...historyForGpt.slice(0, -1),
-                        {
-                            role: 'user',
-                            content: `[CONFIRMACIÓN CITA]: El candidato acaba de confirmar que SÍ quiere agendar su entrevista. OBLIGATORIO: Avanza al paso de agendar cita y presenta las fechas disponibles. No repitas la pregunta de si quiere agendar.`
-                        }
-                    ];
+                    // 🔑 DETERMINISTIC CITA MOVE: bypass GPT entirely.
+                    // GPT in the INICIO step is unreliable at converting a 'sí' affirmation
+                    // into a { move } — it often generates empty output or a clarification fallback.
+                    // We set aiResult.thought_process = '{ move }' directly so hasMoveIntent fires.
+                    skipRecruiterInference = true;
+                    const _candFirst = (candidateData.nombreReal || '').trim().split(/\s+/)[0] || '';
+                    responseTextVal = `\u00a1Perfecto${_candFirst ? `, ${_candFirst}` : ''}! Vamos a agendar tu cita de entrevista. \ud83c\udf1f`;
+                    aiResult = {
+                        response_text: responseTextVal,
+                        thought_process: '{ move }',
+                        extracted_data: {}
+                    };
                 }
 
                 // ═══════════════════════════════════════════════════════════════════
