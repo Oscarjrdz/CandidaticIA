@@ -413,6 +413,95 @@ ${alternatives.length > 0
         }
 
 
+        // ⚡ SLIM PROMPT FOR CITA STEP: When step has calendarOptions, skip all vacancy/FAQ context.
+        // GPT only needs: candidate name, dates, hours for chosen date, and the step prompt.
+        const isCitaStep = hasFutureCalendarOptions && (currentStep?.calendarOptions?.length > 0);
+
+        if (isCitaStep) {
+            // Slim context: only what's needed for scheduling
+            const _citaFecha = candidateData.projectMetadata?.citaFecha || null;
+            const _citaHora = candidateData.projectMetadata?.citaHora || null;
+            const _fn = (candidateData.nombreReal || candidateData.nombre || 'el candidato').split(' ')[0];
+
+            // Only include hours for the chosen date if citaFecha is set
+            let _hoursBlock = '';
+            if (_citaFecha) {
+                const _selHrs = futureCalendarOptions
+                    .filter(o => o.startsWith(_citaFecha))
+                    .map(o => o.replace(_citaFecha, '').replace(/^\s*@\s*/, '').trim())
+                    .filter(h => h.length > 0);
+                _hoursBlock = _selHrs.length > 0
+                    ? `[HORARIOS DISPONIBLES PARA ${_citaFecha}]:\n${_selHrs.map((h, i) => `${_NUM_EMOJIS[i] || `${i+1}.`} ${h} ⏰`).join('\n')}`
+                    : '';
+            } else {
+                // No date chosen yet — show unique days only
+                _hoursBlock = `[DÍAS DISPONIBLES]:\n${_preFormattedDayList}`;
+            }
+
+            systemPrompt = `
+[IDENTIDAD]: Eres Brenda Rodríguez, reclutadora de Candidatic. Cálida, profesional. Sin asteriscos.
+[REGLA DE ORO]: No uses asteriscos (*). Respuestas breves y humanas.
+[FORMATO]: Responde SIEMPRE en JSON con: {"extracted_data":{"citaFecha":"YYYY-MM-DD|null","citaHora":"string|null"},"thought_process":"...","response_text":"...","unanswered_question":null}
+
+[CANDIDATO]:
+- Nombre: ${_fn}
+- Fecha de cita elegida: ${_citaFecha || 'No definida aún'}
+- Hora de cita elegida: ${_citaHora || 'No definida aún'}
+- Hoy: ${currentData.day}, ${currentData.date} (${currentData.city})
+
+${_hoursBlock}
+
+[REGLAS DE AGENDA]:
+PASO 1 — Si no hay fecha elegida: muestra los días disponibles (copia la lista exacta de [DÍAS DISPONIBLES]) y pregunta cuál prefiere. Empieza con: "${_fn}, tengo entrevistas los días:"
+PASO 2 — Si ya hay fecha pero no hora: muestra los horarios de [HORARIOS DISPONIBLES] con emojis numerados y pregunta cuál prefiere.
+PASO 3 — Si ya hay fecha Y hora: confirma la cita completa y pregunta "¿estamos de acuerdo?" ANTES de disparar { move }.
+PASO 4 — Cuando el candidato confirma con Sí/Ok: incluye "{ move }" en thought_process y escribe mensaje de confirmación cálido.
+
+⛔ PROHIBIDO: re-preguntar por el día si ya hay citaFecha. ⛔ PROHIBIDO: inventar horarios fuera de la lista. ⛔ PROHIBIDO: disparar { move } sin confirmar primero.
+⛔ Si el candidato menciona un número o nombre de día, es una SELECCIÓN — no una pregunta. Avanza directamente al paso correspondiente.
+
+[OBJETIVO DE ESTE PASO]:
+"${finalPrompt}"
+`;
+
+            // For Cita, only send last 6 messages to GPT
+            const slimHistory = recentHistory.slice(-6);
+            const messagesForOpenAI = slimHistory.map(m => ({
+                role: (m.role === 'model' || m.role === 'assistant') ? 'assistant' : 'user',
+                content: m.content || m.parts?.[0]?.text || ''
+            }));
+
+            const gptResponse = await getOpenAIResponse(
+                messagesForOpenAI,
+                systemPrompt,
+                'gpt-4o-mini',
+                customApiKey,
+                { type: 'json_object' },
+                null,
+                500  // Slim token budget — just enough for scheduling response
+            );
+
+            if (!gptResponse || !gptResponse.content) {
+                throw new Error('GPT Response empty');
+            }
+
+            let aiResult;
+            try {
+                const sanitized = gptResponse.content.trim()
+                    .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+                aiResult = JSON.parse(sanitized);
+            } catch (e) {
+                console.error('[RECRUITER BRAIN] JSON Parse Error:', e);
+                aiResult = { response_text: gptResponse.content.replace(/\*/g, ''), thought_process: 'Fallback: JSON parse failed.', extracted_data: {}, unanswered_question: null };
+            }
+
+            const duration = Date.now() - startTime;
+            recordAITelemetry(candidateId, 'recruiter_inference_cita_slim', { model: 'gpt-4o-mini', latency: duration, aiResult }).catch(() => {});
+            return aiResult;
+        }
+
+        // ─── FULL PROMPT (non-Cita steps) ───────────────────────────────────────────
+
         // 4. Obtener respuesta de GPT-4o
         // Pasamos el historial estructurado sin inyecciones artificiales
         const messagesForOpenAI = recentHistory.map(m => ({
