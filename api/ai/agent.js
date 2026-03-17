@@ -2000,9 +2000,8 @@ ${safeDnaLines}
                             }
                         }
 
-                        // 3) If resolved (unambiguous) → inject into GPT with EXPLICIT hour list
-                        // We NEVER set skipRecruiterInference=true here — always let GPT respond
-                        // so the normal delivery pipeline runs and the message is sent correctly.
+                        // 3) If resolved (unambiguous) → build response DETERMINISTICALLY
+                        // We set skipRecruiterInference=true to avoid GPT call which can timeout.
                         if (_resolvedDayIdx !== null && !skipRecruiterInference) {
                             const _selDate = _uDays[_resolvedDayIdx];
 
@@ -2010,7 +2009,7 @@ ${safeDnaLines}
                             if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
                             candidateUpdates.projectMetadata.citaFecha = _selDate;
 
-                            // Build explicit hour list inline for GPT to copy verbatim
+                            // Build explicit hour list inline
                             const _selD = new Date(parseInt(_selDate.substr(0,4)), parseInt(_selDate.substr(5,2))-1, parseInt(_selDate.substr(8,2)));
                             const _humanSelDate = `${_DN4[_selD.getDay()]} ${_selD.getDate()} de ${_MN4[_selD.getMonth()]}`;
                             const _selHrs = (currentStep.calendarOptions || [])
@@ -2025,14 +2024,23 @@ ${safeDnaLines}
                                 ? _selHrs.map((h, i) => `${_NE4[i] || `${i+1}.`} ${h} ⏰`).join('\n')
                                 : null;
 
-                            const _injMsg = _hrsInjection
-                                ? `[SISTEMA INTERNO - ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra EXACTAMENTE estos horarios al candidato (copia verbatim, no cambies el formato):\n${_hrsInjection}\n3) Finaliza pidiendo al candidato que elija un horario de la lista. ESTÁ ESTRICTAMENTE PROHIBIDO usar "unanswered_question" aquí.`
-                                : `[SISTEMA INTERNO - ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles del sistema para esa fecha. ESTÁ ESTRICTAMENTE PROHIBIDO usar "unanswered_question" aquí.`;
-
-                            historyForGpt = [
-                                ...historyForGpt.slice(0, -1),
-                                { role: 'user', content: _injMsg }
-                            ];
+                            if (_hrsInjection) {
+                                // 🔥 DETERMINISTIC RESPONSE: Skip GPT entirely — build the hour list ourselves
+                                skipRecruiterInference = true;
+                                responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, para el ${_humanSelDate} tengo estas opciones de horario:\n\n${_hrsInjection}\n\n¿Cuál prefieres?`;
+                                aiResult = {
+                                    response_text: responseTextVal,
+                                    extracted_data: { citaFecha: _selDate },
+                                    thought_process: 'CITA:deterministic_hour_selection'
+                                };
+                            } else {
+                                // No hours found for this date — inject system message and let GPT handle
+                                const _injMsg = `[SISTEMA INTERNO - ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles del sistema para esa fecha. ESTÁ ESTRICTAMENTE PROHIBIDO usar "unanswered_question" aquí.`;
+                                historyForGpt = [
+                                    ...historyForGpt.slice(0, -1),
+                                    { role: 'user', content: _injMsg }
+                                ];
+                            }
                         }
 
 
