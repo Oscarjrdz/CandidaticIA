@@ -1806,7 +1806,10 @@ ${safeDnaLines}
 
                 const _isAffirmativeCs = /^(s[ií]|claro|dale|por\s*favor|porfa|por\s*fa|[aá]ndale|andale|v[aá]|adelante|ok\s*dale|sale|va|quiero|me\s+interesa|s[ií]\s+quiero|perfecto|s[ií]\s+por\s+favor|de\s+una|obvio|claro\s+que\s+s[ií]|s[ií]\s+claro|si\s+quiero)\s*[!.]*$/i.test(aggregatedText.trim());
 
-                if (!skipRecruiterInference && _botAskedCita && _isAffirmativeCs) {
+                // Solo aplicar el GUARD si NO estamos ya en el paso Cita
+                const _isAlreadyInCita = activeStepNameLower.includes('cita');
+
+                if (!skipRecruiterInference && !_isAlreadyInCita && _botAskedCita && _isAffirmativeCs) {
                     // 🔑 DETERMINISTIC CITA MOVE: bypass GPT entirely.
                     // GPT in the INICIO step is unreliable at converting a 'sí' affirmation
                     // into a { move } — it often generates empty output or a clarification fallback.
