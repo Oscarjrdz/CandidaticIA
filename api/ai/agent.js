@@ -1979,48 +1979,42 @@ ${safeDnaLines}
                             }
                         }
 
-                        // 3) If resolved (unambiguous) → show hour list
+                        // 3) If resolved (unambiguous) → inject into GPT with EXPLICIT hour list
+                        // We NEVER set skipRecruiterInference=true here — always let GPT respond
+                        // so the normal delivery pipeline runs and the message is sent correctly.
                         if (_resolvedDayIdx !== null && !skipRecruiterInference) {
                             const _selDate = _uDays[_resolvedDayIdx];
-                            const _hourListMsg = _buildHourList(_selDate, _fn4);
 
-                            if (_hourListMsg) {
-                                skipRecruiterInference = true;
-                                responseTextVal = _hourListMsg;
-                                aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:day_resolved_show_hours' };
-                                // Save selected date to state
-                                if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
-                                candidateUpdates.projectMetadata.citaFecha = _selDate;
-                            } else {
-                                // _buildHourList returned null — either no hours for this day or empty calendarOptions.
-                                // 1) Save citaFecha deterministically (don't rely on GPT extracted_data)
-                                if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
-                                candidateUpdates.projectMetadata.citaFecha = _selDate;
+                            // Save citaFecha deterministically regardless of what GPT returns
+                            if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
+                            candidateUpdates.projectMetadata.citaFecha = _selDate;
 
-                                // 2) Build the hour text inline so GPT can copy it verbatim
-                                const _d2 = new Date(parseInt(_selDate.substr(0,4)), parseInt(_selDate.substr(5,2))-1, parseInt(_selDate.substr(8,2)));
-                                const _humanSel = `${_DN4[_d2.getDay()]} ${_d2.getDate()} de ${_MN4[_d2.getMonth()]}`;
-                                const _inlineHrs = (currentStep.calendarOptions || [])
-                                    .filter(o => o.startsWith(_selDate))
-                                    .map(o => o.replace(_selDate, '').replace(/^\s*@\s*/, '').trim())
-                                    .filter(h => h.length > 0)
-                                    .sort((a, b) => {
-                                        const tm = t => { const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i); if (!m) return 0; let [,h,min,ap] = m; h=parseInt(h); if(ap?.toUpperCase()==='PM'&&h!==12) h+=12; if(ap?.toUpperCase()==='AM'&&h===12) h=0; return h*60+parseInt(min); };
-                                        return tm(a) - tm(b);
-                                    });
-                                const _hrsBlock = _inlineHrs.length > 0
-                                    ? _inlineHrs.map((h, i) => `${_NE4[i] || `${i+1}.`} ${h} ⏰`).join('\n')
-                                    : null;
-                                const _injectContent = _hrsBlock
-                                    ? `[ELECCIÓN DE DÍA]: El candidato eligió el ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra al candidato EXACTAMENTE estos horarios (cópialos verbatim):\n${_hrsBlock}\n¿Cuál te queda mejor?`
-                                    : `[ELECCIÓN DE DÍA]: El candidato eligió el ${_humanSel} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles para esa fecha usando los horarios brutos del sistema.`;
-                                historyForGpt = [
-                                    ...historyForGpt.slice(0, -1),
-                                    { role: 'user', content: _injectContent }
-                                ];
-                            }
+                            // Build explicit hour list inline for GPT to copy verbatim
+                            const _selD = new Date(parseInt(_selDate.substr(0,4)), parseInt(_selDate.substr(5,2))-1, parseInt(_selDate.substr(8,2)));
+                            const _humanSelDate = `${_DN4[_selD.getDay()]} ${_selD.getDate()} de ${_MN4[_selD.getMonth()]}`;
+                            const _selHrs = (currentStep.calendarOptions || [])
+                                .filter(o => o.startsWith(_selDate))
+                                .map(o => o.replace(_selDate, '').replace(/^\s*@\s*/, '').trim())
+                                .filter(h => h.length > 0)
+                                .sort((a, b) => {
+                                    const tf = t => { const m2 = t.match(/(\d+):(\d+)\s*(AM|PM)?/i); if (!m2) return 0; let hh=parseInt(m2[1]),mm2=parseInt(m2[2]),ap=m2[3]; if(ap?.toUpperCase()==='PM'&&hh!==12) hh+=12; if(ap?.toUpperCase()==='AM'&&hh===12) hh=0; return hh*60+mm2; };
+                                    return tf(a) - tf(b);
+                                });
+                            const _hrsInjection = _selHrs.length > 0
+                                ? _selHrs.map((h, i) => `${_NE4[i] || `${i+1}.`} ${h} ⏰`).join('\n')
+                                : null;
 
+                            const _injMsg = _hrsInjection
+                                ? `[ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra EXACTAMENTE estos horarios al candidato (copia verbatim, no cambies el formato):\n${_hrsInjection}\n¿En cuál horario te queda mejor? 😊`
+                                : `[ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles del sistema para esa fecha.`;
+
+                            historyForGpt = [
+                                ...historyForGpt.slice(0, -1),
+                                { role: 'user', content: _injMsg }
+                            ];
                         }
+
+
                     }
                 }
 
