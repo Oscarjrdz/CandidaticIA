@@ -1926,9 +1926,78 @@ ${safeDnaLines}
                     const _citaFechaStored = candidateData.projectMetadata?.citaFecha
                         || candidateUpdates.projectMetadata?.citaFecha;
 
-                    // NOTE: Hour selection (picking a time from the list) is handled entirely by GPT
-                    // via the PASO 2/3 instructions in recruiter-agent.js. We do NOT intercept it here
-                    // to avoid race conditions when multiple user messages arrive in sequence.
+                    // ── BRANCH A: Date IS chosen → candidate is picking an HOUR ─────────────
+                    // Deterministic resolver: map ordinal input to the exact time slot.
+                    // This prevents GPT from skipping the PASO 3 confirmation and firing { move } prematurely.
+                    if (!skipRecruiterInference && _citaFechaStored) {
+                        // Get the sorted list of hours for the chosen date
+                        const _storedDate = _citaFechaStored;
+                        const _dateHours = (_futureDayOpts || [])
+                            .filter(o => o.startsWith(_storedDate))
+                            .map(o => o.replace(_storedDate, '').replace(/^\s*@\s*/, '').trim())
+                            .filter(h => h.length > 0)
+                            .sort((a, b) => {
+                                const tf = t => { const m2 = t.match(/(\d+):(\d+)\s*(AM|PM)?/i); if (!m2) return 0; let hh=parseInt(m2[1]),mm2=parseInt(m2[2]),ap=(m2[3]||'').toUpperCase(); if(ap==='PM'&&hh!==12)hh+=12; if(ap==='AM'&&hh===12)hh=0; return hh*60+mm2; };
+                                return tf(a) - tf(b);
+                            });
+
+                        // Check citaHora: if already stored, we're in PASO 3 (confirmation) — let GPT handle
+                        const _citaHoraStored = candidateData.projectMetadata?.citaHora
+                            || candidateUpdates.projectMetadata?.citaHora;
+
+                        // Only intercept if we have hours for this date and no hour chosen yet
+                        if (_dateHours.length > 0 && !_citaHoraStored) {
+                            let _resolvedHourIdx = null;
+
+                            // Try each burst line through ordinal parser
+                            for (const _line of _rawInputLines) {
+                                const _ordNum = _parseOrdinal(_line);
+                                if (_ordNum !== null) {
+                                    if (_ordNum === -1) _resolvedHourIdx = _dateHours.length - 1;
+                                    else if (_ordNum === -2) _resolvedHourIdx = Math.max(0, _dateHours.length - 2);
+                                    else if (_ordNum >= 1 && _ordNum <= _dateHours.length) _resolvedHourIdx = _ordNum - 1;
+                                    if (_resolvedHourIdx !== null) break;
+                                }
+                            }
+
+                            // Also try matching the raw time string (e.g. "03:00", "3pm", "las 3")
+                            if (_resolvedHourIdx === null) {
+                                for (const _line of _rawInputLines) {
+                                    const _timeMatch = _line.match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+                                    if (_timeMatch) {
+                                        let _hh = parseInt(_timeMatch[1]);
+                                        const _mm = parseInt(_timeMatch[2] || '0');
+                                        const _ap = (_timeMatch[3] || '').toUpperCase();
+                                        if (_ap === 'PM' && _hh !== 12) _hh += 12;
+                                        if (_ap === 'AM' && _hh === 12) _hh = 0;
+                                        const _inputMins = _hh * 60 + _mm;
+                                        const tf = t => { const m2 = t.match(/(\d+):(\d+)\s*(AM|PM)?/i); if (!m2) return 0; let hh=parseInt(m2[1]),mm2=parseInt(m2[2]),ap=(m2[3]||'').toUpperCase(); if(ap==='PM'&&hh!==12)hh+=12; if(ap==='AM'&&hh===12)hh=0; return hh*60+mm2; };
+                                        const _matchIdx = _dateHours.findIndex(h => Math.abs(tf(h) - _inputMins) <= 30);
+                                        if (_matchIdx !== -1) { _resolvedHourIdx = _matchIdx; break; }
+                                    }
+                                }
+                            }
+
+                            if (_resolvedHourIdx !== null) {
+                                // 🔥 DETERMINISTIC: Save citaHora + build confirmation message — SKIP GPT
+                                const _chosenHour = _dateHours[_resolvedHourIdx];
+                                if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = {};
+                                candidateUpdates.projectMetadata.citaHora = _chosenHour;
+
+                                // Build human-readable date for confirmation
+                                const _selD2 = new Date(parseInt(_storedDate.substr(0,4)), parseInt(_storedDate.substr(5,2))-1, parseInt(_storedDate.substr(8,2)));
+                                const _humanDate2 = `${_DN4[_selD2.getDay()]} ${_selD2.getDate()} de ${_MN4[_selD2.getMonth()]}`;
+
+                                skipRecruiterInference = true;
+                                responseTextVal = `Ok${_fn4 ? ` ${_fn4}` : ''}, entonces agendamos tu entrevista para el ${_humanDate2} a las ${_chosenHour}.[MSG_SPLIT]¿Estamos de acuerdo? 🤝`;
+                                aiResult = {
+                                    response_text: responseTextVal,
+                                    extracted_data: { citaFecha: _storedDate, citaHora: _chosenHour },
+                                    thought_process: 'CITA:deterministic_hour_confirmation'
+                                };
+                            }
+                        }
+                    }
 
                     // ── BRANCH B: No date chosen yet → candidate is picking a DAY ────
                     if (!skipRecruiterInference && !_citaFechaStored) {
