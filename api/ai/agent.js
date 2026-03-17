@@ -473,6 +473,16 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                 text = `${beforeQ}[MSG_SPLIT]${question}`;
             }
         }
+
+        // 🔚 CLOSING QUESTION FALLBACK: If ✅ list has no closing question after the last item, inject one.
+        // This fires only when GPT forgot to include the question (catQMatch was null).
+        if (lastCheckIdx !== -1) {
+            const _afterLast = text.substring(lastCheckIdx);
+            if (!/(\?|¿)/.test(_afterLast) && !text.includes('[MSG_SPLIT]')) {
+                const _fnFb = candidateData?.nombreReal?.trim().split(/\s+/)[0] || '';
+                text = text.trimEnd() + `\n\n[MSG_SPLIT]¿Cu\u00e1l te gustar\u00eda elegir${_fnFb ? `, ${_fnFb}` : ''}? \ud83d\ude0a`;
+            }
+        }
     }
 
     // 🎂 FECHA DE NACIMIENTO: Inject example format if GPT forgot it
@@ -482,7 +492,7 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         && !/ya tengo|tengo tu|registr|anot[eéaó]|captur|guard[aáe]/i.test(text)
         && text.includes('?')) {
         // Append example cleanly after the text rather than interrupting the sentence
-        text = text.trimEnd() + '\n\n(ej. 19/05/1983)';
+        text = text.trimEnd() + '\n(ej. 19/05/1983)';
     }
 
 
