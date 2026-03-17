@@ -71,11 +71,27 @@ export async function runTurboEngine(candidateId, from) {
     console.log(`🔄 Worker triggered for ${candidateId} from ${from}`);
 
     try {
-        // 🔒 1. ACQUIRE LOCK
-        const isLocked = await isCandidateLocked(candidateId);
+        // 🔒 1. ACQUIRE LOCK (with wait-and-retry for rapid-fire messages)
+        let isLocked = await isCandidateLocked(candidateId);
         if (isLocked) {
-            console.log(`[Serverless Engine] ⏳ ${candidateId} busy. Another instance is processing.`);
-            return { success: true, status: 'locked' };
+            console.error(`[Serverless Engine] ⏳ ${candidateId} busy. Waiting for lock release...`);
+            // Wait up to 15s for the lock to clear (30 polls × 500ms)
+            let waited = 0;
+            const POLL_MS = 500;
+            const MAX_WAIT = 15000;
+            while (waited < MAX_WAIT) {
+                await new Promise(r => setTimeout(r, POLL_MS));
+                waited += POLL_MS;
+                isLocked = await isCandidateLocked(candidateId);
+                if (!isLocked) {
+                    console.error(`[Serverless Engine] 🔓 Lock released after ${waited}ms. Draining orphaned messages...`);
+                    break;
+                }
+            }
+            if (isLocked) {
+                console.error(`[Serverless Engine] ⚠️ ${candidateId} still locked after ${MAX_WAIT}ms. Giving up.`);
+                return { success: true, status: 'locked' };
+            }
         }
 
         try {
