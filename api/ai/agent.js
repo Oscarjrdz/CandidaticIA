@@ -174,9 +174,10 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
 
     // 📅 SINGLE-DATE QUESTION FIX: "¿Qué día te queda mejor?" only makes sense with multiple dates.
-    // If there's only ONE date (1️⃣ but no 2️⃣/3️⃣), or no numbered list at all, use the singular form.
+    // However, if we are presenting hours, we should NOT override the question, because GPT
+    // might be asking "¿En cuál horario te queda mejor?".
     const hasMultipleDates = /2️⃣|3️⃣|4️⃣|5️⃣/.test(text);
-    if (!hasMultipleDates) {
+    if (!hasMultipleDates && /¿Qué día te queda mejor\??/i.test(text)) {
         text = text.replace(/¿Qué día te queda mejor\??/gi, '¿Te queda bien ese día?');
     }
 
