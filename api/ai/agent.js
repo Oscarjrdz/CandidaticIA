@@ -3676,14 +3676,17 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             })
         ]);
 
-        return responseTextVal || '';
+        return { 
+            text: responseTextVal || '', 
+            mediaUrl: aiResult?.media_url && aiResult.media_url !== 'null' ? aiResult.media_url : null 
+        };
     } catch (error) {
         console.error('❌ [AI Agent] Fatal Error:', error);
         const fallbackMsg = "¡Ay! Me distraje un segundo. 😅 ¿Qué me decías?";
         if (candidateData && candidateData.whatsapp) {
             await sendFallback(candidateData, fallbackMsg).catch(() => { });
         }
-        return fallbackMsg;
+        return { text: fallbackMsg, mediaUrl: null };
     }
 };
 

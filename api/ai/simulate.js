@@ -103,12 +103,21 @@ export default async function handler(req, res) {
             eventData: { event_type: 'incoming_message', whatsapp: phone, text: message }
         });
 
-        // Invocar directamente el cerebro principal (processMessage devuelve el texto de respuesta)
-        const replyText = await processMessage(candidate.id, message, msgId);
+        // Invocar directamente el cerebro principal (processMessage devuelve el texto de respuesta o un objeto)
+        const aiResponse = await processMessage(candidate.id, message, msgId);
+
+        let finalReply = '';
+        let mediaUrl = null;
+
+        if (typeof aiResponse === 'string') {
+            finalReply = aiResponse;
+        } else if (aiResponse && typeof aiResponse === 'object') {
+            finalReply = aiResponse.text;
+            mediaUrl = aiResponse.mediaUrl;
+        }
 
         // Extraer X-Ray (Memoria y contexto para la UI del simulador)
         let trappedXRay = null;
-        let finalReply = replyText;
         
         const candidateDataStr = await redis.get(`candidate:${candidate.id}`);
         const finalCandidateData = candidateDataStr ? JSON.parse(candidateDataStr) : null;
@@ -132,6 +141,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
             success: true,
             reply: finalReply || "Procesado (ver consola o db).",
+            mediaUrl: mediaUrl,
             sessionId: phone,
             xray: trappedXRay
         });

@@ -556,6 +556,23 @@ const SimulatorSection = ({ showToast }) => {
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             }));
 
+            // Insert media bubble if the AI sent an attachment
+            if (data.mediaUrl) {
+                const mediaBubble = {
+                    id: Date.now() + 100,
+                    sender: 'bot',
+                    isMedia: true,
+                    mediaUrl: data.mediaUrl,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+                // If the bot sends text + CTA, slice media in between. Otherwise, append at the end.
+                if (newBubbles.length > 1) {
+                    newBubbles.splice(1, 0, mediaBubble);
+                } else {
+                    newBubbles.push(mediaBubble);
+                }
+            }
+
             setMessages(prev => [...prev, ...newBubbles]);
         } catch (error) {
             console.error('Sim error:', error);
@@ -646,7 +663,22 @@ const SimulatorSection = ({ showToast }) => {
                                                 : 'bg-white rounded-tl-none'
                                             }`}
                                         >
-                                            <p className="text-gray-900 whitespace-pre-wrap">{msg.text}</p>
+                                            {msg.isMedia ? (
+                                                <div className="flex flex-col items-center">
+                                                    {msg.mediaUrl.includes('.pdf') ? (
+                                                        <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg border border-red-100 hover:bg-red-100 transition-colors w-full">
+                                                            <FileText className="w-8 h-8 shrink-0" />
+                                                            <span className="text-[13px] font-bold block overflow-hidden text-ellipsis whitespace-nowrap">Documento PDF</span>
+                                                        </a>
+                                                    ) : (
+                                                        <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer">
+                                                            <img src={msg.mediaUrl} alt="Media" className="rounded-lg w-full h-auto max-w-[200px] object-cover border border-gray-100" />
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+                                            )}
                                             <div className="text-[10px] text-gray-500 text-right mt-1 font-medium">
                                                 {msg.time}
                                             </div>
