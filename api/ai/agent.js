@@ -1934,8 +1934,21 @@ ${safeDnaLines}
                             'dom': 0, 'domingo': 0,
                         };
                         const _norm = txt.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+                        // Strip common noise prefixes directly
+                        const _cleanTxt = _norm.replace(/^(?:(?:el|la|los|las|para|el dia|para el dia)\s+)+/i, '').trim();
+                        
                         for (const [key, val] of Object.entries(_dayNames)) {
-                            if (_norm === key || _norm.startsWith(key + ' ') || _norm.startsWith(key + ',')) return val;
+                            // Match if it's strictly the keyword, or starts with keyword + space/comma
+                            if (_cleanTxt === key || _cleanTxt.startsWith(key + ' ') || _cleanTxt.startsWith(key + ',')) {
+                                return val;
+                            }
+                        }
+                        
+                        // Fallback: search anywhere in string using word boundaries
+                        for (const [key, val] of Object.entries(_dayNames)) {
+                            if (new RegExp(`(?:^|\\s)${key}(?:\\s|$|,)`).test(_norm)) {
+                                return val;
+                            }
                         }
                         return null;
                     };
@@ -2600,6 +2613,9 @@ ${safeDnaLines}
                                     } else {
                                         callToAction = "[MSG_SPLIT]¿En cuál día te queda mejor? 🗓️";
                                     }
+                                } else if (responseTextVal && /¿Cuál de los (dos|tres|opciones)\?|disponibles.*¿Cuál/i.test(responseTextVal)) {
+                                    // Already asked the candidate to clarify an ambiguous day, no need for generic CTA
+                                    callToAction = "";
                                 } else {
                                     callToAction = "¿Qué día te queda mejor para agendar tu cita?";
                                 }
