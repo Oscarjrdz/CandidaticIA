@@ -129,6 +129,7 @@ const SimulatorSection = ({ showToast }) => {
     // --- Simulator Settings State ---
     const [vacancies, setVacancies] = useState([]);
     const [selectedVacancyId, setSelectedVacancyId] = useState('');
+    const [faqs, setFaqs] = useState([]);
     const [selectedFaqId, setSelectedFaqId] = useState(null);
     const [loadingFaqs, setLoadingFaqs] = useState(false);
     
