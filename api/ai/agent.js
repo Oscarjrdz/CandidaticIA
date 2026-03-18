@@ -3574,23 +3574,27 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     const filename = extractedFilename || (isPdf ? 'Informacion.pdf' : 'Imagen.jpg');
 
                     // Stagger delivery text -> media -> CTA priority (Strict sequential await to guarantee WhatsApp arrival order)
-                    if (messagesToSend.length > 1) {
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 1 }).catch(() => { });
-                        await new Promise(r => setTimeout(r, 600)); // Network spacing
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 2 }).catch(() => { });
-                        await new Promise(r => setTimeout(r, 600));
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[1], 'chat', { priority: 3 }).catch(() => { });
-                    } else {
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 }).catch(() => { });
-                        await new Promise(r => setTimeout(r, 600));
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 2 }).catch(() => { });
+                    if (!candidateData.whatsapp.startsWith('sim_')) {
+                        if (messagesToSend.length > 1) {
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 1 }).catch(() => { });
+                            await new Promise(r => setTimeout(r, 600)); // Network spacing
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 2 }).catch(() => { });
+                            await new Promise(r => setTimeout(r, 600));
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[1], 'chat', { priority: 3 }).catch(() => { });
+                        } else {
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 }).catch(() => { });
+                            await new Promise(r => setTimeout(r, 600));
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 2 }).catch(() => { });
+                        }
                     }
 
                 } else {
                     // Text only, send sequentially to guarantee order
-                    for (let i = 0; i < messagesToSend.length; i++) {
-                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
-                        if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));
+                    if (!candidateData.whatsapp.startsWith('sim_')) {
+                        for (let i = 0; i < messagesToSend.length; i++) {
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
+                            if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));
+                        }
                     }
                 }
             })();

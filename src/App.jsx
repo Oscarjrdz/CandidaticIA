@@ -11,6 +11,7 @@ import VacanciesSection from './components/VacanciesSection';
 import UsersSection from './components/UsersSection';
 import PostMakerSection from './components/PostMakerSection';
 import BotIASection from './components/BotIASection';
+import SimulatorSection from './components/SimulatorSection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import ProjectsSection from './components/ProjectsSection';
 import ByPassSection from './components/ByPassSection';
@@ -121,7 +122,8 @@ function App() {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {activeSection === 'candidates' ? 'Candidatos'
                     : activeSection === 'bot-ia' ? 'Bot IA Candidatic'
-                      : activeSection === 'automations' ? 'Automatizaciones'
+                      : activeSection === 'simulator' ? 'Simulador'
+                        : activeSection === 'automations' ? 'Automatizaciones'
                         : activeSection === 'vacancies' ? 'Vacantes'
                           : activeSection === 'history' ? 'Historial'
                             : activeSection === 'users' ? 'Usuarios'
@@ -135,7 +137,8 @@ function App() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
                     : activeSection === 'bot-ia' ? 'Configuración de Comportamiento del Bot'
-                      : activeSection === 'users' ? 'Gestión de equipo y permisos'
+                      : activeSection === 'simulator' ? 'Chatea con Brenda en tiempo real'
+                        : activeSection === 'users' ? 'Gestión de equipo y permisos'
                         : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
                           : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                             : activeSection === 'projects' ? 'Gestión y organización de proyectos'
@@ -189,6 +192,8 @@ function App() {
 
           ) : activeSection === 'bot-ia' ? (
             <BotIASection showToast={showToast} />
+          ) : activeSection === 'simulator' ? (
+            <SimulatorSection showToast={showToast} />
           ) : activeSection === 'automations' ? (
             <AutomationsSection showToast={showToast} />
           ) : activeSection === 'vacancies' ? (
