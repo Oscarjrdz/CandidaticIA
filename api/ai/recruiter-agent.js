@@ -522,7 +522,8 @@ ${alternatives.length > 0
         recordAITelemetry(candidateId, 'recruiter_inference', {
             model: 'gpt-4o-mini-recruiter',
             latency: duration,
-            aiResult: aiResult
+            aiResult: aiResult,
+            systemPrompt: systemPrompt
         }).catch(() => { });
 
         return aiResult;
