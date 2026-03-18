@@ -2173,6 +2173,17 @@ ${safeDnaLines}
                         ];
                     }
 
+                    // ⚡ PERFORMANCE OPTIMIZATION: Filter out purely extraction-phase bot messages 
+                    // and limit history to the last 10 messages so GPT isn't overwhelmed by 40+ messages.
+                    historyForRecruiter = historyForRecruiter.filter(m => {
+                        if (m.role === 'model' || m.role === 'assistant') {
+                            const txt = m.content || '';
+                            // Extraction phase signature: bot asking for specific fields with system labels
+                            if (txt.includes('[EXTRACCIÓN GLOBAL]') || txt.includes('Cerebro Extractor')) return false;
+                        }
+                        return true;
+                    }).slice(-10);
+
                     try {
                         aiResult = await processRecruiterMessage(
                             updatedDataForAgent,
