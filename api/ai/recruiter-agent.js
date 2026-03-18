@@ -483,9 +483,12 @@ ${alternatives.length > 0
         // 🔒 DETERMINISTIC MEDIA_URL INJECTION:
         // If the AI forgot to set media_url (or returned null) but the candidate asked about
         // a topic that matches a FAQ with a mediaUrl, inject it directly from Redis data.
-        if ((!aiResult.media_url || aiResult.media_url === 'null') && faqData && activeVacancyId) {
+        if ((!aiResult.media_url || aiResult.media_url === 'null') && activeVacancyId) {
             try {
-                const faqs = JSON.parse(faqData);
+                const redisClient = getRedisClient();
+                const faqData = redisClient ? await redisClient.get(`faqs:${activeVacancyId}`) : null;
+                if (!faqData) throw new Error('No FAQ data');
+                const faqs = typeof faqData === 'string' ? JSON.parse(faqData) : faqData;
                 const lastUserMsg = (recentHistory[recentHistory.length - 1]?.content || '').toLowerCase();
                 const faqWithMedia = faqs.find(f => {
                     if (!f.mediaUrl || !f.officialAnswer) return false;
