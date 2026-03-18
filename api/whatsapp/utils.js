@@ -51,14 +51,25 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'image':
                 let imgUrl = body;
                 if (isHttp && imgUrl.includes('/api/image?id=')) {
-                    // Force production domain and correct image route instead of non-existent /api/media
                     const mediaIdMatch = imgUrl.match(/id=([^&]+)/);
                     if (mediaIdMatch) {
-                        imgUrl = `https://candidatic-ia.vercel.app/api/image?id=${mediaIdMatch[1]}&ext=.jpg`;
+                        try {
+                            const redisClient = getRedisClient();
+                            if (redisClient) {
+                                const rawId = mediaIdMatch[1].split('.')[0];
+                                const base64Data = await redisClient.get(`image:${rawId}`);
+                                if (base64Data) {
+                                    const metaRaw = await redisClient.get(`meta:image:${rawId}`);
+                                    const meta = metaRaw ? JSON.parse(metaRaw) : null;
+                                    const mimeType = meta && meta.mime ? meta.mime : 'image/jpeg';
+                                    imgUrl = base64Data.startsWith('data:') ? base64Data : `data:${mimeType};base64,${base64Data.replace(/[\n\r]/g, '')}`;
+                                }
+                            }
+                        } catch (e) {
+                            console.error('UltraMsg Image Base64 extraction failed:', e);
+                        }
                     }
-                    // Also handle cases where origin was somehow missing but contains the API path
-                    if (imgUrl.startsWith('/api/')) imgUrl = `https://candidatic-ia.vercel.app${imgUrl}`;
-                } else if (isHttp) {
+                } else if (isHttp && !imgUrl.startsWith('data:')) {
                     imgUrl = imgUrl.includes('?') ? `${imgUrl}&ext=.jpg` : `${imgUrl}?ext=.jpg`;
                 }
                 payload.image = imgUrl;
@@ -71,13 +82,30 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             case 'document':
                 let docUrl = body;
                 if (isHttp && docUrl.includes('/api/image?id=')) {
-                    // Force production domain and correct image route for PDFs
                     const mediaIdMatch = docUrl.match(/id=([^&]+)/);
                     if (mediaIdMatch) {
-                        docUrl = `https://candidatic-ia.vercel.app/api/image?id=${mediaIdMatch[1]}&ext=.pdf`;
+                        try {
+                            const redisClient = getRedisClient();
+                            if (redisClient) {
+                                const rawId = mediaIdMatch[1].split('.')[0];
+                                const base64Data = await redisClient.get(`image:${rawId}`);
+                                if (base64Data) {
+                                    const metaRaw = await redisClient.get(`meta:image:${rawId}`);
+                                    const meta = metaRaw ? JSON.parse(metaRaw) : null;
+                                    const mimeType = meta && meta.mime ? meta.mime : 'application/pdf';
+                                    
+                                    // Send to UltraMsg as inline Base64 to bypass URL validation entirely!
+                                    // For base64, UltraMsg prefers just the raw base64 or a strict URL. 
+                                    // Wait, UltraMsg allows base64 for document string!
+                                    docUrl = base64Data.startsWith('data:') ? base64Data : `data:${mimeType};base64,${base64Data.replace(/[\n\r]/g, '')}`;
+                                    if (meta && meta.filename) extraParams.filename = meta.filename;
+                                }
+                            }
+                        } catch (e) {
+                            console.error('UltraMsg Base64 extraction failed:', e);
+                        }
                     }
-                    if (docUrl.startsWith('/api/')) docUrl = `https://candidatic-ia.vercel.app${docUrl}`;
-                } else if (isHttp && !docUrl.includes('.pdf')) {
+                } else if (isHttp && !docUrl.includes('.pdf') && !docUrl.startsWith('data:')) {
                     docUrl = docUrl.includes('?') ? `${docUrl}&ext=.pdf` : `${docUrl}?ext=.pdf`;
                 }
                 payload.document = docUrl;
