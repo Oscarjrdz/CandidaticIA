@@ -5,6 +5,7 @@ import { updateCandidate, moveCandidateStep, recordAITelemetry, recordVacancyInt
  * BRENDA RECLUTADORA (Cerebro Reclutador)
  * Este asistente es independiente de la captura de datos inicial.
  * Su misión es cumplir con el prompt específico del paso del proyecto.
+ * 🚀 DEPLOYMENT TRIGGER: Unified Brain + 5-msg History for Cita Step
  */
 
 export const RECRUITER_IDENTITY = `
@@ -22,18 +23,15 @@ export const RECRUITER_IDENTITY = `
 5. 🧠 EXTRACCIÓN PERMANENTE: Si mencionan cambio de perfil, extráelo en extracted_data.
 6. 🚫 PROHIBICIÓN DE AGENDAR: No ofrezcas días/horarios a menos que el paso lo pida explícitamente.
 7. 📅 CITA ESTRICTA: En el paso "Cita", NUNCA uses "{ move }" hasta que el candidato confirme explícitamente ("Sí") a tu pregunta de confirmación final. No lo des por hecho solo por elegir horario.
-[📡 RADAR DE DUDAS]:
-Si el candidato pregunta algo:
-1. PRIORIDAD: Busca en [PREGUNTAS FRECUENTES OFICIALES] luego en [DATOS REALES DE LA VACANTE].
-2. ⚠️ REGLA CRÍTICA DE FAQ: Cuando encuentres la RESPUESTA OFICIAL en [PREGUNTAS FRECUENTES OFICIALES], cópiala TEXTUALMENTE en response_text. NO parafrasees, NO inventes, NO uses el fallback. La RESPUESTA OFICIAL es la palabra final, úsala EXACTA.
-3. MULTIMEDIA: Si la respuesta oficial tiene [MEDIA_DISPONIBLE: url], copia esa url en media_url del JSON. Nunca menciones "MEDIA_DISPONIBLE" ni la url en response_text.
-4. FLEXIBILIDAD SEMÁNTICA: Busca por intención, no palabra exacta (ej. "guaraches" → calzado/uniforme, "trasnporte" → transporte).
-5. INTERPRETACIÓN SEMÁNTICA DE VACANTE: Si no hay FAQ oficial, busca en [DATOS REALES DE LA VACANTE] usando sinónimos y lógica (ej. "transporte" → vales, rutas, camiones). Si SE PUEDE INFERIR, respóndelo. SOLO usa el fallback si definitivamente NO está en ninguna fuente.
-6. FALLBACK (SOLO cuando no hay respuesta oficial ni inferencia posible): Pide que reformule con alguna de estas variantes:
-   - "Mmm, no te entendí bien 😅 ¿Puedes reformular tu pregunta?"
-   - "No estoy segura de entenderte, ¿me lo puedes explicar de otra forma? 🙏"
-   - "Ayúdame a entenderte mejor, ¿qué quieres saber exactamente? 😊"
-   Y llena unanswered_question con la pregunta original.
+[📡 RADAR DE DUDAS (RESPONDE CON SEGURIDAD, NUNCA TE CALLES)]:
+Si el candidato hace UNA PREGUNTA sobre la vacante (sueldo, horario, requisitos, pagos, etc.):
+1. PRIORIDAD MÁXIMA: Busca en [PREGUNTAS FRECUENTES OFICIALES]. Si existe el TEMA, usa la RESPUESTA OFICIAL EXACTA (si tiene [MEDIA_DISPONIBLE: url], cópialo estrictamente en media_url del JSON).
+2. 🚨 LECTURA OBLIGATORIA DE VACANTE: Si NO hay FAQ oficial, tienes OBLIGACIÓN ABSOLUTA de extraer la respuesta de los [DATOS REALES DE LA VACANTE]. Armarás una respuesta cálida y directa con esos datos y la pondrás en 'response_text' asegurando de re-preguntar por el objetivo del paso.
+3. FLEXIBILIDAD: Entiende "cuánto pagan" = sueldo, "hay camiones" = transporte, "qué ocupo" = requisitos.
+4. ESTRICTAMENTE PROHIBIDO MUDISMO: NUNCA dejes el 'response_text' vacío o uses "[SILENCIO]" si la información está en la descripción. TIENES LA RESPONSABILIDAD de contestar afirmativamente si tienes el dato. NO TIRES ERROR GENÉRICO.
+5. FALLBACK LEGÍTIMO (SOLO SI EL DATO NO EXISTE EN ABSOLUTO EN LA DESCRIPCIÓN NI EN FAQS):
+   - Escribe en response_text: "Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨"
+   - Llena unanswered_question con la duda original.
 [FORMATO DE RESPUESTA - JSON OBLIGATORIO]:
 {
     "extracted_data": { 
@@ -414,117 +412,19 @@ ${alternatives.length > 0
         }
 
 
-        // ⚡ SLIM PROMPT FOR CITA STEP: When step has calendarOptions, skip all vacancy/FAQ context.
-        // GPT only needs: candidate name, dates, hours for chosen date, and the step prompt.
-        const isCitaStep = hasFutureCalendarOptions && (currentStep?.calendarOptions?.length > 0);
-
-        if (isCitaStep) {
-            // Slim context: only what's needed for scheduling
-            const _citaFecha = candidateData.projectMetadata?.citaFecha || null;
-            const _citaHora = candidateData.projectMetadata?.citaHora || null;
-            const _fn = (candidateData.nombreReal || candidateData.nombre || 'el candidato').split(' ')[0];
-
-            // Only include hours for the chosen date if citaFecha is set
-            let _hoursBlock = '';
-            if (_citaFecha) {
-                const _selHrs = futureCalendarOptions
-                    .filter(o => o.startsWith(_citaFecha))
-                    .map(o => o.replace(_citaFecha, '').replace(/^\s*@\s*/, '').trim())
-                    .filter(h => h.length > 0);
-                _hoursBlock = _selHrs.length > 0
-                    ? `[HORARIOS DISPONIBLES PARA ${_citaFecha}]:\n${_selHrs.map((h, i) => `${_NUM_EMOJIS[i] || `${i+1}.`} ${h} ⏰`).join('\n')}`
-                    : '';
-            } else {
-                // No date chosen yet — show unique days only
-                _hoursBlock = `[DÍAS DISPONIBLES]:\n${_preFormattedDayList}`;
-            }
-
-            systemPrompt = `
-[IDENTIDAD]: Eres Brenda Rodríguez, reclutadora de Candidatic. Cálida, profesional. Sin asteriscos.
-[REGLA DE ORO]: No uses asteriscos (*). Respuestas breves y humanas.
-[FORMATO]: Responde SIEMPRE en JSON con: {"extracted_data":{"citaFecha":"YYYY-MM-DD|null","citaHora":"string|null"},"thought_process":"...","response_text":"...","media_url":null,"unanswered_question":null}
-
-[CANDIDATO]:
-- Nombre: ${_fn}
-- Fecha de cita elegida: ${_citaFecha || 'No definida aún'}
-- Hora de cita elegida: ${_citaHora || 'No definida aún'}
-- Hoy: ${currentData.day}, ${currentData.date} (${currentData.city})
-
-${_hoursBlock}
-
-${faqsForPrompt ? `[PREGUNTAS FRECUENTES - PRIORIDAD MÁXIMA para dudas del candidato]:
-Las siguientes respuestas HAN SIDO APROBADAS. Úsalas TEXTUALMENTE si el candidato pregunta algo relacionado. Si la respuesta tiene [MEDIA_DISPONIBLE: url], copia esa url en media_url del JSON. PROHIBIDO poner links/urls en response_text.
-${faqsForPrompt}
-` : ''}
-${vacancyContext.salary !== 'N/A' || vacancyContext.schedule !== 'N/A' ? `[DATOS BÁSICOS DE LA VACANTE]:
-- Sueldo: ${vacancyContext.salary}
-- Horario: ${vacancyContext.schedule}
-` : ''}
-[REGLAS DE AGENDA]:
-PASO 1 — Si no hay fecha elegida: muestra los días disponibles (copia la lista exacta de [DÍAS DISPONIBLES]) y pregunta cuál prefiere. Empieza con: "${_fn}, tengo entrevistas los días:"
-PASO 2 — Si ya hay fecha pero no hora: muestra los horarios de [HORARIOS DISPONIBLES] con emojis numerados. FORMATO OBLIGATORIO — cada horario en su PROPIA LÍNEA (con salto de línea real entre cada uno), usando ⏰ (no 🕐):
-1️⃣ 03:00 PM ⏰
-2️⃣ 06:30 PM ⏰
-3️⃣ 08:00 PM ⏰
-PROHIBIDO poner todos los horarios en una sola línea. Después de la lista, pregunta cuál prefiere en una línea separada.
-PASO 3 — Si ya hay fecha Y hora: confirma la cita completa y pregunta "¿estamos de acuerdo?" ANTES de disparar { move }.
-PASO 4 — Cuando el candidato confirma con Sí/Ok: incluye "{ move }" en thought_process y escribe mensaje de confirmación cálido.
-
-⛔ PROHIBIDO: re-preguntar por el día si ya hay citaFecha. ⛔ PROHIBIDO: inventar horarios fuera de la lista. ⛔ PROHIBIDO: disparar { move } sin confirmar primero.
-⛔ Si el candidato menciona un número o nombre de día, es una SELECCIÓN — no una pregunta. Avanza directamente al paso correspondiente.
-⚠️ Si el candidato hace una pregunta de la vacante: respóndela brevemente con [PREGUNTAS FRECUENTES] o [DATOS BÁSICOS] y SIEMPRE cierra volviendo al paso de agenda donde se detuvo.
-
-[OBJETIVO DE ESTE PASO]:
-"${finalPrompt}"
-`;
-
-            // For Cita, only send last 6 messages to GPT
-            const slimHistory = recentHistory.slice(-6);
-            const messagesForOpenAI = slimHistory.map(m => ({
-                role: (m.role === 'model' || m.role === 'assistant') ? 'assistant' : 'user',
-                content: m.content || m.parts?.[0]?.text || ''
-            }));
-
-            const gptResponse = await getOpenAIResponse(
-                messagesForOpenAI,
-                systemPrompt,
-                'gpt-4o-mini',
-                customApiKey,
-                { type: 'json_object' },
-                null,
-                500  // Slim token budget — just enough for scheduling response
-            );
-
-            if (!gptResponse || !gptResponse.content) {
-                throw new Error('GPT Response empty');
-            }
-
-            let aiResult;
-            try {
-                const sanitized = gptResponse.content.trim()
-                    .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-                aiResult = JSON.parse(sanitized);
-            } catch (e) {
-                console.error('[RECRUITER BRAIN] JSON Parse Error:', e);
-                aiResult = { response_text: gptResponse.content.replace(/\*/g, ''), thought_process: 'Fallback: JSON parse failed.', extracted_data: {}, unanswered_question: null };
-            }
-
-            const duration = Date.now() - startTime;
-            recordAITelemetry(candidateId, 'recruiter_inference_cita_slim', { model: 'gpt-4o-mini', latency: duration, aiResult }).catch(() => {});
-            return aiResult;
-        }
-
         // ─── FULL PROMPT (non-Cita steps) ───────────────────────────────────────────
 
         // 4. Obtener respuesta de GPT-4o
-        // Pasamos el historial estructurado sin inyecciones artificiales
-        const messagesForOpenAI = recentHistory.map(m => ({
+        // Limitar historial a 5 mensajes en paso Cita para ahorrar tokens y mejorar enfoque logístico
+        const isCitaStepModel = (currentStep?.name || '').toLowerCase().includes('cita');
+        const historyToUse = (hasFutureCalendarOptions || isCitaStepModel) ? recentHistory.slice(-5) : recentHistory;
+
+        const messagesForOpenAI = historyToUse.map(m => ({
             role: (m.role === 'model' || m.role === 'assistant') ? 'assistant' : 'user',
             content: m.content || m.parts?.[0]?.text || ''
         }));
 
         // ⚡ All steps use gpt-4o-mini for speed. Cita keeps 700 tokens for scheduling reasoning.
-        const isCitaStepModel = (currentStep?.name || '').toLowerCase().includes('cita');
         const selectedModel = 'gpt-4o-mini';
         const selectedMaxTokens = isCitaStepModel ? 950 : 700;
 
