@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, RefreshCw, Smartphone, Smile, GripVertical, Plus, Trash2, Pencil, Bot } from 'lucide-react';
+import { Send, RefreshCw, Smartphone, Smile, GripVertical, Plus, Trash2, Pencil, Bot, Paperclip, Loader2, X, Image as ImageIcon, FileText } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -129,9 +129,13 @@ const SimulatorSection = ({ showToast }) => {
     // --- Simulator Settings State ---
     const [vacancies, setVacancies] = useState([]);
     const [selectedVacancyId, setSelectedVacancyId] = useState('');
-    const [faqs, setFaqs] = useState([]);
     const [selectedFaqId, setSelectedFaqId] = useState(null);
     const [loadingFaqs, setLoadingFaqs] = useState(false);
+    
+    // --- Upload State ---
+    const [uploadingFaqId, setUploadingFaqId] = useState(null);
+    const [isUploadingFaq, setIsUploadingFaq] = useState(false);
+    const faqFileInputRef = useRef(null);
     
     // DND Sensors
     const sensors = useSensors(
@@ -423,6 +427,89 @@ const SimulatorSection = ({ showToast }) => {
             }
         } catch (e) {
             showToast('Error al guardar respuesta', 'error');
+        }
+    };
+
+    const handleFaqFileSelect = async (e) => {
+        const file = e.target.files[0];
+        if (!file || !uploadingFaqId) return;
+
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Archivo demasiado grande (Máx 5MB)', 'error');
+            setUploadingFaqId(null);
+            return;
+        }
+
+        setIsUploadingFaq(true);
+        try {
+            const customName = window.prompt(
+                "Ingresa el nombre público con el que Brenda enviará este archivo:",
+                file.name
+            );
+
+            // If user clicked Cancel on the prompt
+            if (customName === null) {
+                setIsUploadingFaq(false);
+                setUploadingFaqId(null);
+                return;
+            }
+
+            const reader = new FileReader();
+            const base64Promise = new Promise(resolve => {
+                reader.onloadend = () => resolve(reader.result);
+                reader.readAsDataURL(file);
+            });
+            const base64 = await base64Promise;
+
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64, filename: customName })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                const extension = data.mime === 'application/pdf' ? '&ext=.pdf' : '&ext=.jpg';
+                const mediaUrl = `${window.location.origin}${data.url}${extension}`;
+                
+                // Save to Backend immediately
+                await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ faqId: uploadingFaqId, mediaUrl })
+                });
+
+                setFaqs(current => current.map(f =>
+                    f.id === uploadingFaqId ? { ...f, mediaUrl } : f
+                ));
+                showToast('Archivo subido correctamente. Recuerda guardar el FAQ.', 'success');
+            } else {
+                showToast('Error al subir archivo', 'error');
+            }
+        } catch (err) {
+            console.error('Upload error:', err);
+            showToast('Error de conexión al subir', 'error');
+        } finally {
+            setIsUploadingFaq(false);
+            setUploadingFaqId(null);
+            if (e.target) e.target.value = '';
+        }
+    };
+
+    const handleRemoveFaqMedia = async (faqId) => {
+        if(!confirm('¿Eliminar archivo adjunto?')) return;
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ faqId, mediaUrl: null })
+            });
+            if (res.ok) {
+                setFaqs(prev => prev.map(f => f.id === faqId ? { ...f, mediaUrl: null } : f));
+                showToast('Archivo eliminado', 'success');
+            }
+        } catch (e) {
+            showToast('Error al eliminar archivo', 'error');
         }
     };
 
@@ -753,7 +840,54 @@ const SimulatorSection = ({ showToast }) => {
                                         }
                                     }}
                                 />
-                                <p className="text-[9px] text-gray-400 mt-1.5 text-right">Se guarda automáticamente 💾</p>
+                                <div className="mt-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg border border-gray-100 dark:border-gray-700">
+                                    {faqs.find(f => f.id === selectedFaqId)?.mediaUrl ? (
+                                        <div className="flex items-center justify-between w-full group/media">
+                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500">
+                                                    {faqs.find(f => f.id === selectedFaqId).mediaUrl.includes('.pdf') ? <FileText className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />}
+                                                </div>
+                                                <a href={faqs.find(f => f.id === selectedFaqId).mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] text-gray-700 dark:text-gray-300 truncate hover:text-indigo-600 transition-colors">
+                                                    Archivo Adjunto
+                                                </a>
+                                            </div>
+                                            <button
+                                                onClick={() => handleRemoveFaqMedia(selectedFaqId)}
+                                                className="p-1 text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-gray-900 rounded transition-colors opacity-0 group-hover/media:opacity-100 flex-shrink-0"
+                                                title="Eliminar archivo"
+                                            >
+                                                <X className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-between w-full">
+                                            <p className="text-[10px] text-gray-400">Sin archivo interactivo</p>
+                                            <input 
+                                                type="file" 
+                                                className="hidden" 
+                                                ref={faqFileInputRef} 
+                                                accept="application/pdf,image/jpeg,image/png,image/webp"
+                                                onChange={handleFaqFileSelect}
+                                            />
+                                            <button
+                                                className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 rounded shadow-sm transition-colors disabled:opacity-50"
+                                                onClick={() => {
+                                                    setUploadingFaqId(selectedFaqId);
+                                                    setTimeout(() => faqFileInputRef.current?.click(), 0);
+                                                }}
+                                                disabled={isUploadingFaq && uploadingFaqId === selectedFaqId}
+                                            >
+                                                {isUploadingFaq && uploadingFaqId === selectedFaqId ? (
+                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                ) : (
+                                                    <Paperclip className="w-3 h-3" />
+                                                )}
+                                                Adjuntar PDF/IMG
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-[9px] text-gray-400 mt-2 text-right">Se guarda automáticamente 💾</p>
                             </div>
                         </div>
                     )}
