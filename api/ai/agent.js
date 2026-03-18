@@ -2304,10 +2304,22 @@ ${safeDnaLines}
                         } else {
                             const lastUserMsg = historyForGpt.filter(h => h.role === 'user').slice(-1)[0];
                             let userText = lastUserMsg?.content || '';
+                            
+                            // Clean system markers from userText (e.g. [CONTEXTO PIVOT], [SISTEMA INTERNO])
+                            userText = userText.replace(/\[.*?\]:\s*/g, '');
+                            userText = userText.replace(/Brenda ofreció.*?: /i, '');
+                            userText = userText.replace(/^"|"$/g, '');
+                            
                             try {
                                 const parsed = JSON.parse(userText);
                                 if (parsed && parsed.text) userText = parsed.text;
-                            } catch (e) { /* ignore, it's raw text */ }
+                            } catch (e) {
+                                // sometimes it's double stringified
+                                try {
+                                    const doubleParsed = JSON.parse(JSON.parse(`"${userText}"`));
+                                    if (doubleParsed && doubleParsed.text) userText = doubleParsed.text;
+                                } catch (e2) { /* ignore, it's raw text */ }
+                            }
 
                             const questionPatterns = /[?¿]|cuál|cómo|cuánto|cuándo|dónde|qué|quién|hacen|tienen|hay|incluye|\bes\b|\bson\b|dan|pagan|trabaj|horario|sueldo|salario|uniforme|transporte|beneficio|requisito|antidop/i;
                             const isQuestion = questionPatterns.test(userText) && userText.length > 5;
