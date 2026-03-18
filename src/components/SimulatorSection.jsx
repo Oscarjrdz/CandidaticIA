@@ -1,6 +1,118 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, RefreshCw, Smartphone, Smile } from 'lucide-react';
+import { Send, RefreshCw, Smartphone, Smile, GripVertical, Plus, Trash2, Pencil, Bot } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import Button from './ui/Button';
+
+const SortableCategoryItem = ({ faq, isSelected, onSelect, onDelete, onEdit }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: faq.id });
+    
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : 'auto',
+        opacity: isDragging ? 0.5 : 1
+    };
+
+    return (
+        <div 
+            ref={setNodeRef} 
+            style={style} 
+            className={`group bg-white dark:bg-gray-800 border ${isSelected ? 'border-indigo-500 shadow-md ring-1 ring-indigo-500' : 'border-gray-100 dark:border-gray-700 hover:border-indigo-200'} rounded-xl p-3 flex items-center gap-3 transition-all cursor-pointer relative`}
+            onClick={onSelect}
+        >
+            <div 
+                {...attributes} 
+                {...listeners} 
+                className="cursor-grab hover:bg-gray-50 dark:hover:bg-gray-700 p-1.5 rounded-lg text-gray-400"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <GripVertical className="w-4 h-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{faq.topic}</h4>
+                    <span className="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 text-[10px] font-black rounded-md uppercase">
+                        {(faq.originalQuestions || []).length} Qs
+                    </span>
+                </div>
+            </div>
+            
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                    className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-gray-50 rounded-lg"
+                    title="Editar nombre"
+                >
+                    <Pencil className="w-4 h-4" />
+                </button>
+                <button 
+                    onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                    title="Eliminar categoría"
+                >
+                    <Trash2 className="w-4 h-4" />
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const SortableQuestionItem = ({ text, index, onDelete, onEdit, onMove }) => {
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: text });
+    
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 50 : 'auto',
+        opacity: isDragging ? 0.5 : 1
+    };
+
+    return (
+        <div 
+            ref={setNodeRef} 
+            style={style} 
+            className="group bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-800 rounded-lg p-2.5 flex items-start gap-3 relative"
+        >
+            <div 
+                {...attributes} 
+                {...listeners} 
+                className="cursor-grab hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded mt-0.5 text-gray-400"
+            >
+                <GripVertical className="w-3.5 h-3.5" />
+            </div>
+            
+            <div className="flex-1 min-w-0">
+                <p className="text-[13px] text-gray-700 dark:text-gray-300 leading-snug italic">"{text}"</p>
+            </div>
+            
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                <button 
+                    onClick={onMove}
+                    className="p-1 text-gray-400 hover:text-blue-500 hover:bg-white dark:hover:bg-gray-800 rounded"
+                    title="Mover a otra categoría"
+                >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+                <button 
+                    onClick={onEdit}
+                    className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-800 rounded"
+                    title="Editar duda"
+                >
+                    <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button 
+                    onClick={onDelete}
+                    className="p-1 text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-gray-800 rounded"
+                    title="Eliminar duda"
+                >
+                    <Trash2 className="w-3.5 h-3.5" />
+                </button>
+            </div>
+        </div>
+    );
+};
 
 // iPhone 17 Pro Max Dimensions/Proportions (Scaled down ~15%)
 const IPHONE_WIDTH = 300;
@@ -13,28 +125,306 @@ const SimulatorSection = ({ showToast }) => {
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
+    
+    // --- Simulator Settings State ---
+    const [vacancies, setVacancies] = useState([]);
+    const [selectedVacancyId, setSelectedVacancyId] = useState('');
+    const [faqs, setFaqs] = useState([]);
+    const [selectedFaqId, setSelectedFaqId] = useState(null);
+    const [loadingFaqs, setLoadingFaqs] = useState(false);
+    
+    // DND Sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    );
     const messagesEndRef = useRef(null);
 
     const commonEmojis = ['😀', '😂', '👍', '❤️', '🙏', '😊', '🤔', '👋', '✅', '❌', '🤷‍♂️', '🔥', '🎉', '💼', '💵'];
 
-    // Load initial history
+    // Load initial history & vacancies
     useEffect(() => {
-        const fetchHistory = async () => {
+        const fetchInitialData = async () => {
             setIsLoading(true);
             try {
-                const res = await fetch('/api/ai/simulate', { method: 'GET' });
-                const data = await res.json();
-                if (data.messages && data.messages.length > 0) {
-                    setMessages(data.messages);
+                // Fetch simulator chat history
+                const simRes = await fetch('/api/ai/simulate', { method: 'GET' });
+                const simData = await simRes.json();
+                if (simData.messages && simData.messages.length > 0) {
+                    setMessages(simData.messages);
+                }
+
+                // Fetch Vacancies for Col 2
+                const vacRes = await fetch('/api/vacancies');
+                const vacData = await vacRes.json();
+                if (vacData.success && vacData.data) {
+                    setVacancies(vacData.data);
                 }
             } catch (e) {
-                console.error('Error fetching simulator history:', e);
+                console.error('Error fetching initial data:', e);
             } finally {
                 setIsLoading(false);
             }
         };
-        fetchHistory();
+        fetchInitialData();
     }, []);
+
+    // Load FAQs when Vacancy changes
+    useEffect(() => {
+        if (!selectedVacancyId) {
+            setFaqs([]);
+            setSelectedFaqId(null);
+            return;
+        }
+        const fetchFaqs = async () => {
+            setLoadingFaqs(true);
+            try {
+                const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`);
+                const data = await res.json();
+                if (data.success) {
+                    setFaqs(data.faqs || []);
+                }
+            } catch (e) {
+                console.error('Error fetching FAQs:', e);
+            } finally {
+                setLoadingFaqs(false);
+            }
+        };
+        fetchFaqs();
+    }, [selectedVacancyId]);
+
+    // --- FAQ Actions ---
+    const handleAddCategory = async () => {
+        if (!selectedVacancyId) return;
+        const topic = prompt('Nombre de la nueva categoría FAQ:');
+        if (!topic) return;
+
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'create_category', topic })
+            });
+            const data = await res.json();
+            if (data.success) setFaqs(data.faqs);
+        } catch (e) {
+            showToast('Error al crear categoría', 'error');
+        }
+    };
+
+    const handleDeleteCategory = async (faqId) => {
+        if (!confirm('¿Eliminar esta categoría y todas sus preguntas?')) return;
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ faqId })
+            });
+            if (res.ok) {
+                setFaqs(prev => prev.filter(f => f.id !== faqId));
+                if (selectedFaqId === faqId) setSelectedFaqId(null);
+            }
+        } catch (e) {
+            showToast('Error al eliminar', 'error');
+        }
+    };
+
+    const handleEditCategoryTopic = async (faqId, oldTopic) => {
+        const newTopic = prompt('Editar nombre de categoría:', oldTopic);
+        if (!newTopic || newTopic === oldTopic) return;
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ faqId, topic: newTopic })
+            });
+            if (res.ok) {
+                setFaqs(prev => prev.map(f => f.id === faqId ? { ...f, topic: newTopic } : f));
+            }
+        } catch (e) {
+            showToast('Error al editar', 'error');
+        }
+    };
+
+    const handleCategoryDragEnd = async (event) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        setFaqs((items) => {
+            const oldIndex = items.findIndex(i => i.id === active.id);
+            const newIndex = items.findIndex(i => i.id === over.id);
+            const newArray = arrayMove(items, oldIndex, newIndex);
+            
+            // Persist Order
+            fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'reorder_categories', order: newArray.map(f => f.id) })
+            }).catch(e => console.error('Error reordering', e));
+
+            return newArray;
+        });
+    };
+
+    // --- Question Actions (Column 3) ---
+    const handleAddQuestion = async () => {
+        if (!selectedVacancyId || !selectedFaqId) return;
+        const question = prompt('Ingresa la nueva variante de la duda:');
+        if (!question?.trim()) return;
+
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'add_question', faqId: selectedFaqId, questionText: question.trim() })
+            });
+            if (res.ok) {
+                setFaqs(prev => prev.map(f => 
+                    f.id === selectedFaqId 
+                        ? { ...f, originalQuestions: [...(f.originalQuestions || []), question.trim()] }
+                        : f
+                ));
+            }
+        } catch (e) {
+            showToast('Error al agregar', 'error');
+        }
+    };
+
+    const handleEditQuestion = async (oldText) => {
+        const newText = prompt('Modificar duda:', oldText);
+        if (!newText?.trim() || newText === oldText) return;
+
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'edit_question', faqId: selectedFaqId, questionText: oldText, newQuestionText: newText.trim() })
+            });
+            if (res.ok) {
+                setFaqs(prev => prev.map(f => {
+                    if (f.id !== selectedFaqId) return f;
+                    const qIdx = f.originalQuestions.indexOf(oldText);
+                    if (qIdx === -1) return f;
+                    const newQs = [...f.originalQuestions];
+                    newQs[qIdx] = newText.trim();
+                    return { ...f, originalQuestions: newQs };
+                }));
+            }
+        } catch (e) {
+            showToast('Error al editar', 'error');
+        }
+    };
+
+    const handleDeleteQuestion = async (questionText) => {
+        if (!confirm('¿Eliminar esta variante?')) return;
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'remove_question', faqId: selectedFaqId, questionText })
+            });
+            if (res.ok) {
+                setFaqs(prev => prev.map(f => 
+                    f.id === selectedFaqId 
+                        ? { ...f, originalQuestions: f.originalQuestions.filter(q => q !== questionText) }
+                        : f
+                ));
+            }
+        } catch (e) {
+            showToast('Error al eliminar', 'error');
+        }
+    };
+
+    const handleMoveQuestion = async (questionText) => {
+        const availableCategories = faqs.filter(f => f.id !== selectedFaqId);
+        if (availableCategories.length === 0) {
+            showToast('No hay otras categorías a donde mover', 'info');
+            return;
+        }
+
+        let promptText = 'Selecciona el número de la categoría destino:\n';
+        availableCategories.forEach((cat, idx) => {
+            promptText += `${idx + 1}. ${cat.topic}\n`;
+        });
+
+        const choice = prompt(promptText);
+        if (!choice) return;
+
+        const targetIdx = parseInt(choice) - 1;
+        if (isNaN(targetIdx) || targetIdx < 0 || targetIdx >= availableCategories.length) {
+            showToast('Selección inválida', 'error');
+            return;
+        }
+
+        const targetFaqId = availableCategories[targetIdx].id;
+
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    action: 'move_question', 
+                    faqId: selectedFaqId, 
+                    targetFaqId, 
+                    questionText 
+                })
+            });
+            if (res.ok) {
+                showToast('Pregunta movida con éxito', 'success');
+                setFaqs(prev => prev.map(f => {
+                    if (f.id === selectedFaqId) {
+                        return { ...f, originalQuestions: f.originalQuestions.filter(q => q !== questionText) };
+                    }
+                    if (f.id === targetFaqId) {
+                        return { ...f, originalQuestions: [...(f.originalQuestions || []), questionText] };
+                    }
+                    return f;
+                }));
+            } else {
+                showToast('Error al mover', 'error');
+            }
+        } catch (e) {
+            showToast('Error de conexión', 'error');
+        }
+    };
+
+    const handleQuestionDragEnd = async (event) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id || !selectedFaqId) return;
+
+        const currentFaq = faqs.find(f => f.id === selectedFaqId);
+        if (!currentFaq) return;
+
+        const oldIndex = currentFaq.originalQuestions.indexOf(active.id);
+        const newIndex = currentFaq.originalQuestions.indexOf(over.id);
+        const newArray = arrayMove(currentFaq.originalQuestions, oldIndex, newIndex);
+
+        setFaqs(prev => prev.map(f => f.id === selectedFaqId ? { ...f, originalQuestions: newArray } : f));
+
+        fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'reorder_questions', faqId: selectedFaqId, questionsOrder: newArray })
+        }).catch(e => console.error('Error reordering qs', e));
+    };
+
+    const handleSaveOfficialAnswer = async (newAnswer) => {
+        if (!selectedVacancyId || !selectedFaqId) return;
+        try {
+            const res = await fetch(`/api/vacancies/faq?vacancyId=${selectedVacancyId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ faqId: selectedFaqId, officialAnswer: newAnswer })
+            });
+            if (res.ok) {
+                showToast('Respuesta oficial guardada', 'success');
+                // The onBlur event syncs state, but we ensure central state is matching just in case
+                setFaqs(prev => prev.map(f => f.id === selectedFaqId ? { ...f, officialAnswer: newAnswer } : f));
+            }
+        } catch (e) {
+            showToast('Error al guardar respuesta', 'error');
+        }
+    };
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -235,20 +625,138 @@ const SimulatorSection = ({ showToast }) => {
                     </div>
                 </div>
 
-                {/* COLUMN 2: Controles & Rayos X (To be implemented) */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full">
-                    <h3 className="font-bold text-gray-900 dark:text-white mb-4">⚙️ Configuración del Simulador</h3>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                        <p>Selecciona una vacante para inyectar su contexto en Brenda y probar su comportamiento.</p>
+                {/* COLUMN 2: Controles & Categorías (Radar) */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            ⚙️ Categorías (Radar)
+                        </h3>
+                        <button 
+                            onClick={handleAddCategory}
+                            disabled={!selectedVacancyId}
+                            className="p-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+                            title="Nueva Categoría"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
+                    </div>
+
+                    <div className="mb-4">
+                        <select
+                            className="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-sm rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-blue-500"
+                            value={selectedVacancyId}
+                            onChange={(e) => setSelectedVacancyId(e.target.value)}
+                        >
+                            <option value="">-- Selecciona Vacante para Radar --</option>
+                            {vacancies.map(v => (
+                                <option key={v.id} value={v.id}>{v.name} ({v.company})</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2">
+                        {!selectedVacancyId ? (
+                            <p className="text-xs text-gray-400 text-center mt-10">Selecciona una vacante arriba para ver su Radar de Dudas.</p>
+                        ) : loadingFaqs ? (
+                            <p className="text-xs text-gray-400 text-center mt-10 animate-pulse">Cargando...</p>
+                        ) : faqs.length === 0 ? (
+                            <p className="text-xs text-gray-400 text-center mt-10">No hay categorías. Crea una.</p>
+                        ) : (
+                            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
+                                <SortableContext items={faqs.map(f => f.id)} strategy={verticalListSortingStrategy}>
+                                    {faqs.map(faq => (
+                                        <SortableCategoryItem 
+                                            key={faq.id} 
+                                            faq={faq} 
+                                            isSelected={selectedFaqId === faq.id}
+                                            onSelect={() => setSelectedFaqId(faq.id)}
+                                            onEdit={() => handleEditCategoryTopic(faq.id, faq.topic)}
+                                            onDelete={() => handleDeleteCategory(faq.id)}
+                                        />
+                                    ))}
+                                </SortableContext>
+                            </DndContext>
+                        )}
                     </div>
                 </div>
 
-                {/* COLUMN 3: Radar Log (To be implemented) */}
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full">
-                    <h3 className="font-bold text-gray-900 dark:text-white mb-4">🧠 Rayos X (Memoria AI)</h3>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                        <p>Aquí verás el ADN extraído y los temas que el Radar de FAQs disparó internamente durante el chat.</p>
+                {/* COLUMN 3: Preguntas Locales del Radar */}
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            🧠 Rayos X (Preguntas)
+                        </h3>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={handleAddQuestion}
+                                disabled={!selectedFaqId}
+                                className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50"
+                                title="Agregar nueva pregunta manual"
+                            >
+                                <Plus className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
+                    
+                    {!selectedFaqId ? (
+                        <p className="text-xs text-gray-400 text-center mt-10">Selecciona una categoría en la Columna 2 para ver y editar sus preguntas y la respuesta oficial.</p>
+                    ) : (
+                        <div className="flex-1 flex flex-col overflow-hidden">
+                            <div className="mb-4 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-2 rounded-lg border border-indigo-100 dark:border-indigo-800/50">
+                                <p className="text-xs font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-tight">Tema enfocado:</p>
+                                <p className="text-sm text-gray-800 dark:text-gray-200 truncate" title={faqs.find(f => f.id === selectedFaqId)?.topic}>
+                                    {faqs.find(f => f.id === selectedFaqId)?.topic}
+                                </p>
+                            </div>
+
+                            <p className="text-[10px] font-black tracking-widest text-gray-400 uppercase mb-2">Variantes de Dudas Detectadas</p>
+                            <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2 min-h-[150px]">
+                                {(() => {
+                                    const activeFaq = faqs.find(f => f.id === selectedFaqId);
+                                    if (!activeFaq?.originalQuestions || activeFaq.originalQuestions.length === 0) {
+                                        return <p className="text-xs text-gray-400 text-center mt-4">No hay preguntas asociadas a este tema.</p>;
+                                    }
+                                    return (
+                                        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleQuestionDragEnd}>
+                                            <SortableContext items={activeFaq.originalQuestions} strategy={verticalListSortingStrategy}>
+                                                {activeFaq.originalQuestions.map((qText, idx) => (
+                                                    <SortableQuestionItem 
+                                                        key={`q-${qText}-${idx}`} // Use combined key for absolute safety just in case of dupes
+                                                        text={qText} 
+                                                        index={idx}
+                                                        onDelete={() => handleDeleteQuestion(qText)}
+                                                        onEdit={() => handleEditQuestion(qText)}
+                                                        onMove={() => handleMoveQuestion(qText)}
+                                                    />
+                                                ))}
+                                            </SortableContext>
+                                        </DndContext>
+                                    );
+                                })()}
+                            </div>
+
+                            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 shrink-0">
+                                <label className="block text-[10px] font-black tracking-widest text-blue-600 dark:text-blue-400 uppercase mb-2 flex items-center gap-1.5">
+                                    <Bot className="w-3.5 h-3.5" />
+                                    Respuesta Oficial del Bot
+                                </label>
+                                <textarea
+                                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-[13px] resize-none"
+                                    rows={4}
+                                    placeholder="Instruye a Brenda sobre qué responder cuando le pregunten por este tema. Guarda automáticamente al salir del campo."
+                                    defaultValue={faqs.find(f => f.id === selectedFaqId)?.officialAnswer || ''}
+                                    onBlur={(e) => {
+                                        const newVal = e.target.value.trim();
+                                        const currentVal = faqs.find(f => f.id === selectedFaqId)?.officialAnswer || '';
+                                        if (newVal !== currentVal) {
+                                            handleSaveOfficialAnswer(newVal);
+                                        }
+                                    }}
+                                />
+                                <p className="text-[9px] text-gray-400 mt-1.5 text-right">Se guarda automáticamente 💾</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
             </div>
