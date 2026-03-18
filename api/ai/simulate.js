@@ -20,15 +20,22 @@ export default async function handler(req, res) {
             const msgs = await getRecentMessages(candidate.id, 50);
             
             // Format to UI structure
-            const uiMessages = msgs.map(m => {
+            let uiMessages = [];
+            msgs.forEach(m => {
                 const isUser = m.from === 'user' || m.from === phone;
-                const content = typeof m === 'string' ? m : (m.content || m.body || '');
-                return {
-                    id: m.id || Date.now() + Math.random(),
-                    sender: isUser ? 'user' : 'bot',
-                    text: content.replace(/\[MSG_SPLIT\]/g, '\n'),
-                    time: new Date(m.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                };
+                const rawContent = typeof m === 'string' ? m : (m.content || m.body || '');
+                
+                // Split AI messages by [MSG_SPLIT] to render multiple bubbles
+                const parts = rawContent.split(/\[MSG_SPLIT\]/).map(p => p.trim()).filter(Boolean);
+                
+                parts.forEach((part, index) => {
+                    uiMessages.push({
+                        id: (m.id || Date.now()) + '-' + index,
+                        sender: isUser ? 'user' : 'bot',
+                        text: part,
+                        time: new Date(m.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    });
+                });
             });
 
             return res.status(200).json({ success: true, messages: uiMessages });
