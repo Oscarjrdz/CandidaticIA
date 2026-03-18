@@ -2919,9 +2919,46 @@ ${safeDnaLines}
                                 );
 
 
-                                if (nextAiResult?.response_text) {
+                                if (nextAiResult?.response_text || nextAiResult?.media_url) {
                                     let cMessagesToSend = [];
-                                    let chainText = nextAiResult.response_text;
+                                    let chainText = nextAiResult.response_text || '';
+                                    
+                                    // 🚀 MEDIA RECOVERY FOR STEPS: Execute PDF/Image logic EXACTLY like the main flow
+                                    let mUrl = nextAiResult?.media_url;
+                                    let isPdf = false;
+                                    let filename = 'document.pdf';
+                                    
+                                    if (!mUrl || mUrl === 'null') {
+                                        const mediaTagPattern = /\[MEDIA_DISPONIBLE:?\s*(https?:\/\/[^\s\]]+)\]/i;
+                                        const tagMatch = chainText.match(mediaTagPattern);
+                                        if (tagMatch) mUrl = tagMatch[1];
+                                    }
+                                    chainText = chainText.replace(/\[MEDIA_DISPONIBLE[^\]]*\]/gi, '').trim();
+
+                                    if (mUrl && mUrl !== 'null') {
+                                        if (mUrl.startsWith('/api/')) mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
+                                        else if (mUrl.includes('candidatic.ia') && !mUrl.includes('vercel.app')) mUrl = mUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
+                                        
+                                        isPdf = mUrl.toLowerCase().includes('.pdf') || mUrl.includes('mime=application%2Fpdf');
+                                        // Attempt to fetch correct filename if local Vercel URL
+                                        if (mUrl.includes('/api/image')) {
+                                            try {
+                                                const urlObj = mUrl.startsWith('http') ? new URL(mUrl) : new URL(mUrl, 'https://candidatic-ia.vercel.app');
+                                                const mediaId = urlObj.searchParams.get('id');
+                                                if (mediaId && redis) {
+                                                    const metaRaw = await redis.get(`meta:image:${mediaId}`);
+                                                    if (metaRaw) {
+                                                        const meta = JSON.parse(metaRaw);
+                                                        if (meta.mime === 'application/pdf') isPdf = true;
+                                                        if (meta.filename) filename = meta.filename;
+                                                    }
+                                                }
+                                            } catch (e) { console.error('Error fetching filename in loop:', e.message); }
+                                        }
+                                        
+                                        // Sweep text leaks again just in case
+                                        chainText = chainText.replace(/!\[.*?\]\(.*?\)/g, '').replace(/https?:\/\/[^\s\)]+/g, '').trim();
+                                    }
 
                                     // 📅 INTERVIEW DATES FORMATTER: Detect and reformat the cita dates message
                                     const isDateMsg = /^[¡!]?Listo\b/i.test(chainText.trim());
@@ -2944,7 +2981,6 @@ ${safeDnaLines}
                                             }
                                         );
                                     }
-
 
                                     // 📐 DRY: Appy shared formatting logic (replaces ~50 duplicate lines)
                                     chainText = formatRecruiterMessage(chainText, candidateData);
@@ -2969,19 +3005,40 @@ ${safeDnaLines}
                                     const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
 
                                     // Sequential send with delay for correct WhatsApp bubble separation
-                                    for (let i = 0; i < cMessagesToSend.length; i++) {
-                                        let msgClean = String(cMessagesToSend[i]).trim();
-                                        if (!msgClean || filterRegex.test(msgClean)) continue;
-
-                                        // Ensure MSG_SPLIT is cleanly removed before sending if it didn't trigger a split earlier
-                                        msgClean = msgClean.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
-
-                                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
-                                        if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));
+                                    const isSimulatorPhoneStep = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
+                                    if (!isSimulatorPhoneStep) {
+                                        // If we have media, send FIRST bubble, then media, then the rest
+                                        if (mUrl && mUrl !== 'null' && cMessagesToSend.length > 0) {
+                                            let pIdx = 1;
+                                            if (cMessagesToSend[0]) {
+                                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cMessagesToSend[0], 'chat', { priority: pIdx++ }).catch(() => { });
+                                                await new Promise(r => setTimeout(r, 600));
+                                            }
+                                            
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: pIdx++ }).catch(() => { });
+                                            await new Promise(r => setTimeout(r, 600));
+                                            
+                                            for (let i = 1; i < cMessagesToSend.length; i++) {
+                                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cMessagesToSend[i], 'chat', { priority: pIdx++ }).catch(() => { });
+                                                if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 600));
+                                            }
+                                        } else if (mUrl && mUrl !== 'null') {
+                                            // Only media
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 }).catch(() => { });
+                                        } else {
+                                            // Normal loop
+                                            for (let i = 0; i < cMessagesToSend.length; i++) {
+                                                let msgClean = String(cMessagesToSend[i]).trim();
+                                                if (!msgClean || filterRegex.test(msgClean)) continue;
+                                                msgClean = msgClean.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
+                                                await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
+                                                if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));
+                                            }
+                                        }
                                     }
 
-                                    const safeLogText = (nextAiResult.response_text || '').replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
-                                    await saveMessage(candidateId, { from: 'me', content: safeLogText, timestamp: new Date().toISOString() });
+                                    const safeLogText = chainText.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
+                                    await saveMessage(candidateId, { from: 'me', content: safeLogText, timestamp: new Date().toISOString(), mediaUrl: mUrl && mUrl !== 'null' ? mUrl : null });
                                 } else {
                                 }
                             } catch (e) {
