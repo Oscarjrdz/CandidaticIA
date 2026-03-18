@@ -542,6 +542,16 @@ export const syncCandidateStats = async (id, candidateData = null, pipeline = nu
 };
 
 export const saveCandidate = async (candidate) => {
+    // 🛑 SIMULATOR SHIELD: Never save simulator mock candidates to the main database or indexes.
+    if (candidate.id && String(candidate.id).startsWith('sim_')) {
+        // We still need to save it temporarily so the agent can read its own history during the session.
+        const client = getRedisClient();
+        if (client) {
+            await client.set(candidate.id, JSON.stringify(candidate), 'EX', 3600); // 1 hour TTL
+        }
+        return candidate;
+    }
+
     if (!candidate.id) {
         candidate.id = `cand_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
@@ -753,6 +763,16 @@ export const clearWaitlist = async (candidateId, processedCount = 0) => {
 };
 
 export const updateCandidate = async (id, data) => {
+    // 🛑 SIMULATOR SHIELD: Short-circuit updates for the mock candidate
+    if (String(id).startsWith('sim_')) {
+        const client = getRedisClient();
+        const existingDataStr = await client?.get(id);
+        const existingData = existingDataStr ? JSON.parse(existingDataStr) : {};
+        const merged = { ...existingData, ...data };
+        await client?.set(id, JSON.stringify(merged), 'EX', 3600);
+        return merged;
+    }
+
     const candidate = await getCandidateById(id);
     if (!candidate) return null;
     const updated = { ...candidate, ...data };
@@ -1005,6 +1025,11 @@ export const getMessages = async (candidateId) => {
 };
 
 export const saveMessage = async (candidateId, message) => {
+    // 🛑 SIMULATOR SHIELD: Short-circuit message queues for mock candidates.
+    if (String(candidateId).startsWith('sim_')) {
+        return message; 
+    }
+
     const client = getClient();
     if (!client) {
         console.error('❌ [Storage] saveMessage failed: No Redis client');
