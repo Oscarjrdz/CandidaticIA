@@ -2,27 +2,60 @@
  * POST /api/ai/simulate
  * Handles messages from the Web Simulator to Brenda.
  */
-import { getRedisClient, getCandidateByPhone, saveCandidate, deleteCandidate, saveWebhookTransaction } from '../utils/storage.js';
+import { getRedisClient, getCandidateByPhone, saveCandidate, deleteCandidate, saveWebhookTransaction, getRecentMessages } from '../utils/storage.js';
 import { processMessage } from './agent.js';
 
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
+    const phone = '5211234567890'; 
+    const redis = getRedisClient();
+
+    // ---- GET: Fetch Simulator History ----
+    if (req.method === 'GET') {
+        try {
+            let candidate = await getCandidateByPhone(phone);
+            if (!candidate) {
+                return res.status(200).json({ success: true, messages: [] });
+            }
+            // Fetch messages from DB for this candidate
+            const msgs = await getRecentMessages(candidate.id, 50);
+            
+            // Format to UI structure
+            const uiMessages = msgs.map(m => {
+                const isUser = m.from === 'user' || m.from === 'me';
+                const content = typeof m === 'string' ? m : (m.content || m.body || '');
+                return {
+                    id: m.id || Date.now() + Math.random(),
+                    sender: isUser ? 'user' : 'bot',
+                    text: content.replace(/\[MSG_SPLIT\]/g, '\n'),
+                    time: new Date(m.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                };
+            });
+
+            return res.status(200).json({ success: true, messages: uiMessages });
+        } catch (e) {
+            console.error('Sim GET Error:', e);
+            return res.status(500).json({ success: false, error: e.message });
+        }
+    }
+
+    // ---- POST / DELETE ----
+    if (req.method !== 'POST' && req.method !== 'DELETE') {
         return res.status(405).json({ success: false, error: 'Method not allowed' });
     }
 
     try {
-        const { message, reset } = req.body;
+        const reset = req.body?.reset || req.method === 'DELETE';
+        const message = req.body?.message;
         
-        // El usuario solicitó el número por defecto '1234567890'
-        // USAMOS EL FORMATO MX 521 + 10 digitos para máxima compatibilidad con el engine principal
-        const phone = '5211234567890'; 
-        const redis = getRedisClient();
-
         // Handle Restart Chat
         if (reset) {
             const cand = await getCandidateByPhone(phone);
             if (cand) {
+                // Wipe candidate from DB completely
                 await deleteCandidate(cand.id);
+                await redis.del(`messages:${cand.id}`);
+                await redis.del(`reengagement:${cand.id}`);
+                await redis.del(`noInteresa:${cand.id}`);
             }
             return res.status(200).json({ 
                 success: true, 
@@ -40,7 +73,7 @@ export default async function handler(req, res) {
         if (!candidate) {
             candidate = await saveCandidate({ 
                 whatsapp: phone, 
-                nombreReal: 'Candidato Simulador', 
+                // Removed 'nombreReal: Candidato Simulador' so the AI will ask for it normally
                 esNuevo: 'SI',
                 primerContacto: new Date().toISOString()
             });

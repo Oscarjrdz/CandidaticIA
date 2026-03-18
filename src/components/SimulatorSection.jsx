@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, RefreshCw, Smartphone } from 'lucide-react';
+import { Send, RefreshCw, Smartphone, Smile } from 'lucide-react';
 import Button from './ui/Button';
 
 // iPhone 17 Pro Max Dimensions/Proportions (Scaled down ~15%)
@@ -12,7 +12,29 @@ const SimulatorSection = ({ showToast }) => {
     ]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [showEmojis, setShowEmojis] = useState(false);
     const messagesEndRef = useRef(null);
+
+    const commonEmojis = ['😀', '😂', '👍', '❤️', '🙏', '😊', '🤔', '👋', '✅', '❌', '🤷‍♂️', '🔥', '🎉', '💼', '💵'];
+
+    // Load initial history
+    useEffect(() => {
+        const fetchHistory = async () => {
+            setIsLoading(true);
+            try {
+                const res = await fetch('/api/ai/simulate', { method: 'GET' });
+                const data = await res.json();
+                if (data.messages && data.messages.length > 0) {
+                    setMessages(data.messages);
+                }
+            } catch (e) {
+                console.error('Error fetching simulator history:', e);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchHistory();
+    }, []);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -35,6 +57,7 @@ const SimulatorSection = ({ showToast }) => {
 
         setMessages(prev => [...prev, userMsg]);
         setInputValue('');
+        setShowEmojis(false);
         setIsLoading(true);
 
         try {
@@ -63,7 +86,7 @@ const SimulatorSection = ({ showToast }) => {
         setIsLoading(true);
         try {
             const response = await fetch('/api/ai/simulate', {
-                method: 'POST',
+                method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ reset: true, sessionId: 'simulator_123' })
             });
@@ -160,25 +183,48 @@ const SimulatorSection = ({ showToast }) => {
                             </div>
 
                             {/* WA Input Area */}
-                            <div className="bg-[#F0F2F5] p-3 flex items-end space-x-2 shrink-0 pb-6">
-                                <form onSubmit={handleSendMessage} className="flex-1 flex items-center bg-white rounded-2xl px-4 py-2 min-h-[44px] shadow-sm">
-                                    <input
-                                        type="text"
-                                        value={inputValue}
-                                        onChange={(e) => setInputValue(e.target.value)}
-                                        placeholder="Escribe un mensaje"
-                                        className="flex-1 bg-transparent outline-none text-[15px]"
-                                        disabled={isLoading}
-                                    />
-                                </form>
-                                {inputValue.trim() && (
-                                    <button 
-                                        onClick={handleSendMessage}
-                                        className="w-11 h-11 bg-[#00A884] rounded-full flex items-center justify-center text-white shrink-0 hover:bg-[#008f6f] transition-colors"
-                                    >
-                                        <Send className="w-5 h-5 ml-1" />
-                                    </button>
+                            <div className="bg-[#F0F2F5] p-3 flex flex-col shrink-0 pb-6 relative">
+                                {showEmojis && (
+                                    <div className="absolute bottom-full left-3 mb-2 bg-white rounded-lg shadow-lg p-2 flex gap-2 flex-wrap w-64 border border-gray-200">
+                                        {commonEmojis.map(emoji => (
+                                            <button 
+                                                key={emoji} 
+                                                type="button"
+                                                onClick={() => setInputValue(prev => prev + emoji)}
+                                                className="w-8 h-8 flex items-center justify-center text-xl hover:bg-gray-100 rounded"
+                                            >
+                                                {emoji}
+                                            </button>
+                                        ))}
+                                    </div>
                                 )}
+                                <div className="flex items-end space-x-2">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowEmojis(!showEmojis)}
+                                        className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-gray-700 shrink-0"
+                                    >
+                                        <Smile className="w-6 h-6" />
+                                    </button>
+                                    <form onSubmit={handleSendMessage} className="flex-1 flex items-center bg-white rounded-2xl px-4 py-2 min-h-[44px] shadow-sm">
+                                        <input
+                                            type="text"
+                                            value={inputValue}
+                                            onChange={(e) => setInputValue(e.target.value)}
+                                            placeholder="Escribe un mensaje"
+                                            className="flex-1 bg-transparent outline-none text-[15px]"
+                                            disabled={isLoading}
+                                        />
+                                    </form>
+                                    {inputValue.trim() && (
+                                        <button 
+                                            onClick={handleSendMessage}
+                                            className="w-11 h-11 bg-[#00A884] rounded-full flex items-center justify-center text-white shrink-0 hover:bg-[#008f6f] transition-colors"
+                                        >
+                                            <Send className="w-5 h-5 ml-1" />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
