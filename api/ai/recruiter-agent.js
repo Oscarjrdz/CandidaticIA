@@ -25,7 +25,7 @@ export const RECRUITER_IDENTITY = `
 7. 📅 CITA ESTRICTA: En el paso "Cita", NUNCA uses "{ move }" hasta que el candidato confirme explícitamente ("Sí") a tu pregunta de confirmación final. No lo des por hecho solo por elegir horario.
 [📡 RADAR DE DUDAS (RESPONDE CON SEGURIDAD, NUNCA TE CALLES)]:
 Si el candidato hace UNA PREGUNTA sobre la vacante (sueldo, horario, requisitos, pagos, etc.):
-1. PRIORIDAD MÁXIMA: Busca en [PREGUNTAS FRECUENTES OFICIALES]. Si existe el TEMA, usa la RESPUESTA OFICIAL EXACTA (si tiene [MEDIA_DISPONIBLE: url], cópialo estrictamente en media_url del JSON).
+1. PRIORIDAD MÁXIMA: Busca en [PREGUNTAS FRECUENTES OFICIALES]. Si existe el TEMA, usa la RESPUESTA OFICIAL EXACTA. 🚨 REGLA DE ORO: Si la respuesta tiene la etiqueta [MEDIA_DISPONIBLE: url], TIENES QUE COPIAR EXACTAMENTE esa url dentro de la variable "media_url" del JSON final. Es obligatorio.
 2. 🚨 LECTURA OBLIGATORIA DE VACANTE: Si NO hay FAQ oficial, tienes OBLIGACIÓN ABSOLUTA de extraer la respuesta de los [DATOS REALES DE LA VACANTE]. Armarás una respuesta cálida y directa con esos datos y la pondrás en 'response_text' asegurando de re-preguntar por el objetivo del paso.
 3. FLEXIBILIDAD: Entiende "cuánto pagan" = sueldo, "hay camiones" = transporte, "qué ocupo" = requisitos.
 4. ESTRICTAMENTE PROHIBIDO MUDISMO: NUNCA dejes el 'response_text' vacío o uses "[SILENCIO]" si la información está en la descripción. TIENES LA RESPONSABILIDAD de contestar afirmativamente si tienes el dato. NO TIRES ERROR GENÉRICO.
@@ -43,7 +43,7 @@ Si el candidato hace UNA PREGUNTA sobre la vacante (sueldo, horario, requisitos,
     },
     "thought_process": "Razonamiento interno.",
     "response_text": "Tu respuesta cálida de Brenda.",
-    "media_url": "URL exacta del [MEDIA_DISPONIBLE] si aplica, sino null.",
+    "media_url": "🚨 OBLIGATORIO EXTRAER LA URL AQUÍ si el FAQ tiene [MEDIA_DISPONIBLE: url]. Si no, null.",
     "unanswered_question": "La pregunta del candidato si no tienes el dato, sino null."
 }
 ⚠️ citaFecha y citaHora deben llenarse en cuanto se elijan y mantenerse al disparar "{ move }". NUNCA dispares "{ move }" con citaFecha o citaHora nulos.
@@ -141,9 +141,13 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                     const answeredFaqs = faqs.filter(f => f.officialAnswer);
                     if (answeredFaqs.length > 0) {
                         vacancyContext.faqs = answeredFaqs.map(f => {
-                            const keywords = f.originalQuestions ? ` (Palabras clave: ${f.originalQuestions.join(', ')})` : '';
+                            // ✂️ TOKEN GUARD: Filter out compound/JSON garbage and limit to 5 keywords max
+                            const cleanKws = (f.originalQuestions || [])
+                                .filter(q => typeof q === 'string' && !q.includes('{') && !q.includes('msgId') && q.length < 80)
+                                .slice(0, 5);
+                            const keywords = cleanKws.length > 0 ? ` (Palabras clave: ${cleanKws.join(', ')})` : '';
                             let mUrl = f.mediaUrl || '';
-                            if (mUrl && mUrl.startsWith('/api/')) mUrl = `https://candidatic.ia${mUrl}`;
+                            if (mUrl && mUrl.startsWith('/api/')) mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
                             const mediaNote = mUrl ? ` [MEDIA_DISPONIBLE: ${mUrl}]` : '';
                             return `- TEMA: "${f.topic}"${keywords}${mediaNote}\n  RESPUESTA OFICIAL: "${f.officialAnswer}"`;
                         }).join('\n');
@@ -264,9 +268,15 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
 [PREGUNTAS FRECUENTES OFICIALES - PRIORIDAD MÁXIMA]:
 ${faqsForPrompt
-                // 🔒 REGLA ESTRICTA: Fuerza al modelo a usar la FAQ oficial y el PDF, ignorando la info general
-                ? `🚨 REGLA DE ORO DE FAQs: Si la pregunta del candidato coincide directa o indirectamente con un TEMA de esta lista, TIENES ESTRICTAMENTE PROHIBIDO usar la descripción general de la vacante para responder. DEBES obligatoriamente usar la RESPUESTA OFICIAL exacta mostrada aquí, y si contiene un [MEDIA_DISPONIBLE: url], es OBLIGATORIO extraerlo en media_url.\n\nLas siguientes respuestas HAN SIDO APROBADAS. Usa el contenido de la respuesta oficial como base, manteniendo la informacion exacta. Puedes enriquecer con emojis de Brenda pero NO cambies el contenido. PROHIBIDO poner links/urls en response_text. Después del contenido del FAQ, DEBES agregar obligatoriamente la pregunta de cierre de agenda:\n${faqsForPrompt}`
-                : 'No hay respuestas oficiales registradas aún. Si preguntan algo no listado aquí o abajo, usa el fallback de duda.'}
+                // 🔒 REGLOS Y FLUJOS DE RESOLUCIÓN DE DUDAS
+                ? `🚨 REGLA DE ORO PARA DUDAS:
+1. Si la duda coincide con un TEMA de esta lista, TIENES ESTRICTAMENTE PROHIBIDO usar la descripción general. Usa OBLIGATORIAMENTE la RESPUESTA OFICIAL exacta (si tiene [MEDIA_DISPONIBLE: url], extráelo en media_url).
+2. Si la duda NO se responde en esta lista, TIENES LA OBLIGACIÓN ABSOLUTA de buscar la respuesta en los [DATOS REALES DE LA VACANTE] (Sueldo, Horario, Descripción completa) antes de rendirte.
+3. SOLO si el dato no existe ni en FAQs ni en [DATOS REALES DE LA VACANTE], usa el fallback ("Es una excelente pregunta...").
+
+[TEMAS Y RESPUESTAS APROBADAS]:
+Las siguientes respuestas HAN SIDO APROBADAS. Usa el contenido oficial como base y nunca inventes. Agrega siempre la pregunta de cierre al final:\n${faqsForPrompt}`
+                : 'No hay respuestas oficiales registradas. Busca la respuesta directamente en los [DATOS REALES DE LA VACANTE]. Si no está, usa el fallback de duda.'}
 
 [DATOS REALES DE LA VACANTE]:
 ${JSON.stringify(vacancyContextForJson)}
@@ -424,9 +434,9 @@ ${alternatives.length > 0
             content: m.content || m.parts?.[0]?.text || ''
         }));
 
-        // ⚡ All steps use gpt-4o-mini for speed. Cita keeps 700 tokens for scheduling reasoning.
+        // ⚡ All steps use gpt-4o-mini for speed. Cita keeps 950 tokens for scheduling reasoning.
         const selectedModel = 'gpt-4o-mini';
-        const selectedMaxTokens = isCitaStepModel ? 950 : 700;
+        const selectedMaxTokens = isCitaStepModel ? 950 : 900;
 
         const gptResponse = await getOpenAIResponse(
             messagesForOpenAI,
@@ -468,6 +478,30 @@ ${alternatives.length > 0
         // Diagnostic: log unanswered_question result
         if (aiResult.unanswered_question && aiResult.unanswered_question !== 'null') {
         } else {
+        }
+
+        // 🔒 DETERMINISTIC MEDIA_URL INJECTION:
+        // If the AI forgot to set media_url (or returned null) but the candidate asked about
+        // a topic that matches a FAQ with a mediaUrl, inject it directly from Redis data.
+        if ((!aiResult.media_url || aiResult.media_url === 'null') && faqData && activeVacancyId) {
+            try {
+                const faqs = JSON.parse(faqData);
+                const lastUserMsg = (recentHistory[recentHistory.length - 1]?.content || '').toLowerCase();
+                const faqWithMedia = faqs.find(f => {
+                    if (!f.mediaUrl || !f.officialAnswer) return false;
+                    const topicWords = (f.topic + ' ' + (f.originalQuestions || []).join(' ')).toLowerCase();
+                    // Match: at least 2 significant words from the topic appear in the user message
+                    const keywords = topicWords.split(/\s+/).filter(w => w.length > 3);
+                    const matches = keywords.filter(kw => lastUserMsg.includes(kw));
+                    return matches.length >= 1; // 1 keyword match is enough for targeted FAQs
+                });
+                if (faqWithMedia) {
+                    let mUrl = faqWithMedia.mediaUrl;
+                    if (mUrl && mUrl.startsWith('/api/')) mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
+                    aiResult.media_url = mUrl;
+                    console.log(`[RECRUITER BRAIN] ✅ Deterministic media_url injected from FAQ "${faqWithMedia.topic}": ${mUrl}`);
+                }
+            } catch(e) { /* ignore */ }
         }
 
         // 5. Lógica de Movimiento { move } y Rastreo de Vacantes
