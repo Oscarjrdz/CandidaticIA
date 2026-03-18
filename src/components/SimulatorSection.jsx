@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, RefreshCw, Smartphone, Smile, GripVertical, Plus, Trash2, Pencil, Bot, Paperclip, Loader2, X, Image as ImageIcon, FileText } from 'lucide-react';
+import { Send, RefreshCw, Smartphone, Smile, GripVertical, Plus, Trash2, Pencil, Bot, Paperclip, Loader2, X, Image as ImageIcon, FileText, Terminal as TerminalIcon } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -126,6 +126,22 @@ const SimulatorSection = ({ showToast }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
     
+    // Logs Terminal State
+    const [logs, setLogs] = useState([
+        { id: Date.now(), time: new Date().toLocaleTimeString(), type: 'system', message: 'Terminal inicializada. Esperando eventos...', data: null }
+    ]);
+    const terminalEndRef = useRef(null);
+
+    const addLog = (type, message, data = null) => {
+        setLogs(prev => [...prev, { id: Date.now() + Math.random(), time: new Date().toLocaleTimeString(), type, message, data }]);
+    };
+
+    useEffect(() => {
+        if (terminalEndRef.current) {
+            terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs]);
+    
     // --- Simulator Settings State ---
     const [vacancies, setVacancies] = useState([]);
     const [selectedVacancyId, setSelectedVacancyId] = useState('');
@@ -158,6 +174,7 @@ const SimulatorSection = ({ showToast }) => {
                 if (simData.messages && simData.messages.length > 0) {
                     setMessages(simData.messages);
                 }
+                addLog('info', 'Historial inicial del simulador cargado.');
 
                 // Fetch Vacancies for Col 2
                 const vacRes = await fetch('/api/vacancies');
@@ -167,6 +184,7 @@ const SimulatorSection = ({ showToast }) => {
                 }
             } catch (e) {
                 console.error('Error fetching initial data:', e);
+                addLog('error', 'Error obteniendo historial inicial', { error: e.message });
             } finally {
                 setIsLoading(false);
             }
@@ -534,6 +552,7 @@ const SimulatorSection = ({ showToast }) => {
         };
 
         setMessages(prev => [...prev, userMsg]);
+        addLog('user', `[Usuario]: ${inputValue}`);
         setInputValue('');
         setShowEmojis(false);
         setIsLoading(true);
@@ -545,6 +564,13 @@ const SimulatorSection = ({ showToast }) => {
                 body: JSON.stringify({ message: userMsg.text, sessionId: 'simulator_123' })
             });
             const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                addLog('error', `Error HTTP/API Code: ${response.status}`, data);
+                throw new Error(data.error || `HTTP error ${response.status}`);
+            }
+
+            addLog('ai', `Respuesta del Simulador (Status 200)`, data);
 
             const rawReply = data.reply || 'Sin respuesta del bot.';
             const parts = rawReply.split(/\[MSG_SPLIT\]/).map(p => p.trim()).filter(Boolean);
@@ -565,7 +591,6 @@ const SimulatorSection = ({ showToast }) => {
                     mediaUrl: data.mediaUrl,
                     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 };
-                // If the bot sends text + CTA, slice media in between. Otherwise, append at the end.
                 if (newBubbles.length > 1) {
                     newBubbles.splice(1, 0, mediaBubble);
                 } else {
@@ -576,6 +601,7 @@ const SimulatorSection = ({ showToast }) => {
             setMessages(prev => [...prev, ...newBubbles]);
         } catch (error) {
             console.error('Sim error:', error);
+            addLog('error', 'Excepción Capturada', { error: error.message || String(error) });
             showToast('Error al procesar el mensaje', 'error');
         } finally {
             setIsLoading(false);
@@ -584,6 +610,7 @@ const SimulatorSection = ({ showToast }) => {
 
     const handleRestart = async () => {
         setIsLoading(true);
+        addLog('system', 'Solicitando reinicio de sesión...');
         try {
             const response = await fetch('/api/ai/simulate', {
                 method: 'DELETE',
@@ -594,9 +621,11 @@ const SimulatorSection = ({ showToast }) => {
             setMessages([
                 { id: Date.now(), sender: 'bot', text: data.reply || 'Conversación reiniciada. ¡Hola! Soy Brenda.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
             ]);
+            addLog('success', 'Sesión reiniciada exitosamente.');
             showToast('Chat reiniciado', 'info');
         } catch (error) {
             console.error('Reset error:', error);
+            addLog('error', 'Fallo al reiniciar chat', { error: error.message || String(error) });
             showToast('Error al reiniciar', 'error');
         } finally {
             setIsLoading(false);
@@ -624,8 +653,8 @@ const SimulatorSection = ({ showToast }) => {
                 </div>
             </div>
 
-            {/* Main Area: 3 Columns Layout */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden">
+            {/* Main Area: 4 Columns Layout */}
+            <div className="flex-1 grid grid-cols-1 xl:grid-cols-4 lg:grid-cols-2 gap-6 overflow-hidden">
                 
                 {/* COLUMN 1: iPhone 17 Pro Max Mockup */}
                 <div className="flex flex-col items-center justify-center p-4">
@@ -745,7 +774,52 @@ const SimulatorSection = ({ showToast }) => {
                     </div>
                 </div>
 
-                {/* COLUMN 2: Controles & Categorías (Radar) */}
+                {/* COLUMN 2: Terminal Logs Pane */}
+                <div className="bg-[#0D1117] rounded-2xl shadow-xl border border-gray-800 flex flex-col h-full overflow-hidden text-gray-300 font-mono text-xs">
+                    <div className="flex items-center justify-between px-4 py-3 bg-[#161B22] border-b border-gray-800 shrink-0">
+                        <div className="flex items-center gap-2 text-gray-300 font-semibold text-[13px]">
+                            <TerminalIcon className="w-4 h-4 text-emerald-400" />
+                            Console / Logs
+                        </div>
+                        <button 
+                            onClick={() => setLogs([])}
+                            className="px-2 py-1 text-[10px] bg-gray-800 hover:bg-gray-700 rounded transition-colors text-gray-400 hover:text-white"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 custom-scrollbar break-words">
+                        {logs.length === 0 ? (
+                            <p className="text-gray-600 italic">No hay logs recientes.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {logs.map(log => (
+                                    <div key={log.id} className="flex flex-col gap-1 pb-2 border-b border-gray-800/50 last:border-0 last:pb-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-gray-500 shrink-0">[{log.time}]</span>
+                                            {log.type === 'error' && <span className="text-red-400 font-bold shrink-0">[ERROR]</span>}
+                                            {log.type === 'ai' && <span className="text-purple-400 font-bold shrink-0">[BRAIN]</span>}
+                                            {log.type === 'user' && <span className="text-blue-400 font-bold shrink-0">[IN]</span>}
+                                            {log.type === 'system' && <span className="text-yellow-400 font-bold shrink-0">[SYS]</span>}
+                                            {log.type === 'success' && <span className="text-emerald-400 font-bold shrink-0">[OK]</span>}
+                                            <span className={`flex-1 ${log.type === 'error' ? 'text-red-300' : 'text-gray-300'}`}>
+                                                {log.message}
+                                            </span>
+                                        </div>
+                                        {log.data && (
+                                            <pre className="mt-1 bg-[#161B22] p-2 rounded border border-gray-800 text-[10px] text-gray-400 overflow-x-auto whitespace-pre-wrap">
+                                                {JSON.stringify(log.data, null, 2)}
+                                            </pre>
+                                        )}
+                                    </div>
+                                ))}
+                                <div ref={terminalEndRef} />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* COLUMN 3: Controles & Categorías (Radar) */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -800,7 +874,7 @@ const SimulatorSection = ({ showToast }) => {
                     </div>
                 </div>
 
-                {/* COLUMN 3: Preguntas Locales del Radar */}
+                {/* COLUMN 4: Preguntas Locales del Radar */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full overflow-hidden">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
