@@ -68,12 +68,17 @@ const SimulatorSection = ({ showToast }) => {
             });
             const data = await response.json();
 
-            setMessages(prev => [...prev, {
-                id: Date.now() + 1,
+            const rawReply = data.reply || 'Sin respuesta del bot.';
+            const parts = rawReply.split(/\[MSG_SPLIT\]/).map(p => p.trim()).filter(Boolean);
+            
+            const newBubbles = parts.map((part, idx) => ({
+                id: Date.now() + idx + 1,
                 sender: 'bot',
-                text: data.reply || 'Sin respuesta del bot.',
+                text: part,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }]);
+            }));
+
+            setMessages(prev => [...prev, ...newBubbles]);
         } catch (error) {
             console.error('Sim error:', error);
             showToast('Error al procesar el mensaje', 'error');
