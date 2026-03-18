@@ -523,7 +523,7 @@ ${alternatives.length > 0
             model: 'gpt-4o-mini-recruiter',
             latency: duration,
             aiResult: aiResult,
-            systemPrompt: systemPrompt
+            systemPrompt: systemPrompt.substring(0, 4000) + (systemPrompt.length > 4000 ? '...[Truncated]' : '')
         }).catch(() => { });
 
         return aiResult;
