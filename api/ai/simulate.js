@@ -21,7 +21,7 @@ export default async function handler(req, res) {
             
             // Format to UI structure
             const uiMessages = msgs.map(m => {
-                const isUser = m.from === 'user' || m.from === 'me';
+                const isUser = m.from === 'user' || m.from === phone;
                 const content = typeof m === 'string' ? m : (m.content || m.body || '');
                 return {
                     id: m.id || Date.now() + Math.random(),
