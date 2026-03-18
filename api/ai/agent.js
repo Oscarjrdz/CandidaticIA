@@ -2228,6 +2228,8 @@ ${safeDnaLines}
                         );
                     } catch (_recErr) {
                         console.error('[RECRUITER] Error on message, using radar fallback:', _recErr.message);
+                        // Record the error so the user can see WHY it fell back!
+                        await recordAITelemetry(candidateId, 'recruiter_error', { error: _recErr.message, stack: _recErr.stack });
                         // Soft fallback: respond as radar-de-dudas instead of showing 'Disculpa!'
                         responseTextVal = 'Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨';
                         aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'FALLBACK:recruiter_error' };
@@ -2418,7 +2420,7 @@ ${safeDnaLines}
                 if (!hasMoveTag) {
                     const lastBotMsg = historyForGpt.filter(h => h.role === 'assistant' || h.role === 'model').slice(-1)[0];
                     const botText = (lastBotMsg?.content || '').toLowerCase();
-                    const isInterviewInvite = /agendar|agendamos|te queda bien|estamos de acuerdo|agendo una cita|aparte un lugar|avanzamos con tu cita|te confirmo tu cita/i.test(botText);
+                    const isInterviewInvite = /agendar|agendamos|te queda bien|estamos de acuerdo|agendo una cita|aparte un lugar|avanzamos con tu cita|avanzamos con|te confirmo tu cita/i.test(botText);
 
                     const isUserAffirmative = /^(si|sí|claro|por supuesto|obvio|va|dale|ok|okay|sipi|simon|simón|me parece bien|está bien|perfecto|excelente|adelante)/i.test(aggregatedText.trim());
 
@@ -2683,6 +2685,7 @@ ${safeDnaLines}
                             cleanSpeech = recruiterFinalSpeech
                                 .replace(/\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]/gi, '')
                                 .replace(/[\{\[]\s*move(?:[\s:]+\w+)?\s*[\}\]]/gi, '')
+                                .replace(/\[MSG_SPLIT\]/g, '\n\n') // strip bubble-split sentinel before raw send
                                 .trim();
                         }
 
@@ -3386,6 +3389,8 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     if (handoverResult?.triggered) {
                         Object.assign(candidateUpdates, { projectId: handoverResult.projectId, stepId: handoverResult.stepId });
                         responseTextVal = null;
+                        if (!aiResult) aiResult = {};
+                        aiResult.simulatorHandoverText = handoverResult.introMessage;
                         handoverTriggered = true;
                     }
                 }
@@ -3591,7 +3596,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
                 // 🔑 CAPA 6: If any sent message contains the CTA, set cita_pending in Redis
                 // so the NEXT affirmative from the candidate is treated as a confirmed acceptance.
-                const CTA_PATTERN = /¿te gustar[ií]a agendar|¿te agendo una cita|¿te aparto una cita|¿quieres que programe|¿te puedo agendar|solo por confirmar|me confirmas si quieres|quieres que agendemos|solo para confirmar|¿te interesa conocer esta|te gustaría conocerla|¿te la presento|¿te gustaría saber más/i;
+                const CTA_PATTERN = /¿te gustar[ií]a agendar|¿te agendo una cita|¿te aparto una cita|¿quieres que programe|¿te puedo agendar|solo por confirmar|me confirmas si quieres|quieres que agendemos|solo para confirmar|¿te interesa conocer esta|te gustaría conocerla|¿te la presento|¿te gustaría saber más|¿avanzamos con|avanzamos con tu cita/i;
                 const _hasCTAinBatch = messagesToSend.some(m => CTA_PATTERN.test(m));
                 if (_hasCTAinBatch && isRecruiterMode) {
                     setCitaPendingFlag(redis, candidateId).catch(() => {});
@@ -3734,7 +3739,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         ]);
 
         return { 
-            text: responseTextVal || '', 
+            text: responseTextVal || aiResult?.simulatorHandoverText || '', 
             mediaUrl: aiResult?.media_url && aiResult.media_url !== 'null' ? aiResult.media_url : null 
         };
     } catch (error) {
