@@ -266,7 +266,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
 [PREGUNTAS FRECUENTES OFICIALES - PRIORIDAD MÁXIMA]:
 ${faqsForPrompt
-                ? `Las siguientes respuestas HAN SIDO APROBADAS. DEBES usar el contenido de la respuesta oficial como base, manteniendo la informacion exacta. Puedes enriquecer con emojis del estilo de Brenda (calido, femenino, entusiasta) pero NO cambies el contenido ni inventes datos. PROHIBIDO poner links/urls en response_text. IMPORTANTE: si la respuesta tiene [MEDIA_DISPONIBLE: url], DEBES copiar esa url en el campo media_url del JSON. Despues del contenido del FAQ, DEBES agregar obligatoriamente la pregunta de cierre de agenda segun la OBLIGACION DE CIERRE de mas abajo:\n${faqsForPrompt}`
+                ? `🚨 REGLA DE ORO DE FAQs: Si la pregunta del candidato coincide directa o indirectamente con un TEMA de esta lista, TIENES ESTRICTAMENTE PROHIBIDO usar la descripción general de la vacante para responder. DEBES obligatoriamente usar la RESPUESTA OFICIAL exacta mostrada aquí, y si contiene un [MEDIA_DISPONIBLE: url], es OBLIGATORIO extraerlo en media_url.\n\nLas siguientes respuestas HAN SIDO APROBADAS. Usa el contenido de la respuesta oficial como base, manteniendo la informacion exacta. Puedes enriquecer con emojis de Brenda pero NO cambies el contenido. PROHIBIDO poner links/urls en response_text. Después del contenido del FAQ, DEBES agregar obligatoriamente la pregunta de cierre de agenda:\n${faqsForPrompt}`
                 : 'No hay respuestas oficiales registradas aún. Si preguntan algo no listado aquí o abajo, usa el fallback de duda.'}
 
 [DATOS REALES DE LA VACANTE]:
