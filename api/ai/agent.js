@@ -3509,7 +3509,8 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     let extractedFilename = null;
                     if (mUrl.includes('/api/image')) {
                         try {
-                            const urlObj = new URL(mUrl, 'https://candidatic.ia');
+                            // Safe URL parsing regardless of domain
+                            const urlObj = mUrl.startsWith('http') ? new URL(mUrl) : new URL(mUrl, 'https://candidatic-ia.vercel.app');
                             const mediaId = urlObj.searchParams.get('id');
                             if (mediaId) {
                                 const redis = getRedisClient();

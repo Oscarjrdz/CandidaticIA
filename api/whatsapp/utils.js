@@ -52,7 +52,10 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 let imgUrl = body;
                 if (isHttp && imgUrl.includes('/api/image?id=')) {
                     // Force production domain and correct image route instead of non-existent /api/media
-                    imgUrl = imgUrl.replace(/^https?:\/\/[^\/]+(\/api\/image\?id=)([^&]+).*/, 'https://candidatic-ia.vercel.app/api/image?id=$2&ext=.jpg');
+                    const mediaIdMatch = imgUrl.match(/id=([^&]+)/);
+                    if (mediaIdMatch) {
+                        imgUrl = `https://candidatic-ia.vercel.app/api/image?id=${mediaIdMatch[1]}&ext=.jpg`;
+                    }
                     // Also handle cases where origin was somehow missing but contains the API path
                     if (imgUrl.startsWith('/api/')) imgUrl = `https://candidatic-ia.vercel.app${imgUrl}`;
                 } else if (isHttp) {
@@ -69,7 +72,10 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 let docUrl = body;
                 if (isHttp && docUrl.includes('/api/image?id=')) {
                     // Force production domain and correct image route for PDFs
-                    docUrl = docUrl.replace(/^https?:\/\/[^\/]+(\/api\/image\?id=)([^&]+).*/, 'https://candidatic-ia.vercel.app/api/image?id=$2&ext=.pdf');
+                    const mediaIdMatch = docUrl.match(/id=([^&]+)/);
+                    if (mediaIdMatch) {
+                        docUrl = `https://candidatic-ia.vercel.app/api/image?id=${mediaIdMatch[1]}&ext=.pdf`;
+                    }
                     if (docUrl.startsWith('/api/')) docUrl = `https://candidatic-ia.vercel.app${docUrl}`;
                 } else if (isHttp && !docUrl.includes('.pdf')) {
                     docUrl = docUrl.includes('?') ? `${docUrl}&ext=.pdf` : `${docUrl}?ext=.pdf`;
