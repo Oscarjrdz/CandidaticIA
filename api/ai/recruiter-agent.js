@@ -144,7 +144,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                             // ✂️ TOKEN GUARD: Filter out compound/JSON garbage and limit to 5 keywords max
                             const cleanKws = (f.originalQuestions || [])
                                 .filter(q => typeof q === 'string' && !q.includes('{') && !q.includes('msgId') && q.length < 80)
-                                .slice(0, 5);
+                                .slice(0, 3);
                             const keywords = cleanKws.length > 0 ? ` (Palabras clave: ${cleanKws.join(', ')})` : '';
                             let mUrl = f.mediaUrl || '';
                             if (mUrl && mUrl.startsWith('/api/')) mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
