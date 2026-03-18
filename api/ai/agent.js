@@ -576,8 +576,8 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         // ⏰ after every time if missing
         text = text.replace(/(\d{1,2}:\d{2}\s*(?:AM|PM))(?!\s*⏰)/gi, '$1 ⏰');
         // 🔧 INLINE SLOT SPLITTER: If multiple slots are on the same line (GPT squishes them),
-        // split so each gets its own line: "1️⃣ 03:00 PM ⏰ 2️⃣ ..." → separate lines
-        text = text.replace(/(⏰)\s+([1-9]️⃣)/g, '⏰\n$2');
+        // split so each gets its own line: "1️⃣ 03:00 PM ⏰ 2️⃣ ..." → separate lines with spacing
+        text = text.replace(/(⏰)\s+([1-9]️⃣)/g, '⏰\n\n$2');
         // Single slot → fix header + closing question
         const timeCount = (text.match(/\d{1,2}:\d{2}\s*(?:AM|PM)/gi) || []).length;
         if (timeCount === 1) {
@@ -594,33 +594,52 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         }
     }
     // 🗓️ CONFIRMATION MESSAGE: "Ok [name], entonces agendamos..."
-    if (/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos|agendamos tu cita|confirmamos tu cita|apartamos tu cita|reserve tu lugar/i.test(text)) {
+    if (/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos|agendamos tu cita|confirmamos tu cita|apartamos tu cita|reserve tu lugar|entonces agendamos tu entrevista para el/i.test(text)) {
         // If there's FAQ text BEFORE "Ok [name], entonces agendamos..." → split it off as msg 1
-        const confirmStart = text.search(/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos/i);
+        let confirmStart = text.search(/(?:Ok|Bien|Perfecto)[,\s]+\w+[,\s]+entonces agendamos/i);
+        if (confirmStart === -1) confirmStart = text.search(/entonces agendamos tu entrevista para el/i);
+        
+        let faqPart = '';
         if (confirmStart > 0) {
-            const faqPart = text.substring(0, confirmStart).trim();
-            const confirmPart = text.substring(confirmStart).trim();
-            text = faqPart + '[MSG_SPLIT]' + confirmPart;
+            faqPart = text.substring(0, confirmStart).trim();
+            text = text.substring(confirmStart).trim();
         }
-        // Bold + 📅 the day-date span: "el día martes 10 de marzo"
-        text = text.replace(
-            /(el d[ií]a\s+)([a-záéíóúüñ]+\s+\d{1,2}\s+de\s+[a-záéíóúüñ]+)/gi,
-            (_, prefix, dateSpan) => `${prefix}📅 *${dateSpan.charAt(0).toUpperCase() + dateSpan.slice(1)}*`
-        );
-        text = text.replace(
-            /(a las\s+)(\d{1,2}:\d{2}\s*(?:AM|PM))/gi,
-            (_, prefix, time) => `${prefix}⏰ *${time}*`
-        );
+
+        // Apply strict visual formatting required by the candidate
+        // Extracts the dynamic Date and Time to rebuild the string
+        let extractedDate = '';
+        let extractedTime = '';
+        
+        // Match existing date span logic
+        const dateMatch = text.match(/(?:para el\s+|el d[ií]a\s+)([a-záéíóúüñ]+\s+\d{1,2}\s+de\s+[a-záéíóúüñ]+)/i) || text.match(/(?:para el\s+)([\w\s]+?)(?=\s+a las)/i);
+        if (dateMatch && dateMatch[1]) extractedDate = dateMatch[1].trim();
+        
+        const timeMatch = text.match(/(?:a las\s+)(\d{1,2}:\d{2}\s*(?:AM|PM))/i);
+        if (timeMatch && timeMatch[1]) extractedTime = timeMatch[1].trim();
 
         // Strip out duplicated splits and emojis completely before rebuilding
         text = text.replace(/\[MSG_SPLIT\]/g, ' ').replace(/🤝✨/g, '');
         // Wipe duplicate "¿estamos de acuerdo?" if GPT wrote it itself
         text = text.replace(/¿estamos de acuerdo\??/gi, '').trim();
 
-        // Remove trailing commas/dots
-        if (text.endsWith(',') || text.endsWith('.')) text = text.substring(0, text.length - 1);
-
-        text = text + ',[MSG_SPLIT]¿estamos de acuerdo? 🤝✨';
+        // If we successfully extracted the core components, overwrite the bot's raw text 
+        // with the deterministic perfect format requested by the user
+        if (extractedDate && extractedTime) {
+            const firstNameMatch = text.match(/^(?:Ok|Bien|Perfecto)[,\s]+(\w+)[,\s]+/i);
+            const firstName = firstNameMatch ? firstNameMatch[1] : (candidateData ? (candidateData.nombreReal || candidateData.nombre) : '');
+            
+            // Reconstruct the exact format
+            text = `Ok${firstName ? ` ${firstName}` : ''}, entonces agendamos tu entrevista para el:\n✅ ${extractedDate.charAt(0).toUpperCase() + extractedDate.slice(1)}\n✅ a las ⏰ ${extractedTime}.\n\n[MSG_SPLIT]¿estamos de acuerdo? 🤝✨`;
+        } else {
+            // Fallback to basic string modification if regex fails
+            if (text.endsWith(',') || text.endsWith('.')) text = text.substring(0, text.length - 1);
+            text = text + '.\n\n[MSG_SPLIT]¿estamos de acuerdo? 🤝✨';
+        }
+        
+        // Prepend the FAQ text if it existed
+        if (faqPart) {
+            text = faqPart + '[MSG_SPLIT]' + text;
+        }
     }
     // 🎯 INICIO PASO CTA GUARANTEE (Capa 1 — Más amplia que el Safety Net)
     // In Inicio/Filtro steps, EVERY substantive response must end with the
