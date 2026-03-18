@@ -2402,19 +2402,17 @@ ${safeDnaLines}
                             inferredAcceptance = true;
                         }
                     } else if (isFiltro && isUserAffirmative && !_citaPending && !hasMoveTag) {
-                        // 🎯 Capa 5: AMBIGUITY GUARD — candidate said Sí but we never sent the CTA yet
+                        // 🎯 Capa 5: DIRECT TRANSITION — candidate said Sí but we never sent the CTA yet
+                        // Or the Redis flag expired/missed. We completely trust the 'Sí' and move to Cita.
                         // ⛔ PIVOT EXCEPTION: If the last bot message was asking about a new vacancy
                         // ("¿Te gustaría conocerla?"), the Sí is clearly about seeing the vacancy —
                         // not scheduling. Let the LLM response go through untouched.
                         const _isPivotContext = /te gustar[ií]a conocerla|quieres conocerla|conocer la vacante|conocerla\?|te la presento|cuente de ella|conocer esta opci[oó]n|saber m[aá]s/i.test(botText);
                         if (!_isPivotContext) {
-                            // Use sequential variant (global counter) for ambiguity re-ask
-                            const _ambIdx = await getCTAIndex(redis, candidateId);
-                            responseTextVal = _AMBIGUITY_VARIANTS[_ambIdx % _AMBIGUITY_VARIANTS.length];
-                            if (aiResult) aiResult.response_text = responseTextVal;
-                            await setCitaPendingFlag(redis, candidateId);
-                            incrCTAIndex(redis, candidateId).catch(() => {}); // Advance sequential counter
-                            hasMoveTag = false; // Block move until next confirmation
+                            // Automatically skip the "Solo por confirmar" redundancy and infer acceptance
+                            hasMoveTag = true;
+                            extractedMoveTarget = 'Cita';
+                            inferredAcceptance = true;
                         }
                     }
 
