@@ -829,6 +829,7 @@ const SimulatorSection = ({ showToast }) => {
                                     Respuesta Oficial del Bot
                                 </label>
                                 <textarea
+                                    key={`answer-${selectedFaqId}`}
                                     className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-[13px] resize-none"
                                     rows={4}
                                     placeholder="Instruye a Brenda sobre qué responder cuando le pregunten por este tema. Guarda automáticamente al salir del campo."
