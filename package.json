@@ -28,6 +28,7 @@
     "ioredis": "^5.9.2",
     "lucide-react": "^0.562.0",
     "mime-types": "^3.0.2",
+    "openai": "^6.31.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

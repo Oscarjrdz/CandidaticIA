@@ -266,6 +266,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
 
 [PREGUNTAS FRECUENTES OFICIALES - PRIORIDAD MÁXIMA]:
 ${faqsForPrompt
+                // 🔒 REGLA ESTRICTA: Fuerza al modelo a usar la FAQ oficial y el PDF, ignorando la info general
                 ? `🚨 REGLA DE ORO DE FAQs: Si la pregunta del candidato coincide directa o indirectamente con un TEMA de esta lista, TIENES ESTRICTAMENTE PROHIBIDO usar la descripción general de la vacante para responder. DEBES obligatoriamente usar la RESPUESTA OFICIAL exacta mostrada aquí, y si contiene un [MEDIA_DISPONIBLE: url], es OBLIGATORIO extraerlo en media_url.\n\nLas siguientes respuestas HAN SIDO APROBADAS. Usa el contenido de la respuesta oficial como base, manteniendo la informacion exacta. Puedes enriquecer con emojis de Brenda pero NO cambies el contenido. PROHIBIDO poner links/urls en response_text. Después del contenido del FAQ, DEBES agregar obligatoriamente la pregunta de cierre de agenda:\n${faqsForPrompt}`
                 : 'No hay respuestas oficiales registradas aún. Si preguntan algo no listado aquí o abajo, usa el fallback de duda.'}
 
