@@ -482,9 +482,9 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         // This fires only when GPT forgot to include the question (catQMatch was null).
         if (lastCheckIdx !== -1) {
             const _afterLast = text.substring(lastCheckIdx);
-            if (!/(\?|¿)/.test(_afterLast) && !text.includes('[MSG_SPLIT]')) {
+            if (!/(\?|¿)/.test(_afterLast) && !_afterLast.includes('[MSG_SPLIT]')) {
                 const _fnFb = candidateData?.nombreReal?.trim().split(/\s+/)[0] || '';
-                text = text.trimEnd() + `\n\n[MSG_SPLIT]¿Cu\u00e1l te gustar\u00eda elegir${_fnFb ? `, ${_fnFb}` : ''}? \ud83d\ude0a`;
+                text = text.trimEnd() + `\n\n[MSG_SPLIT]¿Cu\u00e1l de estas opciones te interesa${_fnFb ? `, ${_fnFb}` : ''}? \ud83d\ude0a`;
             }
         }
     }
