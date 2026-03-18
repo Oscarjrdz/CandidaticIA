@@ -108,7 +108,11 @@ export default async function handler(req, res) {
                 if (index === -1) return res.status(404).json({ error: 'FAQ not found' });
 
                 faqs[index].originalQuestions = faqs[index].originalQuestions || [];
-                faqs[index].originalQuestions.push(questionText.trim());
+                const trimmedQ = questionText.trim();
+                faqs[index].originalQuestions.push(trimmedQ);
+                
+                faqs[index].questionStats = faqs[index].questionStats || {};
+                faqs[index].questionStats[trimmedQ] = { count: 1, createdAt: new Date().toISOString() };
                 await client.set(key, JSON.stringify(faqs));
                 return res.status(200).json({ success: true, faqs });
             }
@@ -127,7 +131,17 @@ export default async function handler(req, res) {
                     return cleanQ === target;
                 });
                 if (qIndex !== -1) {
-                    faqs[index].originalQuestions[qIndex] = newQuestionText.trim();
+                    const oldQText = typeof faqs[index].originalQuestions[qIndex] === 'string' ? faqs[index].originalQuestions[qIndex] : (faqs[index].originalQuestions[qIndex].text || '');
+                    const newTrimmed = newQuestionText.trim();
+                    faqs[index].originalQuestions[qIndex] = newTrimmed;
+                    
+                    faqs[index].questionStats = faqs[index].questionStats || {};
+                    if (faqs[index].questionStats[oldQText]) {
+                        faqs[index].questionStats[newTrimmed] = faqs[index].questionStats[oldQText];
+                        delete faqs[index].questionStats[oldQText];
+                    } else {
+                        faqs[index].questionStats[newTrimmed] = { count: 1, createdAt: new Date().toISOString() };
+                    }
                 }
 
                 await client.set(key, JSON.stringify(faqs));
@@ -164,9 +178,18 @@ export default async function handler(req, res) {
                     return cleanQ !== target;
                 });
 
+                let statsToMove = { count: 1, createdAt: new Date().toISOString() };
+                if (faqs[srcIdx].questionStats && faqs[srcIdx].questionStats[questionText]) {
+                     statsToMove = faqs[srcIdx].questionStats[questionText];
+                     delete faqs[srcIdx].questionStats[questionText];
+                }
+
                 // Add to target
                 faqs[targetIdx].originalQuestions = faqs[targetIdx].originalQuestions || [];
                 faqs[targetIdx].originalQuestions.push(questionText);
+                
+                faqs[targetIdx].questionStats = faqs[targetIdx].questionStats || {};
+                faqs[targetIdx].questionStats[questionText] = statsToMove;
 
                 await client.set(key, JSON.stringify(faqs));
                 return res.status(200).json({ success: true, faqs });
@@ -229,6 +252,11 @@ export default async function handler(req, res) {
                     const target = typeof questionText === 'string' ? questionText : (questionText.text || '');
                     return cleanQ !== target;
                 });
+                
+                if (faqs[index].questionStats && faqs[index].questionStats[questionText]) {
+                    delete faqs[index].questionStats[questionText];
+                }
+                
                 faqs[index].frequency = Math.max(1, (faqs[index].frequency || 1) - 1);
 
                 await client.set(key, JSON.stringify(faqs));

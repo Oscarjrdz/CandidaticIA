@@ -3210,7 +3210,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                                 const nextField = auditForMode.missingLabels[0];
                                 const isEscolaridad = /escolaridad/i.test(nextField);
                                 const splitHint = isEscolaridad
-                                    ? ` Usa DOS separadores [MSG_SPLIT]: uno ANTES de la lista de escolaridad y otro DESPUÉS de la lista, terminando con un mensaje corto de empuje con emoji (ej: "¿Cuál es la tuya? 🌟" o "¡Elige la que más te identifica! 😊") para animar al candidato a contestar.`
+                                    ? ` Usa solo UN separador [MSG_SPLIT] exactamente ANTES de empezar la lista de escolaridad. La lista completa (con sus emojis, hasta Posgrado) y la pregunta final motivadora (ej: "¿Cuál es tu último nivel de estudios? 🌟") DEBEN IR TODAS JUNTAS en el bloque después del separador.`
                                     : '';
                                 const isMunicipio = /municipio/i.test(nextField);
                                 const municipioHint = isMunicipio

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, RefreshCw, Smartphone, Smile, GripVertical, Plus, Trash2, Pencil, Bot, Paperclip, Loader2, X, Image as ImageIcon, FileText, Terminal as TerminalIcon } from 'lucide-react';
+import { Send, RefreshCw, Smartphone, Smile, GripVertical, Plus, Trash2, Pencil, Bot, Paperclip, Loader2, X, Image as ImageIcon, FileText, Terminal as TerminalIcon, Copy } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -59,7 +59,7 @@ const SortableCategoryItem = ({ faq, isSelected, onSelect, onDelete, onEdit }) =
     );
 };
 
-const SortableQuestionItem = ({ text, index, onDelete, onEdit, onMove }) => {
+const SortableQuestionItem = ({ text, stats, index, onDelete, onEdit, onMove }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: text });
     
     const style = {
@@ -83,8 +83,20 @@ const SortableQuestionItem = ({ text, index, onDelete, onEdit, onMove }) => {
                 <GripVertical className="w-3.5 h-3.5" />
             </div>
             
-            <div className="flex-1 min-w-0">
-                <p className="text-[13px] text-gray-700 dark:text-gray-300 leading-snug italic">"{text}"</p>
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[13px] text-gray-700 dark:text-gray-300 leading-snug italic">"{text}"</p>
+                    {stats && stats.count > 1 && (
+                        <span className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-[9px] font-bold rounded-full">
+                            x{stats.count}
+                        </span>
+                    )}
+                    {stats && stats.createdAt && (
+                        <span className="text-[9px] text-gray-400/70">
+                            {new Date(stats.createdAt).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })}
+                        </span>
+                    )}
+                </div>
             </div>
             
             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -453,8 +465,9 @@ const SimulatorSection = ({ showToast }) => {
         const file = e.target.files[0];
         if (!file || !uploadingFaqId) return;
 
-        if (file.size > 5 * 1024 * 1024) {
-            showToast('Archivo demasiado grande (Máx 5MB)', 'error');
+        // Prevent Upstash DB overload due to Base64 inflation
+        if (file.size > 750 * 1024) {
+            showToast(`El archivo original es demasiado pesado (${(file.size/1024).toFixed(0)} KB). Al prepararlo para la nube sube de tamaño y la base de datos lo rechaza. El límite estricto es de 750 KB. Por favor usa ilovepdf para comprimirlo nivel EXTREMO.`, 'error');
             setUploadingFaqId(null);
             return;
         }
@@ -503,7 +516,7 @@ const SimulatorSection = ({ showToast }) => {
                 ));
                 showToast('Archivo subido correctamente. Recuerda guardar el FAQ.', 'success');
             } else {
-                showToast('Error al subir archivo', 'error');
+                showToast(data.error || 'Error al subir archivo', 'error');
             }
         } catch (err) {
             console.error('Upload error:', err);
@@ -917,6 +930,7 @@ const SimulatorSection = ({ showToast }) => {
                                                     <SortableQuestionItem 
                                                         key={`q-${qText}-${idx}`} // Use combined key for absolute safety just in case of dupes
                                                         text={qText} 
+                                                        stats={activeFaq.questionStats ? activeFaq.questionStats[qText] : null}
                                                         index={idx}
                                                         onDelete={() => handleDeleteQuestion(qText)}
                                                         onEdit={() => handleEditQuestion(qText)}
@@ -959,13 +973,22 @@ const SimulatorSection = ({ showToast }) => {
                                                     Archivo Adjunto
                                                 </a>
                                             </div>
-                                            <button
-                                                onClick={() => handleRemoveFaqMedia(selectedFaqId)}
-                                                className="p-1 text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-gray-900 rounded transition-colors opacity-0 group-hover/media:opacity-100 flex-shrink-0"
-                                                title="Eliminar archivo"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                                <button
+                                                    onClick={() => { navigator.clipboard.writeText(faqs.find(f => f.id === selectedFaqId).mediaUrl); showToast('URL copiada ✓', 'success'); }}
+                                                    className="p-1 text-indigo-400 hover:text-indigo-600 hover:bg-white dark:hover:bg-gray-900 rounded transition-colors"
+                                                    title="Copiar URL"
+                                                >
+                                                    <Copy className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRemoveFaqMedia(selectedFaqId)}
+                                                    className="p-1 text-gray-400 hover:text-red-500 hover:bg-white dark:hover:bg-gray-900 rounded transition-colors opacity-0 group-hover/media:opacity-100 flex-shrink-0"
+                                                    title="Eliminar archivo"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
                                     ) : (
                                         <div className="flex items-center justify-between w-full">

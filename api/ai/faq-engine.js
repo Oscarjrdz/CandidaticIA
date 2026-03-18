@@ -68,9 +68,26 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
             const index = faqs.findIndex(f => f.id === parsed.id);
             if (index !== -1) {
                 faqs[index].frequency = (faqs[index].frequency || 1) + 1;
+                
+                if (!faqs[index].questionStats) {
+                    faqs[index].questionStats = {};
+                    // Backwards compatibility migration
+                    faqs[index].originalQuestions.forEach(q => {
+                        faqs[index].questionStats[q] = { count: 1, createdAt: new Date().toISOString() };
+                    });
+                }
+                
                 if (!faqs[index].originalQuestions.includes(question)) {
                     faqs[index].originalQuestions.push(question);
+                    faqs[index].questionStats[question] = { count: 1, createdAt: new Date().toISOString() };
+                } else {
+                    if (faqs[index].questionStats[question]) {
+                        faqs[index].questionStats[question].count += 1;
+                    } else {
+                        faqs[index].questionStats[question] = { count: 1, createdAt: new Date().toISOString() };
+                    }
                 }
+                
                 faqs[index].lastAskedAt = new Date().toISOString();
                 faqs[index].lastAiResponse = responseText;
                 // Store per-question response
@@ -81,6 +98,7 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
                     id: generateId(),
                     topic: parsed.new_topic || "Preguntas Generales",
                     originalQuestions: [question],
+                    questionStats: { [question]: { count: 1, createdAt: new Date().toISOString() } },
                     frequency: 1,
                     officialAnswer: null,
                     lastAiResponse: responseText,
@@ -93,6 +111,7 @@ Responde ÚNICAMENTE en JSON con el siguiente formato:
                 id: generateId(),
                 topic: parsed.new_topic || "Preguntas Generales",
                 originalQuestions: [question],
+                questionStats: { [question]: { count: 1, createdAt: new Date().toISOString() } },
                 frequency: 1,
                 officialAnswer: null,
                 lastAiResponse: responseText,
