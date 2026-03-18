@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, RefreshCw, Smartphone } from 'lucide-react';
 import Button from './ui/Button';
 
-// iPhone 17 Pro Max Dimensions/Proportions
-const IPHONE_WIDTH = 350;
-const IPHONE_HEIGHT = 740;
+// iPhone 17 Pro Max Dimensions/Proportions (Scaled down ~15%)
+const IPHONE_WIDTH = 300;
+const IPHONE_HEIGHT = 630;
 
 const SimulatorSection = ({ showToast }) => {
     const [messages, setMessages] = useState([
@@ -89,9 +89,9 @@ const SimulatorSection = ({ showToast }) => {
                         <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-600 dark:text-blue-400">
                             <Smartphone className="w-6 h-6" />
                         </div>
-                        Simulador de Brenda
+                        📱 Simulador de Brenda 🚀
                     </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Prueba los flujos conversacionales, respuestas y el Radar de FAQs en tiempo real.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Prueba los flujos conversacionales, respuestas y el Radar de FAQs en tiempo real 💬.</p>
                 </div>
                 <div className="flex items-center space-x-4">
                     <Button onClick={handleRestart} variant="outline" className="flex items-center gap-2">
@@ -186,7 +186,7 @@ const SimulatorSection = ({ showToast }) => {
 
                 {/* COLUMN 2: Controles & Rayos X (To be implemented) */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full">
-                    <h3 className="font-bold text-gray-900 dark:text-white mb-4">Configuración del Simulador</h3>
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4">⚙️ Configuración del Simulador</h3>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                         <p>Selecciona una vacante para inyectar su contexto en Brenda y probar su comportamiento.</p>
                     </div>
@@ -194,7 +194,7 @@ const SimulatorSection = ({ showToast }) => {
 
                 {/* COLUMN 3: Radar Log (To be implemented) */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col h-full">
-                    <h3 className="font-bold text-gray-900 dark:text-white mb-4">Rayos X (Memoria AI)</h3>
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4">🧠 Rayos X (Memoria AI)</h3>
                     <div className="text-sm text-gray-500 dark:text-gray-400">
                         <p>Aquí verás el ADN extraído y los temas que el Radar de FAQs disparó internamente durante el chat.</p>
                     </div>

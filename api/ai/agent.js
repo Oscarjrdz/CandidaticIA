@@ -3574,7 +3574,8 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     const filename = extractedFilename || (isPdf ? 'Informacion.pdf' : 'Imagen.jpg');
 
                     // Stagger delivery text -> media -> CTA priority (Strict sequential await to guarantee WhatsApp arrival order)
-                    if (!candidateData.whatsapp.startsWith('sim_')) {
+                    const isSimulatorPhone = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
+                    if (!isSimulatorPhone) {
                         if (messagesToSend.length > 1) {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 1 }).catch(() => { });
                             await new Promise(r => setTimeout(r, 600)); // Network spacing
@@ -3590,7 +3591,8 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
                 } else {
                     // Text only, send sequentially to guarantee order
-                    if (!candidateData.whatsapp.startsWith('sim_')) {
+                    const isSimulatorPhone = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
+                    if (!isSimulatorPhone) {
                         for (let i = 0; i < messagesToSend.length; i++) {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
                             if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));

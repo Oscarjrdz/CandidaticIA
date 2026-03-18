@@ -2,9 +2,8 @@
  * POST /api/ai/simulate
  * Handles messages from the Web Simulator to Brenda.
  */
-import { getRedisClient, getProjectById } from '../utils/storage.js';
+import { getRedisClient, getCandidateByPhone, saveCandidate, deleteCandidate, saveWebhookTransaction } from '../utils/storage.js';
 import { processMessage } from './agent.js';
-import { v4 as uuidv4 } from 'uuid';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -12,107 +11,93 @@ export default async function handler(req, res) {
     }
 
     try {
-        const { message, sessionId, projectId, reset } = req.body;
+        const { message, reset } = req.body;
         
-        if (!message && !reset) {
-            return res.status(400).json({ success: false, error: 'Message or reset missing' });
-        }
-
+        // El usuario solicitó el número por defecto '1234567890'
+        // USAMOS EL FORMATO MX 521 + 10 digitos para máxima compatibilidad con el engine principal
+        const phone = '5211234567890'; 
         const redis = getRedisClient();
-        const simId = sessionId || `sim_${uuidv4().substring(0,8)}`;
-        const candidateKey = `sim_candidato:${simId}`;
 
         // Handle Restart Chat
         if (reset) {
-            await redis.del(candidateKey);
+            const cand = await getCandidateByPhone(phone);
+            if (cand) {
+                await deleteCandidate(cand.id);
+            }
             return res.status(200).json({ 
                 success: true, 
                 reply: 'Conversación reiniciada. ¡Hola! Soy Brenda, la asistente de Candidatic. ¿En qué te puedo ayudar hoy?',
-                sessionId: simId 
+                sessionId: phone 
             });
         }
 
-        // Project defaults or custom
-        // We need a designated "Simulator Project" or just use whatever is active.
-        let activeProject = null;
-        if (projectId) {
-            activeProject = await getProjectById(projectId);
-        } else {
-            // Find any active project for fallback
-            const allProjectsData = await redis.get('candidatic_projects');
-            if (allProjectsData) {
-                const projects = JSON.parse(allProjectsData);
-                activeProject = projects.find(p => p.active) || projects[0];
-            }
+        if (!message) {
+            return res.status(400).json({ success: false, error: 'Message missing' });
         }
 
-        if (!activeProject) {
-            return res.status(200).json({ 
-                success: true, 
-                reply: '⚠️ No hay proyectos activos. Configura al menos un proyecto en tu panel para usar el simulador.',
-                sessionId: simId
+        // Obtener o Crear candidato
+        let candidate = await getCandidateByPhone(phone);
+        if (!candidate) {
+            candidate = await saveCandidate({ 
+                whatsapp: phone, 
+                nombreReal: 'Candidato Simulador', 
+                esNuevo: 'SI',
+                primerContacto: new Date().toISOString()
             });
         }
 
-        // Build mock UltraMsg payload
-        const simulatedPayload = {
-            id: `sim_msg_${Date.now()}`,
-            from: `${simId}@c.us`,
-            to: `sim_bot@c.us`,
-            body: message,
-            pushname: "Candidato Simulador",
-            type: "chat",
-            fromMe: false,
-            timestamp: Math.floor(Date.now() / 1000)
+        const msgId = `sim_msg_${Date.now()}`;
+        const incomingMsgObj = { 
+            id: msgId, 
+            from: 'user', 
+            content: message, 
+            timestamp: new Date().toISOString() 
         };
 
-        // We wrap response to trap it instead of sending to ultraMsg
-        let trappedReply = null;
-        let trappedXRay = null; // To hold extracted_data and thought_process
+        // Guardar el mensaje entrante y simular webhook para registro en BBDD real
+        // Esto permite que el candidato 5211234567890 aparezca en el panel de control real
+        await saveWebhookTransaction({
+            candidateId: candidate.id,
+            message: incomingMsgObj,
+            statsType: 'incoming',
+            eventData: { event_type: 'incoming_message', whatsapp: phone, text: message }
+        });
 
-        // Hacky dependency injection / mock for this single execution context
-        // Instead of modifying the massive agent.js just for simulation, 
-        // we can set a flag on the candidate data.
-        
-        // Let processMessage run. Inside agent.js, we normally call sendMessage.
-        // For Simulator, we will just read what it generated from the simulated candidate object.
+        // Invocar directamente el cerebro principal (processMessage devuelve el texto de respuesta)
+        const replyText = await processMessage(candidate.id, message, msgId);
 
-        const result = await processMessage(simulatedPayload, activeProject.assignedInstanceId || 'sim_instance');
+        // Extraer X-Ray (Memoria y contexto para la UI del simulador)
+        let trappedXRay = null;
+        let finalReply = replyText;
         
-        // Wait! processMessage sends the message via UltraMsg. We need to prevent that, 
-        // or just let it fail silently (instance doesn't exist) and read the DB state.
+        const candidateDataStr = await redis.get(`candidate:${candidate.id}`);
+        const finalCandidateData = candidateDataStr ? JSON.parse(candidateDataStr) : null;
         
-        const candidateDataStr = await redis.get(candidateKey);
-        const candidateData = candidateDataStr ? JSON.parse(candidateDataStr) : null;
-        
-        if (candidateData && candidateData.history && candidateData.history.length > 0) {
-            // Find the last assistant message
-            const assistantMessages = candidateData.history.filter(m => m.role === 'assistant');
-            if (assistantMessages.length > 0) {
-                trappedReply = assistantMessages[assistantMessages.length - 1].content;
-            }
-            
-            // Extract X-RAY data
+        if (finalCandidateData) {
             trappedXRay = {
-                step: candidateData.projectMetadata?.currentStepName || 'Inicio',
-                extracted: candidateData.extractedData || {},
-                thoughtLast: candidateData.projectMetadata?._debugSimThought || 'No capture'
+                step: finalCandidateData.projectMetadata?.currentStepName || finalCandidateData.stepId || 'Inicio',
+                extracted: finalCandidateData.extractedData || {},
+                thoughtLast: finalCandidateData.projectMetadata?._debugSimThought || 'No capture'
             };
-        }
-
-        if (!trappedReply) {
-            trappedReply = "Procesado (ver consola o db).";
+            
+            // Si no obtuvimos reply texto directo, intentar sacarlo del historial
+            if (!finalReply && finalCandidateData.history && finalCandidateData.history.length > 0) {
+                const assistantMessages = finalCandidateData.history.filter(m => m.role === 'assistant');
+                if (assistantMessages.length > 0) {
+                    finalReply = assistantMessages[assistantMessages.length - 1].content;
+                }
+            }
         }
 
         return res.status(200).json({
             success: true,
-            reply: trappedReply,
-            sessionId: simId,
+            reply: finalReply || "Procesado (ver consola o db).",
+            sessionId: phone,
             xray: trappedXRay
         });
 
     } catch (error) {
         console.error('Sim Error:', error);
-        return res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({ success: false, error: String(error) });
     }
 }
