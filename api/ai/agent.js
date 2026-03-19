@@ -99,6 +99,39 @@ async function clearPivotPendingFlag(redis, candidateId) {
     if (!redis || !candidateId) return;
     try { await redis.del(`pivot_pending:${candidateId}`); } catch (_) {}
 }
+// ――― DAY_LIST_PENDING FLAG HELPERS ―――――――――――――――――――――――――――――――――――――――――――
+// Set when Brenda re-shows the days list after a schedule rejection.
+// On next candidate message we check if they're STILL negative → pivot.
+const DAY_LIST_PENDING_TTL = 900;   // 15 minutes
+const DAY_LIST_REJECTION_TTL = 1200; // 20 minutes
+async function setDayListPendingFlag(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.set(`day_list_pending:${candidateId}`, '1', 'EX', DAY_LIST_PENDING_TTL); } catch (_) {}
+}
+async function getDayListPendingFlag(redis, candidateId) {
+    if (!redis || !candidateId) return false;
+    try { return (await redis.get(`day_list_pending:${candidateId}`)) === '1'; } catch (_) { return false; }
+}
+async function clearDayListPendingFlag(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.del(`day_list_pending:${candidateId}`); } catch (_) {}
+}
+async function incrDayListRejectionCount(redis, candidateId) {
+    if (!redis || !candidateId) return 1;
+    try {
+        const newVal = await redis.incr(`day_list_rejection_count:${candidateId}`);
+        await redis.expire(`day_list_rejection_count:${candidateId}`, DAY_LIST_REJECTION_TTL);
+        return newVal;
+    } catch (_) { return 1; }
+}
+async function getDayListRejectionCount(redis, candidateId) {
+    if (!redis || !candidateId) return 0;
+    try { return parseInt((await redis.get(`day_list_rejection_count:${candidateId}`)) || '0'); } catch (_) { return 0; }
+}
+async function clearDayListRejectionCount(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.del(`day_list_rejection_count:${candidateId}`); } catch (_) {}
+}
 // ─── CTA VARIANT COUNTER (sequential rotation per candidate) ─────────────────
 // Single shared counter across ALL second-bubble categories so the candidate
 // never sees the same closing question twice in a row.
@@ -2530,9 +2563,12 @@ ${safeDnaLines}
                     // If user responds negatively to "¿Te parece bien ese horario?" while cita_pending is set,
                     // do NOT treat it as a vacancy rejection. Treat it as a schedule rejection:
                     // show the days list again and clear pending state.
+                    // ⚠️ NOTE: hasExitTag is intentionally NOT required — even if the LLM decides to pivot,
+                    // we override it here. The cita_pending flag + user negative = schedule rejection, always.
                     const _isCitaStepForGuard = (currentStep?.name || '').toLowerCase().includes('cita');
-                    const _isUserNegativeToHour = /^(no|nel|nope|no puedo|no me queda|no puedo ese|otro d[ií]a|prefiero otro|cambiarlo|cambiar|no me conviene|no me sirve|otro horario|no gracias|mejor otro|no ese|de otra forma)/i.test(aggregatedText.trim());
-                    if (_isCitaStepForGuard && _citaPending && _isUserNegativeToHour && hasExitTag) {
+                    const _isUserNegativeToHour = /^(no|nel|nope|no puedo|no me queda|no puedo ese|otro d[ií]a|prefiero otro|cambiarlo|cambiar|no me conviene|no me sirve|otro horario|no gracias|mejor otro|no ese|de otra forma|es muy temprano|muy temprano|muy tarde|es muy tarde)/i.test(aggregatedText.trim());
+                    console.log(`[GUARD 1 CHECK] isCitaStep=${_isCitaStepForGuard} citaPending=${_citaPending} isNeg=${_isUserNegativeToHour} hasExitTag=${hasExitTag}`);
+                    if (_isCitaStepForGuard && _citaPending && _isUserNegativeToHour) {
                         console.log('[CITA HOUR REJECTION GUARD] 🔴 Blocking vacancy-exit. Treating response as schedule rejection, re-showing day list.');
                         hasExitTag = false;
                         extractedMoveTarget = null;
@@ -2574,6 +2610,8 @@ ${safeDnaLines}
                         } else {
                             responseTextVal = `Entiendo ${_candFirstNameGuard}, no hay problema. 😊 ¿Quieres elegir otro día para tu entrevista?`;
                         }
+                        // Mark that we just showed the day list — enables Guard 3 on next message
+                        setDayListPendingFlag(redis, candidateId).catch(() => {});
                         skipRecruiterInference = true; // Don't re-call OpenAI, we already have the response
                     }
 
@@ -2688,6 +2726,76 @@ ${safeDnaLines}
                     responseTextVal = _daysList2
                         ? `Entiendo ${_candName2}, no hay problema. 😊 Puedes elegir otro día si gustas:\n\n${_daysList2}\n\n¿En cuál día te queda mejor?`
                         : `Entiendo ${_candName2}, no hay problema. 😊 ¿Quieres elegir otro día para tu entrevista?`;
+                    // Mark that we just showed the day list — enables Guard 3 on next message
+                    setDayListPendingFlag(redis, candidateId).catch(() => {});
+                }
+
+                // 🛑 DAY LIST REJECTION GUARD (Guard 3)
+                // Fires when: day_list_pending is active + candidate is STILL saying no to all days.
+                // First negative → re-show days (and keep day_list_pending active).
+                // Second negative → trigger pivot to alternate vacancy.
+                const _dayListPending = await getDayListPendingFlag(redis, candidateId);
+                const _isNegToDayList = /^(no|nel|nope|no puedo|no me queda|no me sirve|no me interesa|ningun|ninguno|ningún|no me viene|no me conviene|no gracias|paso|mejor no|ya no|lo dejo|no me llama|no me conviene ninguno|no me queda ninguno|en ninguno|en ningún)/i.test(aggregatedText.trim());
+                if (isCitaStep && _dayListPending && _isNegToDayList && !hasExitTag) {
+                    const _rejCount = await incrDayListRejectionCount(redis, candidateId);
+                    console.log(`[DAY LIST REJECTION GUARD] 🔵 count=${_rejCount} for candidate ${candidateId}`);
+
+                    if (_rejCount >= 2) {
+                        // 2nd+ negative to day list → pivot to alternate vacancy
+                        console.log('[DAY LIST REJECTION GUARD] 🔴 count>=2 → triggering pivot to alternate vacancy.');
+                        clearDayListPendingFlag(redis, candidateId).catch(() => {});
+                        clearDayListRejectionCount(redis, candidateId).catch(() => {});
+                        clearCitaPendingFlag(redis, candidateId).catch(() => {});
+                        hasMoveTag = false;
+                        hasExitTag = false;
+                        extractedMoveTarget = null;
+
+                        const _PIVOT_MSGS_G3 = [
+                            '¡Está bien, lo entiendo! Pero espera... tengo otra vacante disponible que podría ser justo lo que buscas. 🌟',
+                            'No hay problema, entiendo perfectamente. ¡Oye! tengo otra posición que podría interesarte mucho. ✨',
+                            'Lo entiendo totalmente. ¡Mira! casualmente tengo otra vacante disponible que podría ser perfecta para ti. 🌸',
+                        ];
+                        const _pivotMsgG3 = _PIVOT_MSGS_G3[Math.floor(Math.random() * _PIVOT_MSGS_G3.length)];
+                        const _pivotB2IdxG3 = await getCTAIndex(redis, candidateId);
+                        const _pivotB2G3 = _PIVOT_B2_VARIANTS[_pivotB2IdxG3 % _PIVOT_B2_VARIANTS.length];
+                        await incrCTAIndex(redis, candidateId);
+                        responseTextVal = `${_pivotMsgG3}[MSG_SPLIT]${_pivotB2G3}`;
+                        // Set pivot_pending so the next "Sí" presents the vacancy directly
+                        setPivotPendingFlag(redis, candidateId).catch(() => {});
+                        skipRecruiterInference = true;
+                    } else {
+                        // 1st negative to day list → re-show days once more
+                        console.log('[DAY LIST REJECTION GUARD] 🟡 count=1 → re-showing day list.');
+                        // day_list_pending stays active for the next message
+                        const _candNameG3 = (candidateData.nombre || candidateData.nombreReal || 'amig@').split(' ')[0];
+                        const NUM_EMOJI_G3 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                        let _daysListG3 = '';
+                        if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
+                            const _seenG3 = new Set();
+                            const _uniqueG3 = [];
+                            const _mG3 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                            const _wG3 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                            for (const opt of currentStep.calendarOptions) {
+                                const dp = opt.split('@')[0].trim();
+                                if (_seenG3.has(dp)) continue;
+                                _seenG3.add(dp);
+                                const _d = new Date(dp + 'T12:00:00');
+                                if (isNaN(_d)) continue;
+                                _uniqueG3.push(`${_wG3[_d.getDay()]} ${_d.getDate()} de ${_mG3[_d.getMonth()]}`);
+                            }
+                            if (_uniqueG3.length > 0) {
+                                _daysListG3 = _uniqueG3.map((day, i) => `${NUM_EMOJI_G3[i] || (i+1)+'.'} ${day} 📅`).join('\n');
+                            }
+                        }
+                        responseTextVal = _daysListG3
+                            ? `Entiendo ${_candNameG3}, ¿cuál de estos días te vendría mejor?\n\n${_daysListG3}`
+                            : `Entiendo ${_candNameG3}, ¿cuál otro día te quedaría bien para la entrevista?`;
+                        skipRecruiterInference = true;
+                    }
+                } else if (isCitaStep && !_isNegToDayList && _dayListPending) {
+                    // Candidate selected a day → clear day_list flags (happy path)
+                    clearDayListPendingFlag(redis, candidateId).catch(() => {});
+                    clearDayListRejectionCount(redis, candidateId).catch(() => {});
                 }
 
                 if (isCitaStep && !hasExitTag) {
@@ -2719,7 +2827,15 @@ ${safeDnaLines}
                     // 2) FALLBACK RENDERER: If we are missing data, force the question/calendar array.
                     // This must run even if hasMoveTag is false!
                     const isAmbiguousResolver = aiResult?.thought_process === 'CITA:ambiguous_day_name';
-                    if ((isInvalidFecha || isInvalidHora) && !isAmbiguousResolver) {
+                    
+                    // 🛑 PIVOT FALLBACK GUARD: If AI self-generated a pivot (because Redis flags expired),
+                    // skip the fallback renderer so it doesn't append a hallucinated schedule to the pivot.
+                    const _aiSelfGeneratedPivot = /curiosamente|otra posici[oó]n|posici[oó]n disponible|otra opci[oó]n|te gustar[ií]a saber m[aá]s|te interesa conocer/i.test(responseTextVal || '');
+                    if (isCitaStep && _aiSelfGeneratedPivot) {
+                        skipRecruiterInference = true;
+                    }
+
+                    if ((isInvalidFecha || isInvalidHora) && !isAmbiguousResolver && !skipRecruiterInference) {
                         const lowerResponse = (responseTextVal || "").toLowerCase();
                         const isMissingDayOrHour = (!lowerResponse.includes('día') && !lowerResponse.includes('hora') && !lowerResponse.includes('fecha'));
                         // If we already have citaFecha but not citaHora, the AI should ALWAYS show hour options.
@@ -2883,11 +2999,19 @@ ${safeDnaLines}
                         // If cleanSpeech is empty here (from GPT silent move), simply skip — no message needed.
 
 
-                        // 🤫 EXCEPCIÓN UX: Si estamos en el paso "CITA", NO enviar el speech de despedida.
+                        // 🤫 EXCEPCIÓN UX: Si estamos en el paso "CITA", NO enviar el speech de despedida genérico.
+                        // PERO si el speech confirma la cita (ej. "queda agendada"), SÍ lo enviamos antes de mover al candidato.
                         const originStepName = (currentStep?.name || '').toLowerCase();
-                        const isCitaStepOrigin = originStepName.includes('cita');
+                        let allowSpeech = true;
+                        
+                        if (originStepName.includes('cita') && !originStepName.includes('citado')) {
+                            const isConfirming = /agendamos|confirmamos|queda agendada|entrevista agendada/i.test(cleanSpeech);
+                            if (!isConfirming) {
+                                allowSpeech = false;
+                            }
+                        }
 
-                        if (cleanSpeech.length > 0 && !isCitaStepOrigin) {
+                        if (cleanSpeech.length > 0 && allowSpeech) {
                             try {
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 });
                             } catch (e) {
