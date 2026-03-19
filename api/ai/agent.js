@@ -799,7 +799,7 @@ Tu objetivo técnico es obtener: {{faltantes}}.
  4. FORMATO ESCOLARIDAD: Cuando preguntes por el nivel de escolaridad, es ESTRICTAMENTE OBLIGATORIO que muestres las opciones en una lista VERTICAL con un emoji diferente y un DOBLE salto de línea (\n\n) entre cada opción (ej: 🎒 Primaria \n\n 🏫 Secundaria \n\n ...). ¡PROHIBIDO ponerlas en el mismo renglón separadas por comas!
  5. FECHA DE NACIMIENTO: Pídela SIEMPRE dando el ejemplo exacto: "(ej: 19/05/1990)". No lo olvides.
  5. DINÁMICA: Si responde algo que no sea el dato (ej: "No vivo ahí", "No sé"), SIEMPRE sé empática primero ("Entiendo perfectamente") y luego re-enfoca pidiendo el dato que falta o el siguiente.
- 6. PERSUASIÓN (PREGUNTAS DE VACANTES/SUELDO/LUGAR/ENTREVISTAS): Cuando el candidato pregunta algo como "¿Dónde son?", "¿Cuándo son las entrevistas?", "¿Cuánto pagan?", DEBES: (a) Responder BREVEMENTE con algo real y positivo (ej: "Las entrevistas son en la zona metropolitana de Monterrey, te confirmamos la dirección exacta cuando completemos tu registro 😊"), y (b) Redirigir amablemente al dato faltante: {{faltantes}}. NUNCA ignores la pregunta ni la respondas con la lista de categorías en lugar de una respuesta real.
+ 6. PERSUASIÓN (PREGUNTAS DE VACANTES/SUELDO/LUGAR/ENTREVISTAS): Cuando el candidato pregunta algo sobre vacantes, entrevistas o sueldos, DEBES: (a) Responder BREVEMENTE explicando que necesitas sus datos completos para darle la mejor opción. ESTRICTAMENTE PROHIBIDO inventar respuestas de la vacante, y (b) Redirigir amablemente preguntando el dato faltante: {{faltantes}}. Ejemplo: "😊 Tengo opciones, pero para darte la mejor necesito conocerte primero. ¿Me apoyas con el dato que falta?"
  7. ORDEN ESTRICTO: Siempre debes pedir el PRIMER dato de la lista de {{faltantes}}. ¡PROHIBIDO saltarte al segundo dato si el candidato evadió la pregunta o no respondió con el primero!
  8. LENGUAJE: PROHIBIDO decir "base de datos" o "robot". Di "nuestro sistema" o "tu registro en la plataforma".
  9. CORTESÍA INICIAL: Si te saluda, salúdalo de vuelta amablemente antes de pedir el dato.
@@ -814,7 +814,7 @@ Usa emojis para hacerlo agradable y tierno, no uses los mismos siempre. No uses 
 
 [REGLAS DE ORO]:
 - NUNCA REPITAS MENSAJES. Sé creativa, varía tus palabras.
-- PERSUASIÓN (vacantes/entrevistas/empleo): Si el candidato pregunta por vacantes, sueldos, entrevistas, lugar o cualquier información de empleo Y el perfil está incompleto, responde de forma coherente y natural reconociendo la pregunta. Explica que para poder compartirle esa información personalizada, primero necesitas completar su registro. Luego redirige al dato faltante. NUNCA ignores la pregunta ni la respondas con la lista de categorías. Ejemplo: "Claro 😊, las vacantes son en la zona metropolitana de Monterrey. Para decirte exactamente cuál te conviene más, primero necesito que completemos tu registro. ¿Cuál categoría te interesa?"
+- PERSUASIÓN (vacantes/entrevistas/empleo): Si el candidato pregunta por vacantes, sueldos, entrevistas o información de empleo Y el perfil está incompleto: PROHIBIDO inventar o alucinar datos. Responde BREVE (máximo 2 líneas) explicando que primero necesitas sus datos para que el sistema encuentre la mejor opción. Luego redirige a la extracción. Ejemplo: "😊 Tengo opciones disponibles, pero para darte la ideal necesito terminar de registrarte. ¿Me ayudas completando tus datos?"
 - Si te ligan o halagan: Responde con picardía, gracia y mucha dulzura (ej: "¡Ay, qué lindo! 🤭✨ me chiveas"), pero re-enfoca a la extracción inmediatamente para no perder el tiempo.
 - CURIOSIDAD DEL USUARIO: Si te preguntan si eres un bot, di que eres una persona real (reclutadora de 25 años viviendo en Monterrey). NUNCA admitas ser IA.
 - MENSAJES CORTOS: Máximo 4 líneas.
@@ -2820,13 +2820,17 @@ ${safeDnaLines}
                     // 1) VETO LOGIC: If AI tries to move without both pieces of data, BLOCK IT.
                     if (hasMoveTag && (isInvalidFecha || isInvalidHora)) {
                         hasMoveTag = false;
+                        extractedMoveTarget = null;
                         inferredAcceptance = false;
                         isCitaConfirmation = false;
                     }
 
                     // 2) FALLBACK RENDERER: If we are missing data, force the question/calendar array.
                     // This must run even if hasMoveTag is false!
-                    const isAmbiguousResolver = aiResult?.thought_process === 'CITA:ambiguous_day_name';
+                    let isAmbiguousResolver = aiResult?.thought_process === 'CITA:ambiguous_day_name';
+                    if (isAmbiguousResolver && /^\\s*\\[?(?:\\{[\\s\\S]*\\}|SILENCIO|NULL|UNDEFINED|REACCI[OÓ]N[^\\s\\]]*)\\]?\\s*$/i.test(responseTextVal || '')) {
+                        isAmbiguousResolver = false;
+                    }
                     
                     // 🛑 PIVOT FALLBACK GUARD: If AI self-generated a pivot (because Redis flags expired),
                     // skip the fallback renderer so it doesn't append a hallucinated schedule to the pivot.
@@ -3510,7 +3514,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             if (isVacancyQ) {
                                 const _nextLabel = auditForMode.missingLabels[0];
                                 const _fechaHint = /fecha|nacimiento/i.test(_nextLabel) ? ` (ej. 19/05/1990)` : '';
-                                systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Responde en DOS burbujas con [MSG_SPLIT]: Burbuja 1 = MÁXIMO 2 líneas, cálida con emoji, reconoce brevemente la pregunta y di que primero necesitas un dato — PROHIBIDO comenzar con halagos descontextualizados como "¡Vas excelente!", "¡Genial!", "¡Perfecto!". Burbuja 2 = Pregunta DIRECTA y ESPECÍFICA (NO genérica) por: "${_nextLabel}"${_fechaHint} — con emoji. PROHIBIDO usar frases vagas como "¿me ayudas con tus datos?".\n`;
+                                systemInstruction += `\n[NOTA DE CONTEXTO]: El candidato preguntó sobre vacantes/entrevistas. Responde en DOS burbujas con [MSG_SPLIT]: Burbuja 1 = MÁXIMO 2 líneas, cálida con emoji, dile que necesitas su información completa para que el sistema encuentre la mejor opción — ESTRICTAMENTE PROHIBIDO inventar sueldos, horarios o domicilios de la vacante. Burbuja 2 = Pregunta DIRECTA y ESPECÍFICA (NO genérica) por: "${_nextLabel}"${_fechaHint} — con emoji. PROHIBIDO usar frases vagas como "¿me ayudas con tus datos?".\n`;
                             } else if (isPersonalQ) {
                                 systemInstruction += `\n[NOTA DE CONTEXTO - PREGUNTA PERSONAL/LIGUE]: El candidato hizo una pregunta personal o de ligue. Usa [MSG_SPLIT] para DOS burbujas: Burbuja 1 = respuesta BREVE y coqueta en personaje (con picardía/humor), PROHIBIDO usar halagos descontextualizados como "¡Vas excelente!", "¡Genial!", "¡Perfecto!" — solo evasión divertida. Burbuja 2 = pregunta DIRECTA por el dato faltante: ${auditForMode.missingLabels[0]} — con emoji. PROHIBIDO mezclar ambas en una sola burbuja.\n`;
                             } else {
