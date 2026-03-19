@@ -2620,7 +2620,8 @@ ${safeDnaLines}
 
                     // 2) FALLBACK RENDERER: If we are missing data, force the question/calendar array.
                     // This must run even if hasMoveTag is false!
-                    if (isInvalidFecha || isInvalidHora) {
+                    const isAmbiguousResolver = aiResult?.thought_process === 'CITA:ambiguous_day_name';
+                    if ((isInvalidFecha || isInvalidHora) && !isAmbiguousResolver) {
                         const lowerResponse = (responseTextVal || "").toLowerCase();
                         const isMissingDayOrHour = (!lowerResponse.includes('día') && !lowerResponse.includes('hora') && !lowerResponse.includes('fecha'));
                         // If we already have citaFecha but not citaHora, the AI should ALWAYS show hour options.
