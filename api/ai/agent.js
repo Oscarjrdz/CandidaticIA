@@ -2521,8 +2521,9 @@ ${safeDnaLines}
 
                     // 🔑 Capa 4: Read cita_pending from Redis
                     const _citaPending = await getCitaPendingFlag(redis, candidateId);
+                    const isAmbiguousDayResolver = aiResult?.thought_process === 'CITA:ambiguous_day_name';
 
-                    if (isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative) && _citaPending) {
+                    if (isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative) && _citaPending && !isAmbiguousDayResolver) {
                         // Clear the flag — confirmed
                         clearCitaPendingFlag(redis, candidateId).catch(() => {});
                         hasMoveTag = true;
