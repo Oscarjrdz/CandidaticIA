@@ -2823,12 +2823,25 @@ ${safeDnaLines}
                         extractedMoveTarget = null;
                         inferredAcceptance = false;
                         isCitaConfirmation = false;
+                        // 🛡️ ACTUAL MUTISMO FIX: Scrub the raw payload so hasMoveIntent at the bottom evaluates correctly to false
+                        if (aiResult?.thought_process) {
+                            aiResult.thought_process = aiResult.thought_process.replace(/[\{\[]\s*move.*?[\}\]]/gi, '');
+                        }
+                        if (aiResult?.response_text) {
+                            aiResult.response_text = aiResult.response_text.replace(/[\{\[]\s*move.*?[\}\]]/gi, '');
+                        }
+                        if (responseTextVal) {
+                            responseTextVal = responseTextVal.replace(/[\{\[]\s*move.*?[\}\]]/gi, '');
+                        }
                     }
 
                     // 2) FALLBACK RENDERER: If we are missing data, force the question/calendar array.
                     // This must run even if hasMoveTag is false!
                     let isAmbiguousResolver = aiResult?.thought_process === 'CITA:ambiguous_day_name';
                     if (isAmbiguousResolver && /^\s*\[?(?:\{[\s\S]*\}|SILENCIO|NULL|UNDEFINED|REACCI[OÓ]N[^\s\]]*)\]?\s*$/i.test(responseTextVal || '')) {
+                        isAmbiguousResolver = false;
+                    }
+                    if (!isInvalidFecha) {
                         isAmbiguousResolver = false;
                     }
                     
