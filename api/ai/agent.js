@@ -2999,19 +2999,12 @@ ${safeDnaLines}
                         // If cleanSpeech is empty here (from GPT silent move), simply skip — no message needed.
 
 
-                        // 🤫 EXCEPCIÓN UX: Si estamos en el paso "CITA", NO enviar el speech de despedida genérico.
-                        // PERO si el speech confirma la cita (ej. "queda agendada"), SÍ lo enviamos antes de mover al candidato.
+                        // 🤫 EXCEPCIÓN UX: Si estamos en el paso "CITA", NO enviar el speech del LLM.
+                        // El appointmentConfirmation ya envía el texto de confirmación correcto.
                         const originStepName = (currentStep?.name || '').toLowerCase();
-                        let allowSpeech = true;
-                        
-                        if (originStepName.includes('cita') && !originStepName.includes('citado')) {
-                            const isConfirming = /agendamos|confirmamos|queda agendada|entrevista agendada/i.test(cleanSpeech);
-                            if (!isConfirming) {
-                                allowSpeech = false;
-                            }
-                        }
+                        const isCitaStepOrigin = originStepName.includes('cita') && !originStepName.includes('citado');
 
-                        if (cleanSpeech.length > 0 && allowSpeech) {
+                        if (cleanSpeech.length > 0 && !isCitaStepOrigin) {
                             try {
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 });
                             } catch (e) {
