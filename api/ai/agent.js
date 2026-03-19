@@ -2828,7 +2828,7 @@ ${safeDnaLines}
                     // 2) FALLBACK RENDERER: If we are missing data, force the question/calendar array.
                     // This must run even if hasMoveTag is false!
                     let isAmbiguousResolver = aiResult?.thought_process === 'CITA:ambiguous_day_name';
-                    if (isAmbiguousResolver && /^\\s*\\[?(?:\\{[\\s\\S]*\\}|SILENCIO|NULL|UNDEFINED|REACCI[OÓ]N[^\\s\\]]*)\\]?\\s*$/i.test(responseTextVal || '')) {
+                    if (isAmbiguousResolver && /^\s*\[?(?:\{[\s\S]*\}|SILENCIO|NULL|UNDEFINED|REACCI[OÓ]N[^\s\]]*)\]?\s*$/i.test(responseTextVal || '')) {
                         isAmbiguousResolver = false;
                     }
                     
