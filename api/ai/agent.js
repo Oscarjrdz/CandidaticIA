@@ -449,7 +449,10 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
         // e.g. "✅ Montacarguistas ¿Cuál eliges?" → "✅ Montacarguistas\n¿Cuál eliges?"
         text = text.replace(/(✅\s*[^\n✅?¿]+?)\s+(¿[^\n?]+\?)/g, '$1\n$2');
 
-        // 4️⃣ Collapse triple+ newlines
+        // 4️⃣ Collapse double newlines BETWEEN consecutive ✅ items → single newline
+        // (keeps the double newline before the FIRST ✅ for visual separation from header)
+        text = text.replace(/(✅[^\n]*)\n{2,}(?=✅)/g, '$1\n');
+        // Collapse triple+ newlines everywhere else
         text = text.replace(/\n{3,}/g, '\n\n').trim();
 
         // 💬 CATEGORY QUESTION SPLIT: Move the closing choice question to a 2nd bubble.
@@ -753,7 +756,7 @@ Tu objetivo técnico es obtener: {{faltantes}}.
  REGLAS DE MISIÓN:
  1. CORTESÍA PROFESIONAL: Si el usuario dice "Sí", "Claro", "Te ayudo" o saluda, responde siempre de manera amable pero PROFESIONAL. Tienes ESTRICTAMENTE PROHIBIDO usar lenguaje coqueto o informal como "me chiveas" o "qué lindo". Eres una Licenciada en Recursos Humanos y debes mantener el respeto.
  2. NOMBRE COMPLETO: Si solo te da el nombre de pila sin apellidos, agradécele y pídele sus apellidos con amabilidad profesional para avanzar en su registro.
- 3. CATEGORÍA: Si AÚN NO has mostrado la lista de categorías en este historial, muéstrala en formato vertical con ✅ y doble salto de línea entre cada opción. Si YA la mostraste (revisa el historial), TIENES PROHIBIDO repetirla completa — solo pregunta: "¿Cuál de las opciones que te compartí te interesa más?".
+ 3. CATEGORÍA: Si AÚN NO has mostrado la lista de categorías en este historial, muéstrala en formato vertical con ✅ y un SOLO salto de línea (\n) entre cada opción — NUNCA doble salto. Si YA la mostraste (revisa el historial), TIENES PROHIBIDO repetirla completa — solo pregunta: "¿Cuál de las opciones que te compartí te interesa más?".
      ESTRUCTURA al mostrar por PRIMERA VEZ:
      "¡Perfecto! Mira, estas son las opciones que tengo para ti: 
 
