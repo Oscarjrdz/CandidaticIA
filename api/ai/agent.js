@@ -2205,6 +2205,76 @@ ${safeDnaLines}
 
 
 
+                // ==============================================================================
+                // 🛡️ FAQ FUZZY RADAR (DETERMINISTIC INTERCEPTOR)
+                // ==============================================================================
+                const _levenshtein = (a, b) => {
+                    if (!a.length) return b.length;
+                    if (!b.length) return a.length;
+                    const matrix = [];
+                    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+                    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+                    for (let i = 1; i <= b.length; i++) {
+                        for (let j = 1; j <= a.length; j++) {
+                            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                                matrix[i][j] = matrix[i - 1][j - 1];
+                            } else {
+                                matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+                            }
+                        }
+                    }
+                    return matrix[b.length][a.length];
+                };
+
+                if (!skipRecruiterInference && isRecruiterMode && candidateData.activeVacancyId) {
+                    try {
+                        const _redis = getRedisClient();
+                        const _faqData = _redis ? await _redis.get(`faqs:${candidateData.activeVacancyId}`) : null;
+                        if (_faqData) {
+                            const _faqs = typeof _faqData === 'string' ? JSON.parse(_faqData) : _faqData;
+                            const _userNorm = aggregatedText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const _userWords = _userNorm.split(/\s+/).filter(w => w.length >= 4);
+
+                            // Only proceed if user typed something significant
+                            if (_userWords.length > 0) {
+                                for (const _f of _faqs) {
+                                    if (!_f.officialAnswer) continue;
+                                    const _topicWords = (_f.topic + ' ' + (_f.originalQuestions || []).join(' ')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                                    const _kwds = _topicWords.split(/\s+/).filter(w => w.length >= 4);
+                                    
+                                    let _matchedKws = 0;
+                                    for (const _kw of _kwds) {
+                                        for (const _uw of _userWords) {
+                                            const dist = _levenshtein(_uw, _kw);
+                                            // Allow 1 typo for 4-5 letter words, 2 typos for 6+ letter words
+                                            const threshold = _kw.length > 5 ? 2 : 1; 
+                                            if (dist <= threshold) {
+                                                _matchedKws++;
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    // 1 strong keyword match is enough to intercept
+                                    if (_matchedKws >= 1) {
+                                        const _mUrl = _f.mediaUrl ? (_f.mediaUrl.startsWith('/api/') ? `https://candidatic-ia.vercel.app${_f.mediaUrl}` : _f.mediaUrl) : null;
+                                        skipRecruiterInference = true;
+                                        responseTextVal = _f.officialAnswer;
+                                        aiResult = {
+                                            response_text: responseTextVal,
+                                            extracted_data: {},
+                                            thought_process: `FAQ_DETERMINISTIC_MATCH:[${_f.topic}]`,
+                                            media_url: _mUrl
+                                        };
+                                        console.log(`[FAQ RADAR] ✅ Intercepted "${aggregatedText}" -> Matched FAQ "${_f.topic}"`);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } catch(e) { console.error("FAQ Radar Error:", e); }
+                }
+
                 if (!skipRecruiterInference) {
                     const updatedDataForAgent = { ...candidateData, ...candidateUpdates, projectMetadata: { ...candidateData.projectMetadata, ...(candidateUpdates.projectMetadata || {}), currentVacancyIndex: candidateUpdates.currentVacancyIndex !== undefined ? candidateUpdates.currentVacancyIndex : candidateData.projectMetadata?.currentVacancyIndex } };
 
