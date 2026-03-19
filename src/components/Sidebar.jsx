@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut,
-    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi
+    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit
 } from 'lucide-react';
 import {
     DndContext,
@@ -157,19 +157,16 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate 
 
             {/* Logo/Header */}
             <div className="relative p-6 mb-2">
-                <div className="flex items-center space-x-4">
-                    <div className="relative flex-shrink-0">
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-700 rounded-xl flex items-center justify-center shadow-lg transform rotate-3">
-                            <MessageSquare className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="absolute -bottom-1.5 -right-1.5 bg-green-500 rounded-full p-1 border-2 border-slate-950">
-                            <WhatsAppIcon />
-                        </div>
+                <div className="flex items-center space-x-3">
+                    <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105">
+                        <BrainCircuit className="w-10 h-10 text-white stroke-[1.5] drop-shadow-md" />
                     </div>
                     <div>
-                        <h2 className="text-lg font-extrabold text-white leading-tight tracking-tight">Candidatic IA</h2>
+                        <h2 className="text-[20px] font-extrabold text-white leading-tight tracking-wider flex items-center drop-shadow-sm">
+                            CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
+                        </h2>
                         <div className="flex items-center mt-1">
-                            <span className="text-[10px] font-bold text-blue-200 bg-blue-500/30 px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-400/30">Business</span>
+                            <span className="text-[10px] font-bold text-blue-200 bg-blue-500/30 px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-400/30 shadow-inner">BUSINESS</span>
                         </div>
                     </div>
                 </div>

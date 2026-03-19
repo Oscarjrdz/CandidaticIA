@@ -169,7 +169,8 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     for (const p of _OPEN_DOOR_PATTERNS) {
         text = text.replace(p, '');
     }
-    text = text.replace(/\s{2,}/g, ' ').trim();
+    // Fix: Only target horizontal whitespace to preserve the \n\n boundaries for formatting
+    text = text.replace(/[ \t]{2,}/g, ' ').trim();
 
     text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
 
@@ -2074,6 +2075,24 @@ ${safeDnaLines}
                             }
                         }
 
+                        // 1.5) Try explicit day-of-month number (e.g. "20" -> 20th of the month)
+                        if (_resolvedDayIdx === null) {
+                            for (const _line of _rawInputLines) {
+                                const match = _line.match(/^(\d{1,2})\.?$/);
+                                if (match) {
+                                    const dNum = parseInt(match[1], 10);
+                                    const matchingDays = _uDays.filter(ds => {
+                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                        return d.getDate() === dNum;
+                                    });
+                                    if (matchingDays.length === 1) {
+                                        _resolvedDayIdx = _uDays.indexOf(matchingDays[0]);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
                         // 2) Try day name (with optional number disambiguation)
                         if (_resolvedDayIdx === null) {
                             // Try each burst line for day name match
@@ -2108,6 +2127,7 @@ ${safeDnaLines}
                                             _resolvedDayIdx = _specificIdx;
                                         } else {
                                             // Still ambiguous — show sub-list
+                                            console.log("[AGENT] Ambiguous phrase detected. Set skipRecruiterInference = true.");
                                             skipRecruiterInference = true;
                                             const _dayNameLabel = _DN4[new Date(parseInt(_uDays[_matchingIdxs[0]].substr(0,4)), parseInt(_uDays[_matchingIdxs[0]].substr(5,2))-1, parseInt(_uDays[_matchingIdxs[0]].substr(8,2))).getDay()];
                                             const _subLines = _matchingIdxs.map((dIdx, i) => {
@@ -2120,6 +2140,7 @@ ${safeDnaLines}
                                         }
                                     } else {
                                         // No number — show sub-list
+                                        console.log(`[AGENT] Ambiguous day name '${_matchedLine}' mapped to ${_dayOfWeek} with ${_matchingIdxs.length} options. Set skipRecruiterInference = true.`);
                                         skipRecruiterInference = true;
                                         const _dayNameLabel = _DN4[new Date(parseInt(_uDays[_matchingIdxs[0]].substr(0,4)), parseInt(_uDays[_matchingIdxs[0]].substr(5,2))-1, parseInt(_uDays[_matchingIdxs[0]].substr(8,2))).getDay()];
                                         const _subLines = _matchingIdxs.map((dIdx, i) => {

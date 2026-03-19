@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowRight, CheckCircle, BarChart, Users, Zap, Loader2, MessageSquare } from 'lucide-react';
+import { ArrowRight, CheckCircle, BarChart, Users, Zap, Loader2, MessageSquare, BrainCircuit } from 'lucide-react';
 import Button from './ui/Button';
 import Input from './ui/Input';
 
@@ -175,10 +175,12 @@ const LandingPage = ({ onLoginSuccess }) => {
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between relative">
                     <div className="flex items-center space-x-2">
-                        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
-                            C
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg flex items-center justify-center shadow-md">
+                            <BrainCircuit className="w-5 h-5 text-white stroke-[1.5]" />
                         </div>
-                        <span className="text-xl font-bold tracking-tight text-gray-900">Candidatic IA</span>
+                        <span className="text-xl font-extrabold tracking-tight text-gray-900 flex items-center">
+                            CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
+                        </span>
                     </div>
 
                     <nav className="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-600">
@@ -208,11 +210,8 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     <div className="mb-8 text-center">
                                         <div className="relative inline-block mb-4">
                                             <div className="absolute inset-0 bg-blue-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
-                                            <div className="relative w-16 h-16 bg-gradient-to-tr from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform">
-                                                <MessageSquare className="w-8 h-8 text-white" />
-                                            </div>
-                                            <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full p-1.5 border-2 border-white shadow-sm">
-                                                <div className="text-white w-3 h-3"><WhatsAppIcon /></div>
+                                            <div className="relative w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-800 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform ring-4 ring-blue-50">
+                                                <BrainCircuit className="w-10 h-10 text-white stroke-[1.5]" />
                                             </div>
                                         </div>
                                         <h3 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
@@ -457,11 +456,13 @@ const LandingPage = ({ onLoginSuccess }) => {
 
             <footer className="bg-gray-50 border-t border-gray-200 py-12">
                 <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center bg-transparent">
-                    <div className="flex items-center space-x-2 mb-4 md:mb-0">
-                        <div className="w-6 h-6 bg-gray-300 rounded-md flex items-center justify-center text-white text-xs font-bold">
-                            C
+                    <div className="flex items-center space-x-2 mb-4 md:mb-0 opacity-80 hover:opacity-100 transition-opacity">
+                        <div className="w-6 h-6 bg-gray-300 rounded-md flex items-center justify-center text-white">
+                            <BrainCircuit className="w-4 h-4 stroke-[2]" />
                         </div>
-                        <span className="font-semibold text-gray-700">Candidatic IA</span>
+                        <span className="font-extrabold text-gray-700 tracking-tight flex items-center">
+                            CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
+                        </span>
                     </div>
                     <p className="text-gray-500 text-sm">
                         © {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.

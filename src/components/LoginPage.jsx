@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, ArrowRight, UserPlus, ShieldCheck, Loader2 } from 'lucide-react';
+import { MessageSquare, ArrowRight, UserPlus, ShieldCheck, Loader2, BrainCircuit } from 'lucide-react';
 import Button from './ui/Button';
 import Input from './ui/Input';
 
@@ -153,15 +153,14 @@ export default function LoginPage({ onLogin }) {
 
                 {/* Modern Brand Header */}
                 <div className="text-center mb-8">
-                    <div className="relative inline-block">
-                        <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-700 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 mx-auto mb-4 hover:rotate-6 transition-transform duration-300">
-                            <MessageSquare className="w-10 h-10 text-white" />
-                        </div>
-                        <div className="absolute -bottom-2 -right-2 bg-green-500 rounded-full p-1.5 border-4 border-white dark:border-gray-800">
-                            <WhatsAppIcon />
+                    <div className="relative inline-block transition-transform duration-500 hover:scale-105">
+                        <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-800 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-4 ring-4 ring-blue-50/50 dark:ring-blue-900/20">
+                            <BrainCircuit className="w-12 h-12 text-white stroke-[1.5]" />
                         </div>
                     </div>
-                    <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mt-4 tracking-tight">Candidatic IA</h1>
+                    <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mt-4 flex items-center justify-center tracking-wider">
+                        CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
+                    </h1>
                     <p className="text-gray-500 dark:text-gray-400 mt-2 font-medium">Acceso Seguro a tu Reclutamiento</p>
                 </div>
 
