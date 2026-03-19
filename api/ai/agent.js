@@ -2523,6 +2523,57 @@ ${safeDnaLines}
                     const _citaPending = await getCitaPendingFlag(redis, candidateId);
                     const isAmbiguousDayResolver = aiResult?.thought_process === 'CITA:ambiguous_day_name';
 
+                    // 🛑 CITA HOUR REJECTION GUARD
+                    // If user responds negatively to "¿Te parece bien ese horario?" while cita_pending is set,
+                    // do NOT treat it as a vacancy rejection. Treat it as a schedule rejection:
+                    // show the days list again and clear pending state.
+                    const _isCitaStepForGuard = (currentStep?.name || '').toLowerCase().includes('cita');
+                    const _isUserNegativeToHour = /^(no|nel|nope|no puedo|no me queda|no puedo ese|otro d[ií]a|prefiero otro|cambiarlo|cambiar|no me conviene|no me sirve|otro horario|no gracias|mejor otro|no ese|de otra forma)/i.test(aggregatedText.trim());
+                    if (_isCitaStepForGuard && _citaPending && _isUserNegativeToHour && hasExitTag) {
+                        console.log('[CITA HOUR REJECTION GUARD] 🔴 Blocking vacancy-exit. Treating response as schedule rejection, re-showing day list.');
+                        hasExitTag = false;
+                        extractedMoveTarget = null;
+                        hasMoveTag = false;
+                        // Clear the cita_pending flag so the next session starts fresh
+                        clearCitaPendingFlag(redis, candidateId).catch(() => {});
+                        // Wipe the saved date/time from metadata so the Cita renderer re-shows days
+                        if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
+                        candidateUpdates.projectMetadata.citaFecha = null;
+                        candidateUpdates.projectMetadata.citaHora = null;
+
+                        // Build the available days list from calendarOptions
+                        const NUM_EMOJI = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                        let _daysList = '';
+                        if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
+                            // Extract unique dates from calendar options (format: "YYYY-MM-DD @ HH:mm ...")
+                            const _seenDates = new Set();
+                            const _uniqueDays = [];
+                            const _monthsEs = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                            const _daysEs = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                            for (const opt of currentStep.calendarOptions) {
+                                const datePart = opt.split('@')[0].trim(); // "YYYY-MM-DD"
+                                if (_seenDates.has(datePart)) continue;
+                                _seenDates.add(datePart);
+                                const d = new Date(datePart + 'T12:00:00');
+                                if (isNaN(d)) continue;
+                                const dayName = _daysEs[d.getDay()];
+                                const dayNum = d.getDate();
+                                const monthName = _monthsEs[d.getMonth()];
+                                _uniqueDays.push(`${dayName} ${dayNum} de ${monthName}`);
+                            }
+                            if (_uniqueDays.length > 0) {
+                                _daysList = _uniqueDays.map((day, i) => `${NUM_EMOJI[i] || (i+1)+'.'} ${day} 📅`).join('\n');
+                            }
+                        }
+                        const _candFirstNameGuard = (candidateData.nombre || candidateData.nombreReal || 'amig@').split(' ')[0];
+                        if (_daysList) {
+                            responseTextVal = `Entiendo ${_candFirstNameGuard}, no hay problema. 😊 Puedes elegir otro día si gustas:\n\n${_daysList}\n\n¿En cuál día te queda mejor?`;
+                        } else {
+                            responseTextVal = `Entiendo ${_candFirstNameGuard}, no hay problema. 😊 ¿Quieres elegir otro día para tu entrevista?`;
+                        }
+                        skipRecruiterInference = true; // Don't re-call OpenAI, we already have the response
+                    }
+
                     if (isInterviewInvite && (intent === 'ACCEPTANCE' || isUserAffirmative) && _citaPending && !isAmbiguousDayResolver) {
                         // Clear the flag — confirmed
                         clearCitaPendingFlag(redis, candidateId).catch(() => {});
@@ -2593,6 +2644,49 @@ ${safeDnaLines}
 
                 // 🛡️ [CITA STEP SAFEGUARD & CALENDAR RENDERER]
                 const isCitaStep = (currentStep?.name || '').toLowerCase().includes('cita');
+
+                // 🛑 CITA HOUR REJECTION GUARD — Second layer (no-exit-tag path)
+                // Catches cases where user said "no" to the offered time slot but the LLM
+                // generated a hallucinated vacancy-pivot response WITHOUT setting hasExitTag.
+                // Detect: cita_pending active + user is negative + bot response looks like a pivot.
+                const _isCitaPendingForCita = await getCitaPendingFlag(redis, candidateId);
+                const _isNegToHourNoTag = /^(no|nel|nope|no puedo|no me queda|otro d[ií]a|prefiero otro|cambiarlo|cambiar|no me conviene|no me sirve|otro horario|no gracias|mejor otro|no ese)/i.test(aggregatedText.trim());
+                const _aiLooksPivot = /curiosamente|otra posici[oó]n|posici[oó]n disponible|otra opci[oó]n|te gustar[ií]a saber m[aá]s|te interesa conocer/i.test(responseTextVal || '');
+                if (isCitaStep && _isCitaPendingForCita && _isNegToHourNoTag && !hasExitTag && (_aiLooksPivot || false)) {
+                    console.log('[CITA HOUR REJECTION GUARD v2] 🔴 Blocking hallucinated pivot response. Re-showing day list.');
+                    clearCitaPendingFlag(redis, candidateId).catch(() => {});
+                    if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
+                    candidateUpdates.projectMetadata.citaFecha = null;
+                    candidateUpdates.projectMetadata.citaHora = null;
+                    hasMoveTag = false;
+                    hasExitTag = false;
+                    extractedMoveTarget = null;
+
+                    const NUM_EMOJI2 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                    let _daysList2 = '';
+                    if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
+                        const _seenDates2 = new Set();
+                        const _uniqueDays2 = [];
+                        const _monthsEs2 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                        const _daysEs2 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                        for (const opt of currentStep.calendarOptions) {
+                            const datePart = opt.split('@')[0].trim();
+                            if (_seenDates2.has(datePart)) continue;
+                            _seenDates2.add(datePart);
+                            const d = new Date(datePart + 'T12:00:00');
+                            if (isNaN(d)) continue;
+                            _uniqueDays2.push(`${_daysEs2[d.getDay()]} ${d.getDate()} de ${_monthsEs2[d.getMonth()]}`);
+                        }
+                        if (_uniqueDays2.length > 0) {
+                            _daysList2 = _uniqueDays2.map((day, i) => `${NUM_EMOJI2[i] || (i+1)+'.'} ${day} 📅`).join('\n');
+                        }
+                    }
+                    const _candName2 = (candidateData.nombre || candidateData.nombreReal || 'amig@').split(' ')[0];
+                    responseTextVal = _daysList2
+                        ? `Entiendo ${_candName2}, no hay problema. 😊 Puedes elegir otro día si gustas:\n\n${_daysList2}\n\n¿En cuál día te queda mejor?`
+                        : `Entiendo ${_candName2}, no hay problema. 😊 ¿Quieres elegir otro día para tu entrevista?`;
+                }
+
                 if (isCitaStep && !hasExitTag) {
                     const mergedMeta = { ...(candidateData.projectMetadata || {}), ...(candidateUpdates.projectMetadata || {}) };
 
