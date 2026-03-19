@@ -2652,7 +2652,7 @@ ${safeDnaLines}
                 const _isCitaPendingForCita = await getCitaPendingFlag(redis, candidateId);
                 const _isNegToHourNoTag = /^(no|nel|nope|no puedo|no me queda|otro d[ií]a|prefiero otro|cambiarlo|cambiar|no me conviene|no me sirve|otro horario|no gracias|mejor otro|no ese)/i.test(aggregatedText.trim());
                 const _aiLooksPivot = /curiosamente|otra posici[oó]n|posici[oó]n disponible|otra opci[oó]n|te gustar[ií]a saber m[aá]s|te interesa conocer/i.test(responseTextVal || '');
-                if (isCitaStep && _isCitaPendingForCita && _isNegToHourNoTag && !hasExitTag && (_aiLooksPivot || false)) {
+                if (isCitaStep && _isCitaPendingForCita && _isNegToHourNoTag && !hasExitTag) {
                     console.log('[CITA HOUR REJECTION GUARD v2] 🔴 Blocking hallucinated pivot response. Re-showing day list.');
                     clearCitaPendingFlag(redis, candidateId).catch(() => {});
                     if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
@@ -3783,7 +3783,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
                 // 🔑 CAPA 6: If any sent message contains the CTA, set cita_pending in Redis
                 // so the NEXT affirmative from the candidate is treated as a confirmed acceptance.
-                const CTA_PATTERN = /¿te gustar[ií]a agendar|¿te agendo una cita|¿te aparto una cita|¿quieres que programe|¿te puedo agendar|solo por confirmar|me confirmas si quieres|quieres que agendemos|solo para confirmar|¿te interesa conocer esta|te gustaría conocerla|¿te la presento|¿te gustaría saber más|¿avanzamos con|avanzamos con tu cita/i;
+                const CTA_PATTERN = /¿te gustar[ií]a agendar|¿te agendo una cita|¿te aparto una cita|¿quieres que programe|¿te puedo agendar|solo por confirmar|me confirmas si quieres|quieres que agendemos|solo para confirmar|¿te interesa conocer esta|te gustaría conocerla|¿te la presento|¿te gustaría saber más|¿avanzamos con|avanzamos con tu cita|¿te parece bien ese horario|este horario te queda bien|¿cuál prefieres\?/i;
                 const _hasCTAinBatch = messagesToSend.some(m => CTA_PATTERN.test(m));
                 if (_hasCTAinBatch && isRecruiterMode) {
                     setCitaPendingFlag(redis, candidateId).catch(() => {});
