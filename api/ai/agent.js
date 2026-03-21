@@ -2131,12 +2131,26 @@ ${safeDnaLines}
 
                         // 2) Try day name (with optional number disambiguation)
                         if (_resolvedDayIdx === null) {
-                            // Try each burst line for day name match
+                            // 🔧 BURST FIX v2: When multiple burst lines have day names (e.g. "lunes" + "martes 24"),
+                            // prefer the line that has BOTH a day name AND a day-of-month number (more specific),
+                            // as it likely represents a correction or more precise selection.
                             let _matchedLine = _rawInput;
                             let _dayOfWeek = null;
+                            // First pass: look for lines with day name + number (most specific)
                             for (const _line of _rawInputLines) {
-                                _dayOfWeek = _parseDayName(_line);
-                                if (_dayOfWeek !== null) { _matchedLine = _line; break; }
+                                const _dow = _parseDayName(_line);
+                                if (_dow !== null && /(\d{1,2})/.test(_line)) {
+                                    _dayOfWeek = _dow;
+                                    _matchedLine = _line;
+                                    break;
+                                }
+                            }
+                            // Second pass: fallback to first line with any day name
+                            if (_dayOfWeek === null) {
+                                for (const _line of _rawInputLines) {
+                                    const _dow = _parseDayName(_line);
+                                    if (_dow !== null) { _dayOfWeek = _dow; _matchedLine = _line; break; }
+                                }
                             }
                             if (_dayOfWeek !== null) {
                                 const _matchingIdxs = _uDays
@@ -2225,12 +2239,27 @@ ${safeDnaLines}
                                     thought_process: 'CITA:deterministic_hour_selection'
                                 };
                             } else {
-                                // No hours found for this date — inject system message and let GPT handle
-                                const _injMsg = `[SISTEMA INTERNO - ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles del sistema para esa fecha. ESTÁ ESTRICTAMENTE PROHIBIDO usar "unanswered_question" aquí.`;
-                                historyForGpt = [
-                                    ...historyForGpt.slice(0, -1),
-                                    { role: 'user', content: _injMsg }
-                                ];
+                                // 🛡️ NO HOURS IN calendarOptions: Ask for availability deterministically
+                                // rather than delegating to GPT which can silently fail or timeout.
+                                // This prevents the "mute bot" bug when calendarOptions has dates but no times.
+                                const _isCitaStepNoHrs = (currentStep?.name || '').toLowerCase().includes('cita');
+                                if (_isCitaStepNoHrs) {
+                                    skipRecruiterInference = true;
+                                    responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, tenemos disponibilidad el ${_humanSelDate}. ¿En qué horario te queda mejor? ⏰`;
+                                    aiResult = {
+                                        response_text: responseTextVal,
+                                        extracted_data: { citaFecha: _selDate },
+                                        thought_process: 'CITA:deterministic_day_no_hours_configured'
+                                    };
+                                    console.log(`[CITA RESOLVER] ⚠️ No hours configured for ${_selDate}. Using deterministic availability ask.`);
+                                } else {
+                                    // Non-cita step: inject system message and let GPT handle
+                                    const _injMsg = `[SISTEMA INTERNO - ELECCIÓN DE DÍA CONFIRMADA]: El candidato eligió el ${_humanSelDate} (citaFecha: ${_selDate}). OBLIGATORIO: 1) Guarda citaFecha="${_selDate}" en extracted_data. 2) Muestra los horarios disponibles del sistema para esa fecha. ESTÁ ESTRICTAMENTE PROHIBIDO usar "unanswered_question" aquí.`;
+                                    historyForGpt = [
+                                        ...historyForGpt.slice(0, -1),
+                                        { role: 'user', content: _injMsg }
+                                    ];
+                                }
                             }
                         }
 
