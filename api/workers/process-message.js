@@ -92,10 +92,11 @@ export async function runTurboEngine(candidateId, from) {
             // "lunes" arrives 7s into the "si" processing window.
             console.error(`[Serverless Engine] ⏳ ${candidateId} busy. Waiting for lock to release...`);
             
-            // Poll for up to 12 seconds (lock TTL is 15s)
+            // Poll for up to 50 seconds — the agent can hold the lock for 15-25s
+            // (step transition + media sends + delays). 50s < Vercel's 60s maxDuration.
             let waited = 0;
-            const POLL_INTERVAL = 800; // ms
-            const MAX_WAIT = 12000;    // ms
+            const POLL_INTERVAL = 500; // ms — faster reaction when lock frees
+            const MAX_WAIT = 50000;    // ms
             let lockFreed = false;
             
             while (waited < MAX_WAIT) {

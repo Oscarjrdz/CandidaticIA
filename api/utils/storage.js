@@ -706,9 +706,10 @@ export const isCandidateLocked = async (candidateId) => {
     const key = `${KEYS.CANDIDATE_LOCK_PREFIX}${candidateId}`;
     /**
      * ATOMIC LOCK: 'NX' means "Only set if NOT exists"
-     * Reduced to 15 seconds to be less aggressive and reduce "deafness" to rapid messages.
+     * 30s TTL: enough for a full step-move sequence (media + stickers + delays ~20-25s)
+     * without being so long that it blocks rapid-fire messages for too long.
      */
-    const result = await client.set(key, '1', 'EX', 15, 'NX');
+    const result = await client.set(key, '1', 'EX', 30, 'NX');
     return result !== 'OK';
 };
 
