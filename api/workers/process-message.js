@@ -83,13 +83,47 @@ export async function runTurboEngine(candidateId, from) {
     console.error(`🔄 Worker triggered for ${candidateId} from ${from}`);
 
     try {
-        // 🔒 1. ACQUIRE LOCK (atomic SET NX — if someone else has it, return immediately)
+        // 🔒 1. ACQUIRE LOCK (atomic SET NX — if someone else has it, wait and retry)
         const isLocked = await isCandidateLocked(candidateId);
         if (isLocked) {
-            // ✅ SAFE TO RETURN: Our message is already in the waitlist (addToWaitlist ran before us).
-            // The lock holder will pick it up via drainWaitlist's loop or the POST-UNLOCK SWEEP.
-            console.error(`[Serverless Engine] ⏳ ${candidateId} busy. Message is queued — lock holder will drain it.`);
-            return { success: true, status: 'queued' };
+            // ⏳ WAIT STRATEGY: Instead of returning immediately (which loses the message
+            // if the POST-UNLOCK SWEEP is killed by Vercel), we wait for the lock to free
+            // and then process the waitlist ourselves. This handles the race condition where
+            // "lunes" arrives 7s into the "si" processing window.
+            console.error(`[Serverless Engine] ⏳ ${candidateId} busy. Waiting for lock to release...`);
+            
+            // Poll for up to 12 seconds (lock TTL is 15s)
+            let waited = 0;
+            const POLL_INTERVAL = 800; // ms
+            const MAX_WAIT = 12000;    // ms
+            let lockFreed = false;
+            
+            while (waited < MAX_WAIT) {
+                await new Promise(r => setTimeout(r, POLL_INTERVAL));
+                waited += POLL_INTERVAL;
+                
+                // Try to acquire the lock — if the lock expired or was freed, SET NX succeeds
+                const stillLocked = await isCandidateLocked(candidateId);
+                if (!stillLocked) {
+                    // We now hold the lock — drain the waitlist
+                    lockFreed = true;
+                    console.error(`[Serverless Engine] 🔓 Lock freed after ${waited}ms. Draining waitlist for ${candidateId}...`);
+                    try {
+                        await new Promise(r => setTimeout(r, 50)); // brief debounce
+                        await drainWaitlist(candidateId);
+                    } finally {
+                        await unlockCandidate(candidateId);
+                        console.error(`[Serverless Engine] ✅ Late-arrival drain complete for ${candidateId}.`);
+                    }
+                    break;
+                }
+            }
+            
+            if (!lockFreed) {
+                console.error(`[Serverless Engine] ⚠️ Lock never freed after ${MAX_WAIT}ms for ${candidateId}. Message may be lost.`);
+            }
+            
+            return { success: true, status: lockFreed ? 'processed_after_wait' : 'queued' };
         }
 
         // We now hold the lock. Process everything.
@@ -104,10 +138,7 @@ export async function runTurboEngine(candidateId, from) {
             await unlockCandidate(candidateId);
             console.error(`[Serverless Engine] 🔓 ${candidateId} unlocked.`);
 
-            // 🧹 5. POST-UNLOCK SWEEP (Production Safety Net)
-            // Check ONE MORE TIME for messages that arrived in the microsecond
-            // between "waitlist was empty" and "unlockCandidate".
-            // This is the critical fix for the race condition at scale.
+            // 🧹 5. POST-UNLOCK SWEEP (Safety Net for messages arriving in the unlock microsecond)
             try {
                 const orphaned = await getWaitlist(candidateId);
                 if (orphaned && orphaned.length > 0) {
