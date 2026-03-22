@@ -15,7 +15,6 @@ import SimulatorSection from './components/SimulatorSection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import ProjectsSection from './components/ProjectsSection';
 import ByPassSection from './components/ByPassSection';
-import AuditSystem from './components/AuditSystem';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import LoginPage from './components/LoginPage';
 import LandingPage from './components/LandingPage';
