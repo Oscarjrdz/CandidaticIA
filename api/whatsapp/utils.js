@@ -2,15 +2,7 @@ import axios from 'axios';
 import { getRedisClient } from '../utils/storage.js';
 
 export const getUltraMsgConfig = async () => {
-    // 1. Try environment variables first (most secure)
-    if (process.env.ULTRAMSG_INSTANCE_ID && process.env.ULTRAMSG_TOKEN) {
-        return {
-            instanceId: process.env.ULTRAMSG_INSTANCE_ID,
-            token: process.env.ULTRAMSG_TOKEN
-        };
-    }
-
-    // 2. Try Redis (dynamic config)
+    // 1. Try Redis (dynamic config from dashboard) FIRST to override stale env vars
     try {
         const redis = getRedisClient();
         if (redis) {
@@ -23,10 +15,14 @@ export const getUltraMsgConfig = async () => {
             }
         }
     } catch (e) {
-        console.warn('Failed to load UltraMsg config from Redis', e);
+        console.error('Failed to get UltraMsg config from Redis:', e.message);
     }
 
-    return null;
+    // 2. Fallback to Environment variables
+    return {
+        instanceId: process.env.ULTRAMSG_INSTANCE_ID,
+        token: process.env.ULTRAMSG_TOKEN
+    };
 };
 
 export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {

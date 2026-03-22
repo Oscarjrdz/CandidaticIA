@@ -37,7 +37,6 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
     { id: 'post-maker', label: 'Post Maker', icon: Layout, position: 'top' },
     { id: 'users', label: 'Usuarios', icon: User, position: 'top' },
-    { id: 'gateway', label: 'Gateway WA', icon: Wifi, position: 'top' },
     { id: 'settings', label: 'Settings', icon: Settings, position: 'bottom' }
 ];
 

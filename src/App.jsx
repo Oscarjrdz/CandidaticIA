@@ -15,7 +15,7 @@ import SimulatorSection from './components/SimulatorSection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import ProjectsSection from './components/ProjectsSection';
 import ByPassSection from './components/ByPassSection';
-import GatewaySection from './components/GatewaySection';
+import AuditSystem from './components/AuditSystem';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import LoginPage from './components/LoginPage';
 import LandingPage from './components/LandingPage';
@@ -131,8 +131,7 @@ function App() {
                                 : activeSection === 'media-library' ? 'Biblioteca Multimedia'
                                   : activeSection === 'projects' ? 'Proyectos'
                                     : activeSection === 'bypass' ? 'Sistema ByPass'
-                                      : activeSection === 'gateway' ? 'Gateway WhatsApp'
-                                        : 'Configuración'}
+                                      : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
@@ -143,7 +142,6 @@ function App() {
                           : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                             : activeSection === 'projects' ? 'Gestión y organización de proyectos'
                               : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos a proyectos'
-                                : activeSection === 'gateway' ? 'Gestión de instancias WhatsApp independientes'
                                   : 'Configuración del Sistema'
                   }
                 </p>
@@ -208,8 +206,6 @@ function App() {
             <ProjectsSection showToast={showToast} />
           ) : activeSection === 'bypass' ? (
             <ByPassSection showToast={showToast} />
-          ) : activeSection === 'gateway' ? (
-            <GatewaySection showToast={showToast} />
           ) : (
             <SettingsSection
               instanceId={instanceId}
