@@ -2863,6 +2863,12 @@ ${safeDnaLines}
                             responseTextVal = responseTextVal.replace(/[\{\[]\s*move.*?[\}\]]/gi, '');
                         }
                     }
+                    
+                    // 🛡️ OBLITERATE SILENCIO FROM RESPONSE TEXT TO AVOID CORRUPTING FALLBACKS
+                    if (responseTextVal) {
+                        const silenceFilter = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]/gi;
+                        responseTextVal = responseTextVal.replace(silenceFilter, '').trim();
+                    }
 
                     // 2) FALLBACK RENDERER: If we are missing data, force the question/calendar array.
                     // This must run even if hasMoveTag is false!
