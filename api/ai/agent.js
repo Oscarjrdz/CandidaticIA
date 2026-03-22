@@ -2242,7 +2242,7 @@ ${safeDnaLines}
                                 // 🛡️ NO HOURS IN calendarOptions: Ask for availability deterministically
                                 // rather than delegating to GPT which can silently fail or timeout.
                                 // This prevents the "mute bot" bug when calendarOptions has dates but no times.
-                                const _isCitaStepNoHrs = (currentStep?.name || '').toLowerCase().includes('cita');
+                                const _isCitaStepNoHrs = /(cita|entrevista)/i.test(currentStep?.name || '');
                                 if (_isCitaStepNoHrs) {
                                     skipRecruiterInference = true;
                                     responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, tenemos disponibilidad el ${_humanSelDate}. ¿En qué horario te queda mejor? ⏰`;
