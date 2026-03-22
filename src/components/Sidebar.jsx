@@ -158,16 +158,11 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate 
             <div className="relative p-6 mb-2">
                 <div className="flex items-center space-x-3">
                     <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105">
-                        <BrainCircuit className="w-10 h-10 text-white stroke-[1.5] drop-shadow-md" />
+                        <BrainCircuit className="w-8 h-8 text-white stroke-[2] drop-shadow-md" />
                     </div>
-                    <div>
-                        <h2 className="text-[20px] font-extrabold text-white leading-tight tracking-wider flex items-center drop-shadow-sm">
-                            CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
-                        </h2>
-                        <div className="flex items-center mt-1">
-                            <span className="text-[10px] font-bold text-blue-200 bg-blue-500/30 px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-400/30 shadow-inner">BUSINESS</span>
-                        </div>
-                    </div>
+                    <h2 className="text-[20px] font-extrabold text-white tracking-wider flex items-center drop-shadow-sm">
+                        CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
+                    </h2>
                 </div>
             </div>
 
