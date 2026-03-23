@@ -2012,9 +2012,11 @@ ${safeDnaLines}
                             const _storedHourP4 = _citaHoraStoredPaso4;
                             const _selD4 = new Date(parseInt(_storedDateP4.substr(0,4)), parseInt(_storedDateP4.substr(5,2))-1, parseInt(_storedDateP4.substr(8,2)));
                             const _humanDateP4 = `${_DN4[_selD4.getDay()]} ${_selD4.getDate()} de ${_MN4[_selD4.getMonth()]}`;
+                            
+                            const _vacName = candidateData.projectMetadata?.currentVacancyName || candidateData.currentVacancyName || 'nuestra empresa';
 
                             skipRecruiterInference = true;
-                            responseTextVal = `¡Perfecto${_fn4 ? `, ${_fn4}` : ''}! ✅ Tu cita queda agendada para el ${_humanDateP4} a las ${_storedHourP4}. ¡Te esperamos! 🌟`;
+                            responseTextVal = `¡Perfecto${_fn4 ? ` ${_fn4}` : ''}! ✅ Ya quedó agendada tu entrevista para el ${_humanDateP4} a las ${_storedHourP4} para tu vacante de ${_vacName}. ¡No faltes! Te esperamos 🌟`;
                             aiResult = {
                                 response_text: responseTextVal,
                                 extracted_data: { citaFecha: _storedDateP4, citaHora: _storedHourP4 },
@@ -3151,12 +3153,13 @@ ${safeDnaLines}
                         // If cleanSpeech is empty here (from GPT silent move), simply skip — no message needed.
 
 
-                        // 🤫 EXCEPCIÓN UX: Si estamos en el paso "CITA", NO enviar el speech del LLM.
-                        // El appointmentConfirmation ya envía el texto de confirmación correcto.
+                        // 🤫 EXCEPCIÓN UX OMITIDA: Permitimos que cleanSpeech se envíe incluso en Cita
+                        // para que el usuario reciba su "Perfecto, agendado a tal hora" ANTES de los
+                        // mensajes configurables de appointmentConfirmation.
                         const originStepName = (currentStep?.name || '').toLowerCase();
                         const isCitaStepOrigin = originStepName.includes('cita') && !originStepName.includes('citado');
 
-                        if (cleanSpeech.length > 0 && !isCitaStepOrigin) {
+                        if (cleanSpeech.length > 0) {
                             try {
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cleanSpeech, 'chat', { priority: 1 });
                             } catch (e) {
