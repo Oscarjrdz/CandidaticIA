@@ -2232,7 +2232,11 @@ ${safeDnaLines}
                             if (_hrsInjection) {
                                 // 🔥 DETERMINISTIC RESPONSE: Skip GPT entirely — build the hour list ourselves
                                 skipRecruiterInference = true;
-                                responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, para el ${_humanSelDate} tengo estas opciones de horario:\n\n${_hrsInjection}[MSG_SPLIT]¿Cuál te queda mejor? 😊`;
+                                if (_selHrs.length === 1) {
+                                    responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}. Para el ${_humanSelDate} tengo entrevista a las:\n\n${_hrsInjection}[MSG_SPLIT]¿Te parece que agendemos ya${_fn4 ? ` ${_fn4}` : ''}? 😊`;
+                                } else {
+                                    responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, para el ${_humanSelDate} tengo estas opciones de horario:\n\n${_hrsInjection}[MSG_SPLIT]¿Cuál te queda mejor? 😊`;
+                                }
                                 aiResult = {
                                     response_text: responseTextVal,
                                     extracted_data: { citaFecha: _selDate },
@@ -2965,12 +2969,26 @@ ${safeDnaLines}
 
                                 if (availableHoursForDate.length > 0) {
                                     const formattedHours = availableHoursForDate.map((h, i) => `🔹 Opción ${i + 1}: ${h}`).join('\n\n');
-                                    callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo estas opciones de horario para ti:\n\n${formattedHours}\n\n¿Cuál prefieres?`;
+                                    
+                                    const _alreadyMentionedHourVal = availableHoursForDate.some(h => 
+                                        (responseTextVal || '').toLowerCase().includes(h.toLowerCase().trim())
+                                    );
 
                                     // 🩹 INQUIRY FIX: Do NOT wipe responseTextVal if the AI provided a legitimate FAQ answer / job inquiry response (like "Sí tenemos vales").
                                     // Make sure we only wipe it if it was hallucinating its own hours array.
                                     if (responseTextVal && /opciones|horario|perfecto/i.test(responseTextVal) && responseTextVal.includes('1️⃣')) {
                                         responseTextVal = "";
+                                    }
+
+                                    if (availableHoursForDate.length === 1 && _alreadyMentionedHourVal && responseTextVal.trim().length > 5) {
+                                        // The AI already mentioned the only available hour AND we didn't wipe it.
+                                        // We just make sure a CTA is present, then we're done. No redundant schedule bubble!
+                                        const _hasQ = /[?¿]/.test(responseTextVal);
+                                        callToAction = _hasQ ? "" : "[MSG_SPLIT]¿Te parece que agendemos ya?";
+                                    } else if (availableHoursForDate.length === 1) {
+                                        callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo entrevista a las:\n\n${formattedHours}[MSG_SPLIT]¿Te parece que agendemos ya?`;
+                                    } else {
+                                        callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo estas opciones de horario para ti:\n\n${formattedHours}\n\n¿Cuál prefieres?`;
                                     }
                                 } else {
                                     // Safe fallback if literal string match fails
