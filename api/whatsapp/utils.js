@@ -112,7 +112,9 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 payload.filename = extraParams.filename || 'document.pdf';
                 break;
             case 'sticker':
-                payload.sticker = body;
+                endpoint = 'image';
+                payload.image = body;
+                payload.asSticker = true; // Attempt native sticker conversion if supported by GatewayWapp
                 break;
             case 'location':
                 payload.address = extraParams.address || body;
