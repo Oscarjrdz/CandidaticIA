@@ -211,6 +211,11 @@ export default async function handler(req, res) {
                 let candidateId = await getCandidateIdByPhone(phone);
                 let candidate = null;
 
+                // Move config fetch early to capture instance identifier
+                const configPromise = getUltraMsgConfig();
+                const activeConfig = await configPromise;
+                const sourceIdentifier = activeConfig?.identifier || 'whatsapp_v2';
+
                 if (candidateId) {
                     candidate = await getCandidateById(candidateId);
                     if (!candidate) candidateId = null;
@@ -220,7 +225,7 @@ export default async function handler(req, res) {
                     candidate = await saveCandidate({
                         whatsapp: phone,
                         nombre: messageData.pushname || messageData.pushName || messageData.name || 'Desconocido',
-                        origen: 'whatsapp_v2',
+                        origen: sourceIdentifier,
                         esNuevo: 'SI', // Brújula interna: Fase de presentación
                         primerContacto: new Date().toISOString()
                     });
@@ -228,7 +233,7 @@ export default async function handler(req, res) {
                     notifyNewCandidate(candidate).catch(() => { });
                 }
 
-                console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}...`);
+                console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}... [Source: ${sourceIdentifier}]`);
 
                 // --- ADMIN STICKER CAPTURE ---
                 const messageType = messageData.type || 'text';
@@ -292,8 +297,6 @@ export default async function handler(req, res) {
                     lastUserMessageAt: new Date().toISOString(),
                     unread: true
                 };
-
-                const configPromise = getUltraMsgConfig();
 
                 await saveWebhookTransaction({
                     candidateId,

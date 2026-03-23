@@ -15,6 +15,7 @@ import SimulatorSection from './components/SimulatorSection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import ProjectsSection from './components/ProjectsSection';
 import ByPassSection from './components/ByPassSection';
+import InstancesSection from './components/InstancesSection';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import LoginPage from './components/LoginPage';
 import LandingPage from './components/LandingPage';
@@ -130,7 +131,8 @@ function App() {
                                 : activeSection === 'media-library' ? 'Biblioteca Multimedia'
                                   : activeSection === 'projects' ? 'Proyectos'
                                     : activeSection === 'bypass' ? 'Sistema ByPass'
-                                      : 'Configuración'}
+                                      : activeSection === 'instances' ? 'Instancias (Líneas)'
+                                        : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
@@ -141,6 +143,7 @@ function App() {
                           : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                             : activeSection === 'projects' ? 'Gestión y organización de proyectos'
                               : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos a proyectos'
+                                : activeSection === 'instances' ? 'Gestión de Instancias de WhatsApp y Múltiples Líneas'
                                   : 'Configuración del Sistema'
                   }
                 </p>
@@ -182,7 +185,6 @@ function App() {
           </div>
         </header>
 
-        {/* Content Area */}
         <main className="flex-1 px-8 py-8 overflow-y-auto overflow-x-hidden flex flex-col min-h-0">
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
@@ -205,6 +207,8 @@ function App() {
             <ProjectsSection showToast={showToast} />
           ) : activeSection === 'bypass' ? (
             <ByPassSection showToast={showToast} />
+          ) : activeSection === 'instances' ? (
+            <InstancesSection showToast={showToast} />
           ) : (
             <SettingsSection
               instanceId={instanceId}

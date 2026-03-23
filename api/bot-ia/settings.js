@@ -23,8 +23,8 @@ export default async function handler(req, res) {
                 aiModel
             } = req.body;
 
-            // 1. WhatsApp Config (UltraMsg)
-            if (instanceId !== undefined || token !== undefined) {
+            // 1. WhatsApp Config (UltraMsg - Instances)
+            if (instanceId !== undefined || token !== undefined || req.body.name !== undefined || req.body.identifier !== undefined) {
                 const existingConfig = await redis.get('ultramsg_credentials');
                 let config = {};
                 try {
@@ -38,6 +38,9 @@ export default async function handler(req, res) {
 
                 if (instanceId !== undefined) config.instanceId = instanceId;
                 if (token !== undefined) config.token = token;
+                if (req.body.name !== undefined) config.name = req.body.name;
+                if (req.body.identifier !== undefined) config.identifier = req.body.identifier;
+                
                 await redis.set('ultramsg_credentials', JSON.stringify(config));
             }
 
@@ -78,12 +81,16 @@ export default async function handler(req, res) {
 
             let instanceId = '';
             let token = '';
+            let name = '';
+            let identifier = '';
 
             if (ultramsgConfig) {
                 try {
                     const parsed = JSON.parse(ultramsgConfig);
                     instanceId = parsed.instanceId || '';
                     token = parsed.token || '';
+                    name = parsed.name || '';
+                    identifier = parsed.identifier || '';
                 } catch (e) {
                     console.error('⚠️ [Settings] Corrupted ultramsg_credentials JSON');
                 }
@@ -92,6 +99,8 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 instanceId,
                 token,
+                name,
+                identifier,
                 systemPrompt: systemPrompt || '',
                 isActive: isActive === 'true',
                 extractionRules: extractionRules || '',
