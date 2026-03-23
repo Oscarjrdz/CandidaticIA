@@ -336,10 +336,10 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
                 const _idx = text.indexOf(_em, _pos);
                 if (_idx === -1) break;
                 // If something non-newline precedes this emoji, force a new line before it
-                const _before = text.substring(0, _idx).trimEnd();
-                if (_before.length > 0 && !_before.endsWith('\n')) {
-                    text = _before + '\n\n' + text.substring(_idx);
-                    _pos = _before.length + 2;
+                const _before = text.substring(0, _idx);
+                if (_before.trim().length > 0 && !/\n\s*$/.test(_before)) {
+                    text = _before.trimEnd() + '\n\n' + text.substring(_idx);
+                    _pos = _before.trimEnd().length + 2 + _em.length;
                 } else {
                     _pos = _idx + _em.length;
                 }
@@ -3610,8 +3610,6 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     };
                 } else {
                     gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" }, null, 600);
-
-
                 }
 
                 if (gptResult?.content) {
