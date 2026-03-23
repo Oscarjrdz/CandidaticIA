@@ -3917,6 +3917,15 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             // [CLEANUP]: Sweep out ANY literal tag [MEDIA_DISPONIBLE] or [MEDIA_DISPONIBLE: url]
             responseTextVal = responseTextVal.replace(/\[MEDIA_DISPONIBLE[^\]]*\]/gi, '').trim();
 
+            // 🛡️ [MAPS PROTECTION]: If GPT mistakenly put a Maps link into media_url, it's NOT an attachment!
+            if (aiResult?.media_url && aiResult.media_url.match(/maps\.app\.goo\.gl|maps\.google|google\.com\/maps/i)) {
+                // Ensure the link is actually inside the text so the user can click it
+                if (!responseTextVal.includes(aiResult.media_url)) {
+                    responseTextVal = `${responseTextVal.trim()} ${aiResult.media_url}`;
+                }
+                aiResult.media_url = null; // Clear it so it doesn't get downloaded as a broken 518kB "image"
+            }
+
             // 🔄 MEDIA+FALLBACK COHERENCE FIX: When GPT found the FAQ media (media_url is set)
             // but still used the fallback text ("Es una excelente pregunta..."), replace the
             // text with a coherent introduction so it makes sense before the PDF/image arrives.
@@ -3927,14 +3936,14 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
             if (aiResult?.media_url && aiResult.media_url !== 'null') {
 
-                // Failsafe: Remove any detected URLs or Markdown images to prevent leakage
+                // Failsafe: Remove any leaked media URLs to prevent duplicate display natively vs text
                 // 🛡️ IMPORTANT: Temporarily protect [MSG_SPLIT] so it survives the whitespace collapse
-                const urlRegex = /https?:\/\/[^\s\)]+/g;
+                const leakedUrlRegex = /https?:\/\/[^\s\)]*\/api\/(image|media)[^\s\)]*/gi;
                 const markdownImageRegex = /!\[.*?\]\(.*?\)/g;
                 responseTextVal = responseTextVal
                     .replace(markdownImageRegex, '')  // strip markdown images ![...](url)
                     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // strip markdown links [text](url) → text
-                    .replace(urlRegex, '')              // strip bare https:// URLs
+                    .replace(leakedUrlRegex, '')      // strip ONLY internal media URLs
                     .replace(/\[MSG_SPLIT\]/g, '\u0000SPLIT\u0000') // protect sentinel
                     .replace(/[^\S\n]+/g, ' ')         // collapse horizontal whitespace only (preserve \n)
                     .replace(/\n{3,}/g, '\n\n')        // cap excessive newlines to max 2
