@@ -3224,6 +3224,7 @@ ${safeDnaLines}
                                                 lat: item.data.lat,
                                                 lng: item.data.lng,
                                                 address: item.data.address || 'Oficina',
+                                                name: item.data.name || item.data.title,
                                                 priority: 1
                                             });
                                             saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() }).catch(() => { });
