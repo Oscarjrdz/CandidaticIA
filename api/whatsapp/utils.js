@@ -187,9 +187,10 @@ export const getUltraMsgContact = async (instanceId, token, chatId) => {
             formattedChatId = `${formattedChatId.replace(/\D/g, '')}@c.us`;
         }
         const baseUrl = getApiBaseUrl();
-        const url = `${baseUrl}/${instanceId}/contacts/image`;
+        // GatewayWapp uses /contacts/profile-picture?to=... instead of UltraMsg's /contacts/image?chatId=...
+        const url = `${baseUrl}/${instanceId}/contacts/profile-picture`;
         const response = await axios.get(url, {
-            params: { token, chatId: formattedChatId },
+            params: { token, to: formattedChatId },
             timeout: 10000
         });
         return response.data;
