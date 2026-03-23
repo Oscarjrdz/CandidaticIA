@@ -116,6 +116,7 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 break;
             case 'location':
                 payload.address = extraParams.address || body;
+                if (extraParams.name) payload.name = extraParams.name;
                 payload.lat = extraParams.lat;
                 payload.lng = extraParams.lng;
                 break;
