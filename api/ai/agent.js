@@ -2250,7 +2250,25 @@ ${safeDnaLines}
                             if (_hrsInjection) {
                                 // 🔥 DETERMINISTIC RESPONSE: Skip GPT entirely — build the hour list ourselves
                                 skipRecruiterInference = true;
-                                responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, para el ${_humanSelDate} tengo estas opciones de horario:\n\n${_hrsInjection}[MSG_SPLIT]¿Cuál te queda mejor? 😊`;
+                                if (_selHrs.length === 1) {
+                                    const _fns = _fn4 ? ` ${_fn4}` : '';
+                                    const _ctas = [
+                                        `¿Te gustaría agendar tu entrevista${_fns}? 😊`,
+                                        `¿Te parece que agendemos ya${_fns}? ✨`,
+                                        `¿Comenzamos con tu proceso y reservamos${_fns}? 🗓️`,
+                                        `¿Confirmamos tu cita para esta hora${_fns}? ✅`,
+                                        `¿Agendamos tu entrevista de una vez${_fns}? 😊`,
+                                        `¿Te anoto para esta hora${_fns}? ✍️`,
+                                        `¿Deseas que te aparte este lugar${_fns}? 🌟`,
+                                        `¿Cerramos tu cita en este horario${_fns}? 🤝`,
+                                        `¿Te parece bien si agendamos tu entrevista${_fns}? ⏰`,
+                                        `¿Quieres que confirme tu asistencia a esta hora${_fns}? ✨`
+                                    ];
+                                    const _cta = _ctas[Math.floor(Math.random() * _ctas.length)];
+                                    responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}. Para el ${_humanSelDate} tengo entrevista a las:\n\n${_hrsInjection}[MSG_SPLIT]${_cta}`;
+                                } else {
+                                    responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, para el ${_humanSelDate} tengo estas opciones de horario:\n\n${_hrsInjection}[MSG_SPLIT]¿Cuál te queda mejor? 😊`;
+                                }
                                 aiResult = {
                                     response_text: responseTextVal,
                                     extracted_data: { citaFecha: _selDate },
@@ -3015,6 +3033,21 @@ ${safeDnaLines}
                                         } else {
                                             callToAction = "";
                                         }
+                                    } else if (availableHoursForDate.length === 1) {
+                                        const _ctasFb2 = [
+                                            "¿Te gustaría agendar tu entrevista? 😊",
+                                            "¿Te parece que agendemos ya? ✨",
+                                            "¿Comenzamos con tu proceso y reservamos? 🗓️",
+                                            "¿Confirmamos tu cita para esta hora? ✅",
+                                            "¿Agendamos tu entrevista de una vez? 😊",
+                                            "¿Te anoto para esta hora? ✍️",
+                                            "¿Deseas que te aparte este lugar? 🌟",
+                                            "¿Cerramos tu cita en este horario? 🤝",
+                                            "¿Te parece bien si agendamos tu entrevista? ⏰",
+                                            "¿Quieres que confirme tu asistencia a esta hora? ✨"
+                                        ];
+                                        const _cta2 = _ctasFb2[Math.floor(Math.random() * _ctasFb2.length)];
+                                        callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo entrevista a las:\n\n${formattedHours}[MSG_SPLIT]${_cta2}`;
                                     } else {
                                         callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo estas opciones de horario para ti:\n\n${formattedHours}\n\n¿Cuál prefieres?`;
                                     }
