@@ -83,7 +83,8 @@ export default async function handler(req, res) {
                 msgId,
                 from,
                 type: messageData.type,
-                text: body?.substring(0, 50)
+                text: body?.substring(0, 50),
+                raw: messageData.__raw || messageData
             });
 
             try {
