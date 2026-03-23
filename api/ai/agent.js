@@ -2278,7 +2278,7 @@ ${safeDnaLines}
                                 // 🛡️ NO HOURS IN calendarOptions: Ask for availability deterministically
                                 // rather than delegating to GPT which can silently fail or timeout.
                                 // This prevents the "mute bot" bug when calendarOptions has dates but no times.
-                                const _isCitaStepNoHrs = /(cita|entrevista)/i.test(currentStep?.name || '');
+                                const _isCitaStepNoHrs = /(cita|entrevista)/i.test(currentStep?.name || '') && !/citado/i.test(currentStep?.name || '');
                                 if (_isCitaStepNoHrs) {
                                     skipRecruiterInference = true;
                                     responseTextVal = `Perfecto${_fn4 ? `, ${_fn4}` : ''}, tenemos disponibilidad el ${_humanSelDate}. ¿En qué horario te queda mejor? ⏰`;
@@ -2630,7 +2630,8 @@ ${safeDnaLines}
                     // show the days list again and clear pending state.
                     // ⚠️ NOTE: hasExitTag is intentionally NOT required — even if the LLM decides to pivot,
                     // we override it here. The cita_pending flag + user negative = schedule rejection, always.
-                    const _isCitaStepForGuard = (currentStep?.name || '').toLowerCase().includes('cita');
+                    const _cStepNG1 = (currentStep?.name || '').toLowerCase();
+                    const _isCitaStepForGuard = _cStepNG1.includes('cita') && !_cStepNG1.includes('citado');
                     const _isUserNegativeToHour = /^(no|nel|nope|no puedo|no me queda|no puedo ese|otro d[ií]a|prefiero otro|cambiarlo|cambiar|no me conviene|no me sirve|otro horario|no gracias|mejor otro|no ese|de otra forma|es muy temprano|muy temprano|muy tarde|es muy tarde)/i.test(aggregatedText.trim());
                     console.log(`[GUARD 1 CHECK] isCitaStep=${_isCitaStepForGuard} citaPending=${_citaPending} isNeg=${_isUserNegativeToHour} hasExitTag=${hasExitTag}`);
                     if (_isCitaStepForGuard && _citaPending && _isUserNegativeToHour) {
@@ -2749,7 +2750,8 @@ ${safeDnaLines}
                 }
 
                 // 🛡️ [CITA STEP SAFEGUARD & CALENDAR RENDERER]
-                const isCitaStep = (currentStep?.name || '').toLowerCase().includes('cita');
+                const _cStepNameForCheck = (currentStep?.name || '').toLowerCase();
+                const isCitaStep = _cStepNameForCheck.includes('cita') && !_cStepNameForCheck.includes('citado');
 
                 // 🛑 CITA HOUR REJECTION GUARD — Second layer (no-exit-tag path)
                 // Catches cases where user said "no" to the offered time slot but the LLM
