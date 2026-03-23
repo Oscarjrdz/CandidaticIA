@@ -25,6 +25,13 @@ export const getUltraMsgConfig = async () => {
     };
 };
 
+const getApiBaseUrl = (token) => {
+    // GatewayWapp tokens are usually exactly 32 hex chars.
+    // UltraMsg tokens are usually shorter (16 chars).
+    const isGateway = token && String(token).length >= 30;
+    return isGateway ? 'https://gatewaywapp-production.up.railway.app' : 'https://api.ultramsg.com';
+};
+
 export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     try {
         let endpoint = type;
@@ -126,7 +133,8 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 payload.body = body;
         }
 
-        const url = `https://api.ultramsg.com/${instanceId}/messages/${endpoint}`;
+        const baseUrl = getApiBaseUrl(token);
+        const url = `${baseUrl}/${instanceId}/messages/${endpoint}`;
         const redis = getRedisClient();
         const debugKey = `debug:ultramsg:${to}`;
 
@@ -181,7 +189,8 @@ export const getUltraMsgContact = async (instanceId, token, chatId) => {
         if (!formattedChatId.includes('@')) {
             formattedChatId = `${formattedChatId.replace(/\D/g, '')}@c.us`;
         }
-        const url = `https://api.ultramsg.com/${instanceId}/contacts/image`;
+        const baseUrl = getApiBaseUrl(token);
+        const url = `${baseUrl}/${instanceId}/contacts/image`;
         const response = await axios.get(url, {
             params: { token, chatId: formattedChatId },
             timeout: 10000
@@ -194,7 +203,8 @@ export const getUltraMsgContact = async (instanceId, token, chatId) => {
 export const sendUltraMsgReaction = async (instanceId, token, msgId, emoji) => {
     try {
         if (!msgId) return null;
-        const url = `https://api.ultramsg.com/${instanceId}/messages/reaction`;
+        const baseUrl = getApiBaseUrl(token);
+        const url = `${baseUrl}/${instanceId}/messages/reaction`;
         const params = new URLSearchParams();
         params.append('token', token);
         params.append('msgId', msgId);
@@ -220,7 +230,8 @@ export const resolveUltraMsgJid = async (instanceId, token, phone) => {
         }
         for (const jid of formats) {
             try {
-                const url = `https://api.ultramsg.com/${instanceId}/contacts/contact`;
+                const baseUrl = getApiBaseUrl(token);
+                const url = `${baseUrl}/${instanceId}/contacts/contact`;
                 const response = await axios.get(url, { params: { token, chatId: jid }, timeout: 5000 });
                 if (response.data && (response.data.name || response.data.id)) return jid;
             } catch (e) { }
@@ -233,7 +244,8 @@ export const blockUltraMsgContact = async (instanceId, token, chatId) => {
     try {
         const resolvedChatId = await resolveUltraMsgJid(instanceId, token, chatId);
         const finalChatId = resolvedChatId || chatId;
-        const url = `https://api.ultramsg.com/${instanceId}/contacts/block`;
+        const baseUrl = getApiBaseUrl(token);
+        const url = `${baseUrl}/${instanceId}/contacts/block`;
         const res = await axios.post(url, { token, chatId: finalChatId }, { timeout: 10000 });
         return { success: res.status === 200, data: res.data };
     } catch (e) { return { success: false, error: e.message }; }
@@ -243,7 +255,8 @@ export const unblockUltraMsgContact = async (instanceId, token, chatId) => {
     try {
         const resolvedChatId = await resolveUltraMsgJid(instanceId, token, chatId);
         const finalChatId = resolvedChatId || chatId;
-        const url = `https://api.ultramsg.com/${instanceId}/contacts/unblock`;
+        const baseUrl = getApiBaseUrl(token);
+        const url = `${baseUrl}/${instanceId}/contacts/unblock`;
         const res = await axios.post(url, { token, chatId: finalChatId }, { timeout: 10000 });
         return { success: res.status === 200, data: res.data };
     } catch (e) { return { success: false, error: e.message }; }
