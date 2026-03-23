@@ -2002,8 +2002,8 @@ ${safeDnaLines}
                         || candidateUpdates.projectMetadata?.citaHora;
 
                     if (!skipRecruiterInference && _citaFechaStored && _citaHoraStoredPaso4) {
-                        // Broad affirmation — covers formal, informal, and colloquial Spanish
-                        const _isBroadAffirmation = /^[¡!]*\s*(s[ií]|ya|bueno|genial|entendido|enterado|chido|chida|e[cq]hale?|claro|dale|por\s*favor|porfa|por\s*fa|[aá]ndale|andale|v[aá]|adelante|ok\s*dale|sale|sale\s*y\s*vale|quiero|perfecto|de\s*acuerdo|est[aá]\s*bien|me\s*parece\s*bien|me\s*parece\s*perfecto|todo\s*bien|con\s+gusto|obvio|correcto|excelente|listo|confirmado|[aá]ndale\s+pues|s[ií]\s+claro|s[ií]\s+gracias|gracias|s[ií]\s+se[ñn]orita|claro\s+se[ñn]orita|s[ií]\s+se[ñn]or|claro\s+que\s+s[ií]|de\s+una|ok|va|va[aá]monos|👍|✅)\s*[!.¡]*$/i
+                        // Broad affirmation — covers formal, informal, colloquial Spanish, and FAQ answers to transport routes
+                        const _isBroadAffirmation = /^[¡!]*\s*(s[ií]|ya|bueno|genial|entendido|enterado|chido|chida|e[cq]hale?|claro|dale|por\s*favor|porfa|por\s*fa|[aá]ndale|andale|v[aá]|adelante|ok\s*dale|sale|sale\s*y\s*vale|quiero|perfecto|de\s*acuerdo|est[aá]\s*bien|me\s*parece\s*bien|me\s*parece\s*perfecto|todo\s*bien|con\s+gusto|obvio|correcto|excelente|listo|confirmado|[aá]ndale\s+pues|s[ií]\s+claro|s[ií]\s+gracias|gracias|s[ií]\s+se[ñn]orita|claro\s+se[ñn]orita|s[ií]\s+se[ñn]or|claro\s+que\s+s[ií]|de\s+una|ok|va|va[aá]monos|👍|✅|(?:la\s+)?(?:opci[oó]n|ruta)\s*\d+|me\s+queda\b.*)\s*[!.¡]*$/i
                             .test(aggregatedText.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
 
                         if (_isBroadAffirmation) {
