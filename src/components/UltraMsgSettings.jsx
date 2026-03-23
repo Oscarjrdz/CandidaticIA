@@ -37,7 +37,7 @@ const UltraMsgSettings = ({ showToast }) => {
             });
 
             if (res.ok) {
-                showToast('Configuración de UltraMsg guardada', 'success');
+                showToast('Configuración guardada exitosamente', 'success');
             } else {
                 showToast('Error al guardar configuración', 'error');
             }
@@ -57,14 +57,14 @@ const UltraMsgSettings = ({ showToast }) => {
     };
 
     return (
-        <Card title="Conexión WhatsApp (UltraMsg)" icon={Smartphone}>
+        <Card title="Conexión WhatsApp API" icon={Smartphone}>
             <div className="space-y-4">
                 <Input
                     label="Instance ID"
                     placeholder="instance12345"
                     value={instanceId}
                     onChange={(e) => setInstanceId(e.target.value)}
-                    helperText="Tu ID de instancia de UltraMsg"
+                    helperText="Tu ID de instancia generada en el Gateway"
                 />
                 <Input
                     label="Token"
@@ -72,13 +72,13 @@ const UltraMsgSettings = ({ showToast }) => {
                     placeholder="token123..."
                     value={token}
                     onChange={(e) => setToken(e.target.value)}
-                    helperText="Tu token de seguridad de UltraMsg"
+                    helperText="Tu UUID o Token de seguridad de WhatsApp"
                 />
 
                 <div className="pt-2">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                            Webhook URL para UltraMsg:
+                            Webhook URL (Cópialo hacia tu Gateway):
                         </span>
                         <button
                             onClick={handleCopy}
