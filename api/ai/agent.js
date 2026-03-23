@@ -3236,8 +3236,12 @@ ${safeDnaLines}
                                             } else if (imgUrl.includes('candidatic.ia') && !imgUrl.includes('vercel.app')) {
                                                 imgUrl = imgUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
                                             }
-                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, imgUrl, 'image', { priority: 1 });
-                                            saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${imgUrl}]`, timestamp: new Date().toISOString() }).catch(() => { });
+                                            const options = { priority: 1 };
+                                            if (item.data.caption && item.data.caption.trim()) {
+                                                options.caption = item.data.caption.trim();
+                                            }
+                                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, imgUrl, 'image', options);
+                                            saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${imgUrl}]${options.caption ? `\nCaption: ${options.caption}` : ''}`, timestamp: new Date().toISOString() }).catch(() => { });
                                         }
                                         else if (item.type === 'location' && item.data?.lat && item.data?.lng) {
                                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {

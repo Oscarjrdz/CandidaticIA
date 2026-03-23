@@ -240,37 +240,51 @@ const SortableItem = ({ item, isDragging, onUpdate, onToggle }) => {
                                         {!isUploading && <p className="text-[10px] text-slate-400 mt-1">JPG, PNG, WebP (Máx. 5MB)</p>}
                                     </button>
                                 ) : (
-                                    <div className="relative group rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 overflow-hidden">
-                                        <img
-                                            src={resolveImageSrc(item.data.url)}
-                                            alt="Preview"
-                                            className="w-full h-40 object-contain p-2"
-                                            onError={(e) => {
-                                                e.target.style.display = 'none';
-                                                if (!e.target.nextElementSibling?.classList.contains('error-fallback')) {
-                                                    const fallback = document.createElement('div');
-                                                    fallback.className = 'error-fallback w-full h-40 flex items-center justify-center';
-                                                    fallback.innerHTML = '<span class="text-xs text-red-400 font-bold">Error al cargar la imagen</span>';
-                                                    e.target.parentNode.insertBefore(fallback, e.target.nextSibling);
-                                                }
-                                            }}
-                                        />
-                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
-                                            <button
-                                                onClick={() => fileInputRef.current?.click()}
-                                                disabled={isUploading}
-                                                className="px-4 py-2 bg-white text-slate-800 text-xs font-bold rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-2"
-                                            >
-                                                {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-                                                {isUploading ? 'Subiendo...' : 'Reemplazar'}
-                                            </button>
-                                            <button
-                                                onClick={() => onUpdate(item.id, { url: '' })}
-                                                className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-                                                title="Eliminar imagen"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                    <div className="space-y-3">
+                                        <div className="relative group rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                            <img
+                                                src={resolveImageSrc(item.data.url)}
+                                                alt="Preview"
+                                                className="w-full h-40 object-contain p-2"
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none';
+                                                    if (!e.target.nextElementSibling?.classList.contains('error-fallback')) {
+                                                        const fallback = document.createElement('div');
+                                                        fallback.className = 'error-fallback w-full h-40 flex items-center justify-center';
+                                                        fallback.innerHTML = '<span class="text-xs text-red-400 font-bold">Error al cargar la imagen</span>';
+                                                        e.target.parentNode.insertBefore(fallback, e.target.nextSibling);
+                                                    }
+                                                }}
+                                            />
+                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
+                                                <button
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    disabled={isUploading}
+                                                    className="px-4 py-2 bg-white text-slate-800 text-xs font-bold rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-2"
+                                                >
+                                                    {isUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                                                    {isUploading ? 'Subiendo...' : 'Reemplazar'}
+                                                </button>
+                                                <button
+                                                    onClick={() => onUpdate(item.id, { url: '' })}
+                                                    className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                                                    title="Eliminar imagen"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                                <MessageSquare className="w-3 h-3" /> Pie de imagen (Opcional)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={item.data.caption || ''}
+                                                onChange={(e) => onUpdate(item.id, { caption: e.target.value })}
+                                                className="w-full bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-2.5 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                                placeholder="Ej: Te esperamos en esta ubicación..."
+                                            />
                                         </div>
                                     </div>
                                 )}
