@@ -7,6 +7,7 @@ import {
     markMessageAsDone,
     getCandidateById
 } from '../utils/storage.js';
+import { sendUltraMsgPresence, getUltraMsgConfig } from '../whatsapp/utils.js';
 
 export const maxDuration = 60; // Extend Vercel timeout for LLM bursts
 
@@ -23,7 +24,7 @@ export const maxDuration = 60; // Extend Vercel timeout for LLM bursts
  * This eliminates the wasteful 15s polling that would burn serverless compute at scale.
  */
 
-async function drainWaitlist(candidateId) {
+async function drainWaitlist(candidateId, fromPhone) {
     let loopSafety = 0;
     while (loopSafety < 10) {
         const pendingMsgs = await getWaitlist(candidateId);
@@ -53,6 +54,14 @@ async function drainWaitlist(candidateId) {
                     console.error(`[Serverless Engine] 🔁 Retry attempt ${attempts} for ${candidateId}...`);
                     await new Promise(r => setTimeout(r, 2000));
                 }
+                
+                // Show "escribiendo..." if fromPhone is available
+                if (fromPhone) {
+                    getUltraMsgConfig().then(config => {
+                        if (config) sendUltraMsgPresence(config.instanceId, config.token, fromPhone, 'composing');
+                    }).catch(() => {});
+                }
+
                 await logTelemetry('processing_start', { candidateId, count: pendingMsgs.length, attempt: attempts });
                 await processMessage(candidateId, aggregatedText, msgIds[0] || null);
                 await logTelemetry('ai_complete', { candidateId });
@@ -111,7 +120,7 @@ export async function runTurboEngine(candidateId, from) {
                     console.error(`[Serverless Engine] 🔓 Lock freed after ${waited}ms. Draining waitlist for ${candidateId}...`);
                     try {
                         await new Promise(r => setTimeout(r, 50)); // brief debounce
-                        await drainWaitlist(candidateId);
+                        await drainWaitlist(candidateId, from);
                     } finally {
                         await unlockCandidate(candidateId);
                         console.error(`[Serverless Engine] ✅ Late-arrival drain complete for ${candidateId}.`);
@@ -133,7 +142,7 @@ export async function runTurboEngine(candidateId, from) {
             await new Promise(r => setTimeout(r, 50));
 
             // 🚀 3. DRAIN WAITLIST (loops until empty)
-            await drainWaitlist(candidateId);
+            await drainWaitlist(candidateId, from);
         } finally {
             // 🔓 4. UNLOCK
             await unlockCandidate(candidateId);
@@ -149,7 +158,7 @@ export async function runTurboEngine(candidateId, from) {
                     if (!reLocked) {
                         // We got the lock again. Drain the orphans.
                         try {
-                            await drainWaitlist(candidateId);
+                            await drainWaitlist(candidateId, from);
                         } finally {
                             await unlockCandidate(candidateId);
                             console.error(`[Serverless Engine] 🔓 POST-UNLOCK SWEEP complete. ${candidateId} unlocked.`);
