@@ -50,26 +50,7 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         switch (endpoint) {
             case 'image':
                 let imgUrl = body;
-                if (isHttp && imgUrl.includes('/api/image?id=')) {
-                    const mediaIdMatch = imgUrl.match(/id=([^&]+)/);
-                    if (mediaIdMatch) {
-                        try {
-                            const redisClient = getRedisClient();
-                            if (redisClient) {
-                                const rawId = mediaIdMatch[1].split('.')[0];
-                                const base64Data = await redisClient.get(`image:${rawId}`);
-                                if (base64Data) {
-                                    const metaRaw = await redisClient.get(`meta:image:${rawId}`);
-                                    const meta = metaRaw ? JSON.parse(metaRaw) : null;
-                                    const mimeType = meta && meta.mime ? meta.mime : 'image/jpeg';
-                                    imgUrl = base64Data.startsWith('data:') ? base64Data : `data:${mimeType};base64,${base64Data.replace(/[\n\r]/g, '')}`;
-                                }
-                            }
-                        } catch (e) {
-                            console.error('UltraMsg Image Base64 extraction failed:', e);
-                        }
-                    }
-                } else if (isHttp && !imgUrl.startsWith('data:')) {
+                if (isHttp && !imgUrl.startsWith('data:')) {
                     imgUrl = imgUrl.includes('?') ? `${imgUrl}&ext=.jpg` : `${imgUrl}?ext=.jpg`;
                 }
                 payload.image = imgUrl;
@@ -81,35 +62,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 break;
             case 'document':
                 let docUrl = body;
-                if (isHttp && docUrl.includes('/api/image?id=')) {
-                    const mediaIdMatch = docUrl.match(/id=([^&]+)/);
-                    if (mediaIdMatch) {
-                        try {
-                            const redisClient = getRedisClient();
-                            if (redisClient) {
-                                const rawId = mediaIdMatch[1].split('.')[0];
-                                const base64Data = await redisClient.get(`image:${rawId}`);
-                                if (base64Data) {
-                                    const metaRaw = await redisClient.get(`meta:image:${rawId}`);
-                                    const meta = metaRaw ? JSON.parse(metaRaw) : null;
-                                    const mimeType = meta && meta.mime ? meta.mime : 'application/pdf';
-                                    
-                                    // Send to UltraMsg as inline Base64 to bypass URL validation entirely!
-                                    // For base64, UltraMsg prefers just the raw base64 or a strict URL. 
-                                    // Wait, UltraMsg allows base64 for document string!
-                                    docUrl = base64Data.startsWith('data:') ? base64Data : `data:${mimeType};base64,${base64Data.replace(/[\n\r]/g, '')}`;
-                                    if (meta && meta.filename) extraParams.filename = meta.filename;
-                                }
-                            }
-                        } catch (e) {
-                            console.error('UltraMsg Base64 extraction failed:', e);
-                        }
-                    }
-                } else if (isHttp && !docUrl.includes('.pdf') && !docUrl.startsWith('data:')) {
+                if (isHttp && !docUrl.includes('.pdf') && !docUrl.startsWith('data:')) {
                     docUrl = docUrl.includes('?') ? `${docUrl}&ext=.pdf` : `${docUrl}?ext=.pdf`;
                 }
                 payload.document = docUrl;
-                payload.filename = extraParams.filename || 'document.pdf';
+                payload.filename = extraParams.filename || (docUrl.includes('rutas') ? 'Rutas.pdf' : 'documento.pdf');
                 break;
             case 'sticker':
                 payload.sticker = body;
