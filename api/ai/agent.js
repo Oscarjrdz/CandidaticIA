@@ -1962,11 +1962,11 @@ ${safeDnaLines}
                     // ── Helper: day-of-week from day name ────────────────────────────
                     const _parseDayName = (txt) => {
                         const _dayNames = {
-                            'lun': 1, 'lunes': 1,
-                            'mar': 2, 'martes': 2,
-                            'mie': 3, 'mié': 3, 'miercoles': 3, 'miércoles': 3,
-                            'jue': 4, 'jueves': 4,
-                            'vie': 5, 'viernes': 5,
+                            'lun': 1, 'lunes': 1, 'lunees': 1,
+                            'mar': 2, 'martes': 2, 'martees': 2,
+                            'mie': 3, 'mié': 3, 'miercoles': 3, 'miércoles': 3, 'mieercoles': 3,
+                            'jue': 4, 'jueves': 4, 'jueeves': 4, 'juvees': 4,
+                            'vie': 5, 'viernes': 5, 'viiernes': 5,
                             'sab': 6, 'sáb': 6, 'sabado': 6, 'sábado': 6,
                             'dom': 0, 'domingo': 0,
                         };
@@ -3084,6 +3084,24 @@ ${safeDnaLines}
                             }
                         }
                     } else {
+                        // 🩹 FAQ CONFIRMATION FIX: If the candidate already chose Date and Hour (isInvalidFecha = false),
+                        // but asked an FAQ (like routes or salary), GPT might answer the FAQ but forget to ask for the final confirmation.
+                        // Forcefully append the confirmation question if it's missing!
+                        if (!hasMoveTag && !hasExitTag && !skipRecruiterInference && responseTextVal && responseTextVal.trim().length > 0) {
+                            const CTA_CONFIRM_PATTERN = /¿procedo a|¿te gustaría agendar|¿avanzamos con|¿agendamos tu|¿estamos de acuerdo/i;
+                            if (!CTA_CONFIRM_PATTERN.test(responseTextVal)) {
+                                const _ctasConfirm = [
+                                    "¿Procedo a agendar tu entrevista? Es el siguiente paso 🏆",
+                                    "¿Te animas a que agendemos tu entrevista ya? 😊",
+                                    "¿Confirmamos tu asistencia a la entrevista? ✨",
+                                    "¿Continuamos y dejo agendada tu cita? 🚀"
+                                ];
+                                const _ctaConfirm = _ctasConfirm[Math.floor(Math.random() * _ctasConfirm.length)];
+                                // Ensure standard MSG_SPLIT logic is used
+                                const _needsS = !responseTextVal.endsWith('[MSG_SPLIT]');
+                                responseTextVal = `${responseTextVal.trim()}${_needsS ? '[MSG_SPLIT]' : ''}${_ctaConfirm}`.trim();
+                            }
+                        }
                     }
                 }
 
