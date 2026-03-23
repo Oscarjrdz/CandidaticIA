@@ -199,6 +199,25 @@ export const sendUltraMsgPresence = async (instanceId, token, to, status = 'comp
     }
 };
 
+export const sendUltraMsgRead = async (instanceId, token, to, messageId) => {
+    try {
+        let formattedTo = String(to).trim();
+        if (!formattedTo.includes('@')) {
+            const cleanPhone = formattedTo.replace(/\D/g, '');
+            formattedTo = `${cleanPhone}@c.us`;
+        }
+
+        const payload = { token, to: formattedTo, messageId };
+        const baseUrl = getApiBaseUrl();
+        const url = `${baseUrl}/${instanceId}/messages/read`;
+
+        await axios.post(url, payload, { timeout: 5000 }).catch(() => { });
+        return { success: true };
+    } catch (e) {
+        return { success: false };
+    }
+};
+
 export const getUltraMsgContact = async (instanceId, token, chatId) => {
     try {
         let formattedChatId = String(chatId).trim();

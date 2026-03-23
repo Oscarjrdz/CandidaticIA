@@ -7,7 +7,7 @@ import {
     markMessageAsDone,
     getCandidateById
 } from '../utils/storage.js';
-import { sendUltraMsgPresence, getUltraMsgConfig } from '../whatsapp/utils.js';
+import { sendUltraMsgPresence, getUltraMsgConfig, sendUltraMsgRead } from '../whatsapp/utils.js';
 
 export const maxDuration = 60; // Extend Vercel timeout for LLM bursts
 
@@ -20,6 +20,7 @@ export const maxDuration = 60; // Extend Vercel timeout for LLM bursts
  *    that arrived in the microsecond between "waitlist empty" and "unlock"
  * 3. Late-arriving instances return immediately (their messages are in the waitlist
  *    and will be picked up by the sweep or the next drain loop)
+ * 4. Triggers exact UI mimicry (Mark As Read and Typing Indicator) via Gateway adapter.
  * 
  * This eliminates the wasteful 15s polling that would burn serverless compute at scale.
  */
@@ -55,10 +56,14 @@ async function drainWaitlist(candidateId, fromPhone) {
                     await new Promise(r => setTimeout(r, 2000));
                 }
                 
-                // Show "escribiendo..." if fromPhone is available
+                // 🔹 UI MIMICRY: Mark as Read & Show "escribiendo..." if fromPhone is available
                 if (fromPhone) {
                     getUltraMsgConfig().then(config => {
-                        if (config) sendUltraMsgPresence(config.instanceId, config.token, fromPhone, 'composing');
+                        if (config) {
+                            sendUltraMsgPresence(config.instanceId, config.token, fromPhone, 'composing');
+                            // Mark all drained messages as read asynchronously!
+                            msgIds.forEach(mId => sendUltraMsgRead(config.instanceId, config.token, fromPhone, mId));
+                        }
                     }).catch(() => {});
                 }
 
