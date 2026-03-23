@@ -330,7 +330,7 @@ export default async function handler(req, res) {
                         const config = await configPromise;
                         if (!config) return;
                         const info = await getUltraMsgContact(config.instanceId, config.token, from);
-                        const url = info?.profilePictureUrl || info?.image || info?.success;
+                        const url = info?.profile_picture || info?.profilePictureUrl || info?.image || info?.success;
                         if (url?.startsWith('http')) {
                             await updateCandidate(candidateId, { profilePic: url });
                         }
