@@ -37,15 +37,15 @@ export default async function handler(req, res) {
         const key = `image:${id}`;
         const metaKey = `meta:image:${id}`;
 
-        // Store in Redis
+        // Store in Redis without expiration (Persistent Media)
         const pipeline = client.pipeline();
-        pipeline.set(key, base64Data, 'EX', 30 * 24 * 60 * 60);
+        pipeline.set(key, base64Data);
         pipeline.set(metaKey, JSON.stringify({
             mime,
             filename: filename || (mime === 'application/pdf' ? 'Informacion.pdf' : 'Imagen.jpg'),
             size: base64Data.length,
             createdAt: new Date().toISOString()
-        }), 'EX', 30 * 24 * 60 * 60);
+        }));
 
         // Register in Library Index (O(1) scard)
         pipeline.zadd('candidatic:media_library', Date.now(), id);

@@ -25,7 +25,7 @@ export default async function handler(req, res) {
             redirectEnabled: req.body.redirectEnabled || false,
             redirectUrl: req.body.redirectUrl || ''
         };
-        await client.set(key, JSON.stringify(metadata), 'EX', 90 * 24 * 60 * 60);
+        await client.set(key, JSON.stringify(metadata));
 
         // Add to User's History
         if (userId) {
