@@ -99,9 +99,14 @@ export default async function handler(req, res) {
                 continue;
             }
 
+            // ── Load candidate metadata ────────────────────────────────────────
+            const metadataKey = `projects:metadata:${projectId}`;
+            const rawMetadata = await redis.hget(metadataKey, candidateId);
+            const metadata = rawMetadata ? JSON.parse(rawMetadata) : {};
+            const citaHora = metadata.citaHora || '';
+
             // ── Build message from template ───────────────────────────────────
             const nombre   = candidate.nombreReal || candidate.nombre || 'Candidato';
-            const citaHora = candidate.projectMetadata?.citaHora || '';
             const fechaHuman = humanizeFecha(citaFecha);
 
             const message = reminder.message

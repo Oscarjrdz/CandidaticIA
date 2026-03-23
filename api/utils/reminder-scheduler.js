@@ -20,12 +20,12 @@ function parseAppointmentMs(citaFecha, citaHora) {
 
     // Strip emojis / non-time chars
     const clean = citaHora.replace(/[^\d:APM ]/gi, '').trim();
-    const match = clean.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    const match = clean.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
     if (!match) return null;
 
     let h = parseInt(match[1], 10);
     const m = parseInt(match[2], 10);
-    const period = match[3].toUpperCase();
+    const period = match[3] ? match[3].toUpperCase() : null;
 
     if (period === 'PM' && h < 12) h += 12;
     if (period === 'AM' && h === 12) h = 0;

@@ -98,6 +98,33 @@ export default async function handler(req, res) {
                 const cid = bodyCandId || candidateId;
                 if (!pid || !cid || !stepId) return res.status(400).json({ success: false, error: 'PID, CID and StepID required' });
                 await moveCandidateStep(pid, cid, stepId);
+                
+                // --- TRIGGER SCHEDULED REMINDERS IF APPLICABLE ---
+                try {
+                    const project = await getProjectById(pid);
+                    const step = project?.steps?.find(s => s.id === stepId);
+                    if (step && step.scheduledReminders && step.scheduledReminders.length > 0) {
+                        const redis = getRedisClient();
+                        const rawMeta = await redis.hget(`projects:metadata:${pid}`, cid);
+                        const meta = rawMeta ? JSON.parse(rawMeta) : {};
+                        
+                        // Check if they already negotiated a Date and Time
+                        if (meta.citaFecha && meta.citaHora) {
+                            const { scheduleRemindersForCandidate } = await import('./utils/reminder-scheduler.js');
+                            await scheduleRemindersForCandidate({
+                                candidateId: cid,
+                                projectId: pid,
+                                stepId: stepId,
+                                citaFecha: meta.citaFecha,
+                                citaHora: meta.citaHora
+                            });
+                            console.log(`[Projects API] Scheduled reminders after manual drag-and-drop for candidate ${cid}`);
+                        }
+                    }
+                } catch (err) {
+                    console.error('[Projects API] Failed to schedule reminders on move:', err);
+                }
+
                 return res.status(200).json({ success: true });
             }
 
