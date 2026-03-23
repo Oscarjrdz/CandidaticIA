@@ -1992,7 +1992,7 @@ ${safeDnaLines}
 
                     // ── State: has the candidate already selected a date? ────────────
                     // (Used by BRANCH B to avoid re-offering the day list when GPT already has citaFecha)
-                    const _citaFechaStored = candidateData.projectMetadata?.citaFecha
+                    let _citaFechaStored = candidateData.projectMetadata?.citaFecha
                         || candidateUpdates.projectMetadata?.citaFecha;
 
                     // ── BRANCH A (PASO 4): Both date AND hour chosen → candidate is confirming ─
@@ -2072,6 +2072,24 @@ ${safeDnaLines}
                                         const _matchIdx = _dateHours.findIndex(h => Math.abs(tf(h) - _inputMins) <= 30);
                                         if (_matchIdx !== -1) { _resolvedHourIdx = _matchIdx; break; }
                                     }
+                                }
+                            }
+
+                            // 🔄 DAY REVERT FALLBACK: If the candidate answered with a day name instead of an hour
+                            // (e.g., "y para el lunes"), wipe citaFecha so BRANCH B can process it!
+                            if (_resolvedHourIdx === null) {
+                                let _foundDayInHourStep = false;
+                                for (const _line of _rawInputLines) {
+                                    if (_parseDayName(_line) !== null) {
+                                        _foundDayInHourStep = true;
+                                        break;
+                                    }
+                                }
+                                if (_foundDayInHourStep) {
+                                    if (!candidateUpdates.projectMetadata) candidateUpdates.projectMetadata = { ...(candidateData.projectMetadata || {}) };
+                                    candidateUpdates.projectMetadata.citaFecha = null;
+                                    _citaFechaStored = null;
+                                    candidateUpdates.projectMetadata.citaHora = null;
                                 }
                             }
 
@@ -3059,8 +3077,9 @@ ${safeDnaLines}
 
                             // Ensure we don't duplicate the CTA if the AI managed to output it via FAQ engine merging
                             if (!responseTextVal.includes(callToAction) && !responseTextVal.includes("opciones de horario")) {
-                                // 🩹 FAQ RADAR FIX: If responseTextVal has an FAQ answer, add a double newline barrier
-                                const separator = responseTextVal.length > 0 ? '\n\n' : '';
+                                // 🩹 FAQ RADAR FIX: If responseTextVal has an FAQ answer, split it into a separate bubble!
+                                const _needsSplit = responseTextVal.trim().length > 0 && !responseTextVal.endsWith('[MSG_SPLIT]') && !callToAction.startsWith('[MSG_SPLIT]');
+                                const separator = _needsSplit ? '[MSG_SPLIT]' : (responseTextVal.length > 0 && !responseTextVal.endsWith('\n\n') ? '\n\n' : '');
                                 responseTextVal = `${responseTextVal.trim()}${separator}${callToAction}`.trim();
                             }
                         }
