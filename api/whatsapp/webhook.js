@@ -63,10 +63,23 @@ export default async function handler(req, res) {
 
         // 2. Handle Incoming Messages
         if (eventType === 'message_received' || eventType === 'message.incoming') {
-            const from = messageData.from || messageData.remoteJid;
+            const from = messageData.from || messageData.remoteJid || '';
             const body = messageData.body || '';
             const msgId = messageData.id;
+            
+            // 🛡️ BLOCK GROUPS AND STATUS BROADCASTS
+            if (from.includes('@g.us') || from.includes('status@broadcast') || from.includes('newsletter')) {
+                console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando mensaje de sistema/grupo: ${from}`);
+                return res.status(200).send('broadcast_ignored');
+            }
+
             const phone = from.replace(/\D/g, '');
+            
+            // 🛡️ BLOCK ALIEN NUMBERS (Must be a valid 10-15 digit phone)
+            if (phone.length < 10 || phone.length > 16) {
+                console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando ID alienígena o corrompido: ${phone} (Original: ${from})`);
+                return res.status(200).send('alien_number_ignored');
+            }
 
             if (await isMessageProcessed(msgId)) {
                 await logTelemetry('ingress_duplicate', { msgId, from });
