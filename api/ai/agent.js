@@ -3724,7 +3724,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         usage: { total_tokens: 0 }
                     };
                 } else {
-                    gptResult = await getOpenAIResponse(recentHistory, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" }, null, 600);
+                    gptResult = await getOpenAIResponse(historyForGpt, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" }, null, 600);
                 }
 
                 if (gptResult?.content) {
