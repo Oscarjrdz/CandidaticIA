@@ -140,16 +140,16 @@ const InstancesSection = ({ showToast }) => {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
                         <Input
-                            label="UltraMsg Instance ID"
-                            placeholder="instance12345"
+                            label="ID de Instancia (Gateway)"
+                            placeholder="Ej: instance12345"
                             value={formData.instanceId}
                             onChange={(e) => setFormData({...formData, instanceId: e.target.value})}
-                            helperText="Tu ID de instancia generada en el panel de UltraMsg."
+                            helperText="Tu ID de instancia generada en el panel de GatewayWapp."
                         />
                         <Input
-                            label="UltraMsg Token"
+                            label="Token de API"
                             type="password"
-                            placeholder="token123..."
+                            placeholder="Ej: token123..."
                             value={formData.token}
                             onChange={(e) => setFormData({...formData, token: e.target.value})}
                             helperText="Tu Token de seguridad para esta conexión."
@@ -239,7 +239,7 @@ const InstancesSection = ({ showToast }) => {
                     {/* Webhook Card */}
                     <Card title="Webhook de Retorno (Universal)" icon={RefreshCw}>
                         <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4">
-                            Usa la <strong>misma URL</strong> en todas las configuraciones de UltraMsg para que los mensajes de todas tus instancias sean ruteados correctamente por el multi-motor de Candidatic.
+                            Usa la <strong>misma URL</strong> en todas las configuraciones de tu Gateway para que los mensajes de todas tus instancias sean ruteados correctamente por el multi-motor de Candidatic.
                         </p>
                         <div className="flex items-center gap-3">
                             <code className="flex-1 block p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 text-sm font-mono text-slate-700 dark:text-slate-300">
