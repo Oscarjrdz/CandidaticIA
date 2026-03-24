@@ -152,26 +152,26 @@ const InstancesSection = ({ showToast }) => {
 
     const renderStatusBadge = (index, inst) => {
         const status = statuses[index];
-        if (status === 'open') {
+        if (status === 'authenticated' || status === 'open') {
             return (
                 <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50">
                     <Activity className="w-3 h-3" /> Conectada
                 </span>
             );
         }
-        if (status === 'close' || status === 'connecting' || status === 'error') {
+        if (status === 'qr' || status === 'disconnected' || status === 'error' || status === 'close') {
             return (
                 <div className="flex items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 border border-amber-200 dark:border-amber-800/50">
                         <AlertCircle className="w-3 h-3" /> Desconectada
                     </span>
-                    <Button size="sm" onClick={() => showQR(inst)} variant="primary" icon={QrCode} className="text-[10px] py-1 h-7">Conectar QR</Button>
+                    <Button size="sm" onClick={() => showQR(inst)} variant="primary" icon={QrCode} className="text-[10px] py-1 h-7">Vincular QR</Button>
                 </div>
             );
         }
         return (
             <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 border border-slate-200 dark:border-slate-700">
-                <RefreshCw className="w-3 h-3 animate-spin" /> Verificando
+                <RefreshCw className="w-3 h-3 animate-spin" /> {status === 'loading' ? 'Iniciando...' : 'Verificando'}
             </span>
         );
     };
