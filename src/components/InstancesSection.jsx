@@ -1,26 +1,52 @@
 import React, { useState, useEffect } from 'react';
-import { Smartphone, Check, RefreshCw, Save, Server, Shield, Hash, Tag, Activity, Copy } from 'lucide-react';
+import { Smartphone, Check, RefreshCw, Save, Server, Shield, Hash, Tag, Activity, Copy, AlertCircle, QrCode, X } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
 
 const InstancesSection = ({ showToast }) => {
     const [instances, setInstances] = useState([]);
+    const [statuses, setStatuses] = useState({});
     const [loading, setLoading] = useState(false);
     const [editingIndex, setEditingIndex] = useState(null); // null means no edit, -1 means new, else index
     const [formData, setFormData] = useState({ name: '', identifier: '', instanceId: '', token: '' });
     const [copied, setCopied] = useState(false);
+    
+    // QR Code Check State
+    const [qrData, setQrData] = useState(null);
+    const [qrLoading, setQrLoading] = useState(false);
 
     useEffect(() => {
         loadInstances();
     }, []);
+
+    const fetchStatuses = async (instList) => {
+        const newStatuses = {};
+        for (let i = 0; i < instList.length; i++) {
+            const inst = instList[i];
+            try {
+                const res = await fetch(`https://gatewaywapp-production.up.railway.app/${inst.instanceId}/status?token=${inst.token}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    newStatuses[i] = data.status; // 'open', 'close', 'connecting'
+                } else {
+                    newStatuses[i] = 'error';
+                }
+            } catch (err) {
+                newStatuses[i] = 'error';
+            }
+        }
+        setStatuses(newStatuses);
+    };
 
     const loadInstances = async () => {
         try {
             const res = await fetch('/api/bot-ia/instances');
             if (res.ok) {
                 const data = await res.json();
-                setInstances(Array.isArray(data) ? data : []);
+                const arrayData = Array.isArray(data) ? data : [];
+                setInstances(arrayData);
+                fetchStatuses(arrayData);
             }
         } catch (error) {
             console.error('Error loading instances:', error);
@@ -52,6 +78,7 @@ const InstancesSection = ({ showToast }) => {
                 showToast('Instancia guardada exitosamente', 'success');
                 setInstances(updatedInstances);
                 setEditingIndex(null);
+                fetchStatuses(updatedInstances);
             } else {
                 showToast('Error al guardar instancia', 'error');
             }
@@ -75,6 +102,7 @@ const InstancesSection = ({ showToast }) => {
             if (res.ok) {
                 showToast('Instancia eliminada exitosamente', 'success');
                 setInstances(updatedInstances);
+                fetchStatuses(updatedInstances);
             }
         } catch (error) {
             showToast('Error de conexión', 'error');
@@ -98,6 +126,54 @@ const InstancesSection = ({ showToast }) => {
         setCopied(true);
         showToast('Webhook URL copiada', 'success');
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const showQR = async (inst) => {
+        setQrData(null);
+        setQrLoading(true);
+        try {
+            const res = await fetch(`https://gatewaywapp-production.up.railway.app/${inst.instanceId}/qr?token=${inst.token}`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.qr) {
+                    setQrData(data.qr);
+                } else {
+                    showToast('QR no disponible o instancia ya conectada', 'error');
+                }
+            } else {
+                showToast('Error al obtener QR, verifica tus credenciales.', 'error');
+            }
+        } catch (e) {
+            showToast('Falla de red', 'error');
+        } finally {
+            setQrLoading(false);
+        }
+    };
+
+    const renderStatusBadge = (index, inst) => {
+        const status = statuses[index];
+        if (status === 'open') {
+            return (
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50">
+                    <Activity className="w-3 h-3" /> Conectada
+                </span>
+            );
+        }
+        if (status === 'close' || status === 'connecting' || status === 'error') {
+            return (
+                <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 border border-amber-200 dark:border-amber-800/50">
+                        <AlertCircle className="w-3 h-3" /> Desconectada
+                    </span>
+                    <Button size="sm" onClick={() => showQR(inst)} variant="primary" icon={QrCode} className="text-[10px] py-1 h-7">Conectar QR</Button>
+                </div>
+            );
+        }
+        return (
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 border border-slate-200 dark:border-slate-700">
+                <RefreshCw className="w-3 h-3 animate-spin" /> Verificando
+            </span>
+        );
     };
 
     return (
@@ -239,9 +315,7 @@ const InstancesSection = ({ showToast }) => {
                                                     <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">
                                                         {inst.name}
                                                     </h3>
-                                                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 border border-emerald-200 dark:border-emerald-800/50">
-                                                        <Activity className="w-3 h-3" /> Conectada
-                                                    </span>
+                                                    {renderStatusBadge(index, inst)}
                                                 </div>
                                                 <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
                                                     <Tag className="w-3.5 h-3.5" /> Origen ID: <strong className="text-blue-600 dark:text-blue-400 font-bold">{inst.identifier}</strong>
@@ -302,6 +376,47 @@ const InstancesSection = ({ showToast }) => {
                             </Button>
                         </div>
                     </Card>
+                </div>
+            )}
+
+            {/* QR Modal Overlay */}
+            {(qrData || qrLoading) && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[32px] p-8 shadow-2xl relative shadow-blue-500/20">
+                        <button 
+                            onClick={() => { setQrData(null); setQrLoading(false); }}
+                            className="absolute top-6 right-6 p-2 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 transition-colors"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        
+                        <div className="text-center mb-8">
+                            <div className="w-16 h-16 mx-auto bg-blue-50 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mb-4 text-blue-600 dark:text-blue-400">
+                                <QrCode className="w-8 h-8" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tight">Vincular WhatsApp</h3>
+                            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-2">
+                                Abre WhatsApp en tu celular y escanea este código para conectar la instancia.
+                            </p>
+                        </div>
+
+                        <div className="bg-slate-50 dark:bg-slate-800/50 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 flex justify-center items-center min-h-[250px]">
+                            {qrLoading && !qrData ? (
+                                <div className="flex flex-col items-center gap-3">
+                                    <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+                                    <span className="text-sm font-bold text-slate-500 tracking-widest uppercase">Generando QR...</span>
+                                </div>
+                            ) : (
+                                <img src={qrData} alt="WhatsApp QR Code" className="w-[200px] h-[200px] rounded-xl object-contain bg-white p-2 shadow-sm" />
+                            )}
+                        </div>
+                        
+                        <div className="mt-6 flex justify-center">
+                             <Button onClick={() => { setQrData(null); setQrLoading(false); loadInstances(); }} variant="secondary" className="w-full">
+                                Ya lo escaneé (Cerrar)
+                            </Button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
