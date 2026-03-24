@@ -1459,6 +1459,12 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
             content: aggregatedText
         };
 
+        // 🐛 DEBUG LOG: Write aggregatedText to Redis
+        try {
+            const redisDbg = getRedisClient();
+            if (redisDbg) await redisDbg.set(`DEBUG_AI_AGGREGATED:${candidateId}`, aggregatedText, 'EX', 3600);
+        } catch(e) {}
+
         const lastBotMessages = validMessages
             .filter(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel)
             .slice(-20) // Extended unique history
@@ -3743,6 +3749,12 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 // Merge Extracted Data
                 if (aiResult?.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
                     const ext = aiResult.extracted_data;
+                    
+                    try {
+                        const redisDbg = getRedisClient();
+                        if (redisDbg) await redisDbg.set(`DEBUG_AI_EXTRACTED:${candidateId}`, JSON.stringify(ext), 'EX', 3600);
+                    } catch(e) {}
+
 
                     if (ext.nombreReal && ext.nombreReal.trim().length > 1) {
                         const previousName = candidateData.nombreReal || '';
