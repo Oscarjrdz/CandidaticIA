@@ -348,40 +348,49 @@ export default async function handler(req, res) {
                         // 🎧 AUDIO TRANSCRIPTION (GATEWAY)
                         if ((messageType === 'audio' || messageType === 'ptt' || messageType === 'voice') && messageData.media) {
                             try {
-                                console.log(`[WEBHOOK] 🎙️ Transcribiendo audio de ${phone}: ${messageData.media}`);
-                                const audioRes = await fetch(messageData.media);
-                                
-                                if (audioRes.ok) {
-                                    const arrayBuffer = await audioRes.arrayBuffer();
-                                    const buffer = Buffer.from(arrayBuffer);
+                                // Fetch AI config to get the user's OpenAI API Key
+                                const aiConfigStr = await redis?.get('ai_config');
+                                const aiConfig = aiConfigStr ? JSON.parse(aiConfigStr) : {};
+                                const openAiKey = aiConfig.openaiApiKey || process.env.OPENAI_API_KEY;
+
+                                if (!openAiKey) {
+                                    console.error('[WEBHOOK] ❌ No se encontró OpenAI API Key para transcribir el audio.');
+                                } else {
+                                    console.log(`[WEBHOOK] 🎙️ Transcribiendo audio de ${phone}: ${messageData.media}`);
+                                    const audioRes = await fetch(messageData.media);
                                     
-                                    const FormData = (await import('form-data')).default;
-                                    const fetchMod = (await import('node-fetch')).default;
-                                    const formData = new FormData();
-                                    formData.append('file', buffer, { filename: 'audio.ogg', contentType: 'audio/ogg' });
-                                    formData.append('model', 'whisper-1');
-                                    formData.append('language', 'es');
-                                    
-                                    const whisperRes = await fetchMod('https://api.openai.com/v1/audio/transcriptions', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-                                            ...formData.getHeaders()
-                                        },
-                                        body: formData
-                                    });
-                                    
-                                    if (whisperRes.ok) {
-                                        const whisperData = await whisperRes.json();
-                                        if (whisperData.text) {
-                                            finalAgentInput = `🎙️ [AUDIO TRANSCRITO]: "${whisperData.text}"`;
-                                            console.log(`[WEBHOOK] 🎙️ Audio transcrito exitosamente: ${whisperData.text}`);
+                                    if (audioRes.ok) {
+                                        const arrayBuffer = await audioRes.arrayBuffer();
+                                        const buffer = Buffer.from(arrayBuffer);
+                                        
+                                        const FormData = (await import('form-data')).default;
+                                        const fetchMod = (await import('node-fetch')).default;
+                                        const formData = new FormData();
+                                        formData.append('file', buffer, { filename: 'audio.ogg', contentType: 'audio/ogg' });
+                                        formData.append('model', 'whisper-1');
+                                        formData.append('language', 'es');
+                                        
+                                        const whisperRes = await fetchMod('https://api.openai.com/v1/audio/transcriptions', {
+                                            method: 'POST',
+                                            headers: {
+                                                'Authorization': `Bearer ${openAiKey}`,
+                                                ...formData.getHeaders()
+                                            },
+                                            body: formData
+                                        });
+                                        
+                                        if (whisperRes.ok) {
+                                            const whisperData = await whisperRes.json();
+                                            if (whisperData.text) {
+                                                finalAgentInput = `🎙️ [AUDIO TRANSCRITO]: "${whisperData.text}"`;
+                                                console.log(`[WEBHOOK] 🎙️ Audio transcrito exitosamente: ${whisperData.text}`);
+                                            }
+                                        } else {
+                                            console.error('[WEBHOOK] ❌ Error de Whisper API:', await whisperRes.text());
                                         }
                                     } else {
-                                        console.error('[WEBHOOK] ❌ Error de Whisper API:', await whisperRes.text());
+                                        console.error('[WEBHOOK] ❌ No se pudo descargar el audio del Gateway:', audioRes.status);
                                     }
-                                } else {
-                                    console.error('[WEBHOOK] ❌ No se pudo descargar el audio del Gateway:', audioRes.status);
                                 }
                             } catch (e) {
                                 console.error('[WEBHOOK] ❌ Falló captura y transcripción de audio:', e);
