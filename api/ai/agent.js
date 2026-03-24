@@ -1341,10 +1341,10 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
             // 🛡️ [FEEDBACK LOOP SHIELD v2]: Skip any text that looks like a transcription or internal tag
             const textVal = (isJson || typeof parsed === 'object') ? (parsed.body || parsed.content || JSON.stringify(parsed)) : String(parsed || '').trim();
 
-            const isTranscriptionPrefix = textVal.includes('[AUDIO TRANSCRITO]') || textVal.includes('🎙️');
             const isInternalJson = isJson && (parsed.extracted_data || parsed.thought_process);
 
-            if (textVal && textVal !== '{}' && !isTranscriptionPrefix && !isInternalJson) {
+            // 🔥 AUDIO FIX: We MUST ALLOW transcriptions through! Previously `!isTranscriptionPrefix` was destroying audio inputs.
+            if (textVal && textVal !== '{}' && !isInternalJson) {
                 userParts.push({ text: textVal });
                 aggregatedText += (aggregatedText ? " | " : "") + textVal;
             }
