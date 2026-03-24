@@ -56,9 +56,13 @@ async function drainWaitlist(candidateId, fromPhone) {
                     await new Promise(r => setTimeout(r, 2000));
                 }
                 
+                // Fetch candidate to know which instanceId to use
+                const candData = await getCandidateById(candidateId);
+                const candInstanceId = candData?.instanceId || null;
+                
                 // 🔹 UI MIMICRY: Mark as Read & Show "escribiendo..." if fromPhone is available
                 if (fromPhone) {
-                    getUltraMsgConfig().then(config => {
+                    getUltraMsgConfig(candInstanceId).then(config => {
                         if (config) {
                             sendUltraMsgPresence(config.instanceId, config.token, fromPhone, 'composing');
                             // Mark all drained messages as read asynchronously!

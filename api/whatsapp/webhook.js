@@ -212,9 +212,11 @@ export default async function handler(req, res) {
                 let candidate = null;
 
                 // Move config fetch early to capture instance identifier
-                const configPromise = getUltraMsgConfig();
+                const webhookInstanceId = data.instanceId;
+                const configPromise = getUltraMsgConfig(webhookInstanceId);
                 const activeConfig = await configPromise;
                 const sourceIdentifier = activeConfig?.identifier || 'whatsapp_v2';
+                const capturedInstanceId = activeConfig?.instanceId || null;
 
                 if (candidateId) {
                     candidate = await getCandidateById(candidateId);
@@ -226,6 +228,7 @@ export default async function handler(req, res) {
                         whatsapp: phone,
                         nombre: messageData.pushname || messageData.pushName || messageData.name || 'Desconocido',
                         origen: sourceIdentifier,
+                        instanceId: capturedInstanceId, 
                         esNuevo: 'SI', // Brújula interna: Fase de presentación
                         primerContacto: new Date().toISOString()
                     });
@@ -295,6 +298,7 @@ export default async function handler(req, res) {
                     ...candidate,
                     ultimoMensaje: new Date().toISOString(),
                     lastUserMessageAt: new Date().toISOString(),
+                    instanceId: capturedInstanceId || candidate?.instanceId, // Lock to the instance they messaged
                     unread: true
                 };
 

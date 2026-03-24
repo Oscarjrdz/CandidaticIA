@@ -43,11 +43,7 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Redis unavailable' });
     }
 
-    const config = await getUltraMsgConfig();
-    if (!config?.instanceId || !config?.token) {
-        console.warn('[SEND-REMINDERS] UltraMsg not configured — skipping');
-        return res.json({ success: true, skipped: true, reason: 'no_ultramsg_config' });
-    }
+    // Removed global config checking as it evaluates per-candidate now.
 
     const now = Date.now();
 
@@ -95,6 +91,14 @@ export default async function handler(req, res) {
             const reminder = step?.scheduledReminders?.find(r => r.id === reminderId);
 
             if (!reminder?.enabled || !reminder.message) {
+                skipped++;
+                continue;
+            }
+
+            // ── Load specific Instance Config ─────────────────────────────────
+            const config = await getUltraMsgConfig(candidate?.instanceId);
+            if (!config?.instanceId || !config?.token) {
+                console.warn(`[SEND-REMINDERS] No UltraMsg config for instance ${candidate?.instanceId} — skipping`);
                 skipped++;
                 continue;
             }

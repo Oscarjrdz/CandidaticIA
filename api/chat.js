@@ -33,7 +33,7 @@ export default async function handler(req, res) {
             if (!candidate) return res.status(404).json({ error: 'Candidato no encontrado' });
 
             const finalMessage = message ? substituteVariables(message, candidate) : '';
-            const ultraConfig = await getUltraMsgConfig();
+            const ultraConfig = await getUltraMsgConfig(candidate?.instanceId);
 
             if (!ultraConfig) return res.status(400).json({ error: 'Faltan credenciales' });
 

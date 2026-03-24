@@ -1,15 +1,31 @@
 import axios from 'axios';
 import { getRedisClient } from '../utils/storage.js';
 
-export const getUltraMsgConfig = async () => {
-    // 1. Try Redis (dynamic config from dashboard) FIRST to override stale env vars
+export const getUltraMsgConfig = async (requestedInstanceId = null) => {
     try {
         const redis = getRedisClient();
         if (redis) {
-            let config = await redis.get('ultramsg_credentials');
-            if (!config) {
-                config = await redis.get('ultramsg_config');
+            // First look at the multi-instance array
+            let instancesRaw = await redis.get('ultramsg_instances');
+            if (instancesRaw) {
+                try {
+                    const instances = JSON.parse(instancesRaw);
+                    if (Array.isArray(instances) && instances.length > 0) {
+                        // If a specific ID was requested, attempt to match it!
+                        if (requestedInstanceId) {
+                            const match = instances.find(inst => inst.instanceId === requestedInstanceId);
+                            if (match) return match;
+                        }
+                        // Otherwise, return the first one available
+                        return instances[0];
+                    }
+                } catch (e) {
+                    console.error('Json parse error in ultramsg_instances', e);
+                }
             }
+
+            // Fallback for legacy systems / migrations
+            let config = await redis.get('ultramsg_credentials') || await redis.get('ultramsg_config');
             if (config) {
                 return JSON.parse(config);
             }
@@ -18,7 +34,7 @@ export const getUltraMsgConfig = async () => {
         console.error('Failed to get UltraMsg config from Redis:', e.message);
     }
 
-    // 2. Fallback to Environment variables
+    // Fallback to Environment variables
     return {
         instanceId: process.env.ULTRAMSG_INSTANCE_ID,
         token: process.env.ULTRAMSG_TOKEN
