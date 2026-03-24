@@ -138,7 +138,54 @@ const InstancesSection = ({ showToast }) => {
                         />
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 relative">
+                        {editingIndex === -1 && (
+                            <div className="md:col-span-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div>
+                                    <h4 className="text-sm font-bold text-blue-800 dark:text-blue-300">Generador Automático</h4>
+                                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Crea una instancia fresca en tu servidor GatewayWapp y configura el webhook al instante.</p>
+                                </div>
+                                <Button 
+                                    onClick={async (e) => {
+                                        e.preventDefault();
+                                        setLoading(true);
+                                        try {
+                                            const res = await fetch('https://gatewaywapp-production.up.railway.app/instances', { method: 'POST' });
+                                            if (res.ok) {
+                                                const data = await res.json();
+                                                const newId = data.instance_id;
+                                                const newToken = data.token;
+                                                setFormData({...formData, instanceId: newId, token: newToken});
+                                                showToast('Credenciales generadas con éxito', 'success');
+                                                
+                                                // Setup webhook automatically!
+                                                await fetch(`https://gatewaywapp-production.up.railway.app/${newId}/settings/webhook?token=${newToken}`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({
+                                                        webhook_url: `${window.location.origin}/api/whatsapp/webhook`,
+                                                        webhook_message_received: true,
+                                                        webhook_message_ack: true
+                                                    })
+                                                });
+                                                showToast('Webhook enlazado exitosamente', 'success');
+                                            } else {
+                                                showToast('Error contactando al generador', 'error');
+                                            }
+                                        } catch (err) {
+                                            showToast('Falla de red al generar', 'error');
+                                        } finally {
+                                            setLoading(false);
+                                        }
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+                                    size="sm"
+                                    icon={RefreshCw}
+                                >
+                                    Auto-Generar
+                                </Button>
+                            </div>
+                        )}
                         <Input
                             label="ID de Instancia (Gateway)"
                             placeholder="Ej: instance12345"
