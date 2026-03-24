@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Smartphone, Check, RefreshCw, Save, Server, Shield, Hash, Tag, Activity } from 'lucide-react';
+import { Smartphone, Check, RefreshCw, Save, Server, Shield, Hash, Tag, Activity, Copy } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
