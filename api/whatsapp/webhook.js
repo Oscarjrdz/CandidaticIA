@@ -345,6 +345,16 @@ export default async function handler(req, res) {
 
                         let finalAgentInput = agentInput;
 
+                        // 🔍 CRITICAL DIAGNOSTIC
+                        try {
+                            await redis.set('DEBUG_AI_PROMISE_INIT', JSON.stringify({
+                                messageType,
+                                hasMedia: !!messageData.media,
+                                mediaUrl: messageData.media || null,
+                                phone
+                            }));
+                        } catch(e) {}
+
                         // 🎧 AUDIO TRANSCRIPTION (GATEWAY)
                         if ((messageType === 'audio' || messageType === 'ptt' || messageType === 'voice') && messageData.media) {
                             try {
@@ -389,6 +399,12 @@ export default async function handler(req, res) {
                             } catch (e) {
                                 finalAgentInput = `[DEV-ERR] Exception in Whisper Gateway: ${e.response?.data ? JSON.stringify(e.response.data) : e.message}`;
                             }
+
+                            // Direct Debug Observability
+                            try {
+                                await redis.set('debug_last_audio_input', finalAgentInput);
+                                await redis.set('debug_last_audio_err_trace', String(finalAgentInput));
+                            } catch(e) {}
                         }
 
                         // 🏁 1. ADD TO WAITLIST (Safe persistence)
