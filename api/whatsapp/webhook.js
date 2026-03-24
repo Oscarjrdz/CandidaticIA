@@ -363,18 +363,18 @@ export default async function handler(req, res) {
                                         const arrayBuffer = await audioRes.arrayBuffer();
                                         const buffer = Buffer.from(arrayBuffer);
                                         
-                                        const FormData = (await import('form-data')).default;
-                                        const fetchMod = (await import('node-fetch')).default;
+                                        // Utilize Native Globals (Node 18+) instead of third-party libraries
+                                        const blob = new Blob([buffer], { type: 'audio/ogg' });
                                         const formData = new FormData();
-                                        formData.append('file', buffer, { filename: 'audio.ogg', contentType: 'audio/ogg' });
+                                        formData.append('file', blob, 'audio.ogg');
                                         formData.append('model', 'whisper-1');
                                         formData.append('language', 'es');
                                         
-                                        const whisperRes = await fetchMod('https://api.openai.com/v1/audio/transcriptions', {
+                                        const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
                                             method: 'POST',
                                             headers: {
-                                                'Authorization': `Bearer ${openAiKey}`,
-                                                ...formData.getHeaders()
+                                                'Authorization': `Bearer ${openAiKey}`
+                                                // Important: Let native fetch calculate boundary & Content-Type automatically
                                             },
                                             body: formData
                                         });
