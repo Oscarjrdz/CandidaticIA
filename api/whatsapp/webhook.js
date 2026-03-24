@@ -79,6 +79,19 @@ export default async function handler(req, res) {
                 return res.status(200).send('from_me_ignored');
             }
 
+            // IGNORE OLD HISTORICAL MESSAGES (GATEWAY QUEUE SYNC)
+            // Cuando GatewayWapp reconecta un código QR, WhatsApp sincroniza mensajes viejos.
+            const timestamp = messageData.timestamp;
+            if (timestamp) {
+                const msgTimeMs = timestamp > 1e11 ? timestamp : timestamp * 1000;
+                const nowMs = Date.now();
+                const diffMins = (nowMs - msgTimeMs) / 1000 / 60;
+                if (diffMins > 5) {
+                    console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando mensaje antiguo de ${phone} (hace ${Math.round(diffMins)} mins) - Sincronización evadida.`);
+                    return res.status(200).send('historical_message_ignored');
+                }
+            }
+
             await logTelemetry('ingress', {
                 msgId,
                 from,
@@ -317,8 +330,53 @@ export default async function handler(req, res) {
                         const isActive = await redis?.get('bot_ia_active');
                         if (isActive === 'false' || candidate?.blocked === true) return;
 
+                        let finalAgentInput = agentInput;
+
+                        // 🎧 AUDIO TRANSCRIPTION (GATEWAY)
+                        if ((messageType === 'audio' || messageType === 'ptt' || messageType === 'voice') && messageData.media) {
+                            try {
+                                console.log(`[WEBHOOK] 🎙️ Transcribiendo audio de ${phone}: ${messageData.media}`);
+                                const audioRes = await fetch(messageData.media);
+                                
+                                if (audioRes.ok) {
+                                    const arrayBuffer = await audioRes.arrayBuffer();
+                                    const buffer = Buffer.from(arrayBuffer);
+                                    
+                                    const FormData = (await import('form-data')).default;
+                                    const fetchMod = (await import('node-fetch')).default;
+                                    const formData = new FormData();
+                                    formData.append('file', buffer, { filename: 'audio.ogg', contentType: 'audio/ogg' });
+                                    formData.append('model', 'whisper-1');
+                                    formData.append('language', 'es');
+                                    
+                                    const whisperRes = await fetchMod('https://api.openai.com/v1/audio/transcriptions', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                                            ...formData.getHeaders()
+                                        },
+                                        body: formData
+                                    });
+                                    
+                                    if (whisperRes.ok) {
+                                        const whisperData = await whisperRes.json();
+                                        if (whisperData.text) {
+                                            finalAgentInput = `🎙️ [AUDIO TRANSCRITO]: "${whisperData.text}"`;
+                                            console.log(`[WEBHOOK] 🎙️ Audio transcrito exitosamente: ${whisperData.text}`);
+                                        }
+                                    } else {
+                                        console.error('[WEBHOOK] ❌ Error de Whisper API:', await whisperRes.text());
+                                    }
+                                } else {
+                                    console.error('[WEBHOOK] ❌ No se pudo descargar el audio del Gateway:', audioRes.status);
+                                }
+                            } catch (e) {
+                                console.error('[WEBHOOK] ❌ Falló captura y transcripción de audio:', e);
+                            }
+                        }
+
                         // 🏁 1. ADD TO WAITLIST (Safe persistence)
-                        await addToWaitlist(candidateId, { text: agentInput, msgId });
+                        await addToWaitlist(candidateId, { text: finalAgentInput, msgId });
 
                         // 🏁 2. SIGNAL TURBO ENGINE DIRECTLY (Keep container alive)
                         console.log(`[Vercel Turbo] 🚀 Triggering internal engine for candidate ${candidateId}`);
