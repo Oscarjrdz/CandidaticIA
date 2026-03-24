@@ -13,6 +13,30 @@ export default async function handler(req, res) {
             if (raw) {
                 try { instances = JSON.parse(raw); } catch (e) {}
             }
+
+            // Hydrate from legacy config (Auto-Migration)
+            if (!Array.isArray(instances) || instances.length === 0) {
+                const legacyRaw = await redis.get('ultramsg_credentials') || await redis.get('ultramsg_config');
+                if (legacyRaw) {
+                    try { 
+                        const legacy = JSON.parse(legacyRaw);
+                        if (legacy && (legacy.instanceId || legacy.token)) {
+                            instances = [{
+                                id: Date.now().toString(),
+                                name: legacy.name || 'Línea WhatsApp Principal',
+                                identifier: legacy.identifier || 'CAND-01',
+                                instanceId: legacy.instanceId || '',
+                                token: legacy.token || ''
+                            }];
+                            // Auto-save the migrated array
+                            await redis.set('ultramsg_instances', JSON.stringify(instances));
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse legacy config', e);
+                    }
+                }
+            }
+
             return res.status(200).json(instances);
         }
 
