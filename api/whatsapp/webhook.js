@@ -357,36 +357,30 @@ export default async function handler(req, res) {
                                     console.error('[WEBHOOK] ❌ No se encontró OpenAI API Key para transcribir el audio.');
                                 } else {
                                     console.log(`[WEBHOOK] 🎙️ Transcribiendo audio de ${phone}: ${messageData.media}`);
-                                    const audioRes = await fetch(messageData.media);
+                                    const axios = (await import('axios')).default;
+                                    const audioRes = await axios.get(messageData.media, { responseType: 'arraybuffer' });
                                     
-                                    if (audioRes.ok) {
-                                        const arrayBuffer = await audioRes.arrayBuffer();
-                                        const buffer = Buffer.from(arrayBuffer);
+                                    if (audioRes.status === 200) {
+                                        const buffer = Buffer.from(audioRes.data);
                                         
-                                        // Utilize Native Globals (Node 18+) instead of third-party libraries
-                                        const blob = new Blob([buffer], { type: 'audio/ogg' });
+                                        const FormData = (await import('form-data')).default;
                                         const formData = new FormData();
-                                        formData.append('file', blob, 'audio.ogg');
+                                        formData.append('file', buffer, { filename: 'audio.ogg', contentType: 'audio/ogg' });
                                         formData.append('model', 'whisper-1');
                                         formData.append('language', 'es');
                                         
-                                        const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-                                            method: 'POST',
+                                        const whisperRes = await axios.post('https://api.openai.com/v1/audio/transcriptions', formData, {
                                             headers: {
-                                                'Authorization': `Bearer ${openAiKey}`
-                                                // Important: Let native fetch calculate boundary & Content-Type automatically
-                                            },
-                                            body: formData
+                                                'Authorization': `Bearer ${openAiKey}`,
+                                                ...formData.getHeaders()
+                                            }
                                         });
                                         
-                                        if (whisperRes.ok) {
-                                            const whisperData = await whisperRes.json();
-                                            if (whisperData.text) {
-                                                finalAgentInput = `🎙️ [AUDIO TRANSCRITO]: "${whisperData.text}"`;
-                                                console.log(`[WEBHOOK] 🎙️ Audio transcrito exitosamente: ${whisperData.text}`);
-                                            }
+                                        if (whisperRes.data && whisperRes.data.text) {
+                                            finalAgentInput = `🎙️ [AUDIO TRANSCRITO]: "${whisperRes.data.text}"`;
+                                            console.log(`[WEBHOOK] 🎙️ Audio transcrito exitosamente: ${whisperRes.data.text}`);
                                         } else {
-                                            console.error('[WEBHOOK] ❌ Error de Whisper API:', await whisperRes.text());
+                                            console.error('[WEBHOOK] ❌ Error de Whisper API:', whisperRes.data);
                                         }
                                     } else {
                                         console.error('[WEBHOOK] ❌ No se pudo descargar el audio del Gateway:', audioRes.status);
