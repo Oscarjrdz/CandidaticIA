@@ -380,14 +380,14 @@ export default async function handler(req, res) {
                                             finalAgentInput = `🎙️ [AUDIO TRANSCRITO]: "${whisperRes.data.text}"`;
                                             console.log(`[WEBHOOK] 🎙️ Audio transcrito exitosamente: ${whisperRes.data.text}`);
                                         } else {
-                                            console.error('[WEBHOOK] ❌ Error de Whisper API:', whisperRes.data);
+                                            finalAgentInput = `[DEV-ERR] Whisper no text: ${JSON.stringify(whisperRes.data)}`;
                                         }
                                     } else {
-                                        console.error('[WEBHOOK] ❌ No se pudo descargar el audio del Gateway:', audioRes.status);
+                                        finalAgentInput = `[DEV-ERR] Axios GET failed: HTTP ${audioRes.status}`;
                                     }
                                 }
                             } catch (e) {
-                                console.error('[WEBHOOK] ❌ Falló captura y transcripción de audio:', e);
+                                finalAgentInput = `[DEV-ERR] Exception in Whisper Gateway: ${e.response?.data ? JSON.stringify(e.response.data) : e.message}`;
                             }
                         }
 
