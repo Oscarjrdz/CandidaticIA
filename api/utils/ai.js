@@ -293,11 +293,15 @@ export async function cleanMunicipioWithAI(municipio) {
     }
 
     // Capa 2: IA para municipios no en el diccionario
+    // Pasa los nombres canónicos del mapa como referencia para que la IA no invente nombres largos
     try {
         const { getOpenAIResponse } = await import('./openai.js');
-        const prompt = `Identifica el nombre del municipio o ciudad en: "${municipio}".
-Devuelve SOLO el nombre corto y común del municipio en Title Case, sin estado, sin puntos.
-Si no parece un municipio, devuélvelo con ortografía corregida en Title Case.
+        // Build a deduplicated list of canonical values from the dictionary as reference
+        const knownNames = [...new Set(MUNICIPIO_MAP.values())].join(', ');
+        const prompt = `Identifica el municipio o ciudad en: "${municipio}".
+Si está en esta lista de nombres canónicos, devuelve el nombre EXACTAMENTE como aparece en la lista: ${knownNames}.
+Si no está en la lista, devuelve el nombre corto y común en Title Case, sin estado ni puntos.
+Responde SOLO con el nombre, sin explicaciones.
 Respuesta:`;
 
         const result = await getOpenAIResponse([], prompt, 'gpt-4o-mini');
