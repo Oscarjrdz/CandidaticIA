@@ -2,45 +2,128 @@
 
 // ─────────────────────────────────────────────────────────────────
 // 🏷️ GENDER DICTIONARY — Capa 1 (instantánea, sin costo de IA)
-// Nombres femeninos y masculinos más frecuentes en México
+// ~350 nombres femeninos y masculinos más frecuentes en México
 // ─────────────────────────────────────────────────────────────────
 const FEMALE_NAMES = new Set([
-    'abigail','abril','adriana','agustina','alejandra','alicia','alma','alondra',
-    'amada','amalia','amelia','ana','anabell','anahi','anais','andrea','angeles',
-    'angelica','angie','antonia','ariadna','ariana','ashley','astrid','aurora',
-    'azucena','beatriz','berenice','blanca','brenda','camila','carla','carmen',
-    'carolina','catalina','cecilia','celeste','celia','claudia','concepcion',
-    'consuelo','cristal','cristina','daisy','daniela','dania','diana','dolores',
+    // A
+    'abigail','abril','ada','adela','adelina','adriana','agustina','aida','aide',
+    'alejandra','alexia','alicia','alma','alondra','amada','amalia','ambar',
+    'amelia','amparo','ana','anabell','anahi','anais','andrea','angeles','angelica',
+    'angie','antonia','ariadna','ariana','araceli','ashley','astrid','aurora','azucena',
+    // B
+    'beatriz','belen','berenice','blanca','brenda','briseyda','bricia',
+    // C
+    'camila','carla','carmen','carolina','catalina','cecilia','celeste','celia',
+    'citlali','citlaly','claudia','concepcion','consuelo','corina','cristal','cristina',
+    // D
+    'daisy','dalila','daniela','dania','daphne','diana','dolores',
+    // E
     'edith','elena','elisa','elizabeth','elsa','elvira','emily','emma','esmeralda',
-    'esperanza','estela','estefania','eugenia','eva','fabiola','fernanda','flor',
-    'frida','gabriela','genesis','giovanna','gloria','graciela','guadalupe',
-    'ingrid','irene','iris','isabel','isadora','itzel','ivette','ivonne','jacqueline',
-    'jasmine','jessica','johanna','josefina','julieta','karina','karen','karla',
-    'katia','keila','kelly','laura','leonora','leticia','lilia','liliana','lisa',
-    'lizbeth','lizeth','lorena','lourdes','lucia','luisa','lupita','luz','magali',
-    'magdalena','marcela','margarita','maria','maricela','marisol','mariana',
-    'martha','mercedes','michelle','miriam','monica','nadia','nancy','natalia',
-    'nayeli','norma','ofelia','olivia','paola','patricia','paulina','perla',
-    'pilar','priscila','raquel','rebeca','regina','renata','rocio','rosa','rosario',
-    'ruth','sabrina','samantha','sandra','sara','selena','silvia','sofia','sonia',
-    'susana','tatiana','teresa','valentina','valeria','vanessa','veronica',
-    'victoria','violeta','virginia','wendy','xochitl','ximena','yajaira','yesenia',
-    'yolanda','zara','zuleyma',
+    'esperanza','estela','estefania','esther','estrella','eugenia','eva',
+    // F
+    'fabiola','fatima','felicia','fernanda','flor','florencia','frida',
+    // G
+    'gabriela','genesis','giovanna','gloria','graciela','guadalupe',
+    // H
+    'haydee','hilda','hortensia',
+    // I
+    'iliana','imelda','ingrid','irene','iris','isabel','isadora','itzel','ivette','ivonne',
+    // J
+    'jacqueline','jacinta','janeth','jasmine','jazmin','jessica','johanna','josefina','julieta',
+    // K
+    'karina','karen','karla','katia','keila','kelly','kenya','kristal','kristina',
+    // L
+    'laura','leonora','leslie','leticia','lilia','liliana','lisa','lizbeth','lizeth',
+    'lorena','lourdes','lucia','luisa','lupita','luz',
+    // M
+    'magali','magdalena','maite','marcela','margarita','maria','maricela','mariana',
+    'marisol','marlene','martha','mercedes','michelle','miriam','monica',
+    // N
+    'nadia','nancy','natalia','nayeli','noemi','nora','norma',
+    // O
+    'ofelia','olivia','oralia',
+    // P
+    'pamela','paola','patricia','paulina','penelope','perla','pilar','priscila',
+    // R
+    'raquel','rebeca','regina','reyna','renata','rocio','rosa','rosario','rosaura','ruth',
+    // S
+    'sabrina','samantha','sandra','sara','selena','silvia','sofia','soledad','sonia',
+    'stephanie','susana',
+    // T
+    'tania','tatiana','teresa',
+    // U
+    'ursula',
+    // V
+    'valentina','valeria','vanessa','velia','veronica','victoria','violeta','virginia','viviana',
+    // W
+    'wendy',
+    // X
+    'xochitl','ximena',
+    // Y
+    'yajaira','yareli','yesenia','yolanda','yuliana',
+    // Z
+    'zara','zuleyma',
 ]);
 
 const MALE_NAMES = new Set([
     'aaron','abel','abraham','adalberto','adan','adolfo','agustin','alberto',
-    'alejandro','alexis','alfredo','andres','angel','antonio','armando','arturo',
-    'benjamin','bernardo','brandon','carlos','christian','christopher','claudio',
-    'cristian','cristobal','daniel','david','diego','edgar','eduardo','emiliano',
-    'emmanuel','enrique','ernesto','esteban','ezequiel','fabian','felipe','felix',
-    'fernando','francisco','freddy','gabriel','gerardo','gilberto','giovanni',
-    'gonzalo','guadalupe','guillermo','gustavo','hector','heriberto','horacio',
-    'hugo','ignacio','ivan','javier','jesus','joel','jorge','jose','juan',
-    'kevin','leonardo','leodan','luis','manuel','marcos','mario','martin',
-    'mauricio','miguel','moises','nicolas','omar','oscar','pablo','pedro',
-    'raul','ricardo','roberto','rodrigo','rogelio','roman','ruben','salvador',
-    'samuel','santiago','saul','sergio','victor','xavier','alejandro','jose',
+    // A
+    'aaron','abel','abelardo','abraham','adalberto','adan','adolfo','agustin',
+    'alberto','aldair','aldo','alejandro','alexis','alfredo','alonso','alvaro',
+    'andres','angel','antonio','arcadio','armando','arnulfo','arturo','augusto','aurelio','axel',
+    // B
+    'baltazar','benjamin','bernardo','beto','brandon','braulio','brian',
+    // C
+    'camilo','carlos','cayetano','cesar','christian','christopher','cirilo','ciro',
+    'claudio','clemente','cristian','cristobal',
+    // D
+    'dagoberto','daniel','dario','david','demetrio','diego','donato',
+    // E
+    'edgar','eduardo','efrain','eleazar','elias','eliseo','eloy','emiliano',
+    'emilio','emmanuel','enrique','ernesto','esteban','eugenio','everardo','ezequiel',
+    // F
+    'fabian','felipe','felix','fernando','fidel','florentino','francisco','frank','freddy',
+    // G
+    'gabino','gabriel','genaro','gerardo','german','gilberto','giovanni',
+    'gonzalo','gregorio','guadalupe','guillermo','gustavo',
+    // H
+    'hector','heriberto','hernan','hilario','homero','horacio','hugo',
+    // I
+    'ignacio','isidro','ismael','israel','ivan',
+    // J
+    'jacobo','jaime','javier','jesus','joel','jonathan','jorge','jose','josue',
+    'juan','julian','julio',
+    // K
+    'kevin',
+    // L
+    'leandro','leonardo','leodan','leonel','leopoldo','luis',
+    // M
+    'manuel','marcos','mario','martin','mauricio','maximiliano','miguel','misael','moises',
+    // N
+    'neftali','nicolas',
+    // O
+    'omar','oscar',
+    // P
+    'pablo','pedro','porfirio',
+    // R
+    'rafael','ramiro','ramon','raul','rene','reynaldo','ricardo','rigoberto',
+    'roberto','rodrigo','rogelio','rolando','roman','ruben',
+    // S
+    'salvador','samuel','santiago','saul','sergio','simon',
+    // T
+    'teodoro','tomas',
+    // U
+    'ulises',
+    // V
+    'valentin','victor','vicente',
+    // W
+    'wilfredo','william',
+    // X
+    'xavier',
+    // Y
+    'yael',
+    // Z
+    'zacarias',
 ]);
 
 /**
