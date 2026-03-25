@@ -313,21 +313,65 @@ Respuesta:`;
 export async function cleanCategoryWithAI(category) {
     if (!category || category.length < 2) return category;
 
+    const normCat = normalize(category); // reuse normalize() from municipio section
+
     try {
+        // ── Capa 1: Cargar lista real de categorías desde Redis ──
+        const { getRedisClient } = await import('./storage.js');
+        const redis = getRedisClient();
+        let officialCategories = [];
+
+        if (redis) {
+            const raw = await redis.get('candidatic_categories');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                officialCategories = parsed.map(c => c.name || c).filter(Boolean);
+            }
+        }
+
+        // ── Capa 2: Matching normalizado contra la lista oficial ──
+        if (officialCategories.length > 0) {
+            // 2a. Match exacto (sin acentos, lowercase)
+            const exactMatch = officialCategories.find(c => normalize(c) === normCat);
+            if (exactMatch) return exactMatch;
+
+            // 2b. Match de raíz: el input CONTIENE el nombre de una categoría oficial
+            // Ej: "ayudante general" contiene "ayudante" → "Ayudante"
+            const rootMatch = officialCategories.find(c => {
+                const normOfficial = normalize(c);
+                return normCat.includes(normOfficial) || normOfficial.includes(normCat);
+            });
+            if (rootMatch) return rootMatch;
+
+            // 2c. Match por similaridad de primeras letras (tolera typos como "ayduante")
+            // Compara los primeros 5 chars normalizados
+            const typoMatch = officialCategories.find(c => {
+                const normOfficial = normalize(c);
+                const prefix = Math.min(5, normOfficial.length);
+                return normCat.substring(0, prefix) === normOfficial.substring(0, prefix);
+            });
+            if (typoMatch) return typoMatch;
+        }
+
+        // ── Capa 3: IA con la lista exacta como contexto ──
         const { getOpenAIResponse } = await import('./openai.js');
-        const prompt = `Analiza y homogeniza la categoría de empleo: "${category}".
+        const categoriesContext = officialCategories.length > 0
+            ? `\nCATEGORÍAS OFICIALES DISPONIBLES:\n${officialCategories.map(c => `- ${c}`).join('\n')}\n\nElige la categoría más cercana de la lista anterior. Si ninguna aplica, elige la más genérica.`
+            : `\nDevuelve únicamente el término limpio (máximo 2 palabras) con acentos correctos.`;
 
-REGLAS DE HOMOGENEIZACIÓN (MÉTODO GOOGLE):
-1. PRECISIÓN: Si el usuario específicamente se identifica como "Ayudante" (General, de Almacén, de Ventas), respeta el término "Ayudante".
-2. REGLA MONTACARGAS: Si el rol principal es operar maquinaria ("Montacargas"), la categoría ES: "Montacarguista".
-3. REGLA ALMACENISTA: Usa "Almacenista" solo si el rol se centra exclusivamente en gestión de inventarios y bodega sin mención de ser "Ayudante".
-4. Responde ÚNICAMENTE con el término limpio (máximo 2 palabras).
-5. Usa SIEMPRE acentos correctos.
-
-Respuesta (Únicamente el término):`;
+        const prompt = `Determina la categoría de empleo para: "${category}".${categoriesContext}
+Responde ÚNICAMENTE con el nombre exacto de la categoría (copia exacta de la lista si aplica).`;
 
         const result = await getOpenAIResponse([], prompt, 'gpt-4o-mini');
         const cleaned = result?.content?.trim().replace(/[.]/g, '');
+
+        // Validate AI picked an official category (exact or normalized match)
+        if (cleaned && officialCategories.length > 0) {
+            const aiNorm = normalize(cleaned);
+            const confirmed = officialCategories.find(c => normalize(c) === aiNorm);
+            if (confirmed) return confirmed; // Return the correctly-cased official name
+        }
+
         return cleaned || category;
 
     } catch (error) {
