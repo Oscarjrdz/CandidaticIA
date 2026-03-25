@@ -1819,13 +1819,29 @@ ${safeDnaLines}
                                 return _citaMeta.citaFecha;
                             })()
                             : (_citaMeta.citaFecha || '');
+                        const _citaIdx = await getCTAIndex(redis, candidateId);
+                        await incrCTAIndex(redis, candidateId);
                         const isCasual = CASUAL_RE.test(aggregatedText.trim());
                         if (isCasual) {
-                            // Greeting/identity question → personalized reminder
-                            responseTextVal = `¡Hola, ${candFirstName}! 😊 Claro que te recuerdo. Tienes tu entrevista agendada para el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Te esperamos! 🌟`;
+                            // Greeting/identity question → personalized reminder (rotating)
+                            const _CASUAL_VARIANTS = [
+                                `¡Hola, ${candFirstName}! 😊 Claro que te recuerdo. Tienes tu entrevista agendada para el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Te esperamos! 🌟`,
+                                `¡Qué gusto saber de ti, ${candFirstName}! 🌸 Ya tienes tu cita lista: el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Ahí nos vemos! 😊`,
+                                `¡Hola ${candFirstName}! ✨ Por supuesto que te recuerdo. Tu entrevista es el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Ya casi! 🎯`,
+                                `¡Claro que sí, ${candFirstName}! 💪 Tu cita está confirmada para el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Te esperamos con gusto! 🌟`,
+                                `¡Hola ${candFirstName}! 😄 Tienes tu entrevista el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡No faltes! 🚀`,
+                            ];
+                            responseTextVal = _CASUAL_VARIANTS[_citaIdx % _CASUAL_VARIANTS.length];
                         } else {
-                            // Farewell/ack → warm send-off
-                            responseTextVal = `¡Hasta pronto, ${candFirstName}! 🌸 Recuerda que te esperamos el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Mucho éxito! 👋`;
+                            // Farewell/ack → warm send-off (rotating)
+                            const _FAREWELL_VARIANTS = [
+                                `¡Hasta pronto, ${candFirstName}! 🌸 Recuerda que te esperamos el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Mucho éxito! 👋`,
+                                `¡Cuídate mucho, ${candFirstName}! ✨ Tu cita es el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Ahí te vemos! 🌟`,
+                                `¡Hasta luego, ${candFirstName}! 😊 No olvides que el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''} te esperamos. ¡Vas a hacerlo muy bien! 💪`,
+                                `¡Nos vemos pronto, ${candFirstName}! 🎯 Confirmado: ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Éxito! 👋`,
+                                `¡Bye, ${candFirstName}! 🚀 Recuerda llevar tu papelería el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Te esperamos! 🌸`,
+                            ];
+                            responseTextVal = _FAREWELL_VARIANTS[_citaIdx % _FAREWELL_VARIANTS.length];
                         }
                         skipRecruiterInference = true;
                     }
