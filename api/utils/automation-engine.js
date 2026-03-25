@@ -201,6 +201,15 @@ async function processProjectPipelines(redis, openAiKey, config, logs, manualCon
                     continue;
                 }
 
+                // ⚡ INSTANT-VACANCY SKIP: Orchestrator already sent the vacancy directly (no GPT).
+                // Mark step as processed and skip so we don't duplicate the message.
+                if (manualConfig?.vacancyAlreadySent && cand.id === manualConfig?.targetCandidateId) {
+                    logs.push(`⚡[SKIP] Vacancy for ${cand.nombre} was already sent instantly by Orchestrator. Marking processed.`);
+                    await redis.set(metaKey, 'instant_sent', 'EX', 3600 * 24 * 30);
+                    totalSent++;
+                    continue;
+                }
+
                 // Rate Limit Safety (Global 1 min rule still applies via queue or we break here)
                 // For now, let's process 1 per run to be safe alongside Proactive
                 // simple semaphore or just rely on the cron frequency

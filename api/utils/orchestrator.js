@@ -175,17 +175,21 @@ export class Orchestrator {
 
         const firstStep = project.steps[0];
 
-        // Retrieve Vacancy Name for UI
+        // Retrieve Vacancy — cache full object for instant send
         let currentVacancyName = '';
+        let cachedVacancy = null;
         try {
             const { getVacancyById } = await import('./storage.js');
             const vId = Array.isArray(project.vacancyIds) && project.vacancyIds.length > 0 ? project.vacancyIds[0] : project.vacancyId;
             if (vId) {
                 const v = await getVacancyById(vId);
-                if (v && v.name) currentVacancyName = v.name;
+                if (v) {
+                    if (v.name) currentVacancyName = v.name;
+                    cachedVacancy = v; // Full object reused below for instant vacancy send
+                }
             }
         } catch (e) {
-            console.error('[ORCHESTRATOR] Error fetching vacancy name:', e.message);
+            console.error('[ORCHESTRATOR] Error fetching vacancy:', e.message);
         }
 
         // 2. ATOMIC TRANSACTION: State Migration
@@ -208,31 +212,56 @@ export class Orchestrator {
             ...(currentVacancyName ? { currentVacancyName } : {})
         });
 
-        // 3. ✨ PREMIUM MEDIA SEQUENCE (Multi-Layered) - PARALLELIZED FOR SPEED
+        // 3. ✨ PREMIUM MEDIA SEQUENCE (Strictly Sequential for correct WhatsApp delivery order)
         const introMsg = `¡OMG, ${candidateName}! 🤩 Acabo de revisar tu perfil y... ¡está PERFECTO! ✨🌸`;
         const inductionMsg = `Acabas de ser seleccionado para avanzar al proyecto de: *${project.name || 'Candidatic'}*. 🌟`;
 
         const { sendUltraMsgReaction } = await import('../whatsapp/utils.js');
 
-        // Phase 1 to 5: Execute all network/DB I/O concurrently
-        await Promise.allSettled([
-            msgId ? sendUltraMsgReaction(config.instanceId, config.token, msgId, '🎉') : Promise.resolve(),
-            sendUltraMsgMessage(config.instanceId, config.token, phone, introMsg, 'chat', { priority: 0 }),
-            saveMessage(candidateId, { from: 'bot', content: introMsg, timestamp: new Date().toISOString() }),
-            sendUltraMsgMessage(config.instanceId, config.token, phone, inductionMsg, 'chat', { priority: 1 }), // Priority 1 ensures ordered delivery in UltraMsg
-            saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() }),
-            MediaEngine.sendCongratsPack(config, phone, 'bot_celebration_sticker')
-        ]);
+        // 🎉 Reaction: fire non-blocking in background (does not affect message order)
+        if (msgId) {
+            sendUltraMsgReaction(config.instanceId, config.token, msgId, '🎉').catch(() => {});
+        }
 
-        // Phase 6: Instant Automations Trigger (Send Vacancy Immediately)
-        // 🔥 CRITICAL FIX: DO NOT AWAIT runAIAutomations AND DO NOT RUN IT IN THE SAME NODE PROCESS!
-        // Two consecutive GPT calls (Extraction + Automation) exceed Vercel's 15s serverless timeout.
-        // Even Promise.resolve() doesn't bypass this, as Vercel holds the connection open until Event Loop is empty.
-        // Best approach: Fire a detached HTTP webhook to our own serverless endpoint with a micro-timeout
-        // so `agent.js` can continue immediately and Node connection to UltraMsg terminates.
+        // ✅ SEQUENTIAL SEND — guarantees WhatsApp delivery order: OMG → Seleccionado → Sticker
+        // Parallel sends arrive in network-latency order which is non-deterministic on WhatsApp.
+        await sendUltraMsgMessage(config.instanceId, config.token, phone, introMsg, 'chat');
+        saveMessage(candidateId, { from: 'bot', content: introMsg, timestamp: new Date().toISOString() }).catch(() => {});
+
+        await sendUltraMsgMessage(config.instanceId, config.token, phone, inductionMsg, 'chat');
+        saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() }).catch(() => {});
+
+        // Sticker goes LAST — after both text bubbles are confirmed sent
+        await MediaEngine.sendCongratsPack(config, phone, 'bot_celebration_sticker');
+
+        // 4. ⚡ INSTANT VACANCY SEND — Template-based, zero GPT, zero cold start.
+        // The vacancy messageDescription is already fully formatted text. Calling GPT just to wrap it
+        // added 10-30s of latency (HTTP round-trip to worker + Vercel cold start + GPT call).
+        // Now we send it directly here in the same invocation: ~200ms total.
+        let vacancyAlreadySent = false;
         try {
-            logTrace(`⚙️ Triggering detached background worker for ${targetProjectId}...`);
-            const workerPayload = { targetProjectId, stepId: firstStep.id, candidateId };
+            const vacancyBody = cachedVacancy?.messageDescription || cachedVacancy?.description || '';
+            if (vacancyBody) {
+                const vacancyMsg = `¡Mira ${candidateName}! Te comparto la vacante que encontré para ti: ⏬\n\n${vacancyBody}`;
+                const ctaMsg = `¿Te gustaría agendar una entrevista? 😊💖🌼`;
+
+                await sendUltraMsgMessage(config.instanceId, config.token, phone, vacancyMsg, 'chat');
+                saveMessage(candidateId, { from: 'bot', content: vacancyMsg, timestamp: new Date().toISOString() }).catch(() => {});
+
+                await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaMsg, 'chat');
+                saveMessage(candidateId, { from: 'bot', content: ctaMsg, timestamp: new Date().toISOString() }).catch(() => {});
+
+                vacancyAlreadySent = true;
+                logTrace(`⚡ [INSTANT] Vacancy sent directly (no GPT, no worker) for ${candidateId}`);
+            }
+        } catch (e) {
+            console.error('[ORCHESTRATOR] Instant vacancy send failed, worker will retry:', e.message);
+        }
+
+        // 5. Background Worker — fires as failsafe if instant send failed, and handles multi-step pipeline logic.
+        try {
+            logTrace(`⚙️ Triggering background worker for ${targetProjectId} (vacancyAlreadySent: ${vacancyAlreadySent})...`);
+            const workerPayload = { targetProjectId, stepId: firstStep.id, candidateId, vacancyAlreadySent };
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://candidatic-ia.vercel.app';
 
             // Fire and Forget (Do not await)
@@ -245,7 +274,7 @@ export class Orchestrator {
             });
 
         } catch (e) {
-            console.error('[ORCHESTRATOR] Auto-trigger failed:', e.message);
+            console.error('[ORCHESTRATOR] Worker trigger failed:', e.message);
         }
 
         // 📊 [X-RAY INTEGRATION]
