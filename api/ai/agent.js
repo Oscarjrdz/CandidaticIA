@@ -1782,7 +1782,7 @@ ${safeDnaLines}
                         mergedMeta?.citaFecha && mergedMeta?.citaHora
                         && mergedMeta.citaFecha !== 'null' && mergedMeta.citaHora !== 'null'
                     );
-                    const FAREWELL_RE = /^(bye|adiós|adios|hasta luego|chao|gracias|ok gracias|graciass|hasta pronto|nos vemos|cuídate|cuidate|hasta la próxima|hasta la proxima|hasta pronto|👋|🙋|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche)\s*[!.?]*$/i;
+                    const FAREWELL_RE = /^(bye|adi[oó]s|hasta luego|chao|gracias|ok gracias|graciass|hasta pronto|nos vemos|cu[ií]date|hasta la pr[oó]xima|👋|🙋|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche|ok+i*|oke+y?|okey|de acuerdo|listo|entendido|recibido|perfecto|anotado|ah[ií]\s+estar[eé]|ah[ií]\s+voy|estar[eé]\s+ah[ií]|vale|✅|👍|🙌|💪|😊|🌸|🥰)\s*[!.?🥰😁😄🤗💖✨🌸]*$/i;
                     if (hasCitaConfirmed && FAREWELL_RE.test(aggregatedText.trim())) {
                         const candFirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || 'tú').split(' ')[0];
                         const humanCitaFecha = mergedMeta.citaFecha.includes('-')
