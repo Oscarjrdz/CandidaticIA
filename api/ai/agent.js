@@ -1160,7 +1160,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
                             await sendUltraMsgMessage(config.instanceId, config.token, phone, noVacMsg, 'chat', { priority: 0 });
                             await saveMessage(candidateId, { from: 'bot', content: noVacMsg, timestamp: new Date().toISOString() });
-                            await new Promise(r => setTimeout(r, 1000));
+                            await new Promise(r => setTimeout(r, 500));
                             await sendUltraMsgMessage(config.instanceId, config.token, phone, profileMsg, 'chat', { priority: 1 });
                             await saveMessage(candidateId, { from: 'bot', content: profileMsg, timestamp: new Date().toISOString() });
 
@@ -1283,7 +1283,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
 
                     await sendUltraMsgMessage(config.instanceId, config.token, phone, greetText, 'chat', { priority: 0 });
                     await saveMessage(candidateId, { from: 'bot', content: greetText, timestamp: new Date().toISOString() });
-                    await new Promise(r => setTimeout(r, 1200));
+                    await new Promise(r => setTimeout(r, 700));
                     await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaBubble, 'chat', { priority: 1 });
                     await saveMessage(candidateId, { from: 'bot', content: ctaBubble, timestamp: new Date().toISOString() });
 
@@ -2682,7 +2682,7 @@ ${safeDnaLines}
                                         `Lo escucho, ${_pvFn} 🌸 Antes de cerrar tu proceso, permíteme mostrarte una opción más 💼`,
                                     ];
                                     const _ackBubble = _CIT_CANCEL_ACK[_pvIdx % _CIT_CANCEL_ACK.length];
-                                    await new Promise(r => setTimeout(r, 400));
+                                    await new Promise(r => setTimeout(r, 200));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _ackBubble, 'chat', { priority: 1 });
                                     saveMessage(candidateId, { from: 'me', content: _ackBubble, timestamp: new Date().toISOString() }).catch(() => {});
                                     const _vacName = _nextVac.name || 'otra vacante';
@@ -2694,7 +2694,7 @@ ${safeDnaLines}
                                         `💛 Creo que *${_vacName}* puede ser lo que buscas. ¿Agendamos? 🌟`,
                                     ];
                                     const _teaserBubble = _CIT_TEASER[_pvIdx % _CIT_TEASER.length];
-                                    await new Promise(r => setTimeout(r, 900));
+                                    await new Promise(r => setTimeout(r, 500));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _teaserBubble, 'chat', { priority: 2 });
                                     saveMessage(candidateId, { from: 'me', content: _teaserBubble, timestamp: new Date().toISOString() }).catch(() => {});
                                     candidateUpdates.currentVacancyIndex = _nextVacIdx;
@@ -2732,7 +2732,7 @@ ${safeDnaLines}
 
                         // Send the confirmation question and ABORT the exit move
                         if (config) {
-                            await new Promise(r => setTimeout(r, 400));
+                            await new Promise(r => setTimeout(r, 200));
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _niQuestion, 'chat', { priority: 1 });
                             saveMessage(candidateId, { from: 'me', content: _niQuestion, timestamp: new Date().toISOString() }).catch(() => {});
                         }
@@ -3432,7 +3432,7 @@ ${safeDnaLines}
 
                                         // Stagger between messages to guarantee WhatsApp delivery order
                                         if (i < confArray.length - 1) {
-                                            await new Promise(r => setTimeout(r, 800));
+                                            await new Promise(r => setTimeout(r, 500));
                                         }
                                     } catch (err) {
                                         console.error(`[RECRUITER BRAIN] ❌ Error enviando confirmación (${item?.type}):`, err.message);
@@ -3482,10 +3482,10 @@ ${safeDnaLines}
                                 const candFirstName = (candidateData.nombreReal || candidateData.nombre || 'amig@').split(' ')[0];
                                 const farewellPart1 = `Entiendo perfectamente, ${candFirstName} 🙏 Lamento que ninguna de nuestras oportunidades haya encajado contigo en este momento.`;
                                 const farewellPart2 = `Si en algún momento algo cambia y te interesa explorar una nueva vacante, aquí estaré para ayudarte. ¡Mucho éxito en tu búsqueda! 🍀👋`;
-                                await new Promise(r => setTimeout(r, 600));
+                                await new Promise(r => setTimeout(r, 300));
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, farewellPart1, 'chat', { priority: 1 });
                                 saveMessage(candidateId, { from: 'me', content: farewellPart1, timestamp: new Date().toISOString() }).catch(() => {});
-                                await new Promise(r => setTimeout(r, 600));
+                                await new Promise(r => setTimeout(r, 300));
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, farewellPart2, 'chat', { priority: 1 });
                                 saveMessage(candidateId, { from: 'me', content: farewellPart2, timestamp: new Date().toISOString() }).catch(() => {});
                                 // Clear vacancy linkage — both top-level AND projectMetadata (where the UI column reads from)
@@ -4297,13 +4297,13 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     if (!isSimulatorPhone) {
                         if (messagesToSend.length > 1) {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 1 }).catch(() => { });
-                            await new Promise(r => setTimeout(r, 600)); // Network spacing
+                            await new Promise(r => setTimeout(r, 400)); // Network spacing
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 2 }).catch(() => { });
-                            await new Promise(r => setTimeout(r, 600));
+                            await new Promise(r => setTimeout(r, 400));
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[1], 'chat', { priority: 3 }).catch(() => { });
                         } else {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 }).catch(() => { });
-                            await new Promise(r => setTimeout(r, 600));
+                            await new Promise(r => setTimeout(r, 400));
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 2 }).catch(() => { });
                         }
                     }
@@ -4314,7 +4314,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     if (!isSimulatorPhone) {
                         for (let i = 0; i < messagesToSend.length; i++) {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
-                            if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 900));
+                            if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 600));
                         }
                     }
                 }
