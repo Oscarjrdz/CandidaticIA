@@ -483,7 +483,9 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
     // 📋 CATEGORY LIST: Force vertical format — each ✅ item on its own line
     // GPT sometimes writes all categories inline: "✅ A ✅ B ✅ C"
     // We split every ✅ onto a new line so WhatsApp shows them vertically.
-    if (/✅/.test(text)) {
+    // ⚠️ SKIP if ✅ is part of a cita confirmation — not a category list.
+    const _isCitaConfirmation = /cita queda agendada|agendada para el|te esperamos el|tu entrevista para el|cita de entrevista para el/i.test(text);
+    if (/✅/.test(text) && !_isCitaConfirmation) {
         // 1️⃣ Double newline after the header line ending with ":"
         // e.g. "Aquí te muestro las opciones disponibles:✨\n✅ A" → "disponibles:✨\n\n✅ A"
         text = text.replace(/(disponibles?[^:\n]*:|opciones?[^:\n]*:|opciones[^:\n]*💖)\s*\n/gi, '$1\n\n');
