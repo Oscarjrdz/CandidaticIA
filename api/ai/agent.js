@@ -132,6 +132,23 @@ async function clearDayListRejectionCount(redis, candidateId) {
     if (!redis || !candidateId) return;
     try { await redis.del(`day_list_rejection_count:${candidateId}`); } catch (_) {}
 }
+// ――― NO INTERESA GATE FLAG HELPERS ―――――――――――――――――――――――――――――――――――――――――――――
+// Set when AI returns { move: exit/no_interesa }. Instead of immediately exiting,
+// Brenda asks a direct confirmation question. If candidate confirms → exit.
+// If candidate reconsiders → clear flag and let the flow continue.
+const NO_INTERESA_GATE_TTL = 1800; // 30 minutes
+async function setNoInteresaGateFlag(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.set(`ni_gate:${candidateId}`, '1', 'EX', NO_INTERESA_GATE_TTL); } catch (_) {}
+}
+async function getNoInteresaGateFlag(redis, candidateId) {
+    if (!redis || !candidateId) return false;
+    try { return (await redis.get(`ni_gate:${candidateId}`)) === '1'; } catch (_) { return false; }
+}
+async function clearNoInteresaGateFlag(redis, candidateId) {
+    if (!redis || !candidateId) return;
+    try { await redis.del(`ni_gate:${candidateId}`); } catch (_) {}
+}
 // ─── CTA VARIANT COUNTER (sequential rotation per candidate) ─────────────────
 // Single shared counter across ALL second-bubble categories so the candidate
 // never sees the same closing question twice in a row.
@@ -2602,6 +2619,70 @@ ${safeDnaLines}
                                 hasExitTag = false;
                                 extractedMoveTarget = null;
                             }
+                        }
+                    }
+
+                    // 🚧 NO INTERESA CONFIRMATION GATE
+                    // Instead of sending the candidate directly to exit, Brenda asks once
+                    // to confirm they really want to leave. This catches false positives
+                    // caused by ambiguous messages ("no sé", "tal vez", "lo pienso").
+                    // Gate is SKIPPED if candidate already answered it (ni_gate flag not set = not pending).
+                    const _niGateAlreadyPending = await getNoInteresaGateFlag(redis, candidateId);
+                    if (hasExitTag && !_niGateAlreadyPending) {
+                        const _NI_GATE_QUESTIONS = [
+                            `⚠️ Espera, antes de cerrar tu proceso... ¿Estás segur@ de que no quieres continuar? ¡Tenemos vacantes que podrían ser perfectas para ti! 🌟`,
+                            `🙋‍♀️ ¡Un momento! ¿Confirmas que ya no te interesa seguir con tu registro? No quisiera que perdieras una gran oportunidad 💼✨`,
+                            `😊 Antes de que te vayas... ¿Segur@ que no quieres que te ayude a encontrar empleo? Puede que tengamos algo ideal para ti 🎯`,
+                            `💛 ¡Oye, espera! ¿De verdad ya no quieres continuar con tu proceso de empleo? Solo dime *"sí quiero salir"* para cerrar, o *"no, sigo"* si quieres continuar 🚀`,
+                            `🤔 Antes de terminar, ¿me confirmas que no deseas continuar buscando empleo con nosotros? ¡Aún podemos encontrar algo para ti! 💪`,
+                        ];
+                        // Rotate variant using cta_idx counter (reuse same mechanism)
+                        const _niIdx = await getCTAIndex(redis, candidateId);
+                        const _niQuestion = _NI_GATE_QUESTIONS[_niIdx % _NI_GATE_QUESTIONS.length];
+
+                        // Set gate flag (30 min TTL)
+                        await setNoInteresaGateFlag(redis, candidateId);
+                        // Increment rotation index for next time
+                        await incrCTAIndex(redis, candidateId);
+
+                        // Send the confirmation question and ABORT the exit move
+                        if (config) {
+                            await new Promise(r => setTimeout(r, 400));
+                            await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _niQuestion, 'chat', { priority: 1 });
+                            saveMessage(candidateId, { from: 'me', content: _niQuestion, timestamp: new Date().toISOString() }).catch(() => {});
+                        }
+                        // Block the move — candidate must explicitly confirm
+                        hasExitTag = false;
+                        extractedMoveTarget = null;
+                        hasMoveTag = false;
+                        skipRecruiterInference = true;
+                        responseTextVal = null; // suppress any recruiter response
+                        console.error(`[NO_INTERESA_GATE] 🚧 Exit intercepted for ${candidateId}. Confirmation question sent.`);
+                    } else if (_niGateAlreadyPending) {
+                        // Candidate already saw the gate question — interpret their reply
+                        const _gateInput = aggregatedText.trim().toLowerCase().replace(/[^\w\sñáéíóúü]/gi, '');
+                        const _isConfirmExit = /^(s[ií]|s[ií]\s+quiero\s+salir|no\s+quiero|ya\s+no|no\s+me\s+interesa|no\s+gracias|paso|prefiero\s+no|negativo|correcto\s+no\s+quiero)/.test(_gateInput);
+                        const _isRetract    = /^(no\s+sigo|s[ií]\s+quiero\s+continuar|quiero\s+continuar|me\s+interesa|si\s+quiero|claro|dale|va|adelante|me\s+animo|pens[aá]ndolo|s[ií]\s+por\s+favor)/.test(_gateInput);
+
+                        await clearNoInteresaGateFlag(redis, candidateId);
+
+                        if (_isRetract) {
+                            // Candidate changed their mind — let flow continue normally
+                            hasExitTag = false;
+                            extractedMoveTarget = null;
+                            hasMoveTag = false;
+                            console.error(`[NO_INTERESA_GATE] 🔄 Candidate ${candidateId} retracted. Resuming flow.`);
+                        } else if (_isConfirmExit) {
+                            // Candidate confirmed they want to exit — allow the move
+                            hasExitTag = true;
+                            console.error(`[NO_INTERESA_GATE] ✅ Candidate ${candidateId} confirmed exit.`);
+                        }
+                        // If ambiguous, also clear and let flow continue (benefit of the doubt)
+                        else {
+                            hasExitTag = false;
+                            extractedMoveTarget = null;
+                            hasMoveTag = false;
+                            console.error(`[NO_INTERESA_GATE] ❓ Ambiguous reply from ${candidateId}. Clearing gate, resuming flow.`);
                         }
                     }
 
