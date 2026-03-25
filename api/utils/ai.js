@@ -1,13 +1,63 @@
 // Utils AI
 
+// ─────────────────────────────────────────────────────────────────
+// 🏷️ GENDER DICTIONARY — Capa 1 (instantánea, sin costo de IA)
+// Nombres femeninos y masculinos más frecuentes en México
+// ─────────────────────────────────────────────────────────────────
+const FEMALE_NAMES = new Set([
+    'abigail','abril','adriana','agustina','alejandra','alicia','alma','alondra',
+    'amada','amalia','amelia','ana','anabell','anahi','anais','andrea','angeles',
+    'angelica','angie','antonia','ariadna','ariana','ashley','astrid','aurora',
+    'azucena','beatriz','berenice','blanca','brenda','camila','carla','carmen',
+    'carolina','catalina','cecilia','celeste','celia','claudia','concepcion',
+    'consuelo','cristal','cristina','daisy','daniela','dania','diana','dolores',
+    'edith','elena','elisa','elizabeth','elsa','elvira','emily','emma','esmeralda',
+    'esperanza','estela','estefania','eugenia','eva','fabiola','fernanda','flor',
+    'frida','gabriela','genesis','giovanna','gloria','graciela','guadalupe',
+    'ingrid','irene','iris','isabel','isadora','itzel','ivette','ivonne','jacqueline',
+    'jasmine','jessica','johanna','josefina','julieta','karina','karen','karla',
+    'katia','keila','kelly','laura','leonora','leticia','lilia','liliana','lisa',
+    'lizbeth','lizeth','lorena','lourdes','lucia','luisa','lupita','luz','magali',
+    'magdalena','marcela','margarita','maria','maricela','marisol','mariana',
+    'martha','mercedes','michelle','miriam','monica','nadia','nancy','natalia',
+    'nayeli','norma','ofelia','olivia','paola','patricia','paulina','perla',
+    'pilar','priscila','raquel','rebeca','regina','renata','rocio','rosa','rosario',
+    'ruth','sabrina','samantha','sandra','sara','selena','silvia','sofia','sonia',
+    'susana','tatiana','teresa','valentina','valeria','vanessa','veronica',
+    'victoria','violeta','virginia','wendy','xochitl','ximena','yajaira','yesenia',
+    'yolanda','zara','zuleyma',
+]);
+
+const MALE_NAMES = new Set([
+    'aaron','abel','abraham','adalberto','adan','adolfo','agustin','alberto',
+    'alejandro','alexis','alfredo','andres','angel','antonio','armando','arturo',
+    'benjamin','bernardo','brandon','carlos','christian','christopher','claudio',
+    'cristian','cristobal','daniel','david','diego','edgar','eduardo','emiliano',
+    'emmanuel','enrique','ernesto','esteban','ezequiel','fabian','felipe','felix',
+    'fernando','francisco','freddy','gabriel','gerardo','gilberto','giovanni',
+    'gonzalo','guadalupe','guillermo','gustavo','hector','heriberto','horacio',
+    'hugo','ignacio','ivan','javier','jesus','joel','jorge','jose','juan',
+    'kevin','leonardo','leodan','luis','manuel','marcos','mario','martin',
+    'mauricio','miguel','moises','nicolas','omar','oscar','pablo','pedro',
+    'raul','ricardo','roberto','rodrigo','rogelio','roman','ruben','salvador',
+    'samuel','santiago','saul','sergio','victor','xavier','alejandro','jose',
+]);
+
 /**
- * Detects gender (Hombre/Mujer) based on a name using OpenAI
- * @param {string} name - The name to analyze
- * @returns {Promise<string>} - "Hombre" | "Mujer" | "Desconocido"
+ * Capa 1: Diccionario local (gratis, instantáneo)
+ * Capa 2: OpenAI GPT (para nombres no reconocidos)
  */
 export async function detectGender(name) {
     if (!name || name === 'Sin nombre' || name.length < 2) return 'Desconocido';
 
+    // Extraer solo el primer nombre (ignorar apellidos)
+    const firstName = name.trim().split(/\s+/)[0].toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quitar acentos para comparar
+
+    if (FEMALE_NAMES.has(firstName)) return 'Mujer';
+    if (MALE_NAMES.has(firstName)) return 'Hombre';
+
+    // Capa 2: IA para nombres no encontrados en el diccionario
     try {
         const { getOpenAIResponse } = await import('./openai.js');
         const prompt = `Dime si el nombre "${name}" es de un hombre o de una mujer.
@@ -16,10 +66,10 @@ Ignora apellidos si los hay.
 Respuesta:`;
 
         const result = await getOpenAIResponse([], prompt, 'gpt-4o-mini');
-        const text = result?.content?.trim().replace(/[.]/g, '') || '';
+        const text = (result?.content?.trim().replace(/[.]/g, '') || '').toLowerCase();
 
-        if (text.includes('Hombre')) return 'Hombre';
-        if (text.includes('Mujer')) return 'Mujer';
+        if (text.includes('mujer')) return 'Mujer';
+        if (text.includes('hombre')) return 'Hombre';
 
         return 'Desconocido';
 
