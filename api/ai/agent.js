@@ -2656,8 +2656,73 @@ ${safeDnaLines}
                     // caused by ambiguous messages ("no sé", "tal vez", "lo pienso").
                     // Gate is SKIPPED if candidate already answered it (ni_gate flag not set = not pending).
                     const _niGateAlreadyPending = await getNoInteresaGateFlag(redis, candidateId);
+
+                    // 🔄 CITADOS CANCELLATION PIVOT
+                     // Every time a Citados candidate cancels, if there's another vacancy → offer it.
+                     // Only when NO more vacancies remain does the NI Gate fire.
+                        const _originIsCitados = (currentStep?.name || '').toLowerCase().includes('citado');
+                        if (_originIsCitados) {
+                             const _currentVacIdx = typeof candidateData.currentVacancyIndex === 'number' ? candidateData.currentVacancyIndex : 0;
+                            const _allVacIds = project?.vacancyIds || [];
+                            const _hasNextVac = _allVacIds.length > (_currentVacIdx + 1);
+
+                             if (_hasNextVac) {
+                                const _nextVacIdx = _currentVacIdx + 1;
+                                const _nextVacId = _allVacIds[_nextVacIdx];
+                                const _nextVac = _nextVacId ? await getVacancyById(_nextVacId).catch(() => null) : null;
+
+                                if (_nextVac && config) {
+                                    const _pvFn = (candidateData.nombreReal || '').split(' ')[0] || 'amig@';
+                                    const _pvIdx = await getCTAIndex(redis, candidateId);
+                                    await incrCTAIndex(redis, candidateId);
+
+                                    // Burbuja 1 — Empathetic ack (5 rotating variants)
+                                    const _CIT_CANCEL_ACK = [
+                                        `Entiendo, ${_pvFn}, no hay problema 😊 Pero espera, tengo otra vacante que podría encajarte mejor. ¡Dame un momento! 🌟`,
+                                        `Lo entiendo perfectamente, ${_pvFn} 🙏 Antes de que te vayas, déjame mostrarte otra opción disponible ✨`,
+                                        `Qué pena, ${_pvFn}, pero lo comprendo 💛 Fíjate que tenemos otra vacante que quizás te interese más 🎯`,
+                                        `Entendido, ${_pvFn} 😊 ¡No me rindo tan fácil, tengo otra oportunidad para ti! 🚀`,
+                                        `Lo escucho, ${_pvFn} 🌸 Pero antes de cerrar tu proceso, permíteme mostrarte una última opción 💼`,
+                                    ];
+                                    const _ackBubble = _CIT_CANCEL_ACK[_pvIdx % _CIT_CANCEL_ACK.length];
+                                    await new Promise(r => setTimeout(r, 400));
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _ackBubble, 'chat', { priority: 1 });
+                                    saveMessage(candidateId, { from: 'me', content: _ackBubble, timestamp: new Date().toISOString() }).catch(() => {});
+
+                                    // Burbuja 2 — Next vacancy teaser + CTA
+                                    const _vacName = _nextVac.name || 'otra vacante';
+                                    const _CIT_TEASER = [
+                                        `🌟 Tenemos disponible: *${_vacName}*. ¿Te gustaría conocer los detalles? 😊`,
+                                        `💼 Hay una posición de *${_vacName}* esperando. ¿Te la presento? ✨`,
+                                        `🎯 Podría interesarte *${_vacName}*. ¿Quieres que te cuente más? 🌸`,
+                                        `🚀 Aún tenemos *${_vacName}* disponible. ¿Te animas a escuchar? 😊`,
+                                        `💛 Creo que *${_vacName}* puede ser lo que buscas. ¿Lo revisamos? 🌟`,
+                                    ];
+                                    const _teaserBubble = _CIT_TEASER[_pvIdx % _CIT_TEASER.length];
+                                    await new Promise(r => setTimeout(r, 900));
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _teaserBubble, 'chat', { priority: 2 });
+                                    saveMessage(candidateId, { from: 'me', content: _teaserBubble, timestamp: new Date().toISOString() }).catch(() => {});
+
+                                    candidateUpdates.currentVacancyIndex = _nextVacIdx;
+                                    await Promise.all([setPivotPendingFlag(redis, candidateId), clearCitaPendingFlag(redis, candidateId)]).catch(() => {});
+                                    hasExitTag = false;
+                                    extractedMoveTarget = null;
+                                    hasMoveTag = false;
+                                    skipRecruiterInference = true;
+                                    responseTextVal = null;
+                                    console.error(`[CITADOS_PIVOT] 🔄 ${candidateId} pivoted to vacancy[${_nextVacIdx}]: ${_vacName}`);
+                                }
+                            }
+                        }
+                    }
+
                     if (hasExitTag && !_niGateAlreadyPending) {
-                        const _NI_GATE_QUESTIONS = [
+                        const _niFromCitados = (currentStep?.name || '').toLowerCase().includes('citado');
+                        const _NI_GATE_QUESTIONS = _niFromCitados ? [
+                            `¿Entonces ya no te interesa tener una entrevista con nosotros? 🤔 Solo confírmame para cerrar tu proceso`,
+                            `Entiendo... ¿me confirmas que ya no deseas continuar con ninguna de nuestras vacantes? 💼`,
+                            `¿Estás segur@ de que prefieres no tener la entrevista? Solo dímelo y cerramos tu proceso 🙏`,
+                        ] : [
                             `🙋‍♀️ ¡Un momento! ¿Confirmas que ya no te interesa seguir con tu registro? No quisiera que perdieras una gran oportunidad 💼✨`,
                             `😊 Antes de que te vayas... ¿Segur@ que no quieres que te ayude a encontrar empleo? Puede que tengamos algo ideal para ti 🎯`,
                             `🤔 Antes de terminar, ¿me confirmas que no deseas continuar buscando empleo con nosotros? ¡Aún podemos encontrar algo para ti! 💪`,
