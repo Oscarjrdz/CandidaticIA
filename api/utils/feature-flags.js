@@ -4,18 +4,8 @@
  */
 
 export const FEATURES = {
-    // Backend Cache (Fase 1) - ENABLED BY DEFAULT ✅
+    // Backend Cache — usado en agent.js y intent-classifier.js ✅
     USE_BACKEND_CACHE: process.env.ENABLE_CACHE !== 'false',
-
-    // Message Queue (Fase 2) - ENABLED BY DEFAULT ✅
-    USE_MESSAGE_QUEUE: process.env.ENABLE_QUEUE !== 'false',
-
-    // WebSockets (Fase 3)
-    USE_WEBSOCKETS: process.env.ENABLE_WEBSOCKETS === 'true',
-
-    // Advanced optimizations
-    USE_REDIS_PIPELINE: process.env.ENABLE_REDIS_PIPELINE === 'true',
-    USE_AI_CACHE: process.env.ENABLE_AI_CACHE === 'true'
 };
 
 /**

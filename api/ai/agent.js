@@ -1788,10 +1788,6 @@ ${safeDnaLines}
                 // do NOT run the recruiter AI — it may return { move: exit } and wrongly
                 // trigger the No Interesa flow. Just respond with a warm farewell.
                 {
-                    // 🎟️ CITA-CONFIRMED FAREWELL GUARD: If the candidate already has a confirmed
-                    // appointment (citaFecha + citaHora) and sends a farewell/thanks message,
-                    // do NOT run the recruiter AI — it may return { move: exit } and wrongly
-                    // trigger the No Interesa flow. Just respond with a warm farewell.
                     const mdStr = candidateData.projectMetadata;
                     const parsedMd = (typeof mdStr === 'string' && mdStr.trim() !== '') ? JSON.parse(mdStr) : (mdStr || {});
                     const mergedMeta = { ...parsedMd, ...(candidateUpdates.projectMetadata || {}) };
