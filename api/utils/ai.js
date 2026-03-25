@@ -209,23 +209,95 @@ Debes responder ESTRICTAMENTE con un JSON con la siguiente estructura:
     }
 }
 
+// ─────────────────────────────────────────────────────────────────
+// 🗺️ MUNICIPIO DICTIONARY — Nuevo León + estados frecuentes
+// Capa 1: instantánea, sin costo de IA. Nombres cortos canónicos.
+// ─────────────────────────────────────────────────────────────────
+const normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+const MUNICIPIO_MAP = new Map(Object.entries({
+    // ── MONTERREY ÁREA METROPOLITANA ──
+    'monterrey': 'Monterrey', 'mty': 'Monterrey', 'mtyrrey': 'Monterrey',
+    'guadalupe': 'Guadalupe', 'gdlpe': 'Guadalupe', 'guada': 'Guadalupe',
+    'apodaca': 'Apodaca', 'ciudad apodaca': 'Apodaca', 'cd apodaca': 'Apodaca',
+    'escobedo': 'Escobedo', 'gral escobedo': 'Escobedo', 'general escobedo': 'Escobedo',
+    'general mariano escobedo': 'Escobedo', 'gral mariano escobedo': 'Escobedo',
+    'san nicolas': 'San Nicolás', 'san nicolas de los garza': 'San Nicolás',
+    'san nico': 'San Nicolás', 'sn nicolas': 'San Nicolás',
+    'san pedro': 'San Pedro', 'san pedro garza garcia': 'San Pedro',
+    'spgg': 'San Pedro', 'san pedro garza garcía': 'San Pedro',
+    'santa catarina': 'Santa Catarina', 'santa': 'Santa Catarina', 'sta catarina': 'Santa Catarina',
+    'juarez': 'Juárez', 'ciudad juarez nl': 'Juárez', 'cd juarez nl': 'Juárez',
+    'garcia': 'García', 'ciudad garcia': 'García', 'cd garcia': 'García',
+    'pesqueria': 'Pesquería', 'pesqueria nl': 'Pesquería',
+    'zuazua': 'Zuazua', 'general zuazua': 'Zuazua', 'gral zuazua': 'Zuazua',
+    'santiago': 'Santiago', 'santiago nl': 'Santiago',
+    // ── NUEVO LEÓN — RESTO ──
+    'abasolo': 'Abasolo', 'agualeguas': 'Agualeguas', 'aldama': 'Aldama',
+    'allende': 'Allende', 'anahuac': 'Anáhuac', 'anahuac nl': 'Anáhuac',
+    'aramberri': 'Aramberri', 'bustamante': 'Bustamante',
+    'cadereyta': 'Cadereyta', 'cadereyta jimenez': 'Cadereyta',
+    'carmen': 'Carmen', 'cerralvo': 'Cerralvo', 'china': 'China',
+    'cienega': 'Ciénega', 'cienega de flores': 'Ciénega',
+    'doctor arroyo': 'Doctor Arroyo', 'dr arroyo': 'Doctor Arroyo',
+    'doctor coss': 'Doctor Coss', 'dr coss': 'Doctor Coss',
+    'doctor gonzalez': 'Doctor González', 'dr gonzalez': 'Doctor González',
+    'galeana': 'Galeana',
+    'general bravo': 'General Bravo', 'gral bravo': 'General Bravo',
+    'general teran': 'General Terán', 'gral teran': 'General Terán',
+    'general trevino': 'General Treviño', 'gral trevino': 'General Treviño',
+    'general zaragoza': 'General Zaragoza', 'gral zaragoza': 'General Zaragoza',
+    'los herreras': 'Los Herreras', 'herreras': 'Los Herreras',
+    'higueras': 'Higueras', 'hualahuises': 'Hualahuises',
+    'iturbide': 'Iturbide', 'lampazos': 'Lampazos', 'lampazos de naranjo': 'Lampazos',
+    'linares': 'Linares', 'marin': 'Marín',
+    'melchor ocampo': 'Melchor Ocampo', 'mier y noriega': 'Mier y Noriega',
+    'mina': 'Mina', 'montemorelos': 'Montemorelos',
+    'paras': 'Parás', 'los ramones': 'Los Ramones', 'ramones': 'Los Ramones',
+    'rayones': 'Rayones', 'sabinas hidalgo': 'Sabinas', 'sabinas': 'Sabinas',
+    'salinas victoria': 'Salinas', 'salinas': 'Salinas',
+    'hidalgo': 'Hidalgo', 'vallecillo': 'Vallecillo', 'villaldama': 'Villaldama',
+    // ── OTROS ESTADOS FRECUENTES ──
+    // CDMX / Estado de México
+    'cdmx': 'CDMX', 'ciudad de mexico': 'CDMX', 'df': 'CDMX', 'ciudad mexico': 'CDMX',
+    'ecatepec': 'Ecatepec', 'naucalpan': 'Naucalpan', 'tlalnepantla': 'Tlalnepantla',
+    'nezahualcoyotl': 'Neza', 'neza': 'Neza', 'toluca': 'Toluca',
+    // Tamaulipas
+    'matamoros': 'Matamoros', 'reynosa': 'Reynosa', 'nuevo laredo': 'Nuevo Laredo',
+    'tampico': 'Tampico', 'ciudad victoria': 'Ciudad Victoria',
+    // Coahuila
+    'torreon': 'Torreón', 'saltillo': 'Saltillo', 'monclova': 'Monclova',
+    // San Luis Potosí
+    'san luis potosi': 'San Luis Potosí', 'slp': 'San Luis Potosí',
+    // Jalisco
+    'guadalajara': 'Guadalajara', 'gdl': 'Guadalajara', 'zapopan': 'Zapopan',
+    // Otros
+    'tijuana': 'Tijuana', 'mexicali': 'Mexicali', 'culiacan': 'Culiacán',
+    'hermosillo': 'Hermosillo', 'chihuahua': 'Chihuahua', 'durango': 'Durango',
+    'leon': 'León', 'irapuato': 'Irapuato', 'celaya': 'Celaya',
+    'queretaro': 'Querétaro', 'puebla': 'Puebla', 'veracruz': 'Veracruz',
+    'merida': 'Mérida', 'cancun': 'Cancún', 'acapulco': 'Acapulco',
+    'morelia': 'Morelia', 'aguascalientes': 'Aguascalientes', 'oaxaca': 'Oaxaca',
+}));
+
 export async function cleanMunicipioWithAI(municipio) {
     if (!municipio || municipio.length < 2) return municipio;
 
+    // Capa 1: Diccionario instantáneo
+    const key = normalize(municipio);
+    if (MUNICIPIO_MAP.has(key)) return MUNICIPIO_MAP.get(key);
+
+    // Búsqueda parcial: si el input contiene una clave conocida (ej: "vivo en escobedo")
+    for (const [k, v] of MUNICIPIO_MAP.entries()) {
+        if (key.includes(k) && k.length > 4) return v;
+    }
+
+    // Capa 2: IA para municipios no en el diccionario
     try {
         const { getOpenAIResponse } = await import('./openai.js');
-        const prompt = `Corrige la ortografía y devuelve el nombre OFICIAL y COMPLETO del municipio: "${municipio}".
-REGLAS IMPORTANTES:
-1. Prioriza municipios del estado de Nuevo León, México.
-2. Si el usuario dice un nombre corto o informal, conviértelo al oficial.
-   - Ejemplo: "Escobedo" -> "General Mariano Escobedo"
-   - Ejemplo: "San Pedro" -> "San Pedro Garza García"
-   - Ejemplo: "San Nicolás" -> "San Nicolás de los Garza"
-   - Ejemplo: "Apodaca" -> "Ciudad Apodaca"
-   - Ejemplo: "Santa" -> "Santa Catarina"
-3. Si es de otro estado de México, también corrígelo a su nombre oficial.
-4. Si no es un municipio o es ambiguo, devuélvelo corregido ortográficamente en Title Case.
-Responde únicamente con el nombre oficial del municipio, sin estados, sin puntos ni explicaciones.
+        const prompt = `Identifica el nombre del municipio o ciudad en: "${municipio}".
+Devuelve SOLO el nombre corto y común del municipio en Title Case, sin estado, sin puntos.
+Si no parece un municipio, devuélvelo con ortografía corregida en Title Case.
 Respuesta:`;
 
         const result = await getOpenAIResponse([], prompt, 'gpt-4o-mini');
