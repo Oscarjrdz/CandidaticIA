@@ -2630,10 +2630,8 @@ ${safeDnaLines}
                     const _niGateAlreadyPending = await getNoInteresaGateFlag(redis, candidateId);
                     if (hasExitTag && !_niGateAlreadyPending) {
                         const _NI_GATE_QUESTIONS = [
-                            `⚠️ Espera, antes de cerrar tu proceso... ¿Estás segur@ de que no quieres continuar? ¡Tenemos vacantes que podrían ser perfectas para ti! 🌟`,
                             `🙋‍♀️ ¡Un momento! ¿Confirmas que ya no te interesa seguir con tu registro? No quisiera que perdieras una gran oportunidad 💼✨`,
                             `😊 Antes de que te vayas... ¿Segur@ que no quieres que te ayude a encontrar empleo? Puede que tengamos algo ideal para ti 🎯`,
-                            `💛 ¡Oye, espera! ¿De verdad ya no quieres continuar con tu proceso de empleo? Solo dime *"sí quiero salir"* para cerrar, o *"no, sigo"* si quieres continuar 🚀`,
                             `🤔 Antes de terminar, ¿me confirmas que no deseas continuar buscando empleo con nosotros? ¡Aún podemos encontrar algo para ti! 💪`,
                         ];
                         // Rotate variant using cta_idx counter (reuse same mechanism)
