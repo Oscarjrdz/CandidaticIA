@@ -1702,6 +1702,7 @@ ${safeDnaLines}
 
                 // --- MULTI-VACANCY REJECTION SHIELD ---
                 let skipRecruiterInference = false;
+                let isHandlingPivot = false; // Set to true when PIVOT GUARD presents next vacancy
 
                 // ⚡ FIX 2: Run intent classifier IN PARALLEL with the recruiter LLM
                 // We only need the result if the candidate rejected/pivoted — checked after both resolve
@@ -2648,6 +2649,22 @@ ${safeDnaLines}
                                 extractedMoveTarget = null;
                             }
                         }
+                    }
+
+                    // 🛡️ REJECTION-SHIELD COLLISION GUARD
+                    // If the Multi-Vacancy Rejection Shield already handled this turn
+                    // (it set skipRecruiterInference=true and wrote `{ move: exit }` in thought_process
+                    // purely as a log label), the MoveTag parser above may have misread that
+                    // string as a real exit command → hasExitTag=true.
+                    // ALSO covers isHandlingPivot turns: the LLM just presented a new vacancy
+                    // in response to "Sí" — any exit tag it emits is a false positive.
+                    // Clear it here so CITADOS CANCELLATION PIVOT and NO_INTERESA GATE don't
+                    // double-fire on the same turn where pivot was already sent.
+                    if ((skipRecruiterInference || isHandlingPivot) && hasExitTag) {
+                        console.log(`[COLLISION GUARD] skipRecruiterInference=${skipRecruiterInference} isHandlingPivot=${isHandlingPivot} → clearing false hasExitTag.`);
+                        hasExitTag = false;
+                        extractedMoveTarget = null;
+                        hasMoveTag = false;
                     }
 
                     // 🚧 NO INTERESA CONFIRMATION GATE
