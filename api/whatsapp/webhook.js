@@ -75,8 +75,8 @@ export default async function handler(req, res) {
 
             const phone = from.replace(/\D/g, '');
             
-            // 🛡️ BLOCK ALIEN NUMBERS (Must be a valid 10-15 digit phone)
-            if (phone.length < 10 || phone.length > 16) {
+            // 🛡️ BLOCK ALIEN NUMBERS (Must be a valid 10-13 digit phone — blocks Meta/FB Page IDs)
+            if (phone.length < 10 || phone.length > 13) {
                 console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando ID alienígena o corrompido: ${phone} (Original: ${from})`);
                 return res.status(200).send('alien_number_ignored');
             }
