@@ -1159,7 +1159,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
                             await sendUltraMsgMessage(config.instanceId, config.token, phone, noVacMsg, 'chat', { priority: 0 });
                             await saveMessage(candidateId, { from: 'bot', content: noVacMsg, timestamp: new Date().toISOString() });
-                            await new Promise(r => setTimeout(r, 1800));
+                            await new Promise(r => setTimeout(r, 1000));
                             await sendUltraMsgMessage(config.instanceId, config.token, phone, profileMsg, 'chat', { priority: 1 });
                             await saveMessage(candidateId, { from: 'bot', content: profileMsg, timestamp: new Date().toISOString() });
 
@@ -1282,7 +1282,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
 
                     await sendUltraMsgMessage(config.instanceId, config.token, phone, greetText, 'chat', { priority: 0 });
                     await saveMessage(candidateId, { from: 'bot', content: greetText, timestamp: new Date().toISOString() });
-                    await new Promise(r => setTimeout(r, 2000));
+                    await new Promise(r => setTimeout(r, 1200));
                     await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaBubble, 'chat', { priority: 1 });
                     await saveMessage(candidateId, { from: 'bot', content: ctaBubble, timestamp: new Date().toISOString() });
 
@@ -1797,22 +1797,35 @@ ${safeDnaLines}
                         mergedMeta?.citaFecha && mergedMeta?.citaHora
                         && mergedMeta.citaFecha !== 'null' && mergedMeta.citaHora !== 'null'
                     );
+                    // Intercepts:
+                    // A) Farewell/ack messages (bye, gracias, oki, listo...)
+                    // B) Casual greetings or identity questions when cita already confirmed
+                    //    (hola, buenas, sabes quien soy — should get a cita reminder, not the recruiter flow)
                     const FAREWELL_RE = /^(bye|adi[oó]s|hasta luego|chao|gracias|ok gracias|graciass|hasta pronto|nos vemos|cu[ií]date|hasta la pr[oó]xima|👋|🙋|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche|ok+i*|oke+y?|okey|de acuerdo|listo|entendido|recibido|perfecto|anotado|ah[ií]\s+estar[eé]|ah[ií]\s+voy|estar[eé]\s+ah[ií]|vale|✅|👍|🙌|💪|😊|🌸|🥰)\s*[!.?🥰😁😄🤗💖✨🌸]*$/i;
-                    if (hasCitaConfirmed && FAREWELL_RE.test(aggregatedText.trim())) {
+                    const CASUAL_RE = /^(hola+|hey|buenas|buen d[ií]a|buenos d[ií]as|qu[eé] tal|como est[aá]s|sabes quien soy|me recuerdas|qu[eé] onda|qvo|q tal|ya s[eé] quien eres)\s*[!.?]*$/i;
+                    if (hasCitaConfirmed && (FAREWELL_RE.test(aggregatedText.trim()) || CASUAL_RE.test(aggregatedText.trim()))) {
                         const candFirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || 'tú').split(' ')[0];
-                        const humanCitaFecha = mergedMeta.citaFecha.includes('-')
+                        const _citaMeta = mergedMeta?.citaFecha ? mergedMeta : parsedMd;
+                        const humanCitaFecha = (_citaMeta.citaFecha || '').includes('-')
                             ? (() => {
-                                const p = mergedMeta.citaFecha.split('-');
+                                const p = (_citaMeta.citaFecha || '').split('-');
                                 if (p.length === 3) {
                                     const D = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
                                     const M = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
                                     const d = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
                                     return `${D[d.getDay()]} ${d.getDate()} de ${M[d.getMonth()]}`;
                                 }
-                                return mergedMeta.citaFecha;
+                                return _citaMeta.citaFecha;
                             })()
-                            : mergedMeta.citaFecha;
-                        responseTextVal = `¡Hasta pronto, ${candFirstName}! 🌸 Recuerda que te esperamos el ${humanCitaFecha} a las ${mergedMeta.citaHora}. ¡Mucho éxito! 👋`;
+                            : (_citaMeta.citaFecha || '');
+                        const isCasual = CASUAL_RE.test(aggregatedText.trim());
+                        if (isCasual) {
+                            // Greeting/identity question → personalized reminder
+                            responseTextVal = `¡Hola, ${candFirstName}! 😊 Claro que te recuerdo. Tienes tu entrevista agendada para el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Te esperamos! 🌟`;
+                        } else {
+                            // Farewell/ack → warm send-off
+                            responseTextVal = `¡Hasta pronto, ${candFirstName}! 🌸 Recuerda que te esperamos el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Mucho éxito! 👋`;
+                        }
                         skipRecruiterInference = true;
                     }
                 }
@@ -3801,7 +3814,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         usage: { total_tokens: 0 }
                     };
                 } else {
-                    gptResult = await getOpenAIResponse(historyForGpt, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" }, null, 600);
+                    gptResult = await getOpenAIResponse(historyForGpt, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" }, null, 500);
                 }
 
                 if (gptResult?.content) {
@@ -4221,7 +4234,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     if (!isSimulatorPhone) {
                         for (let i = 0; i < messagesToSend.length; i++) {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
-                            if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));
+                            if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 900));
                         }
                     }
                 }
