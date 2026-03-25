@@ -153,14 +153,14 @@ const AutomationsSection = ({ showToast }) => {
             {/* Command Bar: Standardized Style */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px] mb-6">
                 <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-500/20 flex items-center justify-center transition-all">
-                        <Brain className="w-5 h-5 text-white" />
+                    <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center transition-all">
+                        <Brain className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">EXTRACCIÓN INTELIGENTE</h2>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
-                            <p className="text-[10px] font-black tracking-widest uppercase text-indigo-600 dark:text-indigo-400">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                            <p className="text-[10px] font-black tracking-widest uppercase text-blue-600 dark:text-blue-400">
                                 MOTOR DE IA ACTIVO
                             </p>
                         </div>
@@ -171,7 +171,7 @@ const AutomationsSection = ({ showToast }) => {
                     <Button
                         onClick={() => setShowCreateModal(true)}
                         icon={Plus}
-                        className="rounded-2xl shadow-lg shadow-indigo-500/20 hover:scale-105 transition-all duration-300 bg-indigo-600 hover:bg-indigo-700"
+                        className="rounded-2xl shadow-lg shadow-blue-500/20 hover:scale-105 transition-all duration-300 bg-blue-600 hover:bg-blue-700"
                     >
                         Nueva Regla
                     </Button>

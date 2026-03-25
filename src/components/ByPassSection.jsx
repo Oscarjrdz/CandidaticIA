@@ -351,15 +351,15 @@ const ByPassSection = ({ showToast }) => {
             {/* Master ByPass Controller: Matched to Bot IA style */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
                 <div className="flex items-center space-x-4">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center transition-all ${systemActive ? 'bg-blue-600 shadow-lg shadow-blue-600/20' : 'bg-gray-100 dark:bg-gray-700'}`}>
-                        <Zap className={`w-5 h-5 ${systemActive ? 'text-white' : 'text-gray-500'}`} />
+                    <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center transition-all">
+                        <Zap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">ByPass Intelligence ⚡</h2>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">BYPASS INTELLIGENCE</h2>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <span className={`w-1.5 h-1.5 rounded-full ${systemActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></span>
-                            <p className={`text-[10px] font-black tracking-widest uppercase ${systemActive ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`}>
-                                {systemActive ? 'ESCANEANDO CANDIDATOS' : 'STANDBY'}
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                            <p className="text-[10px] font-black tracking-widest uppercase text-blue-600 dark:text-blue-400">
+                                ENRUTAMIENTO AUTOMÁTICO
                             </p>
                         </div>
                     </div>
