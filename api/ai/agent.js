@@ -1823,13 +1823,13 @@ ${safeDnaLines}
                         await incrCTAIndex(redis, candidateId);
                         const isCasual = CASUAL_RE.test(aggregatedText.trim());
                         if (isCasual) {
-                            // Greeting/identity question → personalized reminder (rotating)
+                            // Greeting → warm open reply (no appointment reminder — that's for farewells)
                             const _CASUAL_VARIANTS = [
-                                `¡Hola, ${candFirstName}! 😊 Claro que te recuerdo. Tienes tu entrevista agendada para el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Te esperamos! 🌟`,
-                                `¡Qué gusto saber de ti, ${candFirstName}! 🌸 Ya tienes tu cita lista: el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Ahí nos vemos! 😊`,
-                                `¡Hola ${candFirstName}! ✨ Por supuesto que te recuerdo. Tu entrevista es el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Ya casi! 🎯`,
-                                `¡Claro que sí, ${candFirstName}! 💪 Tu cita está confirmada para el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡Te esperamos con gusto! 🌟`,
-                                `¡Hola ${candFirstName}! 😄 Tienes tu entrevista el ${humanCitaFecha} a las ${_citaMeta.citaHora || ''}. ¡No faltes! 🚀`,
+                                `¡Hola, ${candFirstName}! 😊 ¿En qué te puedo ayudar?`,
+                                `¡Buenas, ${candFirstName}! 🌟 ¿Cómo te puedo apoyar?`,
+                                `¡Hola ${candFirstName}! ✨ ¿En qué te puedo servir hoy?`,
+                                `¡Qué gusto, ${candFirstName}! 😄 ¿Cómo te puedo ayudar?`,
+                                `¡Hola ${candFirstName}! 🌸 Dime, ¿en qué te apoyo?`,
                             ];
                             responseTextVal = _CASUAL_VARIANTS[_citaIdx % _CASUAL_VARIANTS.length];
                         } else {
