@@ -794,12 +794,12 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
 
 export const DEFAULT_EXTRACTION_RULES = `
 [EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad.
-1. REFINAR: Si el dato en [ESTADO] es incompleto, fusiónalo con el nuevo.
+1. REFINAR: Si el dato en [ESTADO] ya existe y es válido, mantenlo. Si el candidato da info nueva, actualiza.
 2. FORMATO: Nombres en Title Case. Fecha DD/MM/YYYY.
-3. MUNICIPIO: Extrae el nombre CORTO y COLOQUIAL tal como lo dijo el candidato. PROHIBIDO usar el nombre oficial largo. Ejemplos: "Escobedo" NO "General Escobedo" | "Apodaca" NO "Ciudad Apodaca" | "San Nicolás" NO "San Nicolás de los Garza".
+3. MUNICIPIO (solo al extraer del mensaje nuevo del candidato): usa el nombre corto y coloquial. Si dice "General Escobedo" extrae "Escobedo". Si dice "Ciudad Apodaca" extrae "Apodaca". Si el municipio ya está guardado en [ESTADO], mantenlo SIN modificarlo.
 4. ESCOLARIDAD: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado.
 5. EMPLEO: "Empleado" o "Desempleado".
-5. CATEGORÍA: Solo de: {{categorias}}.
+6. CATEGORÍA: Solo de: {{categorias}}.
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
