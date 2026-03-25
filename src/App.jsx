@@ -22,9 +22,9 @@ import LandingPage from './components/LandingPage';
 import { getTheme, saveTheme } from './utils/storage';
 
 function App() {
-  const [user, setUser] = useState(null); // AUTH STATE RESTORED
-  const [isAuthChecking, setIsAuthChecking] = useState(true); // NEW: Prevent Landing Ghost
-  const [showLogin, setShowLogin] = useState(false); // NEW: Toggle between Landing and Login
+  const [user, setUser] = useState(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
+  const [showLogin, setShowLogin] = useState(false);
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
   const [theme, setTheme] = useState('light');
@@ -42,7 +42,6 @@ function App() {
         localStorage.removeItem('candidatic_user_session');
       }
     }
-    // Small delay to make it feel professional and ensure state is set
     setTimeout(() => {
       setIsAuthChecking(false);
     }, 600);
@@ -62,7 +61,6 @@ function App() {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     saveTheme(newTheme);
-
     if (newTheme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
@@ -83,8 +81,6 @@ function App() {
     setInstanceId(newInstanceId);
     setToken(newToken);
   };
-
-
 
   // AUTH GUARD
   if (isAuthChecking) {
@@ -114,41 +110,11 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Header */}
-        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90 shrink-0">
-          <div className="px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {activeSection === 'candidates' ? 'Candidatos'
-                    : activeSection === 'bot-ia' ? 'Bot IA Candidatic'
-                      : activeSection === 'simulator' ? 'Simulador'
-                        : activeSection === 'automations' ? 'Automatizaciones'
-                        : activeSection === 'vacancies' ? 'Vacantes'
-                          : activeSection === 'history' ? 'Historial'
-                            : activeSection === 'users' ? 'Usuarios'
-                              : activeSection === 'post-maker' ? 'Post Maker'
-                                : activeSection === 'media-library' ? 'Biblioteca Multimedia'
-                                  : activeSection === 'projects' ? 'Proyectos'
-                                    : activeSection === 'bypass' ? 'Sistema ByPass'
-                                      : activeSection === 'instances' ? 'Instancias (Líneas)'
-                                        : 'Configuración'}
-                </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
-                    : activeSection === 'bot-ia' ? 'Configuración de Comportamiento del Bot'
-                      : activeSection === 'simulator' ? 'Chatea con Brenda en tiempo real'
-                        : activeSection === 'users' ? 'Gestión de equipo y permisos'
-                        : activeSection === 'post-maker' ? 'Creación de Post para Facebook'
-                          : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
-                            : activeSection === 'projects' ? 'Gestión y organización de proyectos'
-                              : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos a proyectos'
-                                : activeSection === 'instances' ? 'Gestión de Instancias de WhatsApp y Múltiples Líneas'
-                                  : 'Configuración del Sistema'
-                  }
-                </p>
-              </div>
 
+        {/* Top Bar — solo saludo + tema, sin título duplicado */}
+        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90 shrink-0">
+          <div className="px-8 py-3">
+            <div className="flex items-center justify-end">
               <div className="flex items-center space-x-4">
                 {/* Greeting */}
                 {user && user.name && (
@@ -188,7 +154,6 @@ function App() {
         <main className="flex-1 px-8 py-8 overflow-y-auto overflow-x-hidden flex flex-col min-h-0">
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
-
           ) : activeSection === 'bot-ia' ? (
             <BotIASection showToast={showToast} />
           ) : activeSection === 'simulator' ? (
