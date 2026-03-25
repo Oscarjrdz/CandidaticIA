@@ -160,7 +160,7 @@ const BotIASection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-4 w-full pb-8 animate-in fade-in duration-700">
+        <div className="space-y-4 w-full pb-8">
             {/* Master Bot Controller: Compact Native */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
                 <div className="flex items-center space-x-4">

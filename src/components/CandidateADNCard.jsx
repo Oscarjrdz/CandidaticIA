@@ -74,7 +74,7 @@ const CandidateADNCard = ({ candidate }) => {
 
             {/* Grid Expansion (Details) */}
             {expanded && (
-                <div className="p-4 bg-gray-50/30 dark:bg-gray-900/40 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="p-4 bg-gray-50/30 dark:bg-gray-900/40 slide-in-from-top-2 duration-300">
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         <ProfileItem
                             icon={User}

@@ -71,7 +71,7 @@ const RibbonSelect = ({ label, options, selected, onToggle, placeholder = "Selec
                 </div>
 
                 {isOpen && (
-                    <div className="absolute z-[120] mt-2 w-[240px] max-h-72 overflow-y-auto bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] p-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute z-[120] mt-2 w-[240px] max-h-72 overflow-y-auto bg-white dark:bg-slate-900 border-2 border-slate-100 dark:border-slate-800 rounded-2xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.25)] p-2 slide-in-from-top-2 duration-200">
                         <div className="p-2 border-b border-slate-50 dark:border-slate-800 mb-2">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Opciones Disponibles</span>
                         </div>
@@ -347,7 +347,7 @@ const ByPassSection = ({ showToast }) => {
     };
 
     return (
-        <div className="space-y-4 w-full pb-8 animate-in fade-in duration-700">
+        <div className="space-y-4 w-full pb-8">
             {/* Master ByPass Controller: Matched to Bot IA style */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
                 <div className="flex items-center space-x-4">

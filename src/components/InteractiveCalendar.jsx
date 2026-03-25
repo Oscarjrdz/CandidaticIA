@@ -260,7 +260,7 @@ export default function InteractiveCalendar({ options = [], onChange }) {
             {/* Right: Slots for selected date & Legacy */}
             <div className="flex-1 flex flex-col border-l border-slate-100 dark:border-slate-800/50 pl-0 md:pl-6 pt-4 md:pt-0 min-h-[300px]">
                 {selectedDate ? (
-                    <div className="flex-1 flex flex-col h-full animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div className="flex-1 flex flex-col h-full slide-in-from-right-4 duration-300">
                         {/* ✨ Date header + delete entire date button */}
                         <div className="mb-4 flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 min-w-0">

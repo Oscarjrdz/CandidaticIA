@@ -199,7 +199,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                         {/* LOGIN DROPDOWN */}
                         {isLoginOpen && (
-                            <div className="absolute right-0 top-full mt-6 w-[38rem] bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_50px_rgb(8_112_184_/_0.3)] border border-white/50 p-8 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-500 ease-out origin-top-right ring-1 ring-white/60">
+                            <div className="absolute right-0 top-full mt-6 w-[38rem] bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_50px_rgb(8_112_184_/_0.3)] border border-white/50 p-8 z-50 zoom-in-95 slide-in-from-top-4 ease-out origin-top-right ring-1 ring-white/60">
                                 {/* Decorator Arrow */}
                                 <div className="absolute -top-3 right-8 w-6 h-6 bg-white/95 backdrop-blur-3xl transform rotate-45 border-t border-l border-white/50"></div>
 
@@ -219,7 +219,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     </div>
 
                                     {loginError && (
-                                        <div className="mb-4 p-3 bg-red-50/50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-semibold shadow-sm backdrop-blur-sm animate-in shake">
+                                        <div className="mb-4 p-3 bg-red-50/50 border border-red-100 text-red-600 text-xs rounded-xl text-center font-semibold shadow-sm backdrop-blur-sm shake">
                                             {loginError}
                                         </div>
                                     )}
@@ -326,7 +326,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                             </button>
                                         </form>
                                     ) : (
-                                        <div className="text-center space-y-6 animate-in zoom-in duration-500">
+                                        <div className="text-center space-y-6 zoom-in">
                                             <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
                                                 <Zap className="w-10 h-10 text-yellow-600" />
                                             </div>
@@ -412,7 +412,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                                 {/* SEARCH RESULTS POPUP */}
                                 {searchResults && (
-                                    <div className="mt-6 bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-6 text-left animate-in slide-in-from-bottom-4 duration-500">
+                                    <div className="mt-6 bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-6 text-left">
                                         <div className="flex items-start justify-between">
                                             <div>
                                                 <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">

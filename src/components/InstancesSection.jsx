@@ -177,7 +177,7 @@ const InstancesSection = ({ showToast }) => {
     };
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="max-w-5xl mx-auto space-y-6">
             {/* Header */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
                 <div className="flex items-center space-x-4">
@@ -389,7 +389,7 @@ const InstancesSection = ({ showToast }) => {
 
             {/* QR Modal Overlay */}
             {(qrData || qrLoading) && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-300">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm duration-300">
                     <div className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[32px] p-8 shadow-2xl relative shadow-blue-500/20">
                         <button 
                             onClick={() => { setQrData(null); setQrLoading(false); }}

@@ -123,7 +123,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 bg-gray-900/60 backdrop-blur-xl animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 bg-gray-900/60 backdrop-blur-xl duration-300">
             <div
                 ref={modalRef}
                 className="w-full max-w-2xl bg-white dark:bg-gray-950 rounded-[40px] shadow-[0_40px_100px_rgba(0,0,0,0.5)] overflow-hidden animate-spring-in border border-white/20"
@@ -186,7 +186,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
 
                             {/* Status Pills */}
                             {loading && (
-                                <div className="mt-6 flex justify-start animate-in slide-in-from-bottom-2 duration-500">
+                                <div className="mt-6 flex justify-start">
                                     <div className="bg-blue-50/80 dark:bg-blue-900/20 px-4 py-2 rounded-full border border-blue-100/50 dark:border-blue-800/30 flex items-center space-x-3">
                                         <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
                                         <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
@@ -199,7 +199,7 @@ const MagicSearch = ({ onResults, showToast, initialMode = 'search', customTitle
 
                         {/* Result Skeleton */}
                         {loading && (
-                            <div className="space-y-4 animate-in fade-in duration-1000">
+                            <div className="space-y-4 duration-1000">
                                 {[1, 2].map(i => (
                                     <div key={i} className="flex items-center space-x-4 p-5 rounded-[24px] bg-gray-50/30 dark:bg-gray-900/20 border border-gray-100/50 dark:border-gray-800/50">
                                         <div className="w-12 h-12 bg-gray-200 dark:bg-gray-800 rounded-xl animate-pulse"></div>

@@ -1351,7 +1351,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 {/* AI Step Config Modal */}
                 {openStepConfig && (
                     <div
-                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 duration-200"
                         onKeyDown={(e) => {
                             if (e.key === 'Escape') setOpenStepConfig(null);
                         }}
@@ -1765,7 +1765,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             {/* Create Modal */}
             {showCreateModal && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 animate-in fade-in duration-300"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-md p-4 duration-300"
                     onClick={(e) => {
                         if (e.target === e.currentTarget) setShowCreateModal(false);
                     }}

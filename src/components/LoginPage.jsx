@@ -153,7 +153,7 @@ export default function LoginPage({ onLogin }) {
 
                 {/* Modern Brand Header */}
                 <div className="text-center mb-8">
-                    <div className="relative inline-block transition-transform duration-500 hover:scale-105">
+                    <div className="relative inline-block transition-transform hover:scale-105">
                         <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-800 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-4 ring-4 ring-blue-50/50 dark:ring-blue-900/20">
                             <BrainCircuit className="w-12 h-12 text-white stroke-[1.5]" />
                         </div>
@@ -166,14 +166,14 @@ export default function LoginPage({ onLogin }) {
 
                 {/* ERROR ALERT */}
                 {error && (
-                    <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-600 dark:text-red-400 rounded-r-xl text-sm font-semibold shadow-sm animate-in shake">
+                    <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 text-red-600 dark:text-red-400 rounded-r-xl text-sm font-semibold shadow-sm shake">
                         {error}
                     </div>
                 )}
 
                 {/* STEP 1: PHONE */}
                 {step === 'phone' && (
-                    <form onSubmit={handlePhoneSubmit} className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <form onSubmit={handlePhoneSubmit} className="space-y-8">
                         <div className="space-y-4">
                             <label className="block text-center text-sm font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest">
                                 NÚMERO DE WHATSAPP
@@ -208,7 +208,7 @@ export default function LoginPage({ onLogin }) {
 
                 {/* STEP 2: SPLIT PIN INPUT */}
                 {step === 'pin' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
+                    <div className="space-y-8 slide-in-from-right-8">
                         <div className="text-center">
                             <h2 className="text-xl font-bold text-gray-900 dark:text-white">Código de Verificación</h2>
                             <p className="text-sm text-gray-500 mt-2">
@@ -254,7 +254,7 @@ export default function LoginPage({ onLogin }) {
 
                 {/* STEP 3: REGISTER */}
                 {step === 'register' && (
-                    <form onSubmit={handleRegisterSubmit} className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
+                    <form onSubmit={handleRegisterSubmit} className="space-y-6 slide-in-from-right-8">
                         <div className="text-center mb-6">
                             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
                                 <UserPlus className="w-8 h-8 text-green-600" />
@@ -287,7 +287,7 @@ export default function LoginPage({ onLogin }) {
 
                 {/* STEP 4: PENDING */}
                 {step === 'pending' && (
-                    <div className="text-center space-y-8 animate-in zoom-in duration-500 py-8">
+                    <div className="text-center space-y-8 zoom-in py-8">
                         <div className="relative">
                             <div className="w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mx-auto animate-pulse">
                                 <ShieldCheck className="w-12 h-12 text-yellow-600" />

@@ -257,7 +257,7 @@ const PostMakerSection = () => {
     };
 
     return (
-        <div className="space-y-4 w-full pb-8 animate-in fade-in duration-700">
+        <div className="space-y-4 w-full pb-8">
 
             {/* Header: Command Bar Style */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
@@ -352,7 +352,7 @@ const PostMakerSection = () => {
                             </div>
 
                             {redirectEnabled && (
-                                <div className="space-y-1 animate-in fade-in slide-in-from-top-1">
+                                <div className="space-y-1 slide-in-from-top-1">
                                     <label className="text-xs font-bold text-gray-500 uppercase">URL de Destino</label>
                                     <div className="flex items-center gap-2">
                                         <ExternalLink className="w-4 h-4 text-gray-400" />
