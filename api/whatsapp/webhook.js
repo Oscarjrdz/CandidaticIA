@@ -36,6 +36,17 @@ if (process.env.DEBUG_MODE !== 'true') {
     console.log = function () { };
 }
 
+/**
+ * 🧹 Limpia un JID/número de WhatsApp a dígitos puros.
+ * Elimina sufijos de multi-dispositivo como ":15" antes de extraer dígitos.
+ * Ej: "521812345678:15@s.whatsapp.net" → "521812345678"
+ */
+const cleanPhoneNumber = (raw = '') => {
+    // Remover sufijo de dispositivo (:NN) antes de @
+    const withoutDevice = raw.split('@')[0].split(':')[0];
+    return withoutDevice.replace(/\D/g, '');
+};
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -54,9 +65,12 @@ export default async function handler(req, res) {
         if (eventType === 'message_ack' || eventType === 'message.ack') {
             const { id, status, to } = messageData;
             try {
-                const phone = to?.replace(/\D/g, '');
-                const candidateId = await getCandidateIdByPhone(phone);
-                if (candidateId) await updateMessageStatus(candidateId, id, status);
+                // 🛡️ Use cleanPhoneNumber to strip device suffix (e.g. :15) before lookup
+                const phone = cleanPhoneNumber(to || '');
+                if (phone.length >= 10) {
+                    const candidateId = await getCandidateIdByPhone(phone);
+                    if (candidateId) await updateMessageStatus(candidateId, id, status);
+                }
             } catch (ackErr) { /* Silent fail */ }
             return res.status(200).send('ok');
         }
@@ -73,12 +87,20 @@ export default async function handler(req, res) {
                 return res.status(200).send('broadcast_ignored');
             }
 
-            const phone = from.replace(/\D/g, '');
+            // 🧹 Strip device suffix before extracting digits (prevents ghost duplicates)
+            const phone = cleanPhoneNumber(from);
             
-            // 🛡️ BLOCK ALIEN NUMBERS (Must be a valid 10-13 digit phone — blocks Meta/FB Page IDs)
+            // 🛡️ BLOCK ALIEN NUMBERS
+            // Regla 1: Longitud mínima/máxima (bloquea IDs de Meta/FB y números corruptos)
             if (phone.length < 10 || phone.length > 13) {
-                console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando ID alienígena o corrompido: ${phone} (Original: ${from})`);
+                console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando ID alienígena o corrompido: ${phone} (${phone.length} dígitos, Original: ${from})`);
                 return res.status(200).send('alien_number_ignored');
+            }
+            // Regla 2: Números de 12-13 dígitos deben empezar con 52 (México)
+            // Números de 10 dígitos son locales válidos (sin código de país)
+            if (phone.length >= 12 && !phone.startsWith('52')) {
+                console.log(`[WEBHOOK/SPAM-PROTECT] Número no mexicano bloqueado: ${phone} (Original: ${from})`);
+                return res.status(200).send('non_mexican_number_ignored');
             }
 
             if (await isMessageProcessed(msgId)) {
