@@ -111,10 +111,43 @@ function App() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 
-        {/* Top Bar — solo saludo + tema, sin título duplicado */}
+        {/* Top Bar — título de sección + saludo + tema */}
         <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90 shrink-0">
-          <div className="px-8 py-3">
-            <div className="flex items-center justify-end">
+          <div className="px-8 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {activeSection === 'candidates' ? 'Candidatos'
+                    : activeSection === 'bot-ia' ? 'Bot IA'
+                    : activeSection === 'simulator' ? 'Simulador'
+                    : activeSection === 'automations' ? 'Automatizaciones'
+                    : activeSection === 'vacancies' ? 'Vacantes'
+                    : activeSection === 'history' ? 'Historial'
+                    : activeSection === 'users' ? 'Usuarios'
+                    : activeSection === 'post-maker' ? 'Post Maker'
+                    : activeSection === 'media-library' ? 'Biblioteca Multimedia'
+                    : activeSection === 'projects' ? 'Proyectos'
+                    : activeSection === 'bypass' ? 'ByPass Intelligence'
+                    : activeSection === 'instances' ? 'Instancias de Envío'
+                    : 'Configuración'}
+                </h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
+                    : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
+                    : activeSection === 'simulator' ? 'Chatea con Brenda en tiempo real'
+                    : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
+                    : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
+                    : activeSection === 'history' ? 'Historial de conversaciones'
+                    : activeSection === 'users' ? 'Gestión de equipo y permisos'
+                    : activeSection === 'post-maker' ? 'Creación de posts para Facebook'
+                    : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
+                    : activeSection === 'projects' ? 'Gestión y organización de proyectos'
+                    : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos'
+                    : activeSection === 'instances' ? 'Gestión de conexiones WhatsApp'
+                    : 'Credenciales y configuración del sistema'}
+                </p>
+              </div>
+
               <div className="flex items-center space-x-4">
                 {/* Greeting */}
                 {user && user.name && (
