@@ -3460,6 +3460,17 @@ ${safeDnaLines}
                                 const bridgeSticker = await redis?.get(bridgeKey);
                                 if (bridgeSticker) {
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
+                                    // 🚀 BRIDGE GAP: Quick text bubble right after sticker so candidate
+                                    // sees activity while chained AI (GPT) fetches the vacancy info.
+                                    await new Promise(r => setTimeout(r, 300));
+                                    const _bFn = (candidateData.nombreReal || '').split(' ')[0] || '';
+                                    const _BRIDGE_TEXTS = [
+                                        `${_bFn ? `${_bFn}, permíteme` : 'Permíteme'} compartirte la información de la vacante 🔍`,
+                                        `${_bFn ? `${_bFn}, un` : 'Un'} momento, te comparto todos los detalles 📋`,
+                                        `Dame un instante, ${_bFn || 'amig@'}, te muestro la oportunidad 🌟`,
+                                    ];
+                                    const _btxt = _BRIDGE_TEXTS[Math.floor(Date.now() / 1000) % _BRIDGE_TEXTS.length];
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _btxt, 'chat', { priority: 0 }).catch(() => {});
                                 }
                             } else {
                             }
