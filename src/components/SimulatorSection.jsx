@@ -648,18 +648,23 @@ const SimulatorSection = ({ showToast }) => {
     return (
         <div className="h-full flex flex-col space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Header */}
-            <div className="flex justify-between items-center bg-white dark:bg-gray-800 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700">
-                <div>
-                    <h2 className="text-xl font-bold flex items-center gap-3 text-gray-900 dark:text-white">
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg text-blue-600 dark:text-blue-400">
-                            <Smartphone className="w-6 h-6" />
-                        </div>
-                        📱 Simulador de Brenda 🚀
-                    </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Prueba los flujos conversacionales, respuestas y el Radar de FAQs en tiempo real 💬.</p>
-                </div>
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
                 <div className="flex items-center space-x-4">
-                    <Button onClick={handleRestart} variant="outline" className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                        <Smartphone className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">Simulador de Brenda</h2>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                            <p className="text-[10px] font-black tracking-widest uppercase text-blue-600 dark:text-blue-400">
+                                MODO REAL-TIME
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <Button onClick={handleRestart} variant="outline" className="flex items-center gap-2 rounded-2xl">
                         <RefreshCw className="w-4 h-4" />
                         Reiniciar Chat
                     </Button>

@@ -169,7 +169,6 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate 
 
             {/* Menu Items - Top */}
             <nav className="relative flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
-                <div className="mb-4 text-[10px] font-bold text-blue-300/50 uppercase tracking-widest px-4">Principal</div>
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}

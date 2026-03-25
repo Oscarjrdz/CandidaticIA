@@ -178,20 +178,28 @@ const InstancesSection = ({ showToast }) => {
 
     return (
         <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
-                        <Server className="w-6 h-6 text-blue-500" />
-                        Instancias de Envío
-                    </h2>
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-                        Gestiona múltiples conexiones de WhatsApp simultáneas.
-                    </p>
+            {/* Header */}
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
+                <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                        <Server className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">Instancias de Envío</h2>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                            <p className="text-[10px] font-black tracking-widest uppercase text-blue-600 dark:text-blue-400">
+                                GATEWAY WAPP
+                            </p>
+                        </div>
+                    </div>
                 </div>
                 {editingIndex === null && (
-                    <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-700 text-white font-bold tracking-widest uppercase text-sm">
-                        + Nueva Instancia
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <Button onClick={openNew} className="bg-blue-600 hover:bg-blue-700 text-white font-bold tracking-widest uppercase text-sm rounded-2xl shadow-lg shadow-blue-500/20 hover:scale-105 transition-all duration-300">
+                            + Nueva Instancia
+                        </Button>
+                    </div>
                 )}
             </div>
 
