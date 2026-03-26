@@ -1941,7 +1941,7 @@ ${safeDnaLines}
                                         const _citadosIdx = project.steps?.findIndex(s =>
                                             (s.calendarOptions || []).some(o => {
                                                 const m = o.match(/^(\d{4}-\d{2}-\d{2})/);
-                                                return m && m[1] >= _todayForPivot;
+                                                return m && m[1] > _todayForPivot;
                                             })
                                         ) ?? -1;
                                         // The step right BEFORE Citados is the Vacante/recruiter step
@@ -2045,7 +2045,7 @@ ${safeDnaLines}
                 // ═══════════════════════════════════════════════════════════════════
                 const _stepHasFutureDatesForOpt = (currentStep.calendarOptions || []).some(opt => {
                     const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
-                    return m && m[1] >= _todayStrCs;
+                    return m && m[1] > _todayStrCs;
                 });
 
                 if (!skipRecruiterInference && _stepHasFutureDatesForOpt) {
@@ -2055,7 +2055,7 @@ ${safeDnaLines}
                     const _rawInputLines = _rawInputFull.split('\n').map(l => l.trim()).filter(l => l.length > 0);
                     const _rawInput = _rawInputLines[0] || _rawInputFull; // Use first line for primary parsing
                     const _futureDayOpts = (currentStep.calendarOptions || [])
-                        .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m && m[1] >= _todayStrCs; });
+                        .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m && m[1] > _todayStrCs; });
                     const _uDays = [...new Set(_futureDayOpts
                         .map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; })
                         .filter(Boolean)
@@ -3626,14 +3626,14 @@ ${safeDnaLines}
                         const _nextTodayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
                         const _nextHasFutureDays = (nextStep.calendarOptions || []).some(opt => {
                             const m = opt.match(/^(\d{4}-\d{2}-\d{2})/);
-                            return m && m[1] >= _nextTodayStr;
+                            return m && m[1] > _nextTodayStr;
                         });
 
                         if (_nextHasFutureDays) {
                             try {
                                 const _futDays = [...new Set(
                                     (nextStep.calendarOptions || [])
-                                        .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m && m[1] >= _nextTodayStr; })
+                                        .filter(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m && m[1] > _nextTodayStr; })
                                         .map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; })
                                         .filter(Boolean)
                                 )];
