@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Radio } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,6 +15,7 @@ import { deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatF
 import { generateChatHistoryText } from '../services/chatExportService';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
+import WaStatusCreator from './WaStatusCreator';
 
 /**
  * Sortable Header Sub-component
@@ -100,6 +101,7 @@ const CandidatesSection = ({ showToast }) => {
     };
 
     const [search, setSearch] = useState('');
+    const [showStatusCreator, setShowStatusCreator] = useState(false);
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
     const [hideIncomplete, setHideIncomplete] = useState(() => {
@@ -579,6 +581,26 @@ const CandidatesSection = ({ showToast }) => {
                     >
                         <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
+
+                    {/* 📡 WhatsApp Status Creator Button */}
+                    <button
+                        type="button"
+                        id="wa-status-creator-btn"
+                        onClick={() => setShowStatusCreator(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border relative overflow-hidden group"
+                        style={{
+                            background: 'linear-gradient(135deg, #075E54 0%, #25D366 100%)',
+                            color: '#fff',
+                            border: '1px solid rgba(37,211,102,0.4)',
+                            boxShadow: '0 0 12px rgba(37,211,102,0.25)',
+                        }}
+                        title="Crear estado de WhatsApp"
+                    >
+                        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity rounded-xl" />
+                        <Radio className="w-3.5 h-3.5 animate-pulse" />
+                        <span>Estado WA</span>
+                        <Sparkles className="w-3 h-3 opacity-70" />
+                    </button>
                 </div>
 
                 {/* Alerta de filtrado por IA: iOS Style */}
@@ -874,6 +896,14 @@ const CandidatesSection = ({ showToast }) => {
                     candidate={selectedCandidate}
                 />
             </ErrorBoundary>
+
+            {/* 📡 WhatsApp Status Creator Modal */}
+            {showStatusCreator && (
+                <WaStatusCreator
+                    onClose={() => setShowStatusCreator(false)}
+                    showToast={showToast}
+                />
+            )}
         </div >
     );
 };
