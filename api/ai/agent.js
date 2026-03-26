@@ -1930,6 +1930,27 @@ ${safeDnaLines}
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _pivotCtaMsg, 'chat');
                                     saveMessage(candidateId, { from: 'bot', content: _pivotCtaMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
+                                    // 🔑 CRITICAL: Move candidate BACK to the scheduling step before setting cita_pending.
+                                    // Without this, candidate stays in "Citados" and when "Sí" fires { move },
+                                    // it goes Citados → No Interesa (wrong: sends farewell).
+                                    // With this, "Sí" fires { move } from Scheduling → Citados (correct: day list + appointment).
+                                    try {
+                                        const _todayForPivot = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Monterrey' });
+                                        const _schedStep = project.steps?.find(s =>
+                                            (s.calendarOptions || []).some(o => {
+                                                const m = o.match(/^(\d{4}-\d{2}-\d{2})/);
+                                                return m && m[1] >= _todayForPivot;
+                                            })
+                                        );
+                                        if (_schedStep && _schedStep.id !== (candidateUpdates.stepId || candidateData.stepId)) {
+                                            await moveCandidateStep(project.id, candidateId, _schedStep.id);
+                                            candidateUpdates.stepId = _schedStep.id;
+                                            console.log(`[PIVOT GUARD] 📅 Moved back to scheduling step: ${_schedStep.name}`);
+                                        }
+                                    } catch (_moveErr) {
+                                        console.error('[PIVOT GUARD] Step move failed:', _moveErr.message);
+                                    }
+
                                     // Set cita_pending so next "Sí" fires appointment scheduling
                                     await setCitaPendingFlag(redis, candidateId);
 
