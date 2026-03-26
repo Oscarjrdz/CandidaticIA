@@ -52,9 +52,9 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const data = req.body || {};
-    const eventType = data.event_type || data.event || data.eventName;
-    const messageData = data.data || data;
+    const payload = req.body;
+    const eventType = payload.event_type || payload.event || payload.eventName;
+    const messageData = payload.data || payload; // Fallback to payload if data is not present
 
     if (!eventType) {
         return res.status(200).json({ success: true, message: 'Heartbeat or invalid payload' });
