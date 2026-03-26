@@ -64,10 +64,60 @@ export default async function handler(req, res) {
         // 1. Handle Message Acknowledgments
         if (eventType === 'message_ack' || eventType === 'message.ack') {
             const { id, status, to } = messageData;
+
+            // 🟢 WA STATUS VIEW (ACK directed to status@broadcast)
+            const remoteJid = messageData.__raw?.key?.remoteJid || to || '';
+            if (remoteJid.includes('status@broadcast') && status === 'read') {
+                const spectatorJid = messageData.__raw?.key?.participant || messageData.__raw?.participant;
+                if (spectatorJid) {
+                    const spectatorPhone = cleanPhoneNumber(spectatorJid);
+                    const storyId = id;
+                    try {
+                        const redis = getRedisClient();
+                        if (redis) {
+                            const rawStories = await redis.lrange('wa_stories', 0, -1);
+                            if (rawStories && rawStories.length > 0) {
+                                let updated = false;
+                                const mutations = [];
+                                for (const raw of rawStories) {
+                                    try {
+                                        const parsed = JSON.parse(raw);
+                                        // Match story using substring or precise ID since Baileys might slightly alter IDs
+                                        if (parsed.id === storyId || parsed.id?.includes(storyId)) {
+                                            if (!parsed.views) parsed.views = [];
+                                            if (!parsed.views.includes(spectatorPhone)) {
+                                                parsed.views.push(spectatorPhone);
+                                                updated = true;
+                                            }
+                                        }
+                                        mutations.push({ old: raw, newStr: JSON.stringify(parsed) });
+                                    } catch (err) {}
+                                }
+                                // Update DB atomically
+                                if (updated) {
+                                    const pipeline = redis.pipeline();
+                                    mutations.forEach(m => {
+                                        if (m.old !== m.newStr) {
+                                            pipeline.lrem('wa_stories', 0, m.old);
+                                            // Put it back to the end of list. Since we lrange 0 to -1, order might shift slightly, 
+                                            // but this is an ID based update so it's fine for simple display. For robustness, 
+                                            // ideally we use hashes, but lists are fine for ~20 items.
+                                            pipeline.lpush('wa_stories', m.newStr);
+                                        }
+                                    });
+                                    await pipeline.exec();
+                                    console.log(`[VISTO 👀] Candidato ${spectatorPhone} vio el estado WA ID: ${storyId}`);
+                                }
+                            }
+                        }
+                    } catch (e) { console.error('Error procesando View de Status:', e.message); }
+                }
+            }
+
             try {
                 // 🛡️ Use cleanPhoneNumber to strip device suffix (e.g. :15) before lookup
                 const phone = cleanPhoneNumber(to || '');
-                if (phone.length >= 10) {
+                if (phone.length >= 10 && !remoteJid.includes('status@broadcast')) {
                     const candidateId = await getCandidateIdByPhone(phone);
                     if (candidateId) await updateMessageStatus(candidateId, id, status);
                 }

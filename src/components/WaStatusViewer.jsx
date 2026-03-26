@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronLeft, Mic, Send, Eye, Camera, Smile } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Mic, Send, Eye, Camera, Smile, Trash2, Loader2, Users } from 'lucide-react';
 
 const WA_FONTS = [
     { id: 0, name: 'Sans-serif', css: '"Helvetica Neue", sans-serif' },
@@ -10,21 +10,27 @@ const WA_FONTS = [
 ];
 
 /**
- * Muestra el anillo del estado + visor de pantalla completa estilo WhatsApp
+ * Muestra el anillo del estado + visor de pantalla completa estilo WhatsApp con soporte para múltiples historias
  */
 export default function WaStatusViewer({ triggerRefresh = 0 }) {
-    const [statusData, setStatusData] = useState(null);
+    const [statuses, setStatuses] = useState([]);
     const [viewerOpen, setViewerOpen] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [deleting, setDeleting] = useState(false);
 
     const fetchStatus = async () => {
         try {
             const res = await fetch('/api/whatsapp/get-status');
-            const { success, status } = await res.json();
-            if (success && status) {
-                setStatusData(status);
+            const data = await res.json();
+            if (data.success && data.statuses && data.statuses.length > 0) {
+                // Ensure array format
+                const s = Array.isArray(data.statuses) ? data.statuses : [data.statuses];
+                setStatuses(s);
+                // Reset index only if viewer is closed to avoid jumping
+                if (!viewerOpen) setCurrentIndex(0);
             } else {
-                setStatusData(null);
+                setStatuses([]);
             }
         } catch (e) {
             console.error('Error fetching status:', e);
@@ -38,10 +44,13 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
         fetchStatus();
     }, [triggerRefresh]);
 
-    if (loading && !statusData) return null; // Wait for initial fetch
-    if (!statusData && !loading) return null; // No active status 
+    if (loading && statuses.length === 0) return null; 
+    if (statuses.length === 0 && !loading) return null; 
 
-    const { type, content, caption, color, font, timestamp } = statusData;
+    // Render the active status based on index
+    const activeStatus = statuses[currentIndex] || statuses[0];
+    const { id: statusId, type, content, caption, color, font, timestamp, views = [] } = activeStatus;
+    
     const fontFamily = WA_FONTS.find(f => f.id === font)?.css || WA_FONTS[0].css;
     const isLight = ['#ffffff', '#f5a623', '#f7b731', '#25D366', '#20bf6b'].includes(color);
     const textColor = isLight ? '#111' : '#fff';
@@ -56,6 +65,40 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
         if (diffMins < 60) return `hace ${diffMins} min`;
         const diffHrs = Math.floor(diffMins / 60);
         return `hace ${diffHrs} h`;
+    };
+
+    const nextStatus = () => {
+        if (currentIndex < statuses.length - 1) setCurrentIndex(p => p + 1);
+        else setViewerOpen(false); // Close if it's the last one
+    };
+
+    const prevStatus = () => {
+        if (currentIndex > 0) setCurrentIndex(p => p - 1);
+    };
+
+    const handleDelete = async (idOfStatus) => {
+        if (!confirm('¿Seguro que deseas eliminar este estado del dashboard?')) return;
+        setDeleting(true);
+        try {
+            await fetch('/api/whatsapp/delete-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: idOfStatus })
+            });
+            // Update local state without waiting for full refetch
+            const newArray = statuses.filter(s => s.id !== idOfStatus);
+            if (newArray.length === 0) {
+                setViewerOpen(false);
+                setStatuses([]);
+            } else {
+                setStatuses(newArray);
+                setCurrentIndex(p => Math.max(0, p - 1));
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setDeleting(false);
+        }
     };
 
     return (
@@ -89,8 +132,8 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
                 </div>
                 {/* Meta details next to ring */}
                 <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-gray-800 dark:text-gray-200 leading-none">Mi estado</span>
-                    <span className="text-[9px] text-gray-500 dark:text-gray-400 mt-[2px]">{getRelativeTimeString(timestamp)}</span>
+                    <span className="text-[10px] font-bold text-gray-800 dark:text-gray-200 leading-none">Mi estado ({statuses.length})</span>
+                    <span className="text-[9px] text-gray-500 dark:text-gray-400 mt-[2px]">{getRelativeTimeString(statuses[0]?.timestamp)}</span>
                 </div>
             </div>
 
@@ -99,18 +142,27 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
                 <div 
                     className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-fade-in"
                 >
-                    <button className="absolute top-6 right-6 z-50 p-2 text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors" onClick={() => setViewerOpen(false)}>
+                    <button className="absolute top-6 right-6 z-50 p-2 text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors hidden md:block" onClick={() => setViewerOpen(false)}>
                         <X className="w-6 h-6" />
                     </button>
 
                     <div className="w-full max-w-[420px] h-[100dvh] flex flex-col bg-black relative mx-auto" style={{
                         boxShadow: '0 0 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05)'
                     }}>
-                        {/* Status bar */}
-                        <div className="absolute top-0 left-0 right-0 z-30 px-3 pt-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent pb-6">
-                            <div className="h-[2px] bg-white/30 rounded-full mb-3">
-                                <div className="h-full bg-white rounded-full w-full shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-                            </div>
+                        {/* 👆 Progress bars (Snapchat style) */}
+                        <div className="absolute top-0 left-0 right-0 z-40 px-3 pt-3 flex gap-1">
+                            {statuses.map((s, idx) => (
+                                <div key={idx} className="h-[2px] bg-white/30 rounded-full flex-1 overflow-hidden transition-all duration-300">
+                                    <div 
+                                        className="h-full bg-white rounded-full transition-all duration-300"
+                                        style={{ width: idx < currentIndex ? '100%' : idx === currentIndex ? '100%' : '0%' }}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Status bar details */}
+                        <div className="absolute top-0 left-0 right-0 z-30 px-3 pt-6 bg-gradient-to-b from-black/80 via-black/40 to-transparent pb-6">
                             <div className="flex items-center gap-2 px-1">
                                 <button onClick={() => setViewerOpen(false)} className="text-white hover:opacity-100 flex items-center drop-shadow-md">
                                     <ChevronLeft className="w-7 h-7 -ml-1" />
@@ -122,11 +174,29 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
                                     <p className="text-white text-[14px] font-semibold leading-tight drop-shadow-md">Mi estado</p>
                                     <p className="text-white/80 text-[11px] font-medium drop-shadow-md">{getRelativeTimeString(timestamp)}</p>
                                 </div>
-                                <div className="ml-auto flex items-center gap-4 px-2">
-                                    <Eye className="w-5 h-5 text-white drop-shadow-md" />
+                                <div className="ml-auto flex items-center gap-2">
+                                    {/* Action buttons inside status */}
+                                    <button 
+                                        onClick={() => handleDelete(statusId)}
+                                        disabled={deleting}
+                                        className="p-2 bg-black/40 hover:bg-red-500/80 rounded-full text-white/90 transition-all backdrop-blur-sm shadow-xl"
+                                        title="Eliminar este estado"
+                                    >
+                                        {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                    </button>
                                 </div>
                             </div>
                         </div>
+
+                        {/* Navigation Overlay Click Areas */}
+                        <div 
+                            className="absolute top-20 bottom-24 left-0 w-1/3 z-20 cursor-w-resize" 
+                            onClick={(e) => { e.stopPropagation(); prevStatus(); }}
+                        />
+                        <div 
+                            className="absolute top-20 bottom-24 right-0 w-2/3 z-20 cursor-e-resize" 
+                            onClick={(e) => { e.stopPropagation(); nextStatus(); }}
+                        />
 
                         {/* Story Content Area */}
                         <div className="flex-1 flex items-center justify-center relative overflow-hidden h-full"
@@ -169,9 +239,20 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
                             )}
                         </div>
 
-                        {/* Bottom Reply Bar */}
-                        <div className="absolute bottom-6 left-0 right-0 px-4 flex items-center gap-3 z-30">
-                            <div className="flex-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-5 py-3 flex items-center gap-3 shadow-lg">
+                        {/* Bottom Reply Bar & Views Tracker */}
+                        <div className="absolute bottom-6 left-0 right-0 px-4 flex flex-col gap-4 z-40">
+                            
+                            {/* Viewers Bubble */}
+                            <div className="flex justify-center">
+                                <div className="bg-black/60 backdrop-blur-md rounded-full px-4 py-2 border border-white/10 flex items-center gap-2 cursor-pointer shadow-xl hover:bg-black/80 transition-colors">
+                                    <Eye className="w-4 h-4 text-white/90" />
+                                    <span className="text-white font-semibold text-[13px]">{views?.length || 0}</span>
+                                    <div className="w-[1px] h-3 bg-white/20 mx-1"></div>
+                                    <Users className="w-4 h-4 text-white/50" />
+                                </div>
+                            </div>
+
+                            <div className="flex-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-5 py-3 flex items-center gap-3 shadow-lg pointer-events-none">
                                 <span className="text-white/60 text-[14px] flex-1">Responder...</span>
                                 <Smile className="w-6 h-6 text-white/80"/>
                             </div>

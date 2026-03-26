@@ -76,7 +76,9 @@ export default async function handler(req, res) {
 
         if (type === 'text') {
             payload.text  = content;
-            payload.color = color;
+            // Convert Hex (#128C7E) to integer ARGB (0xFF128C7E) for Baileys
+            const hexClean = color.replace('#', '');
+            payload.color = parseInt(`FF${hexClean}`, 16); 
             payload.font  = parseInt(font);
         } else if (type === 'image') {
             payload.image   = content;
@@ -98,21 +100,27 @@ export default async function handler(req, res) {
         const success = response.status >= 200 && response.status < 300;
         console.log(`[STORIES] ${response.status}:`, JSON.stringify(response.data));
 
-        if (success) {
+        if (success && response.data?.id) {
             try {
                 const redis = getRedisClient();
                 if (redis) {
-                    await redis.set('last_wa_status', JSON.stringify({
+                    const storyObj = {
+                        id: response.data.id,
                         type,
                         content,
                         caption,
-                        color,
+                        color, // Store the original hex locally for frontend rendering
                         font,
-                        timestamp: new Date().toISOString()
-                    }));
+                        timestamp: new Date().toISOString(),
+                        views: []
+                    };
+                    await redis.lpush('wa_stories', JSON.stringify(storyObj));
+                    
+                    // Keep only the latest 30 stories to prevent unbound growth
+                    await redis.ltrim('wa_stories', 0, 29);
                 }
             } catch (err) {
-                console.error('[STORIES] Error saving last status to redis:', err.message);
+                console.error('[STORIES] Error saving status to redis:', err.message);
             }
         }
 
