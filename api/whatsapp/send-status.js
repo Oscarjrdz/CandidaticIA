@@ -74,6 +74,25 @@ export default async function handler(req, res) {
 
         const success = response.status >= 200 && response.status < 300;
         console.log(`[STORIES] ${response.status}:`, JSON.stringify(response.data));
+
+        if (success) {
+            try {
+                const redis = getRedisClient();
+                if (redis) {
+                    await redis.set('last_wa_status', JSON.stringify({
+                        type,
+                        content,
+                        caption,
+                        color,
+                        font,
+                        timestamp: new Date().toISOString()
+                    }));
+                }
+            } catch (err) {
+                console.error('[STORIES] Error saving last status to redis:', err.message);
+            }
+        }
+
         return res.status(200).json({ success, data: response.data, httpStatus: response.status });
     } catch (e) {
         console.error('[STORIES] Error:', e.message);

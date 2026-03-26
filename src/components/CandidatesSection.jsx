@@ -16,6 +16,7 @@ import { generateChatHistoryText } from '../services/chatExportService';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import WaStatusCreator from './WaStatusCreator';
+import WaStatusViewer from './WaStatusViewer';
 
 /**
  * Sortable Header Sub-component
@@ -102,6 +103,7 @@ const CandidatesSection = ({ showToast }) => {
 
     const [search, setSearch] = useState('');
     const [showStatusCreator, setShowStatusCreator] = useState(false);
+    const [statusViewerRefresh, setStatusViewerRefresh] = useState(0); // Trigger to fetch latest status
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
     const [hideIncomplete, setHideIncomplete] = useState(() => {
@@ -582,6 +584,9 @@ const CandidatesSection = ({ showToast }) => {
                         <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
 
+                    {/* 📡 View WA Status Sub-Component */}
+                    <WaStatusViewer triggerRefresh={statusViewerRefresh} />
+
                     {/* 📡 WhatsApp Status Creator Button */}
                     <button
                         type="button"
@@ -900,7 +905,10 @@ const CandidatesSection = ({ showToast }) => {
             {/* 📡 WhatsApp Status Creator Modal */}
             {showStatusCreator && (
                 <WaStatusCreator
-                    onClose={() => setShowStatusCreator(false)}
+                    onClose={() => {
+                        setShowStatusCreator(false);
+                        setStatusViewerRefresh(prev => prev + 1);
+                    }}
                     showToast={showToast}
                 />
             )}
