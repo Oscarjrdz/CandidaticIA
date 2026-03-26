@@ -18,6 +18,7 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
     const [loading, setLoading] = useState(true);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [deleting, setDeleting] = useState(false);
+    const [showViewers, setShowViewers] = useState(false);
 
     const fetchStatus = async () => {
         try {
@@ -39,7 +40,6 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
         }
     };
 
-    // Refetch when component mounts or parent triggers refresh (e.g. after publishing)
     useEffect(() => {
         fetchStatus();
     }, [triggerRefresh]);
@@ -104,30 +104,26 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
     return (
         <>
             {/* The circular WA Status Avatar Ring */}
-            <div 
-                className="relative cursor-pointer group flex items-center gap-2 px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
-                onClick={() => setViewerOpen(true)}
-                title="Ver último estado publicado"
-            >
-                <div className="relative w-8 h-8 rounded-full shadow-sm bg-gray-200 dark:bg-gray-700 overflow-hidden flex-shrink-0"
-                     style={{ 
-                         padding: '2px', 
-                         background: 'linear-gradient(45deg, #00a884, #25D366)', 
-                         boxShadow: '0 0 0 2px rgba(37,211,102,0.2)' 
-                     }}
-                >
-                    <div className="w-full h-full rounded-full border-[1.5px] border-white dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden flex items-center justify-center relative">
-                        {type === 'image' ? (
-                            <img src={content} alt="estado" className="w-full h-full object-cover" />
-                        ) : type === 'video' ? (
-                            <div className="w-full h-full bg-black/80 flex items-center justify-center">
-                                <span className="text-[7px] font-black text-white">VID</span>
-                            </div>
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center" style={{ backgroundColor: color }}>
-                                <span className="text-[7px] text-white/90 font-bold" style={{ textShadow: isLight ? 'none' : '0 1px 2px rgba(0,0,0,0.5)' }}>Txt</span>
-                            </div>
-                        )}
+            <div className="flex items-center gap-3 ml-2 mr-2 cursor-pointer transition-all hover:opacity-80" onClick={() => setViewerOpen(true)}>
+                <div className="relative">
+                    <div className="w-10 h-10 rounded-full p-[2px] bg-gradient-to-tr from-[#25D366] to-[#128C7E]">
+                        <div 
+                            className="w-full h-full bg-white dark:bg-gray-800 rounded-full border-2 border-white dark:border-gray-800 flex items-center justify-center overflow-hidden"
+                            style={{ backgroundColor: statuses[0]?.type === 'text' ? statuses[0]?.color : undefined }}
+                        >
+                            {statuses[0]?.type === 'image' && statuses[0].content ? (
+                                <img src={statuses[0].content} className="w-full h-full object-cover" alt="State" />
+                            ) : statuses[0]?.type === 'video' && statuses[0].content ? (
+                                <video src={statuses[0].content} className="w-full h-full object-cover" />
+                            ) : statuses[0]?.type === 'text' ? (
+                                <span className="text-white font-bold text-[10px] uppercase text-center w-full break-words px-0.5 leading-tight" 
+                                      style={{ fontFamily: WA_FONTS.find(f => f.id === statuses[0].font)?.css || WA_FONTS[0].css, textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+                                    {statuses[0].content?.substring(0, 3)}
+                                </span>
+                            ) : (
+                                <span className="text-[#128C7E] font-bold text-[12px]">Mi</span>
+                            )}
+                        </div>
                     </div>
                 </div>
                 {/* Meta details next to ring */}
@@ -139,9 +135,7 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
 
             {/* WA FullScreen Viewer Modal */}
             {viewerOpen && (
-                <div 
-                    className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-fade-in"
-                >
+                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl animate-fade-in">
                     <button className="absolute top-6 right-6 z-50 p-2 text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-full transition-colors hidden md:block" onClick={() => setViewerOpen(false)}>
                         <X className="w-6 h-6" />
                     </button>
@@ -162,8 +156,8 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
                         </div>
 
                         {/* Status bar details */}
-                        <div className="absolute top-0 left-0 right-0 z-30 px-3 pt-6 bg-gradient-to-b from-black/80 via-black/40 to-transparent pb-6">
-                            <div className="flex items-center gap-2 px-1">
+                        <div className="absolute top-0 left-0 right-0 z-30 px-3 pt-6 bg-gradient-to-b from-black/80 via-black/40 to-transparent pb-6 pointer-events-none">
+                            <div className="flex items-center gap-2 px-1 pointer-events-auto">
                                 <button onClick={() => setViewerOpen(false)} className="text-white hover:opacity-100 flex items-center drop-shadow-md">
                                     <ChevronLeft className="w-7 h-7 -ml-1" />
                                 </button>
@@ -199,43 +193,37 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
                         />
 
                         {/* Story Content Area */}
-                        <div className="flex-1 flex items-center justify-center relative overflow-hidden h-full"
-                            style={{ backgroundColor: type === 'text' ? color : '#000' }}>
+                        <div className="flex-1 flex items-center justify-center relative overflow-hidden h-full z-10"
+                            style={{ backgroundColor: type === 'text' ? color : '#000' }}
+                            onClick={() => setShowViewers(false)}>
                             
                             {type === 'text' && (
-                                <div className="px-8 text-center w-full" style={{
+                                <div className="px-8 text-center w-full animate-fade-in" style={{
                                     fontFamily,
-                                    fontSize: content.length > 100 ? '22px' : content.length > 50 ? '30px' : '38px',
+                                    fontSize: content?.length > 100 ? '20px' : content?.length > 50 ? '28px' : '40px',
                                     color: textColor,
                                     fontWeight: 600,
                                     lineHeight: 1.35,
                                     wordBreak: 'break-word',
-                                    textShadow: isLight ? 'none' : '0 1px 8px rgba(0,0,0,0.5)',
+                                    textShadow: isLight ? 'none' : '0 1px 4px rgba(0,0,0,0.25)',
                                 }}>
                                     {content}
                                 </div>
                             )}
 
-                            {type === 'image' && content && (
-                                <div className="w-full h-full relative flex flex-col justify-center bg-black">
-                                    <img src={content} alt="status" className="w-full object-contain" style={{ maxHeight: '85vh' }} />
+                            {type === 'image' && (
+                                <div className="w-full h-full relative flex items-center justify-center">
+                                    <img src={content} alt="status" className="max-w-full max-h-full object-contain pointer-events-none" />
                                     {caption && (
-                                        <div className="absolute bottom-24 left-0 right-0 px-6 py-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent text-center">
-                                            <p className="text-white text-[16px] font-medium drop-shadow-lg leading-snug">{caption}</p>
+                                        <div className="absolute bottom-16 left-0 right-0 px-5 text-center bg-gradient-to-t from-black/80 to-transparent pt-6 pb-2">
+                                            <p className="text-white text-[15px] font-medium drop-shadow-lg">{caption}</p>
                                         </div>
                                     )}
                                 </div>
                             )}
 
                             {type === 'video' && content && (
-                                <div className="w-full h-full relative bg-black flex flex-col justify-center">
-                                    <video src={content} className="w-full object-contain" style={{ maxHeight: '85vh' }} autoPlay loop controls={false} />
-                                    {caption && (
-                                        <div className="absolute bottom-24 left-0 right-0 px-6 py-4 bg-gradient-to-t from-black/80 via-black/40 to-transparent text-center">
-                                            <p className="text-white text-[16px] font-medium drop-shadow-lg leading-snug">{caption}</p>
-                                        </div>
-                                    )}
-                                </div>
+                                <video src={content} className="w-full h-full object-contain pointer-events-none" autoPlay loop muted playsInline />
                             )}
                         </div>
 
@@ -243,13 +231,37 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
                         <div className="absolute bottom-6 left-0 right-0 px-4 flex flex-col gap-4 z-40">
                             
                             {/* Viewers Bubble */}
-                            <div className="flex justify-center">
-                                <div className="bg-black/60 backdrop-blur-md rounded-full px-4 py-2 border border-white/10 flex items-center gap-2 cursor-pointer shadow-xl hover:bg-black/80 transition-colors">
+                            <div className="flex justify-center z-50 relative pointer-events-auto cursor-pointer" onClick={(e) => { e.stopPropagation(); setShowViewers(prev => !prev); }}>
+                                <div className="bg-black/60 backdrop-blur-md rounded-full px-4 py-2 border border-white/10 flex items-center gap-2 shadow-xl hover:bg-black/80 transition-colors">
                                     <Eye className="w-4 h-4 text-white/90" />
                                     <span className="text-white font-semibold text-[13px]">{views?.length || 0}</span>
                                     <div className="w-[1px] h-3 bg-white/20 mx-1"></div>
                                     <Users className="w-4 h-4 text-white/50" />
                                 </div>
+                                
+                                {/* Lista extendida de Vistas (Desplegable) */}
+                                {showViewers && (
+                                    <div className="absolute bottom-full mb-3 right-0 left-0 mx-auto w-56 bg-black/85 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-3 animate-fade-in cursor-default" onClick={e => e.stopPropagation()}>
+                                        <div className="flex justify-between items-center mb-3 pb-2 border-b border-white/10">
+                                            <span className="text-white text-[12px] font-bold">Visto por</span>
+                                            <button onClick={() => setShowViewers(false)} className="text-white/50 hover:text-white cursor-pointer"><X className="w-4 h-4" /></button>
+                                        </div>
+                                        <div className="max-h-40 overflow-y-auto overflow-x-hidden flex flex-col gap-2">
+                                            {!views || views.length === 0 ? (
+                                                <p className="text-center text-white/40 text-[11px] py-3">Nadie ha visto esto aún 👀</p>
+                                            ) : (
+                                                views.map((phone, i) => (
+                                                    <div key={i} className="flex items-center gap-2 bg-white/5 rounded-lg p-2 flex-shrink-0">
+                                                        <div className="w-6 h-6 rounded-full bg-[#128C7E] flex items-center justify-center flex-shrink-0">
+                                                            <span className="text-white text-[9px] font-bold">{phone.substring(0,2)}</span>
+                                                        </div>
+                                                        <span className="text-white/90 text-[12px] font-medium">{phone}</span>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-full px-5 py-3 flex items-center gap-3 shadow-lg pointer-events-none">
