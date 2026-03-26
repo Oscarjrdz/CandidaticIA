@@ -1563,6 +1563,7 @@ ${safeDnaLines}
         let project = null;
         let activeStepNameLower = ''; // hoisted so delivery section can read it
         let recruiterTriggeredMove = false; // hoisted — used in final delivery safeguard (lines ~2789)
+        let isHandlingPivot = false; // hoisted — true when pivot guard did a direct vacancy send
         let historyForGpt = [...recentHistory, currentMessageForGpt];
 
         if (activeProjectId) {
@@ -1728,7 +1729,7 @@ ${safeDnaLines}
 
                 // --- MULTI-VACANCY REJECTION SHIELD ---
                 let skipRecruiterInference = false;
-                let isHandlingPivot = false; // Set to true when PIVOT GUARD presents next vacancy
+                // (isHandlingPivot is declared at outer scope — hoisted for FINAL DELIVERY SAFEGUARD)
 
                 // ⚡ FIX 2: Run intent classifier IN PARALLEL with the recruiter LLM
                 // We only need the result if the candidate rejected/pivoted — checked after both resolve
@@ -4254,7 +4255,10 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         const hasMedia = aiResult?.media_url && aiResult.media_url !== 'null';
         const recruiterClosedSilently = isRecruiterMode && isTechnicalOrEmpty && aiResult?.close_conversation && !hasMoveIntent && !recruiterTriggeredMove && !handoverTriggered && !hasMedia;
         
-        if ((isTechnicalOrEmpty && !hasMoveIntent && !recruiterTriggeredMove && !aiResult?.close_conversation && !handoverTriggered && !hasMedia) || recruiterClosedSilently) {
+        // 🛡️ PIVOT EXCLUSION: When the pivot guard already sent the vacancy directly (isHandlingPivot=true),
+        // aiResult and responseTextVal are both null by design — the message was already delivered.
+        // Without this guard, isTechnicalOrEmpty=true triggers a "Ayúdame a entenderte mejor" fallback.
+        if ((isTechnicalOrEmpty && !hasMoveIntent && !recruiterTriggeredMove && !aiResult?.close_conversation && !handoverTriggered && !hasMedia && !isHandlingPivot) || recruiterClosedSilently) {
             if (isRecruiterMode) {
                 // If the AI sent an FAQ Media URL but hallucinated the text away, safely append a generic CTA
                 if (hasMedia) {
