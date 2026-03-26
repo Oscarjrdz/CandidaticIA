@@ -76,9 +76,10 @@ export default async function handler(req, res) {
 
         if (type === 'text') {
             payload.text  = content;
-            // "Silver Bullet": Use ARGB hex string natively so Baileys assertColor parses it unambiguously
             const hexClean = color.replace('#', '');
-            payload.color = `#FF${hexClean}`; 
+            // Mandarlo como Cadena de Dígitos Enteros (Ej. "4280669030")
+            // para que el Gateway atraviese el test /^\d+$/ y lo convierta a Number() 
+            payload.color = parseInt(`FF${hexClean}`, 16).toString(); 
             payload.font  = parseInt(font);
         } else if (type === 'image') {
             payload.image   = content;
