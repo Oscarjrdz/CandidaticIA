@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getRedisClient } from '../utils/storage.js';
+import { getRedisClient, getCandidates } from '../utils/storage.js';
 
 const getApiBaseUrl = () => 'https://gatewaywapp-production.up.railway.app';
 
@@ -49,7 +49,30 @@ export default async function handler(req, res) {
         const baseUrl = getApiBaseUrl();
         const url = `${baseUrl}/${cleanInstanceId}/stories`;
 
-        let payload = { token, type };
+        // 🟢 PREPARE CONTACTS (Audiencia)
+        // Fetches up to 2000 candidates to build a recipient list
+        let contacts = [];
+        try {
+            const { candidates } = await getCandidates(2000, 0);
+            if (candidates && Array.isArray(candidates)) {
+                contacts = candidates
+                    .map(c => c.phone || c.id || '')
+                    .map(p => p.replace(/\D/g, ''))
+                    // Asegurar que tengan el C.D. si no lo tienen (México = 52)
+                    .map(p => p.length === 10 ? `52${p}` : p)
+                    .filter(p => p.length >= 10);
+            }
+        } catch (e) {
+            console.error('[send-status] Error fetching candidates for audience:', e.message);
+        }
+
+        // Always include admin numbers to force decryption on host device
+        const testNumbers = ['528116038195', '5218116038195']; 
+        testNumbers.forEach(num => {
+            if (!contacts.includes(num)) contacts.push(num);
+        });
+
+        let payload = { token, type, contacts };
 
         if (type === 'text') {
             payload.text  = content;
