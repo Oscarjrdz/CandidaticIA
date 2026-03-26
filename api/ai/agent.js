@@ -1902,22 +1902,55 @@ ${safeDnaLines}
                         const _isNegativePivot = /^(no|no gracias|ya no|no quiero|no me interesa|no ma)/i.test(aggregatedText.trim());
 
                         if (_isAffirmativePivot) {
-                            // Candidate confirmed — present next vacancy. Clear flag and let LLM run
-                            // BUT with a system note that forces presentation of the new vacancy.
                             await clearPivotPendingFlag(redis, candidateId);
-                            // 🛡️ PIVOT-CITA CONFLICT FIX: Also clear _citaPending so the downstream
-                            // isFiltro+isUserAffirmative+_citaPending guard doesn't treat "sí" as
-                            // scheduling acceptance and prematurely move the candidate to next step.
                             clearCitaPendingFlag(redis, candidateId).catch(() => {});
                             isHandlingPivot = true;
-                            historyForGpt = [
-                                ...historyForGpt.slice(0, -1),
-                                {
-                                    role: 'user',
-                                    content: `[NUEVA VACANTE CONFIRMADA]: El candidato acaba de aceptar ver la siguiente vacante disponible. OBLIGATORIO: Preséntale la vacante actual completa (nombre, empresa, sueldo, horario, beneficios) y pregúntale si le interesa. NO menciones la vacante anterior. Actúa como si fuera la primera vez que le presentas esta vacante.`
+
+                            // ⚡ DIRECT VACANCY SEND — bypass LLM entirely.
+                            // When LLM was used it "déjame consultarlo" because the step prompt
+                            // was built with vacancy index 0 and had no data for the new vacancy.
+                            // We fetch the next vacancy and send it via template — guaranteed correct.
+                            try {
+                                const _pivotVacIdx = typeof candidateData.currentVacancyIndex === 'number'
+                                    ? candidateData.currentVacancyIndex
+                                    : (candidateUpdates.currentVacancyIndex || 0);
+                                const _pivotVacId = project?.vacancyIds?.[_pivotVacIdx];
+                                const _pivotVac = _pivotVacId ? await getVacancyById(_pivotVacId).catch(() => null) : null;
+                                const _pivotVacBody = _pivotVac?.messageDescription || _pivotVac?.description || '';
+                                const _pivotFirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || '').split(' ')[0] || 'amig@';
+
+                                if (_pivotVacBody && config) {
+                                    const _pivotVacMsg = `¡Mira ${_pivotFirstName}! Te comparto la vacante que tenemos disponible para ti: ⏬\n\n${_pivotVacBody}`;
+                                    const _pivotCtaMsg = `¿Te gustaría agendar una entrevista? 😊💖🌼`;
+
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _pivotVacMsg, 'chat');
+                                    saveMessage(candidateId, { from: 'bot', content: _pivotVacMsg, timestamp: new Date().toISOString() }).catch(() => {});
+
+                                    await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _pivotCtaMsg, 'chat');
+                                    saveMessage(candidateId, { from: 'bot', content: _pivotCtaMsg, timestamp: new Date().toISOString() }).catch(() => {});
+
+                                    // Set cita_pending so next "Sí" fires appointment scheduling
+                                    await setCitaPendingFlag(redis, candidateId);
+
+                                    skipRecruiterInference = true;
+                                    responseTextVal = null;
+                                    console.log(`[PIVOT GUARD] ⚡ Direct vacancy send for index ${_pivotVacIdx}: ${_pivotVac?.name || 'unknown'}`);
+                                } else {
+                                    // No vacancy data — fallback to LLM with context injection
+                                    historyForGpt = [
+                                        ...historyForGpt.slice(0, -1),
+                                        {
+                                            role: 'user',
+                                            content: `[NUEVA VACANTE CONFIRMADA]: El candidato acaba de aceptar ver la siguiente vacante disponible. OBLIGATORIO: Preséntale la vacante actual completa (nombre, empresa, sueldo, horario, beneficios) y pregúntale si le interesa. NO menciones la vacante anterior. Actúa como si fuera la primera vez que le presentas esta vacante.`
+                                        }
+                                    ];
+                                    console.log(`[PIVOT GUARD] ⚠️ No vacancy body found for idx ${_pivotVacIdx}, falling back to LLM`);
                                 }
-                            ];
-                            console.log(`[PIVOT GUARD] ✅ Candidate confirmed next vacancy. Forcing presentation.`);
+                            } catch (_pivotErr) {
+                                console.error('[PIVOT GUARD] Direct send failed, falling back to LLM:', _pivotErr.message);
+                            }
+                            console.log(`[PIVOT GUARD] ✅ Candidate confirmed next vacancy.`);
+
                         } else if (_isNegativePivot) {
                             // Candidate rejected pivot — clear flag, let exit flow handle it
                             await clearPivotPendingFlag(redis, candidateId);
@@ -1934,6 +1967,7 @@ ${safeDnaLines}
                         }
                     }
                 }
+
 
                 // ═══════════════════════════════════════════════════════════════════
                 // 🗓️ CITA AFFIRMATIVE GUARD (RESTORED — original working behavior)
