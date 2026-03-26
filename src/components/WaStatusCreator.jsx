@@ -193,7 +193,7 @@ function EmojiPicker({ onSelect, onClose }) {
     }, [onClose]);
 
     return (
-        <div ref={ref} className="absolute bottom-full mb-2 left-0 z-50 w-72 rounded-2xl overflow-hidden shadow-2xl"
+        <div ref={ref} className="w-[300px] rounded-2xl overflow-hidden shadow-2xl flex flex-col"
             style={{ background: '#1f2c34', border: '1px solid rgba(255,255,255,0.08)' }}>
             {/* Category tabs */}
             <div className="flex gap-0 border-b border-white/10 overflow-x-auto">
@@ -301,7 +301,7 @@ export default function WaStatusCreator({ onClose, showToast }) {
             <div className="relative flex items-center gap-6 pointer-events-auto">
 
                 {/* ── LEFT: Editor panel ─────────────────────────────── */}
-                <div className="bg-[#111b21] rounded-2xl w-[330px] flex flex-col shadow-2xl border border-white/10 overflow-hidden"
+                <div className="bg-[#111b21] rounded-2xl w-[330px] flex flex-col shadow-2xl border border-white/10 overflow-hidden relative"
                     style={{ maxHeight: '710px' }}>
 
                     {/* Header */}
@@ -363,7 +363,6 @@ export default function WaStatusCreator({ onClose, showToast }) {
                                                 title="Emojis">
                                                 <Smile className="w-4 h-4"/>
                                             </button>
-                                            {showEmoji && <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)}/>}
                                         </div>
                                         <button onClick={resetContent} title="Limpiar" className="p-2 rounded-lg text-white/30 hover:text-white/60 hover:bg-white/10 transition-all ml-auto">
                                             <RotateCcw className="w-3.5 h-3.5"/>
@@ -486,6 +485,13 @@ export default function WaStatusCreator({ onClose, showToast }) {
                             Se publicará en tu estado de WhatsApp
                         </p>
                     </div>
+
+                    {/* Hoisted Emoji Picker to avoid overflow-y clipping */}
+                    {showEmoji && (
+                        <div className="absolute top-[125px] left-1/2 -translate-x-1/2 z-[99999]">
+                            <EmojiPicker onSelect={insertEmoji} onClose={() => setShowEmoji(false)} />
+                        </div>
+                    )}
                 </div>
 
                 {/* ── RIGHT: iPhone Preview ──────────────────────────── */}
