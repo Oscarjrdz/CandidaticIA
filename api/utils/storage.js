@@ -608,12 +608,59 @@ export const getCandidateByPhone = async (phone) => {
 export const deleteCandidate = async (id) => {
     const client = getRedisClient();
     if (client) {
-        // Atomic cleanup from specialized stat sets
-        await client.multi()
+        // 1. Fetch candidate first to get phone (needed to clean PHONE_INDEX)
+        let phone = null;
+        try {
+            const raw = await client.get(`${KEYS.CANDIDATE_PREFIX}${id}`);
+            if (raw) {
+                const c = JSON.parse(raw);
+                phone = c.whatsapp ? c.whatsapp.replace(/\D/g, '') : null;
+            }
+        } catch (_) {}
+
+        // 2. Atomic cleanup from stat sets + PHONE_INDEX
+        const multi = client.multi()
             .srem(KEYS.LIST_COMPLETE, id)
-            .srem(KEYS.LIST_PENDING, id)
-            .exec();
+            .srem(KEYS.LIST_PENDING, id);
+        if (phone) {
+            multi.hdel(KEYS.PHONE_INDEX, phone);
+            // Also clean common Mexico variations
+            const last10 = phone.slice(-10);
+            if (last10.length === 10) {
+                ['52' + last10, '521' + last10, last10].forEach(v => {
+                    if (v !== phone) multi.hdel(KEYS.PHONE_INDEX, v);
+                });
+            }
+        }
+        await multi.exec();
+
+        // 3. Deep clean: all TTL-based state keys tied to candidateId
+        const stateKeys = [
+            `cita_pending:${id}`,
+            `pivot_pending:${id}`,
+            `ni_gate:${id}`,
+            `cta_idx:${id}`,
+            `day_list_pending:${id}`,
+            `day_list_rejection_count:${id}`,
+            `messages:${id}`,
+            `${KEYS.CANDIDATE_LOCK_PREFIX}${id}`,
+            `debug:last_response:${id}`,
+            `debug:ultramsg:${phone || id}`,
+            `noInteresa:${id}`,
+        ];
+        await client.del(...stateKeys).catch(() => {});
+
+        // 4. Clean pipeline processed markers (scan pattern pipeline:*:*:id:processed)
+        try {
+            let cursor = '0';
+            do {
+                const [nextCursor, keys] = await client.scan(cursor, 'MATCH', `pipeline:*:*:${id}:*`, 'COUNT', 50);
+                cursor = nextCursor;
+                if (keys && keys.length > 0) await client.del(...keys);
+            } while (cursor !== '0');
+        } catch (_) {}
     }
+
     return await deleteDistributedItem(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX, id);
 };
 
