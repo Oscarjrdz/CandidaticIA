@@ -3538,9 +3538,14 @@ ${safeDnaLines}
                                 if (bridgeSticker) {
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
                                     // 🚀 BRIDGE GAP: Re-trigger "escribiendo..." right after the sticker
-                                    // so the candidate sees the typing indicator while GPT fetches the info.
-                                    await new Promise(r => setTimeout(r, 300));
-                                    sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => {});
+                                    // ONLY for non-terminal steps — if the next step is Citados/No Interesa/exit,
+                                    // there's no follow-up GPT response and composing would hang forever.
+                                    const _bridgeNextName = (nextStep?.name || '').toLowerCase();
+                                    const _bridgeIsTerminal = _bridgeNextName.includes('citado') || _bridgeNextName.includes('no interesa') || isExitMove;
+                                    if (!_bridgeIsTerminal) {
+                                        await new Promise(r => setTimeout(r, 300));
+                                        sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => {});
+                                    }
                                 }
                             } else {
                             }
