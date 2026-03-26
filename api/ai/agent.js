@@ -1370,6 +1370,32 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
             }
         }
 
+        // 📚 ESCOLARIDAD ABBREVIATION NORMALIZER
+        // Expands common Mexican Spanish shorthand BEFORE GPT sees it.
+        // Fixes: GPT correctly extracts the canonical value into extracted_data,
+        // but generates a "please clarify" response because the raw abbreviation
+        // is ambiguous. By expanding upfront, both extraction AND response are correct.
+        const _ESC_ABBREV_MAP = [
+            { pattern: /^sec(?:u(?:nda(?:ria)?)?)?$/i,           canonical: 'Secundaria' },
+            { pattern: /^prepa(?:ratoria)?$/i,                    canonical: 'Preparatoria' },
+            { pattern: /^prim(?:aria)?$/i,                        canonical: 'Primaria' },
+            { pattern: /^lic(?:enciatura)?$/i,                    canonical: 'Licenciatura' },
+            { pattern: /^t[eé]c(?:nica)?$/i,                      canonical: 'Técnica' },
+            { pattern: /^posg(?:rado)?$|^maestr[ií]a$|^doctorado$/i, canonical: 'Posgrado' },
+            { pattern: /^uni(?:versidad)?$/i,                     canonical: 'Licenciatura' },
+            { pattern: /^bachi(?:llerato)?$/i,                    canonical: 'Preparatoria' },
+        ];
+        const _trimmedAgg = aggregatedText.trim();
+        for (const { pattern, canonical } of _ESC_ABBREV_MAP) {
+            if (pattern.test(_trimmedAgg)) {
+                console.log(`[ESC NORMALIZER] "${_trimmedAgg}" → "${canonical}"`);
+                aggregatedText = canonical;
+                // Also patch userParts so GPT history is clean
+                if (userParts.length > 0) userParts[userParts.length - 1] = { text: canonical };
+                break;
+            }
+        }
+
         if (userParts.length === 0) userParts.push({ text: 'Hola' });
 
         let recentHistory = validMessages
