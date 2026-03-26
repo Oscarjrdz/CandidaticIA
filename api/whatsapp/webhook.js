@@ -67,11 +67,12 @@ export default async function handler(req, res) {
 
             // 🟢 WA STATUS VIEW (ACK directed to status@broadcast)
             const remoteJid = messageData.__raw?.key?.remoteJid || to || '';
-            if (remoteJid.includes('status@broadcast') && status === 'read') {
+            if (remoteJid.includes('status@broadcast') && (status === 'read' || status === 'played')) {
                 const spectatorJid = messageData.__raw?.key?.participant || messageData.__raw?.participant;
                 if (spectatorJid) {
                     const spectatorPhone = cleanPhoneNumber(spectatorJid);
-                    const storyId = id;
+                    // MUST extract storyId from raw.key.id because the Gateway maps it explicitly there
+                    const storyId = messageData.__raw?.key?.id || id;
                     try {
                         const redis = getRedisClient();
                         if (redis) {
