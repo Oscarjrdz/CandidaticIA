@@ -15,6 +15,33 @@ export default async function handler(req, res) {
         const redis = getRedisClient();
         if (!redis) return res.status(500).json({ error: 'Database unavailable' });
 
+        // Fetch credentials to talk to the Gateway
+        let instanceId, token;
+        try {
+            const instancesRaw = await redis.get('ultramsg_instances');
+            if (instancesRaw) {
+                const instances = JSON.parse(instancesRaw);
+                const active = instances.find(i => i.status === 'active') || instances[0];
+                if (active) { instanceId = active.instanceId; token = active.token; }
+            }
+        } catch (e) {}
+
+        const cleanInstanceId = instanceId ? instanceId.replace(/^instance/, '') : null;
+        
+        // Call the Gateway physical DELETE endpoint
+        if (cleanInstanceId && token) {
+            try {
+                const baseUrl = 'https://gatewaywapp-production.up.railway.app';
+                const url = `${baseUrl}/${cleanInstanceId}/stories/${id}`;
+                
+                const axios = (await import('axios')).default;
+                await axios.delete(url, { data: { token } });
+                console.log(`[WA DELETE STATUS] Revoked story ${id} on Whatsapp Network.`);
+            } catch (gwError) {
+                console.error('[WA DELETE STATUS] Gateway side error:', gwError.response?.data || gwError.message);
+            }
+        }
+
         const rawStories = await redis.lrange('wa_stories', 0, -1);
         let removedCount = 0;
         
