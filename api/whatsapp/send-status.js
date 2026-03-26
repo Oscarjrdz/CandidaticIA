@@ -76,9 +76,9 @@ export default async function handler(req, res) {
 
         if (type === 'text') {
             payload.text  = content;
-            // Convert Hex (#128C7E) to integer ARGB (0xFF128C7E) for Baileys
+            // "Silver Bullet": Use ARGB hex string natively so Baileys assertColor parses it unambiguously
             const hexClean = color.replace('#', '');
-            payload.color = parseInt(`FF${hexClean}`, 16); 
+            payload.color = `#FF${hexClean}`; 
             payload.font  = parseInt(font);
         } else if (type === 'image') {
             payload.image   = content;
