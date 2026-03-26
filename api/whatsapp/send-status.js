@@ -42,9 +42,12 @@ export default async function handler(req, res) {
     if (!instanceId || !token) return res.status(400).json({ success: false, error: 'Sin instancia configurada.' });
     if (!content) return res.status(400).json({ success: false, error: 'Contenido vacío.' });
 
+    // Ensure we send the raw ID to the gateway (e.g. 9056d7014d instead of instance9056d7014d)
+    const cleanInstanceId = instanceId.replace(/^instance/, '');
+
     try {
         const baseUrl = getApiBaseUrl();
-        const url = `${baseUrl}/${instanceId}/stories`;
+        const url = `${baseUrl}/${cleanInstanceId}/stories`;
 
         let payload = { token, type };
 
