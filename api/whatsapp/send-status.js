@@ -76,10 +76,9 @@ export default async function handler(req, res) {
 
         if (type === 'text') {
             payload.text  = content;
-            const hexClean = color.replace('#', '');
-            // Mandarlo como Cadena de Dígitos Enteros (Ej. "4280669030")
-            // para que el Gateway atraviese el test /^\d+$/ y lo convierta a Number() 
-            payload.color = parseInt(`FF${hexClean}`, 16).toString(); 
+            // Send exactly the Hex string (e.g. '#25D366') from UI 
+            // since the Gateway explicitly deployed a regex hex-parser to transform it!
+            payload.color = color; 
             payload.font  = parseInt(font);
         } else if (type === 'image') {
             payload.image   = content;
