@@ -29,7 +29,7 @@ function App() {
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
   const [theme, setTheme] = useState('light');
-  const [activeSection, setActiveSection] = useState('chat');
+  const [activeSection, setActiveSection] = useState('candidates');
   const { toast, showToast, hideToast, ToastComponent } = useToast();
 
   // Check LocalStorage for session

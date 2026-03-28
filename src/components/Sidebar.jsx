@@ -104,21 +104,21 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate 
 
     useEffect(() => {
         // Initialize from user config or default
-        let finalItems = [...DEFAULT_MENU_ITEMS];
         if (user?.sidebarConfig && Array.isArray(user.sidebarConfig)) {
             const reordered = user.sidebarConfig.map(id => DEFAULT_MENU_ITEMS.find(i => i.id === id)).filter(Boolean);
             const missing = DEFAULT_MENU_ITEMS.filter(di => !user.sidebarConfig.includes(di.id));
-            finalItems = [...reordered, ...missing];
+            
+            // Insert new/missing items right after the first item (Candidatos) 
+            // instead of at the very bottom, so they don't get hidden by scroll overflow.
+            // As soon as the user drags them once, they get saved to sidebarConfig and stay where dragged.
+            if (missing.length > 0 && reordered.length > 0) {
+                reordered.splice(1, 0, ...missing);
+            }
+            
+            setItems(reordered.length > 0 ? reordered : missing);
+        } else {
+            setItems(DEFAULT_MENU_ITEMS);
         }
-
-        // FORCE "chat" to be the second item if it's somehow missing or pushed to the bottom out of sight
-        const chatItem = finalItems.find(i => i.id === 'chat');
-        if (chatItem) {
-            finalItems = finalItems.filter(i => i.id !== 'chat');
-            finalItems.splice(1, 0, chatItem); // Insert exactly after the first item (Candidatos)
-        }
-
-        setItems(finalItems);
     }, [user]);
 
     const sensors = useSensors(
