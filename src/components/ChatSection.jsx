@@ -63,6 +63,10 @@ const ChatSection = ({ showToast }) => {
     useEffect(() => {
         loadCandidates();
         loadTags();
+
+        // 🟢 Live auto-update for the sidebar (every 3 seconds)
+        const interval = setInterval(loadCandidates, 3000);
+        return () => clearInterval(interval);
     }, []);
 
     const loadTags = async () => {
