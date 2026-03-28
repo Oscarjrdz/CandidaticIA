@@ -47,8 +47,12 @@ const ChatSection = ({ showToast }) => {
     const [filterValue, setFilterValue] = useState(null);
     const [showDropdown, setShowDropdown] = useState(null);
 
-    // Derive vacancies dynamically
-    const availableVacancies = [...new Set(candidates.map(c => c.currentVacancyName).filter(Boolean))];
+    // Derive vacancies dynamically safely
+    const availableVacancies = [...new Set(
+        (candidates || [])
+            .map(c => c?.currentVacancyName)
+            .filter(v => typeof v === 'string' && v.trim() !== '')
+    )];
 
     // Load Data
     useEffect(() => {
@@ -93,23 +97,24 @@ const ChatSection = ({ showToast }) => {
         }
     };
 
-    // Fast search filter for the list
-    const filteredCandidates = candidates.filter(c => {
+    // Fast search filter for the list with robust safety checks
+    const filteredCandidates = (candidates || []).filter(c => {
+        const searchVal = (searchQuery || "").toLowerCase();
         const matchesSearch = 
-            (c.nombreReal && c.nombreReal.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (c.nombre && c.nombre.toLowerCase().includes(searchQuery.toLowerCase())) ||
-            (c.whatsapp && c.whatsapp.includes(searchQuery));
+            (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
+            (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
+            (c?.whatsapp && String(c.whatsapp).includes(searchVal));
             
-        if (!matchesSearch) return false;
+        if (!matchesSearch && searchVal !== "") return false;
 
         if (activeFilter === 'unread') {
-            return c.hasUnreadMessages === true; // Requires 'hasUnreadMessages' field or similar indicator
+            return c?.hasUnreadMessages === true;
         }
         if (activeFilter === 'label' && filterValue) {
-            return c.tags && c.tags.includes(filterValue);
+            return Array.isArray(c?.tags) && c.tags.includes(filterValue);
         }
         if (activeFilter === 'vacancy' && filterValue) {
-            return c.currentVacancyName === filterValue;
+            return c?.currentVacancyName === filterValue;
         }
 
         return true;
@@ -301,7 +306,7 @@ const ChatSection = ({ showToast }) => {
                             </button>
                             {showDropdown === 'labels' && (
                                 <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1">
-                                    {availableTags.map(tag => (
+                                    {(Array.isArray(availableTags) ? availableTags : []).map(tag => (
                                         <div 
                                             key={tag}
                                             onClick={() => { setActiveFilter('label'); setFilterValue(tag); setShowDropdown(null); }}
@@ -325,7 +330,7 @@ const ChatSection = ({ showToast }) => {
                                         : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                     }`}
                                 >
-                                    {activeFilter === 'vacancy' ? (filterValue?.slice(0, 15) + (filterValue?.length > 15 ? '...' : '')) : 'Vacantes'} <span className="ml-1 text-[9px]">▼</span>
+                                    {activeFilter === 'vacancy' ? (String(filterValue || '').slice(0, 15) + (String(filterValue || '').length > 15 ? '...' : '')) : 'Vacantes'} <span className="ml-1 text-[9px]">▼</span>
                                 </button>
                                 {showDropdown === 'vacancies' && (
                                     <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
