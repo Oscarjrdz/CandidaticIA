@@ -2958,7 +2958,11 @@ ${safeDnaLines}
                         }
                         const _candFirstNameGuard = (candidateData.nombre || candidateData.nombreReal || 'amig@').split(' ')[0];
                         if (_daysList) {
-                            responseTextVal = `Entiendo ${_candFirstNameGuard}, no hay problema. 😊 Puedes elegir otro día si gustas:\n\n${_daysList}\n\n¿En cuál día te queda mejor?`;
+                            if (_uniqueDays && _uniqueDays.length === 1) {
+                                responseTextVal = `Entiendo ${_candFirstNameGuard}, no hay problema. 😊 Solo tengo disponibilidad el día:\n\n${_daysList}[MSG_SPLIT]¿Te queda bien este día?`;
+                            } else {
+                                responseTextVal = `Entiendo ${_candFirstNameGuard}, no hay problema. 😊 Puedes elegir otro día si gustas:\n\n${_daysList}[MSG_SPLIT]¿En cuál día te queda mejor?`;
+                            }
                         } else {
                             responseTextVal = `Entiendo ${_candFirstNameGuard}, no hay problema. 😊 ¿Quieres elegir otro día para tu entrevista?`;
                         }
@@ -3076,9 +3080,15 @@ ${safeDnaLines}
                         }
                     }
                     const _candName2 = (candidateData.nombre || candidateData.nombreReal || 'amig@').split(' ')[0];
-                    responseTextVal = _daysList2
-                        ? `Entiendo ${_candName2}, no hay problema. 😊 Puedes elegir otro día si gustas:\n\n${_daysList2}\n\n¿En cuál día te queda mejor?`
-                        : `Entiendo ${_candName2}, no hay problema. 😊 ¿Quieres elegir otro día para tu entrevista?`;
+                    if (_daysList2) {
+                        if (_uniqueDays2 && _uniqueDays2.length === 1) {
+                            responseTextVal = `Entiendo ${_candName2}, no hay problema. 😊 Solo tengo disponibilidad el día:\n\n${_daysList2}[MSG_SPLIT]¿Te queda bien este día?`;
+                        } else {
+                            responseTextVal = `Entiendo ${_candName2}, no hay problema. 😊 Puedes elegir otro día si gustas:\n\n${_daysList2}[MSG_SPLIT]¿En cuál día te queda mejor?`;
+                        }
+                    } else {
+                        responseTextVal = `Entiendo ${_candName2}, no hay problema. 😊 ¿Quieres elegir otro día para tu entrevista?`;
+                    }
                     // Mark that we just showed the day list — enables Guard 3 on next message
                     setDayListPendingFlag(redis, candidateId).catch(() => {});
                 }
@@ -3345,7 +3355,7 @@ ${safeDnaLines}
                                 }
                             } else if (!mergedMeta.citaFecha || mergedMeta.citaFecha === 'null') {
                                 // 🩹 REDUNDANT DAY QUESTION FIX: If the bot already provided a day list, make the CTA a second bubble
-                                if (responseTextVal && /Tengo entrevistas los días:/i.test(responseTextVal)) {
+                                if (responseTextVal && /(Tengo entrevistas los días:|Tengo entrevista el día:|Solo tengo disponibilidad el día:)/i.test(responseTextVal)) {
                                     const dayMatches = responseTextVal.match(/1️⃣/g);
                                     if (dayMatches && dayMatches.length === 1 && !responseTextVal.includes('2️⃣')) {
                                         callToAction = "[MSG_SPLIT]¿Te queda bien este día? 😊";
@@ -3645,14 +3655,18 @@ ${safeDnaLines}
                                     const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
                                     return `${_NE3[i] || `${i+1}.`} ${_DN3[d.getDay()]} ${d.getDate()} de ${_MN3[d.getMonth()]} 📅`;
                                 }).join('\n\n');
-                                const _dayListMsg = `${_fn3 ? `${_fn3}, t` : 'T'}engo entrevistas los días:\n\n${_dayLines3}`;
-                                const _dayAskMsg = `¿En cuál día te queda mejor? 😊`;
+                                const _dayListMsg = _futDays.length === 1
+                                    ? `${_fn3 ? `${_fn3}, t` : 'T'}engo entrevista el día:\n\n${_dayLines3}`
+                                    : `${_fn3 ? `${_fn3}, t` : 'T'}engo entrevistas los días:\n\n${_dayLines3}`;
+                                const _dayAskMsg = _futDays.length === 1
+                                    ? `¿Te queda bien este día? 😊`
+                                    : `¿En cuál día te queda mejor? 😊`;
 
                                 await new Promise(r => setTimeout(r, 800));
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _dayListMsg, 'chat').catch(() => {});
                                 await new Promise(r => setTimeout(r, 1500));
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _dayAskMsg, 'chat').catch(() => {});
-                                await saveMessage(candidateId, { from: 'me', content: _dayListMsg + '\n\n' + _dayAskMsg, timestamp: new Date().toISOString() });
+                                await saveMessage(candidateId, { from: 'me', content: _dayListMsg + '[MSG_SPLIT]' + _dayAskMsg, timestamp: new Date().toISOString() });
                             } catch (_dlErr) {
                                 console.error('[DAY LIST] Failed to send day list on step entry:', _dlErr.message);
                             }
@@ -4478,7 +4492,10 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
         if (!dbContentToSave) {
             dbContentToSave = finalReaction ? `[REACCIÓN: ${finalReaction}]` : ' ';
         } else {
-            dbContentToSave = dbContentToSave.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
+            dbContentToSave = dbContentToSave.trim();
+            if (finalReaction && !dbContentToSave.includes('[REACCIÓN:')) {
+                dbContentToSave += ` [REACCIÓN: ${finalReaction}]`;
+            }
         }
 
         // ── ESCOLARIDAD SAFETY NET ────────────────────────────────────────────────

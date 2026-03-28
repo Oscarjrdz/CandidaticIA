@@ -311,7 +311,7 @@ export default async function handler(req, res) {
                 let candidate = null;
 
                 // Move config fetch early to capture instance identifier
-                const webhookInstanceId = data.instanceId;
+                const webhookInstanceId = messageData.instanceId || payload.instanceId;
                 const configPromise = getUltraMsgConfig(webhookInstanceId);
                 const activeConfig = await configPromise;
                 const sourceIdentifier = activeConfig?.identifier || 'whatsapp_v2';
@@ -405,7 +405,7 @@ export default async function handler(req, res) {
                     candidateId,
                     message: msgToSave,
                     candidateUpdates: updatedCandidate,
-                    eventData: data,
+                    eventData: messageData,
                     statsType: 'incoming'
                 });
 
