@@ -408,13 +408,23 @@ const CandidatesSection = ({ showToast }) => {
 
     // --- 🚩 PASO 1 LOGIC ---
     const isProfileComplete = (c) => {
-        // Red dot if ANY field is missing, Green dot if ALL fields are present
+        if (!c) return false;
+
+        const valToStr = (v) => v ? String(v).trim().toLowerCase() : '-';
         const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
+        
         const hasCoreData = coreFields.every(f => {
-            const val = formatValue(c[f]);
-            return val !== '-';
+            const val = valToStr(c[f]);
+            if (val === '-' || val === 'null' || val === 'n/a' || val === 'na' || val === 'ninguno' || val === 'ninguna' || val === 'none' || val === 'desconocido' || val.includes('proporcionado') || val.length < 2) return false;
+            if (f === 'escolaridad') {
+                const junk = ['kinder', 'ninguna', 'sin estudios', 'no tengo', 'no curse', 'preescolar', 'maternal'];
+                if (junk.some(j => val.includes(j))) return false;
+            }
+            return true;
         });
-        const hasAgeData = !!(c.edad || c.fechaNacimiento) && formatValue(c.edad || c.fechaNacimiento) !== '-';
+
+        const ageVal = valToStr(c.edad || c.fechaNacimiento);
+        const hasAgeData = ageVal !== '-' && ageVal !== 'null' && ageVal !== 'n/a' && ageVal !== 'na';
         return hasCoreData && hasAgeData;
     };
 

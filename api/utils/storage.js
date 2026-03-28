@@ -291,7 +291,9 @@ export const auditProfile = (c, customFields = []) => {
             val === 'general' ||
             val === 'n/a' ||
             val === 'na' ||
+            val === 'null' ||
             val === 'ninguno' ||
+            val === 'ninguna' ||
             val === 'none' ||
             val.length < 2 ||
             val.includes('luego') ||

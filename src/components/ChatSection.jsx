@@ -111,13 +111,22 @@ const ChatSection = ({ showToast }) => {
 
     const isProfileComplete = (c) => {
         if (!c) return false;
-        const formatValue = (v) => v ? String(v).trim() : '-';
+
+        const valToStr = (v) => v ? String(v).trim().toLowerCase() : '-';
         const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
+        
         const hasCoreData = coreFields.every(f => {
-            const val = formatValue(c[f]);
-            return val !== '-';
+            const val = valToStr(c[f]);
+            if (val === '-' || val === 'null' || val === 'n/a' || val === 'na' || val === 'ninguno' || val === 'ninguna' || val === 'none' || val === 'desconocido' || val.includes('proporcionado') || val.length < 2) return false;
+            if (f === 'escolaridad') {
+                const junk = ['kinder', 'ninguna', 'sin estudios', 'no tengo', 'no curse', 'preescolar', 'maternal'];
+                if (junk.some(j => val.includes(j))) return false;
+            }
+            return true;
         });
-        const hasAgeData = !!(c.edad || c.fechaNacimiento) && formatValue(c.edad || c.fechaNacimiento) !== '-';
+
+        const ageVal = valToStr(c.edad || c.fechaNacimiento);
+        const hasAgeData = ageVal !== '-' && ageVal !== 'null' && ageVal !== 'n/a' && ageVal !== 'na';
         return hasCoreData && hasAgeData;
     };
 
