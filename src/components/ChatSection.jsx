@@ -109,6 +109,18 @@ const ChatSection = ({ showToast }) => {
         }
     };
 
+    const isProfileComplete = (c) => {
+        if (!c) return false;
+        const formatValue = (v) => v ? String(v).trim() : '-';
+        const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
+        const hasCoreData = coreFields.every(f => {
+            const val = formatValue(c[f]);
+            return val !== '-';
+        });
+        const hasAgeData = !!(c.edad || c.fechaNacimiento) && formatValue(c.edad || c.fechaNacimiento) !== '-';
+        return hasCoreData && hasAgeData;
+    };
+
     // Fast search filter for the list with robust safety checks
     const filteredCandidates = (candidates || []).filter(c => {
         const searchVal = (searchQuery || "").toLowerCase();
@@ -127,6 +139,10 @@ const ChatSection = ({ showToast }) => {
         }
         if (activeFilter === 'vacancy' && filterValue) {
             return c?.currentVacancyName === filterValue;
+        }
+        if (activeFilter === 'profile') {
+            const isComplete = isProfileComplete(c);
+            return filterValue === 'complete' ? isComplete : !isComplete;
         }
 
         return true;
@@ -303,6 +319,26 @@ const ChatSection = ({ showToast }) => {
                         >
                             No leídos
                         </button>
+                        <button 
+                            onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setShowDropdown(null); }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                activeFilter === 'profile' && filterValue === 'complete' 
+                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                            }`}
+                        >
+                            Completos
+                        </button>
+                        <button 
+                            onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setShowDropdown(null); }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                activeFilter === 'profile' && filterValue === 'incomplete' 
+                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                            }`}
+                        >
+                            Incompletos
+                        </button>
 
                         {/* Etiquetas Dropdown */}
                         <div className="relative">
@@ -393,10 +429,15 @@ const ChatSection = ({ showToast }) => {
                                         <h3 className="text-[17px] text-[#111b21] dark:text-[#e9edef] truncate">{toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}</h3>
                                         <span className={`text-xs whitespace-nowrap ml-2 text-[#667781] dark:text-[#8696a0]`}>{formatRelativeDate(chat.ultimoMensaje)}</span>
                                     </div>
-                                    <div className="flex justify-between items-center">
-                                        <p className="text-[13px] text-[#667781] dark:text-[#8696a0] truncate">
-                                            {chat.currentVacancyName || 'Mensaje de WhatsApp...'}
-                                        </p>
+                                    <div className="flex justify-between items-center mt-0.5">
+                                        <div className="flex items-center gap-1.5 truncate">
+                                            <p className="text-[13px] text-[#667781] dark:text-[#8696a0] truncate">
+                                                {chat.currentVacancyName || 'WhatsApp'}
+                                            </p>
+                                            <span className={`text-[11px] font-light tracking-wide shrink-0 font-sans ${isProfileComplete(chat) ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}>
+                                                • {isProfileComplete(chat) ? 'Perfil completo' : 'Perfil incompleto'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
