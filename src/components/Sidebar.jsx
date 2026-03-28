@@ -28,6 +28,7 @@ const WhatsAppIcon = () => (
 
 const DEFAULT_MENU_ITEMS = [
     { id: 'candidates', label: 'Candidatos', icon: Users, position: 'top' },
+    { id: 'chat', label: 'Chat Web', icon: MessageSquare, position: 'top' },
     { id: 'instances', label: 'Instancias', icon: Server, position: 'top' },
     { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
     { id: 'simulator', label: 'Simulador', icon: MessageSquare, position: 'top' },
@@ -103,14 +104,21 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate 
 
     useEffect(() => {
         // Initialize from user config or default
+        let finalItems = [...DEFAULT_MENU_ITEMS];
         if (user?.sidebarConfig && Array.isArray(user.sidebarConfig)) {
             const reordered = user.sidebarConfig.map(id => DEFAULT_MENU_ITEMS.find(i => i.id === id)).filter(Boolean);
-            // Append any missing items (in case of new features)
             const missing = DEFAULT_MENU_ITEMS.filter(di => !user.sidebarConfig.includes(di.id));
-            setItems([...reordered, ...missing]);
-        } else {
-            setItems(DEFAULT_MENU_ITEMS);
+            finalItems = [...reordered, ...missing];
         }
+
+        // FORCE "chat" to be the second item if it's somehow missing or pushed to the bottom out of sight
+        const chatItem = finalItems.find(i => i.id === 'chat');
+        if (chatItem) {
+            finalItems = finalItems.filter(i => i.id !== 'chat');
+            finalItems.splice(1, 0, chatItem); // Insert exactly after the first item (Candidatos)
+        }
+
+        setItems(finalItems);
     }, [user]);
 
     const sensors = useSensors(

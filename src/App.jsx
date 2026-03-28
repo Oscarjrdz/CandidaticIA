@@ -4,6 +4,7 @@ import { useToast } from './hooks/useToast';
 import Button from './components/ui/Button';
 import Sidebar from './components/Sidebar';
 import CandidatesSection from './components/CandidatesSection';
+import ChatSection from './components/ChatSection';
 
 import SettingsSection from './components/SettingsSection';
 import AutomationsSection from './components/AutomationsSection';
@@ -28,7 +29,7 @@ function App() {
   const [instanceId, setInstanceId] = useState('');
   const [token, setToken] = useState('');
   const [theme, setTheme] = useState('light');
-  const [activeSection, setActiveSection] = useState('candidates');
+  const [activeSection, setActiveSection] = useState('chat');
   const { toast, showToast, hideToast, ToastComponent } = useToast();
 
   // Check LocalStorage for session
@@ -118,6 +119,7 @@ function App() {
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {activeSection === 'candidates' ? 'Candidatos'
+                    : activeSection === 'chat' ? 'Chat Web'
                     : activeSection === 'bot-ia' ? 'Bot IA'
                     : activeSection === 'simulator' ? 'Simulador'
                     : activeSection === 'automations' ? 'Automatizaciones'
@@ -133,6 +135,7 @@ function App() {
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
+                    : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
                     : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
                     : activeSection === 'simulator' ? 'Chatea con Brenda en tiempo real'
                     : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
@@ -184,9 +187,11 @@ function App() {
           </div>
         </header>
 
-        <main className="flex-1 px-8 py-8 overflow-y-auto overflow-x-hidden flex flex-col min-h-0">
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' ? 'p-0' : 'px-8 py-8'}`}>
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
+          ) : activeSection === 'chat' ? (
+            <ChatSection showToast={showToast} />
           ) : activeSection === 'bot-ia' ? (
             <BotIASection showToast={showToast} />
           ) : activeSection === 'simulator' ? (
