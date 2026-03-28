@@ -46,6 +46,10 @@ const ChatSection = ({ showToast }) => {
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
 
     const messagesEndRef = useRef(null);
+    const fileInputRef = useRef(null);
+
+    const [showEmojis, setShowEmojis] = useState(false);
+    const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
 
     // Filter Chips State
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'unread', 'label', 'vacancy'
@@ -218,6 +222,82 @@ const ChatSection = ({ showToast }) => {
             }
         } catch (e) {
             console.error('Failed to poll chat', e);
+        }
+    };
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedChat) return;
+
+        // Reset input immediately so user can select the same file again if needed
+        e.target.value = null;
+
+        // Basic validation and determine type
+        const isImage = file.type.startsWith('image/');
+        const isVideo = file.type.startsWith('video/');
+        const isAudio = file.type.startsWith('audio/');
+        
+        let msgType = 'document';
+        if (isImage) msgType = 'image';
+        else if (isVideo) msgType = 'video';
+        else if (isAudio) msgType = 'audio';
+
+        // Pre-create a temporary local object URL for instant UI feedback
+        const localUrl = URL.createObjectURL(file);
+        
+        // Optimistic UI Append
+        const tempId = `temp_${Date.now()}`;
+        const tempMsg = {
+            id: tempId,
+            from: 'me',
+            content: '',
+            mediaUrl: localUrl,
+            type: msgType,
+            status: 'queued',
+            timestamp: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, tempMsg]);
+        setSending(true);
+
+        try {
+            // Upload file to local media store first
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('candidateId', selectedChat.id);
+
+            const uploadRes = await fetch('/api/media/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const uploadData = await uploadRes.json();
+            
+            if (!uploadRes.ok) throw new Error(uploadData.error || 'Error subiendo archivo');
+
+            // Send via Chat API
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    candidateId: selectedChat.id,
+                    message: '',
+                    type: msgType,
+                    mediaUrl: uploadData.url || uploadData.mediaUrl
+                })
+            });
+
+            if (!res.ok) throw new Error('Error al enviar media');
+            
+            // Reload chats for updated list status
+            loadMessages();
+            loadCandidates();
+
+        } catch (err) {
+            console.error('File send error:', err);
+            showToast && showToast('Error al mandar archivo: ' + err.message, 'error');
+            // Remove temp msg
+            setMessages(prev => prev.filter(m => m.id !== tempId));
+        } finally {
+            setSending(false);
         }
     };
 
@@ -718,8 +798,39 @@ const ChatSection = ({ showToast }) => {
                                             </div>
                                         )}
 
-                                        <div className="relative inline-block min-w-[50px] max-w-full">
-                                            <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '10px', paddingRight: '48px' }} dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) }}></div>
+                                        <div className="relative inline-block min-w-[50px] max-w-full group/msgbody">
+                                            {/* Media Rendering */}
+                                            {msg.mediaUrl && (
+                                                <div className="mb-0.5 rounded overflow-hidden mt-1 cursor-pointer">
+                                                    {(msg.type === 'image' || msg.type === 'sticker') && (
+                                                        <img src={msg.mediaUrl} alt="media" className="max-w-[260px] max-h-[260px] object-cover rounded shadow-sm bg-transparent" />
+                                                    )}
+                                                    {msg.type === 'video' && (
+                                                        <video src={msg.mediaUrl} controls className="max-w-[260px] max-h-[260px] rounded shadow-sm bg-black" />
+                                                    )}
+                                                    {(msg.type === 'audio' || msg.type === 'ptt' || msg.type === 'voice') && (
+                                                        <audio src={msg.mediaUrl} controls className="max-w-[240px] h-[35px] mt-1 mb-1" />
+                                                    )}
+                                                    {msg.type === 'document' && (
+                                                        <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-black/5 dark:bg-white/5 rounded text-blue-500 hover:text-blue-600 font-medium break-all">
+                                                            <Paperclip className="w-4 h-4 shrink-0" /> DOCUMENTO ADJUNTO
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Text Rendering */}
+                                            {msg.content && (
+                                                <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '10px', paddingRight: '48px', paddingTop: msg.mediaUrl ? '2px' : '0' }} dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) }}></div>
+                                            )}
+                                            {!msg.content && <div style={{ paddingBottom: '10px', paddingRight: '48px' }}></div>}
+                                            
+                                            {/* Reaction Badges */}
+                                            {msg.reactions && msg.reactions.length > 0 && (
+                                                <div className="absolute -bottom-2.5 right-0 bg-white dark:bg-[#202c33] shadow-md rounded-full px-1.5 py-0.5 text-[11px] z-20 flex gap-0.5 border border-gray-100 dark:border-gray-800">
+                                                    {msg.reactions.map((r, rIdx) => <span key={rIdx}>{r.emoji || r}</span>)}
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className={`flex items-center space-x-1 select-none pr-1 absolute bottom-[3px] right-2`}>
@@ -740,10 +851,26 @@ const ChatSection = ({ showToast }) => {
                     </div>
 
                     {/* Input Area */}
-                    <form onSubmit={handleSend} className="min-h-[62px] px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] z-20 flex items-end shadow-sm">
+                    <form onSubmit={handleSend} className="min-h-[62px] px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] z-20 flex items-end shadow-sm relative">
+                        {/* Emojis Menu */}
+                        {showEmojis && (
+                            <div className="absolute bottom-[70px] left-2 bg-white dark:bg-[#2a3942] rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 p-2 w-[220px] grid grid-cols-6 gap-1 z-50">
+                                {POPULAR_EMOJIS.map(emoji => (
+                                    <button 
+                                        key={emoji} type="button" 
+                                        onClick={() => { setNewMessage(prev => prev + emoji); setShowEmojis(false); }}
+                                        className="text-xl hover:bg-black/5 dark:hover:bg-white/5 rounded p-1 transition-colors"
+                                    >
+                                        {emoji}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
                         <div className="flex space-x-3 text-[#54656f] dark:text-[#8696a0] items-center mb-1 mr-2 px-1">
-                            <button className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors"><Smile className="w-[26px] h-[26px] stroke-[1.5]" /></button>
-                            <button className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors"><Plus className="w-[26px] h-[26px] stroke-[1.5]" /></button>
+                            <button type="button" onClick={() => setShowEmojis(!showEmojis)} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[26px] h-[26px] stroke-[1.5]" /></button>
+                            <button type="button" onClick={() => fileInputRef.current?.click()} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors"><Plus className="w-[26px] h-[26px] stroke-[1.5]" /></button>
+                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
                         </div>
                         
                         <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg border-none shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow">

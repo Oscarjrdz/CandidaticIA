@@ -95,14 +95,15 @@ export default async function handler(req, res) {
                         });
 
                         // Update the message in the Redis list
+                        const remoteId = sendResult.data?.id || sendResult.data?.messageId;
                         const updatedData = {
                             status: 'sent',
-                            ultraMsgId: sendResult.data?.id
+                            ultraMsgId: remoteId
                         };
                         await updateMessageStatus(candidateId, msgToSave.id, 'sent', updatedData);
 
                         msgToSave.status = 'sent';
-                        msgToSave.ultraMsgId = sendResult.data?.id;
+                        msgToSave.ultraMsgId = remoteId;
                     } else {
                         throw new Error(`UltraMSG Error: ${sendResult.error || JSON.stringify(sendResult.data)}`);
                     }
