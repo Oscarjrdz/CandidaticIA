@@ -426,18 +426,24 @@ const ChatSection = ({ showToast }) => {
                                 />
                             </div>
                             <div className="flex flex-col">
-                                <h2 className="text-base text-[#111b21] dark:text-[#e9edef] whitespace-nowrap truncate flex items-center gap-2">
-                                    {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
-                                    {selectedChat.tags && selectedChat.tags.map(t => {
-                                        const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
-                                        const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
-                                        return (
-                                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-sm line-clamp-1 shadow-sm text-white font-medium" style={{ backgroundColor: tColor }}>{t}</span>
-                                        );
-                                    })}
+                                <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] flex items-center gap-2 max-w-full">
+                                    <span className="truncate">
+                                        {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
+                                    </span>
+                                    <div className="flex items-center gap-1 overflow-hidden shrink-0 hide-scrollbar" style={{ maskImage: 'linear-gradient(to right, black 80%, transparent)' }}>
+                                        {selectedChat.tags && selectedChat.tags.map(t => {
+                                            const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
+                                            const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
+                                            return (
+                                                <span key={t} className="text-[9px] px-2 py-[2px] rounded-full text-white font-bold tracking-wider uppercase whitespace-nowrap opacity-90 shadow-sm" style={{ backgroundColor: tColor }}>
+                                                    {t}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
                                 </h2>
-                                <p className="text-xs text-[#667781] dark:text-[#8696a0]">
-                                    {selectedChat.whatsapp} • ultimó msj {formatRelativeDate(selectedChat.ultimoMensaje)}
+                                <p className="text-xs text-[#667781] dark:text-[#8696a0] truncate mt-0.5">
+                                    {selectedChat.whatsapp} • últ. msj {formatRelativeDate(selectedChat.ultimoMensaje)}
                                 </p>
                             </div>
                         </div>
