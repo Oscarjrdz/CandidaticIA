@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send } from 'lucide-react';
+import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X } from 'lucide-react';
 import { getCandidates } from '../services/candidatesService';
 import { formatRelativeDate } from '../utils/formatters';
 
@@ -37,8 +37,13 @@ const ChatSection = ({ showToast }) => {
     const [newMessage, setNewMessage] = useState("");
     const [sending, setSending] = useState(false);
     const [loadingChats, setLoadingChats] = useState(true);
-    const [availableTags, setAvailableTags] = useState(['Urgente', 'Entrevista', 'Contratado', 'Rechazado', 'Duda']);
+    const [availableTags, setAvailableTags] = useState([]);
     const [newTagInput, setNewTagInput] = useState("");
+    const [editingTag, setEditingTag] = useState(null);
+    const [editTagName, setEditTagName] = useState("");
+    const [editTagColor, setEditTagColor] = useState("#3b82f6");
+
+    const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
 
     const messagesEndRef = useRef(null);
 
@@ -65,7 +70,14 @@ const ChatSection = ({ showToast }) => {
             const res = await fetch('/api/tags');
             const data = await res.json();
             if (data.success && data.tags) {
-                setAvailableTags(data.tags);
+                // Migrate to objects if they are strings
+                const migrated = data.tags.map((t, i) => {
+                    if (typeof t === 'string') {
+                        return { name: t, color: TAG_COLORS[i % TAG_COLORS.length] };
+                    }
+                    return t;
+                });
+                setAvailableTags(migrated);
             }
         } catch (e) { console.error('Error fetching tags', e); }
     };
@@ -80,7 +92,7 @@ const ChatSection = ({ showToast }) => {
             });
         } catch (e) {
             console.error('Error saving global tags', e);
-            showToast && showToast('Error al guardar etiquetas nuevas', 'error');
+            showToast && showToast('Error al guardar etiquetas', 'error');
         }
     };
 
@@ -252,7 +264,7 @@ const ChatSection = ({ showToast }) => {
                 </div>
 
                 {/* Barra de Búsqueda y Filtros Rápidos */}
-                <div className="p-2 bg-white dark:bg-[#111b21] flex flex-col gap-2 border-b border-[#f0f2f5] dark:border-[#222e35]">
+                <div className="p-2 bg-white dark:bg-[#111b21] flex flex-col gap-2 border-b border-[#f0f2f5] dark:border-[#222e35] relative z-10">
                     <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-1.5 flex items-center">
                         <Search className="w-4 h-4 text-[#54656f] dark:text-[#aebac1] mr-3" />
                         <input 
@@ -270,7 +282,7 @@ const ChatSection = ({ showToast }) => {
                     </div>
 
                     {/* Filter Chips */}
-                    <div className="flex space-x-2 overflow-x-auto custom-scrollbar pb-1 pt-0 -mx-1 px-1">
+                    <div className="flex flex-wrap gap-2 pb-1 pt-0">
                         <button 
                             onClick={() => { setActiveFilter('all'); setFilterValue(null); setShowDropdown(null); }}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
@@ -305,16 +317,21 @@ const ChatSection = ({ showToast }) => {
                                 {activeFilter === 'label' ? filterValue : 'Etiquetas'} <span className="ml-1 text-[9px]">▼</span>
                             </button>
                             {showDropdown === 'labels' && (
-                                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1">
-                                    {(Array.isArray(availableTags) ? availableTags : []).map(tag => (
-                                        <div 
-                                            key={tag}
-                                            onClick={() => { setActiveFilter('label'); setFilterValue(tag); setShowDropdown(null); }}
-                                            className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer"
-                                        >
-                                            {tag}
-                                        </div>
-                                    ))}
+                                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                    {(Array.isArray(availableTags) ? availableTags : []).map(tagObj => {
+                                        const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                        const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                        return (
+                                            <div 
+                                                key={tName}
+                                                onClick={() => { setActiveFilter('label'); setFilterValue(tName); setShowDropdown(null); }}
+                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
+                                            >
+                                                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></span>
+                                                {tName}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </div>
@@ -411,9 +428,13 @@ const ChatSection = ({ showToast }) => {
                             <div className="flex flex-col">
                                 <h2 className="text-base text-[#111b21] dark:text-[#e9edef] whitespace-nowrap truncate flex items-center gap-2">
                                     {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
-                                    {selectedChat.tags && selectedChat.tags.map(t => (
-                                        <span key={t} className="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded-sm line-clamp-1">{t}</span>
-                                    ))}
+                                    {selectedChat.tags && selectedChat.tags.map(t => {
+                                        const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
+                                        const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
+                                        return (
+                                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-sm line-clamp-1 shadow-sm text-white font-medium" style={{ backgroundColor: tColor }}>{t}</span>
+                                        );
+                                    })}
                                 </h2>
                                 <p className="text-xs text-[#667781] dark:text-[#8696a0]">
                                     {selectedChat.whatsapp} • ultimó msj {formatRelativeDate(selectedChat.ultimoMensaje)}
@@ -421,74 +442,170 @@ const ChatSection = ({ showToast }) => {
                             </div>
                         </div>
                         <div className="flex space-x-3 text-[#54656f] dark:text-[#aebac1] items-center">
-                            <div className="relative group">
+                            <div className="relative group/menu">
                                 <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                                    <svg viewBox="0 0 24 24" width="20" height="20" className="fill-current"><path d="M19 3H5c-1.1 0-2 .9-2 2v14l4-4h12c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 12H5.8L4 16.8V5h15v10z"></path></svg>
+                                    <Tag className="w-5 h-5" />
                                 </button>
                                 {/* Dropdown para Etiquetas */}
-                                <div className="absolute right-0 top-full mt-1 w-56 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+                                <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/menu:opacity-100 pointer-events-none group-hover/menu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
                                     <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111b21]">
                                         <span>Etiquetar candidato</span>
                                     </div>
-                                    <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                                        {availableTags.map(tag => {
-                                            const isActive = selectedChat.tags?.includes(tag);
+                                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                        {availableTags.map(tagObj => {
+                                            const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                            const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                            const isActive = selectedChat.tags?.includes(tName);
+                                            const isEditing = editingTag === tName;
+
+                                            if (isEditing) {
+                                                return (
+                                                    <div key={tName} className="px-3 py-2 bg-gray-50 dark:bg-[#111b21] flex flex-col gap-2">
+                                                        <div className="flex gap-1">
+                                                            <input 
+                                                                type="text"
+                                                                value={editTagName}
+                                                                onChange={e => setEditTagName(e.target.value)}
+                                                                className="flex-1 text-xs px-2 py-1 focus:outline-none dark:bg-[#202c33] dark:text-white rounded border border-gray-300 dark:border-gray-600"
+                                                                autoFocus
+                                                            />
+                                                        </div>
+                                                        <div className="flex justify-between items-center">
+                                                            <div className="flex gap-1">
+                                                                {TAG_COLORS.map(c => (
+                                                                    <button 
+                                                                        key={c}
+                                                                        onClick={(e) => { e.stopPropagation(); setEditTagColor(c); }}
+                                                                        className={`w-4 h-4 rounded-full ${editTagColor === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
+                                                                        style={{ backgroundColor: c }}
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                            <div className="flex gap-1">
+                                                                <button onClick={(e) => { e.stopPropagation(); setEditingTag(null); }} className="p-1 text-gray-400 hover:text-gray-600">
+                                                                    <X className="w-3.5 h-3.5" />
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        if (editTagName.trim()) {
+                                                                            // Update global tags
+                                                                            const newGlobal = availableTags.map(t => 
+                                                                                (typeof t === 'string' ? t : t.name) === tName 
+                                                                                ? { name: editTagName.trim(), color: editTagColor } 
+                                                                                : t
+                                                                            );
+                                                                            saveTagsGlobal(newGlobal);
+                                                                            
+                                                                            // Also update this candidate's tags if they had the old note
+                                                                            if (isActive && editTagName.trim() !== tName) {
+                                                                                const newCandidateTags = (selectedChat.tags || []).filter(t => t !== tName);
+                                                                                newCandidateTags.push(editTagName.trim());
+                                                                                setSelectedChat({ ...selectedChat, tags: newCandidateTags });
+                                                                                // Save to db (fetch put)
+                                                                                fetch('/api/candidates', {
+                                                                                    method: 'PUT',
+                                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                                    body: JSON.stringify({ id: selectedChat.id, tags: newCandidateTags })
+                                                                                }).catch(console.error);
+                                                                            }
+                                                                            setEditingTag(null);
+                                                                        }
+                                                                    }} 
+                                                                    className="p-1 text-green-500 hover:text-green-600"
+                                                                >
+                                                                    <Check className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
                                             return (
                                                 <div 
-                                                    key={tag} 
-                                                    className="px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-gray-50 dark:hover:bg-[#111b21] flex items-center justify-between group/item"
+                                                    key={tName} 
+                                                    className="px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-gray-50 dark:hover:bg-[#202c33] flex items-center justify-between group/item cursor-pointer"
+                                                    onClick={() => handleToggleTag(tName)}
                                                 >
-                                                    <div 
-                                                        className="flex-1 cursor-pointer flex items-center" 
-                                                        onClick={() => handleToggleTag(tag)}
-                                                    >
-                                                        <span className="truncate">{tag}</span>
-                                                        {isActive && <span className="text-blue-500 ml-2">✓</span>}
+                                                    <div className="flex-1 flex items-center gap-2">
+                                                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></span>
+                                                        <span className="truncate">{tName}</span>
+                                                        {isActive && <Check className="w-4 h-4 text-blue-500 ml-1" />}
                                                     </div>
-                                                    <button 
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            const newGlobal = availableTags.filter(t => t !== tag);
-                                                            saveTagsGlobal(newGlobal);
-                                                            // Optional: clean isolated tags from candidate? Not necessary right now
-                                                        }}
-                                                        className="text-red-400 opacity-0 group-hover/item:opacity-100 transition-opacity p-1 hover:text-red-600"
-                                                        title="Eliminar etiqueta"
-                                                    >
-                                                        ×
-                                                    </button>
+                                                    <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEditingTag(tName);
+                                                                setEditTagName(tName);
+                                                                setEditTagColor(tColor);
+                                                            }}
+                                                            className="p-1 text-gray-400 hover:text-blue-500"
+                                                            title="Editar etiqueta"
+                                                        >
+                                                            <Pencil className="w-3 h-3" />
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const newGlobal = availableTags.filter(t => (typeof t === 'string' ? t : t.name) !== tName);
+                                                                saveTagsGlobal(newGlobal);
+                                                            }}
+                                                            className="p-1 text-gray-400 hover:text-red-500"
+                                                            title="Eliminar etiqueta"
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             );
                                         })}
                                     </div>
-                                    <div className="p-2 border-t border-gray-100 dark:border-gray-700 flex bg-gray-50 dark:bg-[#111b21]">
-                                        <input 
-                                            type="text"
-                                            value={newTagInput}
-                                            onChange={(e) => setNewTagInput(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && newTagInput.trim()) {
-                                                    e.preventDefault();
-                                                    if (!availableTags.includes(newTagInput.trim())) {
-                                                        saveTagsGlobal([...availableTags, newTagInput.trim()]);
+                                    <div className="p-2 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-2 bg-gray-50 dark:bg-[#111b21]">
+                                        <div className="flex justify-between px-1">
+                                            {TAG_COLORS.map((c) => (
+                                                <button 
+                                                    key={c}
+                                                    onClick={(e) => { e.preventDefault(); setEditTagColor(c); }}
+                                                    className={`w-3.5 h-3.5 rounded-full hover:scale-110 transition-transform ${editTagColor === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
+                                                    style={{ backgroundColor: c }}
+                                                />
+                                            ))}
+                                        </div>
+                                        <div className="flex">
+                                            <input 
+                                                type="text"
+                                                value={newTagInput}
+                                                onChange={(e) => setNewTagInput(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && newTagInput.trim()) {
+                                                        e.preventDefault();
+                                                        const exists = availableTags.some(t => (typeof t === 'string' ? t : t.name).toLowerCase() === newTagInput.trim().toLowerCase());
+                                                        if (!exists) {
+                                                            saveTagsGlobal([...availableTags, { name: newTagInput.trim(), color: editTagColor || TAG_COLORS[0] }]);
+                                                        }
+                                                        setNewTagInput("");
                                                     }
-                                                    setNewTagInput("");
-                                                }
-                                            }}
-                                            placeholder="Nueva etiqueta..."
-                                            className="w-full text-xs px-2 py-1.5 focus:outline-none dark:bg-[#202c33] dark:text-white rounded border border-transparent focus:border-blue-500 transition-colors"
-                                        />
-                                        <button 
-                                            onClick={() => {
-                                                if (newTagInput.trim() && !availableTags.includes(newTagInput.trim())) {
-                                                    saveTagsGlobal([...availableTags, newTagInput.trim()]);
-                                                }
-                                                setNewTagInput("");
-                                            }}
-                                            className="ml-1 px-2 text-blue-500 hover:text-blue-600 font-bold"
-                                        >
-                                            +
-                                        </button>
+                                                }}
+                                                placeholder="Nueva etiqueta..."
+                                                className="flex-1 text-xs px-2 py-1.5 focus:outline-none dark:bg-[#202c33] dark:text-white rounded border border-transparent focus:border-blue-500 transition-colors bg-white dark:bg-[#202c33]"
+                                            />
+                                            <button 
+                                                onClick={() => {
+                                                    if (newTagInput.trim()) {
+                                                        const exists = availableTags.some(t => (typeof t === 'string' ? t : t.name).toLowerCase() === newTagInput.trim().toLowerCase());
+                                                        if (!exists) {
+                                                            saveTagsGlobal([...availableTags, { name: newTagInput.trim(), color: editTagColor || TAG_COLORS[0] }]);
+                                                        }
+                                                        setNewTagInput("");
+                                                    }
+                                                }}
+                                                className="ml-1 px-2 text-blue-500 hover:text-blue-600 font-bold bg-blue-50 dark:bg-blue-900/30 rounded"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
