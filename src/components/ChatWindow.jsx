@@ -4,6 +4,18 @@ import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
 import CandidateADNCard from './CandidateADNCard';
 
+const formatWhatsAppText = (text) => {
+    if (!text) return '';
+    return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*(.*?)\*/g, '<strong class="font-bold">$1</strong>')
+        .replace(/_(.*?)_/g, '<em class="italic">$1</em>')
+        .replace(/~(.*?)~/g, '<del class="line-through opacity-70">$1</del>')
+        .replace(/```(.*?)```/g, '<code class="bg-black/5 dark:bg-black/30 px-1 py-0.5 rounded font-mono text-[11px]">$1</code>');
+};
+
 /**
  * Ventana de chat flotante y arrastrable
  */
@@ -343,6 +355,26 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
     if (!isOpen) return null;
 
+    const displayMessages = Array.isArray(messages) ? messages.flatMap((msg) => {
+        if (!msg) return [];
+        let content = msg.content || '';
+        if (content.includes('[REACCI')) {
+            content = content.replace(/\[REACCI[OÓ]N:\s*.*?\]/gi, '').trim();
+            if (!content && !msg.mediaUrl) return [];
+        }
+
+        if (content && content.includes('[MSG_SPLIT]')) {
+            const parts = content.split('[MSG_SPLIT]').filter(p => p.trim());
+            return parts.map((part, index) => ({
+                ...msg,
+                content: part.trim(),
+                mediaUrl: index === 0 ? msg.mediaUrl : null,
+                isSplit: true
+            }));
+        }
+        return [{...msg, content}];
+    }) : [];
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
             {/* Backdrop opcional - lo haremos invisible para dar sensación 'flotante' real, 
@@ -415,27 +447,46 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 {/* Scalable Vacancy History Timeline */}
                 <VacancyHistoryCard candidateId={candidate?.id} />
 
-                {/* Messages Area */}
-                <div className="h-96 overflow-y-auto p-4 space-y-3 bg-[#efe7dd] dark:bg-gray-900 text-sm">
-                    {!Array.isArray(messages) || messages.length === 0 ? (
-                        <div className="text-center py-10 opacity-50 select-none">
-                            <MessageCircle className="w-10 h-10 mx-auto mb-2" />
-                            <p>Sin mensajes</p>
+                {/* Messages Area - WhatsApp Original Styling */}
+                <div className="h-96 overflow-y-auto p-4 space-y-2 relative text-[14.2px] bg-[#efeae2] dark:bg-[#0b141a]">
+                    <div 
+                        className="absolute inset-0 z-0 opacity-[0.4] dark:opacity-[0.05] pointer-events-none"
+                        style={{
+                            backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
+                            backgroundRepeat: 'repeat',
+                            backgroundSize: '350px'
+                        }}
+                    ></div>
+                    
+                    <div className="relative z-10 space-y-2 pb-2">
+                    {displayMessages.length === 0 ? (
+                        <div className="text-center py-2 bg-[#ffeed0] dark:bg-[#cca868]/10 text-[#111b21] dark:text-[#f7cd73]/70 rounded-lg mx-auto w-4/5 shadow-sm select-none mt-2 border border-black/5 dark:border-white/5">
+                            <p className="text-[10.5px] leading-tight">Los mensajes están protegidos de extremo a extremo por Candidatic.</p>
                         </div>
                     ) : (
-                        messages.map((msg, idx) => {
+                        displayMessages.map((msg, idx) => {
                             if (!msg) return null; // Safe guard
                             const isMe = msg.from === 'me' || msg.from === 'bot';
-                            const senderName = isMe ? 'Bot' : (candidate?.nombre || 'Usuario');
+                            
+                            const prevMsg = idx > 0 ? displayMessages[idx - 1] : null;
+                            const isPrevMe = prevMsg ? (prevMsg.from === 'me' || prevMsg.from === 'bot') : null;
+                            const isFirstInSeries = !prevMsg || isMe !== isPrevMe;
+
                             return (
-                                <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group relative ${!isFirstInSeries ? '-mt-1.5' : ''}`}>
                                     <div className={`
-                                        max-w-[85%] rounded-lg px-3 py-1.5 shadow-sm
+                                        max-w-[85%] rounded-[7.5px] px-2 py-1.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative z-10
                                         ${isMe
-                                            ? 'bg-[#d9fdd3] dark:bg-green-900 text-gray-900 dark:text-white rounded-tr-none'
-                                            : 'bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-tl-none'}
+                                            ? `bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tr-none' : ''}`
+                                            : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tl-none' : ''}`}
                                     `}>
-                                        <p className="text-[10px] font-semibold mb-0.5 opacity-70">{senderName}</p>
+                                        {/* Tail */}
+                                        {isFirstInSeries && (
+                                            <div 
+                                                className={`absolute top-0 w-3 h-3 ${isMe ? '-right-2 bg-[#d9fdd3] dark:bg-[#005c4b]' : '-left-2 bg-white dark:bg-[#202c33]'}`} 
+                                                style={{ clipPath: isMe ? 'polygon(0 0, 0 100%, 100% 0)' : 'polygon(100% 0, 100% 100%, 0 0)' }}
+                                            />
+                                        )}
 
                                         {/* Media Rendering */}
                                         {msg.mediaUrl && (
@@ -467,28 +518,33 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                                             <p className="text-[11px] italic opacity-50 mb-1">Nota de voz</p>
                                         )}
 
-                                        {msg.content && <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>}
+                                        {msg.content && (
+                                            <div className="relative inline-block min-w-[40px] max-w-full">
+                                                <div 
+                                                    className="whitespace-pre-wrap leading-[1.35] inline-block break-words" 
+                                                    style={{ paddingBottom: '10px', paddingRight: '48px' }}
+                                                    dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) }}
+                                                />
+                                            </div>
+                                        )}
 
-                                        <div className="flex items-center justify-between mt-1 space-x-2">
-                                            <p className="text-[9px] text-gray-500 dark:text-gray-400 opacity-70">
+                                        <div className={`flex items-center space-x-1 select-none pr-1 ${msg.content ? 'absolute bottom-[3px] right-2' : 'justify-end mt-1'}`}>
+                                            <p className="text-[10.5px] text-gray-500/90 dark:text-gray-400/90 font-medium">
                                                 {safeFormatTime(msg.timestamp)}
                                             </p>
-                                            <div className="flex items-center space-x-1">
-                                                {msg.status && (
-                                                    <span className={`text-[9px] font-bold uppercase ${msg.status === 'seen' || msg.status === 'read' ? 'text-blue-500' : 'text-gray-400'
-                                                        }`}>
-                                                        {msg.status === 'seen' || msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
-                                                    </span>
-                                                )}
-                                                {isMe && !msg.status && <span className="text-[9px] text-gray-400">✓✓</span>}
-                                            </div>
+                                            {isMe && (
+                                                <span className={`text-[12.5px] font-bold uppercase leading-none ${msg.status === 'seen' || msg.status === 'read' ? 'text-[#53bdeb]' : 'text-gray-400/80'}`}>
+                                                    {msg.status === 'seen' || msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
                             );
                         })
                     )}
-                    <div ref={messagesEndRef} />
+                    <div ref={messagesEndRef} className="h-2" />
+                    </div>
                 </div>
 
                 {/* Variable Tray */}

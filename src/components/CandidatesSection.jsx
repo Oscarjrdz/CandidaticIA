@@ -116,6 +116,9 @@ const CandidatesSection = ({ showToast }) => {
         }
     });
 
+    const [openClawActive, setOpenClawActive] = useState(false);
+    const [openClawLoading, setOpenClawLoading] = useState(true);
+
     // Save to localStorage when it changes
     useEffect(() => {
         try {
@@ -190,6 +193,17 @@ const CandidatesSection = ({ showToast }) => {
 
             // Cargar campos dinámicos
             loadFields();
+
+            // Cargar settings OpenClaw
+            try {
+                const res = await fetch('/api/bot-ia/settings');
+                const data = await res.json();
+                if (res.ok) setOpenClawActive(!!data.openClawActive);
+            } catch (e) {
+                console.error('Error fetching settings', e);
+            } finally {
+                setOpenClawLoading(false);
+            }
         };
 
         const loadFields = async () => {
@@ -306,6 +320,28 @@ const CandidatesSection = ({ showToast }) => {
         loadCandidates(currentPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, search]);
+
+    const toggleOpenClaw = async () => {
+        const newState = !openClawActive;
+        setOpenClawLoading(true);
+        try {
+            const res = await fetch('/api/bot-ia/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ openClawActive: newState })
+            });
+            if (res.ok) {
+                setOpenClawActive(newState);
+                showToast && showToast(`Agente OpenClaw (VPS) ${newState ? 'Encendido' : 'Apagado'}`, 'success');
+            } else {
+                showToast && showToast('Error guardando config', 'error');
+            }
+        } catch (e) {
+            showToast && showToast('Error de red al alternar OpenClaw', 'error');
+        } finally {
+            setOpenClawLoading(false);
+        }
+    };
 
     /**
      * Alternar estado de bloqueo del candidato
@@ -539,6 +575,32 @@ const CandidatesSection = ({ showToast }) => {
                                 className={`
                                     inline-block h-4 w-4 transform rounded-full bg-white transition-transform
                                     ${!hideIncomplete ? 'translate-x-6' : 'translate-x-1'}
+                                `}
+                            />
+                        </button>
+                    </div>
+
+                    {/* OpenClaw VPS Agent Toggle */}
+                    <div className="flex items-center gap-2 bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)] cursor-pointer" onClick={toggleOpenClaw}>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Agente Externo</span>
+                            <span className={`text-[10px] font-bold ${openClawActive ? 'text-green-500' : 'text-gray-400'}`}>
+                                OPEN CLAW
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            disabled={openClawLoading}
+                            className={`
+                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none shadow-inner
+                                ${openClawActive ? 'bg-green-500' : 'bg-gray-400 dark:bg-gray-600'}
+                            `}
+                            title="Encender o apagar envío de webhooks a DigitalOcean OpenClaw"
+                        >
+                            <span
+                                className={`
+                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-md
+                                    ${openClawActive ? 'translate-x-6' : 'translate-x-1'}
                                 `}
                             />
                         </button>

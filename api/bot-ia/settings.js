@@ -17,6 +17,7 @@ export default async function handler(req, res) {
                 token,
                 systemPrompt,
                 isActive,
+                openClawActive,
                 extractionRules,
                 cerebro1Rules,
                 cerebro2Context,
@@ -54,6 +55,11 @@ export default async function handler(req, res) {
                 await redis.set('bot_ia_active', isActive ? 'true' : 'false');
             }
 
+            // OpenClaw Master Switch
+            if (openClawActive !== undefined) {
+                await redis.set('openclaw_active', openClawActive ? 'true' : 'false');
+            }
+
             // 7. Advanced Internal Protocols
             if (extractionRules !== undefined) await redis.set('bot_extraction_rules', extractionRules);
             if (cerebro1Rules !== undefined) await redis.set('bot_cerebro1_rules', cerebro1Rules);
@@ -74,6 +80,7 @@ export default async function handler(req, res) {
             const ultramsgConfig = await redis.get('ultramsg_credentials') || await redis.get('ultramsg_config');
             const systemPrompt = await redis.get('bot_ia_prompt');
             const isActive = await redis.get('bot_ia_active');
+            const openClawActive = await redis.get('openclaw_active');
             const extractionRules = await redis.get('bot_extraction_rules');
             const cerebro1Rules = await redis.get('bot_cerebro1_rules');
             const cerebro2Context = await redis.get('bot_cerebro2_context');
@@ -103,6 +110,7 @@ export default async function handler(req, res) {
                 identifier,
                 systemPrompt: systemPrompt || '',
                 isActive: isActive === 'true',
+                openClawActive: openClawActive === 'true',
                 extractionRules: extractionRules || '',
                 cerebro1Rules: cerebro1Rules || '',
                 cerebro2Context: cerebro2Context || '',
