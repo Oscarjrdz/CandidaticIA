@@ -40,6 +40,7 @@ const ChatSection = ({ showToast }) => {
     const [sending, setSending] = useState(false);
     const [loadingChats, setLoadingChats] = useState(true);
     const [availableTags, setAvailableTags] = useState([]);
+    const [manualProjects, setManualProjects] = useState([]);
     const [newTagInput, setNewTagInput] = useState("");
     const [editingTag, setEditingTag] = useState(null);
     const [editTagName, setEditTagName] = useState("");
@@ -71,6 +72,7 @@ const ChatSection = ({ showToast }) => {
         loadCandidates();
         loadTags();
         loadVacanciesList();
+        loadManualProjects();
 
         // 🟢 Live auto-update for the sidebar (every 3 seconds)
         const interval = setInterval(loadCandidates, 3000);
@@ -87,6 +89,18 @@ const ChatSection = ({ showToast }) => {
             }
         } catch (e) {
             console.error('Error fetching vacancies for injector', e);
+        }
+    };
+
+    const loadManualProjects = async () => {
+        try {
+            const res = await fetch('/api/manual_projects');
+            const data = await res.json();
+            if (data.success && data.data) {
+                setManualProjects(data.data);
+            }
+        } catch (e) {
+            console.error('Error fetching manual projects', e);
         }
     };
 
@@ -180,6 +194,9 @@ const ChatSection = ({ showToast }) => {
         }
         if (activeFilter === 'vacancy' && filterValue) {
             return c?.currentVacancyName === filterValue;
+        }
+        if (activeFilter === 'crm' && filterValue) {
+            return c?.manualProjectId === filterValue;
         }
         if (activeFilter === 'profile') {
             const isComplete = isProfileComplete(c);
@@ -562,6 +579,43 @@ const ChatSection = ({ showToast }) => {
                                 )}
                             </div>
                         )}
+
+                        {/* CRM Projects Dropdown */}
+                        <div className="relative">
+                            <button 
+                                onClick={() => setShowDropdown(showDropdown === 'crm' ? null : 'crm')}
+                                className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                    activeFilter === 'crm' 
+                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                {activeFilter === 'crm' ? (manualProjects.find(p => p.id === filterValue)?.name?.slice(0, 15) + (manualProjects.find(p => p.id === filterValue)?.name?.length > 15 ? '...' : '') || 'CRM') : 'CRM'} <span className="ml-1 text-[9px]">▼</span>
+                            </button>
+                            {showDropdown === 'crm' && (
+                                <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                    {manualProjects.length === 0 ? (
+                                        <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
+                                    ) : (
+                                        manualProjects.map(project => (
+                                            <div
+                                                key={project.id}
+                                                onClick={() => {
+                                                    setActiveFilter('crm');
+                                                    setFilterValue(project.id);
+                                                    setShowDropdown(null);
+                                                }}
+                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
+                                                title={project.name}
+                                            >
+                                                {project.name}
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                     </div>
                 </div>
 
