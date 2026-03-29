@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X } from 'lucide-react';
-import { getCandidates } from '../services/candidatesService';
+import { getCandidates, blockCandidate } from '../services/candidatesService';
 import { formatRelativeDate } from '../utils/formatters';
 
 const safeFormatTime = (dateStr) => {
@@ -222,6 +222,41 @@ const ChatSection = ({ showToast }) => {
             }
         } catch (e) {
             console.error('Failed to poll chat', e);
+        }
+    };
+
+    const [blockLoading, setBlockLoading] = useState(false);
+
+    const handleBlockToggle = async (chatToBlock, e) => {
+        if (e) e.stopPropagation();
+        if (!chatToBlock) return;
+        const isCurrentlyBlocked = chatToBlock.blocked === true;
+        const action = isCurrentlyBlocked ? 'reactivar la IA para' : 'silenciar la IA de';
+
+        if (!window.confirm(`¿Estás seguro de que deseas ${action} este chat?`)) {
+            return;
+        }
+
+        setBlockLoading(true);
+        try {
+            const result = await blockCandidate(chatToBlock.id, !isCurrentlyBlocked);
+            if (result.success) {
+                showToast && showToast(result.message || `Candidato ${isCurrentlyBlocked ? 'reactivado' : 'silenciado'} con éxito`, 'success');
+
+                // Actualizar estado local
+                setCandidates(prev => prev.map(c =>
+                    c.id === chatToBlock.id ? { ...c, blocked: !isCurrentlyBlocked } : c
+                ));
+                if (selectedChat?.id === chatToBlock.id) {
+                    setSelectedChat(prev => ({ ...prev, blocked: !isCurrentlyBlocked }));
+                }
+            } else {
+                showToast && showToast(`Error al ${isCurrentlyBlocked ? 'reactivar' : 'silenciar'} IA: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            showToast && showToast('Error de red al actualizar estado', 'error');
+        } finally {
+            setBlockLoading(false);
         }
     };
 
@@ -531,6 +566,16 @@ const ChatSection = ({ showToast }) => {
                                                 • {isProfileComplete(chat) ? 'Perfil completo' : 'Perfil incompleto'}
                                             </span>
                                         </div>
+                                        <div className="flex items-center shrink-0 ml-1">
+                                            <button
+                                                onClick={(e) => handleBlockToggle(chat, e)}
+                                                disabled={blockLoading}
+                                                className={`w-7 h-3.5 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center shadow-inner ${chat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                                title={chat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
+                                            >
+                                                <div className={`absolute w-2.5 h-2.5 rounded-full bg-white shadow transition-transform duration-200 ${chat.blocked ? 'translate-x-[16px]' : 'translate-x-0.5'}`}></div>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -582,6 +627,22 @@ const ChatSection = ({ showToast }) => {
                             </div>
                         </div>
                         <div className="flex space-x-3 text-[#54656f] dark:text-[#aebac1] items-center">
+                            {/* Silenciar IA Toggle */}
+                            <div className="flex items-center gap-2 mr-2">
+                                <span className={`text-xs font-medium ${selectedChat.blocked ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'} select-none`}>
+                                    {selectedChat.blocked ? 'IA Silenciada' : 'IA Dinámica'}
+                                </span>
+                                <button
+                                    onClick={(e) => handleBlockToggle(selectedChat, e)}
+                                    disabled={blockLoading}
+                                    className={`w-8 h-4 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center ${selectedChat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                    title={selectedChat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
+                                >
+                                    <div className={`absolute w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${selectedChat.blocked ? 'translate-x-4' : 'translate-x-0.5'}`}>
+                                    </div>
+                                </button>
+                            </div>
+
                             <div className="relative group/menu">
                                 <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                                     <Tag className="w-5 h-5" />
