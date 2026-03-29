@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X } from 'lucide-react';
-import { getCandidates, blockCandidate } from '../services/candidatesService';
+import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2 } from 'lucide-react';
+import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import { formatRelativeDate } from '../utils/formatters';
 
 const safeFormatTime = (dateStr) => {
@@ -257,6 +257,30 @@ const ChatSection = ({ showToast }) => {
             showToast && showToast('Error de red al actualizar estado', 'error');
         } finally {
             setBlockLoading(false);
+        }
+    };
+
+    const handleDeleteChat = async (chatToDelete, e) => {
+        if (e) e.stopPropagation();
+        if (!chatToDelete) return;
+        
+        if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a ${chatToDelete.nombreReal || chatToDelete.nombre || chatToDelete.whatsapp}? Esta acción no se puede deshacer.`)) {
+            return;
+        }
+
+        try {
+            const result = await deleteCandidate(chatToDelete.id);
+            if (result.success) {
+                showToast && showToast('Chat eliminado correctamente', 'success');
+                setCandidates(prev => prev.filter(c => c.id !== chatToDelete.id));
+                if (selectedChat?.id === chatToDelete.id) {
+                    setSelectedChat(null);
+                }
+            } else {
+                showToast && showToast(`Error al eliminar: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            showToast && showToast('Error de red al eliminar', 'error');
         }
     };
 
@@ -574,6 +598,13 @@ const ChatSection = ({ showToast }) => {
                                                 title={chat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
                                             >
                                                 <div className={`absolute w-2.5 h-2.5 rounded-full bg-white shadow transition-transform duration-200 ${chat.blocked ? 'translate-x-[16px]' : 'translate-x-0.5'}`}></div>
+                                            </button>
+                                            <button
+                                                onClick={(e) => handleDeleteChat(chat, e)}
+                                                className="ml-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                                title="Eliminar chat"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
                                     </div>
