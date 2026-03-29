@@ -125,7 +125,14 @@ const ChatSection = ({ showToast }) => {
         try {
             const result = await getCandidates(200, 0, "");
             if (result.success) {
-                setCandidates(result.candidates || []);
+                const fetchedCandidates = result.candidates || [];
+                setCandidates(fetchedCandidates);
+                if (fetchedCandidates.length > 0) {
+                    setSelectedChat(current => {
+                        if (!current) return fetchedCandidates[0];
+                        return current; // Ya hay uno seleccionado, no forzamos cambio
+                    });
+                }
             }
         } catch (e) {
             console.error(e);
@@ -431,22 +438,7 @@ const ChatSection = ({ showToast }) => {
             {/* LADO IZQUIERDO: LISTA DE CHATS */}
             <div className={`w-full md:w-[30%] lg:w-[35%] xl:w-[400px] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] ${selectedChat ? 'hidden md:flex' : 'flex'}`}>
                 
-                {/* Header Izquierdo */}
-                <div className="h-[59px] px-4 py-2 flex items-center justify-between bg-[#f0f2f5] dark:bg-[#202c33]">
-                    <div className="w-10 h-10 rounded-full bg-[#dfe5e7] dark:bg-[#374248] flex items-center justify-center overflow-hidden">
-                        <svg viewBox="0 0 24 24" width="28" height="28" className="text-white dark:text-[#aebac1] opacity-70 mt-2" fill="currentColor">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
-                        </svg>
-                    </div>
-                    <div className="flex space-x-3 text-[#54656f] dark:text-[#aebac1]">
-                        <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                            <MessageSquare className="w-5 h-5" />
-                        </button>
-                        <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                            <MoreVertical className="w-5 h-5" />
-                        </button>
-                    </div>
-                </div>
+                {/* Eliminada la barra Header Izquierdo a petición del usuario */}
 
                 {/* Barra de Búsqueda y Filtros Rápidos */}
                 <div className="p-2 bg-white dark:bg-[#111b21] flex flex-col gap-2 border-b border-[#f0f2f5] dark:border-[#222e35] relative z-10">
