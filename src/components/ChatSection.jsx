@@ -34,7 +34,7 @@ const ChatSection = ({ showToast }) => {
     const [candidates, setCandidates] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedChat, setSelectedChat] = useState(null);
-    const [showRightPanel, setShowRightPanel] = useState(false);
+    const [showRightPanel, setShowRightPanel] = useState(true);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [sending, setSending] = useState(false);
