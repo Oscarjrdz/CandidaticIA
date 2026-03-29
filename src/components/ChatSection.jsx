@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2 } from 'lucide-react';
+import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase } from 'lucide-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import { formatRelativeDate } from '../utils/formatters';
 
@@ -42,6 +42,7 @@ const ChatSection = ({ showToast }) => {
     const [editingTag, setEditingTag] = useState(null);
     const [editTagName, setEditTagName] = useState("");
     const [editTagColor, setEditTagColor] = useState("#3b82f6");
+    const [vacancies, setVacancies] = useState([]);
 
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
 
@@ -67,11 +68,25 @@ const ChatSection = ({ showToast }) => {
     useEffect(() => {
         loadCandidates();
         loadTags();
+        loadVacanciesList();
 
         // 🟢 Live auto-update for the sidebar (every 3 seconds)
         const interval = setInterval(loadCandidates, 3000);
         return () => clearInterval(interval);
     }, []);
+
+    const loadVacanciesList = async () => {
+        try {
+            const res = await fetch('/api/vacancies');
+            const data = await res.json();
+            if (data.success && data.data) {
+                // Solo vacantes con "info para el bot"
+                setVacancies(data.data.filter(v => v.active && !!v.messageDescription));
+            }
+        } catch (e) {
+            console.error('Error fetching vacancies for injector', e);
+        }
+    };
 
     const loadTags = async () => {
         try {
@@ -672,6 +687,38 @@ const ChatSection = ({ showToast }) => {
                                     <div className={`absolute w-3 h-3 rounded-full bg-white shadow-sm transition-transform duration-200 ${selectedChat.blocked ? 'translate-x-4' : 'translate-x-0.5'}`}>
                                     </div>
                                 </button>
+                            </div>
+
+                            {/* Vacancies Injector Menu */}
+                            <div className="relative group/vacmenu">
+                                <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors" title="Inyectar información de Vacante">
+                                    <Briefcase className="w-5 h-5 text-gray-500 hover:text-blue-500 transition-colors" />
+                                </button>
+                                {/* Dropdown de Vacantes */}
+                                <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/vacmenu:opacity-100 pointer-events-none group-hover/vacmenu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+                                    <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
+                                        Inyectar Info de Vacante
+                                    </div>
+                                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                        {vacancies.length === 0 ? (
+                                            <div className="px-3 py-4 text-center text-xs text-gray-400">
+                                                No hay vacantes configuradas con "Info para el bot"
+                                            </div>
+                                        ) : (
+                                            vacancies.map(vac => (
+                                                <div
+                                                    key={vac.id}
+                                                    onClick={() => setNewMessage(prev => (prev ? prev + '\n\n' : '') + vac.messageDescription)}
+                                                    className="px-3 py-2.5 flex flex-col text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer border-b border-gray-50 dark:border-gray-800 last:border-0"
+                                                    title={vac.name}
+                                                >
+                                                    <span className="font-semibold truncate">{vac.name}</span>
+                                                    <span className="text-[11px] text-gray-400 truncate">{vac.company}</span>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="relative group/menu">
