@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase } from 'lucide-react';
+import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban } from 'lucide-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
+import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
 
 const safeFormatTime = (dateStr) => {
@@ -33,6 +34,7 @@ const ChatSection = ({ showToast }) => {
     const [candidates, setCandidates] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedChat, setSelectedChat] = useState(null);
+    const [showRightPanel, setShowRightPanel] = useState(false);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [sending, setSending] = useState(false);
@@ -888,6 +890,13 @@ const ChatSection = ({ showToast }) => {
                                     </div>
                                 </div>
                             </div>
+                            <button 
+                                onClick={() => setShowRightPanel(!showRightPanel)}
+                                className={`p-2 rounded-full transition-colors ml-1 ${showRightPanel ? 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/20' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
+                                title="CRM Manual"
+                            >
+                                <Kanban className="w-5 h-5" />
+                            </button>
                             <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                                 <Search className="w-5 h-5" />
                             </button>
@@ -1046,6 +1055,20 @@ const ChatSection = ({ showToast }) => {
                         </p>
                     </div>
                 </div>
+            )}
+
+            {/* RIGHT PANEL: CRM Manual Projects */}
+            {showRightPanel && (
+                <ManualProjectsSidepanel
+                    selectedChat={selectedChat}
+                    onClose={() => setShowRightPanel(false)}
+                    showToast={showToast}
+                    onCandidateUpdated={(updatedCandidate) => {
+                        // Optimistically update the candidate in the local list and selected reference
+                        setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
+                        if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);
+                    }}
+                />
             )}
         </div>
     );

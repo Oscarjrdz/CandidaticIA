@@ -96,6 +96,36 @@ export const getCandidateById = async (id) => {
 };
 
 /**
+ * Actualiza un candidato
+ */
+export const updateCandidate = async (id, updates) => {
+    try {
+        const response = await fetch(`${API_BASE}/api/candidates`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id, ...updates })
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Error actualizando candidato');
+        }
+
+        return {
+            success: true,
+            candidate: data.candidate
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+};
+
+/**
  * Elimina un candidato
  */
 export const deleteCandidate = async (id) => {
