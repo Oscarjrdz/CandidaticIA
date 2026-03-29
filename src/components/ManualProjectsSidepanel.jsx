@@ -1,6 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, GripVertical, Check, Trash2, Edit2, Box, ArrowRight, Loader2, ListTodo } from 'lucide-react';
+import { Plus, X, GripVertical, Check, Trash2, Edit2, Box, ArrowRight, Loader2, ListTodo, ChevronDown } from 'lucide-react';
 import { updateCandidate } from '../services/candidatesService';
+
+const CustomProjectDropdown = ({ activeProjectId, projects, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    const label = activeProject ? activeProject.name : '-- Sin Proyecto --';
+
+    return (
+        <div className="relative w-full">
+            <div 
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between bg-gray-50 dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 text-sm rounded-lg px-3 py-2.5 outline-none hover:bg-white dark:hover:bg-[#2a3942] focus:ring-2 focus:ring-indigo-500/50 cursor-pointer font-medium mb-1 text-gray-800 dark:text-gray-200 transition-colors shadow-sm"
+            >
+                <span className="truncate">{label}</span>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </div>
+            
+            {isOpen && (
+                <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)}></div>
+                    <div className="absolute top-[105%] left-0 w-full bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-20 py-1.5 overflow-hidden animate-in fade-in duration-150 max-h-[250px] overflow-y-auto">
+                        <div 
+                            onClick={() => { onChange(''); setIsOpen(false); }}
+                            className={`px-3 py-2 text-sm cursor-pointer transition-colors flex items-center gap-2 ${!activeProjectId ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 font-semibold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}
+                        >
+                            {!activeProjectId && <Check className="w-3.5 h-3.5" />}
+                            <span className={!activeProjectId ? "" : "ml-5"}>-- Sin Proyecto --</span>
+                        </div>
+                        {projects.map(p => {
+                            const isSelected = activeProjectId === p.id;
+                            return (
+                                <div 
+                                    key={p.id}
+                                    onClick={() => { onChange(p.id); setIsOpen(false); }}
+                                    className={`px-3 py-2 text-sm cursor-pointer transition-colors flex items-center gap-2 ${isSelected ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 font-semibold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}
+                                >
+                                    {isSelected && <Check className="w-3.5 h-3.5" />}
+                                    <span className={isSelected ? "" : "ml-5 truncate"}>{p.name}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
 
 export default function ManualProjectsSidepanel({ selectedChat, onClose, showToast, onCandidateUpdated }) {
     const [projects, setProjects] = useState([]);
@@ -219,16 +266,11 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
                             <>
                                 <div className="bg-white dark:bg-[#111b21] border border-gray-100 dark:border-gray-800 rounded-xl p-4 shadow-sm">
                                     <h3 className="text-[13px] font-bold text-gray-400 uppercase tracking-wider mb-3">Proyecto Asignado</h3>
-                                    <select 
-                                        className="w-full bg-gray-50 dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 text-sm rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none font-medium mb-1 cursor-pointer"
-                                        value={activeProjectId || ''}
-                                        onChange={(e) => handleAssignCandidate(e.target.value, null)}
-                                    >
-                                        <option value="">-- Sin Proyecto --</option>
-                                        {projects.map(p => (
-                                            <option key={p.id} value={p.id}>{p.name}</option>
-                                        ))}
-                                    </select>
+                                    <CustomProjectDropdown 
+                                        activeProjectId={activeProjectId} 
+                                        projects={projects} 
+                                        onChange={(val) => handleAssignCandidate(val, null)} 
+                                    />
                                 </div>
 
                                 {activeProject && activeProject.steps && activeProject.steps.length > 0 && (
