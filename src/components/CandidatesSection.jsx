@@ -318,17 +318,7 @@ const CandidatesSection = ({ showToast }) => {
         try {
             const result = await blockCandidate(candidate.id, !isCurrentlyBlocked);
             if (result.success) {
-                const remoteSuccess = result.remote?.success;
-                const remoteMsg = result.remote?.data?.message || result.remote?.error || '';
-                const instanceStr = result.instanceId ? ` [Instancia: ${result.instanceId}]` : '';
-                const detail = remoteMsg ? ` (${remoteMsg})` : (remoteSuccess ? ' (Success)' : ' (No Response)');
-
-                const toastType = remoteSuccess ? 'success' : 'warning';
-                const mainMsg = remoteSuccess
-                    ? `Candidato ${isCurrentlyBlocked ? 'desbloqueado' : 'bloqueado'} correctamente`
-                    : `Candidato actualizado localmente, pero falló UltraMsg`;
-
-                showToast(`${mainMsg}${instanceStr}${detail}`, toastType);
+                showToast(result.message || `Candidato ${isCurrentlyBlocked ? 'reactivado' : 'silenciado'} con éxito`, 'success');
 
                 // Actualizar estado local
                 setCandidates(prev => prev.map(c =>
@@ -840,7 +830,7 @@ const CandidatesSection = ({ showToast }) => {
                                                             disabled={blockLoading[candidate.id]}
                                                             className={`w-6 h-3 rounded-full relative transition-colors duration-200 focus:outline-none ${candidate.blocked ? 'bg-red-500' : 'bg-gray-200 dark:bg-gray-700'
                                                                 }`}
-                                                            title={candidate.blocked ? 'Desbloquear candidato' : 'Bloquear candidato'}
+                                                            title={candidate.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
                                                         >
                                                             <div className={`absolute top-0.5 w-2 h-2 rounded-full bg-white shadow-sm transition-transform duration-200 ${candidate.blocked ? 'left-3.5' : 'left-0.5'
                                                                 }`}>

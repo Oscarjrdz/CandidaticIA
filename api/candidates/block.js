@@ -29,30 +29,15 @@ export default async function handler(req, res) {
             return res.status(500).json({ success: false, error: 'Configuración de UltraMsg incompleta' });
         }
 
-        // 2. Ejecutar acción en UltraMsg
-        let remoteResult;
-        const chatId = candidate.whatsapp || candidate.phone || id;
-
-        if (block) {
-            remoteResult = await blockUltraMsgContact(config.instanceId, config.token, chatId);
-        } else {
-            remoteResult = await unblockUltraMsgContact(config.instanceId, config.token, chatId);
-        }
-
-        if (!remoteResult.success) {
-            console.warn(`❌ [Block] UltraMsg error for ${id}:`, remoteResult.error);
-        } else {
-            console.log(`✅ [Block] UltraMsg success for ${id}:`, remoteResult.data);
-        }
-
-        // 3. Marcar en base de datos local
+        // Solo queremos silenciar la IA (marcar al candidato como bloqueado), 
+        // NO queremos bloquearlo físicamente en WhatsApp para que el reclutador humano pueda seguir hablando.
         await updateCandidate(id, { blocked: block });
 
         return res.status(200).json({
             success: true,
-            message: block ? 'Candidato bloqueado correctamente' : 'Candidato desbloqueado',
-            instanceId: config.instanceId, // NEW: For verification
-            remote: remoteResult
+            message: block ? 'Chat silenciado de la IA correctamente' : 'IA reactivada para este chat',
+            instanceId: config.instanceId,
+            remote: { success: true } // Siempre true para la UI
         });
 
     } catch (error) {
