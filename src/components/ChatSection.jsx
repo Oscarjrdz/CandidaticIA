@@ -30,6 +30,58 @@ const formatWhatsAppText = (text) => {
         .replace(/```(.*?)```/g, '<code class="bg-black/5 dark:bg-black/30 px-1 py-0.5 rounded font-mono text-[11px]">$1</code>');
 };
 
+// ─── Componente de Palomitas WhatsApp ────────────────────────────────────────
+const MessageStatusTicks = ({ status, size = 'md' }) => {
+    const isRead = status === 'seen' || status === 'read';
+    const isDelivered = isRead || status === 'delivered';
+    const isSent = isDelivered || status === 'sent';
+
+    // Tamaños
+    const w = size === 'sm' ? 14 : 17;
+    const h = size === 'sm' ? 10 : 11;
+
+    // Colores
+    const color = isRead ? '#53bdeb' : '#8696a0';
+
+    if (!isSent) {
+        // Reloj / en cola — un solo tilde pequeño gris
+        return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
+                <svg viewBox="0 0 16 11" width={w} height={h} fill="none">
+                    <path d="M15.01 3.316L7.412 11 4.502 8.216 6.6 6.083l1.812 1.758 6.497-6.482L15.01 3.316z" fill={color} />
+                </svg>
+            </span>
+        );
+    }
+
+    if (!isDelivered) {
+        // Enviado — doble palomita, la segunda más tenue
+        return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
+                <svg viewBox="0 0 18 11" width={w + 2} height={h} fill="none">
+                    {/* primera palomita */}
+                    <path d="M17.394 1.755l-8.91 9.03-4.56-4.59 1.42-1.41 3.14 3.16 7.48-7.59 1.43 1.4z" fill={color} />
+                    {/* segunda palomita (offset) */}
+                    <path d="M12.394 1.755l-5.91 6.03-1.06-1.07 1.42-1.41.82.83 5.48-5.59 1.25 1.21z" fill={color} opacity="0.55" />
+                </svg>
+            </span>
+        );
+    }
+
+    // Doble palomita (entregado o leído)
+    return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
+            <svg viewBox="0 0 18 11" width={w + 2} height={h} fill={color}>
+                {/* Palomita derecha */}
+                <path d="M17.394 1.755l-8.91 9.03-4.56-4.59 1.42-1.41 3.14 3.16 7.48-7.59 1.43 1.4z" />
+                {/* Palomita izquierda (solapada) */}
+                <path d="M11.394 1.755l-5.91 6.03-1.56-1.57 1.42-1.41.82.83 5.48-5.59 1.25 1.21z" opacity={isRead ? '1' : '0.55'} />
+            </svg>
+        </span>
+    );
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 const ChatSection = ({ showToast }) => {
     const [candidates, setCandidates] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -642,7 +694,13 @@ const ChatSection = ({ showToast }) => {
                                 <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
                                     <div className="flex justify-between items-baseline mb-1">
                                         <h3 className="text-[17px] text-[#111b21] dark:text-[#e9edef] truncate">{toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}</h3>
-                                        <span className={`text-xs whitespace-nowrap ml-2 text-[#667781] dark:text-[#8696a0]`}>{formatRelativeDate(chat.ultimoMensaje)}</span>
+                                        <div className="flex items-center gap-1 shrink-0 ml-2">
+                                            {/* Palomitas en el preview si el último mensaje fue saliente */}
+                                            {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
+                                                <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
+                                            ) : null}
+                                            <span className={`text-xs whitespace-nowrap text-[#667781] dark:text-[#8696a0]`}>{formatRelativeDate(chat.ultimoMensaje)}</span>
+                                        </div>
                                     </div>
                                     <div className="flex justify-between items-center mt-0.5">
                                         <div className="flex items-center gap-1.5 truncate">
@@ -1032,9 +1090,7 @@ const ChatSection = ({ showToast }) => {
                                                 {safeFormatTime(msg.timestamp)}
                                             </p>
                                             {isMe && (
-                                                <span className={`text-[12.5px] font-bold uppercase leading-none pb-[1px] ${msg.status === 'seen' || msg.status === 'read' ? 'text-[#53bdeb]' : 'text-gray-400/80'}`}>
-                                                    {msg.status === 'seen' || msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
-                                                </span>
+                                                <MessageStatusTicks status={msg.status} />
                                             )}
                                         </div>
                                     </div>
