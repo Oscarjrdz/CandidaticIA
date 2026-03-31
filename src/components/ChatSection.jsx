@@ -113,7 +113,6 @@ const ChatSection = ({ showToast }) => {
     
     // Marketing (Briefcase) Filters - Route A
     const [aiProjectFilter, setAiProjectFilter] = useState(null);
-    const [aiVacancyFilter, setAiVacancyFilter] = useState(null);
     const [aiStepFilter, setAiStepFilter] = useState(null);
 
     // Manual CRM (Kanban) Filters - Route B
@@ -122,17 +121,6 @@ const ChatSection = ({ showToast }) => {
 
     const [showDropdown, setShowDropdown] = useState(null);
     const [projects, setProjects] = useState([]); // Colección maestra de marketing (maletín)
-
-    // Derive vacancies dynamically, filtered by Marketing project if one is selected
-    const baseVacanciesSrc = aiProjectFilter 
-        ? (candidates || []).filter(c => c?.projectMetadata?.projectId === aiProjectFilter)
-        : (candidates || []);
-
-    const availableVacancies = [...new Set(
-        baseVacanciesSrc
-            .map(c => c?.currentVacancyName)
-            .filter(v => typeof v === 'string' && v.trim() !== '')
-    )];
 
     // Load Data
     useEffect(() => {
@@ -276,7 +264,6 @@ const ChatSection = ({ showToast }) => {
 
         // --- Ruta A: Filtros Marketing ---
         if (aiProjectFilter && c?.projectMetadata?.projectId !== aiProjectFilter) return false;
-        if (aiVacancyFilter && c?.currentVacancyName !== aiVacancyFilter) return false;
         if (aiStepFilter && c?.projectMetadata?.stepId !== aiStepFilter && c?.stepId !== aiStepFilter) return false;
 
         // --- Ruta B: Filtros CRM Manual ---
@@ -558,7 +545,7 @@ const ChatSection = ({ showToast }) => {
                     {/* Filter Chips */}
                     <div className="flex flex-wrap gap-2 pb-1 pt-0">
                         <button 
-                            onClick={() => { setActiveFilter('all'); setFilterValue(null); setCrmStepFilter(null); setShowDropdown(null); }}
+                            onClick={() => { setActiveFilter('all'); setFilterValue(null); setAiProjectFilter(null); setAiStepFilter(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
                                 activeFilter === 'all' 
                                 ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
@@ -646,7 +633,7 @@ const ChatSection = ({ showToast }) => {
                                     {aiProjectFilter && (
                                         <span 
                                             className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
-                                            onClick={(e) => { e.stopPropagation(); setAiProjectFilter(null); setAiVacancyFilter(null); setAiStepFilter(null); setShowDropdown(null); }}
+                                            onClick={(e) => { e.stopPropagation(); setAiProjectFilter(null); setAiStepFilter(null); setShowDropdown(null); }}
                                         >
                                             <X size={10} />
                                         </span>
@@ -663,7 +650,6 @@ const ChatSection = ({ showToast }) => {
                                                     key={project.id}
                                                     onClick={() => {
                                                         setAiProjectFilter(project.id);
-                                                        setAiVacancyFilter(null);
                                                         setAiStepFilter(null);
                                                         setShowDropdown(null);
                                                     }}
@@ -677,46 +663,6 @@ const ChatSection = ({ showToast }) => {
                                     </div>
                                 )}
                             </div>
-
-                            {/* Vacantes Dropdown (Riel A) */}
-                            {availableVacancies.length > 0 && (
-                                <div className="relative flex items-center">
-                                    <div className="text-gray-300 dark:text-gray-700 mx-1">/</div>
-                                    <button 
-                                        onClick={() => setShowDropdown(showDropdown === 'aiVacancies' ? null : 'aiVacancies')}
-                                        className={`flex items-center px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border border-transparent ${
-                                            aiVacancyFilter 
-                                            ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300' 
-                                            : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
-                                        }`}
-                                    >
-                                        {aiVacancyFilter ? (String(aiVacancyFilter).slice(0, 15) + (String(aiVacancyFilter).length > 15 ? '...' : '')) : 'Vacantes'} 
-                                        {aiVacancyFilter && (
-                                            <span 
-                                                className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
-                                                onClick={(e) => { e.stopPropagation(); setAiVacancyFilter(null); setAiStepFilter(null); setShowDropdown(null); }}
-                                            >
-                                                <X size={10} />
-                                            </span>
-                                        )}
-                                        {!aiVacancyFilter && <span className="ml-1 text-[9px]">▼</span>}
-                                    </button>
-                                    {showDropdown === 'aiVacancies' && (
-                                        <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                            {availableVacancies.map(vac => (
-                                                <div 
-                                                    key={vac}
-                                                    onClick={() => { setAiVacancyFilter(vac); setAiStepFilter(null); setShowDropdown(null); }}
-                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                    title={vac}
-                                                >
-                                                    {vac}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
 
                             {/* Pasos Dropdown (Riel A) */}
                             {aiProjectFilter && (
