@@ -111,15 +111,21 @@ const ChatSection = ({ showToast }) => {
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'unread', 'label', 'profile'
     const [filterValue, setFilterValue] = useState(null);
     
-    const [crmProjectFilter, setCrmProjectFilter] = useState(null);
-    const [vacancyFilter, setVacancyFilter] = useState(null);
-    const [crmStepFilter, setCrmStepFilter] = useState(null);
+    // Marketing (Briefcase) Filters - Route A
+    const [aiProjectFilter, setAiProjectFilter] = useState(null);
+    const [aiVacancyFilter, setAiVacancyFilter] = useState(null);
+    const [aiStepFilter, setAiStepFilter] = useState(null);
+
+    // Manual CRM (Kanban) Filters - Route B
+    const [manualPipelineFilter, setManualPipelineFilter] = useState(null);
+    const [manualStepFilter, setManualStepFilter] = useState(null);
 
     const [showDropdown, setShowDropdown] = useState(null);
+    const [projects, setProjects] = useState([]); // Colección maestra de marketing (maletín)
 
-    // Derive vacancies dynamically, filtered by project if one is selected
-    const baseVacanciesSrc = crmProjectFilter 
-        ? (candidates || []).filter(c => c?.manualProjectId === crmProjectFilter)
+    // Derive vacancies dynamically, filtered by Marketing project if one is selected
+    const baseVacanciesSrc = aiProjectFilter 
+        ? (candidates || []).filter(c => c?.projectMetadata?.projectId === aiProjectFilter)
         : (candidates || []);
 
     const availableVacancies = [...new Set(
@@ -134,6 +140,7 @@ const ChatSection = ({ showToast }) => {
         loadTags();
         loadVacanciesList();
         loadManualProjects();
+        loadProjects();
 
         // 🟢 Live auto-update for the sidebar (every 3 seconds)
         const interval = setInterval(loadCandidates, 3000);
@@ -150,6 +157,18 @@ const ChatSection = ({ showToast }) => {
             }
         } catch (e) {
             console.error('Error fetching vacancies for injector', e);
+        }
+    };
+
+    const loadProjects = async () => {
+        try {
+            const res = await fetch('/api/projects');
+            const data = await res.json();
+            if (data.success && data.projects) {
+                setProjects(data.projects);
+            }
+        } catch (e) {
+            console.error('Error fetching marketing projects', e);
         }
     };
 
@@ -255,10 +274,14 @@ const ChatSection = ({ showToast }) => {
             if (filterValue === 'incomplete' && isComplete) return false;
         }
 
-        if (crmProjectFilter && c?.manualProjectId !== crmProjectFilter) return false;
-        if (vacancyFilter && c?.currentVacancyName !== vacancyFilter) return false;
-        // Support both manualProjectStepId AND stepId (the AI assigns stepId dynamically)
-        if (crmStepFilter && c?.manualProjectStepId !== crmStepFilter && c?.stepId !== crmStepFilter) return false;
+        // --- Ruta A: Filtros Marketing ---
+        if (aiProjectFilter && c?.projectMetadata?.projectId !== aiProjectFilter) return false;
+        if (aiVacancyFilter && c?.currentVacancyName !== aiVacancyFilter) return false;
+        if (aiStepFilter && c?.projectMetadata?.stepId !== aiStepFilter && c?.stepId !== aiStepFilter) return false;
+
+        // --- Ruta B: Filtros CRM Manual ---
+        if (manualPipelineFilter && c?.manualProjectId !== manualPipelineFilter) return false;
+        if (manualStepFilter && c?.manualProjectStepId !== manualStepFilter) return false;
 
         return true;
     });
@@ -607,160 +630,260 @@ const ChatSection = ({ showToast }) => {
                             )}
                         </div>
 
-                        {/* Jerarquía 1: Proyectos CRM */}
-                        <div className="relative">
-                            <button 
-                                onClick={() => setShowDropdown(showDropdown === 'crm' ? null : 'crm')}
-                                className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex-shrink-0 ${
-                                    crmProjectFilter 
-                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                                }`}
-                            >
-                                {crmProjectFilter ? (manualProjects.find(p => p.id === crmProjectFilter)?.name?.slice(0, 15) + (manualProjects.find(p => p.id === crmProjectFilter)?.name?.length > 15 ? '...' : '') || 'Proyecto') : 'Proyectos CRM'} 
-                                {crmProjectFilter && (
-                                    <span 
-                                        className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
-                                        onClick={(e) => { e.stopPropagation(); setCrmProjectFilter(null); setVacancyFilter(null); setCrmStepFilter(null); setShowDropdown(null); }}
-                                    >
-                                        <X size={10} />
-                                    </span>
-                                )}
-                                {!crmProjectFilter && <span className="ml-1 text-[9px]">▼</span>}
-                            </button>
-                            {showDropdown === 'crm' && (
-                                <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                    {manualProjects.length === 0 ? (
-                                        <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
-                                    ) : (
-                                        manualProjects.map(project => (
-                                            <div
-                                                key={project.id}
-                                                onClick={() => {
-                                                    setCrmProjectFilter(project.id);
-                                                    setVacancyFilter(null);
-                                                    setCrmStepFilter(null);
-                                                    setShowDropdown(null);
-                                                }}
-                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                title={project.name}
-                                            >
-                                                {project.name}
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Jerarquía 2: Vacantes Dropdown (Oculto o Filtrado si no hay nada en the array) */}
-                        {availableVacancies.length > 0 && (
+                        {/* Riel A: Proyectos (Maletín) */}
+                        <div className="flex items-center gap-1 bg-[#f0f2f5] dark:bg-[#111b21] p-1 rounded-full border border-gray-200 dark:border-gray-800 shrink-0">
                             <div className="relative">
                                 <button 
-                                    onClick={() => setShowDropdown(showDropdown === 'vacancies' ? null : 'vacancies')}
-                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                        vacancyFilter 
-                                        ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                        : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                    onClick={() => setShowDropdown(showDropdown === 'aiProject' ? null : 'aiProject')}
+                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border border-transparent flex-shrink-0 ${
+                                        aiProjectFilter 
+                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
+                                        : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
                                     }`}
                                 >
-                                    {vacancyFilter ? (String(vacancyFilter).slice(0, 15) + (String(vacancyFilter).length > 15 ? '...' : '')) : 'Vacantes'} 
-                                    {vacancyFilter && (
+                                    <Briefcase className="w-3 h-3 mr-1.5" />
+                                    {aiProjectFilter ? (projects.find(p => p.id === aiProjectFilter)?.name?.slice(0, 15) || 'Proyecto') : 'Proyectos'} 
+                                    {aiProjectFilter && (
                                         <span 
                                             className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
-                                            onClick={(e) => { e.stopPropagation(); setVacancyFilter(null); setCrmStepFilter(null); setShowDropdown(null); }}
+                                            onClick={(e) => { e.stopPropagation(); setAiProjectFilter(null); setAiVacancyFilter(null); setAiStepFilter(null); setShowDropdown(null); }}
                                         >
                                             <X size={10} />
                                         </span>
                                     )}
-                                    {!vacancyFilter && <span className="ml-1 text-[9px]">▼</span>}
+                                    {!aiProjectFilter && <span className="ml-1 text-[9px]">▼</span>}
                                 </button>
-                                {showDropdown === 'vacancies' && (
+                                {showDropdown === 'aiProject' && (
                                     <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                        {availableVacancies.map(vac => (
-                                            <div 
-                                                key={vac}
-                                                onClick={() => { setVacancyFilter(vac); setCrmStepFilter(null); setShowDropdown(null); }}
-                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                title={vac}
-                                            >
-                                                {vac}
-                                            </div>
-                                        ))}
+                                        {projects.length === 0 ? (
+                                            <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
+                                        ) : (
+                                            projects.map(project => (
+                                                <div
+                                                    key={project.id}
+                                                    onClick={() => {
+                                                        setAiProjectFilter(project.id);
+                                                        setAiVacancyFilter(null);
+                                                        setAiStepFilter(null);
+                                                        setShowDropdown(null);
+                                                    }}
+                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
+                                                    title={project.name}
+                                                >
+                                                    {project.name}
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
                                 )}
                             </div>
-                        )}
 
-                        {/* Jerarquía 3: Sub-dropdown para Pasos del CRM activo o Vacante activa */}
-                        {(crmProjectFilter || vacancyFilter) && (
-                            <div className="relative">
-                                {(() => {
-                                    // Determinar el proyecto activo según el tipo de filtro
-                                    let activeProject = crmProjectFilter 
-                                        ? manualProjects.find(p => p.id === crmProjectFilter)
-                                        : manualProjects.find(p => String(p.name).toLowerCase().trim() === String(vacancyFilter).toLowerCase().trim());
-
-                                    // Fallback: si no hay match exacto, buscar coincidencia parcial para vacantes
-                                    if (!activeProject && vacancyFilter) {
-                                        activeProject = manualProjects.find(p => 
-                                            String(p.name).toLowerCase().includes(String(vacancyFilter).toLowerCase().trim()) ||
-                                            String(vacancyFilter).toLowerCase().includes(String(p.name).toLowerCase().trim())
-                                        );
-                                    }
-
-                                    if (!activeProject) return null;
-
-                                    return (
-                                        <>
-                                            <button 
-                                                onClick={() => setShowDropdown(showDropdown === 'crmStep' ? null : 'crmStep')}
-                                                className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                                    crmStepFilter 
-                                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                                                }`}
+                            {/* Vacantes Dropdown (Riel A) */}
+                            {availableVacancies.length > 0 && (
+                                <div className="relative flex items-center">
+                                    <div className="text-gray-300 dark:text-gray-700 mx-1">/</div>
+                                    <button 
+                                        onClick={() => setShowDropdown(showDropdown === 'aiVacancies' ? null : 'aiVacancies')}
+                                        className={`flex items-center px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border border-transparent ${
+                                            aiVacancyFilter 
+                                            ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300' 
+                                            : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
+                                        }`}
+                                    >
+                                        {aiVacancyFilter ? (String(aiVacancyFilter).slice(0, 15) + (String(aiVacancyFilter).length > 15 ? '...' : '')) : 'Vacantes'} 
+                                        {aiVacancyFilter && (
+                                            <span 
+                                                className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
+                                                onClick={(e) => { e.stopPropagation(); setAiVacancyFilter(null); setAiStepFilter(null); setShowDropdown(null); }}
                                             >
-                                                {crmStepFilter ? (activeProject.steps?.find(s => s.id === crmStepFilter)?.name?.slice(0, 15) || 'Paso') : 'Todos los Pasos'} 
-                                                {crmStepFilter && (
-                                                    <span 
-                                                        className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
-                                                        onClick={(e) => { e.stopPropagation(); setCrmStepFilter(null); }}
-                                                    >
-                                                        <X size={10} />
-                                                    </span>
-                                                )}
-                                                {!crmStepFilter && <span className="ml-1 text-[9px]">▼</span>}
-                                            </button>
-                                            {showDropdown === 'crmStep' && (
-                                                <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                                    <div
-                                                        onClick={() => { setCrmStepFilter(null); setShowDropdown(null); }}
-                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] font-medium"
-                                                    >
-                                                        Todos los Pasos
-                                                    </div>
-                                                    {activeProject.steps?.length === 0 ? (
-                                                        <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos creados</div>
-                                                    ) : (
-                                                        activeProject.steps?.map(step => (
-                                                            <div
-                                                                key={step.id}
-                                                                onClick={() => { setCrmStepFilter(step.id); setShowDropdown(null); }}
-                                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                                title={step.name}
-                                                            >
-                                                                {step.name}
-                                                            </div>
-                                                        ))
-                                                    )}
+                                                <X size={10} />
+                                            </span>
+                                        )}
+                                        {!aiVacancyFilter && <span className="ml-1 text-[9px]">▼</span>}
+                                    </button>
+                                    {showDropdown === 'aiVacancies' && (
+                                        <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                            {availableVacancies.map(vac => (
+                                                <div 
+                                                    key={vac}
+                                                    onClick={() => { setAiVacancyFilter(vac); setAiStepFilter(null); setShowDropdown(null); }}
+                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
+                                                    title={vac}
+                                                >
+                                                    {vac}
                                                 </div>
-                                            )}
-                                        </>
-                                    );
-                                })()}
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Pasos Dropdown (Riel A) */}
+                            {aiProjectFilter && (
+                                <div className="relative flex items-center">
+                                    <div className="text-gray-300 dark:text-gray-700 mx-1">/</div>
+                                    {(() => {
+                                        const activeProject = projects.find(p => p.id === aiProjectFilter);
+                                        if (!activeProject) return null;
+
+                                        return (
+                                            <>
+                                                <button 
+                                                    onClick={() => setShowDropdown(showDropdown === 'aiStep' ? null : 'aiStep')}
+                                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border border-transparent ${
+                                                        aiStepFilter 
+                                                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300' 
+                                                        : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
+                                                    }`}
+                                                >
+                                                    {aiStepFilter ? (activeProject.steps?.find(s => s.id === aiStepFilter)?.name?.slice(0, 15) || 'Paso') : 'Pasos'} 
+                                                    {aiStepFilter && (
+                                                        <span 
+                                                            className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
+                                                            onClick={(e) => { e.stopPropagation(); setAiStepFilter(null); }}
+                                                        >
+                                                            <X size={10} />
+                                                        </span>
+                                                    )}
+                                                    {!aiStepFilter && <span className="ml-1 text-[9px]">▼</span>}
+                                                </button>
+                                                {showDropdown === 'aiStep' && (
+                                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                                        <div
+                                                            onClick={() => { setAiStepFilter(null); setShowDropdown(null); }}
+                                                            className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] font-medium"
+                                                        >
+                                                            Todos los Pasos
+                                                        </div>
+                                                        {activeProject.steps?.length === 0 ? (
+                                                            <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos</div>
+                                                        ) : (
+                                                            activeProject.steps?.map(step => (
+                                                                <div
+                                                                    key={step.id}
+                                                                    onClick={() => { setAiStepFilter(step.id); setShowDropdown(null); }}
+                                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
+                                                                    title={step.name}
+                                                                >
+                                                                    {step.name}
+                                                                </div>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Riel B: CRM Manual */}
+                        <div className="flex items-center gap-1 bg-[#f0f2f5] dark:bg-[#111b21] p-1 rounded-full border border-gray-200 dark:border-gray-800 shrink-0 mt-2 md:mt-0 xl:mt-0">
+                            <div className="relative">
+                                <button 
+                                    onClick={() => setShowDropdown(showDropdown === 'manualPipeline' ? null : 'manualPipeline')}
+                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border border-transparent flex-shrink-0 ${
+                                        manualPipelineFilter 
+                                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' 
+                                        : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
+                                    }`}
+                                >
+                                    <Kanban className="w-3 h-3 mr-1.5" />
+                                    {manualPipelineFilter ? (manualProjects.find(p => p.id === manualPipelineFilter)?.name?.slice(0, 15) || 'Pipeline') : 'CRM Manual'} 
+                                    {manualPipelineFilter && (
+                                        <span 
+                                            className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
+                                            onClick={(e) => { e.stopPropagation(); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
+                                        >
+                                            <X size={10} />
+                                        </span>
+                                    )}
+                                    {!manualPipelineFilter && <span className="ml-1 text-[9px]">▼</span>}
+                                </button>
+                                {showDropdown === 'manualPipeline' && (
+                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                        {manualProjects.length === 0 ? (
+                                            <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pipelines</div>
+                                        ) : (
+                                            manualProjects.map(project => (
+                                                <div
+                                                    key={project.id}
+                                                    onClick={() => {
+                                                        setManualPipelineFilter(project.id);
+                                                        setManualStepFilter(null);
+                                                        setShowDropdown(null);
+                                                    }}
+                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
+                                                    title={project.name}
+                                                >
+                                                    {project.name}
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
                             </div>
-                        )}
+
+                            {/* Pasos Dropdown (Riel B) */}
+                            {manualPipelineFilter && (
+                                <div className="relative flex items-center">
+                                    <div className="text-gray-300 dark:text-gray-700 mx-1">/</div>
+                                    {(() => {
+                                        const activeProject = manualProjects.find(p => p.id === manualPipelineFilter);
+                                        if (!activeProject) return null;
+
+                                        return (
+                                            <>
+                                                <button 
+                                                    onClick={() => setShowDropdown(showDropdown === 'manualStep' ? null : 'manualStep')}
+                                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border border-transparent ${
+                                                        manualStepFilter 
+                                                        ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300' 
+                                                        : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
+                                                    }`}
+                                                >
+                                                    {manualStepFilter ? (activeProject.steps?.find(s => s.id === manualStepFilter)?.name?.slice(0, 15) || 'Paso') : 'Pasos'} 
+                                                    {manualStepFilter && (
+                                                        <span 
+                                                            className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
+                                                            onClick={(e) => { e.stopPropagation(); setManualStepFilter(null); }}
+                                                        >
+                                                            <X size={10} />
+                                                        </span>
+                                                    )}
+                                                    {!manualStepFilter && <span className="ml-1 text-[9px]">▼</span>}
+                                                </button>
+                                                {showDropdown === 'manualStep' && (
+                                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                                        <div
+                                                            onClick={() => { setManualStepFilter(null); setShowDropdown(null); }}
+                                                            className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] font-medium"
+                                                        >
+                                                            Todos los Pasos
+                                                        </div>
+                                                        {activeProject.steps?.length === 0 ? (
+                                                            <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos</div>
+                                                        ) : (
+                                                            activeProject.steps?.map(step => (
+                                                                <div
+                                                                    key={step.id}
+                                                                    onClick={() => { setManualStepFilter(step.id); setShowDropdown(null); }}
+                                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
+                                                                    title={step.name}
+                                                                >
+                                                                    {step.name}
+                                                                </div>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+                        </div>
 
                     </div>
                 </div>
