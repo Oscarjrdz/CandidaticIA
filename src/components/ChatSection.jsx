@@ -114,6 +114,7 @@ const ChatSection = ({ showToast }) => {
     // Marketing (Briefcase) Filters - Route A
     const [aiProjectFilter, setAiProjectFilter] = useState(null);
     const [aiStepFilter, setAiStepFilter] = useState(null);
+    const [aiProjectCandidates, setAiProjectCandidates] = useState(null);
 
     // Manual CRM (Kanban) Filters - Route B
     const [manualPipelineFilter, setManualPipelineFilter] = useState(null);
@@ -134,6 +135,27 @@ const ChatSection = ({ showToast }) => {
         const interval = setInterval(loadCandidates, 3000);
         return () => clearInterval(interval);
     }, []);
+
+    // 🚀 NEW: Load Project Candidates specific to Riel A
+    useEffect(() => {
+        if (!aiProjectFilter) {
+            setAiProjectCandidates(null);
+            return;
+        }
+        
+        const loadProjectCands = async () => {
+            try {
+                const res = await fetch(`/api/projects?id=${aiProjectFilter}&view=candidates`);
+                const data = await res.json();
+                if (data.success) {
+                    setAiProjectCandidates(data.candidates);
+                }
+            } catch (e) {
+                console.error("Failed to load project candidates for filter:", e);
+            }
+        };
+        loadProjectCands();
+    }, [aiProjectFilter]);
 
     const loadVacanciesList = async () => {
         try {
@@ -263,8 +285,12 @@ const ChatSection = ({ showToast }) => {
         }
 
         // --- Ruta A: Filtros Marketing ---
-        if (aiProjectFilter && c?.projectMetadata?.projectId !== aiProjectFilter) return false;
-        if (aiStepFilter && c?.projectMetadata?.stepId !== aiStepFilter && c?.stepId !== aiStepFilter) return false;
+        if (aiProjectFilter) {
+            if (!aiProjectCandidates) return false; // Todavía cargando los candidatos del proyecto
+            const matchingCand = aiProjectCandidates.find(pc => pc.id === c.id);
+            if (!matchingCand) return false; // No pertenece a este proyecto
+            if (aiStepFilter && matchingCand.projectMetadata?.stepId !== aiStepFilter) return false; // No está en este paso
+        }
 
         // --- Ruta B: Filtros CRM Manual ---
         if (manualPipelineFilter && c?.manualProjectId !== manualPipelineFilter) return false;
