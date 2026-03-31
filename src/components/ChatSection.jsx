@@ -247,7 +247,8 @@ const ChatSection = ({ showToast }) => {
         }
         if (activeFilter === 'vacancy' && filterValue) {
             if (c?.currentVacancyName !== filterValue) return false;
-            if (crmStepFilter && c?.manualProjectStepId !== crmStepFilter) return false;
+            // Support both manualProjectStepId AND stepId (the AI assigns stepId dynamically)
+            if (crmStepFilter && c?.manualProjectStepId !== crmStepFilter && c?.stepId !== crmStepFilter) return false;
             return true;
         }
         if (activeFilter === 'crm' && filterValue) {
@@ -679,9 +680,17 @@ const ChatSection = ({ showToast }) => {
                             <div className="relative">
                                 {(() => {
                                     // Determinar el proyecto activo según el tipo de filtro
-                                    const activeProject = activeFilter === 'crm' 
+                                    let activeProject = activeFilter === 'crm' 
                                         ? manualProjects.find(p => p.id === filterValue)
-                                        : manualProjects.find(p => p.name === filterValue);
+                                        : manualProjects.find(p => String(p.name).toLowerCase().trim() === String(filterValue).toLowerCase().trim());
+
+                                    // Fallback: si no hay match exacto, buscar coincidencia parcial para vacantes
+                                    if (!activeProject && activeFilter === 'vacancy') {
+                                        activeProject = manualProjects.find(p => 
+                                            String(p.name).toLowerCase().includes(String(filterValue).toLowerCase().trim()) ||
+                                            String(filterValue).toLowerCase().includes(String(p.name).toLowerCase().trim())
+                                        );
+                                    }
 
                                     if (!activeProject) return null;
 
