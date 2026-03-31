@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Bell, Plus, Trash2, Clock, ChevronDown, Mic, Play } from 'lucide-react';
 
 const PRESET_HOURS = [
@@ -23,6 +23,14 @@ const ScheduledRemindersModal = ({ step, onSave, onClose }) => {
             : []
     );
     const [isTestingAudio, setIsTestingAudio] = useState(null);
+
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
 
     const testAudioMessage = async (reminder) => {
         try {

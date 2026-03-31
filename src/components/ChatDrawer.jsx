@@ -27,6 +27,14 @@ const ChatDrawer = ({ isOpen, onClose, candidate, credentials }) => {
     }, [isOpen, candidate]);
 
     useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isOpen) onClose();
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
+
+    useEffect(() => {
         scrollToBottom();
     }, [messages]);
 

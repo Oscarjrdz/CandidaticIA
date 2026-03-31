@@ -68,6 +68,21 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
     const [newStepName, setNewStepName] = useState('');
 
     useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && onClose) {
+                // Si estamos editando algo, el Escape de los inputs debe tener prioridad.
+                // Como los inputs tienen su propio onClose/onEscape que quita el foco/estado de edicion,
+                // verificamos si hay algo editandose
+                if (!editingPipelineId && !editingStepId && !showNewProjectForm) {
+                    onClose();
+                }
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [onClose, editingPipelineId, editingStepId, showNewProjectForm]);
+
+    useEffect(() => {
         loadProjects();
     }, []);
 

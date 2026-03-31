@@ -1,9 +1,17 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X, Download, FileText } from 'lucide-react';
 import Button from './ui/Button';
 import { downloadChatHistory } from '../services/chatExportService';
 
 const ChatHistoryModal = ({ isOpen, onClose, candidate, chatContent }) => {
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && isOpen) onClose();
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     const handleDownload = () => {

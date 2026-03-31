@@ -396,6 +396,14 @@ const CreateRuleModal = ({ onClose, onSuccess, fields, onCreateField }) => {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
