@@ -108,14 +108,22 @@ const ChatSection = ({ showToast }) => {
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
 
     // Filter Chips State
-    const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'unread', 'label', 'vacancy', 'crm'
+    const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'unread', 'label', 'profile'
     const [filterValue, setFilterValue] = useState(null);
+    
+    const [crmProjectFilter, setCrmProjectFilter] = useState(null);
+    const [vacancyFilter, setVacancyFilter] = useState(null);
     const [crmStepFilter, setCrmStepFilter] = useState(null);
+
     const [showDropdown, setShowDropdown] = useState(null);
 
-    // Derive vacancies dynamically safely
+    // Derive vacancies dynamically, filtered by project if one is selected
+    const baseVacanciesSrc = crmProjectFilter 
+        ? (candidates || []).filter(c => c?.manualProjectId === crmProjectFilter)
+        : (candidates || []);
+
     const availableVacancies = [...new Set(
-        (candidates || [])
+        baseVacanciesSrc
             .map(c => c?.currentVacancyName)
             .filter(v => typeof v === 'string' && v.trim() !== '')
     )];
@@ -239,27 +247,18 @@ const ChatSection = ({ showToast }) => {
             
         if (!matchesSearch && searchVal !== "") return false;
 
-        if (activeFilter === 'unread') {
-            return c?.hasUnreadMessages === true;
-        }
-        if (activeFilter === 'label' && filterValue) {
-            return Array.isArray(c?.tags) && c.tags.includes(filterValue);
-        }
-        if (activeFilter === 'vacancy' && filterValue) {
-            if (c?.currentVacancyName !== filterValue) return false;
-            // Support both manualProjectStepId AND stepId (the AI assigns stepId dynamically)
-            if (crmStepFilter && c?.manualProjectStepId !== crmStepFilter && c?.stepId !== crmStepFilter) return false;
-            return true;
-        }
-        if (activeFilter === 'crm' && filterValue) {
-            if (c?.manualProjectId !== filterValue) return false;
-            if (crmStepFilter && c?.manualProjectStepId !== crmStepFilter) return false;
-            return true;
-        }
+        if (activeFilter === 'unread' && c?.hasUnreadMessages !== true) return false;
+        if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
         if (activeFilter === 'profile') {
             const isComplete = isProfileComplete(c);
-            return filterValue === 'complete' ? isComplete : !isComplete;
+            if (filterValue === 'complete' && !isComplete) return false;
+            if (filterValue === 'incomplete' && isComplete) return false;
         }
+
+        if (crmProjectFilter && c?.manualProjectId !== crmProjectFilter) return false;
+        if (vacancyFilter && c?.currentVacancyName !== vacancyFilter) return false;
+        // Support both manualProjectStepId AND stepId (the AI assigns stepId dynamically)
+        if (crmStepFilter && c?.manualProjectStepId !== crmStepFilter && c?.stepId !== crmStepFilter) return false;
 
         return true;
     });
@@ -608,47 +607,26 @@ const ChatSection = ({ showToast }) => {
                             )}
                         </div>
 
-                        {/* Vacantes Dropdown */}
-                        {availableVacancies.length > 0 && (
-                            <div className="relative">
-                                <button 
-                                    onClick={() => setShowDropdown(showDropdown === 'vacancies' ? null : 'vacancies')}
-                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                        activeFilter === 'vacancy' 
-                                        ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                        : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                                    }`}
-                                >
-                                    {activeFilter === 'vacancy' ? (String(filterValue || '').slice(0, 15) + (String(filterValue || '').length > 15 ? '...' : '')) : 'Vacantes'} <span className="ml-1 text-[9px]">▼</span>
-                                </button>
-                                {showDropdown === 'vacancies' && (
-                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                        {availableVacancies.map(vac => (
-                                            <div 
-                                                key={vac}
-                                                onClick={() => { setActiveFilter('vacancy'); setFilterValue(vac); setCrmStepFilter(null); setShowDropdown(null); }}
-                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                title={vac}
-                                            >
-                                                {vac}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* CRM Projects Dropdown */}
+                        {/* Jerarquía 1: Proyectos CRM */}
                         <div className="relative">
                             <button 
                                 onClick={() => setShowDropdown(showDropdown === 'crm' ? null : 'crm')}
-                                className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                    activeFilter === 'crm' 
+                                className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex-shrink-0 ${
+                                    crmProjectFilter 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
-                                {activeFilter === 'crm' ? (manualProjects.find(p => p.id === filterValue)?.name?.slice(0, 15) + (manualProjects.find(p => p.id === filterValue)?.name?.length > 15 ? '...' : '') || 'CRM') : 'CRM'} <span className="ml-1 text-[9px]">▼</span>
+                                {crmProjectFilter ? (manualProjects.find(p => p.id === crmProjectFilter)?.name?.slice(0, 15) + (manualProjects.find(p => p.id === crmProjectFilter)?.name?.length > 15 ? '...' : '') || 'Proyecto') : 'Proyectos CRM'} 
+                                {crmProjectFilter && (
+                                    <span 
+                                        className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
+                                        onClick={(e) => { e.stopPropagation(); setCrmProjectFilter(null); setVacancyFilter(null); setCrmStepFilter(null); setShowDropdown(null); }}
+                                    >
+                                        <X size={10} />
+                                    </span>
+                                )}
+                                {!crmProjectFilter && <span className="ml-1 text-[9px]">▼</span>}
                             </button>
                             {showDropdown === 'crm' && (
                                 <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
@@ -659,8 +637,8 @@ const ChatSection = ({ showToast }) => {
                                             <div
                                                 key={project.id}
                                                 onClick={() => {
-                                                    setActiveFilter('crm');
-                                                    setFilterValue(project.id);
+                                                    setCrmProjectFilter(project.id);
+                                                    setVacancyFilter(null);
                                                     setCrmStepFilter(null);
                                                     setShowDropdown(null);
                                                 }}
@@ -675,20 +653,59 @@ const ChatSection = ({ showToast }) => {
                             )}
                         </div>
 
-                        {/* Sub-dropdown para Pasos del CRM activo o Vacante activa */}
-                        {(activeFilter === 'crm' || activeFilter === 'vacancy') && filterValue && (
+                        {/* Jerarquía 2: Vacantes Dropdown (Oculto o Filtrado si no hay nada en the array) */}
+                        {availableVacancies.length > 0 && (
+                            <div className="relative">
+                                <button 
+                                    onClick={() => setShowDropdown(showDropdown === 'vacancies' ? null : 'vacancies')}
+                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                        vacancyFilter 
+                                        ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                        : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                    }`}
+                                >
+                                    {vacancyFilter ? (String(vacancyFilter).slice(0, 15) + (String(vacancyFilter).length > 15 ? '...' : '')) : 'Vacantes'} 
+                                    {vacancyFilter && (
+                                        <span 
+                                            className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
+                                            onClick={(e) => { e.stopPropagation(); setVacancyFilter(null); setCrmStepFilter(null); setShowDropdown(null); }}
+                                        >
+                                            <X size={10} />
+                                        </span>
+                                    )}
+                                    {!vacancyFilter && <span className="ml-1 text-[9px]">▼</span>}
+                                </button>
+                                {showDropdown === 'vacancies' && (
+                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                        {availableVacancies.map(vac => (
+                                            <div 
+                                                key={vac}
+                                                onClick={() => { setVacancyFilter(vac); setCrmStepFilter(null); setShowDropdown(null); }}
+                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
+                                                title={vac}
+                                            >
+                                                {vac}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Jerarquía 3: Sub-dropdown para Pasos del CRM activo o Vacante activa */}
+                        {(crmProjectFilter || vacancyFilter) && (
                             <div className="relative">
                                 {(() => {
                                     // Determinar el proyecto activo según el tipo de filtro
-                                    let activeProject = activeFilter === 'crm' 
-                                        ? manualProjects.find(p => p.id === filterValue)
-                                        : manualProjects.find(p => String(p.name).toLowerCase().trim() === String(filterValue).toLowerCase().trim());
+                                    let activeProject = crmProjectFilter 
+                                        ? manualProjects.find(p => p.id === crmProjectFilter)
+                                        : manualProjects.find(p => String(p.name).toLowerCase().trim() === String(vacancyFilter).toLowerCase().trim());
 
                                     // Fallback: si no hay match exacto, buscar coincidencia parcial para vacantes
-                                    if (!activeProject && activeFilter === 'vacancy') {
+                                    if (!activeProject && vacancyFilter) {
                                         activeProject = manualProjects.find(p => 
-                                            String(p.name).toLowerCase().includes(String(filterValue).toLowerCase().trim()) ||
-                                            String(filterValue).toLowerCase().includes(String(p.name).toLowerCase().trim())
+                                            String(p.name).toLowerCase().includes(String(vacancyFilter).toLowerCase().trim()) ||
+                                            String(vacancyFilter).toLowerCase().includes(String(p.name).toLowerCase().trim())
                                         );
                                     }
 
@@ -704,7 +721,16 @@ const ChatSection = ({ showToast }) => {
                                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                                 }`}
                                             >
-                                                {crmStepFilter ? (activeProject.steps?.find(s => s.id === crmStepFilter)?.name?.slice(0, 15) || 'Paso') : 'Todos los Pasos'} <span className="ml-1 text-[9px]">▼</span>
+                                                {crmStepFilter ? (activeProject.steps?.find(s => s.id === crmStepFilter)?.name?.slice(0, 15) || 'Paso') : 'Todos los Pasos'} 
+                                                {crmStepFilter && (
+                                                    <span 
+                                                        className="ml-2 w-4 h-4 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center hover:bg-black/20 dark:hover:bg-white/20"
+                                                        onClick={(e) => { e.stopPropagation(); setCrmStepFilter(null); }}
+                                                    >
+                                                        <X size={10} />
+                                                    </span>
+                                                )}
+                                                {!crmStepFilter && <span className="ml-1 text-[9px]">▼</span>}
                                             </button>
                                             {showDropdown === 'crmStep' && (
                                                 <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
