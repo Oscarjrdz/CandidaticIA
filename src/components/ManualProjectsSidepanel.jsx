@@ -62,6 +62,8 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
     const [expandedProjectId, setExpandedProjectId] = useState(null);
     const [editingPipelineId, setEditingPipelineId] = useState(null);
     const [editingPipelineName, setEditingPipelineName] = useState('');
+    const [editingStepId, setEditingStepId] = useState(null);
+    const [editingStepName, setEditingStepName] = useState('');
 
     const [newStepName, setNewStepName] = useState('');
 
@@ -178,6 +180,22 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
         if (success) {
             setEditingPipelineId(null);
             showToast && showToast('Nombre actualizado', 'success');
+        }
+    };
+
+    const handleSaveStepName = async (projectId, stepId) => {
+        if (!editingStepName.trim()) return;
+        const project = projects.find(p => p.id === projectId);
+        if (!project) return;
+        
+        const updatedSteps = project.steps.map(s => 
+            s.id === stepId ? { ...s, name: editingStepName.trim() } : s
+        );
+        
+        const success = await updateProject(projectId, { steps: updatedSteps });
+        if (success) {
+            setEditingStepId(null);
+            showToast && showToast('Paso actualizado', 'success');
         }
     };
 
@@ -413,16 +431,47 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
                                                         onDragStart={(e) => handleDragStart(e, idx, project.id)}
                                                         onDragOver={handleDragOver}
                                                         onDrop={(e) => handleDrop(e, idx, project.id)}
-                                                        className="flex items-center gap-2 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg p-2 shadow-sm cursor-grab active:cursor-grabbing hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors"
+                                                        className="flex items-center gap-2 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg p-2 shadow-sm cursor-grab active:cursor-grabbing hover:border-indigo-300 dark:hover:border-indigo-700 transition-colors group"
                                                     >
                                                         <GripVertical className="w-4 h-4 text-gray-300 dark:text-gray-600 shrink-0" />
-                                                        <div className="flex-1 text-[13px] font-medium text-gray-700 dark:text-gray-300 truncate">{step.name}</div>
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); handleDeleteStep(project.id, step.id); }}
-                                                            className="p-1 text-gray-300 hover:text-red-500 shrink-0"
-                                                        >
-                                                            <X className="w-3.5 h-3.5" />
-                                                        </button>
+                                                        
+                                                        {editingStepId === step.id ? (
+                                                            <div className="flex-1 flex gap-1 items-center">
+                                                                <input
+                                                                    autoFocus
+                                                                    type="text"
+                                                                    className="bg-gray-50 dark:bg-[#111b21] border border-indigo-300 dark:border-indigo-500 rounded px-2 py-0.5 text-[13px] font-medium text-gray-700 dark:text-gray-300 outline-none w-full"
+                                                                    value={editingStepName}
+                                                                    onChange={(e) => setEditingStepName(e.target.value)}
+                                                                    onBlur={() => handleSaveStepName(project.id, step.id)}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter') handleSaveStepName(project.id, step.id);
+                                                                        if (e.key === 'Escape') setEditingStepId(null);
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <div className="flex-1 text-[13px] font-medium text-gray-700 dark:text-gray-300 truncate">{step.name}</div>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEditingStepId(step.id);
+                                                                        setEditingStepName(step.name);
+                                                                    }}
+                                                                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-indigo-500 transition-all rounded"
+                                                                    title="Editar nombre"
+                                                                >
+                                                                    <Edit2 className="w-3 h-3" />
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteStep(project.id, step.id); }}
+                                                                    className="p-1 text-gray-300 hover:text-red-500 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                >
+                                                                    <X className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 ))
                                             )}
