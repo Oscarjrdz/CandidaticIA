@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Bell, Plus, Trash2, Clock, ChevronDown } from 'lucide-react';
+import { X, Bell, Plus, Trash2, Clock, ChevronDown, Mic, Play } from 'lucide-react';
 
 const PRESET_HOURS = [
     { label: '1 hora antes', value: 1 },
@@ -22,6 +22,33 @@ const ScheduledRemindersModal = ({ step, onSave, onClose }) => {
             ? step.scheduledReminders
             : []
     );
+    const [isTestingAudio, setIsTestingAudio] = useState(null);
+
+    const testAudioMessage = async (reminder) => {
+        try {
+            setIsTestingAudio(reminder.id);
+            const messageParsed = reminder.message
+                .replace(/\{\{nombre\}\}/g, 'Candidato de Prueba')
+                .replace(/\{\{citaFecha\}\}/g, 'hoy')
+                .replace(/\{\{citaHora\}\}/g, '12:00 PM');
+                
+            const res = await fetch('/api/bot-ia/test-audio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: messageParsed,
+                    phone: '8116038195'
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Error al enviar audio de prueba');
+            alert('¡Audio de prueba enviado exitosamente al 8116038195!');
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+        } finally {
+            setIsTestingAudio(null);
+        }
+    };
 
     const addReminder = () => {
         setReminders(prev => [...prev, {
@@ -30,7 +57,8 @@ const ScheduledRemindersModal = ({ step, onSave, onClose }) => {
             hoursBefor: 24,
             exactTime: '08:00',            // HH:MM used when triggerMode = 'exact_time'
             message: 'Hola {{nombre}} 👋, te recordamos que tienes entrevista el {{citaFecha}} a las {{citaHora}}. ¡Te esperamos! 🌟',
-            enabled: true
+            enabled: true,
+            sendAsAudio: false
         }]);
     };
 
@@ -221,6 +249,40 @@ const ScheduledRemindersModal = ({ step, onSave, onClose }) => {
                                     <p className="text-[9px] text-slate-400">
                                         Variables disponibles: <code>{'{{nombre}}'}</code>, <code>{'{{citaFecha}}'}</code>, <code>{'{{citaHora}}'}</code>
                                     </p>
+                                </div>
+
+                                {/* Audio Toggle */}
+                                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 mt-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${reminder.sendAsAudio ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400' : 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}`}>
+                                            <Mic className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-slate-700 dark:text-slate-200">Audio (Brenda AI)</p>
+                                            <p className="text-[10px] text-slate-500">Enviar como nota de voz en lugar de texto.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        {reminder.sendAsAudio && (
+                                            <button
+                                              onClick={() => testAudioMessage(reminder)}
+                                              disabled={isTestingAudio === reminder.id}
+                                              className="px-3 py-1.5 text-[10px] font-black uppercase tracking-widest bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-all flex items-center gap-1.5 shadow-md shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                                              title="Enviar mensaje de prueba al 8116038195"
+                                            >
+                                                <Play className={`w-3 h-3 ${isTestingAudio === reminder.id ? 'animate-pulse' : ''}`} />
+                                                {isTestingAudio === reminder.id ? 'Enviando...' : 'Probar'}
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => updateReminder(reminder.id, 'sendAsAudio', !reminder.sendAsAudio)}
+                                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${reminder.sendAsAudio ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                                            role="switch"
+                                            aria-checked={reminder.sendAsAudio}
+                                        >
+                                            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${reminder.sendAsAudio ? 'translate-x-4' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         );

@@ -48,7 +48,7 @@ const getApiBaseUrl = () => {
 export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'chat', extraParams = {}) => {
     try {
         let endpoint = type;
-        if (!['chat', 'image', 'video', 'document', 'sticker', 'location'].includes(endpoint)) endpoint = 'chat';
+        if (!['chat', 'image', 'video', 'document', 'sticker', 'location', 'audio'].includes(endpoint)) endpoint = 'chat';
 
         let formattedTo = String(to).trim();
         if (!formattedTo.includes('@')) {
@@ -64,6 +64,9 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
         const isHttp = typeof body === 'string' && body.startsWith('http');
 
         switch (endpoint) {
+            case 'audio':
+                payload.audio = body; // Base64 or URL
+                break;
             case 'image':
                 let imgUrl = body;
                 if (isHttp && !imgUrl.startsWith('data:')) {

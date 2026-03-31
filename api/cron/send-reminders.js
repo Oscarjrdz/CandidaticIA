@@ -10,6 +10,7 @@
 
 import { getRedisClient, getCandidateById, getProjectById, saveMessage } from '../utils/storage.js';
 import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
+import { generateTTS } from '../utils/openai.js';
 
 const REDIS_ZSET_KEY = 'scheduled_reminders';
 
@@ -119,21 +120,36 @@ export default async function handler(req, res) {
                 .replace(/\{\{citaHora\}\}/gi, citaHora);
 
             // ── Send ──────────────────────────────────────────────────────────
+            let finalMessagePayload = message;
+            let messageType = 'chat';
+            let isAudio = false;
+
+            if (reminder.sendAsAudio) {
+                try {
+                    console.log(`[SEND-REMINDERS] Synthesizing TTS for reminder ${reminderId}`);
+                    finalMessagePayload = await generateTTS(message, 'nova');
+                    messageType = 'audio';
+                    isAudio = true;
+                } catch (ttsErr) {
+                    console.error(`[SEND-REMINDERS] Fallback: TTS Failed for ${reminderId}, sending as text. Error:`, ttsErr.message);
+                }
+            }
+
             await sendUltraMsgMessage(
                 config.instanceId,
                 config.token,
                 candidate.whatsapp,
-                message,
-                'chat',
+                finalMessagePayload,
+                messageType,
                 { priority: 1 }
             );
 
             // ── Save to chat history ──────────────────────────────────────────
             await saveMessage(candidateId, {
                 from: 'me',
-                content: message,
+                content: isAudio ? `[Nota de voz Brenda] ${message}` : message,
                 timestamp: new Date().toISOString(),
-                meta: { reminder: true, reminderId, hoursBefor: reminder.hoursBefor }
+                meta: { reminder: true, reminderId, hoursBefor: reminder.hoursBefor, isAudio }
             }).catch(() => { });
 
             console.log(`[SEND-REMINDERS] ✅ Sent reminder "${reminderId}" to ${nombre} (${candidate.whatsapp})`);

@@ -89,3 +89,54 @@ export async function getOpenAIResponse(messages, systemPrompt = '', model = 'gp
         throw new Error(`OpenAI Connection failed: ${typeof apiError === 'object' ? JSON.stringify(apiError) : apiError}`);
     }
 }
+
+/**
+ * Generate Text-to-Speech audio returning a Base64 encoded payload.
+ */
+export async function generateTTS(text, voice = 'nova', model = 'tts-1') {
+    try {
+        const redis = getRedisClient();
+        let apiKey = process.env.OPENAI_API_KEY;
+
+        // Try to get from Redis settings (ai_config) if not explicitly provided and not in process.env
+        if (!apiKey && redis) {
+            try {
+                const aiConfigJson = await redis.get('ai_config');
+                if (aiConfigJson) {
+                    const aiConfig = JSON.parse(aiConfigJson);
+                    apiKey = aiConfig.openaiApiKey;
+                }
+            } catch (rErr) {
+                console.warn('[OpenAI Adapter TS] Redis read failed:', rErr.message);
+            }
+        }
+
+        if (!apiKey || apiKey === 'undefined' || apiKey.trim() === '') {
+            throw new Error('OPENAI_API_KEY not configured. Please add it in Settings.');
+        }
+
+        const payload = {
+            model,
+            voice,
+            input: text,
+            response_format: 'mp3'
+        };
+
+        const response = await axios.post('https://api.openai.com/v1/audio/speech', payload, {
+            headers: {
+                'Authorization': `Bearer ${apiKey.trim()}`,
+                'Content-Type': 'application/json'
+            },
+            responseType: 'arraybuffer',
+            timeout: 15000 // Voice generation takes a bit longer sometimes
+        });
+
+        const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+        return `data:audio/mp3;base64,${base64Audio}`;
+
+    } catch (error) {
+        const apiError = error.response?.data || error.message;
+        console.error('❌ [OpenAI TTS] Error:', apiError instanceof Buffer ? apiError.toString('utf8') : apiError);
+        throw new Error(`OpenAI TTS Connection failed: ${error.message}`);
+    }
+}
