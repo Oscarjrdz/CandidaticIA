@@ -234,6 +234,15 @@ export default function WaStatusCreator({ onClose, showToast }) {
     const textRef  = useRef(null);
     const fileRef  = useRef(null);
 
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && !showEmoji) onClose();
+            else if (e.key === 'Escape' && showEmoji) setShowEmoji(false);
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [onClose, showEmoji]);
+
     const resetContent = () => { setContent(''); setCaption(''); setImagePreview(''); };
 
     const insertEmoji = (emoji) => {

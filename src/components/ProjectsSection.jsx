@@ -481,16 +481,27 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         }
     }, [activeProject]);
 
-    // Close Create Modal on ESC
+    // Universal ESC Key Listener for all Modals/Panels
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (e.key === 'Escape' && showCreateModal) {
-                setShowCreateModal(false);
+            if (e.key === 'Escape') {
+                if (showCreateModal) setShowCreateModal(false);
+                if (showVacancyModal) setShowVacancyModal(false);
+                if (openStepConfig) setOpenStepConfig(null);
+                if (openCalendarConfig) setOpenCalendarConfig(null);
+                if (openConfirmationConfig) setOpenConfirmationConfig(null);
+                if (openRemindersConfig) setOpenRemindersConfig(null);
+                if (showAISearch) setShowAISearch(false);
+                if (isChatOpen) setIsChatOpen(false);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [showCreateModal]);
+    }, [
+        showCreateModal, showVacancyModal, openStepConfig,
+        openCalendarConfig, openConfirmationConfig, openRemindersConfig,
+        showAISearch, isChatOpen
+    ]);
 
     const fetchProjects = async () => {
         setIsInitialLoading(true);

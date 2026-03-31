@@ -44,6 +44,14 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
         fetchStatus();
     }, [triggerRefresh]);
 
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && viewerOpen) setViewerOpen(false);
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [viewerOpen]);
+
     if (loading && statuses.length === 0) return null; 
     if (statuses.length === 0 && !loading) return null; 
 

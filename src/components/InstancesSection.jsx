@@ -20,6 +20,23 @@ const InstancesSection = ({ showToast }) => {
         loadInstances();
     }, []);
 
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                if (qrData || qrLoading) {
+                    setQrData(null);
+                    setQrLoading(false);
+                    // Opcionalmente recargar instancias
+                }
+                if (editingIndex !== null) {
+                    setEditingIndex(null);
+                }
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [qrData, qrLoading, editingIndex]);
+
     const fetchStatuses = async (instList) => {
         const newStatuses = {};
         for (let i = 0; i < instList.length; i++) {
