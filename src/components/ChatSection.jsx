@@ -246,7 +246,9 @@ const ChatSection = ({ showToast }) => {
             return Array.isArray(c?.tags) && c.tags.includes(filterValue);
         }
         if (activeFilter === 'vacancy' && filterValue) {
-            return c?.currentVacancyName === filterValue;
+            if (c?.currentVacancyName !== filterValue) return false;
+            if (crmStepFilter && c?.manualProjectStepId !== crmStepFilter) return false;
+            return true;
         }
         if (activeFilter === 'crm' && filterValue) {
             if (c?.manualProjectId !== filterValue) return false;
@@ -623,7 +625,7 @@ const ChatSection = ({ showToast }) => {
                                         {availableVacancies.map(vac => (
                                             <div 
                                                 key={vac}
-                                                onClick={() => { setActiveFilter('vacancy'); setFilterValue(vac); setShowDropdown(null); }}
+                                                onClick={() => { setActiveFilter('vacancy'); setFilterValue(vac); setCrmStepFilter(null); setShowDropdown(null); }}
                                                 className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
                                                 title={vac}
                                             >
@@ -672,43 +674,56 @@ const ChatSection = ({ showToast }) => {
                             )}
                         </div>
 
-                        {/* Sub-dropdown para Pasos del CRM activo */}
-                        {activeFilter === 'crm' && filterValue && (
+                        {/* Sub-dropdown para Pasos del CRM activo o Vacante activa */}
+                        {(activeFilter === 'crm' || activeFilter === 'vacancy') && filterValue && (
                             <div className="relative">
-                                <button 
-                                    onClick={() => setShowDropdown(showDropdown === 'crmStep' ? null : 'crmStep')}
-                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                        crmStepFilter 
-                                        ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                        : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                                    }`}
-                                >
-                                    {crmStepFilter ? (manualProjects.find(p => p.id === filterValue)?.steps?.find(s => s.id === crmStepFilter)?.name?.slice(0, 15) || 'Paso') : 'Todos los Pasos'} <span className="ml-1 text-[9px]">▼</span>
-                                </button>
-                                {showDropdown === 'crmStep' && (
-                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                        <div
-                                            onClick={() => { setCrmStepFilter(null); setShowDropdown(null); }}
-                                            className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] font-medium"
-                                        >
-                                            Todos los Pasos
-                                        </div>
-                                        {manualProjects.find(p => p.id === filterValue)?.steps?.length === 0 ? (
-                                            <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos creados</div>
-                                        ) : (
-                                            manualProjects.find(p => p.id === filterValue)?.steps?.map(step => (
-                                                <div
-                                                    key={step.id}
-                                                    onClick={() => { setCrmStepFilter(step.id); setShowDropdown(null); }}
-                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                    title={step.name}
-                                                >
-                                                    {step.name}
+                                {(() => {
+                                    // Determinar el proyecto activo según el tipo de filtro
+                                    const activeProject = activeFilter === 'crm' 
+                                        ? manualProjects.find(p => p.id === filterValue)
+                                        : manualProjects.find(p => p.name === filterValue);
+
+                                    if (!activeProject) return null;
+
+                                    return (
+                                        <>
+                                            <button 
+                                                onClick={() => setShowDropdown(showDropdown === 'crmStep' ? null : 'crmStep')}
+                                                className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                                    crmStepFilter 
+                                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                                }`}
+                                            >
+                                                {crmStepFilter ? (activeProject.steps?.find(s => s.id === crmStepFilter)?.name?.slice(0, 15) || 'Paso') : 'Todos los Pasos'} <span className="ml-1 text-[9px]">▼</span>
+                                            </button>
+                                            {showDropdown === 'crmStep' && (
+                                                <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                                    <div
+                                                        onClick={() => { setCrmStepFilter(null); setShowDropdown(null); }}
+                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] font-medium"
+                                                    >
+                                                        Todos los Pasos
+                                                    </div>
+                                                    {activeProject.steps?.length === 0 ? (
+                                                        <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos creados</div>
+                                                    ) : (
+                                                        activeProject.steps?.map(step => (
+                                                            <div
+                                                                key={step.id}
+                                                                onClick={() => { setCrmStepFilter(step.id); setShowDropdown(null); }}
+                                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
+                                                                title={step.name}
+                                                            >
+                                                                {step.name}
+                                                            </div>
+                                                        ))
+                                                    )}
                                                 </div>
-                                            ))
-                                        )}
-                                    </div>
-                                )}
+                                            )}
+                                        </>
+                                    );
+                                })()}
                             </div>
                         )}
 
