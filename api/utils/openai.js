@@ -132,6 +132,29 @@ export async function generateTTS(text, voice = 'nova', model = 'tts-1') {
         });
 
         const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
+        
+        // WhatsApp APIs often fail processing raw Base64 data for audio/voice. 
+        // We act as our own Media Server, saving the buffer to Redis and returning an HTTP URL.
+        if (redis) {
+            const id = `med_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+            const pipeline = redis.pipeline();
+            pipeline.set(`image:${id}`, base64Audio, 'EX', 86400 * 7); // 7 days TTL (Ephemerial Voice Note)
+            pipeline.set(`meta:image:${id}`, JSON.stringify({
+                mime: 'audio/ogg; codecs=opus',
+                filename: 'brenda_voice.opus',
+                size: base64Audio.length,
+                createdAt: new Date().toISOString()
+            }), 'EX', 86400 * 7);
+            await pipeline.exec();
+
+            // Resolve Public Vercel Host
+            let host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || 'candidatic-ia.vercel.app';
+            if (!host.startsWith('http')) host = `https://${host}`;
+
+            return `${host}/api/image?id=${id}&ext=.opus`;
+        }
+
+        // Fallback (might fail in strict Gateway implementations)
         return `data:audio/ogg;base64,${base64Audio}`;
 
     } catch (error) {
