@@ -119,7 +119,7 @@ export async function generateTTS(text, voice = 'nova', model = 'tts-1') {
             model,
             voice,
             input: text,
-            response_format: 'mp3'
+            response_format: 'opus' // NATIVE WHATSAPP OGG OPUS
         };
 
         const response = await axios.post('https://api.openai.com/v1/audio/speech', payload, {
@@ -128,11 +128,11 @@ export async function generateTTS(text, voice = 'nova', model = 'tts-1') {
                 'Content-Type': 'application/json'
             },
             responseType: 'arraybuffer',
-            timeout: 15000 // Voice generation takes a bit longer sometimes
+            timeout: 15000
         });
 
         const base64Audio = Buffer.from(response.data, 'binary').toString('base64');
-        return `data:audio/mp3;base64,${base64Audio}`;
+        return `data:audio/ogg;base64,${base64Audio}`;
 
     } catch (error) {
         const apiError = error.response?.data || error.message;
