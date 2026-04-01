@@ -724,7 +724,7 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
 
     // 🎯 FAQ CLOSING QUESTION SAFETY NET (Capa 1b — Backup for non-Inicio steps)
     // Only fires for non-Inicio steps when FAQ topic keywords are detected.
-    if (!stepContext.isInicio && !text.includes('[MSG_SPLIT]') && !text.includes('\xbf')) {
+    if (!stepContext.isInicio && !stepContext.isCitados && !text.includes('[MSG_SPLIT]') && !text.includes('\xbf')) {
         const hasCompleteProfile = !!(
             candidateData &&
             (candidateData.nombreReal || candidateData.nombre) &&
@@ -2586,7 +2586,8 @@ ${safeDnaLines}
                         const _isInicioPasoFmt = /filtro|inicio|contacto/i.test(activeStepNameLower);
                         // Read sequential CTA index for this turn (incremented at delivery)
                         const _ctaVariantIdxFmt = await getCTAIndex(redis, candidateId);
-                        responseTextVal = formatRecruiterMessage(responseTextVal, candidateData, { isInicio: _isInicioPasoFmt, ctaVariantIdx: _ctaVariantIdxFmt });
+                        const _isCitadosPasoFmt = /citado|cita|entrevista/i.test(activeStepNameLower);
+                        responseTextVal = formatRecruiterMessage(responseTextVal, candidateData, { isInicio: _isInicioPasoFmt, isCitados: _isCitadosPasoFmt, ctaVariantIdx: _ctaVariantIdxFmt });
                         aiResult.response_text = responseTextVal;
 
                     }
