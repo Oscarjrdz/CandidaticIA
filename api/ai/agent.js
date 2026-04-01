@@ -1399,7 +1399,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
         if (userParts.length === 0) userParts.push({ text: 'Hola' });
 
         let recentHistory = validMessages
-            .slice(-10) // Memory Boost: 10 messages of history (Optimized for Vercel Serverless latency)
+            .slice(-6) // Token Saver 🚀: 6 messages of history (Optimized for Extraction)
             .filter(m => {
                 const ghostKeywords = ['focusada', 'procesa su perfil'];
                 if ((m.from === 'bot' || m.from === 'me') && ghostKeywords.some(kw => m.content.toLowerCase().includes(kw))) {
@@ -3841,11 +3841,23 @@ ${safeDnaLines}
         // 2. GPT HOST (OpenAI Social Brain) - Triggers after 2 messages of silence
         const aiConfigJson = batchConfig.ai_config;
         const activeAiConfig = aiConfigJson ? (typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson) : {};
+
+        // 🧼 Token Saver: Clean ADN to prevent massive JSON stringification of telemetry logs
+        const cleanAdnBase = { 
+            nombreReal: candidateData.nombreReal || null,
+            edad: candidateData.edad || null,
+            municipio: candidateData.municipio || null,
+            categoria: candidateData.categoria || null,
+            escolaridad: candidateData.escolaridad || null,
+            citaFecha: candidateData.citaFecha || null,
+            citaHora: candidateData.citaHora || null
+        };
+
         if (!isRecruiterMode && !isBridgeActive && isProfileComplete && activeAiConfig.gptHostEnabled && activeAiConfig.openaiApiKey) {
             isHostMode = true;
             try {
                 const hostPrompt = activeAiConfig.gptHostPrompt || 'Eres la Lic. Brenda Rodríguez de Candidatic.';
-                const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt} \n[ADN]: ${JSON.stringify(candidateData)} `, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
+                const gptResponse = await getOpenAIResponse(allMessages, `${hostPrompt} \n[ADN]: ${JSON.stringify(cleanAdnBase)} `, activeAiConfig.openaiModel || 'gpt-4o-mini', activeAiConfig.openaiApiKey);
 
                 if (gptResponse?.content) {
                     const textContent = gptResponse.content.replace(/\*/g, '');
@@ -4024,7 +4036,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         usage: { total_tokens: 0 }
                     };
                 } else {
-                    gptResult = await getOpenAIResponse(historyForGpt, `${systemInstruction}\n[ADN]: ${JSON.stringify(candidateData)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" }, null, 500);
+                    gptResult = await getOpenAIResponse(historyForGpt, `${systemInstruction}\n[ADN]: ${JSON.stringify(cleanAdnBase)}`, selectedModel, activeAiConfig.openaiApiKey, { type: "json_object" }, null, 500);
                 }
 
                 if (gptResult?.content) {
