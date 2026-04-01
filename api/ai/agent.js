@@ -3889,9 +3889,14 @@ ${safeDnaLines}
                 }
                 // Build Instructions — extraction rules only injected when there is NO custom prompt
                 // (custom prompt owns all behavioral rules; we only add the technical JSON schema + data)
+                
+                // 🧼 Token Saver: Only show categories to GPT if we are actively asking for them!
+                const isAskingCategoria = auditForMode.missingLabels && auditForMode.missingLabels.length > 0 && auditForMode.missingLabels[0].toLowerCase().includes('categor');
+                const maskedCategoriesList = isAskingCategoria ? categoriesList : "✅ [Ocultas por sistema hasta el paso de Categoría]";
+
                 if (!customPrompt) {
                     const extractionRules = batchConfig.bot_extraction_rules || DEFAULT_EXTRACTION_RULES;
-                    systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, categoriesList)}`;
+                    systemInstruction += `\n[REGLAS DE EXTRACCIÓN (VIPER-GPT)]: ${extractionRules.replace(/{{categorias}}/g, maskedCategoriesList)}`;
                 }
 
                 // JSON format schema — always required so the code can parse the response
@@ -3957,8 +3962,8 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
                             const cerebro1Rules = baseRules
                                 .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
-                                .replace(/{{categorias}}/g, categoriesList)
-                                .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
+                                .replace(/{{categorias}}/g, maskedCategoriesList)
+                                .replace(/\[LISTA DE CATEGORÍAS\]/g, maskedCategoriesList);
                             systemInstruction += `\n[MISION: BIENVENIDA CON PREGUNTA]: Es el primer mensaje. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego responde brevemente la pregunta del candidato con info real. Al final pide el dato faltante: ${auditForMode.missingLabels[0]}.\n${cerebro1Rules}\n`;
                         } else {
                             systemInstruction += `\n[MISION: BIENVENIDA]: Es el inicio. Preséntate en UNA SOLA ORACIÓN como Brenda Rodríguez de Candidatic (NO termines la frase en "Lic."). Luego en otra línea pide el Nombre Y Apellidos completos del candidato — siempre incluye al menos un emoji en esa segunda línea. ✨🌸\n`;
@@ -3970,13 +3975,13 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     if (customPrompt) {
                         // Custom prompt already has all behavior rules — only inject the dynamic context
                         const missingList = auditForMode.missingLabels.join(', ');
-                        systemInstruction += `\n[CONTEXTO DE MISIÓN]: Datos aún faltantes del candidato: ${missingList}. Categorías disponibles:\n${categoriesList}\n`;
+                        systemInstruction += `\n[CONTEXTO DE MISIÓN]: Datos aún faltantes del candidato: ${missingList}. Categorías disponibles:\n${maskedCategoriesList}\n`;
                     } else {
                         let baseRules = batchConfig.bot_cerebro1_rules || DEFAULT_CEREBRO1_RULES;
                         const cerebro1Rules = baseRules
                             .replace('{{faltantes}}', auditForMode.missingLabels.join(', '))
-                            .replace(/{{categorias}}/g, categoriesList)
-                            .replace(/\[LISTA DE CATEGORÍAS\]/g, categoriesList);
+                            .replace(/{{categorias}}/g, maskedCategoriesList)
+                            .replace(/\[LISTA DE CATEGORÍAS\]/g, maskedCategoriesList);
                         systemInstruction += `\n${cerebro1Rules}\n`;
                     }
 
