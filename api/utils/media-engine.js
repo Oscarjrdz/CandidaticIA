@@ -9,12 +9,17 @@ export class MediaEngine {
     /**
      * Sends a "Congratulations" pack (Sticker + Optional Text)
      */
-    static async sendCongratsPack(config, phone, customStickerKey = 'bot_step_move_sticker') {
+    static async sendCongratsPack(config, phone, customStickerKey = 'bot_step_move_sticker', candidateId = null) {
         const client = getRedisClient();
         const stickerUrl = await client?.get(customStickerKey);
 
         if (stickerUrl) {
             console.log(`[MEDIA ENGINE] 🚀 Sending Congrats Sticker: ${customStickerKey}`);
+            if (candidateId) {
+                import('./storage.js').then(({ saveMessage }) => {
+                    saveMessage(candidateId, { from: 'me', content: `[Sticker: ${stickerUrl}]`, timestamp: new Date().toISOString() }).catch(() => {});
+                });
+            }
             // Fast sequenced delivery
             return await sendUltraMsgMessage(config.instanceId, config.token, phone, stickerUrl, 'sticker');
         }

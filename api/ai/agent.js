@@ -3581,6 +3581,7 @@ ${safeDnaLines}
                                 const bridgeSticker = await redis?.get(bridgeKey);
                                 if (bridgeSticker) {
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
+                                    saveMessage(candidateId, { from: 'me', content: `[Sticker: ${bridgeSticker}]`, timestamp: new Date().toISOString() }).catch(() => { });
                                     // 🚀 BRIDGE GAP: Re-trigger "escribiendo..." right after the sticker
                                     // ONLY for non-terminal steps — if the next step is Citados/No Interesa/exit,
                                     // there's no follow-up GPT response and composing would hang forever.
@@ -4193,7 +4194,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 if (!handoverTriggered && isNowComplete && !candidateData.congratulated) {
                     responseTextVal = "¡Listo! 🌟 Ya tengo todos tus datos guardados. Pronto un reclutador te contactará. ✨🌸";
                     candidateUpdates.congratulated = true;
-                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker');
+                    await MediaEngine.sendCongratsPack(config, candidateData.whatsapp, 'bot_celebration_sticker', candidateId);
                 }
 
             } catch (err) {

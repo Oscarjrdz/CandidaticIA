@@ -232,7 +232,7 @@ export class Orchestrator {
         saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
         // Sticker goes LAST — after both text bubbles are confirmed sent
-        await MediaEngine.sendCongratsPack(config, phone, 'bot_celebration_sticker');
+        await MediaEngine.sendCongratsPack(config, phone, 'bot_celebration_sticker', candidateId);
 
         // 4. ⚡ INSTANT VACANCY SEND — Template-based, zero GPT, zero cold start.
         // The vacancy messageDescription is already fully formatted text. Calling GPT just to wrap it
@@ -322,7 +322,7 @@ export class Orchestrator {
         const bridgeKey = await MediaEngine.resolveBridgeSticker('STEP_MOVE');
         if (bridgeKey) {
             const phone = (await import('./storage.js')).getCandidateById(candidateId).whatsapp;
-            await MediaEngine.sendCongratsPack(config, phone, bridgeKey);
+            await MediaEngine.sendCongratsPack(config, phone, bridgeKey, candidateId);
         }
     }
 }

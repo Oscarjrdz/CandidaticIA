@@ -13,7 +13,18 @@ const formatWhatsAppText = (text) => {
         .replace(/\*(.*?)\*/g, '<strong class="font-bold">$1</strong>')
         .replace(/_(.*?)_/g, '<em class="italic">$1</em>')
         .replace(/~(.*?)~/g, '<del class="line-through opacity-70">$1</del>')
-        .replace(/```(.*?)```/g, '<code class="bg-black/5 dark:bg-black/30 px-1 py-0.5 rounded font-mono text-[11px]">$1</code>');
+        .replace(/```(.*?)```/g, '<code class="bg-black/5 dark:bg-black/30 px-1 py-0.5 rounded font-mono text-[11px]">$1</code>')
+        .replace(/\[Imagen Adjunta:\s*(https?:\/\/[^\s\]]+)\](?:\nCaption:\s*(.*))?/gi, (match, url, caption) => {
+            return `<div class="mt-1 mb-1"><img src="${url}" alt="Adjunto" class="max-w-[200px] object-cover rounded shadow-sm bg-transparent" />${caption ? `<div class="text-[11px] text-gray-600 dark:text-gray-300 mt-1">${caption}</div>` : ''}</div>`;
+        })
+        .replace(/\[Ubicación:\s*(.*?)\s*\(([-.\d]+),\s*([-.\d]+)\)\]/gi, (match, address, lat, lng) => {
+            return `<div class="mt-1 mb-1 border border-black/10 dark:border-white/10 rounded overflow-hidden max-w-[220px]">
+                <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="bg-gray-100 dark:bg-gray-800 p-2 text-blue-500 hover:text-blue-600 text-[11px] flex items-center gap-1 font-medium select-none whitespace-normal"><span class="text-xs shrink-0">📍</span> <span>Google Maps</span></a>
+            </div>`;
+        })
+        .replace(/\[Sticker:\s*(https?:\/\/[^\s\]]+)\]/gi, (match, url) => {
+            return `<div class="mt-1 mb-1"><img src="${url}" alt="Sticker" class="max-w-[120px] max-h-[120px] object-contain rounded bg-transparent" /></div>`;
+        });
 };
 
 /**
@@ -266,7 +277,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         try {
             const date = new Date(ts);
             if (isNaN(date.getTime())) return '-';
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
         } catch (e) {
             return '-';
         }
