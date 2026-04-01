@@ -226,6 +226,12 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
         const faqsForPrompt = vacancyContext.faqs || null;
         const vacancyContextForJson = { ...vacancyContext };
         delete vacancyContextForJson.faqs; // Remove from JSON blob — shown in its own section
+        
+        // 🧼 [AHORRO DE TOKENS - ABRIL 2026]: 
+        // 1. documents: Evita que el JSON envíe cadenas Base64 o URLs largas de los PDFs dos veces a OpenAI (ya se mandan abajo en "BASE DE CONOCIMIENTO TEXTUAL").
+        // 2. messageDescription: Evita mandarle la versión "maquillada para WhatsApp" cuando ya va a leer la versión de "description". Es pura duplicidad.
+        delete vacancyContextForJson.documents; 
+        delete vacancyContextForJson.messageDescription;
 
         // --- DEBUG DIAGNOSTIC ---
         if (!faqsForPrompt) {
