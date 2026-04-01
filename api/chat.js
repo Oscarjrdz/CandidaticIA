@@ -59,20 +59,29 @@ export default async function handler(req, res) {
                 let sendResult;
                 let deliveryContent = base64Data || mediaUrl;
 
-                // Ensure absolute URL for relative paths (for images/video)
-                if (mediaUrl && mediaUrl.includes('id=')) {
-                    const protocol = req.headers['x-forwarded-proto'] || 'http';
-                    const host = req.headers.host;
+                // Convert relative /api/image?id=xxx to an absolute URL for GatewayWapp
+                if (mediaUrl && !base64Data) {
+                    const protocol = req.headers['x-forwarded-proto'] || 'https';
+                    const host = req.headers.host || 'candidatic-ia.vercel.app';
 
-                    const urlObj = new URL(mediaUrl, `${protocol}://${host}`);
-                    const id = urlObj.searchParams.get('id');
-                    if (id) {
-                        const ext = type === 'video' ? '.mp4' : '.jpg';
-                        deliveryContent = `${protocol}://${host}/api/media/${id}${ext}`;
+                    let absoluteUrl = mediaUrl;
+
+                    // Handle /api/image?id=xxx format (our standard storage format)
+                    if (mediaUrl.startsWith('/api/image') && mediaUrl.includes('id=')) {
+                        const urlObj = new URL(mediaUrl, `${protocol}://${host}`);
+                        const id = urlObj.searchParams.get('id');
+                        if (id) {
+                            // Map type to extension for WhatsApp content-type hint
+                            const extMap = { image: '.jpg', video: '.mp4', audio: '.mp3', document: '.pdf' };
+                            const ext = extMap[type] || '';
+                            absoluteUrl = `${protocol}://${host}/api/media/${id}${ext}`;
+                        }
+                    } else if (mediaUrl.startsWith('/')) {
+                        // Any other relative URL → make absolute
+                        absoluteUrl = `${protocol}://${host}${mediaUrl}`;
                     }
-                }
 
-                if (base64Data) {
+                    deliveryContent = absoluteUrl;
                 }
 
 

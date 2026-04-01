@@ -8,6 +8,18 @@
             "destination": "/api/share?id=:id"
         },
         {
+            "source": "/api/media/upload",
+            "destination": "/api/media/upload"
+        },
+        {
+            "source": "/api/media/list",
+            "destination": "/api/media/list"
+        },
+        {
+            "source": "/api/media/delete",
+            "destination": "/api/media/delete"
+        },
+        {
             "source": "/api/media/:id",
             "destination": "/api/image?id=:id"
         },
