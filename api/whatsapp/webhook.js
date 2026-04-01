@@ -31,8 +31,9 @@ import { logTelemetry } from '../utils/telemetry.js';
 
 export const maxDuration = 60; // Extend Vercel timeout to prevent LLM latency silence
 
+const isDebug = process.env.DEBUG_MODE === 'true';
 // 🚀 TURBO MODE: Silence all synchronous Vercel console I/O unless actively debugging
-if (process.env.DEBUG_MODE !== 'true') {
+if (!isDebug) {
     console.log = function () { };
 }
 
@@ -107,7 +108,7 @@ export default async function handler(req, res) {
                                         }
                                     });
                                     await pipeline.exec();
-                                    console.log(`[VISTO 👀] Candidato ${spectatorPhone} vio el estado WA ID: ${storyId}`);
+                                    if (isDebug) console.log(`[VISTO 👀] Candidato ${spectatorPhone} vio el estado WA ID: ${storyId}`);
                                 }
                             }
                         }
@@ -134,7 +135,7 @@ export default async function handler(req, res) {
             
             // 🛡️ BLOCK GROUPS AND STATUS BROADCASTS
             if (from.includes('@g.us') || from.includes('status@broadcast') || from.includes('newsletter')) {
-                console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando mensaje de sistema/grupo: ${from}`);
+                if (isDebug) console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando mensaje de sistema/grupo: ${from}`);
                 return res.status(200).send('broadcast_ignored');
             }
 
@@ -144,13 +145,13 @@ export default async function handler(req, res) {
             // 🛡️ BLOCK ALIEN NUMBERS
             // Regla 1: Longitud mínima/máxima (bloquea IDs de Meta/FB y números corruptos)
             if (phone.length < 10 || phone.length > 13) {
-                console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando ID alienígena o corrompido: ${phone} (${phone.length} dígitos, Original: ${from})`);
+                if (isDebug) console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando ID alienígena o corrompido: ${phone} (${phone.length} dígitos, Original: ${from})`);
                 return res.status(200).send('alien_number_ignored');
             }
             // Regla 2: Números de 12-13 dígitos deben empezar con 52 (México)
             // Números de 10 dígitos son locales válidos (sin código de país)
             if (phone.length >= 12 && !phone.startsWith('52')) {
-                console.log(`[WEBHOOK/SPAM-PROTECT] Número no mexicano bloqueado: ${phone} (Original: ${from})`);
+                if (isDebug) console.log(`[WEBHOOK/SPAM-PROTECT] Número no mexicano bloqueado: ${phone} (Original: ${from})`);
                 return res.status(200).send('non_mexican_number_ignored');
             }
 
@@ -173,7 +174,7 @@ export default async function handler(req, res) {
                 const nowMs = Date.now();
                 const diffMins = (nowMs - msgTimeMs) / 1000 / 60;
                 if (diffMins > 5) {
-                    console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando mensaje antiguo de ${phone} (hace ${Math.round(diffMins)} mins) - Sincronización evadida.`);
+                    if (isDebug) console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando mensaje antiguo de ${phone} (hace ${Math.round(diffMins)} mins) - Sincronización evadida.`);
                     return res.status(200).send('historical_message_ignored');
                 }
             }
@@ -298,7 +299,7 @@ export default async function handler(req, res) {
                     const targetCandId = await getCandidateIdByPhone(targetPhone);
                     if (targetCandId) {
                         await deleteCandidate(targetCandId);
-                        console.log(`[WEBHOOK/RESET] 💥 Data wiped for candidate ${targetCandId} (${targetPhone}) via WhatsApp command.`);
+                        if (isDebug) console.log(`[WEBHOOK/RESET] 💥 Data wiped for candidate ${targetCandId} (${targetPhone}) via WhatsApp command.`);
                         await sendMessage(phone, `✅ *RESET COMPLETADO*\nEl historial y perfil del número \`${targetPhone}\` han sido borrados.\n\nEscribe "Hola" para reiniciar el flujo como un candidato nuevo.`);
                     } else {
                         await sendMessage(phone, `⚠️ *Aviso*: El número \`${targetPhone}\` no existe en la base de datos o ya fue reseteado.`);
@@ -335,7 +336,7 @@ export default async function handler(req, res) {
                     notifyNewCandidate(candidate).catch(() => { });
                 }
 
-                console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}... [Source: ${sourceIdentifier}]`);
+                if (isDebug) console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}... [Source: ${sourceIdentifier}]`);
 
                 // --- ADMIN STICKER CAPTURE ---
                 const messageType = messageData.type || 'text';
@@ -439,7 +440,7 @@ export default async function handler(req, res) {
                                 if (!openAiKey) {
                                     console.error('[WEBHOOK] ❌ No se encontró OpenAI API Key para transcribir el audio.');
                                 } else {
-                                    console.log(`[WEBHOOK] 🎙️ Transcribiendo audio de ${phone}: ${messageData.media}`);
+                                    if (isDebug) console.log(`[WEBHOOK] 🎙️ Transcribiendo audio de ${phone}: ${messageData.media}`);
                                     const axios = (await import('axios')).default;
                                     const audioRes = await axios.get(messageData.media, { responseType: 'arraybuffer' });
                                     
@@ -461,7 +462,7 @@ export default async function handler(req, res) {
                                         
                                         if (whisperRes.data && whisperRes.data.text) {
                                             finalAgentInput = `🎙️ [AUDIO TRANSCRITO]: "${whisperRes.data.text}"`;
-                                            console.log(`[WEBHOOK] 🎙️ Audio transcrito exitosamente: ${whisperRes.data.text}`);
+                                            if (isDebug) console.log(`[WEBHOOK] 🎙️ Audio transcrito exitosamente: ${whisperRes.data.text}`);
                                         } else {
                                             finalAgentInput = `[DEV-ERR] Whisper no text: ${JSON.stringify(whisperRes.data)}`;
                                         }
@@ -484,7 +485,7 @@ export default async function handler(req, res) {
                         await addToWaitlist(candidateId, { text: finalAgentInput, msgId });
 
                         // 🏁 2. SIGNAL TURBO ENGINE DIRECTLY (Keep container alive)
-                        console.log(`[Vercel Turbo] 🚀 Triggering internal engine for candidate ${candidateId}`);
+                        if (isDebug) console.log(`[Vercel Turbo] 🚀 Triggering internal engine for candidate ${candidateId}`);
 
                         // Import dynamically to avoid circular dependencies and load only when needed
                         const { runTurboEngine } = await import('../workers/process-message.js');
