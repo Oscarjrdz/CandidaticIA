@@ -32,6 +32,7 @@ Si el candidato hace UNA PREGUNTA sobre la vacante (sueldo, horario, requisitos,
 5. FALLBACK LEGÍTIMO (SOLO SI EL DATO NO EXISTE EN ABSOLUTO EN LA DESCRIPCIÓN NI EN FAQS):
    - Escribe en response_text: "Es una excelente pregunta, déjame consultarlo con el equipo de recursos humanos para darte el dato exacto y no quedarte mal. ✨"
    - Llena unanswered_question con la duda original.
+   - 🚫 EXCEPCIÓN DE AGENDA: Si la pregunta del candidato es sobre si hay citas disponibles OTRO DÍA (ej: "¿y para el jueves?", "¿tienes el viernes?"), esto NO es una pregunta para Recursos Humanos. ESTRICTAMENTE PROHIBIDO usar "unanswered_question" o decir "déjame consultarlo". Responde con la regla de AUSENCIA DE DISPONIBILIDAD.
 [FORMATO DE RESPUESTA - JSON OBLIGATORIO]:
 {
     "extracted_data": { 
@@ -302,7 +303,7 @@ PASO 1 (OFRECER DÍAS): Si aún no elige día, usa EXACTAMENTE la siguiente list
 
 ${_preFormattedDayList}
 
-¿Qué día prefieres?
+${_uniqueDayCount === 1 ? '¿Te queda bien este día? 😊' : '¿Qué día prefieres? 😊'}
 
 Tu mensaje DEBE comenzar con un saludo breve (ej. "Listo ${candidateData.nombreReal || 'Oscar'}"), luego "Tengo entrevistas los días:", y DESPUÉS copiar la lista completa de arriba SIN MODIFICARLA. PROHIBIDO fusionar opciones en un mismo renglón.
 🚨 CONTEO OBLIGATORIO: La lista tiene exactamente ${_uniqueDayCount} DÍA(S). Si envías menos, CAUSARÁS UN ERROR CRÍTICO.
