@@ -2229,8 +2229,8 @@ ${safeDnaLines}
 
                             // 🔄 DAY REVERT FALLBACK: If the candidate answered with a day name instead of an hour
                             // (e.g., "y para el lunes"), wipe citaFecha so BRANCH B can process it!
+                            let _foundDayInHourStep = false; // declared here so else-if below can access it
                             if (_resolvedHourIdx === null) {
-                                let _foundDayInHourStep = false;
                                 for (const _line of _rawInputLines) {
                                     if (_parseDayName(_line) !== null) {
                                         _foundDayInHourStep = true;
