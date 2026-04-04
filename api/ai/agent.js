@@ -2371,6 +2371,58 @@ ${safeDnaLines}
                                         responseTextVal = `Hay ${_matchingIdxs.length} ${_dayNameLabel.toLowerCase()}s disponibles${_fn4 ? `, ${_fn4}` : ''}. ¿Cuál prefieres?\n\n${_subLines}`;
                                         aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:ambiguous_day_name' };
                                     }
+                                } else if (_matchingIdxs.length === 0) {
+                                    // Day name detected but 0 calendar matches — fully deterministic, never GPT, never HR fallback.
+                                    console.log(`[AGENT] Day ${_dayOfWeek} requested but 0 calendar matches. Applying varied no-avail response.`);
+                                    skipRecruiterInference = true;
+                                    const _cName_DA = _fn4 || '';
+                                    const _nameTag = _cName_DA ? ` ${_cName_DA}` : '';
+                                    const _subLines2 = _uDays.map((ds, i) => {
+                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                        return `${_NE4[i] || `${i+1}.`} ${_DN4[d.getDay()]} ${d.getDate()} de ${_MN4[d.getMonth()]} 📅`;
+                                    }).join('\n');
+                                    const _reqDayName2 = _DN4[_dayOfWeek];
+                                    const _ctaDA = _uDays.length === 1 ? '¿Te queda bien este día? 😊' : '¿Alguno de estos días te funciona? 😊';
+                                    const _noAvailVars = [
+                                        `Ay${_nameTag}, el ${_reqDayName2} no tenemos entrevistas disponibles 😔 Te comparto los días en los que sí tenemos espacio:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Para el ${_reqDayName2} no cuento con citas${_cName_DA ? `, ${_cName_DA}` : ''} 🙏 Pero aquí van mis días disponibles:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Uy${_nameTag}, el ${_reqDayName2} no tengo nada disponible 😅 Mis opciones son:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Ese ${_reqDayName2} no lo tengo habilitado${_cName_DA ? `, ${_cName_DA}` : ''} 🙈 Los días en que sí hay espacio:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `El ${_reqDayName2} no está disponible en mi agenda${_nameTag} 📋 Lo que tengo es:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Para el ${_reqDayName2} no hay lugar por el momento${_nameTag} 😕 Lo que sí tengo:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `El ${_reqDayName2} no tengo citas${_nameTag}, pero mira lo que sí tengo:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Ese ${_reqDayName2} no aparece en mi calendario${_nameTag} 📅 Mis fechas disponibles:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `El ${_reqDayName2} no lo tengo disponible${_nameTag} �� Aquí van mis opciones:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `En este momento el ${_reqDayName2} no está en mi agenda${_nameTag} 🗓️ Te ofrezco:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`
+                                    ];
+                                    responseTextVal = _noAvailVars[Math.floor(Math.random() * _noAvailVars.length)];
+                                    aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:unavailable_day_name' };
+                                } else if (_matchingIdxs.length === 0) {
+                                    // Day name detected but 0 calendar matches — fully deterministic, never GPT, never HR fallback.
+                                    console.log(`[AGENT] Day ${_dayOfWeek} not in calendar. Varied no-avail response.`);
+                                    skipRecruiterInference = true;
+                                    const _cName_DA = _fn4 || '';
+                                    const _nameTag = _cName_DA ? ` ${_cName_DA}` : '';
+                                    const _subLines2 = _uDays.map((ds, i) => {
+                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                        return `${_NE4[i] || `${i+1}.`} ${_DN4[d.getDay()]} ${d.getDate()} de ${_MN4[d.getMonth()]} 📅`;
+                                    }).join('\n');
+                                    const _reqDayName2 = _DN4[_dayOfWeek];
+                                    const _ctaDA = _uDays.length === 1 ? '¿Te queda bien este día? 😊' : '¿Alguno de estos días te funciona? 😊';
+                                    const _noAvailVars = [
+                                        `Ay${_nameTag}, el ${_reqDayName2} no tenemos entrevistas disponibles 😔 Te comparto los días en los que sí tenemos espacio:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Para el ${_reqDayName2} no cuento con citas${_cName_DA ? `, ${_cName_DA}` : ''} 🙏 Pero aquí van mis días disponibles:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Uy${_nameTag}, el ${_reqDayName2} no tengo nada disponible 😅 Mis opciones son:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Ese ${_reqDayName2} no lo tengo habilitado${_cName_DA ? `, ${_cName_DA}` : ''} 🙈 Los días en que sí hay espacio:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `El ${_reqDayName2} no está disponible en mi agenda${_nameTag} 📋 Lo que tengo es:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Para el ${_reqDayName2} no hay lugar por el momento${_nameTag} 😕 Lo que sí tengo:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `El ${_reqDayName2} no tengo citas${_nameTag}, pero mira lo que sí tengo:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `Ese ${_reqDayName2} no aparece en mi calendario${_nameTag} 📅 Mis fechas disponibles:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `El ${_reqDayName2} no lo tengo disponible${_nameTag} 🙈 Aquí van mis opciones:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
+                                        `En este momento el ${_reqDayName2} no está en mi agenda${_nameTag} 🗓️ Te ofrezco:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`
+                                    ];
+                                    responseTextVal = _noAvailVars[Math.floor(Math.random() * _noAvailVars.length)];
+                                    aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:unavailable_day_name' };
                                 }
                             }
                         }
