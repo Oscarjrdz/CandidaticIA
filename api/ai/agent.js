@@ -1776,14 +1776,87 @@ ${safeDnaLines}
                     });
 
                     if (currentIdx + 1 >= project.vacancyIds.length) {
-                        // All vacancies exhausted → fire move:exit
-                        aiResult = {
-                            thought_process: "ALL_VACANCIES_REJECTED { move: exit }",
-                            response_text: null,
-                            close_conversation: true,
-                            reaction: '👍'
-                        };
-                        skipRecruiterInference = true;
+                        // 🔥 CROSS-PROJECT PIVOT: Check if they qualify for another bypass project before kicking to No Interesa
+                        let crossTargetProject = null;
+                        try {
+                            const { getActiveBypassRules, getProjects: getAllProjects } = await import('../utils/storage.js');
+                            const allProjects = await getAllProjects();
+                            const rules = await getActiveBypassRules();
+                            
+                            const normalizeStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                            let cAge = NaN;
+                            if (candidateData.edad && !isNaN(parseInt(candidateData.edad))) {
+                                cAge = parseInt(candidateData.edad);
+                            } else if (candidateData.fechaNacimiento) {
+                                const yMatch = candidateData.fechaNacimiento.match(/\b(19|20)\d{2}\b/);
+                                if (yMatch) cAge = new Date().getFullYear() - parseInt(yMatch[0]);
+                            }
+
+                            const cGender = normalizeStr(candidateData.genero);
+                            const cCat = normalizeStr(candidateData.categoria);
+                            const cMun = normalizeStr(candidateData.municipio);
+                            const cEsc = normalizeStr(candidateData.escolaridad);
+                            
+                            const rejectedProjectIds = (candidateData.projectMetadata?.historialRechazos || []).map(h => h.projectId || project.id);
+                            rejectedProjectIds.push(project.id); // EXCLUDE current project
+
+                            for (const rule of rules) {
+                                if (rejectedProjectIds.includes(rule.projectId)) continue;
+
+                                if (!isNaN(cAge)) {
+                                    if (rule.minAge && cAge < parseInt(rule.minAge)) continue;
+                                    if (rule.maxAge && cAge > parseInt(rule.maxAge)) continue;
+                                }
+                                const rGender = normalizeStr(rule.gender || 'Cualquiera');
+                                if (rGender !== 'cualquiera' && cGender !== rGender) continue;
+
+                                if (rule.categories?.length > 0) {
+                                    const catMatch = rule.categories.some(rc => { const r = normalizeStr(rc); return r.includes(cCat) || cCat.includes(r); });
+                                    if (!catMatch) continue;
+                                }
+                                if (rule.municipios?.length > 0) {
+                                    const munMatch = rule.municipios.some(rm => { const r = normalizeStr(rm); return r.includes(cMun) || cMun.includes(r); });
+                                    if (!munMatch) continue;
+                                }
+                                if (rule.escolaridades?.length > 0) {
+                                    const escMatch = rule.escolaridades.some(re => { const r = normalizeStr(re); return r.includes(cEsc) || cEsc.includes(r); });
+                                    if (!escMatch) continue;
+                                }
+                                crossTargetProject = allProjects.find(p => p.id === rule.projectId && p.vacancyIds?.length > 0) || null;
+                                if (crossTargetProject) break;
+                            }
+                        } catch (err) { console.error('[CROSS-PROJECT PIVOT] Error evaluating bypass:', err); }
+
+                        if (crossTargetProject) {
+                            console.log(`[CROSS-PROJECT PIVOT] ⚡ Exiting exhausted ${project.name}, pivoting to -> ${crossTargetProject.name}`);
+                            const _PIVOT_MSGS = [
+                                '¡Entendido, no hay problema! 😊 De hecho, tengo otra vacante completamente distinta que podría interesarte más 👀✨',
+                                '¡Está bien, lo entiendo! Pero espera... tengo otra opción disponible en mi sistema que podría ser justo lo que buscas. 🌟',
+                                '¡Sin problema! Curiosamente manejamos otro tipo de posiciones que creo que encaja perfecto contigo. 😊✨'
+                            ];
+                            const _pivotMsg = _PIVOT_MSGS[Math.floor(Math.random() * _PIVOT_MSGS.length)];
+                            const _pivotB2 = '¿Te gustaría que te platique de qué trata para que la revises? 👇';
+                            responseTextVal = `${_pivotMsg}[MSG_SPLIT]${_pivotB2}`;
+                            
+                            candidateUpdates.projectId = crossTargetProject.id;
+                            candidateUpdates.currentVacancyIndex = 0;
+                            const nextVac = await getVacancyById(crossTargetProject.vacancyIds[0]);
+                            if (nextVac) candidateUpdates.currentVacancyName = nextVac.name;
+                            candidateUpdates.projectMetadata = { ...(candidateUpdates.projectMetadata || {}), citaFecha: null, citaHora: null };
+                            
+                            aiResult = { thought_process: 'CROSS_PROJECT_PIVOT', response_text: responseTextVal, close_conversation: false };
+                            skipRecruiterInference = true;
+                            await Promise.all([setPivotPendingFlag(redis, candidateId), clearCitaPendingFlag(redis, candidateId)]).catch(() => {});
+                        } else {
+                            // All vacancies exhausted AND no bypass match → fire move:exit
+                            aiResult = {
+                                thought_process: "ALL_VACANCIES_REJECTED { move: exit }",
+                                response_text: null,
+                                close_conversation: true,
+                                reaction: '👍'
+                            };
+                            skipRecruiterInference = true;
+                        }
                     } else {
                         // ✅ More vacancies available — send PIVOT message in two bubbles
                         // Bubble 1: empathic acknowledgement + tease of next vacancy
