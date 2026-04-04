@@ -1779,7 +1779,7 @@ ${safeDnaLines}
                         // 🔥 CROSS-PROJECT PIVOT: Check if they qualify for another bypass project before kicking to No Interesa
                         let crossTargetProject = null;
                         try {
-                            const { getActiveBypassRules, getProjects: getAllProjects } = await import('../utils/storage.js');
+                            const { getActiveBypassRules, getProjects: getAllProjects, removeCandidateFromProject, addCandidateToProject } = await import('../utils/storage.js');
                             const allProjects = await getAllProjects();
                             const rules = await getActiveBypassRules();
                             
@@ -1838,7 +1838,21 @@ ${safeDnaLines}
                             const _pivotB2 = '¿Te gustaría que te platique de qué trata para que la revises? 👇';
                             responseTextVal = `${_pivotMsg}[MSG_SPLIT]${_pivotB2}`;
                             
+                            // Ensure UI updates properly by moving the candidate in Redis project sets
+                            try {
+                                const { removeCandidateFromProject, addCandidateToProject } = await import('../utils/storage.js');
+                                await removeCandidateFromProject(project.id, candidateId);
+                                await addCandidateToProject(crossTargetProject.id, candidateId, {
+                                    stepId: crossTargetProject.steps?.[0]?.id || null,
+                                    origin: 'cross_project_rejection_pivot'
+                                });
+                            } catch (e) {
+                                console.error('[CROSS-PROJECT PIVOT] Error updating UI sets:', e);
+                            }
+
                             candidateUpdates.projectId = crossTargetProject.id;
+                            // Set step to the first step of the new project to restart the flow
+                            candidateUpdates.stepId = crossTargetProject.steps?.[0]?.id || null;
                             candidateUpdates.currentVacancyIndex = 0;
                             const nextVac = await getVacancyById(crossTargetProject.vacancyIds[0]);
                             if (nextVac) candidateUpdates.currentVacancyName = nextVac.name;
