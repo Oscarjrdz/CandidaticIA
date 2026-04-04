@@ -3241,7 +3241,7 @@ ${safeDnaLines}
                         skipRecruiterInference = true;
                     }
 
-                    if ((isInvalidFecha || isInvalidHora) && !isAmbiguousResolver && !skipRecruiterInference) {
+                    if ((isInvalidFecha || isInvalidHora) && !isAmbiguousResolver && !skipRecruiterInference && !aiResult?.close_conversation) {
                         const lowerResponse = (responseTextVal || "").toLowerCase();
                         const isMissingDayOrHour = (!lowerResponse.includes('día') && !lowerResponse.includes('hora') && !lowerResponse.includes('fecha'));
                         // If we already have citaFecha but not citaHora, the AI should ALWAYS show hour options.
@@ -3405,7 +3405,7 @@ ${safeDnaLines}
                         // 🩹 FAQ CONFIRMATION FIX: If the candidate already chose Date and Hour (isInvalidFecha = false),
                         // but asked an FAQ (like routes or salary), GPT might answer the FAQ but forget to ask for the final confirmation.
                         // Forcefully append the confirmation question if it's missing!
-                        if (!hasMoveTag && !hasExitTag && !skipRecruiterInference && responseTextVal && responseTextVal.trim().length > 0) {
+                        if (!hasMoveTag && !hasExitTag && !skipRecruiterInference && responseTextVal && responseTextVal.trim().length > 0 && !aiResult?.close_conversation) {
                             const CTA_CONFIRM_PATTERN = /¿procedo a|¿te gustaría agendar|¿avanzamos con|¿agendamos tu|¿estamos de acuerdo/i;
                             if (!CTA_CONFIRM_PATTERN.test(responseTextVal)) {
                                 const _ctasConfirm = [
