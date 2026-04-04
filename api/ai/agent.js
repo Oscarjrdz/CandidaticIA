@@ -1745,7 +1745,7 @@ ${safeDnaLines}
 
                 const isCitaPhase = (currentStep?.name || '').toLowerCase().includes('cita');
 
-                if ((intent === 'REJECTION' || intent === 'PIVOT') && hasMultiVacancy && !isCitaPhase) {
+                if ((intent === 'REJECTION' || intent === 'PIVOT') && hasMultiVacancy) {
                     const isPivot = intent === 'PIVOT';
                     const currentIdx = candidateData.currentVacancyIndex || 0;
 
@@ -1858,29 +1858,29 @@ ${safeDnaLines}
                             skipRecruiterInference = true;
                         }
                     } else {
-                        // ✅ More vacancies available — send PIVOT message in two bubbles
-                        // Bubble 1: empathic acknowledgement + tease of next vacancy
-                        // Bubble 2: "¿Te gustaría conocerla?" — clear yes/no question, no ambiguity
+                        // ✅ More vacancies available in SAME project — send PIVOT message in two bubbles
                         const _PIVOT_MSGS = [
                             '¡Entendido, no hay problema! 😊 De hecho, tengo otra opción que podría interesarte más 👀✨',
                             '¡Está bien, lo entiendo! Pero espera... tengo otra vacante disponible que podría ser justo lo que buscas. 🌟',
                             '¡Sin problema! Curiosamente tengo otra posición disponible que puede encajarte mejor. 😊✨'
                         ];
                         const _pivotMsg = _PIVOT_MSGS[Math.floor(Math.random() * _PIVOT_MSGS.length)];
-                        // Use sequential variant for Burbuja 2 (same counter as CTA)
                         const _pivotB2Idx = await getCTAIndex(redis, candidateId);
                         const _pivotB2 = _PIVOT_B2_VARIANTS[_pivotB2Idx % _PIVOT_B2_VARIANTS.length];
-                        incrCTAIndex(redis, candidateId).catch(() => {}); // Advance counter
-                        // Send both bubbles immediately, then skip the LLM this turn
+                        incrCTAIndex(redis, candidateId).catch(() => {});
+                        
                         responseTextVal = `${_pivotMsg}[MSG_SPLIT]${_pivotB2}`;
+                        
+                        // 🧹 CLEAR CITA DATA for the new vacancy!
+                        candidateUpdates.projectMetadata = { ...(candidateUpdates.projectMetadata || {}), citaFecha: null, citaHora: null };
+                        
                         aiResult = {
-                            thought_process: 'PIVOT_TO_NEXT_VACANCY — sent teaser, awaiting candidate confirmation',
+                            thought_process: 'PIVOT_TO_NEXT_VACANCY',
                             response_text: responseTextVal,
                             close_conversation: false
                         };
                         skipRecruiterInference = true;
-                        // ✅ Set pivot_pending so the next "Sí" presents the vacancy directly
-                        // Clear cita_pending so Ambiguity Guard doesn’t intercept that "Sí"
+                        
                         await Promise.all([
                             setPivotPendingFlag(redis, candidateId),
                             clearCitaPendingFlag(redis, candidateId)
