@@ -2262,6 +2262,33 @@ ${safeDnaLines}
                                     extracted_data: { citaFecha: _storedDate, citaHora: _chosenHour },
                                     thought_process: 'CITA:deterministic_hour_confirmation'
                                 };
+                            } else if (!_foundDayInHourStep) {
+                                // 🕐 UNAVAILABLE HOUR DETECTOR: Candidate proposed a time not in the calendar.
+                                // Parse whether their message contains ANY time reference (number + context).
+                                const _hourRequestRe = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|hrs?|horas?|de\s+la\s+ma[nñ]ana|de\s+la\s+tarde|de\s+la\s+noche)?\b/i;
+                                const _hasTimeRef = _hourRequestRe.test(aggregatedText);
+                                if (_hasTimeRef && _dateHours.length > 0) {
+                                    // Candidate wanted a time but it's not available — respond with firm+charismatic fixed-hours message
+                                    console.log(`[AGENT] Candidate proposed unavailable hour. Applying varied fixed-hour response.`);
+                                    skipRecruiterInference = true;
+                                    const _selD3 = new Date(parseInt(_storedDate.substr(0,4)), parseInt(_storedDate.substr(5,2))-1, parseInt(_storedDate.substr(8,2)));
+                                    const _humanDate3 = `${_DN4[_selD3.getDay()]} ${_selD3.getDate()} de ${_MN4[_selD3.getMonth()]}`;
+                                    const _hrsFormatted = _dateHours.map((h, i) => `${_NE4[i] || `${i+1}.`} ${h} ⏰`).join('\n');
+                                    const _nameH = _fn4 ? ` ${_fn4}` : '';
+                                    const _ctaH = _dateHours.length === 1 ? '¿Te animas a confirmar este horario? 😊' : '¿Cuál de estos horarios te queda mejor? 😊';
+                                    const _fixedHrVars = [
+                                        `¡Ay${_nameH}! 🙈 Me encantaría cambiarte la hora pero los horarios son fijos porque el proceso arranca muy puntual. ✨ Te los comparto de nuevo:\n\n${_hrsFormatted}\n\n[MSG_SPLIT]${_ctaH}`,
+                                        `Entiendo${_nameH}, pero los horarios no los puedo mover 😅 El proceso de entrevistas es muy puntual y así nos organizamos. Te mando de nuevo las opciones:\n\n${_hrsFormatted}\n\n[MSG_SPLIT]${_ctaH}`,
+                                        `Ojalá pudiera${_nameH} 🌸 pero esos son los únicos horarios disponibles para el ${_humanDate3}. ¡De verdad vale la pena el esfuercito! \n\n${_hrsFormatted}\n\n[MSG_SPLIT]${_ctaH}`,
+                                        `El horario es fijo${_nameH} 😊 No está en mis manos cambiarlo, pero te prometo que vale la pena llegar a tiempo. Aquí van las opciones:\n\n${_hrsFormatted}\n\n[MSG_SPLIT]${_ctaH}`,
+                                        `Qué pena${_nameH} 😕 no tengo más horarios para el ${_humanDate3}, estos son los únicos disponibles. ¡Anímate!\n\n${_hrsFormatted}\n\n[MSG_SPLIT]${_ctaH}`,
+                                        `Me gustaría poder${_nameH}, pero el proceso de selección tiene horarios muy específicos 🕐 Aquí están:\n\n${_hrsFormatted}\n\n[MSG_SPLIT]${_ctaH}`,
+                                        `Los horarios son inamovibles${_nameH}, así funciona el proceso 🎯 Lo que tengo para el ${_humanDate3} es:\n\n${_hrsFormatted}\n\n[MSG_SPLIT]${_ctaH}`,
+                                        `Ay${_nameH}, qué lástima pero esos horarios son los únicos 🙈 El proceso tiene que arrancar puntual. ¡Te espero en:\n\n${_hrsFormatted}\n\n[MSG_SPLIT]${_ctaH}`
+                                    ];
+                                    responseTextVal = _fixedHrVars[Math.floor(Math.random() * _fixedHrVars.length)];
+                                    aiResult = { response_text: responseTextVal, extracted_data: { citaFecha: _storedDate }, thought_process: 'CITA:unavailable_hour' };
+                                }
                             }
                         }
                     }
