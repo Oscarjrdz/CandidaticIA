@@ -308,7 +308,7 @@ Tu mensaje DEBE comenzar con un saludo breve (ej. "Listo ${candidateData.nombreR
 🚨 CONTEO OBLIGATORIO: La lista tiene exactamente ${_uniqueDayCount} DÍA(S). Si envías menos, CAUSARÁS UN ERROR CRÍTICO.
 
 
-🚫 ANULA-RADAR (CRÍTICO EN ESTE PASO): Si el candidato menciona un número ("el 3", "3", "la segunda"), un ordinal ("primero", "último") o un nombre de día ("viernes", "lunes 30") en el contexto de la selección de agenda → NUNCA uses el RADAR DE DUDAS ni el fallback. Ese mensaje ES una selección de día/hora. Ve directamente al PASO 2 correspondiente.
+🚫 ANULA-RADAR (CRÍTICO EN ESTE PASO): Si el candidato menciona un número ("el 3", "3", "la segunda") o un nombre de día ("viernes", "lunes 30") como una *ELECCIÓN* de su agenda → NUNCA uses el RADAR DE DUDAS ni el fallback. Pero CUIDADO: Usa tu sentido común. Si dice "no puedo el martes", está *rechazando* el martes, no eligiéndolo. Solo avanza al PASO 2 si el candidato elige positivamente un día disponible.
 
 ❌ AUSENCIA DE DISPONIBILIDAD O RECHAZO DE FECHAS: 
 a) Si el candidato pregunta por otro día ("¿y para el martes?"): Explícale amablemente y preséntale la lista EXACTA de nuevo (ej. "Por el momento solo tengo entrevistas para los días mencionados arriba, Oscar 🌸. Te los comparto de nuevo..."). 
