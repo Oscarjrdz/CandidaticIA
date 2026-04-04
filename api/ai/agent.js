@@ -3850,7 +3850,7 @@ ${safeDnaLines}
                                                 if (!msgClean || filterRegex.test(msgClean)) continue;
                                                 msgClean = msgClean.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
                                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
-                                                if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 1500));
+                                                if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 600));
                                             }
                                         }
                                     }
