@@ -68,7 +68,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 payload.audio = body; // Base64 or URL
                 break;
             case 'image':
-                let imgUrl = body;
+                let imgUrl = String(body).trim();
+                if (!imgUrl || imgUrl === 'null' || imgUrl === 'N/A') {
+                    console.log(`[ULTRAMSG FILTER] Blocking empty image send.`);
+                    return { success: true, data: { status: 'filtered_empty_media' } };
+                }
                 if (isHttp && !imgUrl.startsWith('data:')) {
                     imgUrl = imgUrl.includes('?') ? `${imgUrl}&ext=.jpg` : `${imgUrl}?ext=.jpg`;
                 }
@@ -80,7 +84,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 if (extraParams.caption) payload.caption = extraParams.caption;
                 break;
             case 'document':
-                let docUrl = body;
+                let docUrl = String(body).trim();
+                if (!docUrl || docUrl === 'null' || docUrl === 'N/A') {
+                    console.log(`[ULTRAMSG FILTER] Blocking empty document send.`);
+                    return { success: true, data: { status: 'filtered_empty_media' } };
+                }
                 if (isHttp && !docUrl.includes('.pdf') && !docUrl.startsWith('data:')) {
                     docUrl = docUrl.includes('?') ? `${docUrl}&ext=.pdf` : `${docUrl}?ext=.pdf`;
                 }
@@ -98,11 +106,12 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
                 break;
             default:
                 const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
-                const isTechnical = filterRegex.test(String(body).trim());
+                const bodyStr = String(body).trim();
+                const isTechnical = !bodyStr || filterRegex.test(bodyStr) || bodyStr === "\n\n";
 
                 if (isTechnical) {
-                    console.log(`[ULTRAMSG FILTER] Blocking technical message send: "${body}"`);
-                    return { success: true, data: { status: 'filtered_internal_tag' } };
+                    console.log(`[ULTRAMSG FILTER] Blocking empty or technical message send: "${body}"`);
+                    return { success: true, data: { status: 'filtered_internal_tag_or_empty' } };
                 }
                 payload.body = body;
         }

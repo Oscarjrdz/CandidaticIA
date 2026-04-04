@@ -1742,7 +1742,9 @@ ${safeDnaLines}
                 // We resolve it NOW only when we need it for the rejection check
                 intent = await intentPromise;
 
-                if ((intent === 'REJECTION' || intent === 'PIVOT') && hasMultiVacancy) {
+                const isCitaPhase = (currentStep?.name || '').toLowerCase().includes('cita');
+
+                if ((intent === 'REJECTION' || intent === 'PIVOT') && hasMultiVacancy && !isCitaPhase) {
                     const isPivot = intent === 'PIVOT';
                     const currentIdx = candidateData.currentVacancyIndex || 0;
 
@@ -2368,6 +2370,17 @@ ${safeDnaLines}
                                         responseTextVal = `Hay ${_matchingIdxs.length} ${_dayNameLabel.toLowerCase()}s disponibles${_fn4 ? `, ${_fn4}` : ''}. ¿Cuál prefieres?\n\n${_subLines}`;
                                         aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:ambiguous_day_name' };
                                     }
+                                } else if (_matchingIdxs.length === 0) {
+                                    // The candidate typed a valid day name, but we don't have available dates for it
+                                    console.log(`[AGENT] Candidate requested ${_matchedLine} but 0 matches found in future dates. Blocking GPT.`);
+                                    skipRecruiterInference = true;
+                                    const _cName_DS = _fn4 || 'amig@';
+                                    const _subLines = _uDays.map((ds, i) => {
+                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
+                                        return `${_NE4[i] || `${i+1}.`} ${_DN4[d.getDay()]} ${d.getDate()} de ${_MN4[d.getMonth()]} 📅`;
+                                    }).join('\n\n');
+                                    responseTextVal = `Lo siento ${_cName_DS}, por el momento solo tengo disponibilidad en estas opciones:\n\n${_subLines}\n\n[MSG_SPLIT]¿Algún día de esta lista te queda bien? 😊`;
+                                    aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:unavailable_day_name' };
                                 }
                             }
                         }
@@ -2643,7 +2656,8 @@ ${safeDnaLines}
                     if (activeVacancyId && openAiKey) {
                         if (unansweredQ) {
                             await recordAITelemetry(candidateId, 'faq_detected', { vacancyId: activeVacancyId, question: unansweredQ });
-                            processUnansweredQuestion(activeVacancyId, unansweredQ, responseTextVal, openAiKey)
+                            const _cleanFaqAns = responseTextVal ? responseTextVal.split('[MSG_SPLIT]')[0].trim() : '';
+                            processUnansweredQuestion(activeVacancyId, unansweredQ, _cleanFaqAns, openAiKey)
                                 .catch(() => { });
                         } else {
                             const lastUserMsg = historyForGpt.filter(h => h.role === 'user').slice(-1)[0];
@@ -2665,11 +2679,11 @@ ${safeDnaLines}
                                 } catch (e2) { /* ignore, it's raw text */ }
                             }
 
-                            const questionPatterns = /[?¿]|cuál|cómo|cuánto|cuándo|dónde|qué|quién|hacen|tienen|hay|incluye|\bes\b|\bson\b|dan|pagan|trabaj|horario|sueldo|salario|uniforme|transporte|beneficio|requisito|antidop/i;
-                            const isQuestion = questionPatterns.test(userText) && userText.length > 5;
+                            const questionPatterns = /[?¿]|qué|que|qu[eé]\s+es|cu[aá]l|c[oó]mo|cu[aá]nto|cu[aá]ndo|d[oó]nde|qui[eé]n|hacen|tienen|tienes|hay|incluye|\bes\b|\bson\b|dan|pagan|trabaj|horario|turno|sueldo|salario|nomina|semana|descanso|fondo|ahorro|prestaciones|vale|uniforme|transporte|ruta|beneficio|requisito|edad|antidop|reingreso|comedor|duda|quiero saber|info|informaci[oó]n|pregunta|puedo/i;
+                            const isQuestion = questionPatterns.test(userText) && userText.length > 5 && !/^(si|no|gracias|ok|va|sale|claro|excelente|perfecto)$/i.test(userText.trim());
                             if (isQuestion && responseTextVal) {
-                                processUnansweredQuestion(activeVacancyId, userText, responseTextVal, openAiKey)
-
+                                const _cleanFaqAns2 = responseTextVal ? responseTextVal.split('[MSG_SPLIT]')[0].trim() : '';
+                                processUnansweredQuestion(activeVacancyId, userText, _cleanFaqAns2, openAiKey)
                                     .catch(() => { });
                             }
                         }
@@ -2734,14 +2748,30 @@ ${safeDnaLines}
                         }
                     }
 
-                    // 🛡️ FALSE REJECTION SHIELD: If they are in "Citados", ignore exit triggers caused by a simple "gracias" or positive sentiment
+                    // 🛡️ FALSE REJECTION SHIELD: Citados & Cita Steps
                     if (hasExitTag) {
                         const originStepNameExit = (currentStep?.name || '').toLowerCase();
+                        
+                        // Citados Shield
                         if (originStepNameExit.includes('citado')) {
                             const isJustThanksOrOk = /^(gracias|muchas gracias|mil gracias|perfecto|ok|okay|vale|gracias a ti|excelente|va|si|sí)\s*$/i.test(aggregatedText.trim().replace(/[^\w\sñáéíóúü]/gi, ''));
                             if (isJustThanksOrOk) {
                                 hasExitTag = false;
                                 extractedMoveTarget = null;
+                            }
+                        }
+                        
+                        // Cita Shield (Date/Time Negotiation)
+                        if (originStepNameExit.includes('cita') && !originStepNameExit.includes('citado')) {
+                            const _isClearNo = /^(no me interesa|no gracias|ya no|mejor no|paso|cancelar|no quiero|ninguno|en ninguno|ya no quiero)/i.test(aggregatedText.trim());
+                            if (!_isClearNo) {
+                                hasExitTag = false;
+                                extractedMoveTarget = null;
+                                // If the LLM left an empty response due to `{ move: exit }` silence rule, inject a fallback
+                                if (!responseTextVal || responseTextVal.trim() === 'null') {
+                                    responseTextVal = `Por el momento solo tengo disponibilidad para las fechas mencionadas arriba. ¿Podrías confirmarme si alguno te acomoda? 😊`;
+                                    if (aiResult) aiResult.response_text = responseTextVal;
+                                }
                             }
                         }
                     }
@@ -3453,6 +3483,15 @@ ${safeDnaLines}
                         // mensajes configurables de appointmentConfirmation.
                         const originStepName = (currentStep?.name || '').toLowerCase();
                         const isCitaStepOrigin = originStepName.includes('cita') && !originStepName.includes('citado');
+
+                        // 🧹 DOUBLE PROMPT FIX: GPT in Inicio often hallucinates "¿Te gustaría agendar?" when firing { move }.
+                        // Intercept this hallucinated question and replace it with a declarative transition.
+                        if (originStepName.includes('inicio') && (nextStep?.name || '').toLowerCase().includes('cita') && !(nextStep?.name || '').toLowerCase().includes('citado')) {
+                            if (cleanSpeech.includes('¿') || cleanSpeech.includes('?')) {
+                                console.log('[UX] Stripped hallucinated question during Inicio->Cita. Replacing with declarative transition.');
+                                cleanSpeech = '¡Excelente! Vamos a revisar la disponibilidad. 🗓️';
+                            }
+                        }
 
                         if (cleanSpeech.length > 0) {
                             try {

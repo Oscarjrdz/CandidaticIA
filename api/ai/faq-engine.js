@@ -29,11 +29,11 @@ Aquí tienes la lista de temas (topics) existentes:
 ${JSON.stringify(existingTopics, null, 2)}
 
 Tu tarea es:
-1. REGLA DE EXCLUSIÓN CRÍTICA: Si la pregunta NO es sobre la vacante en sí (ej. sueldo, actividades, ubicación, prestaciones), sino sobre el proceso de entrevista (ej. "horarios para agendar", "días disponibles para cita", "¿a qué hora es?", "¿qué día voy?"), sobre el uso del bot, o es un cambio de paso ("ya llegué", "me equivoqué de opción"), DEBES descartarla y devolver "ignore": true.
-2. Si NO debe ignorarse y significa lo mismo o pertenece claramente a uno de los temas existentes, devuelve el "id" de ese tema.
-3. Si NO debe ignorarse y es una pregunta sobre un tema totalmente nuevo, devuelve "id": null, y sugiere un titulo corto y representativo en "new_topic" (máximo 4 palabras).
+1. REGLA DE EXCLUSIÓN: Descarta ("ignore": true) ÚNICAMENTE los mensajes que no aportan nada (saludos, "gracias", "ok"), respuestas de confirmación ("sí", "no", "me interesa"), o comandos para agendar específicas (ej. "agéndame a las 3", "llegaré tarde"). 
+2. Para CUALQUIER OTRA FRASE, DUDA, O PREGUNTA (ej. "quiero saber de la vacante", "cómo son los turnos", "¿tienen contrato?", cualquier consulta operativa o de la vacante): NO la ignores ("ignore": false) y asígnala al "id" del tema existente que mejor encaje.
+3. Si la pregunta es válida pero trata sobre un tema totalmente nuevo, devuelve "id": null, y sugiere un título corto en "new_topic" (ej. "Rápida Contratación", "Dudas de Reingreso").
 
-IMPORTANTE: El campo "new_topic" DEBE estar siempre en ESPAÑOL.
+IMPORTANTE: El campo "new_topic" DEBE estar siempre en ESPAÑOL. Ante la duda de si es una pregunta, asume que SÍ LO ES y pon "ignore": false.
 Responde ÚNICAMENTE en JSON con el siguiente formato:
 {
   "ignore": true o false,

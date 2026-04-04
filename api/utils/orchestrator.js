@@ -40,48 +40,34 @@ export class Orchestrator {
         return false;
     }
 
-    /**
-     * Executes the Atomic Handover: move candidate + send congrats + start project.
-     * Uses a Matching Engine to find the best project.
-     */
-    static async executeHandover(candidateData, config, msgId = null) {
-        const candidateId = candidateData.id;
-        const phone = candidateData.whatsapp;
-        const candidateName = candidateData.nombreReal ? candidateData.nombreReal.split(' ')[0] : '';
+    static async findMatchingProject(candidateData, excludeProjectIds = []) {
         const trace = [];
         const logTrace = (m) => {
             console.log(m);
-            trace.push(`[${new Date().toISOString()}] \${m}`);
+            trace.push(`[${new Date().toISOString()}] ${m}`);
         };
 
-        logTrace(`🎯 Starting Premium Handover for \${candidateId}`);
-
-        // 1. SMART MATCHING ENGINE (Silicon Valley Pattern)
         const redis = getRedisClient();
         const projects = await getProjects();
         const rules = await getActiveBypassRules();
-        logTrace(`🧩 Found ${projects.length} active projects and ${rules.length} Bypass Rules for handover.`);
-
+        
         let targetProjectId = null;
         let matchedRuleName = null;
 
-        // NEW INTELLIGENT ROUTING LOGIC (Bypass Rules Evaluation)
         for (const rule of rules) {
             logTrace(`   🔍 Evaluating Rule: ${rule.name}`);
+            if (excludeProjectIds.includes(rule.projectId)) continue;
 
-            // 1. Age Check
             const cAge = parseInt(candidateData.edad);
             if (!isNaN(cAge)) {
-                if (rule.minAge && cAge < parseInt(rule.minAge)) continue; // Fails min age
-                if (rule.maxAge && cAge > parseInt(rule.maxAge)) continue; // Fails max age
+                if (rule.minAge && cAge < parseInt(rule.minAge)) continue;
+                if (rule.maxAge && cAge > parseInt(rule.maxAge)) continue;
             }
 
-            // 2. Gender Check
             const cGender = (candidateData.genero || '').toLowerCase();
             const rGender = (rule.gender || 'Cualquiera').toLowerCase();
             if (rGender !== 'cualquiera' && cGender !== rGender) continue;
 
-            // 3. Category Check
             const cCat = (candidateData.categoria || '').toLowerCase().trim();
             if (rule.categories && rule.categories.length > 0) {
                 const isMatch = rule.categories.some(rc => {
@@ -91,7 +77,6 @@ export class Orchestrator {
                 if (!isMatch) continue;
             }
 
-            // 4. Municipio Check
             const normalizeStr = (s) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
             const cMun = normalizeStr(candidateData.municipio);
             if (rule.municipios && rule.municipios.length > 0) {
@@ -102,7 +87,6 @@ export class Orchestrator {
                 if (!isMatch) continue;
             }
 
-            // 5. Escolaridad Check
             const cEsc = normalizeStr(candidateData.escolaridad);
             if (rule.escolaridades && rule.escolaridades.length > 0) {
                 const isMatch = rule.escolaridades.some(re => {
@@ -112,54 +96,63 @@ export class Orchestrator {
                 if (!isMatch) continue;
             }
 
-            // MATCH FOUND
             targetProjectId = rule.projectId;
             matchedRuleName = rule.name;
             logTrace(`   ✅ PERFECT MATCH on Rule: ${rule.name} -> Project ${targetProjectId}`);
             break;
         }
 
-        // FALLBACK: If no rules match, use legacy global bypass OR first project with vacancies 
         if (!targetProjectId) {
-            logTrace(`⚠️ No Bypass Rules matched.`);
-
-            // STRICT ENFORCEMENT: If bypass rules exist, and none matched, we MUST NOT fallback. 
-            // The candidate goes to the waiting room.
-            if (rules.length > 0) {
-                logTrace(`🚫 Bypass rules exist but none matched. Candidate must go to waiting room.`);
-            } else {
-                logTrace(`Attempting Global Bypass Fallback since no explicit rules are defined...`);
+            if (rules.length === 0) {
                 targetProjectId = await redis?.get('bypass_selection');
-                if (targetProjectId && (targetProjectId.trim() === '' || targetProjectId === 'null')) targetProjectId = null;
-
-                if (targetProjectId) {
+                if (targetProjectId && targetProjectId !== 'null' && !excludeProjectIds.includes(targetProjectId)) {
                     const selectedExists = projects.some(p => p.id === targetProjectId);
-                    if (!selectedExists) targetProjectId = null;
-                    else matchedRuleName = 'Legacy Global Bypass';
+                    if (selectedExists) matchedRuleName = 'Legacy Global Bypass';
+                    else targetProjectId = null;
+                } else {
+                    targetProjectId = null;
                 }
 
                 if (!targetProjectId && projects.length > 0) {
-                    logTrace(`🔍 Match based on FIRST available project...`);
                     const matchedProject = projects.find(p => {
+                        if (excludeProjectIds.includes(p.id)) return false;
                         const vacancyIds = p.vacancyIds || [];
-                        const hasVacancies = Array.isArray(vacancyIds) && vacancyIds.length > 0;
-                        return hasVacancies;
-                    }) || projects[0];
-
-                    targetProjectId = matchedProject?.id;
-                    matchedRuleName = 'Fallback Default Project';
-                    logTrace(`🏁 Fallback Result: ${targetProjectId} (${matchedProject?.name || 'Unknown'})`);
+                        return Array.isArray(vacancyIds) && vacancyIds.length > 0;
+                    });
+                    if (matchedProject) {
+                        targetProjectId = matchedProject.id;
+                        matchedRuleName = 'Fallback Default Project';
+                    }
                 }
             }
         }
 
         if (trace.length > 0 && redis) {
             try {
-                await redis.lpush(`trace:handover:\${candidateId}`, ...trace.reverse());
-                await redis.ltrim(`trace:handover:\${candidateId}`, 0, 19);
-            } catch (e) {
-                console.warn('[ORCHESTRATOR] Failed to save trace to Redis');
-            }
+                await redis.lpush(`trace:handover:\${candidateData.id}`, ...trace.reverse());
+                await redis.ltrim(`trace:handover:\${candidateData.id}`, 0, 19);
+            } catch (e) {}
+        }
+
+        return { targetProjectId, matchedRuleName };
+    }
+
+    /**
+     * Executes the Atomic Handover: move candidate + send congrats + start project.
+     * Uses a Matching Engine to find the best project.
+     */
+    static async executeHandover(candidateData, config, msgId = null) {
+        const candidateId = candidateData.id;
+        const phone = candidateData.whatsapp;
+        const candidateName = candidateData.nombreReal ? candidateData.nombreReal.split(' ')[0] : '';
+        
+        console.log(`🎯 Starting Premium Handover for \${candidateId}`);
+        const redis = getRedisClient();
+        const { targetProjectId, matchedRuleName } = await Orchestrator.findMatchingProject(candidateData, []);
+
+        if (!targetProjectId) {
+            console.log('❌ No matching project found for handover.');
+            return false;
         }
 
         if (!targetProjectId) {
