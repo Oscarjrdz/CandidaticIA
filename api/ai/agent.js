@@ -23,6 +23,7 @@ import { getSchemaByField } from '../utils/schema-registry.js';
 import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { getOpenAIResponse } from '../utils/openai.js';
 import { processRecruiterMessage } from './recruiter-agent.js';
+import { sendGatewayPresence } from '../utils/messenger.js';
 import { inferGender } from '../utils/gender-helper.js';
 import { classifyIntent } from './intent-classifier.js';
 import { FEATURES } from '../utils/feature-flags.js';
@@ -3838,8 +3839,13 @@ ${safeDnaLines}
                                                 let msgClean = String(cMessagesToSend[i]).trim();
                                                 if (!msgClean || filterRegex.test(msgClean)) continue;
                                                 msgClean = msgClean.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
+                                                // 💬 Show typing before every bubble after the first
+                                                if (i > 0) {
+                                                    sendGatewayPresence(candidateData.whatsapp, 'composing').catch(() => {});
+                                                    await new Promise(r => setTimeout(r, 800));
+                                                }
                                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
-                                                if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 600));
+                                                if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 200));
                                             }
                                         }
                                     }
@@ -4493,8 +4499,13 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     const isSimulatorPhone = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
                     if (!isSimulatorPhone) {
                         for (let i = 0; i < messagesToSend.length; i++) {
+                            // 💬 Show typing before every bubble after the first
+                            if (i > 0) {
+                                sendGatewayPresence(candidateData.whatsapp, 'composing').catch(() => {});
+                                await new Promise(r => setTimeout(r, 800));
+                            }
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
-                            if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 600));
+                            if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 200));
                         }
                     }
                 }

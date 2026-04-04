@@ -87,3 +87,28 @@ async function _sendViaGateway(instanceId, phone, message, type = 'chat', extraP
     }
 }
 
+
+// ─── Send typing presence via our own Gateway ────────────────────────────────
+export const sendGatewayPresence = async (phone, status = 'composing') => {
+    try {
+        const redis = getRedisClient();
+        const gwInstanceId = await redis?.get(GW_CHANNEL_KEY(String(phone).replace(/\D/g, '')));
+        if (!gwInstanceId) return; // Not a gateway candidate, skip silently
+
+        const { getInstance } = await import('../gateway/session-engine.js');
+        const instance = await getInstance(gwInstanceId);
+        if (!instance) return;
+
+        const gwBaseUrl = instance.gatewayUrl
+            || process.env.GATEWAY_SERVER_URL
+            || 'https://candidaticia-production.up.railway.app';
+
+        const { default: axios } = await import('axios');
+        await axios.post(`${gwBaseUrl}/${gwInstanceId}/presence`, {
+            to: String(phone).replace(/\D/g, ''),
+            status
+        }, { timeout: 5000 });
+    } catch (e) {
+        // Presence is best-effort — never block message delivery
+    }
+};
