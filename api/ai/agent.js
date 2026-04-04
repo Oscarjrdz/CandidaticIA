@@ -2370,17 +2370,6 @@ ${safeDnaLines}
                                         responseTextVal = `Hay ${_matchingIdxs.length} ${_dayNameLabel.toLowerCase()}s disponibles${_fn4 ? `, ${_fn4}` : ''}. ¿Cuál prefieres?\n\n${_subLines}`;
                                         aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:ambiguous_day_name' };
                                     }
-                                } else if (_matchingIdxs.length === 0) {
-                                    // The candidate typed a valid day name, but we don't have available dates for it
-                                    console.log(`[AGENT] Candidate requested ${_matchedLine} but 0 matches found in future dates. Blocking GPT.`);
-                                    skipRecruiterInference = true;
-                                    const _cName_DS = _fn4 || 'amig@';
-                                    const _subLines = _uDays.map((ds, i) => {
-                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
-                                        return `${_NE4[i] || `${i+1}.`} ${_DN4[d.getDay()]} ${d.getDate()} de ${_MN4[d.getMonth()]} 📅`;
-                                    }).join('\n\n');
-                                    responseTextVal = `Lo siento ${_cName_DS}, por el momento solo tengo disponibilidad en estas opciones:\n\n${_subLines}\n\n[MSG_SPLIT]¿Algún día de esta lista te queda bien? 😊`;
-                                    aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:unavailable_day_name' };
                                 }
                             }
                         }
