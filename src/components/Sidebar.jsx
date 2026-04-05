@@ -152,6 +152,19 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate 
         }
     }, [user, rolePermissions]);
 
+    useEffect(() => {
+        if (!rolePermissions) return;
+
+        // Force redirect if the current section is not allowed (ignores SuperAdmin logic by checking user?.role itself)
+        if (user?.role !== 'SuperAdmin' && rolePermissions[activeSection] !== true) {
+            const firstAllowed = DEFAULT_MENU_ITEMS.find(item => rolePermissions[item.id] === true);
+            if (firstAllowed) {
+                // Changing section triggers the App re-render to the safe view immediately
+                onSectionChange(firstAllowed.id);
+            }
+        }
+    }, [activeSection, rolePermissions, user?.role, onSectionChange]);
+
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
         useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
