@@ -22,6 +22,16 @@ const AVAILABLE_SECTIONS = [
     { id: 'instances', name: 'Instancias de Envío' }
 ];
 
+const AVAILABLE_CHAT_FILTERS = [
+    { id: 'filter_todos', name: 'Todos' },
+    { id: 'filter_unread', name: 'No leídos' },
+    { id: 'filter_complete', name: 'Completos' },
+    { id: 'filter_incomplete', name: 'Incompletos' },
+    { id: 'filter_labels', name: 'Etiquetas' },
+    { id: 'filter_projects', name: 'Proyectos' },
+    { id: 'filter_crm', name: 'CRM Manual' }
+];
+
 const UsersSection = ({ showToast }) => {
     const [activeTab, setActiveTab] = useState('users');
     const [users, setUsers] = useState([]);
@@ -151,6 +161,7 @@ const UsersSection = ({ showToast }) => {
             setEditingRole(null);
             const defaultPerms = {};
             AVAILABLE_SECTIONS.forEach(s => defaultPerms[s.id] = false);
+            AVAILABLE_CHAT_FILTERS.forEach(f => defaultPerms[f.id] = false);
             setRoleFormData({
                 name: '',
                 permissions: defaultPerms
@@ -501,7 +512,7 @@ const UsersSection = ({ showToast }) => {
 
                     <div>
                         <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-3">Permisos de Secciones</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-2 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto p-2 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                             {AVAILABLE_SECTIONS.map(section => (
                                 <label key={section.id} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                     <input
@@ -513,6 +524,26 @@ const UsersSection = ({ showToast }) => {
                                     />
                                     <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none">
                                         {section.name}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-3">Filtros de Chat (Quiénes puede ver)</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto p-2 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                            {AVAILABLE_CHAT_FILTERS.map(filter => (
+                                <label key={filter.id} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!roleFormData.permissions[filter.id]}
+                                        onChange={() => togglePermission(filter.id)}
+                                        disabled={editingRole && editingRole.name === 'SuperAdmin'}
+                                        className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                    />
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none">
+                                        {filter.name}
                                     </span>
                                 </label>
                             ))}

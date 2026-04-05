@@ -93,7 +93,7 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ChatSection = ({ showToast }) => {
+const ChatSection = ({ showToast, user, rolePermissions }) => {
     const [candidates, setCandidates] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedChat, setSelectedChat] = useState(null);
@@ -133,6 +133,13 @@ const ChatSection = ({ showToast }) => {
 
     const [showDropdown, setShowDropdown] = useState(null);
     const [projects, setProjects] = useState([]); // Colección maestra de marketing (maletín)
+
+    // Helper for RBAC
+    const canSeeFilter = (filterKey) => {
+        if (!user || user.role === 'SuperAdmin') return true;
+        if (!rolePermissions) return true;
+        return rolePermissions[filterKey] === true;
+    };
 
     // Load Data
     useEffect(() => {
@@ -581,48 +588,57 @@ const ChatSection = ({ showToast }) => {
 
                     {/* Filter Chips */}
                     <div className="flex flex-wrap gap-2 pb-1 pt-0">
-                        <button 
-                            onClick={() => { setActiveFilter('all'); setFilterValue(null); setAiProjectFilter(null); setAiStepFilter(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                activeFilter === 'all' 
-                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                            }`}
-                        >
-                            Todos
-                        </button>
-                        <button 
-                            onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                activeFilter === 'unread' 
-                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                            }`}
-                        >
-                            No leídos
-                        </button>
-                        <button 
-                            onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setShowDropdown(null); }}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                activeFilter === 'profile' && filterValue === 'complete' 
-                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                            }`}
-                        >
-                            Completos
-                        </button>
-                        <button 
-                            onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setShowDropdown(null); }}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                activeFilter === 'profile' && filterValue === 'incomplete' 
-                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                            }`}
-                        >
-                            Incompletos
-                        </button>
+                        {canSeeFilter('filter_todos') && (
+                            <button 
+                                onClick={() => { setActiveFilter('all'); setFilterValue(null); setAiProjectFilter(null); setAiStepFilter(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                    activeFilter === 'all' 
+                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                Todos
+                            </button>
+                        )}
+                        {canSeeFilter('filter_unread') && (
+                            <button 
+                                onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                    activeFilter === 'unread' 
+                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                No leídos
+                            </button>
+                        )}
+                        {canSeeFilter('filter_complete') && (
+                            <button 
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setShowDropdown(null); }}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                    activeFilter === 'profile' && filterValue === 'complete' 
+                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                Completos
+                            </button>
+                        )}
+                        {canSeeFilter('filter_incomplete') && (
+                            <button 
+                                onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setShowDropdown(null); }}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                    activeFilter === 'profile' && filterValue === 'incomplete' 
+                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                Incompletos
+                            </button>
+                        )}
 
                         {/* Etiquetas Dropdown */}
+                        {canSeeFilter('filter_labels') && (
                         <div className="relative">
                             <button 
                                 onClick={() => setShowDropdown(showDropdown === 'labels' ? null : 'labels')}
@@ -653,8 +669,10 @@ const ChatSection = ({ showToast }) => {
                                 </div>
                             )}
                         </div>
+                        )}
 
                         {/* Riel A: Proyectos (Maletín) */}
+                        {canSeeFilter('filter_projects') && (
                         <div className="flex items-center gap-1 bg-[#f0f2f5] dark:bg-[#111b21] p-1 rounded-full border border-gray-200 dark:border-gray-800 shrink-0">
                             <div className="relative">
                                 <button 
@@ -760,8 +778,10 @@ const ChatSection = ({ showToast }) => {
                                 </div>
                             )}
                         </div>
+                        )}
 
                         {/* Riel B: CRM Manual */}
+                        {canSeeFilter('filter_crm') && (
                         <div className="flex items-center gap-1 bg-[#f0f2f5] dark:bg-[#111b21] p-1 rounded-full border border-gray-200 dark:border-gray-800 shrink-0 mt-2 md:mt-0 xl:mt-0">
                             <div className="relative">
                                 <button 
@@ -867,6 +887,7 @@ const ChatSection = ({ showToast }) => {
                                 </div>
                             )}
                         </div>
+                        )}
 
                     </div>
                 </div>

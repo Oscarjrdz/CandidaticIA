@@ -31,6 +31,7 @@ function App() {
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
   const [isAppReady, setIsAppReady] = useState(false);
+  const [rolePermissions, setRolePermissions] = useState({});
   const { toast, showToast, hideToast, ToastComponent } = useToast();
 
   // Check LocalStorage for session
@@ -75,6 +76,7 @@ function App() {
          if (data.success && data.roles) {
              const currentUserRole = data.roles.find(r => r.name === user.role);
              if (currentUserRole && currentUserRole.permissions) {
+                 setRolePermissions(currentUserRole.permissions);
                  if (currentUserRole.permissions['candidates'] !== true) {
                      // Fallback orderly based on typical Sidebar order
                      const fallbackKeys = ['chat', 'instances', 'bot-ia', 'simulator', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
@@ -232,7 +234,7 @@ function App() {
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
           ) : activeSection === 'chat' ? (
-            <ChatSection showToast={showToast} />
+            <ChatSection showToast={showToast} user={user} rolePermissions={rolePermissions} />
           ) : activeSection === 'bot-ia' ? (
             <BotIASection showToast={showToast} />
           ) : activeSection === 'simulator' ? (
