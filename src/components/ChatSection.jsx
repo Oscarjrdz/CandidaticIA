@@ -141,6 +141,21 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         return rolePermissions[filterKey] === true;
     };
 
+    // Filter projects by role-allowed list
+    const filteredProjects = (() => {
+        if (!user || user.role === 'SuperAdmin') return projects;
+        const allowed = rolePermissions?.allowed_projects;
+        if (!Array.isArray(allowed) || allowed.length === 0) return projects; // no restriction set yet
+        return projects.filter(p => allowed.includes(p.id));
+    })();
+
+    const filteredManualProjects = (() => {
+        if (!user || user.role === 'SuperAdmin') return manualProjects;
+        const allowed = rolePermissions?.allowed_crm_projects;
+        if (!Array.isArray(allowed) || allowed.length === 0) return manualProjects;
+        return manualProjects.filter(p => allowed.includes(p.id));
+    })();
+
     // Load Data
     useEffect(() => {
         loadCandidates();
@@ -697,10 +712,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 </button>
                                 {showDropdown === 'aiProject' && (
                                     <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                        {projects.length === 0 ? (
+                                        {filteredProjects.length === 0 ? (
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
                                         ) : (
-                                            projects.map(project => (
+                                            filteredProjects.map(project => (
                                                 <div
                                                     key={project.id}
                                                     onClick={() => {
@@ -806,10 +821,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 </button>
                                 {showDropdown === 'manualPipeline' && (
                                     <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                        {manualProjects.length === 0 ? (
+                                        {filteredManualProjects.length === 0 ? (
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pipelines</div>
                                         ) : (
-                                            manualProjects.map(project => (
+                                            filteredManualProjects.map(project => (
                                                 <div
                                                     key={project.id}
                                                     onClick={() => {

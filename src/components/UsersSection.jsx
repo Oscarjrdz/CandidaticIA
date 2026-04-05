@@ -36,6 +36,8 @@ const UsersSection = ({ showToast }) => {
     const [activeTab, setActiveTab] = useState('users');
     const [users, setUsers] = useState([]);
     const [roles, setRoles] = useState([]);
+    const [allProjects, setAllProjects] = useState([]);
+    const [allManualProjects, setAllManualProjects] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     
@@ -62,16 +64,22 @@ const UsersSection = ({ showToast }) => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [usersRes, rolesRes] = await Promise.all([
+            const [usersRes, rolesRes, projRes, manualRes] = await Promise.all([
                 fetch('/api/users'),
-                fetch('/api/roles')
+                fetch('/api/roles'),
+                fetch('/api/projects'),
+                fetch('/api/manual_projects')
             ]);
             
             const usersData = await usersRes.json();
             const rolesData = await rolesRes.json();
+            const projData = await projRes.json();
+            const manualData = await manualRes.json();
             
             if (usersData.success) setUsers(usersData.users);
             if (rolesData.success) setRoles(rolesData.roles);
+            if (projData.success && projData.projects) setAllProjects(projData.projects);
+            if (manualData.success && manualData.data) setAllManualProjects(manualData.data);
         } catch {
             showToast('Error cargando datos', 'error');
         } finally {
@@ -222,6 +230,26 @@ const UsersSection = ({ showToast }) => {
                 [sectionId]: !prev.permissions[sectionId]
             }
         }));
+    };
+
+    const toggleProjectPermission = (projectId) => {
+        setRoleFormData(prev => {
+            const current = prev.permissions.allowed_projects || [];
+            const next = current.includes(projectId)
+                ? current.filter(id => id !== projectId)
+                : [...current, projectId];
+            return { ...prev, permissions: { ...prev.permissions, allowed_projects: next } };
+        });
+    };
+
+    const toggleManualProjectPermission = (projectId) => {
+        setRoleFormData(prev => {
+            const current = prev.permissions.allowed_crm_projects || [];
+            const next = current.includes(projectId)
+                ? current.filter(id => id !== projectId)
+                : [...current, projectId];
+            return { ...prev, permissions: { ...prev.permissions, allowed_crm_projects: next } };
+        });
     };
 
     const filteredUsers = users.filter(u =>
@@ -549,6 +577,52 @@ const UsersSection = ({ showToast }) => {
                             ))}
                         </div>
                     </div>
+
+                    {/* Proyectos AI permitidos */}
+                    {!!roleFormData.permissions['filter_projects'] && allProjects.length > 0 && (
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-3">📂 Proyectos Permitidos</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-40 overflow-y-auto p-2 border border-blue-100 dark:border-blue-900 rounded-lg bg-blue-50/50 dark:bg-blue-900/10">
+                                {allProjects.map(proj => (
+                                    <label key={proj.id} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={(roleFormData.permissions.allowed_projects || []).includes(proj.id)}
+                                            onChange={() => toggleProjectPermission(proj.id)}
+                                            disabled={editingRole && editingRole.name === 'SuperAdmin'}
+                                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                        />
+                                        <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none truncate">
+                                            {proj.name}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Pipelines CRM Manual permitidos */}
+                    {!!roleFormData.permissions['filter_crm'] && allManualProjects.length > 0 && (
+                        <div>
+                            <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-3">📋 Pipelines CRM Permitidos</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-40 overflow-y-auto p-2 border border-purple-100 dark:border-purple-900 rounded-lg bg-purple-50/50 dark:bg-purple-900/10">
+                                {allManualProjects.map(proj => (
+                                    <label key={proj.id} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-purple-100/50 dark:hover:bg-purple-900/20 transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={(roleFormData.permissions.allowed_crm_projects || []).includes(proj.id)}
+                                            onChange={() => toggleManualProjectPermission(proj.id)}
+                                            disabled={editingRole && editingRole.name === 'SuperAdmin'}
+                                            className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                        />
+                                        <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none truncate">
+                                            {proj.name}
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex justify-end space-x-3 pt-4">
                         <Button variant="outline" type="button" onClick={() => setIsRoleModalOpen(false)} disabled={saving}>
