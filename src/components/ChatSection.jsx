@@ -134,6 +134,9 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const [showDropdown, setShowDropdown] = useState(null);
     const [projects, setProjects] = useState([]); // Colección maestra de marketing (maletín)
 
+    // RBAC: base-level candidate restriction
+    const [roleAllowedCandidateIds, setRoleAllowedCandidateIds] = useState(null); // null = no restriction, Set = restricted
+
     // Helper for RBAC
     const canSeeFilter = (filterKey) => {
         if (!user || user.role === 'SuperAdmin') return true;
@@ -168,6 +171,56 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         const interval = setInterval(loadCandidates, 3000);
         return () => clearInterval(interval);
     }, []);
+
+    // RBAC: Load candidate IDs from all allowed projects to create base filter
+    useEffect(() => {
+        if (!user || user.role === 'SuperAdmin') {
+            setRoleAllowedCandidateIds(null);
+            return;
+        }
+        const allowedProjects = rolePermissions?.allowed_projects;
+        const allowedCrm = rolePermissions?.allowed_crm_projects;
+        const hasProjectRestriction = Array.isArray(allowedProjects) && allowedProjects.length > 0;
+        const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
+
+        if (!hasProjectRestriction && !hasCrmRestriction) {
+            setRoleAllowedCandidateIds(null);
+            return;
+        }
+
+        const loadAllowedCandidates = async () => {
+            try {
+                const candidateIdSet = new Set();
+
+                // Fetch candidates from all allowed AI projects
+                if (hasProjectRestriction) {
+                    const projPromises = allowedProjects.map(projId =>
+                        fetch(`/api/projects?id=${projId}&view=candidates`).then(r => r.json())
+                    );
+                    const projResults = await Promise.all(projPromises);
+                    projResults.forEach(data => {
+                        if (data.success && Array.isArray(data.candidates)) {
+                            data.candidates.forEach(c => candidateIdSet.add(c.id));
+                        }
+                    });
+                }
+
+                // For CRM manual projects, candidates have manualProjectId field
+                // We'll filter by that field in the filteredCandidates logic
+                // Just mark that CRM restriction exists
+
+                setRoleAllowedCandidateIds(candidateIdSet);
+            } catch (e) {
+                console.error('Error loading RBAC allowed candidates:', e);
+                setRoleAllowedCandidateIds(null);
+            }
+        };
+
+        loadAllowedCandidates();
+        // Refresh every 15s in case projects change
+        const interval = setInterval(loadAllowedCandidates, 15000);
+        return () => clearInterval(interval);
+    }, [user, rolePermissions]);
 
     // 🚀 NEW: Load Project Candidates specific to Riel A
     useEffect(() => {
@@ -308,6 +361,17 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             (c?.whatsapp && String(c.whatsapp).includes(searchVal));
             
         if (!matchesSearch && searchVal !== "") return false;
+
+        // --- RBAC Base Filter: Only show candidates from allowed projects ---
+        if (roleAllowedCandidateIds !== null) {
+            const allowedCrm = rolePermissions?.allowed_crm_projects;
+            const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
+
+            const inAllowedProject = roleAllowedCandidateIds.has(c.id);
+            const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
+
+            if (!inAllowedProject && !inAllowedCrm) return false;
+        }
 
         if (activeFilter === 'unread' && c?.hasUnreadMessages !== true) return false;
         if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
