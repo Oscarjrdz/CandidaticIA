@@ -126,6 +126,22 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const [qrSaving, setQrSaving] = useState(false);
     const [capturingShortcut, setCapturingShortcut] = useState(false);
 
+    // Toolbar icon order (drag & drop)
+    const TOOLBAR_ICON_IDS = ['vacancies', 'tags', 'crm_manual', 'quick_replies'];
+    const [toolbarOrder, setToolbarOrder] = useState(() => {
+        try {
+            const saved = localStorage.getItem('candidatic:toolbar_order');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                // Ensure all IDs are present (handles new icons added later)
+                const merged = [...parsed.filter(id => TOOLBAR_ICON_IDS.includes(id)), ...TOOLBAR_ICON_IDS.filter(id => !parsed.includes(id))];
+                return merged;
+            }
+        } catch {}
+        return TOOLBAR_ICON_IDS;
+    });
+    const [draggedIcon, setDraggedIcon] = useState(null);
+
     // Filter Chips State
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'unread', 'label', 'profile'
     const [filterValue, setFilterValue] = useState(null);
@@ -1161,225 +1177,275 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 </button>
                             </div>
 
-                            {/* Vacancies Injector Menu */}
-                            <div className="relative group/vacmenu">
-                                <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors" title="Inyectar información de Vacante">
-                                    <Briefcase className="w-5 h-5 text-gray-500 hover:text-blue-500 transition-colors" />
-                                </button>
-                                {/* Dropdown de Vacantes */}
-                                <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/vacmenu:opacity-100 pointer-events-none group-hover/vacmenu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
-                                    <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
-                                        Inyectar Info de Vacante
-                                    </div>
-                                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                                        {vacancies.length === 0 ? (
-                                            <div className="px-3 py-4 text-center text-xs text-gray-400">
-                                                No hay vacantes configuradas con "Info para el bot"
-                                            </div>
-                                        ) : (
-                                            vacancies.map(vac => (
-                                                <div
-                                                    key={vac.id}
-                                                    onClick={() => setNewMessage(prev => (prev ? prev + '\n\n' : '') + vac.messageDescription)}
-                                                    className="px-3 py-2.5 flex flex-col text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer border-b border-gray-50 dark:border-gray-800 last:border-0"
-                                                    title={vac.name}
-                                                >
-                                                    <span className="font-semibold truncate">{vac.name}</span>
-                                                    <span className="text-[11px] text-gray-400 truncate">{vac.company}</span>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                            {/* Draggable Icon Toolbar */}
+                            {toolbarOrder.map((iconId) => {
+                                const handleDragStart = (e) => {
+                                    setDraggedIcon(iconId);
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    e.dataTransfer.setData('text/plain', iconId);
+                                };
+                                const handleDragOver = (e) => {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = 'move';
+                                };
+                                const handleDrop = (e) => {
+                                    e.preventDefault();
+                                    if (!draggedIcon || draggedIcon === iconId) return;
+                                    const newOrder = [...toolbarOrder];
+                                    const fromIdx = newOrder.indexOf(draggedIcon);
+                                    const toIdx = newOrder.indexOf(iconId);
+                                    newOrder.splice(fromIdx, 1);
+                                    newOrder.splice(toIdx, 0, draggedIcon);
+                                    setToolbarOrder(newOrder);
+                                    localStorage.setItem('candidatic:toolbar_order', JSON.stringify(newOrder));
+                                    setDraggedIcon(null);
+                                };
+                                const handleDragEnd = () => setDraggedIcon(null);
 
-                            <div className="relative group/menu">
-                                <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                                    <Tag className="w-5 h-5" />
-                                </button>
-                                {/* Dropdown para Etiquetas */}
-                                <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/menu:opacity-100 pointer-events-none group-hover/menu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
-                                    <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111b21]">
-                                        <span>Etiquetar candidato</span>
-                                    </div>
-                                    <div className="max-h-60 overflow-y-auto custom-scrollbar">
-                                        {availableTags.map(tagObj => {
-                                            const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                            const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
-                                            const isActive = selectedChat.tags?.includes(tName);
-                                            const isEditing = editingTag === tName;
+                                const dragProps = {
+                                    draggable: true,
+                                    onDragStart: handleDragStart,
+                                    onDragOver: handleDragOver,
+                                    onDrop: handleDrop,
+                                    onDragEnd: handleDragEnd,
+                                };
 
-                                            if (isEditing) {
-                                                return (
-                                                    <div key={tName} className="px-3 py-2 bg-gray-50 dark:bg-[#111b21] flex flex-col gap-2">
-                                                        <div className="flex gap-1">
-                                                            <input 
-                                                                type="text"
-                                                                value={editTagName}
-                                                                onChange={e => setEditTagName(e.target.value)}
-                                                                className="flex-1 text-xs px-2 py-1 focus:outline-none dark:bg-[#202c33] dark:text-white rounded border border-gray-300 dark:border-gray-600"
-                                                                autoFocus
-                                                            />
-                                                        </div>
-                                                        <div className="flex justify-between items-center">
-                                                            <div className="flex gap-1">
-                                                                {TAG_COLORS.map(c => (
-                                                                    <button 
-                                                                        key={c}
-                                                                        onClick={(e) => { e.stopPropagation(); setEditTagColor(c); }}
-                                                                        className={`w-4 h-4 rounded-full ${editTagColor === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
-                                                                        style={{ backgroundColor: c }}
-                                                                    />
-                                                                ))}
-                                                            </div>
-                                                            <div className="flex gap-1">
-                                                                <button onClick={(e) => { e.stopPropagation(); setEditingTag(null); }} className="p-1 text-gray-400 hover:text-gray-600">
-                                                                    <X className="w-3.5 h-3.5" />
-                                                                </button>
-                                                                <button 
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        if (editTagName.trim()) {
-                                                                            // Update global tags
-                                                                            const newGlobal = availableTags.map(t => 
-                                                                                (typeof t === 'string' ? t : t.name) === tName 
-                                                                                ? { name: editTagName.trim(), color: editTagColor } 
-                                                                                : t
-                                                                            );
-                                                                            saveTagsGlobal(newGlobal);
-                                                                            
-                                                                            // Also update this candidate's tags if they had the old note
-                                                                            if (isActive && editTagName.trim() !== tName) {
-                                                                                const newCandidateTags = (selectedChat.tags || []).filter(t => t !== tName);
-                                                                                newCandidateTags.push(editTagName.trim());
-                                                                                setSelectedChat({ ...selectedChat, tags: newCandidateTags });
-                                                                                // Save to db (fetch put)
-                                                                                fetch('/api/candidates', {
-                                                                                    method: 'PUT',
-                                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                                    body: JSON.stringify({ id: selectedChat.id, tags: newCandidateTags })
-                                                                                }).catch(console.error);
-                                                                            }
-                                                                            setEditingTag(null);
-                                                                        }
-                                                                    }} 
-                                                                    className="p-1 text-green-500 hover:text-green-600"
-                                                                >
-                                                                    <Check className="w-3.5 h-3.5" />
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
+                                const baseClass = `p-2 rounded-full transition-all cursor-grab active:cursor-grabbing ${draggedIcon === iconId ? 'opacity-40 scale-90' : 'opacity-100'}`;
 
-                                            return (
-                                                <div 
-                                                    key={tName} 
-                                                    className="px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-gray-50 dark:hover:bg-[#202c33] flex items-center justify-between group/item cursor-pointer"
-                                                    onClick={() => handleToggleTag(tName)}
-                                                >
-                                                    <div className="flex-1 flex items-center gap-2">
-                                                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></span>
-                                                        <span className="truncate">{tName}</span>
-                                                        {isActive && <Check className="w-4 h-4 text-blue-500 ml-1" />}
-                                                    </div>
-                                                    <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setEditingTag(tName);
-                                                                setEditTagName(tName);
-                                                                setEditTagColor(tColor);
-                                                            }}
-                                                            className="p-1 text-gray-400 hover:text-blue-500"
-                                                            title="Editar etiqueta"
-                                                        >
-                                                            <Pencil className="w-3 h-3" />
-                                                        </button>
-                                                        <button 
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                const newGlobal = availableTags.filter(t => (typeof t === 'string' ? t : t.name) !== tName);
-                                                                saveTagsGlobal(newGlobal);
-                                                            }}
-                                                            className="p-1 text-gray-400 hover:text-red-500"
-                                                            title="Eliminar etiqueta"
-                                                        >
-                                                            <X className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    <div className="p-2 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-2 bg-gray-50 dark:bg-[#111b21]">
-                                        <div className="flex justify-between px-1">
-                                            {TAG_COLORS.map((c) => (
-                                                <button 
-                                                    key={c}
-                                                    onClick={(e) => { e.preventDefault(); setEditTagColor(c); }}
-                                                    className={`w-3.5 h-3.5 rounded-full hover:scale-110 transition-transform ${editTagColor === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
-                                                    style={{ backgroundColor: c }}
-                                                />
-                                            ))}
-                                        </div>
-                                        <div className="flex">
-                                            <input 
-                                                type="text"
-                                                value={newTagInput}
-                                                onChange={(e) => setNewTagInput(e.target.value)}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' && newTagInput.trim()) {
-                                                        e.preventDefault();
-                                                        const exists = availableTags.some(t => (typeof t === 'string' ? t : t.name).toLowerCase() === newTagInput.trim().toLowerCase());
-                                                        if (!exists) {
-                                                            saveTagsGlobal([...availableTags, { name: newTagInput.trim(), color: editTagColor || TAG_COLORS[0] }]);
-                                                        }
-                                                        setNewTagInput("");
-                                                    }
-                                                }}
-                                                placeholder="Nueva etiqueta..."
-                                                className="flex-1 text-xs px-2 py-1.5 focus:outline-none dark:bg-[#202c33] dark:text-white rounded border border-transparent focus:border-blue-500 transition-colors bg-white dark:bg-[#202c33]"
-                                            />
-                                            <button 
-                                                onClick={() => {
-                                                    if (newTagInput.trim()) {
-                                                        const exists = availableTags.some(t => (typeof t === 'string' ? t : t.name).toLowerCase() === newTagInput.trim().toLowerCase());
-                                                        if (!exists) {
-                                                            saveTagsGlobal([...availableTags, { name: newTagInput.trim(), color: editTagColor || TAG_COLORS[0] }]);
-                                                        }
-                                                        setNewTagInput("");
-                                                    }
-                                                }}
-                                                className="ml-1 px-2 text-blue-500 hover:text-blue-600 font-bold bg-blue-50 dark:bg-blue-900/30 rounded"
-                                            >
-                                                +
+                                if (iconId === 'vacancies') {
+                                    return (
+                                        <div key={iconId} className="relative group/vacmenu" {...dragProps}>
+                                            <button className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5`} title="Inyectar información de Vacante">
+                                                <Briefcase className="w-5 h-5 text-gray-500 hover:text-blue-500 transition-colors" />
                                             </button>
+                                            <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/vacmenu:opacity-100 pointer-events-none group-hover/vacmenu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+                                                <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
+                                                    Inyectar Info de Vacante
+                                                </div>
+                                                <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                                    {vacancies.length === 0 ? (
+                                                        <div className="px-3 py-4 text-center text-xs text-gray-400">
+                                                            No hay vacantes configuradas con "Info para el bot"
+                                                        </div>
+                                                    ) : (
+                                                        vacancies.map(vac => (
+                                                            <div key={vac.id}
+                                                                onClick={() => injectVacancy(vac)}
+                                                                className={`px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-[#111b21] cursor-pointer transition-colors flex items-center gap-2 ${
+                                                                    selectedChat?.currentVacancyId === vac.id
+                                                                    ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 font-bold'
+                                                                    : 'text-[#111b21] dark:text-[#e9edef]'
+                                                                }`}
+                                                            >
+                                                                <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                                                                <span className="truncate">{vac.title}</span>
+                                                                {selectedChat?.currentVacancyId === vac.id && <Check className="w-3.5 h-3.5 ml-auto text-blue-500 shrink-0" />}
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => setShowRightPanel(!showRightPanel)}
-                                className={`p-2 rounded-full transition-colors ml-1 ${showRightPanel ? 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/20' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
-                                title="CRM Manual"
-                            >
-                                <Kanban className="w-5 h-5" />
-                            </button>
-                            <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                                <Search className="w-5 h-5" />
-                            </button>
-                            <button 
-                                onClick={() => setShowQuickRepliesPanel(!showQuickRepliesPanel)}
-                                className={`p-2 rounded-full transition-colors ${showQuickRepliesPanel ? 'bg-green-50 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
-                                title="Banco de Respuestas"
-                            >
-                                <BookOpen className="w-5 h-5" />
-                            </button>
-                            <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                                <MoreVertical className="w-5 h-5" />
-                            </button>
+                                    );
+                                }
+
+                                if (iconId === 'tags') {
+                                    return (
+                                        <div key={iconId} className="relative group/menu" {...dragProps}>
+                                            <button className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5`}>
+                                                <Tag className="w-5 h-5" />
+                                            </button>
+                                            <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/menu:opacity-100 pointer-events-none group-hover/menu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+                                                <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111b21]">
+                                                    <span>Etiquetar candidato</span>
+                                                </div>
+                                                <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                                                    {availableTags.map(tagObj => {
+                                                        const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                                        const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                                        const isActive = selectedChat.tags?.includes(tName);
+                                                        const isEditing = editingTag === tName;
+
+                                                        if (isEditing) {
+                                                            return (
+                                                                <div key={tName} className="px-3 py-2 bg-gray-50 dark:bg-[#111b21] flex flex-col gap-2">
+                                                                    <div className="flex gap-1">
+                                                                        <input 
+                                                                            type="text"
+                                                                            value={editTagName}
+                                                                            onChange={e => setEditTagName(e.target.value)}
+                                                                            className="flex-1 text-xs px-2 py-1 focus:outline-none dark:bg-[#202c33] dark:text-white rounded border border-gray-300 dark:border-gray-600"
+                                                                            autoFocus
+                                                                        />
+                                                                    </div>
+                                                                    <div className="flex justify-between items-center">
+                                                                        <div className="flex gap-1">
+                                                                            {TAG_COLORS.map(c => (
+                                                                                <button 
+                                                                                    key={c}
+                                                                                    onClick={(e) => { e.stopPropagation(); setEditTagColor(c); }}
+                                                                                    className={`w-4 h-4 rounded-full ${editTagColor === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
+                                                                                    style={{ backgroundColor: c }}
+                                                                                />
+                                                                            ))}
+                                                                        </div>
+                                                                        <div className="flex gap-1">
+                                                                            <button onClick={(e) => { e.stopPropagation(); setEditingTag(null); }} className="p-1 text-gray-400 hover:text-gray-600">
+                                                                                <X className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                            <button 
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    if (editTagName.trim()) {
+                                                                                        const newGlobal = availableTags.map(t => 
+                                                                                            (typeof t === 'string' ? t : t.name) === tName 
+                                                                                            ? { name: editTagName.trim(), color: editTagColor } 
+                                                                                            : t
+                                                                                        );
+                                                                                        saveTagsGlobal(newGlobal);
+                                                                                        if (isActive && editTagName.trim() !== tName) {
+                                                                                            const newCandidateTags = (selectedChat.tags || []).filter(t => t !== tName);
+                                                                                            newCandidateTags.push(editTagName.trim());
+                                                                                            setSelectedChat({ ...selectedChat, tags: newCandidateTags });
+                                                                                            fetch('/api/candidates', {
+                                                                                                method: 'PUT',
+                                                                                                headers: { 'Content-Type': 'application/json' },
+                                                                                                body: JSON.stringify({ id: selectedChat.id, tags: newCandidateTags })
+                                                                                            }).catch(console.error);
+                                                                                        }
+                                                                                        setEditingTag(null);
+                                                                                    }
+                                                                                }} 
+                                                                                className="p-1 text-green-500 hover:text-green-600"
+                                                                            >
+                                                                                <Check className="w-3.5 h-3.5" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        return (
+                                                            <div 
+                                                                key={tName} 
+                                                                className="px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] hover:bg-gray-50 dark:hover:bg-[#202c33] flex items-center justify-between group/item cursor-pointer"
+                                                                onClick={() => handleToggleTag(tName)}
+                                                            >
+                                                                <div className="flex-1 flex items-center gap-2">
+                                                                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></span>
+                                                                    <span className="truncate">{tName}</span>
+                                                                    {isActive && <Check className="w-4 h-4 text-blue-500 ml-1" />}
+                                                                </div>
+                                                                <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                                    <button 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            setEditingTag(tName);
+                                                                            setEditTagName(tName);
+                                                                            setEditTagColor(tColor);
+                                                                        }}
+                                                                        className="p-1 text-gray-400 hover:text-blue-500"
+                                                                        title="Editar etiqueta"
+                                                                    >
+                                                                        <Pencil className="w-3 h-3" />
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const newGlobal = availableTags.filter(t => (typeof t === 'string' ? t : t.name) !== tName);
+                                                                            saveTagsGlobal(newGlobal);
+                                                                        }}
+                                                                        className="p-1 text-gray-400 hover:text-red-500"
+                                                                        title="Eliminar etiqueta"
+                                                                    >
+                                                                        <X className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="p-2 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-2 bg-gray-50 dark:bg-[#111b21]">
+                                                    <div className="flex justify-between px-1">
+                                                        {TAG_COLORS.map((c) => (
+                                                            <button 
+                                                                key={c}
+                                                                onClick={(e) => { e.preventDefault(); setEditTagColor(c); }}
+                                                                className={`w-3.5 h-3.5 rounded-full hover:scale-110 transition-transform ${editTagColor === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
+                                                                style={{ backgroundColor: c }}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex">
+                                                        <input 
+                                                            type="text"
+                                                            value={newTagInput}
+                                                            onChange={e => setNewTagInput(e.target.value)}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter' && newTagInput.trim()) {
+                                                                    e.preventDefault();
+                                                                    const exists = availableTags.some(t => (typeof t === 'string' ? t : t.name).toLowerCase() === newTagInput.trim().toLowerCase());
+                                                                    if (!exists) {
+                                                                        saveTagsGlobal([...availableTags, { name: newTagInput.trim(), color: editTagColor || TAG_COLORS[0] }]);
+                                                                    }
+                                                                    setNewTagInput("");
+                                                                }
+                                                            }}
+                                                            placeholder="Nueva etiqueta..."
+                                                            className="flex-1 text-xs px-2 py-1.5 focus:outline-none dark:bg-[#202c33] dark:text-white rounded border border-transparent focus:border-blue-500 transition-colors bg-white dark:bg-[#202c33]"
+                                                        />
+                                                        <button 
+                                                            onClick={() => {
+                                                                if (newTagInput.trim()) {
+                                                                    const exists = availableTags.some(t => (typeof t === 'string' ? t : t.name).toLowerCase() === newTagInput.trim().toLowerCase());
+                                                                    if (!exists) {
+                                                                        saveTagsGlobal([...availableTags, { name: newTagInput.trim(), color: editTagColor || TAG_COLORS[0] }]);
+                                                                    }
+                                                                    setNewTagInput("");
+                                                                }
+                                                            }}
+                                                            className="ml-1 px-2 text-blue-500 hover:text-blue-600 font-bold bg-blue-50 dark:bg-blue-900/30 rounded"
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                if (iconId === 'crm_manual') {
+                                    return (
+                                        <button 
+                                            key={iconId}
+                                            {...dragProps}
+                                            onClick={() => setShowRightPanel(!showRightPanel)}
+                                            className={`${baseClass} ml-1 ${showRightPanel ? 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/20' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
+                                            title="CRM Manual"
+                                        >
+                                            <Kanban className="w-5 h-5" />
+                                        </button>
+                                    );
+                                }
+
+                                if (iconId === 'quick_replies') {
+                                    return (
+                                        <button 
+                                            key={iconId}
+                                            {...dragProps}
+                                            onClick={() => setShowQuickRepliesPanel(!showQuickRepliesPanel)}
+                                            className={`${baseClass} ${showQuickRepliesPanel ? 'bg-green-50 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
+                                            title="Banco de Respuestas"
+                                        >
+                                            <BookOpen className="w-5 h-5" />
+                                        </button>
+                                    );
+                                }
+
+                                return null;
+                            })}
                         </div>
                     </div>
 
