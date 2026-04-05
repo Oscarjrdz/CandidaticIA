@@ -101,12 +101,43 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange }) => {
 
 const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate }) => {
     const [items, setItems] = useState([]);
+    const [rolePermissions, setRolePermissions] = useState(null);
 
     useEffect(() => {
+        // Fetch roles to get user permissions
+        fetch('/api/roles')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.roles) {
+                    const currentUserRole = data.roles.find(r => r.name === user?.role);
+                    if (currentUserRole && currentUserRole.permissions) {
+                        setRolePermissions(currentUserRole.permissions);
+                    } else if (user?.role === 'SuperAdmin') {
+                        const allPerms = {};
+                        DEFAULT_MENU_ITEMS.forEach(i => allPerms[i.id] = true);
+                        setRolePermissions(allPerms);
+                    } else {
+                        // Fallback open for backward compatibility or empty for strict? 
+                        // Let's do empty for strict (hide everything unless permitted)
+                        setRolePermissions({});
+                    }
+                }
+            })
+            .catch(console.error);
+    }, [user?.role]);
+
+    useEffect(() => {
+        if (!rolePermissions) return; // Wait for permissions to load
+
+        // Filter DEFAULT_MENU_ITEMS based on permissions
+        const permittedDefaults = DEFAULT_MENU_ITEMS.filter(item => {
+            return rolePermissions[item.id] === true || user?.role === 'SuperAdmin';
+        });
+
         // Initialize from user config or default
         if (user?.sidebarConfig && Array.isArray(user.sidebarConfig)) {
-            const reordered = user.sidebarConfig.map(id => DEFAULT_MENU_ITEMS.find(i => i.id === id)).filter(Boolean);
-            const missing = DEFAULT_MENU_ITEMS.filter(di => !user.sidebarConfig.includes(di.id));
+            const reordered = user.sidebarConfig.map(id => permittedDefaults.find(i => i.id === id)).filter(Boolean);
+            const missing = permittedDefaults.filter(di => !user.sidebarConfig.includes(di.id));
             
             // Insert new/missing items right after the first item (Candidatos) 
             // instead of at the very bottom, so they don't get hidden by scroll overflow.
@@ -117,9 +148,9 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate 
             
             setItems(reordered.length > 0 ? reordered : missing);
         } else {
-            setItems(DEFAULT_MENU_ITEMS);
+            setItems(permittedDefaults);
         }
-    }, [user]);
+    }, [user, rolePermissions]);
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
