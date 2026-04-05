@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban } from 'lucide-react';
+import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2 } from 'lucide-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
@@ -117,6 +117,14 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
     const [showEmojis, setShowEmojis] = useState(false);
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
+
+    // Quick Replies (Banco de Respuestas)
+    const [quickReplies, setQuickReplies] = useState([]);
+    const [showQuickRepliesPanel, setShowQuickRepliesPanel] = useState(false);
+    const [editingQuickReply, setEditingQuickReply] = useState(null); // null = creating, object = editing
+    const [qrForm, setQrForm] = useState({ name: '', message: '', shortcut: '' });
+    const [qrSaving, setQrSaving] = useState(false);
+    const [capturingShortcut, setCapturingShortcut] = useState(false);
 
     // Filter Chips State
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'unread', 'label', 'profile'
@@ -279,6 +287,64 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             console.error('Error fetching manual projects', e);
         }
     };
+
+    // Quick Replies loader
+    const loadQuickReplies = async () => {
+        try {
+            const res = await fetch('/api/quick_replies');
+            const data = await res.json();
+            if (data.success) setQuickReplies(data.replies || []);
+        } catch (e) { console.error('Error loading quick replies', e); }
+    };
+
+    const saveQuickReplies = async (newList) => {
+        setQuickReplies(newList);
+        try {
+            await fetch('/api/quick_replies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ replies: newList })
+            });
+        } catch (e) { console.error('Error saving quick replies', e); }
+    };
+
+    // Load quick replies on mount
+    useEffect(() => { loadQuickReplies(); }, []);
+
+    // Keyboard shortcut listener for quick replies
+    useEffect(() => {
+        if (quickReplies.length === 0) return;
+        const handler = (e) => {
+            // Don't fire when user is typing in an input/textarea
+            const tag = document.activeElement?.tagName?.toLowerCase();
+            // Only intercept if Ctrl or Meta is pressed
+            if (!e.ctrlKey && !e.metaKey) return;
+
+            for (const qr of quickReplies) {
+                if (!qr.shortcut) continue;
+                // Parse shortcut like "Ctrl+H" → key = 'h'
+                const parts = qr.shortcut.toLowerCase().split('+').map(p => p.trim());
+                const key = parts[parts.length - 1];
+                const needsCtrl = parts.includes('ctrl') || parts.includes('meta');
+                const needsShift = parts.includes('shift');
+                const needsAlt = parts.includes('alt');
+
+                if (
+                    e.key.toLowerCase() === key &&
+                    (needsCtrl ? (e.ctrlKey || e.metaKey) : true) &&
+                    (needsShift ? e.shiftKey : !e.shiftKey) &&
+                    (needsAlt ? e.altKey : !e.altKey)
+                ) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setNewMessage(qr.message);
+                    return;
+                }
+            }
+        };
+        window.addEventListener('keydown', handler, true);
+        return () => window.removeEventListener('keydown', handler, true);
+    }, [quickReplies]);
 
     const loadTags = async () => {
         try {
@@ -1304,6 +1370,13 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                             <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                                 <Search className="w-5 h-5" />
                             </button>
+                            <button 
+                                onClick={() => setShowQuickRepliesPanel(!showQuickRepliesPanel)}
+                                className={`p-2 rounded-full transition-colors ${showQuickRepliesPanel ? 'bg-green-50 text-green-600 dark:bg-green-500/20 dark:text-green-400' : 'hover:bg-black/5 dark:hover:bg-white/5 text-[#54656f] dark:text-[#aebac1]'}`}
+                                title="Banco de Respuestas"
+                            >
+                                <BookOpen className="w-5 h-5" />
+                            </button>
                             <button className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                                 <MoreVertical className="w-5 h-5" />
                             </button>
@@ -1447,7 +1520,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                 </div>
             ) : (
                 <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35] border-l border-[#d1d7db] dark:border-[#222e35]">
-                    {/* Placeholder when no chat selected */}
                     <div className="flex flex-col items-center">
                         <MessageSquare className="w-[84px] h-[84px] opacity-20 text-[#41525d] dark:text-[#e9edef] mb-8" strokeWidth={1} />
                         <h1 className="text-3xl text-[#41525d] dark:text-[#e9edef] font-light mb-4">Candidatic Web</h1>
@@ -1466,11 +1538,162 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                     onClose={() => setShowRightPanel(false)}
                     showToast={showToast}
                     onCandidateUpdated={(updatedCandidate) => {
-                        // Optimistically update the candidate in the local list and selected reference
                         setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
                         if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);
                     }}
                 />
+            )}
+
+            {/* QUICK REPLIES PANEL */}
+            {showQuickRepliesPanel && (
+                <div className="w-[340px] border-l border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] flex flex-col h-full">
+                    {/* Header */}
+                    <div className="px-4 py-3 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-[#d1d7db] dark:border-[#222e35] flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <BookOpen className="w-5 h-5 text-green-600 dark:text-green-400" />
+                            <h3 className="font-bold text-sm text-[#111b21] dark:text-[#e9edef]">Banco de Respuestas</h3>
+                        </div>
+                        <button onClick={() => setShowQuickRepliesPanel(false)} className="text-[#54656f] hover:text-[#111b21] dark:text-[#aebac1] dark:hover:text-white">
+                            <X className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Create / Edit Form */}
+                    <div className="p-3 border-b border-[#f0f2f5] dark:border-[#222e35] space-y-2">
+                        <input
+                            type="text"
+                            placeholder="Nombre (ej: Saludo)"
+                            value={qrForm.name}
+                            onChange={(e) => setQrForm({ ...qrForm, name: e.target.value })}
+                            className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors"
+                        />
+                        <textarea
+                            placeholder="Mensaje..."
+                            value={qrForm.message}
+                            onChange={(e) => setQrForm({ ...qrForm, message: e.target.value })}
+                            rows={3}
+                            className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors resize-none"
+                        />
+                        <div className="flex items-center gap-2">
+                            <div className="flex-1 relative">
+                                <Keyboard className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder={capturingShortcut ? 'Presiona las teclas...' : 'Atajo (clic para capturar)'}
+                                    value={qrForm.shortcut}
+                                    readOnly
+                                    onClick={() => setCapturingShortcut(true)}
+                                    onKeyDown={(e) => {
+                                        if (!capturingShortcut) return;
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const parts = [];
+                                        if (e.ctrlKey || e.metaKey) parts.push('Ctrl');
+                                        if (e.shiftKey) parts.push('Shift');
+                                        if (e.altKey) parts.push('Alt');
+                                        const key = e.key;
+                                        if (!['Control', 'Shift', 'Alt', 'Meta'].includes(key)) {
+                                            parts.push(key.length === 1 ? key.toUpperCase() : key);
+                                            setQrForm({ ...qrForm, shortcut: parts.join(' + ') });
+                                            setCapturingShortcut(false);
+                                        }
+                                    }}
+                                    onBlur={() => setCapturingShortcut(false)}
+                                    className={`w-full text-xs pl-8 pr-3 py-2 rounded-lg border bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none transition-colors cursor-pointer ${
+                                        capturingShortcut 
+                                        ? 'border-green-500 ring-2 ring-green-500/20' 
+                                        : 'border-gray-200 dark:border-gray-700 focus:border-green-500'
+                                    }`}
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                            {editingQuickReply !== null && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setEditingQuickReply(null); setQrForm({ name: '', message: '', shortcut: '' }); }}
+                                    className="flex-1 text-xs py-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors font-medium"
+                                >
+                                    Cancelar
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                disabled={!qrForm.name.trim() || !qrForm.message.trim()}
+                                onClick={async () => {
+                                    const entry = { id: editingQuickReply?.id || `qr_${Date.now()}`, name: qrForm.name.trim(), message: qrForm.message.trim(), shortcut: qrForm.shortcut.trim() };
+                                    let newList;
+                                    if (editingQuickReply) {
+                                        newList = quickReplies.map(q => q.id === editingQuickReply.id ? entry : q);
+                                    } else {
+                                        newList = [...quickReplies, entry];
+                                    }
+                                    await saveQuickReplies(newList);
+                                    setQrForm({ name: '', message: '', shortcut: '' });
+                                    setEditingQuickReply(null);
+                                    showToast && showToast(editingQuickReply ? 'Respuesta actualizada' : 'Respuesta creada', 'success');
+                                }}
+                                className="flex-1 text-xs py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                                {editingQuickReply ? 'Actualizar' : 'Guardar'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* List */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        {quickReplies.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-600 p-6">
+                                <BookOpen className="w-10 h-10 mb-3 opacity-30" />
+                                <p className="text-xs text-center">Sin respuestas rápidas. Crea una arriba para empezar.</p>
+                            </div>
+                        ) : (
+                            quickReplies.map(qr => (
+                                <div
+                                    key={qr.id}
+                                    className="px-4 py-3 border-b border-[#f0f2f5] dark:border-[#222e35] hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] transition-colors group cursor-pointer"
+                                    onClick={() => { setNewMessage(qr.message); setShowQuickRepliesPanel(false); }}
+                                >
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-xs font-bold text-[#111b21] dark:text-[#e9edef] truncate">{qr.name}</span>
+                                                {qr.shortcut && (
+                                                    <span className="shrink-0 text-[10px] font-mono bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700">
+                                                        {qr.shortcut}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-[11px] text-[#667781] dark:text-[#8696a0] line-clamp-2 leading-relaxed">{qr.message}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setEditingQuickReply(qr); setQrForm({ name: qr.name, message: qr.message, shortcut: qr.shortcut || '' }); }}
+                                                className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                                title="Editar"
+                                            >
+                                                <Pencil className="w-3.5 h-3.5" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm(`¿Eliminar "${qr.name}"?`)) {
+                                                        saveQuickReplies(quickReplies.filter(q => q.id !== qr.id));
+                                                        showToast && showToast('Respuesta eliminada', 'success');
+                                                    }
+                                                }}
+                                                className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
+                                                title="Eliminar"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     );
