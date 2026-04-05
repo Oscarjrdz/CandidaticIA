@@ -47,6 +47,7 @@ export const getRedisClient = () => {
 const KEYS = {
     // Blob Style
     USERS: 'candidatic_users',
+    ROLES: 'candidatic_roles',
     VACANCIES: 'candidatic_vacancies',
 
     // Auth
@@ -947,6 +948,130 @@ export const deleteUser = async (id) => {
 
     const newUsers = users.filter(u => u.id !== id && u.whatsapp !== id);
     await client.set(KEYS.USERS, JSON.stringify(newUsers));
+    return true;
+};
+
+/**
+ * ==========================================
+ * ROLES (Blob)
+ * ==========================================
+ */
+export const getRoles = async () => {
+    const client = getClient();
+    if (!client) return [];
+    const data = await client.get(KEYS.ROLES);
+    let roles = [];
+    if (data) {
+        try {
+            roles = JSON.parse(data);
+        } catch (e) {
+            console.error('❌ Corrupt Roles Data Found (resetting):', e);
+            roles = [];
+        }
+    }
+
+    // Default roles if none exist
+    if (roles.length === 0) {
+        const defaultRoles = [
+            {
+                id: 'role_superadmin',
+                name: 'SuperAdmin',
+                permissions: {
+                    settings: true,
+                    candidates: true,
+                    chat: true,
+                    "bot-ia": true,
+                    simulator: true,
+                    automations: true,
+                    vacancies: true,
+                    history: true,
+                    users: true,
+                    "post-maker": true,
+                    "media-library": true,
+                    projects: true,
+                    bypass: true,
+                    instances: true
+                },
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: 'role_admin',
+                name: 'Admin',
+                permissions: {
+                    settings: false,
+                    candidates: true,
+                    chat: true,
+                    "bot-ia": true,
+                    simulator: true,
+                    automations: true,
+                    vacancies: true,
+                    history: true,
+                    users: true,
+                    "post-maker": true,
+                    "media-library": true,
+                    projects: true,
+                    bypass: true,
+                    instances: false
+                },
+                createdAt: new Date().toISOString()
+            },
+            {
+                id: 'role_recruiter',
+                name: 'Recruiter',
+                permissions: {
+                    settings: false,
+                    candidates: true,
+                    chat: true,
+                    "bot-ia": false,
+                    simulator: true,
+                    automations: false,
+                    vacancies: true,
+                    history: true,
+                    users: false,
+                    "post-maker": true,
+                    "media-library": true,
+                    projects: true,
+                    bypass: false,
+                    instances: false
+                },
+                createdAt: new Date().toISOString()
+            }
+        ];
+        roles = defaultRoles;
+        await client.set(KEYS.ROLES, JSON.stringify(roles));
+    }
+
+    return roles;
+};
+
+export const saveRole = async (role) => {
+    const client = getClient();
+    if (!client) return;
+    const roles = await getRoles();
+    const index = roles.findIndex(r => r.id === role.id || r.name === role.name);
+    if (index >= 0) {
+        roles[index] = { ...roles[index], ...role, id: roles[index].id }; // preserve ID if updating by name
+    } else {
+        if (!role.id) role.id = `role_${Date.now()}`;
+        roles.push(role);
+    }
+    await client.set(KEYS.ROLES, JSON.stringify(roles));
+    return role;
+};
+
+export const deleteRole = async (id) => {
+    const client = getClient();
+    if (!client) return;
+    const roles = await getRoles();
+
+    const roleToDelete = roles.find(r => r.id === id);
+    if (roleToDelete && (roleToDelete.name === 'SuperAdmin')) {
+        console.warn('⛔️ Intento de eliminar rol SuperAdmin bloqueado.');
+        return false;
+    }
+
+    const newRoles = roles.filter(r => r.id !== id);
+    await client.set(KEYS.ROLES, JSON.stringify(newRoles));
     return true;
 };
 

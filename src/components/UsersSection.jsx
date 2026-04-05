@@ -1,18 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Trash2, Pencil, Shield, Loader2, RefreshCw, Search, User } from 'lucide-react';
+import { UserPlus, Trash2, Pencil, Shield, Loader2, RefreshCw, Search, User, ShieldCheck } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
 
+const AVAILABLE_SECTIONS = [
+    { id: 'settings', name: 'Configuración' },
+    { id: 'candidates', name: 'Candidatos' },
+    { id: 'chat', name: 'Chat Web' },
+    { id: 'bot-ia', name: 'Bot IA' },
+    { id: 'simulator', name: 'Simulador' },
+    { id: 'automations', name: 'Automatizaciones' },
+    { id: 'vacancies', name: 'Vacantes' },
+    { id: 'history', name: 'Historial' },
+    { id: 'users', name: 'Usuarios' },
+    { id: 'post-maker', name: 'Post Maker' },
+    { id: 'media-library', name: 'Biblioteca Multimedia' },
+    { id: 'projects', name: 'Proyectos' },
+    { id: 'bypass', name: 'ByPass Intelligence' },
+    { id: 'instances', name: 'Instancias de Envío' }
+];
+
 const UsersSection = ({ showToast }) => {
+    const [activeTab, setActiveTab] = useState('users');
     const [users, setUsers] = useState([]);
+    const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    
+    // User Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
-
     const [formData, setFormData] = useState({
         name: '',
         whatsapp: '',
@@ -21,25 +41,39 @@ const UsersSection = ({ showToast }) => {
         status: 'Active'
     });
 
-    const loadUsers = async () => {
+    // Role Modal State
+    const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+    const [editingRole, setEditingRole] = useState(null);
+    const [roleFormData, setRoleFormData] = useState({
+        name: '',
+        permissions: {}
+    });
+
+    const loadData = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/users');
-            const data = await res.json();
-            if (data.success) {
-                setUsers(data.users);
-            }
+            const [usersRes, rolesRes] = await Promise.all([
+                fetch('/api/users'),
+                fetch('/api/roles')
+            ]);
+            
+            const usersData = await usersRes.json();
+            const rolesData = await rolesRes.json();
+            
+            if (usersData.success) setUsers(usersData.users);
+            if (rolesData.success) setRoles(rolesData.roles);
         } catch {
-            showToast('Error cargando usuarios', 'error');
+            showToast('Error cargando datos', 'error');
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        loadUsers();
+        loadData();
     }, []);
 
+    // -------- USER LOGIC --------
     const handleOpenModal = (user = null) => {
         if (user) {
             setEditingUser(user);
@@ -56,7 +90,7 @@ const UsersSection = ({ showToast }) => {
                 name: '',
                 whatsapp: '',
                 pin: '',
-                role: 'Recruiter',
+                role: roles.length > 0 ? roles[0].name : 'Recruiter',
                 status: 'Active'
             });
         }
@@ -80,7 +114,7 @@ const UsersSection = ({ showToast }) => {
             if (data.success) {
                 showToast(editingUser ? 'Usuario actualizado' : 'Usuario creado', 'success');
                 setIsModalOpen(false);
-                loadUsers();
+                loadData();
             } else {
                 showToast(data.error || 'Error al guardar', 'error');
             }
@@ -93,22 +127,99 @@ const UsersSection = ({ showToast }) => {
 
     const handleDelete = async (id) => {
         if (!window.confirm('¿Estás seguro de eliminar este usuario?')) return;
-
         try {
             const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
             const data = await res.json();
             if (data.success) {
                 showToast('Usuario eliminado', 'success');
-                loadUsers();
+                loadData();
             }
         } catch {
             showToast('Error al eliminar', 'error');
         }
     };
 
+    // -------- ROLE LOGIC --------
+    const handleOpenRoleModal = (role = null) => {
+        if (role) {
+            setEditingRole(role);
+            setRoleFormData({
+                name: role.name,
+                permissions: role.permissions || {}
+            });
+        } else {
+            setEditingRole(null);
+            const defaultPerms = {};
+            AVAILABLE_SECTIONS.forEach(s => defaultPerms[s.id] = false);
+            setRoleFormData({
+                name: '',
+                permissions: defaultPerms
+            });
+        }
+        setIsRoleModalOpen(true);
+    };
+
+    const handleRoleSubmit = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            const method = editingRole ? 'PUT' : 'POST';
+            const body = editingRole ? { ...roleFormData, id: editingRole.id } : roleFormData;
+
+            const res = await fetch('/api/roles', {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                showToast(editingRole ? 'Rol actualizado' : 'Rol creado', 'success');
+                setIsRoleModalOpen(false);
+                loadData();
+            } else {
+                showToast(data.error || 'Error al guardar rol', 'error');
+            }
+        } catch {
+            showToast('Error de conexión', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleRoleDelete = async (id) => {
+        if (!window.confirm('¿Estás seguro de eliminar este rol?')) return;
+        try {
+            const res = await fetch(`/api/roles?id=${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                showToast('Rol eliminado', 'success');
+                loadData();
+            } else {
+                showToast('Error al eliminar rol', 'error');
+            }
+        } catch {
+            showToast('Error de conexión', 'error');
+        }
+    };
+
+    const togglePermission = (sectionId) => {
+        setRoleFormData(prev => ({
+            ...prev,
+            permissions: {
+                ...prev.permissions,
+                [sectionId]: !prev.permissions[sectionId]
+            }
+        }));
+    };
+
     const filteredUsers = users.filter(u =>
         (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
         (u.whatsapp || '').includes(search)
+    );
+
+    const filteredRoles = roles.filter(r => 
+        (r.name || '').toLowerCase().includes(search.toLowerCase())
     );
 
     return (
@@ -117,22 +228,51 @@ const UsersSection = ({ showToast }) => {
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
                 <div className="flex items-center space-x-4">
                     <div className="w-10 h-10 rounded-2xl bg-blue-600 shadow-lg shadow-blue-500/20 flex items-center justify-center transition-all">
-                        <User className="w-5 h-5 text-white" />
+                        {activeTab === 'users' ? <User className="w-5 h-5 text-white" /> : <ShieldCheck className="w-5 h-5 text-white" />}
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">USUARIOS</h2>
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight uppercase tracking-tight">EQUIPO Y ACCESOS</h2>
                         <div className="flex items-center gap-2 mt-0.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                            <p className="text-[10px] font-black tracking-widest uppercase text-blue-600 dark:text-blue-400">GESTIÓN DE EQUIPO</p>
+                            <p className="text-[10px] font-black tracking-widest uppercase text-blue-600 dark:text-blue-400">GESTIÓN DE PERSONAL Y ROLES</p>
                         </div>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button onClick={loadUsers} icon={RefreshCw} variant="outline" size="sm" disabled={loading} />
-                    <Button onClick={() => handleOpenModal()} icon={UserPlus} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
-                        Nuevo Usuario
-                    </Button>
+                    <Button onClick={loadData} icon={RefreshCw} variant="outline" size="sm" disabled={loading} />
+                    {activeTab === 'users' ? (
+                        <Button onClick={() => handleOpenModal()} icon={UserPlus} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
+                            Nuevo Usuario
+                        </Button>
+                    ) : (
+                        <Button onClick={() => handleOpenRoleModal()} icon={Shield} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
+                            Nuevo Rol
+                        </Button>
+                    )}
                 </div>
+            </div>
+
+            <div className="flex space-x-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+                <button
+                    onClick={() => setActiveTab('users')}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                        activeTab === 'users'
+                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                >
+                    Usuarios
+                </button>
+                <button
+                    onClick={() => setActiveTab('roles')}
+                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                        activeTab === 'roles'
+                            ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                    }`}
+                >
+                    Roles y Permisos
+                </button>
             </div>
 
             <Card>
@@ -141,102 +281,141 @@ const UsersSection = ({ showToast }) => {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
                             type="search"
-                            placeholder="Buscar por nombre o teléfono..."
+                            placeholder={activeTab === 'users' ? "Buscar por nombre o teléfono..." : "Buscar por nombre de rol..."}
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none dark:text-white text-xs font-medium"
                         />
                     </div>
                     <div className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                        Total: {users.length}
+                        Total: {activeTab === 'users' ? users.length : roles.length}
                     </div>
                 </div>
+                
                 <div className="overflow-x-auto">
                     {loading ? (
                         <div className="p-12 text-center">
                             <Loader2 className="w-8 h-8 animate-spin mx-auto text-blue-600 mb-4" />
-                            <p className="text-gray-500">Cargando equipo...</p>
+                            <p className="text-gray-500">Cargando...</p>
                         </div>
-                    ) : filteredUsers.length === 0 ? (
-                        <div className="p-12 text-center text-gray-500 uppercase text-xs tracking-wider">
-                            No se encontraron usuarios
-                        </div>
-                    ) : (
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
-                                <tr>
-                                    <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Usuario</th>
-                                    <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">WhatsApp</th>
-                                    <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Rol</th>
-                                    <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Estado</th>
-                                    <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
-                                {filteredUsers.map(user => (
-                                    <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
-                                        <td className="py-4 px-6">
-                                            <div className="flex items-center space-x-3">
-                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${user.role === 'SuperAdmin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300' :
-                                                    user.role === 'Admin' ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300' :
-                                                        'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                                                    }`}>
-                                                    {(user.name || 'U').charAt(0).toUpperCase()}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-gray-900 dark:text-white text-sm">{user.name}</p>
-                                                    <p className="text-xs text-gray-500">PIN: {user.pin || '****'}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-6 text-sm text-gray-700 dark:text-gray-300">
-                                            {user.whatsapp}
-                                        </td>
-                                        <td className="py-4 px-6">
-                                            <span className="flex items-center space-x-1.5 text-sm">
-                                                <Shield className={`w-3.5 h-3.5 ${user.role === 'SuperAdmin' ? 'text-purple-500' :
-                                                    user.role === 'Admin' ? 'text-blue-500' :
-                                                        'text-gray-400'
-                                                    }`} />
-                                                <span className="text-gray-700 dark:text-gray-300">
-                                                    {user.role === 'SuperAdmin' ? 'Super Administrador' :
-                                                        user.role === 'Admin' ? 'Administrador' : 'Reclutador'}
-                                                </span>
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-6">
-                                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                                                }`}>
-                                                {user.status === 'Active' ? 'Activo' : 'Inactivo'}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-6 text-right">
-                                            <div className="flex items-center justify-end space-x-2">
-                                                <button
-                                                    onClick={() => handleOpenModal(user)}
-                                                    className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
-                                                >
-                                                    <Pencil className="w-4 h-4" />
-                                                </button>
-                                                {user.role !== 'SuperAdmin' && (
-                                                    <button
-                                                        onClick={() => handleDelete(user.id)}
-                                                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                                                        title="Eliminar usuario"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
+                    ) : activeTab === 'users' ? (
+                        /* ----------- TABLA DE USUARIOS ----------- */
+                        filteredUsers.length === 0 ? (
+                            <div className="p-12 text-center text-gray-500 uppercase text-xs tracking-wider">
+                                No se encontraron usuarios
+                            </div>
+                        ) : (
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                                    <tr>
+                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Usuario</th>
+                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">WhatsApp</th>
+                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Rol</th>
+                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Estado</th>
+                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm text-right">Acciones</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                                    {filteredUsers.map(user => (
+                                        <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
+                                            <td className="py-4 px-6">
+                                                <div className="flex items-center space-x-3">
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${user.role === 'SuperAdmin' ? 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300' :
+                                                        'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                                        }`}>
+                                                        {(user.name || 'U').charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-gray-900 dark:text-white text-sm">{user.name}</p>
+                                                        <p className="text-xs text-gray-500">PIN: {user.pin || '****'}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-6 text-sm text-gray-700 dark:text-gray-300">
+                                                {user.whatsapp}
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                <span className="flex items-center space-x-1.5 text-sm">
+                                                    <Shield className={`w-3.5 h-3.5 ${user.role === 'SuperAdmin' ? 'text-purple-500' : 'text-blue-500'}`} />
+                                                    <span className="text-gray-700 dark:text-gray-300">{user.role}</span>
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                                    {user.status === 'Active' ? 'Activo' : 'Inactivo'}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-6 text-right">
+                                                <div className="flex items-center justify-end space-x-2">
+                                                    <button onClick={() => handleOpenModal(user)} className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
+                                                        <Pencil className="w-4 h-4" />
+                                                    </button>
+                                                    {user.role !== 'SuperAdmin' && (
+                                                        <button onClick={() => handleDelete(user.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Eliminar usuario">
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )
+                    ) : (
+                        /* ----------- TABLA DE ROLES ----------- */
+                        filteredRoles.length === 0 ? (
+                            <div className="p-12 text-center text-gray-500 uppercase text-xs tracking-wider">
+                                No se encontraron roles
+                            </div>
+                        ) : (
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-100 dark:border-gray-700">
+                                    <tr>
+                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Nombre del Rol</th>
+                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Secciones Permitidas</th>
+                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                                    {filteredRoles.map(role => {
+                                        const activeCount = Object.values(role.permissions || {}).filter(Boolean).length;
+                                        return (
+                                            <tr key={role.id} className="hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors">
+                                                <td className="py-4 px-6">
+                                                    <div className="flex items-center space-x-2">
+                                                        <ShieldCheck className={`w-5 h-5 ${role.name === 'SuperAdmin' ? 'text-purple-500' : 'text-blue-500'}`} />
+                                                        <span className="font-bold text-gray-900 dark:text-white">{role.name}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 px-6 text-sm">
+                                                    <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs font-bold">
+                                                        {activeCount} de {AVAILABLE_SECTIONS.length}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4 px-6 text-right">
+                                                    <div className="flex items-center justify-end space-x-2">
+                                                        <button onClick={() => handleOpenRoleModal(role)} className="p-2 text-gray-400 hover:text-blue-500 transition-colors">
+                                                            <Pencil className="w-4 h-4" />
+                                                        </button>
+                                                        {role.name !== 'SuperAdmin' && (
+                                                            <button onClick={() => handleRoleDelete(role.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors" title="Eliminar rol">
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )
                     )}
                 </div>
             </Card>
 
+            {/* ----------- USER MODAL ----------- */}
             <Modal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -275,9 +454,9 @@ const UsersSection = ({ showToast }) => {
                                 onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 outline-none text-sm"
                             >
-                                <option value="Recruiter">Reclutador</option>
-                                <option value="Admin">Administrador</option>
-                                <option value="SuperAdmin">Super Administrador</option>
+                                {roles.map(r => (
+                                    <option key={r.id} value={r.name}>{r.name}</option>
+                                ))}
                             </select>
                         </div>
                         <div>
@@ -294,11 +473,58 @@ const UsersSection = ({ showToast }) => {
                     </div>
 
                     <div className="flex justify-end space-x-3 pt-4">
-                        <Button variant="outline" onClick={() => setIsModalOpen(false)} disabled={saving}>
+                        <Button variant="outline" type="button" onClick={() => setIsModalOpen(false)} disabled={saving}>
                             Cancelar
                         </Button>
                         <Button type="submit" disabled={saving}>
                             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingUser ? 'Actualizar' : 'Crear Usuario'}
+                        </Button>
+                    </div>
+                </form>
+            </Modal>
+
+            {/* ----------- ROLE MODAL ----------- */}
+            <Modal
+                isOpen={isRoleModalOpen}
+                onClose={() => setIsRoleModalOpen(false)}
+                title={editingRole ? 'Editar Rol' : 'Nuevo Rol'}
+            >
+                <form onSubmit={handleRoleSubmit} className="space-y-4 pt-2">
+                    <Input
+                        label="Nombre del Rol"
+                        value={roleFormData.name}
+                        onChange={(e) => setRoleFormData({ ...roleFormData, name: e.target.value })}
+                        required
+                        placeholder="Ej: Manager"
+                        disabled={editingRole && editingRole.name === 'SuperAdmin'}
+                    />
+
+                    <div>
+                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-3">Permisos de Secciones</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto p-2 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                            {AVAILABLE_SECTIONS.map(section => (
+                                <label key={section.id} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!roleFormData.permissions[section.id]}
+                                        onChange={() => togglePermission(section.id)}
+                                        disabled={editingRole && editingRole.name === 'SuperAdmin'}
+                                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                    />
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none">
+                                        {section.name}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-3 pt-4">
+                        <Button variant="outline" type="button" onClick={() => setIsRoleModalOpen(false)} disabled={saving}>
+                            Cancelar
+                        </Button>
+                        <Button type="submit" disabled={saving || (editingRole && editingRole.name === 'SuperAdmin')}>
+                            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : editingRole ? 'Actualizar Rol' : 'Crear Rol'}
                         </Button>
                     </div>
                 </form>
