@@ -30,6 +30,7 @@ function App() {
   const [token, setToken] = useState('');
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
+  const [isAppReady, setIsAppReady] = useState(false);
   const { toast, showToast, hideToast, ToastComponent } = useToast();
 
   // Check LocalStorage for session
@@ -56,6 +57,41 @@ function App() {
       document.documentElement.classList.add('dark');
     }
   }, []);
+
+  // Validar permisos iniciales para evitar flickeo (Ghosting)
+  useEffect(() => {
+    if (!user) {
+      setIsAppReady(false);
+      return;
+    }
+    if (user.role === 'SuperAdmin') {
+      setIsAppReady(true);
+      return;
+    }
+    
+    fetch('/api/roles')
+      .then(res => res.json())
+      .then(data => {
+         if (data.success && data.roles) {
+             const currentUserRole = data.roles.find(r => r.name === user.role);
+             if (currentUserRole && currentUserRole.permissions) {
+                 if (currentUserRole.permissions['candidates'] !== true) {
+                     // Fallback orderly based on typical Sidebar order
+                     const fallbackKeys = ['chat', 'instances', 'bot-ia', 'simulator', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
+                     const fallback = fallbackKeys.find(k => currentUserRole.permissions[k] === true);
+                     if (fallback) {
+                         setActiveSection(fallback);
+                     }
+                 }
+             }
+         }
+         setIsAppReady(true);
+      })
+      .catch(e => {
+         console.error('Failed fetching role perms in App', e);
+         setIsAppReady(true);
+      });
+  }, [user]);
 
   // Toggle tema
   const toggleTheme = () => {
@@ -96,6 +132,11 @@ function App() {
         showToast(`Bienvenido, ${userData.name}`, 'success');
       }} />
     );
+  }
+
+  // PREVENT GHOSTING: wait until permissions apply routing fix
+  if (!isAppReady) {
+    return <LoadingOverlay />;
   }
 
   return (
