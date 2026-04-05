@@ -1238,7 +1238,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                                 }`}
                                                             >
                                                                 <Briefcase className="w-3.5 h-3.5 shrink-0" />
-                                                                <span className="truncate">{vac.title}</span>
+                                                                <span className="truncate">{vac.name}</span>
                                                                 {selectedChat?.currentVacancyId === vac.id && <Check className="w-3.5 h-3.5 ml-auto text-blue-500 shrink-0" />}
                                                             </div>
                                                         ))
