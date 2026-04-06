@@ -245,7 +245,7 @@ const BulksSection = ({ showToast }) => {
         const validMsgs = messages.filter(m => m.text.trim()).map(m => m.text.trim());
         if (validMsgs.length === 0) return showToast && showToast("Crea al menos un mensaje válido", "error");
 
-        if (!window.confirm(`¿Estás seguro de mandar ${validMsgs.length} mensajes secuenciales a ${selectedCandIds.size} candidatos?`)) {
+        if (!window.confirm(`¿Estás seguro de contactar a ${selectedCandIds.size} candidatos alternando entre ${validMsgs.length} variaciones de mensaje?`)) {
             return;
         }
 
@@ -378,8 +378,8 @@ const BulksSection = ({ showToast }) => {
             {/* COLUMN 2: MESSAGES */}
             <div className="w-[33%] flex flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a]">
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10 flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Secuencia de Mensajes</h2>
-                    <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded dark:bg-blue-900 dark:text-blue-300">{messages.length} SMS</span>
+                    <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Variaciones de Mensaje</h2>
+                    <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded dark:bg-blue-900 dark:text-blue-300">{messages.length} opciones</span>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">

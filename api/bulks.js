@@ -97,9 +97,12 @@ const sendNextMessage = async () => {
     }
 
     const candidateId = bulkState.candidates[bulkState.currentCandidateIndex];
-    const messageTemplate = bulkState.messages[bulkState.currentIndex];
+    
+    // Choose a random variation from the available messages for anti-spam
+    const randomMsgIndex = Math.floor(Math.random() * bulkState.messages.length);
+    const messageTemplate = bulkState.messages[randomMsgIndex];
 
-    addLog(`⏳ Procesando candidato ${candidateId} - Mensaje ${bulkState.currentIndex + 1}/${bulkState.messages.length}`);
+    addLog(`⏳ Procesando Destinatario ${bulkState.currentCandidateIndex + 1}/${bulkState.candidates.length} - Usando Variante de Msg #${randomMsgIndex + 1}`);
 
     // --- LOGICA DE ENVIO Y WA ---
     try {
@@ -155,13 +158,7 @@ const sendNextMessage = async () => {
 
     // --- MANEJO DE INDICES ---
     bulkState.totalSent++;
-    bulkState.currentIndex++;
-
-    // ¿Ya acabo sus mensajes este candidato?
-    if (bulkState.currentIndex >= bulkState.messages.length) {
-        bulkState.currentIndex = 0;
-        bulkState.currentCandidateIndex++;
-    }
+    bulkState.currentCandidateIndex++;
 
     // ¿Toca descanso general?
     if (bulkState.totalSent % bulkState.pauseEvery === 0) {
