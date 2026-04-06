@@ -24,6 +24,10 @@ const BulksSection = ({ showToast }) => {
     // Engine State
     const [engineState, setEngineState] = useState(null);
 
+    // History Modal State
+    const [showHistory, setShowHistory] = useState(false);
+    const [historyList, setHistoryList] = useState([]);
+
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
 
     // Load Candidates & Persistence
@@ -92,6 +96,43 @@ const BulksSection = ({ showToast }) => {
                 setEngineState(data.state);
             }
         } catch (e) {}
+    };
+
+    const loadHistory = async () => {
+        try {
+            const res = await fetch('/api/bulks?action=history_list');
+            const data = await res.json();
+            if (data.success) setHistoryList(data.history);
+        } catch(e) {}
+    };
+
+    const openHistory = () => {
+        loadHistory();
+        setShowHistory(true);
+    };
+
+    const reuseCampaign = (camp) => {
+        setMessages(camp.messages || [{ id: Date.now(), text: '' }]);
+        setMinDelay(camp.minDelay || 3);
+        setMaxDelay(camp.maxDelay || 5);
+        setPauseEvery(camp.pauseEvery || 10);
+        setPauseFor(camp.pauseFor || 10);
+        setSelectedCandIds(new Set()); // Start fresh selection
+        setShowHistory(false);
+        showToast && showToast("Plantilla cargada. Selecciona a tus destinatarios.", "success");
+    };
+
+    const deleteCampaign = async (id) => {
+        if (!window.confirm("¿Seguro que quieres borrar este historial?")) return;
+        try {
+            await fetch('/api/bulks?action=history_delete', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id})
+            });
+            showToast && showToast("Eliminado", "info");
+            loadHistory();
+        } catch(e) {}
     };
 
     const isProfileComplete = (c) => {
@@ -208,6 +249,8 @@ const BulksSection = ({ showToast }) => {
             return;
         }
 
+        const campaignName = prompt("Ingresa un nombre para guardar esta configuración/campaña y usarla en el futuro. (Déjalo en blanco si no quieres guardarlo):", "");
+
         try {
             const res = await fetch('/api/bulks?action=start', {
                 method: 'POST',
@@ -215,7 +258,7 @@ const BulksSection = ({ showToast }) => {
                 body: JSON.stringify({
                     candidates: Array.from(selectedCandIds),
                     messages: validMsgs,
-                    minDelay, maxDelay, pauseEvery, pauseFor
+                    minDelay, maxDelay, pauseEvery, pauseFor, campaignName
                 })
             });
             const data = await res.json();
@@ -389,8 +432,11 @@ const BulksSection = ({ showToast }) => {
 
             {/* COLUMN 3: SETTINGS & STATUS */}
             <div className="w-[34%] flex flex-col bg-white dark:bg-[#111b21]">
-                <div className="p-3 border-b border-[#f0f2f5] dark:border-[#222e35]">
+                <div className="p-3 border-b border-[#f0f2f5] dark:border-[#222e35] flex justify-between items-center bg-[#f0f2f5] dark:bg-[#202c33]">
                     <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Ejecución y Reglas</h2>
+                    <button onClick={openHistory} className="text-sm bg-white dark:bg-[#111b21] hover:bg-gray-50 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg shadow-sm flex items-center gap-1 font-medium transition-colors">
+                        📜 Historial
+                    </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4">
@@ -486,6 +532,46 @@ const BulksSection = ({ showToast }) => {
                     )}
                 </div>
             </div>
+            
+            {/* HISTORY MODAL */}
+            {showHistory && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-[#111b21] w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                        <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex justify-between items-center bg-gray-50 dark:bg-[#202c33]">
+                            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-200">📜 Historial de Campañas</h2>
+                            <button onClick={()=>setShowHistory(false)} className="text-gray-500 hover:text-gray-800 dark:hover:text-white p-1">
+                                <XCircle size={24} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-[#111b21]">
+                            {historyList.length === 0 ? (
+                                <p className="text-center text-gray-500 dark:text-gray-400 py-8">No hay campañas guardadas.</p>
+                            ) : (
+                                <div className="space-y-3">
+                                    {historyList.map(h => (
+                                        <div key={h.id} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors">
+                                            <div>
+                                                <h3 className="font-bold text-gray-800 dark:text-gray-200">{h.name || "Campaña sin nombre"}</h3>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    {new Date(h.date).toLocaleDateString()} • {h.status === 'running' ? '🚀' : h.status === 'completed' ? '✅' : '🛑'} {h.totalSent}/{h.totalTargets} enviados
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={()=>reuseCampaign(h)} className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 rounded font-bold text-xs flex items-center gap-1 transition-colors">
+                                                    👁️ Re-usar
+                                                </button>
+                                                <button onClick={()=>deleteCampaign(h.id)} className="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 rounded transition-colors">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
             
         </div>
     );

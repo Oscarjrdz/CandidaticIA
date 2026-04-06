@@ -18,7 +18,9 @@ let bulkState = {
     currentIndex: 0,
     currentCandidateIndex: 0,
     totalSent: 0,
-    logs: []
+    logs: [],
+    campaignId: null,
+    campaignName: null
 };
 
 // Variable para el temporizador
@@ -29,6 +31,22 @@ const syncStateToRedis = async () => {
         const redis = getRedisClient();
         if (redis) {
             await redis.set('bulks:latest_state', JSON.stringify(bulkState));
+            // Update history if it's a saved campaign
+            if (bulkState.campaignId) {
+                const res = await redis.get('bulks:history');
+                let history = [];
+                if (res) history = typeof res === 'string' ? JSON.parse(res) : res;
+                
+                const index = history.findIndex(h => h.id === bulkState.campaignId);
+                if (index !== -1) {
+                    history[index].totalSent = bulkState.totalSent;
+                    if (bulkState.isRunning) history[index].status = 'running';
+                    else if (bulkState.isAborted) history[index].status = 'aborted';
+                    else history[index].status = 'completed';
+                    
+                    await redis.set('bulks:history', JSON.stringify(history));
+                }
+            }
         }
     } catch (e) {
         console.error('Error saving bulk state to redis', e);
@@ -173,11 +191,13 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
         }
 
-        const { candidates, messages, minDelay, maxDelay, pauseEvery, pauseFor } = req.body;
+        const { candidates, messages, minDelay, maxDelay, pauseEvery, pauseFor, campaignName } = req.body;
         
         if (!candidates?.length || !messages?.length) {
             return res.status(400).json({ error: 'Faltan candidatos o mensajes.' });
         }
+
+        const campaignId = campaignName ? `camp_${Date.now()}` : null;
 
         bulkState = {
             isRunning: true,
@@ -191,8 +211,33 @@ export default async function handler(req, res) {
             currentIndex: 0,
             currentCandidateIndex: 0,
             totalSent: 0,
-            logs: []
+            logs: [],
+            campaignId,
+            campaignName
         };
+
+        if (campaignId) {
+            try {
+                const redis = getRedisClient();
+                if (redis) {
+                    let history = [];
+                    const resApi = await redis.get('bulks:history');
+                    if (resApi) history = typeof resApi === 'string' ? JSON.parse(resApi) : resApi;
+                    
+                    history.unshift({
+                        id: campaignId,
+                        name: campaignName,
+                        date: new Date().toISOString(),
+                        messages,
+                        minDelay, maxDelay, pauseEvery, pauseFor,
+                        totalTargets: candidates.length,
+                        totalSent: 0,
+                        status: 'running'
+                    });
+                    await redis.set('bulks:history', JSON.stringify(history));
+                }
+            } catch(e) {}
+        }
 
         addLog(`🚀 Iniciando cola masiva para ${candidates.length} contactos...`);
         syncStateToRedis();
@@ -245,6 +290,35 @@ export default async function handler(req, res) {
             }
         } catch (e) {}
         return res.status(200).json({ success: false });
+    }
+
+    if (req.method === 'GET' && action === 'history_list') {
+        try {
+            const redis = getRedisClient();
+            if (redis) {
+                const history = await redis.get('bulks:history');
+                return res.status(200).json({ success: true, history: history ? (typeof history === 'string' ? JSON.parse(history) : history) : [] });
+            }
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed getting history' });
+        }
+        return res.status(200).json({ success: true, history: [] });
+    }
+
+    if (req.method === 'POST' && action === 'history_delete') {
+        try {
+            const { id } = req.body;
+            const redis = getRedisClient();
+            if (redis) {
+                const resApi = await redis.get('bulks:history');
+                let history = [];
+                if (resApi) history = typeof resApi === 'string' ? JSON.parse(resApi) : resApi;
+                history = history.filter(h => h.id !== id);
+                await redis.set('bulks:history', JSON.stringify(history));
+                return res.status(200).json({ success: true });
+            }
+        } catch (e) {}
+        return res.status(500).json({ error: 'Failed deleting history' });
     }
 
     if (req.method === 'POST' && action === 'clone_ai') {
