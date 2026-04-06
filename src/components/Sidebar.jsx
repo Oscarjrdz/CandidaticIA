@@ -29,6 +29,7 @@ const WhatsAppIcon = () => (
 const DEFAULT_MENU_ITEMS = [
     { id: 'candidates', label: 'Candidatos', icon: Users, position: 'top' },
     { id: 'chat', label: 'Chat Web', icon: MessageSquare, position: 'top' },
+    { id: 'bulks', label: 'Envíos Masivos', icon: Send, position: 'top' },
     { id: 'instances', label: 'Instancias', icon: Server, position: 'top' },
     { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
     { id: 'simulator', label: 'Simulador', icon: MessageSquare, position: 'top' },

@@ -1,0 +1,233 @@
+import { getCandidateById, saveMessage, updateCandidate, updateMessageStatus } from './utils/storage.js';
+import { substituteVariables } from './utils/shortcuts.js';
+import { sendUltraMsgMessage, getUltraMsgConfig } from './whatsapp/utils.js';
+import axios from 'axios';
+import { getRedisClient } from './utils/storage.js';
+import { getCachedConfig } from './utils/cache.js';
+
+// En memoria RAM (Solo funcionará perfecto en persistencia como Railway o Local)
+let bulkState = {
+    isRunning: false,
+    isAborted: false,
+    candidates: [],
+    messages: [],
+    minDelay: 3,
+    maxDelay: 5,
+    pauseEvery: 10,
+    pauseFor: 10,
+    currentIndex: 0,
+    currentCandidateIndex: 0,
+    totalSent: 0,
+    logs: []
+};
+
+// Variable para el temporizador
+let bulkQueueTimer = null;
+
+const addLog = (msg) => {
+    const timestamp = new Date().toLocaleTimeString();
+    bulkState.logs.unshift(`[${timestamp}] ${msg}`);
+    if (bulkState.logs.length > 50) bulkState.logs.pop(); // Keep only 50 logs
+};
+
+const sendNextMessage = async () => {
+    if (bulkState.isAborted || !bulkState.isRunning) {
+        bulkState.isRunning = false;
+        return;
+    }
+
+    if (bulkState.currentCandidateIndex >= bulkState.candidates.length) {
+        addLog('✅ Envío masivo completado.');
+        bulkState.isRunning = false;
+        return;
+    }
+
+    const candidateId = bulkState.candidates[bulkState.currentCandidateIndex];
+    const messageTemplate = bulkState.messages[bulkState.currentIndex];
+
+    addLog(`⏳ Procesando candidato ${candidateId} - Mensaje ${bulkState.currentIndex + 1}/${bulkState.messages.length}`);
+
+    // --- LOGICA DE ENVIO Y WA ---
+    try {
+        const candidate = await getCandidateById(candidateId);
+        if (candidate) {
+            const finalMessage = substituteVariables(messageTemplate, candidate);
+            const ultraConfig = await getUltraMsgConfig(candidate?.instanceId);
+
+            if (ultraConfig) {
+                const timestamp = new Date().toISOString();
+                const msgId = `msg_bulk_${Date.now()}`;
+                
+                // Simular typing (Opcional, UltraMsg lo soporta con un endpoint distinto, pero lo omitiremos para no sobrecargar el api, a menos que el delay sea la pausa)
+                // Aquí podríamos llamar un endpoint de presencia, como la API original que usa el chat: `sendUltraMsgMessage(..., 'chat')`
+                
+                const cleanTo = candidate.whatsapp.replace(/\D/g, '');
+                
+                // 1. Transactional Save
+                const msgToSave = {
+                    id: msgId,
+                    from: 'me',
+                    content: finalMessage,
+                    type: 'text',
+                    status: 'queued',
+                    timestamp: timestamp
+                };
+
+                await saveMessage(candidateId, msgToSave);
+
+                // 2. Send via UltraMsg
+                const sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat');
+
+                if (sendResult && sendResult.success) {
+                    await updateCandidate(candidateId, {
+                        ultimoMensajeBot: timestamp,
+                        lastBotMessageAt: timestamp,
+                        ultimoMensaje: timestamp
+                    });
+
+                    const remoteId = sendResult.data?.id || sendResult.data?.messageId;
+                    await updateMessageStatus(candidateId, msgToSave.id, 'sent', { status: 'sent', ultraMsgId: remoteId });
+                    addLog(`🟢 Mensaje enviado a ${candidate.nombreReal || candidate.whatsapp}`);
+                } else {
+                    addLog(`🔴 Fila enviada pero UltraMsg retornó error para ${candidate.whatsapp}`);
+                }
+            } else {
+                addLog(`🔴 Configuración de UltraMsg no encontrada para candidato ${candidateId}`);
+            }
+        }
+    } catch (e) {
+        addLog(`❌ Error procesando candidato ${candidateId}: ${e.message}`);
+    }
+
+    // --- MANEJO DE INDICES ---
+    bulkState.totalSent++;
+    bulkState.currentIndex++;
+
+    // ¿Ya acabo sus mensajes este candidato?
+    if (bulkState.currentIndex >= bulkState.messages.length) {
+        bulkState.currentIndex = 0;
+        bulkState.currentCandidateIndex++;
+    }
+
+    // ¿Toca descanso general?
+    if (bulkState.totalSent % bulkState.pauseEvery === 0) {
+        addLog(`☕ Descanso programado. Pausando por ${bulkState.pauseFor} minutos...`);
+        bulkQueueTimer = setTimeout(sendNextMessage, bulkState.pauseFor * 60 * 1000);
+        return;
+    }
+
+    // Delay aleatorio normal
+    const minDelayMs = bulkState.minDelay * 1000;
+    const maxDelayMs = bulkState.maxDelay * 1000;
+    const nextRandomDelay = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1) + minDelayMs);
+
+    bulkQueueTimer = setTimeout(sendNextMessage, nextRandomDelay);
+};
+
+
+export default async function handler(req, res) {
+    if (req.method === 'OPTIONS') return res.status(200).end();
+
+    const { action } = req.query;
+
+    if (req.method === 'POST' && action === 'start') {
+        if (bulkState.isRunning) {
+            return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
+        }
+
+        const { candidates, messages, minDelay, maxDelay, pauseEvery, pauseFor } = req.body;
+        
+        if (!candidates?.length || !messages?.length) {
+            return res.status(400).json({ error: 'Faltan candidatos o mensajes.' });
+        }
+
+        bulkState = {
+            isRunning: true,
+            isAborted: false,
+            candidates,
+            messages,
+            minDelay: Number(minDelay) || 3,
+            maxDelay: Number(maxDelay) || 5,
+            pauseEvery: Number(pauseEvery) || 10,
+            pauseFor: Number(pauseFor) || 10,
+            currentIndex: 0,
+            currentCandidateIndex: 0,
+            totalSent: 0,
+            logs: []
+        };
+
+        addLog(`🚀 Iniciando cola masiva para ${candidates.length} contactos...`);
+        
+        if (bulkQueueTimer) clearTimeout(bulkQueueTimer);
+        
+        // Empezar en 2 segundos el primero
+        bulkQueueTimer = setTimeout(sendNextMessage, 2000);
+
+        return res.status(200).json({ success: true, message: 'Bulk started', state: bulkState });
+    }
+
+    if (req.method === 'POST' && action === 'abort') {
+        bulkState.isRunning = false;
+        bulkState.isAborted = true;
+        if (bulkQueueTimer) clearTimeout(bulkQueueTimer);
+        addLog('🛑 Envío masivo ABORTADO por el usuario.');
+        return res.status(200).json({ success: true, message: 'Bulk aborted' });
+    }
+
+    if (req.method === 'GET' && action === 'status') {
+        return res.status(200).json({ success: true, state: bulkState });
+    }
+
+    if (req.method === 'POST' && action === 'clone_ai') {
+        const { text } = req.body;
+        if (!text) return res.status(400).json({ error: 'Falta texto a clonar' });
+
+        try {
+            const redis = getRedisClient();
+            let apiKey = process.env.OPENAI_API_KEY;
+
+            if (redis) {
+                const aiConfigJson = await getCachedConfig(redis, 'ai_config') || await redis.get('ai_config');
+                if (aiConfigJson) {
+                    const aiConfig = typeof aiConfigJson === 'string' ? JSON.parse(aiConfigJson) : aiConfigJson;
+                    if (aiConfig.openaiApiKey) apiKey = aiConfig.openaiApiKey;
+                }
+            }
+
+            if (!apiKey) {
+                return res.status(500).json({ error: 'No OpenAI API Key found' });
+            }
+
+            const prompt = `Re-escribe el siguiente mensaje utilizando sinónimos, cambiando sutilmente la estructura para que parezca escrito por una persona natural. 
+MANTÉN EL MISMO CONTEXTO, LA MISMA AMIGABILIDAD, y la longitud muy similar. 
+Asegúrate de incluir EMOJIS variados (diferentes a los originales si los había, o agrégalos si no).
+ESTE TEXTO RE-ESCRITO SE ENVIARÁ POR WHATSAPP, POR LO QUE NO SALUDES TÚ NI DIGAS "Aquí tienes tu texto". ÚNICAMENTE entrega el mensaje final que se mandará.
+
+TEXTO ORIGINAL:
+"${text}"
+`;
+
+            const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+                model: 'gpt-4o-mini',
+                messages: [{ role: 'system', content: prompt }],
+                temperature: 0.8,
+                max_tokens: 300
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey.trim()}`,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 15000
+            });
+
+            const rewritten = response.data.choices[0].message.content.trim();
+            return res.status(200).json({ success: true, result: rewritten });
+
+        } catch (error) {
+            console.error('Clone AI Error', error.message);
+            return res.status(500).json({ error: 'No se pudo generar con IA' });
+        }
+    }
+
+    return res.status(405).json({ error: 'Method not allowed' });
+}

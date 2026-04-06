@@ -5,6 +5,7 @@ import Button from './components/ui/Button';
 import Sidebar from './components/Sidebar';
 import CandidatesSection from './components/CandidatesSection';
 import ChatSection from './components/ChatSection';
+import BulksSection from './components/BulksSection';
 
 import SettingsSection from './components/SettingsSection';
 import AutomationsSection from './components/AutomationsSection';
@@ -163,6 +164,7 @@ function App() {
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
                   {activeSection === 'candidates' ? 'Candidatos'
                     : activeSection === 'chat' ? 'Chat Web'
+                    : activeSection === 'bulks' ? 'Envíos Masivos (Bulks)'
                     : activeSection === 'bot-ia' ? 'Bot IA'
                     : activeSection === 'simulator' ? 'Simulador'
                     : activeSection === 'automations' ? 'Automatizaciones'
@@ -179,6 +181,7 @@ function App() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
                     : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
+                    : activeSection === 'bulks' ? 'Manda mensajes en secuencia a múltiples candidatos a la vez'
                     : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
                     : activeSection === 'simulator' ? 'Chatea con Brenda en tiempo real'
                     : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
@@ -230,11 +233,13 @@ function App() {
           </div>
         </header>
 
-        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' ? 'p-0' : 'px-8 py-8'}`}>
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' ? 'p-0' : 'px-8 py-8'}`}>
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
           ) : activeSection === 'chat' ? (
             <ChatSection showToast={showToast} user={user} rolePermissions={rolePermissions} />
+          ) : activeSection === 'bulks' ? (
+            <BulksSection showToast={showToast} />
           ) : activeSection === 'bot-ia' ? (
             <BotIASection showToast={showToast} />
           ) : activeSection === 'simulator' ? (
