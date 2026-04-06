@@ -24,10 +24,46 @@ let bulkState = {
 // Variable para el temporizador
 let bulkQueueTimer = null;
 
+const syncStateToRedis = async () => {
+    try {
+        const redis = getRedisClient();
+        if (redis) {
+            await redis.set('bulks:latest_state', JSON.stringify(bulkState));
+        }
+    } catch (e) {
+        console.error('Error saving bulk state to redis', e);
+    }
+};
+
+const tryRecoverState = async () => {
+    try {
+        const redis = getRedisClient();
+        if (redis) {
+            const saved = await redis.get('bulks:latest_state');
+            if (saved) {
+                const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
+                // Si el motor dice estar corriendo pero no hay temporizador (ej. reinicio de app),
+                // lo marcamos como abortado o detenido por caída.
+                if (parsed.isRunning && !bulkQueueTimer) {
+                    parsed.isRunning = false;
+                    parsed.logs.unshift(`[${new Date().toLocaleTimeString()}] ⚠️ El servidor se reinició. Envío detenido en el contacto ${parsed.currentCandidateIndex}.`);
+                }
+                bulkState = parsed;
+            }
+        }
+    } catch (e) {
+        console.error('Error recovering bulk state from redis', e);
+    }
+};
+
+// Intentar recuperar al cargar el módulo
+tryRecoverState();
+
 const addLog = (msg) => {
     const timestamp = new Date().toLocaleTimeString();
     bulkState.logs.unshift(`[${timestamp}] ${msg}`);
     if (bulkState.logs.length > 50) bulkState.logs.pop(); // Keep only 50 logs
+    syncStateToRedis();
 };
 
 const sendNextMessage = async () => {
@@ -112,6 +148,7 @@ const sendNextMessage = async () => {
     // ¿Toca descanso general?
     if (bulkState.totalSent % bulkState.pauseEvery === 0) {
         addLog(`☕ Descanso programado. Pausando por ${bulkState.pauseFor} minutos...`);
+        syncStateToRedis();
         bulkQueueTimer = setTimeout(sendNextMessage, bulkState.pauseFor * 60 * 1000);
         return;
     }
@@ -121,6 +158,7 @@ const sendNextMessage = async () => {
     const maxDelayMs = bulkState.maxDelay * 1000;
     const nextRandomDelay = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1) + minDelayMs);
 
+    syncStateToRedis();
     bulkQueueTimer = setTimeout(sendNextMessage, nextRandomDelay);
 };
 
@@ -157,6 +195,7 @@ export default async function handler(req, res) {
         };
 
         addLog(`🚀 Iniciando cola masiva para ${candidates.length} contactos...`);
+        syncStateToRedis();
         
         if (bulkQueueTimer) clearTimeout(bulkQueueTimer);
         
@@ -171,10 +210,15 @@ export default async function handler(req, res) {
         bulkState.isAborted = true;
         if (bulkQueueTimer) clearTimeout(bulkQueueTimer);
         addLog('🛑 Envío masivo ABORTADO por el usuario.');
+        syncStateToRedis();
         return res.status(200).json({ success: true, message: 'Bulk aborted' });
     }
 
     if (req.method === 'GET' && action === 'status') {
+        // En caso de que se haya reiniciado la app y sea la primera petición, tratamos de recuperar si bulkState es por defecto
+        if (!bulkState.candidates || bulkState.candidates.length === 0) {
+            await tryRecoverState();
+        }
         return res.status(200).json({ success: true, state: bulkState });
     }
 

@@ -8,6 +8,7 @@ const BulksSection = ({ showToast }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [loadingChats, setLoadingChats] = useState(true);
     const [selectedCandIds, setSelectedCandIds] = useState(new Set());
+    const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'complete', 'incomplete'
 
     // Col 2: Messages
     const [messages, setMessages] = useState([{ id: Date.now(), text: '' }]);
@@ -55,13 +56,41 @@ const BulksSection = ({ showToast }) => {
         } catch (e) {}
     };
 
+    const isProfileComplete = (c) => {
+        if (!c) return false;
+        const valToStr = (v) => v ? String(v).trim().toLowerCase() : '-';
+        const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
+        const hasCoreData = coreFields.every(f => {
+            const val = valToStr(c[f]);
+            if (val === '-' || val === 'null' || val === 'n/a' || val === 'na' || val === 'ninguno' || val === 'ninguna' || val === 'none' || val === 'desconocido' || val.includes('proporcionado') || val.length < 2) return false;
+            if (f === 'escolaridad') {
+                const junk = ['kinder', 'ninguna', 'sin estudios', 'no tengo', 'no curse', 'preescolar', 'maternal'];
+                if (junk.some(j => val.includes(j))) return false;
+            }
+            return true;
+        });
+
+        const ageVal = valToStr(c.edad || c.fechaNacimiento);
+        const hasAgeData = ageVal !== '-' && ageVal !== 'null' && ageVal !== 'n/a' && ageVal !== 'na';
+        return hasCoreData && hasAgeData;
+    };
+
     // Filter Logic
     const filteredCandidates = (candidates || []).filter(c => {
         const searchVal = (searchQuery || "").toLowerCase();
-        if (!searchVal) return true;
-        return (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
-               (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
-               (c?.whatsapp && String(c.whatsapp).includes(searchVal));
+        let matchesSearch = true;
+        if (searchVal) {
+            matchesSearch = (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
+                            (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
+                            (c?.whatsapp && String(c.whatsapp).includes(searchVal));
+        }
+
+        if (!matchesSearch) return false;
+
+        if (activeFilter === 'complete' && !isProfileComplete(c)) return false;
+        if (activeFilter === 'incomplete' && isProfileComplete(c)) return false;
+
+        return true;
     });
 
     const toggleCandidate = (id) => {
@@ -191,6 +220,33 @@ const BulksSection = ({ showToast }) => {
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 pb-2">
+                        <button 
+                            onClick={() => setActiveFilter('all')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                activeFilter === 'all' 
+                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                            }`}
+                        >Todos</button>
+                        <button 
+                            onClick={() => setActiveFilter('complete')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                activeFilter === 'complete' 
+                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                            }`}
+                        >Completos</button>
+                        <button 
+                            onClick={() => setActiveFilter('incomplete')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                activeFilter === 'incomplete' 
+                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                            }`}
+                        >Incompletos</button>
                     </div>
 
                     <div className="flex justify-between items-center text-sm px-1">
