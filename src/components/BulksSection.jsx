@@ -31,33 +31,44 @@ const BulksSection = ({ showToast }) => {
         loadCandidates();
         const pollStatus = setInterval(fetchEngineStatus, 1500);
 
-        // Recover draft
-        const savedDraft = localStorage.getItem('bulks_draft');
-        if (savedDraft) {
-            try {
-                const parsed = JSON.parse(savedDraft);
-                if (parsed.messages) setMessages(parsed.messages);
-                if (parsed.minDelay) setMinDelay(parsed.minDelay);
-                if (parsed.maxDelay) setMaxDelay(parsed.maxDelay);
-                if (parsed.pauseEvery) setPauseEvery(parsed.pauseEvery);
-                if (parsed.pauseFor) setPauseFor(parsed.pauseFor);
-                if (parsed.selectedCandIds) setSelectedCandIds(new Set(parsed.selectedCandIds));
-            } catch (e) {}
-        }
+        // Recover draft from redis
+        fetch('/api/bulks?action=get_draft')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.draft) {
+                    const parsed = data.draft;
+                    if (parsed.messages) setMessages(parsed.messages);
+                    if (parsed.minDelay) setMinDelay(parsed.minDelay);
+                    if (parsed.maxDelay) setMaxDelay(parsed.maxDelay);
+                    if (parsed.pauseEvery) setPauseEvery(parsed.pauseEvery);
+                    if (parsed.pauseFor) setPauseFor(parsed.pauseFor);
+                    if (parsed.selectedCandIds) setSelectedCandIds(new Set(parsed.selectedCandIds));
+                }
+            })
+            .catch(e => console.error("Could not load draft", e));
 
         return () => clearInterval(pollStatus);
     }, []);
 
     // Save draft state on change
     useEffect(() => {
-        localStorage.setItem('bulks_draft', JSON.stringify({
+        const draft = {
             messages,
             minDelay,
             maxDelay,
             pauseEvery,
             pauseFor,
             selectedCandIds: Array.from(selectedCandIds)
-        }));
+        };
+        const timer = setTimeout(() => {
+            fetch('/api/bulks?action=save_draft', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(draft)
+            }).catch(e => console.error("Could not save draft", e));
+        }, 1200);
+        
+        return () => clearTimeout(timer);
     }, [messages, minDelay, maxDelay, pauseEvery, pauseFor, selectedCandIds]);
 
     const loadCandidates = async () => {

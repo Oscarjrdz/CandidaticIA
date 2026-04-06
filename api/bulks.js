@@ -222,6 +222,31 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, state: bulkState });
     }
 
+    if (req.method === 'POST' && action === 'save_draft') {
+        try {
+            const redis = getRedisClient();
+            if (redis) {
+                await redis.set('bulks:draft', JSON.stringify(req.body));
+            }
+            return res.status(200).json({ success: true });
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed saving draft to redis' });
+        }
+    }
+
+    if (req.method === 'GET' && action === 'get_draft') {
+        try {
+            const redis = getRedisClient();
+            if (redis) {
+                const draft = await redis.get('bulks:draft');
+                if (draft) {
+                    return res.status(200).json({ success: true, draft: typeof draft === 'string' ? JSON.parse(draft) : draft });
+                }
+            }
+        } catch (e) {}
+        return res.status(200).json({ success: false });
+    }
+
     if (req.method === 'POST' && action === 'clone_ai') {
         const { text } = req.body;
         if (!text) return res.status(400).json({ error: 'Falta texto a clonar' });
