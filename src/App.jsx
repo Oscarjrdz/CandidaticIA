@@ -96,6 +96,15 @@ function App() {
       });
   }, [user]);
 
+  // Global heartbeat to keep Vercel alive for background Bulks even if outside of BulksSection
+  useEffect(() => {
+    if (!user) return;
+    const heartbeat = setInterval(() => {
+        fetch('/api/bulks?action=status').catch(() => {});
+    }, 2000);
+    return () => clearInterval(heartbeat);
+  }, [user]);
+
   // Toggle tema
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
