@@ -26,12 +26,39 @@ const BulksSection = ({ showToast }) => {
 
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
 
-    // Load Candidates
+    // Load Candidates & Persistence
     useEffect(() => {
         loadCandidates();
         const pollStatus = setInterval(fetchEngineStatus, 1500);
+
+        // Recover draft
+        const savedDraft = localStorage.getItem('bulks_draft');
+        if (savedDraft) {
+            try {
+                const parsed = JSON.parse(savedDraft);
+                if (parsed.messages) setMessages(parsed.messages);
+                if (parsed.minDelay) setMinDelay(parsed.minDelay);
+                if (parsed.maxDelay) setMaxDelay(parsed.maxDelay);
+                if (parsed.pauseEvery) setPauseEvery(parsed.pauseEvery);
+                if (parsed.pauseFor) setPauseFor(parsed.pauseFor);
+                if (parsed.selectedCandIds) setSelectedCandIds(new Set(parsed.selectedCandIds));
+            } catch (e) {}
+        }
+
         return () => clearInterval(pollStatus);
     }, []);
+
+    // Save draft state on change
+    useEffect(() => {
+        localStorage.setItem('bulks_draft', JSON.stringify({
+            messages,
+            minDelay,
+            maxDelay,
+            pauseEvery,
+            pauseFor,
+            selectedCandIds: Array.from(selectedCandIds)
+        }));
+    }, [messages, minDelay, maxDelay, pauseEvery, pauseFor, selectedCandIds]);
 
     const loadCandidates = async () => {
         try {
