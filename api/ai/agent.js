@@ -4368,8 +4368,11 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 // 🛠️ [HACK] Synchronous Gender fallback for Orchestrator
                 let tempGenero = candidateUpdates.genero || candidateData.genero;
                 if ((!tempGenero || tempGenero === 'Desconocido') && (candidateUpdates.nombreReal || candidateData.nombreReal)) {
-                    const nr = (candidateUpdates.nombreReal || candidateData.nombreReal || "").toLowerCase();
-                    if (nr.startsWith("maria") || nr.startsWith("ana ") || nr.startsWith("laura") || nr.startsWith("brenda") || nr.endsWith("a")) {
+                    const nr = (candidateUpdates.nombreReal || candidateData.nombreReal || "").trim().toLowerCase();
+                    const firstWord = nr.split(/\s+/)[0] || "";
+                    if (['jose', 'jesús', 'jesus', 'josé'].includes(firstWord)) {
+                        tempGenero = "Hombre";
+                    } else if (firstWord.startsWith("maria") || firstWord.startsWith("ana") || firstWord.startsWith("laura") || firstWord.startsWith("brenda") || firstWord.endsWith("a")) {
                         tempGenero = "Mujer";
                     } else {
                         tempGenero = "Hombre";
