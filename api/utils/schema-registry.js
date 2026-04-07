@@ -19,7 +19,10 @@ export const DATA_SCHEMA = {
         onSuccess: async (val, updateObj) => {
             if (val) {
                 const gender = await detectGender(val);
-                if (gender && gender !== 'Desconocido') updateObj.genero = gender;
+                // Forzar que SIEMPRE se recalcule el género si hay nuevo nombre
+                if (gender && gender !== 'Desconocido') {
+                    updateObj.genero = gender;
+                }
             }
         }
     },
