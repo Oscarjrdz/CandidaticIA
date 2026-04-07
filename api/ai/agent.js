@@ -1865,7 +1865,7 @@ ${safeDnaLines}
                             // All vacancies exhausted AND no bypass match → fire move:exit
                             aiResult = {
                                 thought_process: "ALL_VACANCIES_REJECTED { move: exit }",
-                                response_text: null,
+                                response_text: "Entiendo perfectamente. 🙏 Por el momento ya no tengo otras vacantes disponibles en esta zona, pero mantendré tu perfil guardado por si en un futuro se abre una nueva posición que te interese. ¡Mucho éxito! 💼✨",
                                 close_conversation: true,
                                 reaction: '👍'
                             };
@@ -2941,7 +2941,8 @@ ${safeDnaLines}
                     // in response to "Sí" — any exit tag it emits is a false positive.
                     // Clear it here so CITADOS CANCELLATION PIVOT and NO_INTERESA GATE don't
                     // double-fire on the same turn where pivot was already sent.
-                    if ((skipRecruiterInference || isHandlingPivot) && hasExitTag) {
+                    const isProgrammaticExit = String(aiResult?.thought_process || '').includes('ALL_VACANCIES_REJECTED');
+                    if ((skipRecruiterInference || isHandlingPivot) && hasExitTag && !isProgrammaticExit) {
                         console.log(`[COLLISION GUARD] skipRecruiterInference=${skipRecruiterInference} isHandlingPivot=${isHandlingPivot} → clearing false hasExitTag.`);
                         hasExitTag = false;
                         extractedMoveTarget = null;
@@ -3008,7 +3009,7 @@ ${safeDnaLines}
                         }
                     }
 
-                    if (hasExitTag && !_niGateAlreadyPending) {
+                    if (hasExitTag && !_niGateAlreadyPending && !isProgrammaticExit) {
                         const _niFromCitados = (currentStep?.name || '').toLowerCase().includes('citado');
                         const _NI_GATE_QUESTIONS = _niFromCitados ? [
                             `¿Entonces ya no te interesa tener una entrevista con nosotros? 🤔 Solo confírmame para cerrar tu proceso`,
