@@ -101,7 +101,7 @@ const BulksSection = ({ showToast }) => {
 
     const loadCandidates = async () => {
         try {
-            const result = await getCandidates(200, 0, "");
+            const result = await getCandidates(2000, 0, "");
             if (result.success) {
                 setCandidates(result.candidates || []);
             }
