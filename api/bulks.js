@@ -5,296 +5,383 @@ import axios from 'axios';
 import { getRedisClient } from './utils/storage.js';
 import { getCachedConfig } from './utils/cache.js';
 
-// En memoria RAM (Solo funcionará perfecto en persistencia como Railway o Local)
-let bulkState = {
-    isRunning: false,
-    isAborted: false,
-    candidates: [],
-    messages: [],
-    minDelay: 3,
-    maxDelay: 5,
-    pauseEvery: 10,
-    pauseFor: 10,
-    currentIndex: 0,
-    currentCandidateIndex: 0,
-    totalSent: 0,
-    logs: [],
-    campaignId: null,
-    campaignName: null
-};
+// ═══════════════════════════════════════════════════════════════════════════════
+// POLL-DRIVEN BULK ENGINE v2.0
+// ═══════════════════════════════════════════════════════════════════════════════
+// Diseñado para sobrevivir en entornos serverless (Vercel) y persistentes (Railway).
+//
+// PRINCIPIO: El estado vive 100% en Redis. Cada call a GET ?action=status
+//            es el "tick" que avanza la cola si ya pasó el delay.
+//            No hay setTimeout, no hay setInterval, no hay RAM persistente.
+//
+// FLUJO:
+//   1. POST ?action=start   → Escribe estado inicial en Redis con isRunning:true
+//   2. GET  ?action=status   → Lee Redis. Si isRunning && Date.now() >= nextSendAt
+//                               → ejecuta sendNextMessage() inline, actualiza Redis
+//   3. POST ?action=abort    → Escribe isAborted:true en Redis. Siguiente tick lo detecta.
+//
+// ANTI-SPAM: Los delays aleatorios se precomputan como timestamps absolutos
+//            (nextSendAt). Los descansos de seguridad también.
+// ═══════════════════════════════════════════════════════════════════════════════
 
-// Variable para el temporizador
-let bulkQueueTimer = null;
+const REDIS_KEY_STATE = 'bulks:engine_state';
+const REDIS_KEY_DRAFT = 'bulks:draft';
+const REDIS_KEY_HISTORY = 'bulks:history';
 
-const syncStateToRedis = async () => {
+// Lock para evitar que 2 polls concurrentes procesen al mismo candidato
+let processingLock = false;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const getState = async () => {
     try {
         const redis = getRedisClient();
-        if (redis) {
-            await redis.set('bulks:latest_state', JSON.stringify(bulkState));
-            // Update history if it's a saved campaign
-            if (bulkState.campaignId) {
-                const res = await redis.get('bulks:history');
-                let history = [];
-                if (res) history = typeof res === 'string' ? JSON.parse(res) : res;
-                
-                const index = history.findIndex(h => h.id === bulkState.campaignId);
-                if (index !== -1) {
-                    history[index].totalSent = bulkState.totalSent;
-                    if (bulkState.isRunning) history[index].status = 'running';
-                    else if (bulkState.isAborted) history[index].status = 'aborted';
-                    else history[index].status = 'completed';
-                    
-                    await redis.set('bulks:history', JSON.stringify(history));
-                }
-            }
-        }
+        if (!redis) return null;
+        const raw = await redis.get(REDIS_KEY_STATE);
+        if (!raw) return null;
+        return typeof raw === 'string' ? JSON.parse(raw) : raw;
     } catch (e) {
-        console.error('Error saving bulk state to redis', e);
+        console.error('[BULK ENGINE] Error reading state from Redis:', e.message);
+        return null;
     }
 };
 
-const tryRecoverState = async () => {
+const saveState = async (state) => {
     try {
         const redis = getRedisClient();
-        if (redis) {
-            const saved = await redis.get('bulks:latest_state');
-            if (saved) {
-                const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
-                // Si el motor dice estar corriendo pero no hay temporizador (ej. reinicio de app),
-                // lo marcamos como abortado o detenido por caída.
-                if (parsed.isRunning && !bulkQueueTimer) {
-                    parsed.isRunning = false;
-                    parsed.logs.unshift(`[${new Date().toLocaleTimeString()}] ⚠️ El servidor se reinició. Envío detenido en el contacto ${parsed.currentCandidateIndex}.`);
+        if (!redis) return;
+        await redis.set(REDIS_KEY_STATE, JSON.stringify(state));
+
+        // Sync to history if campaign has an ID
+        if (state.campaignId) {
+            try {
+                const raw = await redis.get(REDIS_KEY_HISTORY);
+                let history = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
+                const idx = history.findIndex(h => h.id === state.campaignId);
+                if (idx !== -1) {
+                    history[idx].totalSent = state.totalSent;
+                    history[idx].status = state.isRunning ? 'running' : (state.isAborted ? 'aborted' : 'completed');
+                    await redis.set(REDIS_KEY_HISTORY, JSON.stringify(history));
                 }
-                bulkState = parsed;
-            }
+            } catch (e) { /* non-critical */ }
         }
     } catch (e) {
-        console.error('Error recovering bulk state from redis', e);
+        console.error('[BULK ENGINE] Error saving state to Redis:', e.message);
     }
 };
 
-// Intentar recuperar al cargar el módulo
-tryRecoverState();
-
-const addLog = (msg) => {
-    const timestamp = new Date().toLocaleTimeString();
-    bulkState.logs.unshift(`[${timestamp}] ${msg}`);
-    if (bulkState.logs.length > 50) bulkState.logs.pop(); // Keep only 50 logs
-    syncStateToRedis();
+const addLog = (state, msg) => {
+    const ts = new Date().toLocaleTimeString();
+    state.logs.unshift(`[${ts}] ${msg}`);
+    if (state.logs.length > 80) state.logs.length = 80; // cap
 };
 
-const sendNextMessage = async () => {
-    if (bulkState.isAborted || !bulkState.isRunning) {
-        bulkState.isRunning = false;
-        return;
+const computeNextDelay = (state) => {
+    const minMs = (Number(state.minDelay) || 3) * 1000;
+    const maxMs = (Number(state.maxDelay) || 7) * 1000;
+    return Math.floor(Math.random() * (maxMs - minMs + 1) + minMs);
+};
+
+const computePauseDelay = (state) => {
+    return (Number(state.pauseFor) || 10) * 60 * 1000; // minutos → ms
+};
+
+// ─── Core Tick Engine ────────────────────────────────────────────────────────
+
+const tickEngine = async (state) => {
+    // Gate 1: no está corriendo
+    if (!state || !state.isRunning) return state;
+
+    // Gate 2: fue abortado
+    if (state.isAborted) {
+        state.isRunning = false;
+        addLog(state, '🛑 Envío masivo ABORTADO por el usuario.');
+        await saveState(state);
+        return state;
     }
 
-    if (bulkState.currentCandidateIndex >= bulkState.candidates.length) {
-        addLog('✅ Envío masivo completado.');
-        bulkState.isRunning = false;
-        return;
+    // Gate 3: ya terminó todos los candidatos
+    if (state.currentCandidateIndex >= state.candidates.length) {
+        state.isRunning = false;
+        addLog(state, '✅ Envío masivo completado. Todos los contactos procesados.');
+        await saveState(state);
+        return state;
     }
 
-    const candidateId = bulkState.candidates[bulkState.currentCandidateIndex];
-    
-    // Choose a random variation from the available messages for anti-spam
-    const randomMsgIndex = Math.floor(Math.random() * bulkState.messages.length);
-    const messageTemplate = bulkState.messages[randomMsgIndex];
+    // Gate 4: aún no toca (delay / pausa)
+    if (state.nextSendAt && Date.now() < state.nextSendAt) {
+        return state; // Aún no es hora, no guardar (no cambió nada)
+    }
 
-    addLog(`⏳ Procesando Destinatario ${bulkState.currentCandidateIndex + 1}/${bulkState.candidates.length} - Usando Variante de Msg #${randomMsgIndex + 1}`);
+    // Gate 5: lock — otro tick ya está procesando
+    if (processingLock) return state;
+    processingLock = true;
 
-    // --- LOGICA DE ENVIO Y WA ---
     try {
-        const candidate = await getCandidateById(candidateId);
-        if (candidate) {
-            const finalMessage = substituteVariables(messageTemplate, candidate);
-            const ultraConfig = await getUltraMsgConfig(candidate?.instanceId);
+        // ─── ENVIAR MENSAJE ──────────────────────────────────────────────────
+        const candidateId = state.candidates[state.currentCandidateIndex];
 
-            if (ultraConfig) {
-                const timestamp = new Date().toISOString();
-                const msgId = `msg_bulk_${Date.now()}`;
-                
-                // Simular typing (Opcional, UltraMsg lo soporta con un endpoint distinto, pero lo omitiremos para no sobrecargar el api, a menos que el delay sea la pausa)
-                // Aquí podríamos llamar un endpoint de presencia, como la API original que usa el chat: `sendUltraMsgMessage(..., 'chat')`
-                
-                const cleanTo = candidate.whatsapp.replace(/\D/g, '');
-                
-                // 1. Transactional Save
-                const msgToSave = {
-                    id: msgId,
-                    from: 'me',
-                    content: finalMessage,
-                    type: 'text',
-                    status: 'queued',
-                    timestamp: timestamp
-                };
+        // Selección aleatoria de variante
+        const randomIdx = Math.floor(Math.random() * state.messages.length);
+        const messageTemplate = state.messages[randomIdx];
 
-                await saveMessage(candidateId, msgToSave);
+        addLog(state, `⏳ Procesando ${state.currentCandidateIndex + 1}/${state.candidates.length} — Variante #${randomIdx + 1}`);
 
-                // 2. Send via UltraMsg
-                const sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat');
+        let sendSuccess = false;
 
-                if (sendResult && sendResult.success) {
-                    await updateCandidate(candidateId, {
-                        ultimoMensajeBot: timestamp,
-                        lastBotMessageAt: timestamp,
-                        ultimoMensaje: timestamp
-                    });
-
-                    const remoteId = sendResult.data?.id || sendResult.data?.messageId;
-                    await updateMessageStatus(candidateId, msgToSave.id, 'sent', { status: 'sent', ultraMsgId: remoteId });
-                    addLog(`🟢 Mensaje enviado a ${candidate.nombreReal || candidate.whatsapp}`);
-                } else {
-                    addLog(`🔴 Fila enviada pero UltraMsg retornó error para ${candidate.whatsapp}`);
-                }
+        try {
+            const candidate = await getCandidateById(candidateId);
+            if (!candidate) {
+                addLog(state, `⚠️ Candidato ${candidateId} no encontrado en DB. Saltando.`);
             } else {
-                addLog(`🔴 Configuración de UltraMsg no encontrada para candidato ${candidateId}`);
+                const finalMessage = substituteVariables(messageTemplate, candidate);
+                const ultraConfig = await getUltraMsgConfig(candidate?.instanceId);
+
+                if (!ultraConfig) {
+                    addLog(state, `🔴 Sin config UltraMsg para ${candidateId}. Saltando.`);
+                } else {
+                    const cleanTo = (candidate.whatsapp || '').replace(/\D/g, '');
+                    if (!cleanTo) {
+                        addLog(state, `🔴 WhatsApp vacío para ${candidate.nombreReal || candidateId}. Saltando.`);
+                    } else {
+                        const timestamp = new Date().toISOString();
+                        const msgId = `msg_bulk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+                        // 1. Guardar mensaje transaccional
+                        const msgToSave = {
+                            id: msgId,
+                            from: 'me',
+                            content: finalMessage,
+                            type: 'text',
+                            status: 'queued',
+                            timestamp
+                        };
+                        await saveMessage(candidateId, msgToSave);
+
+                        // 2. Enviar via WhatsApp
+                        const sendResult = await sendUltraMsgMessage(
+                            ultraConfig.instanceId,
+                            ultraConfig.token,
+                            cleanTo,
+                            finalMessage,
+                            'chat'
+                        );
+
+                        if (sendResult && sendResult.success) {
+                            await updateCandidate(candidateId, {
+                                ultimoMensajeBot: timestamp,
+                                lastBotMessageAt: timestamp,
+                                ultimoMensaje: timestamp
+                            });
+                            const remoteId = sendResult.data?.id || sendResult.data?.messageId;
+                            await updateMessageStatus(candidateId, msgToSave.id, 'sent', {
+                                status: 'sent',
+                                ultraMsgId: remoteId
+                            });
+                            addLog(state, `🟢 Enviado a ${candidate.nombreReal || candidate.whatsapp}`);
+                            sendSuccess = true;
+                        } else {
+                            addLog(state, `🔴 Error de API para ${candidate.whatsapp}: ${sendResult?.error || 'respuesta no exitosa'}`);
+                            // Marcar como fallido
+                            await updateMessageStatus(candidateId, msgToSave.id, 'failed', { status: 'failed' }).catch(() => {});
+                        }
+                    }
+                }
             }
+        } catch (e) {
+            addLog(state, `❌ Error procesando ${candidateId}: ${e.message}`);
         }
-    } catch (e) {
-        addLog(`❌ Error procesando candidato ${candidateId}: ${e.message}`);
+
+        // ─── AVANZAR ÍNDICE ──────────────────────────────────────────────────
+        if (sendSuccess) state.totalSent++;
+        state.currentCandidateIndex++;
+
+        // ─── CALCULAR PRÓXIMO DELAY ──────────────────────────────────────────
+
+        // ¿Ya terminó?
+        if (state.currentCandidateIndex >= state.candidates.length) {
+            state.isRunning = false;
+            state.nextSendAt = null;
+            addLog(state, '✅ Envío masivo completado. Todos los contactos procesados.');
+        }
+        // ¿Toca descanso de seguridad?
+        else if (state.totalSent > 0 && state.totalSent % (Number(state.pauseEvery) || 10) === 0) {
+            const pauseMs = computePauseDelay(state);
+            state.nextSendAt = Date.now() + pauseMs;
+            const pauseMins = Math.round(pauseMs / 60000);
+            addLog(state, `☕ Descanso de seguridad. Pausando ${pauseMins} minutos (hasta ${new Date(state.nextSendAt).toLocaleTimeString()})...`);
+        }
+        // Delay aleatorio normal
+        else {
+            const delayMs = computeNextDelay(state);
+            state.nextSendAt = Date.now() + delayMs;
+        }
+
+        await saveState(state);
+
+    } finally {
+        processingLock = false;
     }
 
-    // --- MANEJO DE INDICES ---
-    bulkState.totalSent++;
-    bulkState.currentCandidateIndex++;
-
-    // ¿Toca descanso general?
-    if (bulkState.totalSent % bulkState.pauseEvery === 0) {
-        addLog(`☕ Descanso programado. Pausando por ${bulkState.pauseFor} minutos...`);
-        syncStateToRedis();
-        bulkQueueTimer = setTimeout(sendNextMessage, bulkState.pauseFor * 60 * 1000);
-        return;
-    }
-
-    // Delay aleatorio normal
-    const minDelayMs = bulkState.minDelay * 1000;
-    const maxDelayMs = bulkState.maxDelay * 1000;
-    const nextRandomDelay = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1) + minDelayMs);
-
-    syncStateToRedis();
-    bulkQueueTimer = setTimeout(sendNextMessage, nextRandomDelay);
+    return state;
 };
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HTTP HANDLER
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     const { action } = req.query;
 
+    // ─── START ───────────────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'start') {
-        if (bulkState.isRunning) {
+        const existingState = await getState();
+        if (existingState && existingState.isRunning) {
             return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
         }
 
         const { candidates, messages, minDelay, maxDelay, pauseEvery, pauseFor, campaignName } = req.body;
-        
+
         if (!candidates?.length || !messages?.length) {
             return res.status(400).json({ error: 'Faltan candidatos o mensajes.' });
         }
 
         const campaignId = campaignName ? `camp_${Date.now()}` : null;
 
-        bulkState = {
+        const newState = {
             isRunning: true,
             isAborted: false,
             candidates,
             messages,
             minDelay: Number(minDelay) || 3,
-            maxDelay: Number(maxDelay) || 5,
+            maxDelay: Number(maxDelay) || 7,
             pauseEvery: Number(pauseEvery) || 10,
             pauseFor: Number(pauseFor) || 10,
-            currentIndex: 0,
             currentCandidateIndex: 0,
             totalSent: 0,
             logs: [],
             campaignId,
-            campaignName
+            campaignName,
+            startedAt: Date.now(),
+            nextSendAt: Date.now() + 2000 // Primer envío en 2 segundos
         };
 
+        addLog(newState, `🚀 Campaña iniciada para ${candidates.length} contactos con ${messages.length} variaciones.`);
+
+        // Guardar campaña en historial
         if (campaignId) {
             try {
                 const redis = getRedisClient();
                 if (redis) {
-                    let history = [];
-                    const resApi = await redis.get('bulks:history');
-                    if (resApi) history = typeof resApi === 'string' ? JSON.parse(resApi) : resApi;
-                    
+                    const raw = await redis.get(REDIS_KEY_HISTORY);
+                    let history = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
                     history.unshift({
                         id: campaignId,
                         name: campaignName,
                         date: new Date().toISOString(),
                         messages,
-                        minDelay, maxDelay, pauseEvery, pauseFor,
+                        minDelay: newState.minDelay,
+                        maxDelay: newState.maxDelay,
+                        pauseEvery: newState.pauseEvery,
+                        pauseFor: newState.pauseFor,
                         totalTargets: candidates.length,
                         totalSent: 0,
                         status: 'running'
                     });
-                    await redis.set('bulks:history', JSON.stringify(history));
+                    await redis.set(REDIS_KEY_HISTORY, JSON.stringify(history));
                 }
-            } catch(e) {}
+            } catch (e) { /* non-critical */ }
         }
 
-        addLog(`🚀 Iniciando cola masiva para ${candidates.length} contactos...`);
-        syncStateToRedis();
-        
-        if (bulkQueueTimer) clearTimeout(bulkQueueTimer);
-        
-        // Empezar en 2 segundos el primero
-        bulkQueueTimer = setTimeout(sendNextMessage, 2000);
-
-        return res.status(200).json({ success: true, message: 'Bulk started', state: bulkState });
+        await saveState(newState);
+        return res.status(200).json({ success: true, message: 'Bulk started', state: newState });
     }
 
+    // ─── ABORT ───────────────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'abort') {
-        bulkState.isRunning = false;
-        bulkState.isAborted = true;
-        if (bulkQueueTimer) clearTimeout(bulkQueueTimer);
-        addLog('🛑 Envío masivo ABORTADO por el usuario.');
-        syncStateToRedis();
+        const state = await getState();
+        if (!state) {
+            return res.status(200).json({ success: true, message: 'No hay campaña activa.' });
+        }
+
+        state.isRunning = false;
+        state.isAborted = true;
+        state.nextSendAt = null;
+        addLog(state, '🛑 Envío masivo ABORTADO por el usuario.');
+        await saveState(state);
+
         return res.status(200).json({ success: true, message: 'Bulk aborted' });
     }
 
+    // ─── STATUS (+ TICK ENGINE) ──────────────────────────────────────────────
     if (req.method === 'GET' && action === 'status') {
-        // En caso de que se haya reiniciado la app y sea la primera petición, tratamos de recuperar si bulkState es por defecto
-        if (!bulkState.candidates || bulkState.candidates.length === 0) {
-            await tryRecoverState();
+        let state = await getState();
+
+        if (!state) {
+            // No hay estado — devolver estado vacío
+            return res.status(200).json({
+                success: true,
+                state: {
+                    isRunning: false,
+                    isAborted: false,
+                    candidates: [],
+                    messages: [],
+                    currentCandidateIndex: 0,
+                    totalSent: 0,
+                    logs: []
+                }
+            });
         }
-        return res.status(200).json({ success: true, state: bulkState });
+
+        // 🔥 TICK: Si está corriendo, intentar avanzar la cola
+        if (state.isRunning && !state.isAborted) {
+            state = await tickEngine(state);
+        }
+
+        return res.status(200).json({ success: true, state });
     }
 
+    // ─── SAVE DRAFT ──────────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'save_draft') {
         try {
             const redis = getRedisClient();
             if (redis) {
-                await redis.set('bulks:draft', JSON.stringify(req.body));
+                await redis.set(REDIS_KEY_DRAFT, JSON.stringify(req.body));
             }
             return res.status(200).json({ success: true });
         } catch (e) {
-            return res.status(500).json({ error: 'Failed saving draft to redis' });
+            return res.status(500).json({ error: 'Failed saving draft' });
         }
     }
 
+    // ─── GET DRAFT ───────────────────────────────────────────────────────────
     if (req.method === 'GET' && action === 'get_draft') {
         try {
             const redis = getRedisClient();
             if (redis) {
-                const draft = await redis.get('bulks:draft');
-                if (draft) {
-                    return res.status(200).json({ success: true, draft: typeof draft === 'string' ? JSON.parse(draft) : draft });
+                const raw = await redis.get(REDIS_KEY_DRAFT);
+                if (raw) {
+                    return res.status(200).json({
+                        success: true,
+                        draft: typeof raw === 'string' ? JSON.parse(raw) : raw
+                    });
                 }
             }
-        } catch (e) {}
+        } catch (e) { /* non-critical */ }
         return res.status(200).json({ success: false });
     }
 
+    // ─── HISTORY LIST ────────────────────────────────────────────────────────
     if (req.method === 'GET' && action === 'history_list') {
         try {
             const redis = getRedisClient();
             if (redis) {
-                const history = await redis.get('bulks:history');
-                return res.status(200).json({ success: true, history: history ? (typeof history === 'string' ? JSON.parse(history) : history) : [] });
+                const raw = await redis.get(REDIS_KEY_HISTORY);
+                const history = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
+                return res.status(200).json({ success: true, history });
             }
         } catch (e) {
             return res.status(500).json({ error: 'Failed getting history' });
@@ -302,22 +389,23 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, history: [] });
     }
 
+    // ─── HISTORY DELETE ──────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'history_delete') {
         try {
             const { id } = req.body;
             const redis = getRedisClient();
             if (redis) {
-                const resApi = await redis.get('bulks:history');
-                let history = [];
-                if (resApi) history = typeof resApi === 'string' ? JSON.parse(resApi) : resApi;
+                const raw = await redis.get(REDIS_KEY_HISTORY);
+                let history = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
                 history = history.filter(h => h.id !== id);
-                await redis.set('bulks:history', JSON.stringify(history));
+                await redis.set(REDIS_KEY_HISTORY, JSON.stringify(history));
                 return res.status(200).json({ success: true });
             }
-        } catch (e) {}
+        } catch (e) { /* non-critical */ }
         return res.status(500).json({ error: 'Failed deleting history' });
     }
 
+    // ─── CLONE AI ────────────────────────────────────────────────────────────
     if (req.method === 'POST' && action === 'clone_ai') {
         const { text } = req.body;
         if (!text) return res.status(400).json({ error: 'Falta texto a clonar' });

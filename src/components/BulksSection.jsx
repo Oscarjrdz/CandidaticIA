@@ -30,10 +30,31 @@ const BulksSection = ({ showToast }) => {
 
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
 
+    // Guard para evitar polls concurrentes (race condition)
+    const isFetchingRef = useRef(false);
+
     // Load Candidates & Persistence
     useEffect(() => {
         loadCandidates();
-        const pollStatus = setInterval(fetchEngineStatus, 1500);
+        
+        // Web Worker inline — inmune a background tab throttling del navegador
+        const workerCode = `
+            self.onmessage = function(e) {
+                if (e.data === 'start') {
+                    setInterval(() => self.postMessage('tick'), 1500);
+                }
+            };
+        `;
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const workerUrl = URL.createObjectURL(blob);
+        const worker = new Worker(workerUrl);
+
+        worker.onmessage = () => {
+            if (!isFetchingRef.current) {
+                fetchEngineStatus();
+            }
+        };
+        worker.postMessage('start');
 
         // Recover draft from redis
         fetch('/api/bulks?action=get_draft')
@@ -42,16 +63,19 @@ const BulksSection = ({ showToast }) => {
                 if (data.success && data.draft) {
                     const parsed = data.draft;
                     if (parsed.messages) setMessages(parsed.messages);
-                    if (parsed.minDelay) setMinDelay(parsed.minDelay);
-                    if (parsed.maxDelay) setMaxDelay(parsed.maxDelay);
-                    if (parsed.pauseEvery) setPauseEvery(parsed.pauseEvery);
-                    if (parsed.pauseFor) setPauseFor(parsed.pauseFor);
+                    if (parsed.minDelay != null) setMinDelay(Number(parsed.minDelay) || 3);
+                    if (parsed.maxDelay != null) setMaxDelay(Number(parsed.maxDelay) || 7);
+                    if (parsed.pauseEvery != null) setPauseEvery(Number(parsed.pauseEvery) || 10);
+                    if (parsed.pauseFor != null) setPauseFor(Number(parsed.pauseFor) || 10);
                     if (parsed.selectedCandIds) setSelectedCandIds(new Set(parsed.selectedCandIds));
                 }
             })
             .catch(e => console.error("Could not load draft", e));
 
-        return () => clearInterval(pollStatus);
+        return () => {
+            worker.terminate();
+            URL.revokeObjectURL(workerUrl);
+        };
     }, []);
 
     // Save draft state on change
@@ -89,13 +113,19 @@ const BulksSection = ({ showToast }) => {
     };
 
     const fetchEngineStatus = async () => {
+        if (isFetchingRef.current) return; // Guard contra polls concurrentes
+        isFetchingRef.current = true;
         try {
             const res = await fetch('/api/bulks?action=status');
             const data = await res.json();
             if (data.success) {
                 setEngineState(data.state);
             }
-        } catch (e) {}
+        } catch (e) {
+            // Network error — silencioso
+        } finally {
+            isFetchingRef.current = false;
+        }
     };
 
     const loadHistory = async () => {
@@ -112,12 +142,23 @@ const BulksSection = ({ showToast }) => {
     };
 
     const reuseCampaign = (camp) => {
-        setMessages(camp.messages || [{ id: Date.now(), text: '' }]);
-        setMinDelay(camp.minDelay || 3);
-        setMaxDelay(camp.maxDelay || 5);
-        setPauseEvery(camp.pauseEvery || 10);
-        setPauseFor(camp.pauseFor || 10);
-        setSelectedCandIds(new Set()); // Start fresh selection
+        // El historial guarda messages como strings planos ["Hola", "Buenos días"]
+        // El frontend necesita objetos {id, text} — convertir si es necesario
+        const rawMsgs = camp.messages || [];
+        const normalizedMsgs = rawMsgs.length > 0
+            ? rawMsgs.map((m, i) => {
+                if (typeof m === 'string') return { id: Date.now() + i, text: m };
+                if (m && typeof m === 'object' && m.text !== undefined) return { ...m, id: m.id || Date.now() + i };
+                return { id: Date.now() + i, text: String(m || '') };
+            })
+            : [{ id: Date.now(), text: '' }];
+
+        setMessages(normalizedMsgs);
+        setMinDelay(Number(camp.minDelay) || 3);
+        setMaxDelay(Number(camp.maxDelay) || 7);
+        setPauseEvery(Number(camp.pauseEvery) || 10);
+        setPauseFor(Number(camp.pauseFor) || 10);
+        setSelectedCandIds(new Set());
         setShowHistory(false);
         showToast && showToast("Plantilla cargada. Selecciona a tus destinatarios.", "success");
     };
@@ -449,12 +490,12 @@ const BulksSection = ({ showToast }) => {
                             <div className="flex items-center gap-4">
                                 <div className="flex-1">
                                     <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Mínimo (Segs)</label>
-                                    <input type="number" min="1" value={minDelay} onChange={e=>setMinDelay(e.target.value)} className="w-full bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded p-2 text-sm outline-none focus:border-blue-500" />
+                                    <input type="number" min="1" value={minDelay} onChange={e=>setMinDelay(parseInt(e.target.value) || 1)} className="w-full bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded p-2 text-sm outline-none focus:border-blue-500" />
                                 </div>
                                 <span className="text-gray-400 mt-4">—</span>
                                 <div className="flex-1">
                                     <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Máximo (Segs)</label>
-                                    <input type="number" min="2" value={maxDelay} onChange={e=>setMaxDelay(e.target.value)} className="w-full bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded p-2 text-sm outline-none focus:border-blue-500" />
+                                    <input type="number" min="2" value={maxDelay} onChange={e=>setMaxDelay(parseInt(e.target.value) || 2)} className="w-full bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded p-2 text-sm outline-none focus:border-blue-500" />
                                 </div>
                             </div>
                         </div>
@@ -464,9 +505,9 @@ const BulksSection = ({ showToast }) => {
                             <p className="text-xs text-[#54656f] dark:text-[#8696a0] mb-4">Detener la ráfaga de mensajes cada cierta cantidad protege tu cuenta de Flags anti-spam de Meta.</p>
                             <div className="flex items-center gap-2 text-sm text-[#111b21] dark:text-[#d1d7db]">
                                 <span>Descansar cada</span>
-                                <input type="number" min="1" value={pauseEvery} onChange={e=>setPauseEvery(e.target.value)} className="w-16 bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded py-1 px-2 text-center outline-none focus:border-blue-500" />
+                                <input type="number" min="1" value={pauseEvery} onChange={e=>setPauseEvery(parseInt(e.target.value) || 1)} className="w-16 bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded py-1 px-2 text-center outline-none focus:border-blue-500" />
                                 <span>sms por</span>
-                                <input type="number" min="1" value={pauseFor} onChange={e=>setPauseFor(e.target.value)} className="w-16 bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded py-1 px-2 text-center outline-none focus:border-blue-500" />
+                                <input type="number" min="1" value={pauseFor} onChange={e=>setPauseFor(parseInt(e.target.value) || 1)} className="w-16 bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded py-1 px-2 text-center outline-none focus:border-blue-500" />
                                 <span>Mins.</span>
                             </div>
                         </div>
@@ -493,8 +534,23 @@ const BulksSection = ({ showToast }) => {
                                             <div className="bg-indigo-600 h-2 rounded-full transition-all duration-500" style={{width: `${(engineState.currentCandidateIndex / (engineState.candidates.length || 1)) * 100}%`}}></div>
                                         </div>
                                     </div>
+                                    {/* Countdown / Next send indicator */}
+                                    {engineState.isRunning && engineState.nextSendAt && (
+                                        <div className="mb-3 text-[12px] text-amber-600 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                                            {(() => {
+                                                const remaining = Math.max(0, Math.ceil((engineState.nextSendAt - Date.now()) / 1000));
+                                                if (remaining > 60) {
+                                                    const mins = Math.floor(remaining / 60);
+                                                    const secs = remaining % 60;
+                                                    return `☕ Descanso — próximo envío en ${mins}m ${secs}s`;
+                                                }
+                                                return `⏳ Próximo envío en ${remaining}s...`;
+                                            })()}
+                                        </div>
+                                    )}
                                     <div className="text-[13px] text-gray-600 dark:text-gray-300 mb-2 font-medium">
-                                        Mensajes mandados totales: <strong className="text-indigo-600 dark:text-indigo-400">{engineState.totalSent}</strong>
+                                        Mensajes enviados exitosamente: <strong className="text-indigo-600 dark:text-indigo-400">{engineState.totalSent}</strong>
+                                        <span className="text-gray-400 ml-2">/ {engineState.candidates?.length || 0} contactos</span>
                                     </div>
                                     <div className="bg-gray-900 rounded-lg p-3 h-[150px] overflow-y-auto text-[11px] font-mono text-green-400 mt-2">
                                         {engineState.logs?.length === 0 ? "Esperando acciones..." : engineState.logs.map((log, i) => (

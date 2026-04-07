@@ -96,13 +96,27 @@ function App() {
       });
   }, [user]);
 
-  // Global heartbeat to keep Vercel alive for background Bulks even if outside of BulksSection
+  // Global heartbeat — Web Worker impulsado para que NO se congele al cambiar de pestaña
   useEffect(() => {
     if (!user) return;
-    const heartbeat = setInterval(() => {
+    const workerCode = `
+      self.onmessage = function(e) {
+        if (e.data === 'start') {
+          setInterval(() => self.postMessage('tick'), 2000);
+        }
+      };
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    const worker = new Worker(url);
+    worker.onmessage = () => {
         fetch('/api/bulks?action=status').catch(() => {});
-    }, 2000);
-    return () => clearInterval(heartbeat);
+    };
+    worker.postMessage('start');
+    return () => {
+        worker.terminate();
+        URL.revokeObjectURL(url);
+    };
   }, [user]);
 
   // Toggle tema
