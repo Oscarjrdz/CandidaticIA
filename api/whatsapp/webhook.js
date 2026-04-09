@@ -129,11 +129,23 @@ export default async function handler(req, res) {
 
         // 2. Handle Incoming Messages (UltraMsg & GatewayWapp/EvolutionAPI hybrid check)
         if (eventType === 'message_received' || eventType === 'message.incoming' || eventType === 'messages.upsert') {
-            const fromRaw = messageData.from || messageData.remoteJid || messageData.key?.remoteJid || '';
+            
+            // 🔄 Extracción profunda para Baileys/EvolutionAPI (puede venir dentro de un arreglo 'messages')
+            let mData = messageData;
+            if (messageData.messages && Array.isArray(messageData.messages) && messageData.messages.length > 0) {
+                mData = messageData.messages[0];
+            }
+
+            const fromRaw = mData.from || mData.remoteJid || mData.key?.remoteJid || '';
             const from = fromRaw;
-            const bodyRaw = messageData.body || messageData.message?.conversation || messageData.message?.extendedTextMessage?.text || messageData.message?.imageMessage?.caption || '';
+            const bodyRaw = mData.body || mData.message?.conversation || mData.message?.extendedTextMessage?.text || mData.message?.imageMessage?.caption || '';
             const body = bodyRaw;
-            const msgId = messageData.id || messageData.key?.id || `msg_${Date.now()}`;
+            const msgId = mData.id || mData.key?.id || `msg_${Date.now()}`;
+            
+            // Override messageData para el resto de la función si sacamos el dato del array
+            if (mData !== messageData) {
+                Object.assign(messageData, mData); // Mutar seguro para retrocompatibilidad
+            }
             
             // 🛡️ BLOCK GROUPS AND STATUS BROADCASTS
             if (from.includes('@g.us') || from.includes('status@broadcast') || from.includes('newsletter')) {
