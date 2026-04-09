@@ -127,11 +127,13 @@ export default async function handler(req, res) {
             return res.status(200).send('ok');
         }
 
-        // 2. Handle Incoming Messages
-        if (eventType === 'message_received' || eventType === 'message.incoming') {
-            const from = messageData.from || messageData.remoteJid || '';
-            const body = messageData.body || '';
-            const msgId = messageData.id;
+        // 2. Handle Incoming Messages (UltraMsg & GatewayWapp/EvolutionAPI hybrid check)
+        if (eventType === 'message_received' || eventType === 'message.incoming' || eventType === 'messages.upsert') {
+            const fromRaw = messageData.from || messageData.remoteJid || messageData.key?.remoteJid || '';
+            const from = fromRaw;
+            const bodyRaw = messageData.body || messageData.message?.conversation || messageData.message?.extendedTextMessage?.text || messageData.message?.imageMessage?.caption || '';
+            const body = bodyRaw;
+            const msgId = messageData.id || messageData.key?.id || `msg_${Date.now()}`;
             
             // 🛡️ BLOCK GROUPS AND STATUS BROADCASTS
             if (from.includes('@g.us') || from.includes('status@broadcast') || from.includes('newsletter')) {
@@ -339,7 +341,14 @@ export default async function handler(req, res) {
                 if (isDebug) console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}... [Source: ${sourceIdentifier}]`);
 
                 // --- ADMIN STICKER CAPTURE ---
-                const messageType = messageData.type || 'text';
+                let messageType = messageData.type;
+                if (!messageType && messageData.message) {
+                    if (messageData.message.imageMessage) messageType = 'image';
+                    else if (messageData.message.audioMessage) messageType = 'audio';
+                    else if (messageData.message.stickerMessage) messageType = 'sticker';
+                    else messageType = 'text';
+                }
+                messageType = messageType || 'text';
                 if (phone === adminNumber && (messageType === 'sticker' || messageType === 'stickerMessage')) {
                     const stickerUrl = messageData.media || messageData.body || messageData.file;
                     if (stickerUrl?.startsWith('http')) {
