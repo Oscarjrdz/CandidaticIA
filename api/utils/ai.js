@@ -236,7 +236,7 @@ const MUNICIPIO_MAP = new Map(Object.entries({
     'abasolo': 'Abasolo', 'agualeguas': 'Agualeguas', 'aldama': 'Aldama',
     'allende': 'Allende', 'anahuac': 'Anáhuac', 'anahuac nl': 'Anáhuac',
     'aramberri': 'Aramberri', 'bustamante': 'Bustamante',
-    'cadereyta': 'Cadereyta', 'cadereyta jimenez': 'Cadereyta',
+    'cadereyta': 'Cadereyta', 'cadereyta jimenez': 'Cadereyta', 'cadereyta garibaldi': 'Cadereyta',
     'carmen': 'Carmen', 'cerralvo': 'Cerralvo', 'china': 'China',
     'cienega': 'Ciénega', 'cienega de flores': 'Ciénega',
     'doctor arroyo': 'Doctor Arroyo', 'dr arroyo': 'Doctor Arroyo',

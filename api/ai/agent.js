@@ -32,6 +32,7 @@ import { Orchestrator } from '../utils/orchestrator.js';
 import { MediaEngine } from '../utils/media-engine.js';
 import { intelligentExtract } from '../utils/intelligent-extractor.js';
 import { scheduleRemindersForCandidate } from '../utils/reminder-scheduler.js';
+import { cleanMunicipioWithAI, cleanCategoryWithAI, cleanEscolaridadWithAI } from '../utils/ai.js';
 
 // 🚀 TURBO MODE: Silence all synchronous Vercel console I/O unless actively debugging
 if (process.env.DEBUG_MODE !== 'true') {
@@ -796,11 +797,10 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
 export const DEFAULT_EXTRACTION_RULES = `
 [EXTRAER]: nombreReal, genero, fechaNacimiento, edad, municipio, categoria, escolaridad.
 1. REFINAR: Si el dato en [ESTADO] ya existe y es válido, mantenlo. Si el candidato da info nueva, actualiza.
-2. FORMATO: Nombres en Title Case. Fecha DD/MM/YYYY.
-3. MUNICIPIO (solo al extraer del mensaje nuevo del candidato): usa el nombre corto y coloquial. Si dice "General Escobedo" extrae "Escobedo". Si dice "Ciudad Apodaca" extrae "Apodaca". Si el municipio ya está guardado en [ESTADO], mantenlo SIN modificarlo.
+2. FORMATO: Nombres en Title Case. Fecha DD/MM/YYYY (Si el usuario te da números amontonados como "191274" o "190590", INTUYE LA FECHA y guárdala formateada como "19/12/1974". No se la rechaces si puedes deducirla).
+3. MUNICIPIO: Extrae ÚNICAMENTE el nombre base CORTO del municipio/ciudad (ej: "Monterrey", "Apodaca", "Juárez", "Escobedo", "Cadereyta"). Si el usuario incluye su colonia o fraccionamiento (ej: "Centro Apodaca", "Santamonika villa de Juárez", "Valle del roble Cadereyta"), IGNORA la colonia y extrae SÓLO el municipio base corto (ej: "Apodaca", "Juárez", "Cadereyta"). NUNCA uses el nombre oficial largo del municipio (ej: "Cadereyta Jiménez" → "Cadereyta", "General Escobedo" → "Escobedo", "San Nicolás de los Garza" → "San Nicolás", "Cadereyta Garibaldi" → "Cadereyta"). Si ya está en [ESTADO], mantenlo intacto.
 4. ESCOLARIDAD: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, Posgrado.
-5. EMPLEO: "Empleado" o "Desempleado".
-6. CATEGORÍA: Solo de: {{categorias}}.
+5. CATEGORÍA: Solo de: {{categorias}}.
 `;
 
 export const DEFAULT_CEREBRO1_RULES = `
@@ -903,7 +903,17 @@ function normalizeBirthDate(input) {
         }
     }
 
-    // 2. Try Numeric Patterns
+    // 2. Try Solid Digit Blocks (no separators): DDMMYYYY or DDMMYY
+    if (!matched) {
+        const solid8 = cleaned.match(/^(\d{2})(\d{2})(\d{4})$/);
+        if (solid8) { day = solid8[1]; month = solid8[2]; year = solid8[3]; matched = true; }
+    }
+    if (!matched) {
+        const solid6 = cleaned.match(/^(\d{2})(\d{2})(\d{2})$/);
+        if (solid6) { day = solid6[1]; month = solid6[2]; year = solid6[3]; matched = true; }
+    }
+
+    // 3. Try Numeric Patterns (with separators)
     if (!matched) {
         for (const pattern of patterns) {
             const match = cleaned.match(pattern);
@@ -1496,7 +1506,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
         // This avoids instructions redundancy (e.g. user prompt already handles greetings)
         if (!customPrompt) {
             systemInstruction += `\n[REGLA DE CORTESÍA]: Si el usuario te saluda ("Hola", "Buen día", etc.), DEBES devolver el saludo brevemente antes de pedir el dato faltante.
-[SUFICIENCIA DE NOMBRE]: Si ya tienes un nombre y UN apellido, EL NOMBRE ESTÁ COMPLETO. No preguntes por más apellidos.`;
+[SUFICIENCIA DE DATOS]: Si en [ESTADO DEL CANDIDATO] ya aparece su Nombre Real, ESTRICTAMENTE PROHIBIDO volver a pedir su nombre. Si pide más información, explícale que para darle opciones necesitas completar su registro y ve al grano pidiendo el siguiente dato faltante.`;
         }
 
         const identityContext = !isNameBoilerplate ? `Estás hablando con ${displayName}.` : 'No sabes el nombre del candidato aún. Pídelo amablemente.';
@@ -4140,7 +4150,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 - NUNCA preguntes al candidato por un dato que acabas de extraer exitosamente en el campo "extracted_data" de este mismo JSON.
 
 [REGLAS DE HOMOGENEIZACIÓN (ESTRICTAS)]:
-- **Municipio**: Devuelve ÚNICAMENTE el nombre oficial del municipio sin direcciones completas ni calles.
+- **Municipio**: Devuelve ÚNICAMENTE el nombre CORTO del municipio (ej: "Cadereyta", NO "Cadereyta Jiménez"; "Escobedo", NO "General Escobedo") sin direcciones ni calles.
 - **Escolaridad**: Clasifica en una sola palabra: Primaria, Secundaria, Preparatoria, Licenciatura, Técnica, o Posgrado.
 - **Categoría**: Si el candidato escribe "Ayudante", extrae estrictamente "Ayudante General" u otra categoría que haga *match exacto* a la lista. Si opera maquinaria -> "Montacarguista".\n`;
                 }
@@ -4295,6 +4305,30 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
                     if (ext.fechaNacimiento) {
                         ext.fechaNacimiento = coalesceDate(candidateData.fechaNacimiento, ext.fechaNacimiento);
+                        // 🎂 AUTO-EDAD: Calculate age from valid birth date
+                        const _dateParts = (ext.fechaNacimiento || '').split('/');
+                        if (_dateParts.length === 3) {
+                            const _bd = new Date(+_dateParts[2], +_dateParts[1] - 1, +_dateParts[0]);
+                            const _ageDiff = Date.now() - _bd.getTime();
+                            const _ageDate = new Date(_ageDiff);
+                            const _calcAge = Math.abs(_ageDate.getUTCFullYear() - 1970);
+                            if (_calcAge >= 15 && _calcAge <= 80) ext.edad = _calcAge;
+                        }
+                    }
+                    // 🧹 CLEANER PIPELINE: Normalize extracted values through dictionary before saving
+                    // These are instant for known values (local Map lookup), AI fallback only for unknowns
+                    try {
+                        if (ext.municipio && typeof ext.municipio === 'string') {
+                            ext.municipio = await cleanMunicipioWithAI(ext.municipio);
+                        }
+                        if (ext.escolaridad && typeof ext.escolaridad === 'string') {
+                            ext.escolaridad = await cleanEscolaridadWithAI(ext.escolaridad);
+                        }
+                        if (ext.categoria && typeof ext.categoria === 'string') {
+                            ext.categoria = await cleanCategoryWithAI(ext.categoria);
+                        }
+                    } catch (_cleanErr) {
+                        // Cleaning failed — keep raw GPT values (same behavior as before)
                     }
                     Object.assign(candidateUpdates, Object.fromEntries(
                         Object.entries(ext).filter(([k, v]) => {
@@ -4739,11 +4773,11 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             const _ESC_DIRECT = [
                 [/\b(primaria|prima|prim)\b/i, 'Primaria'],
                 [/\b(secundaria|secund|secu|sec)\b/i, 'Secundaria'],
-                [/\b(preparatoria|bachillerato|prepa|prep)\b/i, 'Preparatoria'],
-                [/\b(licenciatura|licenc|lic)\b/i, 'Licenciatura'],
-                [/\b(universidad)\b/i, 'Licenciatura'],
+                [/\b(preparatoria|bachillerato|prepa|prep|cbetis|cbtis|conalep|cecyte|cetis)\b/i, 'Preparatoria'],
+                [/\b(licenciatura|licenc|lic|ingenieria|ingenier[ií]a)\b/i, 'Licenciatura'],
+                [/\b(universidad|uni|itesm|tec de monterrey|uanl|udem)\b/i, 'Licenciatura'],
                 [/\b(t[eé]cnic[ao]|tecnica|tecnico|carrera t[eé]cnica)\b/i, 'Técnica'],
-                [/\b(posgrado|maestr[ií]a|maestria|doctorado)\b/i, 'Posgrado']
+                [/\b(posgrado|maestr[ií]a|maestria|doctorado|mba)\b/i, 'Posgrado']
             ];
             const msgLower = aggregatedText.toLowerCase();
             for (const [pattern, nivel] of _ESC_DIRECT) {
