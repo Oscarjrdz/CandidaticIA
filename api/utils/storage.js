@@ -332,12 +332,12 @@ export const auditProfile = (c, customFields = []) => {
             if (!dateRegex.test(val)) {
                 isInvalid = true;
             } else {
-                // Reasonable Age Check (1940 - Current Year)
+                // Reasonable Age Check (1900 - Current Year)
                 const yearMatch = val.match(/\b(19|20)\d{2}\b/);
                 if (yearMatch) {
                     const yearValue = parseInt(yearMatch[0]);
                     const currentYear = new Date().getFullYear();
-                    if (yearValue < 1940 || yearValue > currentYear) isInvalid = true;
+                    if (yearValue < 1900 || yearValue > currentYear) isInvalid = true;
                 }
             }
         }
@@ -392,7 +392,7 @@ export const isProfileComplete = (c, customFields = []) => {
 };
 
 // Native Redis Pagination (Page size 100)
-export const getCandidates = async (limit = 100, offset = 0, search = '', excludeLinked = false) => {
+export const getCandidates = async (limit = 100, offset = 0, search = '', excludeLinked = false, tagFilter = '') => {
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
 
@@ -406,9 +406,9 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
         proyecto: linkedIds.has(c.id) ? 1 : 0
     });
 
-    // If searching, we currently have to do a scan (unless we index names too)
-    // For now, if search is empty, we use the ultra-fast F1 Steering.
-    if (!search && !excludeLinked) {
+    // If searching or tagFiltering, we currently have to do a scan (unless we index names too)
+    // For now, if search and tagFilter are empty, we use the ultra-fast F1 Steering.
+    if (!search && !tagFilter && !excludeLinked) {
         const sumCount = async () => (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
         const stop = offset + limit - 1;
         const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, offset, stop);
@@ -459,6 +459,11 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
 
     // Hydrate all with 'proyecto'
     filtered = filtered.map(hydrate);
+
+    // Filter by Tag
+    if (tagFilter) {
+        filtered = filtered.filter(c => Array.isArray(c.tags) && c.tags.includes(tagFilter));
+    }
 
     // Filter out Linked Candidates
     if (excludeLinked) {

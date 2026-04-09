@@ -13,13 +13,14 @@ import {
     recordAITelemetry,
     moveCandidateStep,
     addCandidateToProject,
+    removeCandidateFromProject,
     recordVacancyInteraction,
     updateProjectCandidateMeta,
     getActiveBypassRules,
     getProjects
 } from '../utils/storage.js';
 import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgReaction, sendUltraMsgPresence } from '../whatsapp/utils.js';
-import { getSchemaByField } from '../utils/schema-registry.js';
+// schema-registry import removed — getSchemaByField was unused
 import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { getOpenAIResponse } from '../utils/openai.js';
 import { processRecruiterMessage } from './recruiter-agent.js';
@@ -43,7 +44,7 @@ if (process.env.DEBUG_MODE !== 'true') {
 // 📐 SHARED MESSAGE FORMATTER — applies to all recruiter/bot response texts
 // ─────────────────────────────────────────────────────────────────────────────
 const _DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-const _MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const _MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const _NUM_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
 
 function isEmoji(str) {
@@ -60,7 +61,7 @@ function humanizeDate(dateStr) {
         const dayMatch = _DAY_NAMES[date.getDay()];
         const monMatch = _MONTH_NAMES[date.getMonth()];
         if (dayMatch && monMatch) {
-            return `${dayMatch} ${parseInt(parts[2])} de ${monMatch.charAt(0).toUpperCase() + monMatch.slice(1)}`;
+            return `${dayMatch} ${parseInt(parts[2])} de ${monMatch}`;
         }
     }
     return dateStr;
@@ -167,6 +168,18 @@ const _CTA_VARIANTS = [
     '¿Aseguro tu cita de entrevista? 🎯',
     '¿Quieres que te separe la entrevista? 🤩',
     '¿Te interesa que ya quede apartada tu cita? 🌺',
+];
+const _SINGLE_HOUR_CTAS = [
+    "¿Te gustaría agendar tu entrevista? 😊",
+    "¿Te parece que agendemos ya? ✨",
+    "¿Comenzamos con tu proceso y reservamos? 🗓️",
+    "¿Confirmamos tu cita para esta hora? ✅",
+    "¿Agendamos tu entrevista de una vez? 😊",
+    "¿Te anoto para esta hora? ✍️",
+    "¿Deseas que te aparte este lugar? 🌟",
+    "¿Cerramos tu cita en este horario? 🤝",
+    "¿Te parece bien si agendamos tu entrevista? ⏰",
+    "¿Quieres que confirme tu asistencia a esta hora? ✨"
 ];
 const _AMBIGUITY_VARIANTS = [
     'Solo por confirmar, ¿te gustaría agendar tu entrevista? 😊',
@@ -824,7 +837,8 @@ Tu objetivo técnico es obtener: {{faltantes}}.
  7. ORDEN ESTRICTO: Siempre debes pedir el PRIMER dato de la lista de {{faltantes}}. ¡PROHIBIDO saltarte al segundo dato si el candidato evadió la pregunta o no respondió con el primero!
  8. LENGUAJE: PROHIBIDO decir "base de datos" o "robot". Di "nuestro sistema" o "tu registro en la plataforma".
  9. CORTESÍA INICIAL: Si te saluda, salúdalo de vuelta amablemente antes de pedir el dato.
- 10. PREGUNTAS PERSONALES: Eres Brenda Rodríguez de Monterrey. Mantén siempre el perfil estrictamente profesional si preguntan cosas personales y regresa al tema de reclutamiento. PROHIBIDO DECIR QUE ERES UN BOT.`;
+ 10. PREGUNTAS PERSONALES: Eres Brenda Rodríguez de Monterrey. Mantén siempre el perfil estrictamente profesional si preguntan cosas personales y regresa al tema de reclutamiento. PROHIBIDO DECIR QUE ERES UN BOT.
+ 11. OMITIR REPETICIONES Y DOBLES MENÚS: Si el candidato acaba de responder correctamente a la pregunta previa dando el dato (ej. te dio su escolaridad, fecha, ciudad), CONFIRMA SU INGRESO y PASA DE INMEDIATO AL SIGUIENTE DATO. TIENES ESTRICTAMENTE PROHIBIDO repetir la pregunta del dato que acaba de dar o mostrar sus listas de opciones asociadas (ej. la lista de escolaridad).`;
 
 export const DEFAULT_SYSTEM_PROMPT = `
 [PERSONALIDAD]:
@@ -1180,7 +1194,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                         }
 
                         // Build list bubble
-                        const _NUM_EMOJIS_RE = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                        const _NUM_EMOJIS_RE = _NUM_EMOJIS;
                         const listLines = vacancies.map((v, i) => {
                             const num = _NUM_EMOJIS_RE[i] || `${i+1}.`;
                             const company = v.company ? ` – ${v.company}` : '';
@@ -1220,10 +1234,13 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                         await redis?.del(reengageKey);
                         return closeMsg;
                     } else {
-                        // Candidate wants to correct something → let GPT capture the new data,
-                        // then on NEXT message we re-check vacancies
+                        // Candidate wants to correct something → ask them explicitly to avoid GPT fallback to farewell
                         await redis?.set(reengageKey, 'RECHECK_VACANCIES', 'EX', 604800);
-                        // Fall through to normal agent flow so GPT extracts and saves the correction
+                        const correctionMsg = `¡Claro ${firstName}! ¿Qué dato necesitas que corrijamos? 📝 Dime cuál es el correcto y lo actualizo al momento.`;
+                        const config = await getUltraMsgConfig(candidateData?.instanceId);
+                        await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, correctionMsg, 'chat');
+                        await saveMessage(candidateId, { from: 'bot', content: correctionMsg, timestamp: new Date().toISOString() });
+                        return correctionMsg;
                     }
 
                 } else if (reengageState === 'RECHECK_VACANCIES') {
@@ -1234,7 +1251,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                     const phone = candidateData.whatsapp;
 
                     if (vacancies.length > 0) {
-                        const _NUM_EMOJIS_R2 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                        const _NUM_EMOJIS_R2 = _NUM_EMOJIS;
                         const listLines2 = vacancies.map((v, i) => {
                             const num = _NUM_EMOJIS_R2[i] || `${i+1}.`;
                             const company = v.company ? ` – ${v.company}` : '';
@@ -1493,6 +1510,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
         const hasGratitude = candidateData.gratitudAlcanzada === true || candidateData.gratitudAlcanzada === 'true';
         const isLongSilence = minSinceLastBot >= 5;
         const currentIsSilenced = candidateData.silencioActivo === true || candidateData.silencioActivo === 'true';
+        const isSimulatorPhone = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
 
         systemInstruction += `\n[ESTADO DE MISIÓN]:
 - PERFIL COMPLETADO: ${isProfileComplete ? 'SÍ (SKIP EXTRACTION)' : 'NO (DATA REQUIRED)'}
@@ -1516,11 +1534,13 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
             content: aggregatedText
         };
 
-        // 🐛 DEBUG LOG: Write aggregatedText to Redis
-        try {
-            const redisDbg = getRedisClient();
-            if (redisDbg) await redisDbg.set(`DEBUG_AI_AGGREGATED:${candidateId}`, aggregatedText, 'EX', 3600);
-        } catch(e) {}
+        // 🐛 DEBUG LOG: Write aggregatedText to Redis (only in debug mode)
+        if (process.env.DEBUG_MODE === 'true') {
+            try {
+                const redisDbg = getRedisClient();
+                if (redisDbg) await redisDbg.set(`DEBUG_AI_AGGREGATED:${candidateId}`, aggregatedText, 'EX', 3600);
+            } catch(e) {}
+        }
 
         const lastBotMessages = validMessages
             .filter(m => (m.from === 'bot' || m.from === 'me') && !m.meta?.proactiveLevel)
@@ -1628,12 +1648,12 @@ ${safeDnaLines}
                 const isVacancyQuestion = VACANCY_Q_RE.test(aggregatedText.trim());
 
                 if (isFarewellMessage) {
-                    console.error(`[RECRUITER BRAIN] No Interesa — farewell detected, staying silent for ${candidateId}`);
+                    console.log(`[RECRUITER BRAIN] No Interesa — farewell detected, staying silent for ${candidateId}`);
                     return; // Silent
                 }
 
                 if (isReactivationYes || isVacancyQuestion) {
-                    console.error(`[RECRUITER BRAIN] No Interesa — candidate wants to see vacancies, running bypass match for ${candidateId}`);
+                    console.log(`[RECRUITER BRAIN] No Interesa — candidate wants to see vacancies, running bypass match for ${candidateId}`);
                     try {
                         const candFirstName = (candidateData.nombreReal || candidateData.nombre || 'Claro').split(' ')[0];
 
@@ -1789,8 +1809,8 @@ ${safeDnaLines}
                         // 🔥 CROSS-PROJECT PIVOT: Check if they qualify for another bypass project before kicking to No Interesa
                         let crossTargetProject = null;
                         try {
-                            const { getActiveBypassRules, getProjects: getAllProjects, removeCandidateFromProject, addCandidateToProject } = await import('../utils/storage.js');
-                            const allProjects = await getAllProjects();
+                            // Uses top-level static imports: getActiveBypassRules, getProjects, addCandidateToProject
+                            const allProjects = await getProjects();
                             const rules = await getActiveBypassRules();
                             
                             const normalizeStr = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -1850,7 +1870,7 @@ ${safeDnaLines}
                             
                             // Ensure UI updates properly by moving the candidate in Redis project sets
                             try {
-                                const { removeCandidateFromProject, addCandidateToProject } = await import('../utils/storage.js');
+                                // Uses top-level static imports: removeCandidateFromProject, addCandidateToProject
                                 await removeCandidateFromProject(project.id, candidateId);
                                 await addCandidateToProject(crossTargetProject.id, candidateId, {
                                     stepId: crossTargetProject.steps?.[0]?.id || null,
@@ -1932,15 +1952,21 @@ ${safeDnaLines}
                     //    (hola, buenas, sabes quien soy — should get a cita reminder, not the recruiter flow)
                     const FAREWELL_RE = /^(bye|adi[oó]s|hasta luego|chao|gracias|ok gracias|graciass|hasta pronto|nos vemos|cu[ií]date|hasta la pr[oó]xima|👋|🙋|buen[ao]s?\s+d[ií]as|buen[ao]s?\s+tarde|buen[ao]s?\s+noche|ok+i*|oke+y?|okey|de acuerdo|listo|entendido|recibido|perfecto|anotado|ah[ií]\s+estar[eé]|ah[ií]\s+voy|estar[eé]\s+ah[ií]|vale|✅|👍|🙌|💪|😊|🌸|🥰)\s*[!.?🥰😁😄🤗💖✨🌸]*$/i;
                     const CASUAL_RE = /^(hola+|hey|buenas|buen d[ií]a|buenos d[ií]as|qu[eé] tal|como est[aá]s|sabes quien soy|me recuerdas|qu[eé] onda|qvo|q tal|ya s[eé] quien eres)\s*[!.?]*$/i;
-                    if (hasCitaConfirmed && (FAREWELL_RE.test(aggregatedText.trim()) || CASUAL_RE.test(aggregatedText.trim()))) {
+                    const _rawTrim = aggregatedText.trim();
+                    const _isTrivia = FAREWELL_RE.test(_rawTrim) 
+                        || CASUAL_RE.test(_rawTrim)
+                        || _rawTrim.length === 0
+                        || /^\[(?:STICKER|sticker|REACCI[OÓ]N|VIDEO|AUDIO|IMAGEN)\]/i.test(_rawTrim)
+                        || /^\p{Emoji}+$/u.test(_rawTrim);
+                    if (hasCitaConfirmed && _isTrivia) {
                         const candFirstName = (candidateUpdates.nombreReal || candidateData.nombreReal || 'tú').split(' ')[0];
                         const _citaMeta = mergedMeta?.citaFecha ? mergedMeta : parsedMd;
                         const humanCitaFecha = (_citaMeta.citaFecha || '').includes('-')
                             ? (() => {
                                 const p = (_citaMeta.citaFecha || '').split('-');
                                 if (p.length === 3) {
-                                    const D = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-                                    const M = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+                                    const D = _DAY_NAMES;
+                                    const M = _MONTH_NAMES;
                                     const d = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
                                     return `${D[d.getDay()]} ${d.getDate()} de ${M[d.getMonth()]}`;
                                 }
@@ -2160,9 +2186,9 @@ ${safeDnaLines}
                         .map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; })
                         .filter(Boolean)
                     )];
-                    const _DN4 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-                    const _MN4 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                    const _NE4 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                    const _DN4 = _DAY_NAMES;
+                    const _MN4 = _MONTH_NAMES;
+                    const _NE4 = _NUM_EMOJIS;
                     const _fn4 = (candidateData.nombreReal || candidateData.nombre || '').split(' ')[0];
 
                     // ── Helper: parse user input as a 1-based list index ──────────────
@@ -2521,32 +2547,6 @@ ${safeDnaLines}
                                     ];
                                     responseTextVal = _noAvailVars[Math.floor(Math.random() * _noAvailVars.length)];
                                     aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:unavailable_day_name' };
-                                } else if (_matchingIdxs.length === 0) {
-                                    // Day name detected but 0 calendar matches — fully deterministic, never GPT, never HR fallback.
-                                    console.log(`[AGENT] Day ${_dayOfWeek} not in calendar. Varied no-avail response.`);
-                                    skipRecruiterInference = true;
-                                    const _cName_DA = _fn4 || '';
-                                    const _nameTag = _cName_DA ? ` ${_cName_DA}` : '';
-                                    const _subLines2 = _uDays.map((ds, i) => {
-                                        const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
-                                        return `${_NE4[i] || `${i+1}.`} ${_DN4[d.getDay()]} ${d.getDate()} de ${_MN4[d.getMonth()]} 📅`;
-                                    }).join('\n');
-                                    const _reqDayName2 = _DN4[_dayOfWeek];
-                                    const _ctaDA = _uDays.length === 1 ? '¿Te queda bien este día? 😊' : '¿Alguno de estos días te funciona? 😊';
-                                    const _noAvailVars = [
-                                        `Ay${_nameTag}, el ${_reqDayName2} no tenemos entrevistas disponibles 😔 Te comparto los días en los que sí tenemos espacio:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
-                                        `Para el ${_reqDayName2} no cuento con citas${_cName_DA ? `, ${_cName_DA}` : ''} 🙏 Pero aquí van mis días disponibles:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
-                                        `Uy${_nameTag}, el ${_reqDayName2} no tengo nada disponible 😅 Mis opciones son:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
-                                        `Ese ${_reqDayName2} no lo tengo habilitado${_cName_DA ? `, ${_cName_DA}` : ''} 🙈 Los días en que sí hay espacio:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
-                                        `El ${_reqDayName2} no está disponible en mi agenda${_nameTag} 📋 Lo que tengo es:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
-                                        `Para el ${_reqDayName2} no hay lugar por el momento${_nameTag} 😕 Lo que sí tengo:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
-                                        `El ${_reqDayName2} no tengo citas${_nameTag}, pero mira lo que sí tengo:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
-                                        `Ese ${_reqDayName2} no aparece en mi calendario${_nameTag} 📅 Mis fechas disponibles:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
-                                        `El ${_reqDayName2} no lo tengo disponible${_nameTag} 🙈 Aquí van mis opciones:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`,
-                                        `En este momento el ${_reqDayName2} no está en mi agenda${_nameTag} 🗓️ Te ofrezco:\n\n${_subLines2}\n\n[MSG_SPLIT]${_ctaDA}`
-                                    ];
-                                    responseTextVal = _noAvailVars[Math.floor(Math.random() * _noAvailVars.length)];
-                                    aiResult = { response_text: responseTextVal, extracted_data: {}, thought_process: 'CITA:unavailable_day_name' };
                                 }
                             }
                         }
@@ -2853,7 +2853,6 @@ ${safeDnaLines}
                                     .catch(() => { });
                             }
                         }
-                    } else {
                     }
                 }
 
@@ -3013,7 +3012,7 @@ ${safeDnaLines}
                                     hasMoveTag = false;
                                     skipRecruiterInference = true;
                                     responseTextVal = null;
-                                    console.error(`[CITADOS_PIVOT] 🔄 ${candidateId} → vacancy[${_nextVacIdx}]: ${_vacName}`);
+                                    console.log(`[CITADOS_PIVOT] 🔄 ${candidateId} → vacancy[${_nextVacIdx}]: ${_vacName}`);
                                 }
                             }
                         }
@@ -3051,7 +3050,7 @@ ${safeDnaLines}
                         hasMoveTag = false;
                         skipRecruiterInference = true;
                         responseTextVal = null; // suppress any recruiter response
-                        console.error(`[NO_INTERESA_GATE] 🚧 Exit intercepted for ${candidateId}. Confirmation question sent.`);
+                        console.log(`[NO_INTERESA_GATE] 🚧 Exit intercepted for ${candidateId}. Confirmation question sent.`);
                     } else if (_niGateAlreadyPending) {
                         // Candidate already saw the gate question — interpret their reply
                         const _gateInput = aggregatedText.trim().toLowerCase().replace(/[^\w\sñáéíóúü]/gi, '');
@@ -3065,18 +3064,18 @@ ${safeDnaLines}
                             hasExitTag = false;
                             extractedMoveTarget = null;
                             hasMoveTag = false;
-                            console.error(`[NO_INTERESA_GATE] 🔄 Candidate ${candidateId} retracted. Resuming flow.`);
+                            console.log(`[NO_INTERESA_GATE] 🔄 Candidate ${candidateId} retracted. Resuming flow.`);
                         } else if (_isConfirmExit) {
                             // Candidate confirmed they want to exit — allow the move
                             hasExitTag = true;
-                            console.error(`[NO_INTERESA_GATE] ✅ Candidate ${candidateId} confirmed exit.`);
+                            console.log(`[NO_INTERESA_GATE] ✅ Candidate ${candidateId} confirmed exit.`);
                         }
                         // If ambiguous, also clear and let flow continue (benefit of the doubt)
                         else {
                             hasExitTag = false;
                             extractedMoveTarget = null;
                             hasMoveTag = false;
-                            console.error(`[NO_INTERESA_GATE] ❓ Ambiguous reply from ${candidateId}. Clearing gate, resuming flow.`);
+                            console.log(`[NO_INTERESA_GATE] ❓ Ambiguous reply from ${candidateId}. Clearing gate, resuming flow.`);
                         }
                     }
 
@@ -3131,14 +3130,14 @@ ${safeDnaLines}
                         candidateUpdates.projectMetadata.citaHora = null;
 
                         // Build the available days list from calendarOptions
-                        const NUM_EMOJI = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                        const NUM_EMOJI = _NUM_EMOJIS;
                         let _daysList = '';
                         if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
                             // Extract unique dates from calendar options (format: "YYYY-MM-DD @ HH:mm ...")
                             const _seenDates = new Set();
                             const _uniqueDays = [];
-                            const _monthsEs = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                            const _daysEs = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                            const _monthsEs = _MONTH_NAMES;
+                            const _daysEs = _DAY_NAMES;
                             for (const opt of currentStep.calendarOptions) {
                                 const datePart = opt.split('@')[0].trim(); // "YYYY-MM-DD"
                                 if (_seenDates.has(datePart)) continue;
@@ -3258,13 +3257,13 @@ ${safeDnaLines}
                     hasExitTag = false;
                     extractedMoveTarget = null;
 
-                    const NUM_EMOJI2 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                    const NUM_EMOJI2 = _NUM_EMOJIS;
                     let _daysList2 = '';
                     if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
                         const _seenDates2 = new Set();
                         const _uniqueDays2 = [];
-                        const _monthsEs2 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                        const _daysEs2 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                        const _monthsEs2 = _MONTH_NAMES;
+                        const _daysEs2 = _DAY_NAMES;
                         for (const opt of currentStep.calendarOptions) {
                             const datePart = opt.split('@')[0].trim();
                             if (_seenDates2.has(datePart)) continue;
@@ -3329,13 +3328,13 @@ ${safeDnaLines}
                         console.log('[DAY LIST REJECTION GUARD] 🟡 count=1 → re-showing day list.');
                         // day_list_pending stays active for the next message
                         const _candNameG3 = (candidateData.nombre || candidateData.nombreReal || 'amig@').split(' ')[0];
-                        const NUM_EMOJI_G3 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                        const NUM_EMOJI_G3 = _NUM_EMOJIS;
                         let _daysListG3 = '';
                         if (currentStep?.calendarOptions && Array.isArray(currentStep.calendarOptions)) {
                             const _seenG3 = new Set();
                             const _uniqueG3 = [];
-                            const _mG3 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                            const _wG3 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+                            const _mG3 = _MONTH_NAMES;
+                            const _wG3 = _DAY_NAMES;
                             for (const opt of currentStep.calendarOptions) {
                                 const dp = opt.split('@')[0].trim();
                                 if (_seenG3.has(dp)) continue;
@@ -3492,7 +3491,6 @@ ${safeDnaLines}
                                             return parts.length > 1 ? parts[1].trim() : opt;
                                         });
 
-                                } else {
                                 }
 
                                 if (availableHoursForDate.length > 0) {
@@ -3513,36 +3511,12 @@ ${safeDnaLines}
                                         // We just make sure a CTA is present, then we're done. No redundant schedule bubble!
                                         const _hasQ = /[?¿]/.test(responseTextVal);
                                         if (!_hasQ) {
-                                            const _ctasFb = [
-                                                "¿Te gustaría agendar tu entrevista? 😊",
-                                                "¿Te parece que agendemos ya? ✨",
-                                                "¿Comenzamos con tu proceso y reservamos? 🗓️",
-                                                "¿Confirmamos tu cita para esta hora? ✅",
-                                                "¿Agendamos tu entrevista de una vez? 😊",
-                                                "¿Te anoto para esta hora? ✍️",
-                                                "¿Deseas que te aparte este lugar? 🌟",
-                                                "¿Cerramos tu cita en este horario? 🤝",
-                                                "¿Te parece bien si agendamos tu entrevista? ⏰",
-                                                "¿Quieres que confirme tu asistencia a esta hora? ✨"
-                                            ];
-                                            callToAction = "[MSG_SPLIT]" + _ctasFb[Math.floor(Math.random() * _ctasFb.length)];
+                                            callToAction = "[MSG_SPLIT]" + _SINGLE_HOUR_CTAS[Math.floor(Math.random() * _SINGLE_HOUR_CTAS.length)];
                                         } else {
                                             callToAction = "";
                                         }
                                     } else if (availableHoursForDate.length === 1) {
-                                        const _ctasFb2 = [
-                                            "¿Te gustaría agendar tu entrevista? 😊",
-                                            "¿Te parece que agendemos ya? ✨",
-                                            "¿Comenzamos con tu proceso y reservamos? 🗓️",
-                                            "¿Confirmamos tu cita para esta hora? ✅",
-                                            "¿Agendamos tu entrevista de una vez? 😊",
-                                            "¿Te anoto para esta hora? ✍️",
-                                            "¿Deseas que te aparte este lugar? 🌟",
-                                            "¿Cerramos tu cita en este horario? 🤝",
-                                            "¿Te parece bien si agendamos tu entrevista? ⏰",
-                                            "¿Quieres que confirme tu asistencia a esta hora? ✨"
-                                        ];
-                                        const _cta2 = _ctasFb2[Math.floor(Math.random() * _ctasFb2.length)];
+                                        const _cta2 = _SINGLE_HOUR_CTAS[Math.floor(Math.random() * _SINGLE_HOUR_CTAS.length)];
                                         callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo entrevista a las:\n\n${formattedHours}[MSG_SPLIT]${_cta2}`;
                                     } else {
                                         callToAction = `Perfecto, para el ${mergedMeta.citaFecha} tengo estas opciones de horario para ti:\n\n${formattedHours}\n\n¿Cuál prefieres?`;
@@ -3598,6 +3572,31 @@ ${safeDnaLines}
                                 responseTextVal = `${responseTextVal.trim()}${_needsS ? '[MSG_SPLIT]' : ''}${_ctaConfirm}`.trim();
                             }
                         }
+                    }
+                }
+
+                // 🔥 BUG 2 FIX: Prevent { move } from Citados to the absolute end if already confirmed
+                if (hasMoveTag && currentStep?.name?.toLowerCase().includes('citado')) {
+                    const mdStr = candidateData.projectMetadata;
+                    const parsedMd = (typeof mdStr === 'string' && mdStr.trim() !== '') ? JSON.parse(mdStr) : (mdStr || {});
+                    const mergedMeta = { ...parsedMd, ...(candidateUpdates.projectMetadata || {}) };
+                    const hasCitaConfirmedG2 = (mergedMeta?.citaFecha && mergedMeta?.citaHora && mergedMeta.citaFecha !== 'null' && mergedMeta.citaHora !== 'null');
+                    
+                    if (hasCitaConfirmedG2) {
+                        hasMoveTag = false;
+                        skipRecruiterInference = true;
+                        if (aiResult) aiResult.close_conversation = false; 
+                        
+                        const D = _DAY_NAMES;
+                        const M = _MONTH_NAMES;
+                        const p = mergedMeta.citaFecha.split('-');
+                        let humanF = mergedMeta.citaFecha;
+                        if(p.length === 3) {
+                            const d = new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+                            humanF = `${D[d.getDay()]} ${d.getDate()} de ${M[d.getMonth()]}`;
+                        }
+                        const cfn = (candidateUpdates.nombreReal || candidateData.nombreReal || 'tú').split(' ')[0];
+                        responseTextVal = `¡Claro ${cfn}! Tu cita ya está confirmada para el ${humanF} a las ${mergedMeta.citaHora}. ¡Ahí te esperamos! 🌟`;
                     }
                 }
 
@@ -3799,7 +3798,6 @@ ${safeDnaLines}
                                         sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => {});
                                     }
                                 }
-                            } else {
                             }
                         } catch (e) { console.error(`[RECRUITER BRAIN] Bridge Fail: `, e.message); }
 
@@ -3855,9 +3853,9 @@ ${safeDnaLines}
                                         .map(o => { const m = o.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : null; })
                                         .filter(Boolean)
                                 )];
-                                const _DN3 = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
-                                const _MN3 = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-                                const _NE3 = ['1️⃣','2️⃣','3️⃣','4️⃣','5️⃣','6️⃣','7️⃣','8️⃣','9️⃣'];
+                                const _DN3 = _DAY_NAMES;
+                                const _MN3 = _MONTH_NAMES;
+                                const _NE3 = _NUM_EMOJIS;
                                 const _fn3 = (candidateData.nombreReal || candidateData.nombre || '').split(' ')[0];
                                 const _dayLines3 = _futDays.map((ds, i) => {
                                     const d = new Date(parseInt(ds.substr(0,4)), parseInt(ds.substr(5,2))-1, parseInt(ds.substr(8,2)));
@@ -3990,8 +3988,7 @@ ${safeDnaLines}
                                     const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
 
                                     // Sequential send with delay for correct WhatsApp bubble separation
-                                    const isSimulatorPhoneStep = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
-                                    if (!isSimulatorPhoneStep) {
+                                    if (!isSimulatorPhone) {
                                         // If we have media, send FIRST bubble, then media, then the rest
                                         if (mUrl && mUrl !== 'null' && cMessagesToSend.length > 0) {
                                             let pIdx = 1;
@@ -4029,12 +4026,10 @@ ${safeDnaLines}
 
                                     const safeLogText = chainText.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
                                     await saveMessage(candidateId, { from: 'me', content: safeLogText, timestamp: new Date().toISOString(), mediaUrl: mUrl && mUrl !== 'null' ? mUrl : null });
-                                } else {
                                 }
                             } catch (e) {
                                 console.error(`[RECRUITER BRAIN] Chain Fail: `, e.message);
                             }
-                        } else {
                         }
                     }
                 }
@@ -4280,10 +4275,12 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 if (aiResult?.extracted_data && Object.keys(aiResult.extracted_data).length > 0) {
                     const ext = aiResult.extracted_data;
                     
-                    try {
-                        const redisDbg = getRedisClient();
-                        if (redisDbg) await redisDbg.set(`DEBUG_AI_EXTRACTED:${candidateId}`, JSON.stringify(ext), 'EX', 3600);
-                    } catch(e) {}
+                    if (process.env.DEBUG_MODE === 'true') {
+                        try {
+                            const redisDbg = getRedisClient();
+                            if (redisDbg) await redisDbg.set(`DEBUG_AI_EXTRACTED:${candidateId}`, JSON.stringify(ext), 'EX', 3600);
+                        } catch(e) {}
+                    }
 
 
                     if (ext.nombreReal && ext.nombreReal.trim().length > 1) {
@@ -4340,6 +4337,12 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             const profileFields = ['categoria', 'municipio', 'escolaridad', 'fechaNacimiento', 'nombreReal'];
                             if (profileFields.includes(k) && candidateData[k] && String(candidateData[k]).trim().length > 2) {
                                 // Allow update only if new value is substantively different (not empty/junk)
+                                const oldVal = String(candidateData[k]).trim().toLowerCase();
+                                const newVal = str.toLowerCase();
+                                const aggregatedTextLower = aggregatedText.toLowerCase();
+                                // Solo permitir si el candidato MENCIONÓ el nuevo valor o el viejo en el contexto
+                                const candidateMentionedIt = aggregatedTextLower.includes(newVal) || aggregatedTextLower.includes(oldVal);
+                                if (!candidateMentionedIt) return false; // Bloquear overwrite silencioso/alucinado
                                 return str.length >= 3;
                             }
                             return true;
@@ -4683,7 +4686,6 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     const filename = extractedFilename || (isPdf ? 'Informacion.pdf' : 'Imagen.jpg');
 
                     // Stagger delivery text -> media -> CTA priority (Strict sequential await to guarantee WhatsApp arrival order)
-                    const isSimulatorPhone = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
                     if (!isSimulatorPhone) {
                         if (messagesToSend.length > 1) {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 1 }).catch(() => { });
@@ -4700,7 +4702,6 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 
                 } else {
                     // Text only, send sequentially to guarantee order
-                    const isSimulatorPhone = candidateData.whatsapp.startsWith('sim_') || ['1234567890', '5211234567890'].includes(candidateData.whatsapp);
                     if (!isSimulatorPhone) {
                         for (let i = 0; i < messagesToSend.length; i++) {
                             // 💬 Show typing before every bubble after the first
@@ -4722,30 +4723,32 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             isNowComplete = finalAudit.paso1Status === 'COMPLETO';
         }
 
-        // 📝 [DEBUG LOG]: Store full trace NOW before potential timeouts in secondary deliveries
-        try {
-            const redisClient = getRedisClient();
-            if (redisClient) {
-                const trace = {
-                    v: "V_FINAL_STABLE_V1",
-                    timestamp: new Date().toISOString(),
-                    receivedMessage: aggregatedText,
-                    intent,
-                    apiUsed: isRecruiterMode ? `recruiter-agent(Step: ${activeStepId})` : 'capturista-brain',
-                    aiResult,
-                    isNowComplete
-                };
-                await redisClient.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
-                await redisClient.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
-                await redisClient.set('debug:global:last_run', JSON.stringify({
-                    candidateId,
-                    timestamp: trace.timestamp,
-                    msg: aggregatedText.substring(0, 50),
-                    hasUQ: !!aiResult?.unanswered_question
-                }), 'EX', 3600);
+        // 📝 [DEBUG LOG]: Store full trace (only in debug mode to save Redis I/O)
+        if (process.env.DEBUG_MODE === 'true') {
+            try {
+                const redisClient = getRedisClient();
+                if (redisClient) {
+                    const trace = {
+                        v: "V_FINAL_STABLE_V1",
+                        timestamp: new Date().toISOString(),
+                        receivedMessage: aggregatedText,
+                        intent,
+                        apiUsed: isRecruiterMode ? `recruiter-agent(Step: ${activeStepId})` : 'capturista-brain',
+                        aiResult,
+                        isNowComplete
+                    };
+                    await redisClient.lpush(`debug:agent:logs:${candidateId}`, JSON.stringify(trace));
+                    await redisClient.ltrim(`debug:agent:logs:${candidateId}`, 0, 49);
+                    await redisClient.set('debug:global:last_run', JSON.stringify({
+                        candidateId,
+                        timestamp: trace.timestamp,
+                        msg: aggregatedText.substring(0, 50),
+                        hasUQ: !!aiResult?.unanswered_question
+                    }), 'EX', 3600);
+                }
+            } catch (e) {
+                console.error(`[DEBUG] Trace failed: `, e.message);
             }
-        } catch (e) {
-            console.error(`[DEBUG] Trace failed: `, e.message);
         }
 
         const finalReaction = (aiResult?.reaction && aiResult.reaction !== 'null' && aiResult.reaction !== 'undefined') ? aiResult.reaction : null;
