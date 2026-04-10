@@ -349,6 +349,35 @@ export default async function handler(req, res) {
                     if (!candidate) candidateId = null;
                 }
 
+                // 🔄 INSTANCE-SWITCH RESET: If candidate exists but wrote to a DIFFERENT number,
+                // deep-delete all their data and start fresh on the new instance.
+                // This prevents cross-instance contamination and gives them a clean Brenda flow.
+                if (candidate && capturedInstanceId && candidate.instanceId) {
+                    // Normalize both IDs for comparison (strip 'instance' prefix)
+                    const normalize = (id) => String(id || '').replace(/^instance/, '');
+                    const currentNorm = normalize(candidate.instanceId);
+                    const incomingNorm = normalize(capturedInstanceId);
+
+                    if (currentNorm && incomingNorm && currentNorm !== incomingNorm) {
+                        if (isDebug) console.log(`[WEBHOOK/INSTANCE-SWITCH] 🔄 Candidate ${phone} switched from ${candidate.instanceId} to ${capturedInstanceId}. Performing full reset...`);
+                        
+                        // Deep delete (same as RESET command): wipes candidate, messages, locks, state keys
+                        await deleteCandidate(candidateId);
+                        
+                        // Clear instance mapping so messenger doesn't use stale data
+                        try {
+                            const redis = getRedisClient();
+                            if (redis) {
+                                await redis.del(`candidate_instance:${phone}`).catch(() => {});
+                            }
+                        } catch (e) { /* non-critical */ }
+
+                        // Nullify so the next block creates a fresh candidate
+                        candidateId = null;
+                        candidate = null;
+                    }
+                }
+
                 if (!candidateId) {
                     candidate = await saveCandidate({
                         whatsapp: phone,
