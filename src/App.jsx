@@ -13,11 +13,9 @@ import VacanciesSection from './components/VacanciesSection';
 import UsersSection from './components/UsersSection';
 import PostMakerSection from './components/PostMakerSection';
 import BotIASection from './components/BotIASection';
-import SimulatorSection from './components/SimulatorSection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import ProjectsSection from './components/ProjectsSection';
 import ByPassSection from './components/ByPassSection';
-import InstancesSection from './components/InstancesSection';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import LoginPage from './components/LoginPage';
 import LandingPage from './components/LandingPage';
@@ -80,7 +78,7 @@ function App() {
                  setRolePermissions(currentUserRole.permissions);
                  if (currentUserRole.permissions['candidates'] !== true) {
                      // Fallback orderly based on typical Sidebar order
-                     const fallbackKeys = ['chat', 'instances', 'bot-ia', 'simulator', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
+                     const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
                      const fallback = fallbackKeys.find(k => currentUserRole.permissions[k] === true);
                      if (fallback) {
                          setActiveSection(fallback);
@@ -189,7 +187,6 @@ function App() {
                     : activeSection === 'chat' ? 'Chat Web'
                     : activeSection === 'bulks' ? 'Envíos Masivos (Bulks)'
                     : activeSection === 'bot-ia' ? 'Bot IA'
-                    : activeSection === 'simulator' ? 'Simulador'
                     : activeSection === 'automations' ? 'Automatizaciones'
                     : activeSection === 'vacancies' ? 'Vacantes'
                     : activeSection === 'history' ? 'Historial'
@@ -198,7 +195,6 @@ function App() {
                     : activeSection === 'media-library' ? 'Biblioteca Multimedia'
                     : activeSection === 'projects' ? 'Proyectos'
                     : activeSection === 'bypass' ? 'ByPass Intelligence'
-                    : activeSection === 'instances' ? 'Instancias de Envío'
                     : 'Configuración'}
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -206,7 +202,6 @@ function App() {
                     : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
                     : activeSection === 'bulks' ? 'Manda mensajes en secuencia a múltiples candidatos a la vez'
                     : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
-                    : activeSection === 'simulator' ? 'Chatea con Brenda en tiempo real'
                     : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
                     : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
                     : activeSection === 'history' ? 'Historial de conversaciones'
@@ -215,7 +210,6 @@ function App() {
                     : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                     : activeSection === 'projects' ? 'Gestión y organización de proyectos'
                     : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos'
-                    : activeSection === 'instances' ? 'Gestión de conexiones WhatsApp'
                     : 'Credenciales y configuración del sistema'}
                 </p>
               </div>
@@ -265,8 +259,7 @@ function App() {
             <BulksSection showToast={showToast} />
           ) : activeSection === 'bot-ia' ? (
             <BotIASection showToast={showToast} />
-          ) : activeSection === 'simulator' ? (
-            <SimulatorSection showToast={showToast} />
+
           ) : activeSection === 'automations' ? (
             <AutomationsSection showToast={showToast} />
           ) : activeSection === 'vacancies' ? (
@@ -281,8 +274,7 @@ function App() {
             <ProjectsSection showToast={showToast} />
           ) : activeSection === 'bypass' ? (
             <ByPassSection showToast={showToast} />
-          ) : activeSection === 'instances' ? (
-            <InstancesSection showToast={showToast} />
+
           ) : (
             <SettingsSection
               instanceId={instanceId}

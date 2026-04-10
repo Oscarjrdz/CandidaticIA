@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut,
-    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, Server
+    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit
 } from 'lucide-react';
 import {
     DndContext,
@@ -30,9 +30,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'candidates', label: 'Candidatos', icon: Users, position: 'top' },
     { id: 'chat', label: 'Chat Web', icon: MessageSquare, position: 'top' },
     { id: 'bulks', label: 'Envíos Masivos', icon: Send, position: 'top' },
-    { id: 'instances', label: 'Instancias', icon: Server, position: 'top' },
     { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
-    { id: 'simulator', label: 'Simulador', icon: MessageSquare, position: 'top' },
     { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
     { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
     { id: 'bypass', label: 'ByPass', icon: Zap, position: 'top' },
