@@ -438,7 +438,7 @@ export default async function handler(req, res) {
                     ...candidate,
                     ultimoMensaje: new Date().toISOString(),
                     lastUserMessageAt: new Date().toISOString(),
-                    instanceId: capturedInstanceId || candidate?.instanceId, // Lock to the instance they messaged
+                    instanceId: candidate?.instanceId || capturedInstanceId, // 🔒 STICKY: Keep original instance, only assign if new
                     unread: true
                 };
 
