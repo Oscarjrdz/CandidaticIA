@@ -1,6 +1,15 @@
 import axios from 'axios';
 import { getRedisClient } from '../utils/storage.js';
 
+/**
+ * 🔒 MULTI-INSTANCE CONFIG RESOLVER (Instance-Sticky)
+ * - If requestedInstanceId is provided → return that exact instance
+ * - If requestedInstanceId is null → return instances[0] as safe default
+ *   (Candidates are assigned organically via the webhook — whichever
+ *    GatewayWapp instance receives the first message becomes their
+ *    permanent line. NO round-robin, NO rotation.)
+ * - Fallback chain: instances array → legacy credentials → env vars
+ */
 export const getUltraMsgConfig = async (requestedInstanceId = null) => {
     try {
         const redis = getRedisClient();
@@ -15,8 +24,12 @@ export const getUltraMsgConfig = async (requestedInstanceId = null) => {
                         if (requestedInstanceId) {
                             const match = instances.find(inst => inst.instanceId === requestedInstanceId);
                             if (match) return match;
+                            // If the requested ID doesn't match, fall through to default
+                            // (the instance may have been deleted or the ID is stale)
                         }
-                        // Otherwise, return the first one available
+                        // 🔒 DETERMINISTIC DEFAULT: Always return first instance
+                        // Candidates get their instance assigned in the webhook
+                        // from the GatewayWapp payload — no rotation needed.
                         return instances[0];
                     }
                 } catch (e) {
@@ -31,7 +44,7 @@ export const getUltraMsgConfig = async (requestedInstanceId = null) => {
             }
         }
     } catch (e) {
-        console.error('Failed to get UltraMsg config from Redis:', e.message);
+        console.error('Failed to get WhatsApp config from Redis:', e.message);
     }
 
     // Fallback to Environment variables
@@ -40,8 +53,35 @@ export const getUltraMsgConfig = async (requestedInstanceId = null) => {
         token: process.env.ULTRAMSG_TOKEN
     };
 };
+
+/**
+ * 📡 Returns ALL configured instances (for broadcast operations like Stories).
+ * Falls back to single-instance array if only one exists.
+ */
+export const getAllActiveInstances = async () => {
+    try {
+        const redis = getRedisClient();
+        if (!redis) return [];
+        const raw = await redis.get('ultramsg_instances');
+        if (!raw) return [];
+        const instances = JSON.parse(raw);
+        return Array.isArray(instances) ? instances : [];
+    } catch (e) {
+        return [];
+    }
+};
+
+/**
+ * 🎯 Semantic helper: Resolve the correct instance for a specific candidate.
+ * Accepts a candidateData object and returns the matching config.
+ */
+export const getInstanceForCandidate = async (candidateData) => {
+    if (!candidateData) return getUltraMsgConfig();
+    return getUltraMsgConfig(candidateData.instanceId || null);
+};
+
 const getApiBaseUrl = () => {
-    // GatewayWapp is now the exclusive WhatsApp engine. UltraMsg is deprecated.
+    // GatewayWapp is now the exclusive WhatsApp engine.
     return 'https://gatewaywapp-production.up.railway.app';
 };
 

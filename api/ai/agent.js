@@ -4817,7 +4817,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
 };
 
 async function sendFallback(cand, text) {
-    const config = await getUltraMsgConfig();
+    const config = await getUltraMsgConfig(cand?.instanceId);
     if (config && cand.whatsapp) {
         await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, text);
     }

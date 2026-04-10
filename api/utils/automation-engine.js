@@ -50,16 +50,12 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
             return { success: false, error: 'OPENAI_API_KEY_MISSING', logs };
         }
 
-        const config = await getUltraMsgConfig();
-        if (!config?.instanceId || !config?.token) {
-            logs.push(`❌ CRITICAL: UltraMsg no está vinculado(Falta Instance ID o Token).`);
-            return { success: false, error: 'ULTRAMSG_CONFIG_MISSING', logs };
-        }
-        logs.push(`✅ Configuración y API Key verificadas.`);
+        // Config is now resolved per-candidate inside the pipeline to support multi-instance
+        logs.push(`✅ API Key verificadas.`);
 
         // --- PIPELINE DE RECLUTAMIENTO ---
         try {
-            const pipeResult = await processProjectPipelines(redis, openAiKey, config, logs, manualConfig);
+            const pipeResult = await processProjectPipelines(redis, openAiKey, logs, manualConfig);
             processedCount = pipeResult?.sent || 0;
         } catch (e) {
             logs.push(`⚠️[PIPELINE] Error procesando embudos: ${e.message} `);
@@ -79,7 +75,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
  * --- PARTE 3: PIPELINE DE RECLUTAMIENTO ---
  * Procesa los candidatos que están "estacionados" en un paso activo.
  */
-async function processProjectPipelines(redis, openAiKey, config, logs, manualConfig = null) {
+async function processProjectPipelines(redis, openAiKey, logs, manualConfig = null) {
     const { getProjects, getProjectById, getProjectCandidates, getProjectCandidateMetadata, getVacancyById } = await import('./storage.js');
 
     let projects = [];
@@ -280,7 +276,13 @@ REGLAS DE ORO:
                     }
 
                     for (let i = 0; i < messagesToSend.length; i++) {
-                        await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, messagesToSend[i], 'chat', { priority: i });
+                        // 🎯 Per-candidate instance resolution for multi-instance support
+                        const candConfig = await getUltraMsgConfig(cand.instanceId);
+                        if (!candConfig?.instanceId) {
+                            logs.push(`🔴 Sin config WhatsApp para ${cand.nombre}. Saltando envío.`);
+                            break;
+                        }
+                        await sendUltraMsgMessage(candConfig.instanceId, candConfig.token, cand.whatsapp, messagesToSend[i], 'chat', { priority: i });
                         if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
                             await new Promise(r => setTimeout(r, 3000));
                         }
@@ -332,7 +334,13 @@ REGLAS DE ORO:
                         let candidateFirstName = (cand.nombreReal || cand.nombre || 'Candidato').split(' ')[0];
                         let p = `¡Mira ${candidateFirstName}! Te comparto la vacante que encontré para ti: ⏬\n\n${vacancyContext.messageDescription || vacancyContext.description || ''}`;
 
-                        await sendUltraMsgMessage(config.instanceId, config.token, cand.whatsapp, p, 'chat', { priority: 0 });
+                        // 🎯 Per-candidate instance resolution
+                        const failsafeConfig = await getUltraMsgConfig(cand.instanceId);
+                        if (!failsafeConfig?.instanceId) {
+                            logs.push(`❌[PIPELINE FAILSAFE] Sin config WhatsApp para ${cand.nombre}.`);
+                            continue;
+                        }
+                        await sendUltraMsgMessage(failsafeConfig.instanceId, failsafeConfig.token, cand.whatsapp, p, 'chat', { priority: 0 });
 
                         const { updateCandidate, saveMessage } = await import('./storage.js');
                         await updateCandidate(cand.id, {

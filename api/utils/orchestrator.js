@@ -155,14 +155,10 @@ export class Orchestrator {
             return false;
         }
 
-        if (!targetProjectId) {
-            logTrace('❌ No matching project found for handover.');
-            return false;
-        }
 
         const project = await getProjectById(targetProjectId);
         if (!project || !project.steps || project.steps.length === 0) {
-            logTrace(`❌ Invalid project \${targetProjectId} for handover.`);
+            console.log(`❌ Invalid project \${targetProjectId} for handover.`);
             return false;
         }
 
@@ -245,7 +241,7 @@ export class Orchestrator {
                 saveMessage(candidateId, { from: 'bot', content: ctaMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
                 vacancyAlreadySent = true;
-                logTrace(`⚡ [INSTANT] Vacancy sent directly (no GPT, no worker) for ${candidateId}`);
+                console.log(`⚡ [INSTANT] Vacancy sent directly (no GPT, no worker) for ${candidateId}`);
             }
         } catch (e) {
             console.error('[ORCHESTRATOR] Instant vacancy send failed, worker will retry:', e.message);
@@ -253,7 +249,7 @@ export class Orchestrator {
 
         // 5. Background Worker — fires as failsafe if instant send failed, and handles multi-step pipeline logic.
         try {
-            logTrace(`⚙️ Triggering background worker for ${targetProjectId} (vacancyAlreadySent: ${vacancyAlreadySent})...`);
+            console.log(`⚙️ Triggering background worker for ${targetProjectId} (vacancyAlreadySent: ${vacancyAlreadySent})...`);
             const workerPayload = { targetProjectId, stepId: firstStep.id, candidateId, vacancyAlreadySent };
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://candidatic-ia.vercel.app';
 

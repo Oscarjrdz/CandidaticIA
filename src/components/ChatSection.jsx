@@ -145,6 +145,14 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     // Filter Chips State
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'unread', 'label', 'profile'
     const [filterValue, setFilterValue] = useState(null);
+    const activeFilterRef = useRef('all');
+    const filterValueRef = useRef(null);
+
+    useEffect(() => {
+        activeFilterRef.current = activeFilter;
+        filterValueRef.current = filterValue;
+        loadCandidates();
+    }, [activeFilter, filterValue]);
     
     // Marketing (Briefcase) Filters - Route A
     const [aiProjectFilter, setAiProjectFilter] = useState(null);
@@ -395,7 +403,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
     const loadCandidates = async () => {
         try {
-            const result = await getCandidates(200, 0, "");
+            const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
+            const result = await getCandidates(200, 0, "", false, tagParam);
             if (result.success) {
                 const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
@@ -816,6 +825,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                     {(Array.isArray(availableTags) ? availableTags : []).map(tagObj => {
                                         const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                        const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
                                         return (
                                             <div 
                                                 key={tName}
@@ -823,7 +833,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                 className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
                                             >
                                                 <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></span>
-                                                {tName}
+                                                {display}
                                             </div>
                                         );
                                     })}
@@ -1263,6 +1273,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                     {availableTags.map(tagObj => {
                                                         const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                                        const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
                                                         const isActive = selectedChat.tags?.includes(tName);
                                                         const isEditing = editingTag === tName;
 
@@ -1334,7 +1345,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                             >
                                                                 <div className="flex-1 flex items-center gap-2">
                                                                     <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></span>
-                                                                    <span className="truncate">{tName}</span>
+                                                                    <span className="truncate">{display}</span>
                                                                     {isActive && <Check className="w-4 h-4 text-blue-500 ml-1" />}
                                                                 </div>
                                                                 <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">

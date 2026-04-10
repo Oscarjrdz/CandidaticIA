@@ -19,7 +19,7 @@ export default async function handler(req, res) {
 
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {
-            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false' } = req.query;
+            const { limit = '100', offset = '0', search = '', stats, id, excludeLinked = 'false', tag = '' } = req.query;
 
             // Estadísticas (Optional mixed response)
             let statsData = null;
@@ -70,7 +70,8 @@ export default async function handler(req, res) {
                 parseInt(limit),
                 parseInt(offset),
                 search,
-                excludeLinked === 'true'
+                excludeLinked === 'true',
+                tag
             );
 
             return res.status(200).json({

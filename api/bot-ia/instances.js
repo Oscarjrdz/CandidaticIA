@@ -26,7 +26,8 @@ export default async function handler(req, res) {
                                 name: legacy.name || 'Línea WhatsApp Principal',
                                 identifier: legacy.identifier || 'CAND-01',
                                 instanceId: legacy.instanceId || '',
-                                token: legacy.token || ''
+                                token: legacy.token || '',
+                                status: 'active'
                             }];
                             // Auto-save the migrated array
                             await redis.set('ultramsg_instances', JSON.stringify(instances));
@@ -36,6 +37,15 @@ export default async function handler(req, res) {
                     }
                 }
             }
+
+            // Hydrate candidate counts per instance (fast scan)
+            try {
+                for (const inst of instances) {
+                    const countKey = `instance_candidates:${inst.instanceId}`;
+                    const count = await redis.get(countKey);
+                    inst.candidateCount = count ? parseInt(count) : 0;
+                }
+            } catch (e) { /* non-critical */ }
 
             return res.status(200).json(instances);
         }

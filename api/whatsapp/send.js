@@ -16,12 +16,23 @@ export default async function handler(req, res) {
     }
 
     try {
-        // Use provided credentials or fallback to stored config
+        // Use provided credentials or fallback to candidate's assigned instance
         let effectiveInstanceId = instanceId;
         let effectiveToken = token;
 
         if (!effectiveInstanceId || !effectiveToken) {
-            const config = await getUltraMsgConfig();
+            // Try to resolve the candidate's assigned instance first
+            let resolvedInstanceId = null;
+            try {
+                const { getRedisClient } = await import('../utils/storage.js');
+                const redis = getRedisClient();
+                if (redis) {
+                    const cleanPhone = String(to).replace(/\D/g, '');
+                    resolvedInstanceId = await redis.get(`candidate_instance:${cleanPhone}`);
+                }
+            } catch (e) { /* non-critical */ }
+
+            const config = await getUltraMsgConfig(resolvedInstanceId);
             if (config) {
                 effectiveInstanceId = effectiveInstanceId || config.instanceId;
                 effectiveToken = effectiveToken || config.token;
@@ -29,7 +40,7 @@ export default async function handler(req, res) {
         }
 
         if (!effectiveInstanceId || !effectiveToken) {
-            return res.status(500).json({ error: 'UltraMsg credentials not configured' });
+            return res.status(500).json({ error: 'WhatsApp credentials not configured' });
         }
 
         const result = await sendUltraMsgMessage(effectiveInstanceId, effectiveToken, to, body);

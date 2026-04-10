@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { getRedisClient, getCandidates } from '../utils/storage.js';
+import { getAllActiveInstances } from './utils.js';
 
 const getApiBaseUrl = () => 'https://gatewaywapp-production.up.railway.app';
 
@@ -16,30 +17,34 @@ export default async function handler(req, res) {
 
     let { instanceId, token, type = 'text', content, caption, color = '#075E54', font = 0 } = req.body;
 
-    // Load creds from Redis if not passed
-    if (!instanceId || !token) {
-        try {
-            const redis = getRedisClient();
-            if (redis) {
-                const instancesRaw = await redis.get('ultramsg_instances');
-                if (instancesRaw) {
-                    const instances = JSON.parse(instancesRaw);
-                    const active = instances.find(i => i.status === 'active') || instances[0];
-                    if (active) { instanceId = active.instanceId; token = active.token; }
-                }
-                if (!instanceId) {
+    // Load creds from Redis if not passed — now supports multi-instance
+    let targetInstances = []; // Will hold { instanceId, token } objects
+    if (instanceId && token) {
+        // Explicit credentials passed — use only this one
+        targetInstances = [{ instanceId, token }];
+    } else {
+        // Broadcast through ALL instances for maximum story reach
+        const allInstances = await getAllActiveInstances();
+        if (allInstances.length > 0) {
+            targetInstances = allInstances.map(i => ({ instanceId: i.instanceId, token: i.token }));
+        } else {
+            // Legacy fallback
+            try {
+                const redis = getRedisClient();
+                if (redis) {
                     const cfg = await redis.get('ultramsg_credentials') || await redis.get('ultramsg_config');
                     if (cfg) {
                         const parsed = typeof cfg === 'string' ? JSON.parse(cfg) : cfg;
-                        instanceId = parsed.instanceId;
-                        token = parsed.token;
+                        if (parsed.instanceId && parsed.token) {
+                            targetInstances = [{ instanceId: parsed.instanceId, token: parsed.token }];
+                        }
                     }
                 }
-            }
-        } catch (e) { console.error('[send-status] Redis:', e.message); }
+            } catch (e) { console.error('[send-status] Redis:', e.message); }
+        }
     }
 
-    if (!instanceId || !token) return res.status(400).json({ success: false, error: 'Sin instancia configurada.' });
+    if (targetInstances.length === 0) return res.status(400).json({ success: false, error: 'Sin instancia configurada.' });
     if (!content) return res.status(400).json({ success: false, error: 'Contenido vacío.' });
 
     // Ensure we send the raw ID to the gateway (e.g. 9056d7014d instead of instance9056d7014d)
@@ -47,7 +52,6 @@ export default async function handler(req, res) {
 
     try {
         const baseUrl = getApiBaseUrl();
-        const url = `${baseUrl}/${cleanInstanceId}/stories`;
 
         // 🟢 PREPARE CONTACTS (Audiencia)
         // Fetches up to 2000 candidates to build a recipient list
@@ -72,7 +76,7 @@ export default async function handler(req, res) {
             if (!contacts.includes(num)) contacts.push(num);
         });
 
-        let payload = { token, type, contacts };
+        let payload = { type, contacts };
 
         if (type === 'text') {
             payload.text  = content;
@@ -90,29 +94,46 @@ export default async function handler(req, res) {
             return res.status(400).json({ success: false, error: `Tipo no soportado: ${type}` });
         }
 
-        console.log(`[STORIES] POST ${url}  type=${type} instance=${instanceId}`);
-        const response = await axios.post(url, payload, {
-            timeout: 30000,
-            headers: { 'Content-Type': 'application/json' },
-            validateStatus: () => true,
-        });
+        // 📡 BROADCAST: Send through ALL instances
+        let firstResponse = null;
+        let successCount = 0;
+        for (const inst of targetInstances) {
+            const cleanId = inst.instanceId.replace(/^instance/, '');
+            const url = `${baseUrl}/${cleanId}/stories`;
+            try {
+                const instPayload = { ...payload, token: inst.token };
+                console.log(`[STORIES] POST ${url}  type=${type} instance=${inst.instanceId}`);
+                const response = await axios.post(url, instPayload, {
+                    timeout: 30000,
+                    headers: { 'Content-Type': 'application/json' },
+                    validateStatus: () => true,
+                });
+                const success = response.status >= 200 && response.status < 300;
+                console.log(`[STORIES] ${response.status} (${inst.instanceId}):`, JSON.stringify(response.data));
+                if (success) {
+                    successCount++;
+                    if (!firstResponse) firstResponse = response;
+                }
+            } catch (instErr) {
+                console.error(`[STORIES] Error on instance ${inst.instanceId}:`, instErr.message);
+            }
+        }
 
-        const success = response.status >= 200 && response.status < 300;
-        console.log(`[STORIES] ${response.status}:`, JSON.stringify(response.data));
-
-        if (success && response.data?.id) {
+        // Save to Redis using the first successful response
+        if (firstResponse?.data?.id) {
             try {
                 const redis = getRedisClient();
                 if (redis) {
                     const storyObj = {
-                        id: response.data.id,
+                        id: firstResponse.data.id,
                         type,
                         content,
                         caption,
                         color, // Store the original hex locally for frontend rendering
                         font,
                         timestamp: new Date().toISOString(),
-                        views: []
+                        views: [],
+                        broadcastCount: successCount
                     };
                     await redis.lpush('wa_stories', JSON.stringify(storyObj));
                     
@@ -124,7 +145,7 @@ export default async function handler(req, res) {
             }
         }
 
-        return res.status(200).json({ success, data: response.data, httpStatus: response.status });
+        return res.status(200).json({ success: successCount > 0, broadcastCount: successCount, data: firstResponse?.data, httpStatus: firstResponse?.status });
     } catch (e) {
         console.error('[STORIES] Error:', e.message);
         return res.status(500).json({ success: false, error: e.message });

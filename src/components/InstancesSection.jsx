@@ -344,6 +344,11 @@ const InstancesSection = ({ showToast }) => {
                                                 </div>
                                                 <span className="text-sm font-medium text-slate-500 flex items-center gap-1.5">
                                                     <Tag className="w-3.5 h-3.5" /> Origen ID: <strong className="text-blue-600 dark:text-blue-400 font-bold">{inst.identifier}</strong>
+                                                    {inst.candidateCount > 0 && (
+                                                        <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold border border-blue-100 dark:border-blue-800/50">
+                                                            {inst.candidateCount} candidatos
+                                                        </span>
+                                                    )}
                                                 </span>
                                             </div>
                                         </div>

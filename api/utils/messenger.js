@@ -1,47 +1,55 @@
-import { getUltraMsgConfig, sendUltraMsgMessage } from '../whatsapp/utils.js';
+import { getUltraMsgConfig, sendUltraMsgMessage, sendUltraMsgPresence } from '../whatsapp/utils.js';
 import { getRedisClient } from './storage.js';
 
-// Gateway channel key (set by gateway/webhook.js when a message comes in)
-const GW_CHANNEL_KEY = (phone) => `gw_channel:${phone}`;
-
 /**
- * Smart messenger — routes replies through the same channel the message arrived on.
- * - If the candidate messaged via a Gateway instance → reply via Gateway
- * - Otherwise → reply via UltraMsg (existing behavior)
+ * 🚀 SMART MESSENGER v2 — Multi-Instance Aware
+ *
+ * Routes replies through the correct GatewayWapp instance based on:
+ *   1. Explicit instanceId passed in options (_instanceId)
+ *   2. Candidate's assigned instanceId (Redis: candidate_instance:{phone})
+ *   3. Deterministic default (instances[0]) if no assignment found
+ *
+ * All sends go through the unified GatewayWapp API layer (sendUltraMsgMessage).
+ * Instance assignment is organic: the GatewayWapp webhook captures the instanceId
+ * from the line that received the first message. NO rotation, NO round-robin.
  */
 export const sendMessage = async (number, message, type = 'chat', extraParams = {}) => {
     try {
         // Normalize phone
         const phone = String(number).replace(/\D/g, '');
 
-        // ── Check for active Gateway channel ──────────────────────────────────
-        try {
-            const redis = getRedisClient();
-            const gwInstanceId = await redis?.get(GW_CHANNEL_KEY(phone));
+        // Determine instanceId: explicit > Redis lookup > deterministic default
+        let targetInstanceId = extraParams._instanceId || null;
 
-            if (gwInstanceId) {
-                return await _sendViaGateway(gwInstanceId, phone, message, type, extraParams);
+        // If no explicit instanceId, try to look up the candidate's assigned instance
+        if (!targetInstanceId) {
+            try {
+                const redis = getRedisClient();
+                if (redis) {
+                    // Quick Redis lookup: candidate's instance is stored on their hash
+                    const candidateInstanceId = await redis.get(`candidate_instance:${phone}`);
+                    if (candidateInstanceId) targetInstanceId = candidateInstanceId;
+                }
+            } catch (e) {
+                // Redis lookup failed — fall through to deterministic default
             }
-        } catch (e) {
-            // Redis lookup failed — fall through to UltraMsg
-            console.warn('[MESSENGER] Gateway channel lookup failed, using UltraMsg:', e.message);
         }
 
-        // ── Default: UltraMsg ─────────────────────────────────────────────────
-        const config = await getUltraMsgConfig();
+        // Resolve config (returns exact match or instances[0] as safe default)
+        const config = await getUltraMsgConfig(targetInstanceId);
 
         if (!config || !config.instanceId || !config.token) {
-            console.error('❌ Missing UltraMsg Configuration (Checked Env & Redis)');
-            return { success: false, error: 'Configuration missing: ULTRAMSG_INSTANCE_ID or TOKEN' };
+            console.error('❌ Missing WhatsApp Configuration (Checked Env & Redis)');
+            return { success: false, error: 'Configuration missing: instanceId or TOKEN' };
         }
 
         const result = await sendUltraMsgMessage(config.instanceId, config.token, number, message, type, extraParams);
 
         if (!result.success) {
-            return { success: false, error: result.error || 'UltraMsg Send Error' };
+            return { success: false, error: result.error || 'WhatsApp Send Error' };
         }
 
-        return { success: true, data: result.data };
+        return { success: true, data: result.data, via: 'gateway', instanceId: config.instanceId };
 
     } catch (error) {
         console.error('❌ Error sending message:', error.message);
@@ -49,65 +57,23 @@ export const sendMessage = async (number, message, type = 'chat', extraParams = 
     }
 };
 
-// ─── Internal: Send via our own Gateway ────────────────────────────────────────
-async function _sendViaGateway(instanceId, phone, message, type = 'chat', extraParams = {}) {
-    try {
-        const { getInstance } = await import('../gateway/session-engine.js');
-        const instance = await getInstance(instanceId);
-        if (!instance) throw new Error(`Gateway instance ${instanceId} not found`);
-
-        // Call the Railway gateway server's /send endpoint (uses the active socket)
-        // gatewayUrl is set on the instance, or falls back to env var
-        const gwBaseUrl = instance.gatewayUrl
-            || process.env.GATEWAY_SERVER_URL
-            || 'https://candidaticia-production.up.railway.app';
-
-        const { default: axios } = await import('axios');
-        const result = await axios.post(`${gwBaseUrl}/send/${instanceId}`, {
-            to: phone,
-            body: message,
-            type,
-            ...extraParams
-        }, { timeout: 30000 });
-
-        if (result.data?.success) {
-            return { success: true, data: result.data, via: 'gateway', instanceId };
-        }
-
-        throw new Error(result.data?.error || 'Gateway send failed');
-
-    } catch (err) {
-        console.error(`[MESSENGER] Gateway send via ${instanceId} failed:`, err.message);
-        // Fallback to UltraMsg on error
-        const config = await getUltraMsgConfig();
-        if (config) {
-            return await sendUltraMsgMessage(config.instanceId, config.token, phone, message, type, extraParams);
-        }
-        return { success: false, error: err.message };
-    }
-}
-
-
-// ─── Send typing presence via our own Gateway ────────────────────────────────
+// ─── Send typing presence via GatewayWapp ────────────────────────────────────
 export const sendGatewayPresence = async (phone, status = 'composing') => {
     try {
-        const redis = getRedisClient();
-        const gwInstanceId = await redis?.get(GW_CHANNEL_KEY(String(phone).replace(/\D/g, '')));
-        if (!gwInstanceId) return; // Not a gateway candidate, skip silently
+        const cleanPhone = String(phone).replace(/\D/g, '');
 
-        const { getInstance } = await import('../gateway/session-engine.js');
-        const instance = await getInstance(gwInstanceId);
-        if (!instance) return;
+        // Try to find the candidate's assigned instance
+        let targetInstanceId = null;
+        try {
+            const redis = getRedisClient();
+            const candidateInstanceId = await redis?.get(`candidate_instance:${cleanPhone}`);
+            if (candidateInstanceId) targetInstanceId = candidateInstanceId;
+        } catch (e) { }
 
-        const gwBaseUrl = instance.gatewayUrl
-            || process.env.GATEWAY_SERVER_URL
-            || 'https://candidaticia-production.up.railway.app';
+        const config = await getUltraMsgConfig(targetInstanceId);
+        if (!config) return;
 
-        const { default: axios } = await import('axios');
-        await axios.post(`${gwBaseUrl}/${gwInstanceId}/presence`, {
-            to: String(phone).replace(/\D/g, ''),
-            status
-        }, { timeout: 5000 });
+        await sendUltraMsgPresence(config.instanceId, config.token, cleanPhone, status);
     } catch (e) {
         // Presence is best-effort — never block message delivery
     }

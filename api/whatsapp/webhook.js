@@ -326,11 +326,23 @@ export default async function handler(req, res) {
                 let candidate = null;
 
                 // Move config fetch early to capture instance identifier
-                const webhookInstanceId = messageData.instanceId || payload.instanceId;
+                // GatewayWapp may send instanceId at different nesting levels
+                const webhookInstanceId = messageData.instanceId || payload.instanceId || payload.instance?.instanceId || req.headers['x-instance-id'];
                 const configPromise = getUltraMsgConfig(webhookInstanceId);
                 const activeConfig = await configPromise;
                 const sourceIdentifier = activeConfig?.identifier || 'whatsapp_v2';
-                const capturedInstanceId = activeConfig?.instanceId || null;
+                const capturedInstanceId = activeConfig?.instanceId || webhookInstanceId || null;
+
+                // 🗺️ FAST INSTANCE MAP: Persist phone→instanceId for O(1) messenger lookups
+                if (capturedInstanceId) {
+                    try {
+                        const redis = getRedisClient();
+                        if (redis) {
+                            // TTL 90 days — refreshed every time they message
+                            redis.set(`candidate_instance:${phone}`, capturedInstanceId, 'EX', 7776000).catch(() => {});
+                        }
+                    } catch (e) { /* non-critical */ }
+                }
 
                 if (candidateId) {
                     candidate = await getCandidateById(candidateId);
@@ -348,6 +360,13 @@ export default async function handler(req, res) {
                     });
                     candidateId = candidate.id;
                     notifyNewCandidate(candidate).catch(() => { });
+                    // 📊 Increment per-instance candidate counter for dashboard
+                    if (capturedInstanceId) {
+                        try {
+                            const redis = getRedisClient();
+                            if (redis) redis.incr(`instance_candidates:${capturedInstanceId}`).catch(() => {});
+                        } catch (e) { /* non-critical */ }
+                    }
                 }
 
                 if (isDebug) console.log(`[WEBHOOK] Incoming message from ${phone}: ${body.substring(0, 30)}... [Source: ${sourceIdentifier}]`);

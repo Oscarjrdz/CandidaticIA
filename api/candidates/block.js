@@ -24,9 +24,9 @@ export default async function handler(req, res) {
             return res.status(404).json({ success: false, error: 'Candidato no encontrado' });
         }
 
-        const config = await getUltraMsgConfig();
+        const config = await getUltraMsgConfig(candidate?.instanceId);
         if (!config || !config.instanceId || !config.token) {
-            return res.status(500).json({ success: false, error: 'Configuración de UltraMsg incompleta' });
+            return res.status(500).json({ success: false, error: 'Configuración de WhatsApp incompleta' });
         }
 
         // Solo queremos silenciar la IA (marcar al candidato como bloqueado), 
