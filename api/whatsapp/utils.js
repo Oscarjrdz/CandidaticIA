@@ -22,7 +22,11 @@ export const getUltraMsgConfig = async (requestedInstanceId = null) => {
                     if (Array.isArray(instances) && instances.length > 0) {
                         // If a specific ID was requested, attempt to match it!
                         if (requestedInstanceId) {
-                            const match = instances.find(inst => inst.instanceId === requestedInstanceId);
+                            // Normalize: Gateway sends "6154bb3156", Redis may store "instance6154bb3156"
+                            // Strip 'instance' prefix from both sides for reliable comparison
+                            const normalize = (id) => String(id || '').replace(/^instance/, '');
+                            const normalizedReq = normalize(requestedInstanceId);
+                            const match = instances.find(inst => normalize(inst.instanceId) === normalizedReq);
                             if (match) return match;
                             // If the requested ID doesn't match, fall through to default
                             // (the instance may have been deleted or the ID is stale)
