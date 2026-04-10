@@ -1104,6 +1104,16 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const candidateData = await getCandidateById(candidateId);
         if (!candidateData) return 'ERROR: No se encontró al candidato';
 
+        // 🔄 REAL-TIME INSTANCE RESOLUTION: Use the Redis key set by the webhook
+        // (always points to the number the candidate JUST wrote to), with fallback
+        // to candidate object's instanceId for backward compatibility.
+        const phone = candidateData.whatsapp?.replace(/\D/g, '');
+        let resolvedInstanceId = candidateData.instanceId;
+        try {
+            const freshInstanceId = await redis?.get(`candidate_instance:${phone}`);
+            if (freshInstanceId) resolvedInstanceId = freshInstanceId;
+        } catch (e) { /* fallback to candidateData.instanceId */ }
+
         // 1. High-Speed Parallel Acquisition (Memory Boost: 40 messages)
         const configKeys = [
             'custom_fields',
@@ -1118,7 +1128,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         ];
 
         const [config, allMessages, batchConfig] = await Promise.all([
-            getUltraMsgConfig(candidateData.instanceId),
+            getUltraMsgConfig(resolvedInstanceId),
             getMessages(candidateId, 40),
             FEATURES.USE_BACKEND_CACHE
                 ? getCachedConfigBatch(redis, configKeys)
@@ -1166,7 +1176,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                     if (saidYes) {
                         // ── Phase 2: Candidate said YES ──────────────────────────────────────
                         const vacancies = await getReengageVacancies(candidateData);
-                        const config = await getUltraMsgConfig(candidateData?.instanceId);
+                        const config = await getUltraMsgConfig(resolvedInstanceId);
                         const phone = candidateData.whatsapp;
 
                         if (vacancies.length === 0) {
@@ -1214,7 +1224,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
                     } else if (saidNo) {
                         // ── Phase 2b: Candidate said NO ─────────────────────────────────────
-                        const config = await getUltraMsgConfig(candidateData?.instanceId);
+                        const config = await getUltraMsgConfig(resolvedInstanceId);
                         const closeMsg = `¡Perfecto! No hay problema, ${firstName}. 😊 Aquí estaré cuando necesites algo. ¡Mucho éxito! 🍀`;
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, closeMsg, 'chat');
                         await saveMessage(candidateId, { from: 'bot', content: closeMsg, timestamp: new Date().toISOString() });
@@ -1227,7 +1237,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                     // ── Phase 3a: Profile confirmation response ──────────────────────────
                     if (saidYes) {
                         // Candidate confirmed profile is correct → friendly close
-                        const config = await getUltraMsgConfig(candidateData?.instanceId);
+                        const config = await getUltraMsgConfig(resolvedInstanceId);
                         const closeMsg = `¡Perfecto ${firstName}! En cuanto llegue algo que se ajuste a tu perfil, ¡serás el primero en saberlo! 🌟 ¡Mucho éxito! 🍀`;
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, closeMsg, 'chat');
                         await saveMessage(candidateId, { from: 'bot', content: closeMsg, timestamp: new Date().toISOString() });
@@ -1237,7 +1247,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                         // Candidate wants to correct something → ask them explicitly to avoid GPT fallback to farewell
                         await redis?.set(reengageKey, 'RECHECK_VACANCIES', 'EX', 604800);
                         const correctionMsg = `¡Claro ${firstName}! ¿Qué dato necesitas que corrijamos? 📝 Dime cuál es el correcto y lo actualizo al momento.`;
-                        const config = await getUltraMsgConfig(candidateData?.instanceId);
+                        const config = await getUltraMsgConfig(resolvedInstanceId);
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, correctionMsg, 'chat');
                         await saveMessage(candidateId, { from: 'bot', content: correctionMsg, timestamp: new Date().toISOString() });
                         return correctionMsg;
@@ -1247,7 +1257,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
                     // ── Phase 3b: After data was corrected, re-evaluate vacancies ────────
                     // candidateData is fresh (already updated by GPT in previous turn)
                     const vacancies = await getReengageVacancies(candidateData);
-                    const config = await getUltraMsgConfig(candidateData?.instanceId);
+                    const config = await getUltraMsgConfig(resolvedInstanceId);
                     const phone = candidateData.whatsapp;
 
                     if (vacancies.length > 0) {
@@ -1305,7 +1315,7 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
                         console.error('[RE-ENGAGE] Greeting GPT error, using fallback:', e.message);
                     }
 
-                    const config = await getUltraMsgConfig(candidateData?.instanceId);
+                    const config = await getUltraMsgConfig(resolvedInstanceId);
                     const phone = candidateData.whatsapp;
                     const ctaBubble = `¿Te gustaría conocer las vacantes que tenemos disponibles para ti?`;
 
