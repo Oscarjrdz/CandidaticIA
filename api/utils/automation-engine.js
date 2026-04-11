@@ -283,9 +283,6 @@ REGLAS DE ORO:
                             break;
                         }
                         await sendUltraMsgMessage(candConfig.instanceId, candConfig.token, cand.whatsapp, messagesToSend[i], 'chat', { priority: i });
-                        if (messagesToSend.length > 1 && i < messagesToSend.length - 1) {
-                            await new Promise(r => setTimeout(r, 3000));
-                        }
                     }
 
                     // AUTO-MOVE LOGIC (Outbound)
