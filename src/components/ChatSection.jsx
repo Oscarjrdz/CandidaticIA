@@ -844,14 +844,14 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
                         {/* Riel A: Proyectos (Maletín) */}
                         {canSeeFilter('filter_projects') && (
-                        <div className="flex items-center gap-1 bg-[#f0f2f5] dark:bg-[#111b21] p-1 rounded-full border border-gray-200 dark:border-gray-800 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
                             <div className="relative">
                                 <button 
                                     onClick={() => setShowDropdown(showDropdown === 'aiProject' ? null : 'aiProject')}
-                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border border-transparent flex-shrink-0 ${
+                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex-shrink-0 ${
                                         aiProjectFilter 
-                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
-                                        : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
+                                        ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                        : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                     }`}
                                 >
                                     <Briefcase className="w-3 h-3 mr-1.5" />
@@ -902,10 +902,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             <>
                                                 <button 
                                                     onClick={() => setShowDropdown(showDropdown === 'aiStep' ? null : 'aiStep')}
-                                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border border-transparent ${
+                                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
                                                         aiStepFilter 
-                                                        ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300' 
-                                                        : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
+                                                        ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                                        : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                                     }`}
                                                 >
                                                     {aiStepFilter ? (activeProject.steps?.find(s => s.id === aiStepFilter)?.name?.slice(0, 15) || 'Paso') : 'Pasos'} 
@@ -953,14 +953,14 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
                         {/* Riel B: CRM Manual */}
                         {canSeeFilter('filter_crm') && (
-                        <div className="flex items-center gap-1 bg-[#f0f2f5] dark:bg-[#111b21] p-1 rounded-full border border-gray-200 dark:border-gray-800 shrink-0 mt-2 md:mt-0 xl:mt-0">
+                        <div className="flex items-center gap-1 shrink-0">
                             <div className="relative">
                                 <button 
                                     onClick={() => setShowDropdown(showDropdown === 'manualPipeline' ? null : 'manualPipeline')}
-                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors border border-transparent flex-shrink-0 ${
+                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex-shrink-0 ${
                                         manualPipelineFilter 
-                                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' 
-                                        : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
+                                        ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                        : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                     }`}
                                 >
                                     <Kanban className="w-3 h-3 mr-1.5" />
@@ -1011,10 +1011,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             <>
                                                 <button 
                                                     onClick={() => setShowDropdown(showDropdown === 'manualStep' ? null : 'manualStep')}
-                                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border border-transparent ${
+                                                    className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
                                                         manualStepFilter 
-                                                        ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300' 
-                                                        : 'bg-transparent text-[#54656f] hover:bg-white dark:text-[#aebac1] dark:hover:bg-[#202c33]'
+                                                        ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                                        : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                                     }`}
                                                 >
                                                     {manualStepFilter ? (activeProject.steps?.find(s => s.id === manualStepFilter)?.name?.slice(0, 15) || 'Paso') : 'Pasos'} 
