@@ -1195,7 +1195,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
                             await sendUltraMsgMessage(config.instanceId, config.token, phone, noVacMsg, 'chat', { priority: 0 });
                             await saveMessage(candidateId, { from: 'bot', content: noVacMsg, timestamp: new Date().toISOString() });
-                            await new Promise(r => setTimeout(r, 500));
                             await sendUltraMsgMessage(config.instanceId, config.token, phone, profileMsg, 'chat', { priority: 1 });
                             await saveMessage(candidateId, { from: 'bot', content: profileMsg, timestamp: new Date().toISOString() });
 
@@ -1215,7 +1214,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
                         await sendUltraMsgMessage(config.instanceId, config.token, phone, listMsg, 'chat', { priority: 0 });
                         await saveMessage(candidateId, { from: 'bot', content: listMsg, timestamp: new Date().toISOString() });
-                        await new Promise(r => setTimeout(r, 1500));
                         await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaMsg, 'chat', { priority: 1 });
                         await saveMessage(candidateId, { from: 'bot', content: ctaMsg, timestamp: new Date().toISOString() });
 
@@ -1272,7 +1270,6 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
 
                         await sendUltraMsgMessage(config.instanceId, config.token, phone, goodNewsMsg, 'chat', { priority: 0 });
                         await saveMessage(candidateId, { from: 'bot', content: goodNewsMsg, timestamp: new Date().toISOString() });
-                        await new Promise(r => setTimeout(r, 1500));
                         await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaMsg2, 'chat', { priority: 1 });
                         await saveMessage(candidateId, { from: 'bot', content: ctaMsg2, timestamp: new Date().toISOString() });
 
@@ -1321,7 +1318,6 @@ SOLO responde al mensaje actual, de forma corta (máximo 2 oraciones). NO mencio
 
                     await sendUltraMsgMessage(config.instanceId, config.token, phone, greetText, 'chat', { priority: 0 });
                     await saveMessage(candidateId, { from: 'bot', content: greetText, timestamp: new Date().toISOString() });
-                    await new Promise(r => setTimeout(r, 700));
                     await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaBubble, 'chat', { priority: 1 });
                     await saveMessage(candidateId, { from: 'bot', content: ctaBubble, timestamp: new Date().toISOString() });
 
@@ -1740,7 +1736,6 @@ ${safeDnaLines}
                         saveMessage(candidateId, { from: 'me', content: listMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
                         // 3. Close with a hook
-                        await new Promise(r => setTimeout(r, 700));
                         const closingMsg = `¿Alguna de estas opciones te llama la atención? 😊`;
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, closingMsg, 'chat', { priority: 1 });
                         saveMessage(candidateId, { from: 'me', content: closingMsg, timestamp: new Date().toISOString() }).catch(() => {});
@@ -3000,7 +2995,6 @@ ${safeDnaLines}
                                         `Lo escucho, ${_pvFn} 🌸 Antes de cerrar tu proceso, permíteme mostrarte una opción más 💼`,
                                     ];
                                     const _ackBubble = _CIT_CANCEL_ACK[_pvIdx % _CIT_CANCEL_ACK.length];
-                                    await new Promise(r => setTimeout(r, 200));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _ackBubble, 'chat', { priority: 1 });
                                     saveMessage(candidateId, { from: 'me', content: _ackBubble, timestamp: new Date().toISOString() }).catch(() => {});
                                     const _vacName = _nextVac.name || 'otra vacante';
@@ -3012,7 +3006,6 @@ ${safeDnaLines}
                                         `💛 Creo que *${_vacName}* puede ser lo que buscas. ¿Agendamos? 🌟`,
                                     ];
                                     const _teaserBubble = _CIT_TEASER[_pvIdx % _CIT_TEASER.length];
-                                    await new Promise(r => setTimeout(r, 500));
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _teaserBubble, 'chat', { priority: 2 });
                                     saveMessage(candidateId, { from: 'me', content: _teaserBubble, timestamp: new Date().toISOString() }).catch(() => {});
                                     candidateUpdates.currentVacancyIndex = _nextVacIdx;
@@ -3050,7 +3043,6 @@ ${safeDnaLines}
 
                         // Send the confirmation question and ABORT the exit move
                         if (config) {
-                            await new Promise(r => setTimeout(r, 200));
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _niQuestion, 'chat', { priority: 1 });
                             saveMessage(candidateId, { from: 'me', content: _niQuestion, timestamp: new Date().toISOString() }).catch(() => {});
                         }
@@ -3676,7 +3668,6 @@ ${safeDnaLines}
                                 console.error('Error enviando pre-move:', e.message);
                             }
                             saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() }).catch(() => { });
-                            await new Promise(r => setTimeout(r, 300));
                         }
 
 
@@ -3769,7 +3760,6 @@ ${safeDnaLines}
 
                                         // Stagger between messages to guarantee WhatsApp delivery order
                                         if (i < confArray.length - 1) {
-                                            await new Promise(r => setTimeout(r, 500));
                                         }
                                     } catch (err) {
                                         console.error(`[RECRUITER BRAIN] ❌ Error enviando confirmación (${item?.type}):`, err.message);
@@ -3804,7 +3794,6 @@ ${safeDnaLines}
                                     const _bridgeNextName = (nextStep?.name || '').toLowerCase();
                                     const _bridgeIsTerminal = _bridgeNextName.includes('citado') || _bridgeNextName.includes('no interesa') || isExitMove;
                                     if (!_bridgeIsTerminal) {
-                                        await new Promise(r => setTimeout(r, 300));
                                         sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => {});
                                     }
                                 }
@@ -3824,10 +3813,8 @@ ${safeDnaLines}
                                 const candFirstName = (candidateData.nombreReal || candidateData.nombre || 'amig@').split(' ')[0];
                                 const farewellPart1 = `Entiendo perfectamente, ${candFirstName} 🙏 Lamento que ninguna de nuestras oportunidades haya encajado contigo en este momento.`;
                                 const farewellPart2 = `Si en algún momento algo cambia y te interesa explorar una nueva vacante, aquí estaré para ayudarte. ¡Mucho éxito en tu búsqueda! 🍀👋`;
-                                await new Promise(r => setTimeout(r, 300));
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, farewellPart1, 'chat', { priority: 1 });
                                 saveMessage(candidateId, { from: 'me', content: farewellPart1, timestamp: new Date().toISOString() }).catch(() => {});
-                                await new Promise(r => setTimeout(r, 300));
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, farewellPart2, 'chat', { priority: 1 });
                                 saveMessage(candidateId, { from: 'me', content: farewellPart2, timestamp: new Date().toISOString() }).catch(() => {});
                                 // Clear vacancy linkage — both top-level AND projectMetadata (where the UI column reads from)
@@ -3878,9 +3865,7 @@ ${safeDnaLines}
                                     ? `¿Te queda bien este día? 😊`
                                     : `¿En cuál día te queda mejor? 😊`;
 
-                                await new Promise(r => setTimeout(r, 800));
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _dayListMsg, 'chat').catch(() => {});
-                                await new Promise(r => setTimeout(r, 1500));
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _dayAskMsg, 'chat').catch(() => {});
                                 await saveMessage(candidateId, { from: 'me', content: _dayListMsg + '[MSG_SPLIT]' + _dayAskMsg, timestamp: new Date().toISOString() });
                             } catch (_dlErr) {
@@ -3997,22 +3982,19 @@ ${safeDnaLines}
 
                                     const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
 
-                                    // Sequential send with delay for correct WhatsApp bubble separation
+                                    // Sequential send — Gateway handles anti-spam spacing
                                     if (!isSimulatorPhone) {
                                         // If we have media, send FIRST bubble, then media, then the rest
                                         if (mUrl && mUrl !== 'null' && cMessagesToSend.length > 0) {
                                             let pIdx = 1;
                                             if (cMessagesToSend[0]) {
                                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cMessagesToSend[0], 'chat', { priority: pIdx++ }).catch(() => { });
-                                                await new Promise(r => setTimeout(r, 600));
                                             }
                                             
                                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: pIdx++ }).catch(() => { });
-                                            await new Promise(r => setTimeout(r, 600));
                                             
                                             for (let i = 1; i < cMessagesToSend.length; i++) {
                                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, cMessagesToSend[i], 'chat', { priority: pIdx++ }).catch(() => { });
-                                                if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 600));
                                             }
                                         } else if (mUrl && mUrl !== 'null') {
                                             // Only media
@@ -4026,10 +4008,8 @@ ${safeDnaLines}
                                                 // 💬 Show typing before every bubble after the first
                                                 if (i > 0) {
                                                     sendGatewayPresence(candidateData.whatsapp, 'composing').catch(() => {});
-                                                    await new Promise(r => setTimeout(r, 800));
                                                 }
                                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
-                                                if (i < cMessagesToSend.length - 1) await new Promise(r => setTimeout(r, 200));
                                             }
                                         }
                                     }
@@ -4699,13 +4679,10 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     if (!isSimulatorPhone) {
                         if (messagesToSend.length > 1) {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 1 }).catch(() => { });
-                            await new Promise(r => setTimeout(r, 400)); // Network spacing
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 2 }).catch(() => { });
-                            await new Promise(r => setTimeout(r, 400));
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[1], 'chat', { priority: 3 }).catch(() => { });
                         } else {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, mUrl, isPdf ? 'document' : 'image', { filename, priority: 1 }).catch(() => { });
-                            await new Promise(r => setTimeout(r, 400));
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[0], 'chat', { priority: 2 }).catch(() => { });
                         }
                     }
@@ -4717,10 +4694,8 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             // 💬 Show typing before every bubble after the first
                             if (i > 0) {
                                 sendGatewayPresence(candidateData.whatsapp, 'composing').catch(() => {});
-                                await new Promise(r => setTimeout(r, 800));
                             }
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
-                            if (i < messagesToSend.length - 1) await new Promise(r => setTimeout(r, 200));
                         }
                     }
                 }
