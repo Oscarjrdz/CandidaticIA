@@ -62,7 +62,7 @@ export default async function handler(req, res) {
                 // Convert relative /api/image?id=xxx to an absolute URL for GatewayWapp
                 if (mediaUrl && !base64Data) {
                     const protocol = req.headers['x-forwarded-proto'] || 'https';
-                    const host = req.headers.host || 'candidatic-ia.vercel.app';
+                    const host = req.headers.host || 'candidatic.com';
 
                     let absoluteUrl = mediaUrl;
 

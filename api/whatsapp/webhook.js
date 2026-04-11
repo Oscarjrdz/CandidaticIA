@@ -149,6 +149,26 @@ export default async function handler(req, res) {
             
             // 🛡️ BLOCK GROUPS AND STATUS BROADCASTS
             if (from.includes('@g.us') || from.includes('status@broadcast') || from.includes('newsletter')) {
+                
+                // EXCEPCIÓN: Permitir comando VINCULAR GRUPO
+                if (from.includes('@g.us') && body.trim().toUpperCase() === 'VINCULAR GRUPO') {
+                    const adminNumber = process.env.ADMIN_NUMBER || '5218116038195';
+                    const senderJid = mData.participant || mData.key?.participant || mData.__raw?.key?.participant || mData.__raw?.participant || '';
+                    const senderPhone = cleanPhoneNumber(senderJid);
+                    
+                    if (senderPhone.slice(-10) === adminNumber.slice(-10)) {
+                        try {
+                            const redis = getRedisClient();
+                            if (redis) {
+                                await redis.set('ventas_grupo_id', from);
+                                const vInstanceId = messageData.instanceId || payload.instanceId || payload.instance?.instanceId || req.headers['x-instance-id'];
+                                await sendMessage(from, '✅ Grupo vinculado con éxito. Los reportes automáticos se enviarán aquí.', 'chat', { _instanceId: vInstanceId });
+                            }
+                        } catch(e) { console.error('Error al vincular grupo:', e); }
+                        return res.status(200).send('grupo_vinculado');
+                    }
+                }
+
                 if (isDebug) console.log(`[WEBHOOK/SPAM-PROTECT] Ignorando mensaje de sistema/grupo: ${from}`);
                 return res.status(200).send('broadcast_ignored');
             }
@@ -205,8 +225,9 @@ export default async function handler(req, res) {
                 // --- ADMIN COMMANDS ---
                 const adminNumber = process.env.ADMIN_NUMBER || '5218116038195';
                 const redis = getRedisClient();
+                const isAdmin = phone.slice(-10) === adminNumber.slice(-10);
 
-                if (phone === adminNumber) {
+                if (isAdmin) {
                     const lowerBody = body.toLowerCase().trim();
 
                     // ---- BRIDGE LEARNING COMMANDS ----

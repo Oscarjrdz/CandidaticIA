@@ -149,7 +149,7 @@ export const processRecruiterMessage = async (candidateData, project, currentSte
                                 .slice(0, 3);
                             const keywords = cleanKws.length > 0 ? ` (Palabras clave: ${cleanKws.join(', ')})` : '';
                             let mUrl = f.mediaUrl || '';
-                            if (mUrl && mUrl.startsWith('/api/')) mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
+                            if (mUrl && mUrl.startsWith('/api/')) mUrl = `https://candidatic.com${mUrl}`;
                             const mediaNote = mUrl ? ` [MEDIA_DISPONIBLE: ${mUrl}]` : '';
                             return `- TEMA: "${f.topic}"${keywords}${mediaNote}\n  RESPUESTA OFICIAL: "${f.officialAnswer}"`;
                         }).join('\n');
@@ -518,7 +518,7 @@ ${alternatives.length > 0
                 });
                 if (faqWithMedia) {
                     let mUrl = faqWithMedia.mediaUrl;
-                    if (mUrl && mUrl.startsWith('/api/')) mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
+                    if (mUrl && mUrl.startsWith('/api/')) mUrl = `https://candidatic.com${mUrl}`;
                     aiResult.media_url = mUrl;
                     console.log(`[RECRUITER BRAIN] ✅ Deterministic media_url injected from FAQ "${faqWithMedia.topic}": ${mUrl}`);
                 }

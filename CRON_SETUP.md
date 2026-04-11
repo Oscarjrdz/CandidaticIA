@@ -46,7 +46,7 @@ The following settings are read from Redis (configured in the frontend Settings 
 After deployment, you can test the cron manually:
 
 ```bash
-curl -X GET https://candidatic-ia.vercel.app/api/cron/export-chats \
+curl -X GET https://candidatic.com/api/cron/export-chats \
   -H "Authorization: Bearer YOUR_CRON_SECRET"
 ```
 

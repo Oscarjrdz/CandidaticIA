@@ -251,7 +251,7 @@ export class Orchestrator {
         try {
             console.log(`⚙️ Triggering background worker for ${targetProjectId} (vacancyAlreadySent: ${vacancyAlreadySent})...`);
             const workerPayload = { targetProjectId, stepId: firstStep.id, candidateId, vacancyAlreadySent };
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://candidatic-ia.vercel.app';
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://candidatic.com';
 
             // Fire and Forget (Do not await)
             fetch(`${apiUrl}/api/workers/run-automations`, {

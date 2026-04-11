@@ -2691,7 +2691,7 @@ ${safeDnaLines}
 
                                     // 1 strong keyword match is enough to intercept
                                     if (_matchedKws >= 1) {
-                                        const _mUrl = _f.mediaUrl ? (_f.mediaUrl.startsWith('/api/') ? `https://candidatic-ia.vercel.app${_f.mediaUrl}` : _f.mediaUrl) : null;
+                                        const _mUrl = _f.mediaUrl ? (_f.mediaUrl.startsWith('/api/') ? `https://candidatic.com${_f.mediaUrl}` : _f.mediaUrl) : null;
                                         skipRecruiterInference = true;
                                         responseTextVal = _f.officialAnswer;
                                         aiResult = {
@@ -3736,9 +3736,9 @@ ${safeDnaLines}
                                         else if (item.type === 'image' && item.data?.url) {
                                             let imgUrl = item.data.url;
                                             if (imgUrl.startsWith('/')) {
-                                                imgUrl = `${process.env.NEXT_PUBLIC_API_URL || 'https://candidatic-ia.vercel.app'}${imgUrl}`;
-                                            } else if (imgUrl.includes('candidatic.ia') && !imgUrl.includes('vercel.app')) {
-                                                imgUrl = imgUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
+                                                imgUrl = `${process.env.NEXT_PUBLIC_API_URL || 'https://candidatic.com'}${imgUrl}`;
+                                            } else if (imgUrl.includes('candidatic.ia') && !imgUrl.includes('candidatic.com')) {
+                                                imgUrl = imgUrl.replace('candidatic.ia', 'candidatic.com');
                                             }
                                             const options = { priority: 1 };
                                             if (item.data.caption && item.data.caption.trim()) {
@@ -3914,14 +3914,14 @@ ${safeDnaLines}
                                     chainText = chainText.replace(/\[MEDIA_DISPONIBLE[^\]]*\]/gi, '').trim();
 
                                     if (mUrl && mUrl !== 'null') {
-                                        if (mUrl.startsWith('/api/')) mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
-                                        else if (mUrl.includes('candidatic.ia') && !mUrl.includes('vercel.app')) mUrl = mUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
+                                        if (mUrl.startsWith('/api/')) mUrl = `https://candidatic.com${mUrl}`;
+                                        else if (mUrl.includes('candidatic.ia') && !mUrl.includes('candidatic.com')) mUrl = mUrl.replace('candidatic.ia', 'candidatic.com');
                                         
                                         isPdf = mUrl.toLowerCase().includes('.pdf') || mUrl.includes('mime=application%2Fpdf');
                                         // Attempt to fetch correct filename if local Vercel URL
                                         if (mUrl.includes('/api/image')) {
                                             try {
-                                                const urlObj = mUrl.startsWith('http') ? new URL(mUrl) : new URL(mUrl, 'https://candidatic-ia.vercel.app');
+                                                const urlObj = mUrl.startsWith('http') ? new URL(mUrl) : new URL(mUrl, 'https://candidatic.com');
                                                 const mediaId = urlObj.searchParams.get('id');
                                                 if (mediaId && redis) {
                                                     const metaRaw = await redis.get(`meta:image:${mediaId}`);
@@ -4646,9 +4646,9 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 if (mUrl && mUrl !== 'null') {
                     // Ensure absolute URL for UltraMsg
                     if (mUrl.startsWith('/api/')) {
-                        mUrl = `https://candidatic-ia.vercel.app${mUrl}`;
-                    } else if (mUrl.includes('candidatic.ia') && !mUrl.includes('vercel.app')) {
-                        mUrl = mUrl.replace('candidatic.ia', 'candidatic-ia.vercel.app');
+                        mUrl = `https://candidatic.com${mUrl}`;
+                    } else if (mUrl.includes('candidatic.ia') && !mUrl.includes('candidatic.com')) {
+                        mUrl = mUrl.replace('candidatic.ia', 'candidatic.com');
                     }
 
                     // Detect if it's a PDF
@@ -4657,7 +4657,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                     if (mUrl.includes('/api/image')) {
                         try {
                             // Safe URL parsing regardless of domain
-                            const urlObj = mUrl.startsWith('http') ? new URL(mUrl) : new URL(mUrl, 'https://candidatic-ia.vercel.app');
+                            const urlObj = mUrl.startsWith('http') ? new URL(mUrl) : new URL(mUrl, 'https://candidatic.com');
                             const mediaId = urlObj.searchParams.get('id');
                             if (mediaId) {
                                 const redis = getRedisClient();

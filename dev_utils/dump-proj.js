@@ -1,5 +1,5 @@
 const https = require('https');
-https.get('https://candidatic-ia.vercel.app/api/projects', res => {
+https.get('https://candidatic.com/api/projects', res => {
   let data = '';
   res.on('data', chunk => data += chunk);
   res.on('end', () => {

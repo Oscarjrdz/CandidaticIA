@@ -148,7 +148,7 @@ export async function generateTTS(text, voice = 'nova', model = 'tts-1') {
             await pipeline.exec();
 
             // Resolve Public Vercel Host
-            let host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || 'candidatic-ia.vercel.app';
+            let host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || 'candidatic.com';
             if (!host.startsWith('http')) host = `https://${host}`;
 
             return `${host}/api/image?id=${id}&ext=.opus`;
