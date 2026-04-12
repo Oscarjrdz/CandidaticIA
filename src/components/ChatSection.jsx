@@ -707,8 +707,24 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         const msg = newMessage.trim();
         if (!msg || sending || !selectedChat) return;
 
+        // Optimistic clear + focus so the user can immediately type again
+        setNewMessage('');
+        setTimeout(() => {
+            const input = document.getElementById('chat-msg-input');
+            if (input) input.focus();
+        }, 10);
+
         setSending(true);
-        // Optimistic UI updates could go here
+        
+        // Optimistic append
+        setMessages(prev => [...(prev || []), {
+            id: 'temp-' + Date.now(),
+            content: msg,
+            tipo: 'text',
+            enviado_por_agente: 1, // Visual indicator for sent by us
+            fecha: new Date().toISOString()
+        }]);
+
         try {
             const res = await fetch('/api/chat', {
                 method: 'POST',
@@ -717,7 +733,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             });
             const data = await res.json();
             if (data.success) {
-                setNewMessage('');
                 loadMessages();
             } else {
                 showToast && showToast('Error al enviar mensaje', 'error');
@@ -727,6 +742,11 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             showToast && showToast('Error de red', 'error');
         } finally {
             setSending(false);
+            // Backup focus
+            setTimeout(() => {
+                const input = document.getElementById('chat-msg-input');
+                if (input) input.focus();
+            }, 50);
         }
     };
 
@@ -1594,6 +1614,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                         
                         <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg border-none shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow">
                             <input 
+                                id="chat-msg-input"
+                                autoComplete="off"
                                 className="w-full bg-transparent border-none outline-none py-2.5 px-4 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none overflow-hidden text-[15px]" 
                                 placeholder="Escribe un mensaje"
                                 value={newMessage}
