@@ -675,7 +675,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                             {/* ── RIGHT: iPhone 17 Pro Max Mockup ── */}
                             <div className="flex justify-center lg:justify-end" style={{ perspective: '1200px' }}>
                                 <div className="relative" style={{ animation: 'iphoneFloat 6s ease-in-out infinite' }}>
-                                    {/* Glow behind phone */
+                                    {/* Glow behind phone */}
                                     <div className="absolute -inset-8 bg-gradient-to-br from-violet-400/20 via-blue-400/15 to-pink-400/10 rounded-[4rem] blur-2xl iphone-glow"></div>
 
                                     {/* iPhone Frame */}
