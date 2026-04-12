@@ -78,28 +78,101 @@ const LandingPage = ({ onLoginSuccess }) => {
     /* ─── MOBILE NAV ─── */
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    /* ─── SEARCH LOGIC ─── */
-    const [searchQuery, setSearchQuery] = useState('');
-    const [isSearching, setIsSearching] = useState(false);
-    const [searchResults, setSearchResults] = useState(null);
+    /* ─── BRENDA CHAT LOGIC ─── */
+    const [brendaMessages, setBrendaMessages] = useState([
+        { from: 'brenda', text: '¡Hola! 👋 Soy Brenda, tu reclutadora virtual de Candidatic.', time: new Date() },
+    ]);
+    const [brendaInput, setBrendaInput] = useState('');
+    const [brendaTyping, setBrendaTyping] = useState(false);
+    const chatEndRef = useRef(null);
+    const chatInputRef = useRef(null);
+    const brendaGreeted = useRef(false);
 
-    const handleSearch = async (e) => {
-        e.preventDefault();
-        if (!searchQuery.trim()) return;
-        setIsSearching(true);
-        setSearchResults(null);
+    // Auto-greet: second message after delay for cinematic effect
+    useEffect(() => {
+        if (brendaGreeted.current) return;
+        brendaGreeted.current = true;
+        const timer1 = setTimeout(() => {
+            setBrendaTyping(true);
+        }, 2000);
+        const timer2 = setTimeout(() => {
+            setBrendaTyping(false);
+            setBrendaMessages(prev => [...prev,
+                { from: 'brenda', text: '¿Buscas talento o quieres saber cómo funciona la plataforma? Pregúntame lo que quieras ✨', time: new Date() },
+            ]);
+        }, 4000);
+        return () => { clearTimeout(timer1); clearTimeout(timer2); };
+    }, []);
+
+    // Auto-scroll chat
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [brendaMessages, brendaTyping]);
+
+    const sendBrendaMessage = async (e) => {
+        e?.preventDefault();
+        const msg = brendaInput.trim();
+        if (!msg || brendaTyping) return;
+        const userMsg = { from: 'user', text: msg, time: new Date() };
+        setBrendaMessages(prev => [...prev, userMsg]);
+        setBrendaInput('');
+        setBrendaTyping(true);
         try {
-            const res = await fetch('/api/public/ai-search', {
+            const res = await fetch('/api/public/chat-brenda', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: searchQuery })
+                body: JSON.stringify({
+                    message: msg,
+                    history: [...brendaMessages, userMsg].slice(-10)
+                })
             });
             const data = await res.json();
-            if (data.success) setSearchResults(data);
+            // Simulate human-like delay
+            await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
+            setBrendaTyping(false);
+            setBrendaMessages(prev => [...prev, { from: 'brenda', text: data.reply || '¡Ups! Intenta de nuevo 😅', time: new Date() }]);
+        } catch {
+            setBrendaTyping(false);
+            setBrendaMessages(prev => [...prev, { from: 'brenda', text: 'Hmm, tuve un problema de conexión. ¿Puedes intentar de nuevo? 😊', time: new Date() }]);
+        }
+        chatInputRef.current?.focus();
+    };
+
+    /* ─── WHATSAPP CONTACT LOGIC ─── */
+    const [showWhatsAppInput, setShowWhatsAppInput] = useState(false);
+    const [contactPhone, setContactPhone] = useState('');
+    const [contactLoading, setContactLoading] = useState(false);
+    const [contactStatus, setContactStatus] = useState(''); // 'success' | 'error' | ''
+    const [contactError, setContactError] = useState('');
+
+    const sendWhatsAppContact = async (e) => {
+        e?.preventDefault();
+        const cleanPhone = contactPhone.replace(/\D/g, '');
+        if (cleanPhone.length < 10) {
+            setContactError('Ingresa un número válido de 10 dígitos');
+            return;
+        }
+        setContactLoading(true);
+        setContactError('');
+        setContactStatus('');
+        try {
+            const res = await fetch('/api/public/contact-brenda', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: cleanPhone })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setContactStatus('success');
+                setContactPhone('');
+            } else {
+                throw new Error(data.error || 'Error');
+            }
         } catch (err) {
-            console.error(err);
+            setContactStatus('error');
+            setContactError(err.message || 'Error al enviar. Intenta de nuevo.');
         } finally {
-            setIsSearching(false);
+            setContactLoading(false);
         }
     };
 
@@ -428,119 +501,281 @@ const LandingPage = ({ onLoginSuccess }) => {
             </header>
 
             <main>
-                {/* ═══ HERO SECTION ═══ */}
-                <section className="pt-32 pb-8 px-6">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="relative rounded-[2.5rem] overflow-hidden p-12 md:p-20 lg:p-24 text-center" style={{
-                            background: 'linear-gradient(135deg, #E0F2FE 0%, #EDE9FE 40%, #F3E8FF 70%, #FCE7F3 100%)'
-                        }}>
-                            {/* Blurs decorativos */}
-                            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                                <div className="absolute top-[-15%] left-[-10%] w-[45%] h-[45%] bg-blue-400/15 rounded-full blur-3xl animate-float"></div>
-                                <div className="absolute bottom-[-15%] right-[-10%] w-[45%] h-[45%] bg-violet-400/15 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }}></div>
-                                <div className="absolute top-[30%] right-[20%] w-[25%] h-[25%] bg-pink-300/10 rounded-full blur-3xl"></div>
-                            </div>
+                {/* ═══ iPhone CSS Animations ═══ */}
+                <style>{`
+                    @keyframes iphoneFloat {
+                        0%, 100% { transform: translateY(0px) rotateY(-5deg) rotateX(2deg); }
+                        50% { transform: translateY(-12px) rotateY(-5deg) rotateX(2deg); }
+                    }
+                    @keyframes msgSlideIn {
+                        from { opacity: 0; transform: translateY(12px) scale(0.95); }
+                        to { opacity: 1; transform: translateY(0) scale(1); }
+                    }
+                    @keyframes typingBounce {
+                        0%, 60%, 100% { transform: translateY(0); }
+                        30% { transform: translateY(-4px); }
+                    }
+                    @keyframes glowPulse {
+                        0%, 100% { box-shadow: 0 0 20px rgba(124, 58, 237, 0.15), 0 0 60px rgba(124, 58, 237, 0.05); }
+                        50% { box-shadow: 0 0 30px rgba(124, 58, 237, 0.25), 0 0 80px rgba(124, 58, 237, 0.1); }
+                    }
+                    @keyframes heroTextReveal {
+                        from { opacity: 0; transform: translateY(30px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+                    .msg-appear { animation: msgSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+                    .typing-dot { animation: typingBounce 1.4s infinite; }
+                    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+                    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+                    .iphone-glow { animation: glowPulse 3s ease-in-out infinite; }
+                    .hero-text-1 { animation: heroTextReveal 0.8s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+                    .hero-text-2 { animation: heroTextReveal 0.8s 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+                    .hero-text-3 { animation: heroTextReveal 0.8s 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+                    .hero-text-4 { animation: heroTextReveal 0.8s 0.8s cubic-bezier(0.16, 1, 0.3, 1) both; }
+                `}</style>
 
-                            <div className="relative z-10 max-w-4xl mx-auto">
+                {/* ═══ HERO SECTION ═══ */}
+                <section className="pt-32 pb-16 px-6 relative overflow-hidden">
+                    {/* Background gradient blobs */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        <div className="absolute top-[-20%] left-[-15%] w-[60%] h-[60%] bg-blue-400/8 rounded-full blur-3xl animate-float"></div>
+                        <div className="absolute bottom-[-20%] right-[-15%] w-[55%] h-[55%] bg-violet-400/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '3s' }}></div>
+                        <div className="absolute top-[40%] left-[50%] w-[30%] h-[30%] bg-pink-300/8 rounded-full blur-3xl"></div>
+                    </div>
+
+                    <div className="max-w-7xl mx-auto w-full relative z-10">
+                        <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-start pt-8">
+
+                            {/* ── LEFT: Hero Text ── */}
+                            <div className="text-left lg:pr-8">
                                 {/* Badge */}
-                                <div className="inline-flex items-center space-x-2 bg-white/70 backdrop-blur-sm px-5 py-2 rounded-full text-sm font-semibold text-violet-800 mb-8 border border-white/50 shadow-sm hover:bg-white/80 transition-colors cursor-default">
+                                <div className="hero-text-1 inline-flex items-center space-x-2 bg-violet-50/80 backdrop-blur-sm px-5 py-2.5 rounded-full text-sm font-semibold text-violet-700 mb-8 border border-violet-100/60">
                                     <span className="relative flex h-2 w-2">
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
                                         <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
                                     </span>
-                                    <span>Plataforma de reclutamiento AI-first</span>
+                                    <span>Conoce a Brenda, tu reclutadora IA</span>
                                 </div>
 
                                 {/* Headline */}
-                                <h1 className="text-4xl sm:text-5xl md:text-7xl font-extrabold tracking-tight text-gray-900 mb-6 leading-[1.08]">
-                                    Revoluciona tu{' '}<br className="hidden sm:block" />
+                                <h1 className="hero-text-2 text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-6xl font-extrabold tracking-tight text-gray-900 mb-6 leading-[1.08]">
+                                    Revoluciona tu{' '}<br className="hidden sm:inline" />
                                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">
                                         Reclutamiento con IA
                                     </span>
                                 </h1>
 
-                                <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-                                    Bot conversacional con GPT, búsqueda semántica de candidatos, envíos masivos por WhatsApp y automatización total del pipeline de reclutamiento.
+                                <p className="hero-text-3 text-base lg:text-lg text-gray-500 max-w-lg mb-8 leading-relaxed">
+                                    Brenda es tu bot de reclutamiento con GPT. Conversa con candidatos, extrae datos automáticamente y agenda entrevistas. ¡Pruébala ahora mismo! →
                                 </p>
 
-                                {/* AI Search Bar */}
-                                <div className="max-w-2xl mx-auto relative z-20">
-                                    <form onSubmit={handleSearch} className="relative group">
-                                        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 rounded-full blur opacity-20 group-hover:opacity-40 transition duration-700"></div>
-                                        <div className="relative flex items-center bg-white rounded-full shadow-xl shadow-violet-200/30 p-2">
-                                            <div className="pl-4 pr-2 text-gray-400">
-                                                <Sparkles className="w-5 h-5 text-violet-500" />
-                                            </div>
-                                            <input
-                                                type="text"
-                                                className="flex-1 bg-transparent border-none focus:ring-0 text-gray-800 placeholder-gray-400 text-base md:text-lg outline-none min-w-0"
-                                                placeholder="Ej. Busco contador con experiencia en Monterrey..."
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                            />
-                                            <button
-                                                type="submit"
-                                                disabled={isSearching}
-                                                className="bg-gray-900 text-white rounded-full px-6 py-3 font-semibold hover:bg-gray-800 transition-all duration-300 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 text-sm"
-                                            >
-                                                {isSearching ? (
-                                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                                ) : (
-                                                    <>
-                                                        <span>Buscar</span>
-                                                        <ArrowRight className="w-4 h-4" />
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-                                    </form>
-
-                                    {/* Search Results Popup */}
-                                    {searchResults && (
-                                        <div className="mt-6 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-violet-100/50 p-6 text-left animate-in slide-in-from-top-2">
-                                            <div className="flex items-start justify-between flex-wrap gap-4">
-                                                <div>
-                                                    <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                                                        <span>🎉</span>
-                                                        Encontramos <span className="text-violet-600">{searchResults.matches_count}</span> candidatos
-                                                    </h3>
-                                                    <p className="text-gray-600 mt-1">
-                                                        Coinciden con tu búsqueda. Regístrate para ver sus perfiles completos.
-                                                    </p>
-                                                </div>
-                                                <Button onClick={() => setIsLoginOpen(true)} size="sm" className="bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white shadow-lg">
-                                                    Ver Perfiles
-                                                </Button>
-                                            </div>
-                                            <div className="flex flex-wrap gap-2 mt-4">
-                                                {searchResults.preview.map((p, i) => (
-                                                    <span key={i} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-violet-50 text-violet-700 border border-violet-100">
-                                                        {p.role} • {p.location}
-                                                    </span>
-                                                ))}
-                                                {searchResults.matches_count > 10 && (
-                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100">
-                                                        +{searchResults.matches_count - 10} más
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
+                                {/* CTA Buttons */}
+                                <div className="hero-text-4 flex flex-col sm:flex-row gap-4">
+                                    <button
+                                        onClick={() => setIsLoginOpen(true)}
+                                        className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold rounded-2xl shadow-xl shadow-violet-300/30 hover:shadow-violet-400/40 transition-all duration-300 transform hover:-translate-y-0.5 text-base"
+                                    >
+                                        Empezar gratis
+                                        <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+                                    </button>
+                                    <button
+                                        onClick={() => { setShowWhatsAppInput(!showWhatsAppInput); setContactStatus(''); setContactError(''); }}
+                                        className="group inline-flex items-center justify-center px-8 py-4 bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-green-400 text-gray-800 font-bold rounded-2xl transition-all duration-300 text-base"
+                                    >
+                                        <WhatsAppIcon className="w-5 h-5 text-green-600 mr-2" />
+                                        Hablar con Brenda
+                                    </button>
                                 </div>
 
-                                {/* Trust badges */}
-                                <div className="mt-12 flex flex-wrap items-center justify-center gap-6 text-sm text-gray-500">
-                                    <div className="flex items-center space-x-1.5">
-                                        <Shield className="w-4 h-4 text-green-500" />
-                                        <span>Conexión segura</span>
+                                {/* WhatsApp Phone Input */}
+                                {showWhatsAppInput && (
+                                    <div className="hero-text-4 mt-4 msg-appear">
+                                        {contactStatus === 'success' ? (
+                                            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-5 py-4">
+                                                <CheckCircle className="w-6 h-6 text-green-500 shrink-0" />
+                                                <div>
+                                                    <p className="font-bold text-green-800 text-sm">¡Listo! Revisa tu WhatsApp 📱</p>
+                                                    <p className="text-green-600 text-xs mt-0.5">Brenda te está escribiendo en este momento.</p>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <form onSubmit={sendWhatsAppContact} className="relative">
+                                                <div className="flex items-center bg-white rounded-2xl shadow-lg shadow-green-100/40 border-2 border-green-200 p-1.5 gap-2">
+                                                    <div className="pl-3 text-gray-400 flex items-center gap-1.5">
+                                                        <span className="text-sm font-bold text-gray-500">🇲🇽 +52</span>
+                                                    </div>
+                                                    <input
+                                                        type="tel"
+                                                        value={contactPhone}
+                                                        onChange={(e) => { setContactPhone(e.target.value); setContactError(''); }}
+                                                        placeholder="Tu número a 10 dígitos"
+                                                        className="flex-1 bg-transparent border-none text-gray-800 placeholder-gray-400 text-sm outline-none min-w-0 py-2"
+                                                        maxLength={10}
+                                                        autoFocus
+                                                    />
+                                                    <button
+                                                        type="submit"
+                                                        disabled={contactLoading || contactPhone.replace(/\D/g, '').length < 10}
+                                                        className="bg-green-500 hover:bg-green-600 text-white rounded-xl px-5 py-2.5 font-bold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
+                                                    >
+                                                        {contactLoading ? (
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <Send className="w-4 h-4" />
+                                                                <span>Enviar</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                                {contactError && (
+                                                    <p className="text-red-500 text-xs mt-2 pl-2">{contactError}</p>
+                                                )}
+                                            </form>
+                                        )}
                                     </div>
-                                    <div className="flex items-center space-x-1.5">
-                                        <Clock className="w-4 h-4 text-blue-500" />
-                                        <span>Setup en 5 min</span>
+                                )}
+
+                                {/* QR + Trust badges row */}
+                                <div className="hero-text-4 mt-8 flex flex-col sm:flex-row items-start gap-6">
+                                    {/* QR Code */}
+                                    <a href="https://wa.me/528120622870?text=Hola%20Brenda" target="_blank" rel="noopener noreferrer"
+                                       className="group flex items-center gap-4 bg-white/80 backdrop-blur rounded-2xl px-4 py-3 border border-gray-100 hover:border-green-300 hover:shadow-lg hover:shadow-green-100/30 transition-all cursor-pointer">
+                                        <img
+                                            src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https%3A%2F%2Fwa.me%2F528120622870%3Ftext%3DHola%2520Brenda&color=25D366&bgcolor=FFFFFF&format=svg"
+                                            alt="QR WhatsApp Brenda"
+                                            className="w-16 h-16 rounded-lg"
+                                        />
+                                        <div>
+                                            <p className="font-bold text-gray-800 text-sm group-hover:text-green-700 transition-colors">Escanea y habla con Brenda</p>
+                                            <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+                                                <WhatsAppIcon className="w-3 h-3 text-green-500" />
+                                                Nuestra IA reclutadora por WhatsApp
+                                            </p>
+                                        </div>
+                                    </a>
+
+                                    {/* Trust badges */}
+                                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400 pt-2">
+                                        <div className="flex items-center space-x-1">
+                                            <Shield className="w-3.5 h-3.5 text-green-500" />
+                                            <span>Conexión segura</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <Clock className="w-3.5 h-3.5 text-blue-500" />
+                                            <span>Setup en 5 min</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1">
+                                            <Zap className="w-3.5 h-3.5 text-amber-500" />
+                                            <span>Sin tarjeta</span>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center space-x-1.5">
-                                        <Zap className="w-4 h-4 text-amber-500" />
-                                        <span>Sin tarjeta de crédito</span>
+                                </div>
+                            </div>
+
+                            {/* ── RIGHT: iPhone 17 Pro Max Mockup ── */}
+                            <div className="flex justify-center lg:justify-end" style={{ perspective: '1200px' }}>
+                                <div className="relative" style={{ animation: 'iphoneFloat 6s ease-in-out infinite' }}>
+                                    {/* Glow behind phone */}
+                                    <div className="absolute -inset-8 bg-gradient-to-br from-violet-400/20 via-blue-400/15 to-pink-400/10 rounded-[4rem] blur-2xl iphone-glow"></div>
+
+                                    {/* iPhone Frame */}
+                                    <div className="relative w-[320px] sm:w-[340px] bg-gray-950 rounded-[3rem] p-[10px] shadow-2xl shadow-gray-900/40" style={{
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                    }}>
+                                        {/* Dynamic Island */}
+                                        <div className="absolute top-[14px] left-1/2 -translate-x-1/2 w-[100px] h-[28px] bg-black rounded-full z-30 flex items-center justify-center">
+                                            <div className="w-[10px] h-[10px] rounded-full bg-gray-800 border border-gray-700"></div>
+                                        </div>
+
+                                        {/* Screen */}
+                                        <div className="relative bg-white rounded-[2.4rem] overflow-hidden" style={{ height: '560px' }}>
+                                            {/* WhatsApp Header */}
+                                            <div className="bg-gradient-to-r from-violet-600 to-blue-600 px-4 pt-14 pb-3 flex items-center space-x-3">
+                                                <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
+                                                    <Bot className="w-6 h-6 text-white" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="font-bold text-white text-sm">Brenda • Reclutadora IA</p>
+                                                    <p className="text-[11px] text-white/70 flex items-center gap-1">
+                                                        <span className="w-1.5 h-1.5 bg-green-400 rounded-full inline-block"></span>
+                                                        en línea
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center space-x-3 text-white/70">
+                                                    <Sparkles className="w-4 h-4" />
+                                                </div>
+                                            </div>
+
+                                            {/* Chat Area */}
+                                            <div className="flex flex-col h-[calc(100%-140px)]">
+                                                <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2" style={{
+                                                    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+                                                    backgroundColor: '#f0f0f0'
+                                                }}>
+                                                    {/* Date chip */}
+                                                    <div className="flex justify-center mb-2">
+                                                        <span className="text-[10px] bg-white/80 rounded-lg px-3 py-1 text-gray-500 shadow-sm">Hoy</span>
+                                                    </div>
+
+                                                    {/* Messages */}
+                                                    {brendaMessages.map((msg, i) => (
+                                                        <div key={i} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'} msg-appear`}>
+                                                            <div className={`max-w-[82%] px-3 py-2 rounded-2xl text-[13px] leading-relaxed shadow-sm relative ${
+                                                                msg.from === 'user'
+                                                                    ? 'bg-gradient-to-br from-violet-500 to-blue-600 text-white rounded-br-md'
+                                                                    : 'bg-white text-gray-800 rounded-bl-md'
+                                                            }`}>
+                                                                {msg.text}
+                                                                <span className={`block text-[9px] mt-0.5 text-right ${msg.from === 'user' ? 'text-white/60' : 'text-gray-400'}`}>
+                                                                    {msg.time ? new Date(msg.time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''}
+                                                                    {msg.from === 'user' && ' ✓✓'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Typing indicator */}
+                                                    {brendaTyping && (
+                                                        <div className="flex justify-start msg-appear">
+                                                            <div className="bg-white px-4 py-3 rounded-2xl rounded-bl-md shadow-sm flex items-center space-x-1.5">
+                                                                <div className="w-2 h-2 bg-gray-400 rounded-full typing-dot"></div>
+                                                                <div className="w-2 h-2 bg-gray-400 rounded-full typing-dot"></div>
+                                                                <div className="w-2 h-2 bg-gray-400 rounded-full typing-dot"></div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    <div ref={chatEndRef}></div>
+                                                </div>
+
+                                                {/* Input Area */}
+                                                <div className="px-2 py-2 bg-white border-t border-gray-100">
+                                                    <form onSubmit={sendBrendaMessage} className="flex items-center gap-2">
+                                                        <input
+                                                            ref={chatInputRef}
+                                                            type="text"
+                                                            value={brendaInput}
+                                                            onChange={(e) => setBrendaInput(e.target.value)}
+                                                            placeholder="Escribe un mensaje..."
+                                                            className="flex-1 bg-gray-100 rounded-full px-4 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-violet-200 transition-all text-gray-800 placeholder-gray-400"
+                                                        />
+                                                        <button
+                                                            type="submit"
+                                                            disabled={!brendaInput.trim() || brendaTyping}
+                                                            className="w-9 h-9 rounded-full bg-gradient-to-r from-violet-500 to-blue-600 flex items-center justify-center shrink-0 disabled:opacity-30 hover:scale-105 active:scale-95 transition-all shadow-md"
+                                                        >
+                                                            <Send className="w-4 h-4 text-white translate-x-[1px]" />
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Home indicator */}
+                                        <div className="flex justify-center mt-2 mb-1">
+                                            <div className="w-28 h-1 bg-white/20 rounded-full"></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
