@@ -654,7 +654,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </div>
 
                             {/* ── CENTER: QR Code ── */}
-                            <div className="hidden lg:flex flex-col items-center justify-center self-center" style={{ transform: 'translateX(210px)' }}>
+                            <div className="hidden lg:flex flex-col items-center justify-center self-center">
                                 <a href="https://wa.me/528120622870?text=Hola%20Brenda" target="_blank" rel="noopener noreferrer"
                                    className="group flex flex-col items-center gap-3 bg-white/80 backdrop-blur rounded-2xl px-6 py-6 border border-gray-100 hover:border-green-300 hover:shadow-xl hover:shadow-green-100/30 transition-all cursor-pointer">
                                     <img
