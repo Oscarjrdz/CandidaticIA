@@ -186,6 +186,26 @@ const CandidatesSection = ({ showToast }) => {
         }
     };
 
+    const deleteTagGlobal = async (tagName) => {
+        if (!window.confirm(`¿Seguro que deseas eliminar la etiqueta "${tagName}"?\n\nEsta acción eliminará la etiqueta de TODOS los candidatos que la tengan asignada actualmente.`)) {
+            return;
+        }
+        
+        try {
+            const res = await fetch(`/api/tags?name=${encodeURIComponent(tagName)}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (data.success && data.tags) {
+                setAvailableTags(data.tags);
+                showToast && showToast('Etiqueta eliminada de la base global', 'success');
+            }
+        } catch (e) {
+            console.error('Error al eliminar etiqueta', e);
+            showToast && showToast('Error al eliminar', 'error');
+        }
+    };
+
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target)) {
@@ -886,8 +906,7 @@ const CandidatesSection = ({ showToast }) => {
                                                                 <button 
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
-                                                                        const newGlobal = availableTags.filter(t => (typeof t === 'string' ? t : t.name) !== tName);
-                                                                        saveTagsGlobal(newGlobal);
+                                                                        deleteTagGlobal(tName);
                                                                     }}
                                                                     className="p-1 text-[#8696a0] hover:text-red-500"
                                                                     title="Eliminar etiqueta"

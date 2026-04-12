@@ -36,6 +36,37 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true, tags });
         }
         
+        if (req.method === 'DELETE') {
+            const tagName = req.query.name;
+            if (!tagName) return res.status(400).json({ error: 'Falta nombre de etiqueta' });
+            
+            // 1. Remove from global tags
+            const raw = await redis.get('candidatic:chat_tags');
+            let savedTags = raw ? JSON.parse(raw) : [];
+            const newTags = savedTags.filter(t => (typeof t === 'string' ? t : t.name) !== tagName);
+            await redis.set('candidatic:chat_tags', JSON.stringify(newTags));
+            
+            // 2. Cascading deletion (Remove from all candidates)
+            const { getCandidates, saveCandidate } = await import('./utils/storage.js');
+            // Fetch a sufficiently large buffer to cover all active candidates
+            const { candidates } = await getCandidates(20000, 0, '');
+            
+            // Update only candidates having the tag
+            const promises = [];
+            for (let c of candidates) {
+                if (c.tags && Array.isArray(c.tags) && c.tags.includes(tagName)) {
+                    c.tags = c.tags.filter(t => t !== tagName);
+                    promises.push(saveCandidate(c));
+                }
+            }
+            
+            if (promises.length > 0) {
+                await Promise.all(promises);
+            }
+            
+            return res.status(200).json({ success: true, message: `Etiqueta '${tagName}' eliminada globalmente`, tags: newTags });
+        }
+        
         return res.status(405).json({ error: 'Method not allowed' });
     } catch (e) {
         return res.status(500).json({ error: e.message });

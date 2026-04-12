@@ -401,6 +401,26 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         }
     };
 
+    const deleteTagGlobal = async (tagName) => {
+        if (!window.confirm(`¿Seguro que deseas eliminar la etiqueta "${tagName}"?\n\nEsta acción eliminará la etiqueta de TODOS los candidatos que la tengan asignada actualmente.`)) {
+            return;
+        }
+        
+        try {
+            const res = await fetch(`/api/tags?name=${encodeURIComponent(tagName)}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (data.success && data.tags) {
+                setAvailableTags(data.tags);
+                showToast && showToast('Etiqueta eliminada de la base global', 'success');
+            }
+        } catch (e) {
+            console.error('Error al eliminar etiqueta', e);
+            showToast && showToast('Error al eliminar', 'error');
+        }
+    };
+
     const loadCandidates = async () => {
         try {
             const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
@@ -1364,8 +1384,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                                     <button 
                                                                         onClick={(e) => {
                                                                             e.stopPropagation();
-                                                                            const newGlobal = availableTags.filter(t => (typeof t === 'string' ? t : t.name) !== tName);
-                                                                            saveTagsGlobal(newGlobal);
+                                                                            deleteTagGlobal(tName);
                                                                         }}
                                                                         className="p-1 text-gray-400 hover:text-red-500"
                                                                         title="Eliminar etiqueta"
