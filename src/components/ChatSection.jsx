@@ -721,6 +721,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             id: 'temp-' + Date.now(),
             content: msg,
             tipo: 'text',
+            from: 'me',
             enviado_por_agente: 1, // Visual indicator for sent by us
             fecha: new Date().toISOString()
         }]);
