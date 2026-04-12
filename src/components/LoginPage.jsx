@@ -155,7 +155,7 @@ export default function LoginPage({ onLogin }) {
                 <div className="text-center mb-8">
                     <div className="relative inline-block transition-transform hover:scale-105">
                         <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-indigo-800 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-4 ring-4 ring-blue-50/50 dark:ring-blue-900/20">
-                            <BrainCircuit className="w-12 h-12 text-white stroke-[1.5]" />
+                            <BrainCircuit className="w-12 h-12 text-white stroke-[1.5] rotate-90" />
                         </div>
                     </div>
                     <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mt-4 flex items-center justify-center tracking-wider">

@@ -361,7 +361,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between relative">
                     <div className="flex items-center space-x-2.5">
                         <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-200">
-                            <BrainCircuit className="w-5 h-5 text-white stroke-[1.5]" />
+                            <BrainCircuit className="w-5 h-5 text-white stroke-[1.5] rotate-90" />
                         </div>
                         <span className="text-xl font-extrabold tracking-tight text-gray-900 flex items-center">
                             CANDIDATIC&nbsp;<span className="tracking-tighter bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">IΛ</span>
@@ -394,7 +394,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                             <div className="relative inline-block mb-4">
                                                 <div className="absolute inset-0 bg-violet-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
                                                 <div className="relative w-16 h-16 bg-gradient-to-tr from-blue-600 to-violet-800 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform ring-4 ring-violet-50">
-                                                    <BrainCircuit className="w-10 h-10 text-white stroke-[1.5]" />
+                                                    <BrainCircuit className="w-10 h-10 text-white stroke-[1.5] rotate-90" />
                                                 </div>
                                             </div>
                                             <h3 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
@@ -1187,7 +1187,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                         <div className="md:col-span-1">
                             <div className="flex items-center space-x-2.5 mb-4">
                                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center">
-                                    <BrainCircuit className="w-4.5 h-4.5 text-white stroke-[1.5]" />
+                                    <BrainCircuit className="w-4.5 h-4.5 text-white stroke-[1.5] rotate-90" />
                                 </div>
                                 <span className="text-lg font-extrabold text-white tracking-tight flex items-center">
                                     CANDIDATIC&nbsp;<span className="tracking-tighter text-violet-400">IΛ</span>

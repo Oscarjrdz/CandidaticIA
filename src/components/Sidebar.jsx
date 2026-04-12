@@ -209,8 +209,8 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate 
             {/* Logo/Header */}
             <div className="relative p-6 mb-2">
                 <div className="flex items-center space-x-3">
-                    <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105 rotate-90">
-                        <BrainCircuit className="w-8 h-8 text-white stroke-[2] drop-shadow-md" />
+                    <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105">
+                        <BrainCircuit className="w-8 h-8 text-white stroke-[2] drop-shadow-md rotate-90" />
                     </div>
                     <h2 className="text-[20px] font-extrabold text-white tracking-wider flex items-center drop-shadow-sm ml-1">
                         CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
