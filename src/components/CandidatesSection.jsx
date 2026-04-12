@@ -783,11 +783,12 @@ const CandidatesSection = ({ showToast }) => {
                                     </p>
                                 </div>
                             </div>
-                            {/* BULK TAG DROPDOWN */}
-                            <div className="relative" ref={tagDropdownRef}>
-                                <button 
-                                    onClick={() => setTagDropdownOpen(!tagDropdownOpen)}
-                                    disabled={bulkTagLoading}
+                            <div className="flex items-center gap-2">
+                                {/* BULK TAG DROPDOWN */}
+                                <div className="relative" ref={tagDropdownRef}>
+                                    <button 
+                                        onClick={() => setTagDropdownOpen(!tagDropdownOpen)}
+                                        disabled={bulkTagLoading}
                                     className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-semibold text-gray-700 dark:text-gray-300 shadow-sm flex items-center gap-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
                                 >
                                     {bulkTagLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Tag className="w-3.5 h-3.5" />}
@@ -953,9 +954,22 @@ const CandidatesSection = ({ showToast }) => {
                                     </div>
                                 )}
                             </div>
+                            
+                            {/* Botón Cerrar (Resetear) */}
+                            <button 
+                                onClick={() => {
+                                    setAiFilteredCandidates(null);
+                                    setSearch('');
+                                }}
+                                className="p-1.5 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 bg-gray-50 dark:bg-gray-800/50 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-[8px] transition-all border border-gray-200 dark:border-gray-700/50"
+                                title="Quitar resultados de IA"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
             </div>
 
