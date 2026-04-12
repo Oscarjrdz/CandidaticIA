@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Radio, Tag, ChevronDown } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Radio, Tag, ChevronDown, X, Pencil, Plus } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -145,6 +145,10 @@ const CandidatesSection = ({ showToast }) => {
     const [availableTags, setAvailableTags] = useState([]);
     const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
     const [bulkTagLoading, setBulkTagLoading] = useState(false);
+    const [newTagInput, setNewTagInput] = useState("");
+    const [editingTag, setEditingTag] = useState(null);
+    const [editTagName, setEditTagName] = useState("");
+    const [editTagColor, setEditTagColor] = useState("#3b82f6");
     const tagDropdownRef = useRef(null);
 
     useEffect(() => {
@@ -167,6 +171,20 @@ const CandidatesSection = ({ showToast }) => {
         };
         loadTags();
     }, []);
+
+    const saveTagsGlobal = async (newGlobalTags) => {
+        setAvailableTags(newGlobalTags);
+        try {
+            await fetch('/api/tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tags: newGlobalTags })
+            });
+        } catch (e) {
+            console.error('Error saving global tags', e);
+            showToast && showToast('Error al guardar etiquetas', 'error');
+        }
+    };
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -750,7 +768,7 @@ const CandidatesSection = ({ showToast }) => {
 
                 {/* Alerta de filtrado por IA: iOS Style */}
                 {aiFilteredCandidates && (
-                    <div className="mb-2 animate-spring-in">
+                    <div className="mb-2 animate-spring-in relative z-[100]">
                         <div className="ios-glass p-3 rounded-[16px] flex items-center justify-between shadow-ios border-gray-200 dark:border-gray-700/50">
                             <div className="flex items-center space-x-3">
                                 <div className="w-8 h-8 bg-blue-600 dark:bg-blue-500 rounded-[10px] flex items-center justify-center shadow-sm">
@@ -778,29 +796,159 @@ const CandidatesSection = ({ showToast }) => {
                                 </button>
 
                                 {tagDropdownOpen && (
-                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-in fade-in zoom-in duration-200">
-                                        <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
-                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Añadir a {displayedCandidates.length} cand.</span>
+                                    <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-[#202c33] rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 flex flex-col animate-in fade-in zoom-in duration-200">
+                                        <div className="px-3 py-2 bg-gray-50 dark:bg-[#111b21] border-b border-gray-100 dark:border-gray-700">
+                                            <span className="text-[10px] font-bold text-[#8696a0] uppercase tracking-widest">Añadir a {displayedCandidates.length} cand.</span>
                                         </div>
-                                        <div className="max-h-60 overflow-y-auto">
+                                        <div className="max-h-60 overflow-y-auto custom-scrollbar">
                                             {availableTags.length === 0 ? (
-                                                <div className="px-3 py-4 text-center text-xs text-gray-500">No hay etiquetas creadas</div>
+                                                <div className="px-3 py-4 text-center text-xs text-[#8696a0]">No hay etiquetas creadas</div>
                                             ) : (
                                                 availableTags.map((tagObj, idx) => {
                                                     const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                                     const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                                    const isEditing = editingTag === tName;
+
+                                                    if (isEditing) {
+                                                        return (
+                                                            <div key={idx} className="px-3 py-2 bg-gray-50 dark:bg-[#111b21] flex flex-col gap-2">
+                                                                <div className="flex gap-1">
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={editTagName}
+                                                                        onChange={e => setEditTagName(e.target.value)}
+                                                                        className="flex-1 text-xs px-2 py-1 focus:outline-none dark:bg-[#202c33] dark:text-white rounded border border-gray-300 dark:border-gray-600"
+                                                                        autoFocus
+                                                                    />
+                                                                </div>
+                                                                <div className="flex justify-between items-center">
+                                                                    <div className="flex gap-1">
+                                                                        {TAG_COLORS.map(c => (
+                                                                            <button 
+                                                                                key={c}
+                                                                                onClick={(e) => { e.stopPropagation(); setEditTagColor(c); }}
+                                                                                className={`w-4 h-4 rounded-full ${editTagColor === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
+                                                                                style={{ backgroundColor: c }}
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                    <div className="flex gap-1">
+                                                                        <button onClick={(e) => { e.stopPropagation(); setEditingTag(null); }} className="p-1 text-gray-400 hover:text-gray-600">
+                                                                            <X className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                if (editTagName.trim()) {
+                                                                                    const newGlobal = availableTags.map(t => 
+                                                                                        (typeof t === 'string' ? t : t.name) === tName 
+                                                                                        ? { ...t, name: editTagName.trim(), color: editTagColor } 
+                                                                                        : t
+                                                                                    );
+                                                                                    saveTagsGlobal(newGlobal);
+                                                                                    setEditingTag(null);
+                                                                                }
+                                                                            }} 
+                                                                            className="p-1 text-green-500 hover:text-green-600"
+                                                                        >
+                                                                            <Check className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+
                                                     return (
-                                                        <button 
+                                                        <div 
                                                             key={idx}
                                                             onClick={() => handleBulkTag(tagObj)}
-                                                            className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2 transition"
+                                                            className="w-full text-left px-3 py-2 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-gray-50 dark:hover:bg-[#202c33] flex items-center justify-between group/item cursor-pointer transition"
                                                         >
-                                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></div>
-                                                            <span className="text-gray-700 dark:text-gray-300 font-medium truncate">{tName}</span>
-                                                        </button>
+                                                            <div className="flex items-center gap-2 truncate">
+                                                                <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></div>
+                                                                <span className="font-medium truncate">{tName}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setEditingTag(tName);
+                                                                        setEditTagName(tName);
+                                                                        setEditTagColor(tColor);
+                                                                    }}
+                                                                    className="p-1 text-[#8696a0] hover:text-blue-500"
+                                                                    title="Editar etiqueta"
+                                                                >
+                                                                    <Pencil className="w-3 h-3" />
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const newGlobal = availableTags.filter(t => (typeof t === 'string' ? t : t.name) !== tName);
+                                                                        saveTagsGlobal(newGlobal);
+                                                                    }}
+                                                                    className="p-1 text-[#8696a0] hover:text-red-500"
+                                                                    title="Eliminar etiqueta"
+                                                                >
+                                                                    <X className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     )
                                                 })
                                             )}
+                                        </div>
+
+                                        {/* Modulo crear nueva etiqueta */}
+                                        <div className="p-2 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-2 bg-gray-50 dark:bg-[#111b21]">
+                                            <div className="flex justify-between px-1">
+                                                {TAG_COLORS.map((c) => (
+                                                    <button 
+                                                        key={c}
+                                                        onClick={(e) => { e.preventDefault(); setEditTagColor(c); }}
+                                                        className={`w-3.5 h-3.5 rounded-full hover:scale-110 transition-transform ${editTagColor === c ? 'ring-2 ring-offset-1 ring-gray-400' : ''}`}
+                                                        style={{ backgroundColor: c }}
+                                                    />
+                                                ))}
+                                            </div>
+                                            <div className="flex">
+                                                <input 
+                                                    type="text"
+                                                    value={newTagInput}
+                                                    onChange={e => setNewTagInput(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && newTagInput.trim()) {
+                                                            e.preventDefault();
+                                                            const exists = availableTags.some(t => (typeof t === 'string' ? t : t.name).toLowerCase() === newTagInput.trim().toLowerCase());
+                                                            if (!exists) {
+                                                                const newGlobal = [...availableTags, { name: newTagInput.trim(), color: editTagColor }];
+                                                                saveTagsGlobal(newGlobal);
+                                                                setNewTagInput('');
+                                                            }
+                                                        }
+                                                    }}
+                                                    placeholder="Nueva etiqueta..."
+                                                    className="flex-1 text-xs px-2 py-1.5 focus:outline-none dark:bg-[#202c33] dark:text-white rounded-l border-y border-l border-gray-300 dark:border-gray-600 shadow-sm"
+                                                />
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        if (newTagInput.trim()) {
+                                                            const exists = availableTags.some(t => (typeof t === 'string' ? t : t.name).toLowerCase() === newTagInput.trim().toLowerCase());
+                                                            if (!exists) {
+                                                                const newGlobal = [...availableTags, { name: newTagInput.trim(), color: editTagColor }];
+                                                                saveTagsGlobal(newGlobal);
+                                                                setNewTagInput('');
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="bg-blue-500 text-white px-2 py-1.5 rounded-r border-y border-r border-blue-500 hover:bg-blue-600 transition outline-none"
+                                                    title="Añadir etiqueta"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
