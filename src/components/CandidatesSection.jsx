@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Radio } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Radio, Tag, ChevronDown } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -139,6 +139,81 @@ const CandidatesSection = ({ showToast }) => {
     // --- 🪄 MAGIC AI FIX STATE ---
     const [magicLoading, setMagicLoading] = useState({});
     const [blockLoading, setBlockLoading] = useState({});
+
+    // === TAGS STATE & LOGIC ===
+    const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
+    const [availableTags, setAvailableTags] = useState([]);
+    const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+    const [bulkTagLoading, setBulkTagLoading] = useState(false);
+    const tagDropdownRef = useRef(null);
+
+    useEffect(() => {
+        const loadTags = async () => {
+            try {
+                const res = await fetch('/api/tags');
+                const data = await res.json();
+                if (data.success && data.tags) {
+                    const migrated = data.tags.map((t, i) => {
+                        return { name: t, color: TAG_COLORS[i % TAG_COLORS.length] };
+                    });
+                    setAvailableTags(migrated);
+                }
+            } catch (e) {
+                console.error('Error fetching tags', e);
+            }
+        };
+        loadTags();
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target)) {
+                setTagDropdownOpen(false);
+            }
+        };
+        if (tagDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [tagDropdownOpen]);
+
+    const handleBulkTag = async (tagObj) => {
+        const displayedCandidatesInner = aiFilteredCandidates || candidates;
+        if (!displayedCandidatesInner.length) return;
+        const tagName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+        setBulkTagLoading(true);
+        setTagDropdownOpen(false);
+        try {
+            const ids = displayedCandidatesInner.map(c => c.id);
+            const res = await fetch('/api/candidates/bulk-tag', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, tag: tagName, action: 'add' })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast(`Se agregó la etiqueta "${tagName}" a ${ids.length} candidatos`, 'success');
+                // Optimistically update local state
+                const applyTags = (c) => {
+                    const existingTags = c.tags || [];
+                    return { ...c, tags: existingTags.includes(tagName) ? existingTags : [...existingTags, tagName] };
+                };
+                
+                setCandidates(prev => prev.map(c => ids.includes(c.id) ? applyTags(c) : c));
+                if (aiFilteredCandidates) {
+                    setAiFilteredCandidates(prev => prev.map(c => ids.includes(c.id) ? applyTags(c) : c));
+                }
+            } else {
+                showToast(data.error || 'Error aplicando etiquetas', 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            showToast('Error de red al aplicar etiquetas', 'error');
+        } finally {
+            setBulkTagLoading(false);
+        }
+    };
+
 
     // 📡 SSE: Real-time candidate updates
     const { newCandidate, updatedCandidate, globalStats } = useCandidatesSSE();
@@ -686,6 +761,46 @@ const CandidatesSection = ({ showToast }) => {
                                         {aiExplanation}
                                     </p>
                                 </div>
+                            </div>
+                            {/* BULK TAG DROPDOWN */}
+                            <div className="relative" ref={tagDropdownRef}>
+                                <button 
+                                    onClick={() => setTagDropdownOpen(!tagDropdownOpen)}
+                                    disabled={bulkTagLoading}
+                                    className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-semibold text-gray-700 dark:text-gray-300 shadow-sm flex items-center gap-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                >
+                                    {bulkTagLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Tag className="w-3.5 h-3.5" />}
+                                    <span>Etiquetar todos</span>
+                                    <ChevronDown className="w-3.5 h-3.5 opacity-50" />
+                                </button>
+
+                                {tagDropdownOpen && (
+                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden z-50 animate-in fade-in zoom-in duration-200">
+                                        <div className="px-3 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-100 dark:border-gray-700">
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Añadir a {displayedCandidates.length} cand.</span>
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto">
+                                            {availableTags.length === 0 ? (
+                                                <div className="px-3 py-4 text-center text-xs text-gray-500">No hay etiquetas creadas</div>
+                                            ) : (
+                                                availableTags.map((tagObj, idx) => {
+                                                    const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                                    const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                                    return (
+                                                        <button 
+                                                            key={idx}
+                                                            onClick={() => handleBulkTag(tagObj)}
+                                                            className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center gap-2 transition"
+                                                        >
+                                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></div>
+                                                            <span className="text-gray-700 dark:text-gray-300 font-medium truncate">{tName}</span>
+                                                        </button>
+                                                    )
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
