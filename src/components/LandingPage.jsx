@@ -86,22 +86,16 @@ const LandingPage = ({ onLoginSuccess }) => {
     const [brendaTyping, setBrendaTyping] = useState(false);
     const chatEndRef = useRef(null);
     const chatInputRef = useRef(null);
-    const brendaGreeted = useRef(false);
-
-    // Auto-greet: second message after delay for cinematic effect
+    // Auto-scroll to center iPhone on load + focus chat input for blinking cursor
+    const heroRef = useRef(null);
     useEffect(() => {
-        if (brendaGreeted.current) return;
-        brendaGreeted.current = true;
-        const timer1 = setTimeout(() => {
-            setBrendaTyping(true);
+        const scrollTimer = setTimeout(() => {
+            heroRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 1200);
+        const focusTimer = setTimeout(() => {
+            chatInputRef.current?.focus();
         }, 2000);
-        const timer2 = setTimeout(() => {
-            setBrendaTyping(false);
-            setBrendaMessages(prev => [...prev,
-                { from: 'brenda', text: '¿Buscas chamba o quieres que te cuente cómo te puedo ayudar? 😊✨', time: new Date() },
-            ]);
-        }, 3500);
-        return () => { clearTimeout(timer1); clearTimeout(timer2); };
+        return () => { clearTimeout(scrollTimer); clearTimeout(focusTimer); };
     }, []);
 
     // Auto-scroll chat
@@ -535,7 +529,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 `}</style>
 
                 {/* ═══ HERO SECTION ═══ */}
-                <section className="pt-32 pb-16 px-6 relative overflow-hidden">
+                <section ref={heroRef} className="pt-32 pb-16 px-6 relative overflow-hidden">
                     {/* Background gradient blobs */}
                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
                         <div className="absolute top-[-20%] left-[-15%] w-[60%] h-[60%] bg-blue-400/8 rounded-full blur-3xl animate-float"></div>
