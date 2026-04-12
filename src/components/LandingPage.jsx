@@ -94,9 +94,12 @@ const LandingPage = ({ onLoginSuccess }) => {
         return () => clearTimeout(focusTimer);
     }, []);
 
-    // Auto-scroll chat
+    // Auto-scroll chat (inside iPhone only, don't move page)
     useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const el = chatEndRef.current;
+        if (el?.parentElement) {
+            el.parentElement.scrollTop = el.parentElement.scrollHeight;
+        }
     }, [brendaMessages, brendaTyping]);
 
     const sendBrendaMessage = async (e) => {
