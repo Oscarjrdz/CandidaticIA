@@ -89,7 +89,7 @@ const LandingPage = ({ onLoginSuccess }) => {
     // Focus chat input for blinking cursor effect
     useEffect(() => {
         const focusTimer = setTimeout(() => {
-            chatInputRef.current?.focus();
+            chatInputRef.current?.focus({ preventScroll: true });
         }, 2000);
         return () => clearTimeout(focusTimer);
     }, []);
