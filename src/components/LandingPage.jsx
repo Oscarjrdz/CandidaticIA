@@ -80,7 +80,7 @@ const LandingPage = ({ onLoginSuccess }) => {
 
     /* ─── BRENDA CHAT LOGIC ─── */
     const [brendaMessages, setBrendaMessages] = useState([
-        { from: 'brenda', text: '¡Hola! 👋 Soy Brenda, tu reclutadora virtual de Candidatic.', time: new Date() },
+        { from: 'brenda', text: '¡Hola, hola! 👋 Soy la Lic. Brenda, reclutadora de Candidatic.', time: new Date() },
     ]);
     const [brendaInput, setBrendaInput] = useState('');
     const [brendaTyping, setBrendaTyping] = useState(false);
@@ -98,9 +98,9 @@ const LandingPage = ({ onLoginSuccess }) => {
         const timer2 = setTimeout(() => {
             setBrendaTyping(false);
             setBrendaMessages(prev => [...prev,
-                { from: 'brenda', text: '¿Buscas talento o quieres saber cómo funciona la plataforma? Pregúntame lo que quieras ✨', time: new Date() },
+                { from: 'brenda', text: '¿Buscas chamba o quieres que te cuente cómo te puedo ayudar? 😊✨', time: new Date() },
             ]);
-        }, 4000);
+        }, 3500);
         return () => { clearTimeout(timer1); clearTimeout(timer2); };
     }, []);
 
