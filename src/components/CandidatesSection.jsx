@@ -154,7 +154,10 @@ const CandidatesSection = ({ showToast }) => {
                 const data = await res.json();
                 if (data.success && data.tags) {
                     const migrated = data.tags.map((t, i) => {
-                        return { name: t, color: TAG_COLORS[i % TAG_COLORS.length] };
+                        if (typeof t === 'string') {
+                            return { name: t, color: TAG_COLORS[i % TAG_COLORS.length] };
+                        }
+                        return t;
                     });
                     setAvailableTags(migrated);
                 }
@@ -199,9 +202,9 @@ const CandidatesSection = ({ showToast }) => {
                     return { ...c, tags: existingTags.includes(tagName) ? existingTags : [...existingTags, tagName] };
                 };
                 
-                setCandidates(prev => prev.map(c => ids.includes(c.id) ? applyTags(c) : c));
+                setCandidates(prev => prev ? prev.map(c => ids.includes(c.id) ? applyTags(c) : c) : []);
                 if (aiFilteredCandidates) {
-                    setAiFilteredCandidates(prev => prev.map(c => ids.includes(c.id) ? applyTags(c) : c));
+                    setAiFilteredCandidates(prev => prev ? prev.map(c => ids.includes(c.id) ? applyTags(c) : c) : null);
                 }
             } else {
                 showToast(data.error || 'Error aplicando etiquetas', 'error');
