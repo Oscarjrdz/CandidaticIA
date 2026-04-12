@@ -120,15 +120,23 @@ const LandingPage = ({ onLoginSuccess }) => {
                 })
             });
             const data = await res.json();
-            // Simulate human-like delay
-            await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
-            setBrendaTyping(false);
-            setBrendaMessages(prev => [...prev, { from: 'brenda', text: data.reply || '¡Ups! Intenta de nuevo 😅', time: new Date() }]);
+            const replyText = data.reply || '¡Ups! Intenta de nuevo 😅';
+            // Split multi-bubble responses (same as WhatsApp bot)
+            const bubbles = replyText.split('[MSG_SPLIT]').map(b => b.trim()).filter(Boolean);
+            for (let i = 0; i < bubbles.length; i++) {
+                await new Promise(r => setTimeout(r, 600 + Math.random() * 800));
+                setBrendaTyping(false);
+                setBrendaMessages(prev => [...prev, { from: 'brenda', text: bubbles[i], time: new Date() }]);
+                if (i < bubbles.length - 1) {
+                    await new Promise(r => setTimeout(r, 400));
+                    setBrendaTyping(true);
+                }
+            }
         } catch {
             setBrendaTyping(false);
             setBrendaMessages(prev => [...prev, { from: 'brenda', text: 'Hmm, tuve un problema de conexión. ¿Puedes intentar de nuevo? 😊', time: new Date() }]);
         }
-        chatInputRef.current?.focus();
+        chatInputRef.current?.focus({ preventScroll: true });
     };
 
     /* ─── WHATSAPP CONTACT LOGIC ─── */
@@ -537,7 +545,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
 
                     <div className="max-w-7xl mx-auto w-full relative z-10">
-                        <div className="grid lg:grid-cols-2 gap-12 lg:gap-8 items-start pt-8">
+                        <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-8 lg:gap-6 items-start pt-8">
 
                             {/* ── LEFT: Hero Text ── */}
                             <div className="text-left lg:pr-8">
@@ -580,6 +588,22 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     </button>
                                 </div>
 
+                                {/* Trust badges — below buttons */}
+                                <div className="hero-text-4 mt-4 flex flex-wrap items-center gap-5 text-xs text-gray-400">
+                                    <div className="flex items-center space-x-1.5">
+                                        <Shield className="w-3.5 h-3.5 text-green-500" />
+                                        <span>Conexión segura</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1.5">
+                                        <Clock className="w-3.5 h-3.5 text-blue-500" />
+                                        <span>Setup en 5 min</span>
+                                    </div>
+                                    <div className="flex items-center space-x-1.5">
+                                        <Zap className="w-3.5 h-3.5 text-amber-500" />
+                                        <span>Sin tarjeta de crédito</span>
+                                    </div>
+                                </div>
+
                                 {/* WhatsApp Phone Input */}
                                 {showWhatsAppInput && (
                                     <div className="hero-text-4 mt-4 msg-appear">
@@ -604,7 +628,6 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                         placeholder="Tu número a 10 dígitos"
                                                         className="flex-1 bg-transparent border-none text-gray-800 placeholder-gray-400 text-sm outline-none min-w-0 py-2"
                                                         maxLength={10}
-                                                        autoFocus
                                                     />
                                                     <button
                                                         type="submit"
@@ -628,48 +651,31 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         )}
                                     </div>
                                 )}
+                            </div>
 
-                                {/* QR + Trust badges row */}
-                                <div className="hero-text-4 mt-8 flex flex-col sm:flex-row items-start gap-6">
-                                    {/* QR Code */}
-                                    <a href="https://wa.me/528120622870?text=Hola%20Brenda" target="_blank" rel="noopener noreferrer"
-                                       className="group flex items-center gap-4 bg-white/80 backdrop-blur rounded-2xl px-4 py-3 border border-gray-100 hover:border-green-300 hover:shadow-lg hover:shadow-green-100/30 transition-all cursor-pointer">
-                                        <img
-                                            src="https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=https%3A%2F%2Fwa.me%2F528120622870%3Ftext%3DHola%2520Brenda&color=25D366&bgcolor=FFFFFF&format=svg"
-                                            alt="QR WhatsApp Brenda"
-                                            className="w-16 h-16 rounded-lg"
-                                        />
-                                        <div>
-                                            <p className="font-bold text-gray-800 text-sm group-hover:text-green-700 transition-colors">Escanea y habla con Brenda</p>
-                                            <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
-                                                <WhatsAppIcon className="w-3 h-3 text-green-500" />
-                                                Nuestra IA reclutadora por WhatsApp
-                                            </p>
-                                        </div>
-                                    </a>
-
-                                    {/* Trust badges */}
-                                    <div className="flex flex-wrap items-center gap-4 text-xs text-gray-400 pt-2">
-                                        <div className="flex items-center space-x-1">
-                                            <Shield className="w-3.5 h-3.5 text-green-500" />
-                                            <span>Conexión segura</span>
-                                        </div>
-                                        <div className="flex items-center space-x-1">
-                                            <Clock className="w-3.5 h-3.5 text-blue-500" />
-                                            <span>Setup en 5 min</span>
-                                        </div>
-                                        <div className="flex items-center space-x-1">
-                                            <Zap className="w-3.5 h-3.5 text-amber-500" />
-                                            <span>Sin tarjeta</span>
-                                        </div>
+                            {/* ── CENTER: QR Code ── */}
+                            <div className="hidden lg:flex flex-col items-center justify-center">
+                                <a href="https://wa.me/528120622870?text=Hola%20Brenda" target="_blank" rel="noopener noreferrer"
+                                   className="group flex flex-col items-center gap-3 bg-white/80 backdrop-blur rounded-2xl px-5 py-5 border border-gray-100 hover:border-green-300 hover:shadow-xl hover:shadow-green-100/30 transition-all cursor-pointer">
+                                    <img
+                                        src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fwa.me%2F528120622870%3Ftext%3DHola%2520Brenda&color=25D366&bgcolor=FFFFFF&format=svg"
+                                        alt="QR WhatsApp Brenda"
+                                        className="w-24 h-24 rounded-lg"
+                                    />
+                                    <div className="text-center">
+                                        <p className="font-bold text-gray-800 text-xs group-hover:text-green-700 transition-colors">Escanea y habla<br/>con Brenda</p>
+                                        <p className="text-[10px] text-gray-400 flex items-center justify-center gap-1 mt-1">
+                                            <WhatsAppIcon className="w-3 h-3 text-green-500" />
+                                            WhatsApp
+                                        </p>
                                     </div>
-                                </div>
+                                </a>
                             </div>
 
                             {/* ── RIGHT: iPhone 17 Pro Max Mockup ── */}
                             <div className="flex justify-center lg:justify-end" style={{ perspective: '1200px' }}>
                                 <div className="relative" style={{ animation: 'iphoneFloat 6s ease-in-out infinite' }}>
-                                    {/* Glow behind phone */}
+                                    {/* Glow behind phone */
                                     <div className="absolute -inset-8 bg-gradient-to-br from-violet-400/20 via-blue-400/15 to-pink-400/10 rounded-[4rem] blur-2xl iphone-glow"></div>
 
                                     {/* iPhone Frame */}
@@ -718,7 +724,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                                 msg.from === 'user'
                                                                     ? 'bg-gradient-to-br from-violet-500 to-blue-600 text-white rounded-br-md'
                                                                     : 'bg-white text-gray-800 rounded-bl-md'
-                                                            }`}>
+                                                            }`} style={{ whiteSpace: 'pre-wrap' }}>
                                                                 {msg.text}
                                                                 <span className={`block text-[9px] mt-0.5 text-right ${msg.from === 'user' ? 'text-white/60' : 'text-gray-400'}`}>
                                                                     {msg.time ? new Date(msg.time).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''}
