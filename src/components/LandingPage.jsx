@@ -545,7 +545,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
 
                     <div className="max-w-7xl mx-auto w-full relative z-10">
-                        <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-8 lg:gap-6 items-start pt-8">
+                        <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-8 lg:gap-6 items-center pt-8">
 
                             {/* ── LEFT: Hero Text ── */}
                             <div className="text-left lg:pr-8">
@@ -654,16 +654,16 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </div>
 
                             {/* ── CENTER: QR Code ── */}
-                            <div className="hidden lg:flex flex-col items-center justify-center">
+                            <div className="hidden lg:flex flex-col items-center justify-center self-center">
                                 <a href="https://wa.me/528120622870?text=Hola%20Brenda" target="_blank" rel="noopener noreferrer"
-                                   className="group flex flex-col items-center gap-3 bg-white/80 backdrop-blur rounded-2xl px-5 py-5 border border-gray-100 hover:border-green-300 hover:shadow-xl hover:shadow-green-100/30 transition-all cursor-pointer">
+                                   className="group flex flex-col items-center gap-3 bg-white/80 backdrop-blur rounded-2xl px-6 py-6 border border-gray-100 hover:border-green-300 hover:shadow-xl hover:shadow-green-100/30 transition-all cursor-pointer">
                                     <img
-                                        src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=https%3A%2F%2Fwa.me%2F528120622870%3Ftext%3DHola%2520Brenda&color=25D366&bgcolor=FFFFFF&format=svg"
+                                        src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https%3A%2F%2Fwa.me%2F528120622870%3Ftext%3DHola%2520Brenda&color=25D366&bgcolor=FFFFFF&format=svg"
                                         alt="QR WhatsApp Brenda"
-                                        className="w-24 h-24 rounded-lg"
+                                        className="w-32 h-32 rounded-lg"
                                     />
                                     <div className="text-center">
-                                        <p className="font-bold text-gray-800 text-xs group-hover:text-green-700 transition-colors">Escanea y habla<br/>con Brenda</p>
+                                        <p className="font-bold text-gray-800 text-sm group-hover:text-green-700 transition-colors">Escanea y habla<br/>con Brenda</p>
                                         <p className="text-[10px] text-gray-400 flex items-center justify-center gap-1 mt-1">
                                             <WhatsAppIcon className="w-3 h-3 text-green-500" />
                                             WhatsApp
