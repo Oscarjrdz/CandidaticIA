@@ -9,6 +9,7 @@ const BulksSection = ({ showToast }) => {
     const [loadingChats, setLoadingChats] = useState(true);
     const [selectedCandIds, setSelectedCandIds] = useState(new Set());
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'complete', 'incomplete'
+    const [mobileTab, setMobileTab] = useState('candidates'); // 'candidates', 'messages', 'settings'
 
     // Col 2: Messages
     const [messages, setMessages] = useState([{ id: Date.now(), text: '' }]);
@@ -326,10 +327,30 @@ const BulksSection = ({ showToast }) => {
     const isRunning = engineState?.isRunning;
 
     return (
-        <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
+        <div className="flex flex-col lg:flex-row h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
             
+            {/* Mobile Tab Bar */}
+            <div className="lg:hidden flex border-b border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] shrink-0">
+                {[{id:'candidates',label:'Destinatarios',emoji:'👥'},{id:'messages',label:'Mensajes',emoji:'💬'},{id:'settings',label:'Config',emoji:'⚙️'}].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setMobileTab(tab.id)}
+                        className={`flex-1 py-3 text-xs font-bold uppercase tracking-wider text-center transition-colors border-b-2 ${
+                            mobileTab === tab.id
+                                ? 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                        }`}
+                    >
+                        <span className="mr-1">{tab.emoji}</span>{tab.label}
+                        {tab.id === 'candidates' && selectedCandIds.size > 0 && (
+                            <span className="ml-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{selectedCandIds.size}</span>
+                        )}
+                    </button>
+                ))}
+            </div>
+
             {/* COLUMN 1: CANDIDATES */}
-            <div className="w-[33%] flex flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21]">
+            <div className={`${mobileTab === 'candidates' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[33%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] min-h-0`}>
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35]">
                     <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db] mb-2">Destinatarios</h2>
                     
@@ -417,7 +438,7 @@ const BulksSection = ({ showToast }) => {
             </div>
 
             {/* COLUMN 2: MESSAGES */}
-            <div className="w-[33%] flex flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a]">
+            <div className={`${mobileTab === 'messages' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[33%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a] min-h-0`}>
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10 flex justify-between items-center">
                     <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Variaciones de Mensaje</h2>
                     <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded dark:bg-blue-900 dark:text-blue-300">{messages.length} opciones</span>
@@ -472,7 +493,7 @@ const BulksSection = ({ showToast }) => {
             </div>
 
             {/* COLUMN 3: SETTINGS & STATUS */}
-            <div className="w-[34%] flex flex-col bg-white dark:bg-[#111b21]">
+            <div className={`${mobileTab === 'settings' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[34%] flex-col bg-white dark:bg-[#111b21] min-h-0`}>
                 <div className="p-3 border-b border-[#f0f2f5] dark:border-[#222e35] flex justify-between items-center bg-[#f0f2f5] dark:bg-[#202c33]">
                     <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Ejecución y Reglas</h2>
                     <button onClick={openHistory} className="text-sm bg-white dark:bg-[#111b21] hover:bg-gray-50 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg shadow-sm flex items-center gap-1 font-medium transition-colors">

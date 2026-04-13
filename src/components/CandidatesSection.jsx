@@ -662,7 +662,7 @@ const CandidatesSection = ({ showToast }) => {
                 </div>
 
                 {/* Búsqueda */}
-                <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4 items-center">
+                <div className="flex flex-wrap gap-2 sm:gap-4 items-center">
                     <MagicSearch
                         onResults={(results, ai) => {
                             setAiFilteredCandidates(results);
@@ -735,7 +735,7 @@ const CandidatesSection = ({ showToast }) => {
                         />
                     )}
 
-                    <div className="relative w-full sm:w-64 group">
+                    <div className="relative w-full sm:w-64 group order-first sm:order-none">
                         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-600 transition-colors" />
                         <input
                             type="text"

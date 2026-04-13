@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut,
-    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit
+    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X
 } from 'lucide-react';
 import {
     DndContext,
@@ -98,7 +98,7 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange }) => {
     );
 };
 
-const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate }) => {
+const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate, isMobileOpen, onClose }) => {
     const [items, setItems] = useState([]);
     const [rolePermissions, setRolePermissions] = useState(null);
 
@@ -202,75 +202,102 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate 
     const topItems = items.filter(item => item.position === 'top');
     const bottomItem = items.find(item => item.position === 'bottom');
 
+    const handleSectionClick = (sectionId) => {
+        onSectionChange(sectionId);
+        if (onClose) onClose(); // Close mobile drawer on navigation
+    };
+
     return (
-        <aside className="w-64 bg-blue-700 flex flex-col h-screen sticky top-0 overflow-hidden shadow-2xl transition-colors duration-500 z-30">
-            <div className="absolute inset-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-800 pointer-events-none" />
+        <>
+            {/* Mobile backdrop overlay */}
+            {isMobileOpen && (
+                <div
+                    className="fixed inset-0 bg-black/50 z-40 lg:hidden transition-opacity duration-300"
+                    onClick={onClose}
+                />
+            )}
 
-            {/* Logo/Header */}
-            <div className="relative p-6 mb-2">
-                <div className="flex items-center space-x-3">
-                    <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105">
-                        <BrainCircuit className="w-8 h-8 text-white stroke-[2] drop-shadow-md rotate-90" />
-                    </div>
-                    <h2 className="text-[20px] font-extrabold text-white tracking-wider flex items-center drop-shadow-sm ml-1">
-                        CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
-                    </h2>
-                </div>
-            </div>
+            <aside className={`
+                fixed lg:sticky top-0 left-0 h-screen w-64 bg-blue-700 flex flex-col overflow-hidden shadow-2xl transition-all duration-300 z-50
+                ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+            `}>
+                <div className="absolute inset-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-800 pointer-events-none" />
 
-            {/* Menu Items - Top */}
-            <nav className="relative flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                >
-                    <SortableContext
-                        items={topItems.map(i => i.id)}
-                        strategy={verticalListSortingStrategy}
-                    >
-                        {topItems.map(item => (
-                            <SortableMenuItem
-                                key={item.id}
-                                item={item}
-                                activeSection={activeSection}
-                                onSectionChange={onSectionChange}
-                            />
-                        ))}
-                    </SortableContext>
-                </DndContext>
-            </nav>
-
-            {/* Footer / Bottom Items */}
-            <div className="relative p-4 mt-auto border-t border-white/5 bg-white/5 backdrop-blur-sm">
-                <div className="space-y-2">
-                    {bottomItem && (
+                {/* Logo/Header */}
+                <div className="relative p-6 mb-2">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105">
+                                <BrainCircuit className="w-8 h-8 text-white stroke-[2] drop-shadow-md rotate-90" />
+                            </div>
+                            <h2 className="text-[20px] font-extrabold text-white tracking-wider flex items-center drop-shadow-sm ml-1">
+                                CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
+                            </h2>
+                        </div>
+                        {/* Mobile close button */}
                         <button
-                            onClick={() => onSectionChange(bottomItem.id)}
-                            className={`
-                                w-full flex items-center space-x-3 px-4 py-3 rounded-xl
-                                transition-all duration-300 group
-                                ${activeSection === bottomItem.id
-                                    ? 'bg-white/15 text-white'
-                                    : 'text-blue-100/70 hover:text-white hover:bg-white/10'
-                                }
-                            `}
+                            onClick={onClose}
+                            className="lg:hidden p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
                         >
-                            <Settings className="w-5 h-5" />
-                            <span className="font-medium text-sm">{bottomItem.label}</span>
+                            <X className="w-5 h-5" />
                         </button>
-                    )}
-
-                    <button
-                        onClick={onLogout}
-                        className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 group text-red-300 hover:text-red-100 hover:bg-red-500/20"
-                    >
-                        <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
-                        <span className="font-medium text-sm">Cerrar Sesión</span>
-                    </button>
+                    </div>
                 </div>
-            </div>
-        </aside>
+
+                {/* Menu Items - Top */}
+                <nav className="relative flex-1 p-4 space-y-2 overflow-y-auto custom-scrollbar">
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                    >
+                        <SortableContext
+                            items={topItems.map(i => i.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            {topItems.map(item => (
+                                <SortableMenuItem
+                                    key={item.id}
+                                    item={item}
+                                    activeSection={activeSection}
+                                    onSectionChange={handleSectionClick}
+                                />
+                            ))}
+                        </SortableContext>
+                    </DndContext>
+                </nav>
+
+                {/* Footer / Bottom Items */}
+                <div className="relative p-4 mt-auto border-t border-white/5 bg-white/5 backdrop-blur-sm">
+                    <div className="space-y-2">
+                        {bottomItem && (
+                            <button
+                                onClick={() => handleSectionClick(bottomItem.id)}
+                                className={`
+                                    w-full flex items-center space-x-3 px-4 py-3 rounded-xl
+                                    transition-all duration-300 group
+                                    ${activeSection === bottomItem.id
+                                        ? 'bg-white/15 text-white'
+                                        : 'text-blue-100/70 hover:text-white hover:bg-white/10'
+                                    }
+                                `}
+                            >
+                                <Settings className="w-5 h-5" />
+                                <span className="font-medium text-sm">{bottomItem.label}</span>
+                            </button>
+                        )}
+
+                        <button
+                            onClick={onLogout}
+                            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 group text-red-300 hover:text-red-100 hover:bg-red-500/20"
+                        >
+                            <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
+                            <span className="font-medium text-sm">Cerrar Sesión</span>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+        </>
     );
 };
 

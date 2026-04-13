@@ -189,7 +189,7 @@ export default function LoginPage({ onLogin }) {
                                         const val = e.target.value.replace(/\D/g, '').slice(0, 10);
                                         setPhone(val);
                                     }}
-                                    className="w-full h-16 text-3xl font-bold text-center tracking-widest text-gray-800 dark:text-white bg-transparent border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500 transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600 placeholder:text-2xl placeholder:font-normal"
+                                    className="w-full h-14 sm:h-16 text-2xl sm:text-3xl font-bold text-center tracking-widest text-gray-800 dark:text-white bg-transparent border-2 border-gray-300 dark:border-gray-600 rounded-xl focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:border-gray-400 dark:focus:border-gray-500 transition-all placeholder:text-gray-300 dark:placeholder:text-gray-600 placeholder:text-xl sm:placeholder:text-2xl placeholder:font-normal"
                                     maxLength={10}
                                     required
                                     autoFocus

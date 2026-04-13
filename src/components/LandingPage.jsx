@@ -358,12 +358,12 @@ const LandingPage = ({ onLoginSuccess }) => {
 
             {/* ═══ HEADER ═══ */}
             <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100/80">
-                <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between relative">
-                    <div className="flex items-center space-x-2.5">
-                        <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-200">
-                            <BrainCircuit className="w-5 h-5 text-white stroke-[1.5] rotate-90" />
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between relative">
+                    <div className="flex items-center space-x-2">
+                        <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-blue-600 to-violet-700 rounded-xl flex items-center justify-center shadow-lg shadow-violet-200">
+                            <BrainCircuit className="w-4 h-4 sm:w-5 sm:h-5 text-white stroke-[1.5] rotate-90" />
                         </div>
-                        <span className="text-xl font-extrabold tracking-tight text-gray-900 flex items-center">
+                        <span className="text-lg sm:text-xl font-extrabold tracking-tight text-gray-900 flex items-center">
                             CANDIDATIC&nbsp;<span className="tracking-tighter bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">IΛ</span>
                         </span>
                     </div>
@@ -375,30 +375,34 @@ const LandingPage = ({ onLoginSuccess }) => {
                         <a href="#faq" className="hover:text-violet-600 transition-colors duration-300">FAQ</a>
                     </nav>
 
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-2 sm:space-x-3">
                         <div className="relative" ref={dropdownRef}>
                             <Button
                                 onClick={() => setIsLoginOpen(!isLoginOpen)}
-                                className="rounded-full px-7 py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white shadow-lg shadow-violet-200/50 hover:shadow-violet-300/60 transition-all duration-300 transform hover:-translate-y-0.5 text-sm font-semibold"
+                                className="rounded-full px-4 sm:px-7 py-2 sm:py-2.5 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white shadow-lg shadow-violet-200/50 hover:shadow-violet-300/60 transition-all duration-300 transform hover:-translate-y-0.5 text-xs sm:text-sm font-semibold"
                             >
                                 Ingresar
                             </Button>
 
-                            {/* LOGIN DROPDOWN */}
+                            {/* LOGIN DROPDOWN / MOBILE FULLSCREEN MODAL */}
                             {isLoginOpen && (
-                                <div className="absolute right-0 top-full mt-6 w-[38rem] bg-white/95 backdrop-blur-3xl rounded-3xl shadow-[0_20px_50px_rgb(109_40_217_/_0.2)] border border-white/50 p-8 z-50 animate-in zoom-in-95 slide-in-from-top-4 ease-out origin-top-right ring-1 ring-violet-100/60">
-                                    <div className="absolute -top-3 right-8 w-6 h-6 bg-white/95 backdrop-blur-3xl transform rotate-45 border-t border-l border-violet-100/50"></div>
-                                    <div className="absolute inset-0 rounded-3xl bg-gradient-to-b from-violet-50/30 to-transparent pointer-events-none"></div>
-                                    <div className="relative z-10">
-                                        <div className="mb-8 text-center">
+                                <div className="fixed inset-0 sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-6 w-full sm:w-[38rem] h-full sm:h-auto bg-white sm:bg-white/95 sm:backdrop-blur-3xl sm:rounded-3xl shadow-none sm:shadow-[0_20px_50px_rgb(109_40_217_/_0.2)] border-0 sm:border sm:border-white/50 p-6 sm:p-8 z-50 sm:animate-in sm:zoom-in-95 sm:slide-in-from-top-4 sm:ease-out sm:origin-top-right sm:ring-1 sm:ring-violet-100/60 overflow-y-auto flex flex-col justify-center">
+                                    <div className="hidden sm:block absolute -top-3 right-8 w-6 h-6 bg-white/95 backdrop-blur-3xl transform rotate-45 border-t border-l border-violet-100/50"></div>
+                                    <div className="hidden sm:block absolute inset-0 rounded-3xl bg-gradient-to-b from-violet-50/30 to-transparent pointer-events-none"></div>
+                                    {/* Mobile close button */}
+                                    <button onClick={() => setIsLoginOpen(false)} className="sm:hidden absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors z-20">
+                                        <X className="w-5 h-5 text-gray-600" />
+                                    </button>
+                                    <div className="relative z-10 max-w-md mx-auto w-full">
+                                        <div className="mb-6 sm:mb-8 text-center">
                                             <div className="relative inline-block mb-4">
                                                 <div className="absolute inset-0 bg-violet-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
-                                                <div className="relative w-16 h-16 bg-gradient-to-tr from-blue-600 to-violet-800 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform ring-4 ring-violet-50">
-                                                    <BrainCircuit className="w-10 h-10 text-white stroke-[1.5] rotate-90" />
+                                                <div className="relative w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-tr from-blue-600 to-violet-800 rounded-2xl flex items-center justify-center shadow-lg transform rotate-3 hover:rotate-6 transition-transform ring-4 ring-violet-50">
+                                                    <BrainCircuit className="w-8 h-8 sm:w-10 sm:h-10 text-white stroke-[1.5] rotate-90" />
                                                 </div>
                                             </div>
-                                            <h3 className="text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
-                                            <p className="text-base text-gray-500 font-medium">Accede a tu cuenta</p>
+                                            <h3 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight mb-1">Bienvenido</h3>
+                                            <p className="text-sm sm:text-base text-gray-500 font-medium">Accede a tu cuenta</p>
                                         </div>
 
                                         {loginError && (
@@ -409,9 +413,9 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                                         {loginStep === 'phone' ? (
                                             <form onSubmit={handlePhoneSubmit} className="space-y-6">
-                                                <div className="space-y-2 text-center">
-                                                    <label className="text-sm font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
-                                                    <div className="flex justify-center gap-1.5">
+                                                <div className="space-y-3 text-center">
+                                                    <label className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
+                                                    <div className="flex justify-center gap-1 sm:gap-1.5 flex-wrap">
                                                         {Array(10).fill(0).map((_, i) => (
                                                             <input key={i} id={`phone-${i}`} type="text" inputMode="numeric" maxLength={1}
                                                                 value={phone[i] || ''}
@@ -422,7 +426,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                                 }}
                                                                 onKeyDown={(e) => { if (e.key === 'Backspace' && !phone[i] && i > 0) document.getElementById(`phone-${i - 1}`).focus(); }}
                                                                 onFocus={(e) => e.target.select()}
-                                                                className={`w-12 h-14 text-center text-2xl font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-violet-400 focus:bg-white'}`}
+                                                                className={`w-9 h-11 sm:w-12 sm:h-14 text-center text-lg sm:text-2xl font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-violet-400 focus:bg-white'}`}
                                                             />
                                                         ))}
                                                     </div>
@@ -438,12 +442,12 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                         Código enviado a <b className="text-gray-800">{phone}</b>
                                                     </p>
                                                 </div>
-                                                <div className="flex justify-center gap-2">
+                                                <div className="flex justify-center gap-2 sm:gap-3">
                                                     {pinDigits.map((d, i) => (
                                                         <input key={i} ref={el => pinRefs.current[i] = el} type="text" value={d} maxLength={1}
                                                             onChange={(e) => handlePinChange(i, e.target.value)}
                                                             onKeyDown={(e) => handleKeyDown(i, e)}
-                                                            className={`w-12 h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all duration-300 shadow-sm ${d ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-100 text-gray-400 bg-white/50 focus:border-violet-500 focus:ring-4 focus:ring-violet-100 focus:bg-white'}`}
+                                                            className={`w-14 h-16 sm:w-12 sm:h-14 text-center text-2xl font-bold border-2 rounded-xl outline-none transition-all duration-300 shadow-sm ${d ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-100 text-gray-400 bg-white/50 focus:border-violet-500 focus:ring-4 focus:ring-violet-100 focus:bg-white'}`}
                                                             autoFocus={i === 0}
                                                         />
                                                     ))}
@@ -485,18 +489,18 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                         {/* Mobile menu button */}
                         <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors">
-                            <Menu className="w-5 h-5 text-gray-700" />
+                            {mobileMenuOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
                         </button>
                     </div>
                 </div>
 
                 {/* Mobile menu */}
                 {mobileMenuOpen && (
-                    <div className="md:hidden bg-white border-t border-gray-100 px-6 py-4 space-y-3 animate-in slide-in-from-top-2">
-                        <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 py-2">Características</a>
-                        <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 py-2">Cómo funciona</a>
-                        <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 py-2">Precios</a>
-                        <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 py-2">FAQ</a>
+                    <div className="md:hidden bg-white/95 backdrop-blur-xl border-t border-gray-100 px-6 py-4 space-y-1">
+                        <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Características</a>
+                        <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Cómo funciona</a>
+                        <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">Precios</a>
+                        <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block text-sm font-medium text-gray-600 hover:text-violet-600 hover:bg-violet-50 rounded-xl px-4 py-3 transition-all">FAQ</a>
                     </div>
                 )}
             </header>
@@ -536,7 +540,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 `}</style>
 
                 {/* ═══ HERO SECTION ═══ */}
-                <section className="pt-32 pb-16 px-6 relative overflow-hidden">
+                <section className="pt-24 sm:pt-32 pb-12 sm:pb-16 px-4 sm:px-6 relative overflow-hidden">
                     {/* Background gradient blobs */}
                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
                         <div className="absolute top-[-20%] left-[-15%] w-[60%] h-[60%] bg-blue-400/8 rounded-full blur-3xl animate-float"></div>
@@ -545,12 +549,12 @@ const LandingPage = ({ onLoginSuccess }) => {
                     </div>
 
                     <div className="max-w-7xl mx-auto w-full relative z-10">
-                        <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-8 lg:gap-6 items-center pt-8">
+                        <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-8 lg:gap-6 items-center pt-4 sm:pt-8">
 
                             {/* ── LEFT: Hero Text ── */}
-                            <div className="text-left lg:pr-8">
+                            <div className="text-center lg:text-left lg:pr-8">
                                 {/* Badge */}
-                                <div className="hero-text-1 inline-flex items-center space-x-2 bg-violet-50/80 backdrop-blur-sm px-5 py-2.5 rounded-full text-sm font-semibold text-violet-700 mb-8 border border-violet-100/60">
+                                <div className="hero-text-1 inline-flex items-center space-x-2 bg-violet-50/80 backdrop-blur-sm px-4 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold text-violet-700 mb-6 sm:mb-8 border border-violet-100/60">
                                     <span className="relative flex h-2 w-2">
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
                                         <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
@@ -559,29 +563,29 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 </div>
 
                                 {/* Headline */}
-                                <h1 className="hero-text-2 text-4xl sm:text-5xl lg:text-[3.5rem] xl:text-6xl font-extrabold tracking-tight text-gray-900 mb-6 leading-[1.08]">
+                                <h1 className="hero-text-2 text-3xl sm:text-4xl md:text-5xl lg:text-[3.5rem] xl:text-6xl font-extrabold tracking-tight text-gray-900 mb-4 sm:mb-6 leading-[1.1]">
                                     Revoluciona tu{' '}<br className="hidden sm:inline" />
                                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">
                                         Reclutamiento con IA
                                     </span>
                                 </h1>
 
-                                <p className="hero-text-3 text-base lg:text-lg text-gray-500 max-w-lg mb-8 leading-relaxed">
+                                <p className="hero-text-3 text-sm sm:text-base lg:text-lg text-gray-500 max-w-lg mx-auto lg:mx-0 mb-6 sm:mb-8 leading-relaxed">
                                     Brenda es tu bot de reclutamiento con GPT. Conversa con candidatos, extrae datos automáticamente y agenda entrevistas. ¡Pruébala ahora mismo! →
                                 </p>
 
                                 {/* CTA Buttons */}
-                                <div className="hero-text-4 flex flex-col sm:flex-row gap-4">
+                                <div className="hero-text-4 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center lg:justify-start">
                                     <button
                                         onClick={() => setIsLoginOpen(true)}
-                                        className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold rounded-2xl shadow-xl shadow-violet-300/30 hover:shadow-violet-400/40 transition-all duration-300 transform hover:-translate-y-0.5 text-base"
+                                        className="group inline-flex items-center justify-center px-6 sm:px-8 py-3.5 sm:py-4 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold rounded-2xl shadow-xl shadow-violet-300/30 hover:shadow-violet-400/40 transition-all duration-300 transform hover:-translate-y-0.5 text-sm sm:text-base"
                                     >
                                         Empezar gratis
                                         <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                                     </button>
                                     <button
                                         onClick={() => { setShowWhatsAppInput(!showWhatsAppInput); setContactStatus(''); setContactError(''); }}
-                                        className="group inline-flex items-center justify-center px-8 py-4 bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-green-400 text-gray-800 font-bold rounded-2xl transition-all duration-300 text-base"
+                                        className="group inline-flex items-center justify-center px-6 sm:px-8 py-3.5 sm:py-4 bg-white hover:bg-gray-50 border-2 border-gray-200 hover:border-green-400 text-gray-800 font-bold rounded-2xl transition-all duration-300 text-sm sm:text-base"
                                     >
                                         <WhatsAppIcon className="w-5 h-5 text-green-600 mr-2" />
                                         Hablar con Brenda
@@ -589,7 +593,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 </div>
 
                                 {/* Trust badges — below buttons */}
-                                <div className="hero-text-4 mt-4 flex flex-wrap items-center gap-5 text-xs text-gray-400">
+                                <div className="hero-text-4 mt-4 flex flex-wrap items-center justify-center lg:justify-start gap-4 sm:gap-5 text-xs text-gray-400">
                                     <div className="flex items-center space-x-1.5">
                                         <Shield className="w-3.5 h-3.5 text-green-500" />
                                         <span>Conexión segura</span>
@@ -608,7 +612,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 {showWhatsAppInput && (
                                     <div className="hero-text-4 mt-4 msg-appear">
                                         {contactStatus === 'success' ? (
-                                            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-5 py-4">
+                                            <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-2xl px-4 sm:px-5 py-3 sm:py-4">
                                                 <CheckCircle className="w-6 h-6 text-green-500 shrink-0" />
                                                 <div>
                                                     <p className="font-bold text-green-800 text-sm">¡Listo! Revisa tu WhatsApp 📱</p>
@@ -617,9 +621,9 @@ const LandingPage = ({ onLoginSuccess }) => {
                                             </div>
                                         ) : (
                                             <form onSubmit={sendWhatsAppContact} className="relative">
-                                                <div className="flex items-center bg-white rounded-2xl shadow-lg shadow-green-100/40 border-2 border-green-200 p-1.5 gap-2">
-                                                    <div className="pl-3 text-gray-400 flex items-center gap-1.5">
-                                                        <span className="text-sm font-bold text-gray-500">🇲🇽 +52</span>
+                                                <div className="flex items-center bg-white rounded-2xl shadow-lg shadow-green-100/40 border-2 border-green-200 p-1.5 gap-1 sm:gap-2">
+                                                    <div className="pl-2 sm:pl-3 text-gray-400 flex items-center gap-1 sm:gap-1.5 shrink-0">
+                                                        <span className="text-xs sm:text-sm font-bold text-gray-500">🇲🇽 +52</span>
                                                     </div>
                                                     <input
                                                         type="tel"
@@ -632,14 +636,14 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                     <button
                                                         type="submit"
                                                         disabled={contactLoading || contactPhone.replace(/\D/g, '').length < 10}
-                                                        className="bg-green-500 hover:bg-green-600 text-white rounded-xl px-5 py-2.5 font-bold text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
+                                                        className="bg-green-500 hover:bg-green-600 text-white rounded-xl px-3 sm:px-5 py-2.5 font-bold text-xs sm:text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2 shrink-0"
                                                     >
                                                         {contactLoading ? (
                                                             <Loader2 className="w-4 h-4 animate-spin" />
                                                         ) : (
                                                             <>
                                                                 <Send className="w-4 h-4" />
-                                                                <span>Enviar</span>
+                                                                <span className="hidden sm:inline">Enviar</span>
                                                             </>
                                                         )}
                                                     </button>
@@ -673,13 +677,13 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </div>
 
                             {/* ── RIGHT: iPhone 17 Pro Max Mockup ── */}
-                            <div className="flex justify-center lg:justify-end" style={{ perspective: '1200px' }}>
+                            <div className="flex justify-center lg:justify-end mt-8 lg:mt-0" style={{ perspective: '1200px' }}>
                                 <div className="relative" style={{ animation: 'iphoneFloat 6s ease-in-out infinite' }}>
                                     {/* Glow behind phone */}
-                                    <div className="absolute -inset-8 bg-gradient-to-br from-violet-400/20 via-blue-400/15 to-pink-400/10 rounded-[4rem] blur-2xl iphone-glow"></div>
+                                    <div className="absolute -inset-6 sm:-inset-8 bg-gradient-to-br from-violet-400/20 via-blue-400/15 to-pink-400/10 rounded-[4rem] blur-2xl iphone-glow"></div>
 
                                     {/* iPhone Frame */}
-                                    <div className="relative w-[320px] sm:w-[340px] bg-gray-950 rounded-[3rem] p-[10px] shadow-2xl shadow-gray-900/40" style={{
+                                    <div className="relative w-[270px] sm:w-[320px] md:w-[340px] bg-gray-950 rounded-[2.5rem] sm:rounded-[3rem] p-[8px] sm:p-[10px] shadow-2xl shadow-gray-900/40" style={{
                                         border: '1px solid rgba(255,255,255,0.1)',
                                     }}>
                                         {/* Dynamic Island */}
@@ -688,7 +692,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         </div>
 
                                         {/* Screen */}
-                                        <div className="relative bg-white rounded-[2.4rem] overflow-hidden" style={{ height: '560px' }}>
+                                        <div className="relative bg-white rounded-[2rem] sm:rounded-[2.4rem] overflow-hidden" style={{ height: 'clamp(440px, 70vw, 560px)' }}>
                                             {/* WhatsApp Header */}
                                             <div className="bg-gradient-to-r from-violet-600 to-blue-600 px-4 pt-14 pb-3 flex items-center space-x-3">
                                                 <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
@@ -783,30 +787,30 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ═══ LOGOS / SOCIAL PROOF ═══ */}
-                <section className="py-12 px-6">
+                <section className="py-8 sm:py-12 px-4 sm:px-6">
                     <div className="max-w-5xl mx-auto text-center">
-                        <p className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-8">Empresas que ya confían en nosotros</p>
-                        <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6 opacity-40">
+                        <p className="text-xs sm:text-sm font-semibold text-gray-400 uppercase tracking-widest mb-6 sm:mb-8">Empresas que ya confían en nosotros</p>
+                        <div className="flex flex-wrap items-center justify-center gap-x-6 sm:gap-x-12 gap-y-4 sm:gap-y-6 opacity-40">
                             {['Grupo Monterrey', 'TalentoMX', 'RecruiterPro', 'HRTech Labs', 'FastHire'].map((name, i) => (
-                                <span key={i} className="text-xl font-bold text-gray-400 tracking-tight whitespace-nowrap">{name}</span>
+                                <span key={i} className="text-base sm:text-xl font-bold text-gray-400 tracking-tight whitespace-nowrap">{name}</span>
                             ))}
                         </div>
                     </div>
                 </section>
 
                 {/* ═══ FEATURES SECTION ═══ */}
-                <section id="features" className="py-20 px-6" ref={featuresRef}>
+                <section id="features" className="py-12 sm:py-20 px-4 sm:px-6" ref={featuresRef}>
                     <div className="max-w-7xl mx-auto">
-                        <div className={`text-center mb-16 transition-all duration-700 ${featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-                            <div className="inline-flex items-center space-x-2 bg-violet-50 px-4 py-1.5 rounded-full text-sm font-semibold text-violet-700 mb-4 border border-violet-100">
+                        <div className={`text-center mb-10 sm:mb-16 transition-all duration-700 ${featuresVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+                            <div className="inline-flex items-center space-x-2 bg-violet-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-violet-700 mb-4 border border-violet-100">
                                 <Sparkles className="w-4 h-4" />
                                 <span>Funcionalidades</span>
                             </div>
-                            <h2 className="text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                            <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
                                 Todo lo que necesitas para<br />
                                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">reclutar mejor</span>
                             </h2>
-                            <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+                            <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
                                 Una suite completa de herramientas potenciadas por inteligencia artificial, diseñadas para reclutadores modernos.
                             </p>
                         </div>
@@ -836,22 +840,22 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ═══ HOW IT WORKS ═══ */}
-                <section id="how-it-works" className="py-20 px-6 bg-gradient-to-b from-gray-50/50 to-white" ref={stepsRef}>
+                <section id="how-it-works" className="py-12 sm:py-20 px-4 sm:px-6 bg-gradient-to-b from-gray-50/50 to-white" ref={stepsRef}>
                     <div className="max-w-7xl mx-auto">
-                        <div className={`text-center mb-16 transition-all duration-700 ${stepsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-                            <div className="inline-flex items-center space-x-2 bg-blue-50 px-4 py-1.5 rounded-full text-sm font-semibold text-blue-700 mb-4 border border-blue-100">
+                        <div className={`text-center mb-10 sm:mb-16 transition-all duration-700 ${stepsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+                            <div className="inline-flex items-center space-x-2 bg-blue-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-blue-700 mb-4 border border-blue-100">
                                 <Rocket className="w-4 h-4" />
                                 <span>Proceso</span>
                             </div>
-                            <h2 className="text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                            <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
                                 ¿Cómo funciona?
                             </h2>
-                            <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+                            <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
                                 En solo 4 pasos automatiza completamente tu proceso de reclutamiento.
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-8">
                             {steps.map((s, i) => (
                                 <div
                                     key={i}
@@ -862,14 +866,14 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     {i < 3 && (
                                         <div className="hidden lg:block absolute top-10 left-[calc(100%+0.5rem)] w-[calc(100%-3rem)] h-px bg-gradient-to-r from-violet-300 to-transparent"></div>
                                     )}
-                                    <div className="bg-white rounded-2xl p-8 border border-gray-100 hover:border-violet-200 hover:shadow-lg hover:shadow-violet-50 transition-all duration-300 h-full">
-                                        <div className="flex items-center space-x-3 mb-5">
-                                            <span className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">{s.num}</span>
+                                    <div className="bg-white rounded-2xl p-6 sm:p-8 border border-gray-100 hover:border-violet-200 hover:shadow-lg hover:shadow-violet-50 transition-all duration-300 h-full">
+                                        <div className="flex items-center space-x-3 mb-4 sm:mb-5">
+                                            <span className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">{s.num}</span>
                                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/10 to-violet-500/10 flex items-center justify-center text-violet-600">
                                                 {s.icon}
                                             </div>
                                         </div>
-                                        <h3 className="text-lg font-bold text-gray-900 mb-2">{s.title}</h3>
+                                        <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-2">{s.title}</h3>
                                         <p className="text-sm text-gray-500 leading-relaxed">{s.desc}</p>
                                     </div>
                                 </div>
@@ -879,9 +883,9 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ═══ STATS SECTION ═══ */}
-                <section className="py-20 px-6" ref={statsRef}>
+                <section className="py-12 sm:py-20 px-4 sm:px-6" ref={statsRef}>
                     <div className="max-w-7xl mx-auto">
-                        <div className={`relative rounded-[2rem] overflow-hidden p-12 md:p-16 transition-all duration-700 ${statsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{
+                        <div className={`relative rounded-2xl sm:rounded-[2rem] overflow-hidden p-8 sm:p-12 md:p-16 transition-all duration-700 ${statsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{
                             background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)'
                         }}>
                             {/* Decorative elements */}
@@ -891,37 +895,37 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </div>
 
                             <div className="relative z-10">
-                                <h2 className="text-3xl md:text-4xl font-extrabold text-white text-center mb-4 tracking-tight">
+                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white text-center mb-3 sm:mb-4 tracking-tight">
                                     Números que hablan por sí solos
                                 </h2>
-                                <p className="text-violet-200 text-center mb-12 text-lg">
+                                <p className="text-violet-200 text-center mb-8 sm:mb-12 text-sm sm:text-lg">
                                     Resultados reales de empresas que usan Candidatic IA
                                 </p>
 
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8">
                                     <div className="text-center" ref={candidatesRef}>
-                                        <div className="text-4xl md:text-5xl font-black text-white mb-2">
+                                        <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-1 sm:mb-2">
                                             {candidates.toLocaleString()}+
                                         </div>
-                                        <div className="text-violet-300 text-sm font-medium">Candidatos gestionados</div>
+                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Candidatos gestionados</div>
                                     </div>
                                     <div className="text-center" ref={messagesRef}>
-                                        <div className="text-4xl md:text-5xl font-black text-white mb-2">
+                                        <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-1 sm:mb-2">
                                             {messages.toLocaleString()}+
                                         </div>
-                                        <div className="text-violet-300 text-sm font-medium">Mensajes enviados</div>
+                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Mensajes enviados</div>
                                     </div>
                                     <div className="text-center" ref={companiesRef}>
-                                        <div className="text-4xl md:text-5xl font-black text-white mb-2">
+                                        <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-1 sm:mb-2">
                                             {companies}+
                                         </div>
-                                        <div className="text-violet-300 text-sm font-medium">Empresas activas</div>
+                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Empresas activas</div>
                                     </div>
                                     <div className="text-center" ref={automationsRef}>
-                                        <div className="text-4xl md:text-5xl font-black text-white mb-2">
+                                        <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-1 sm:mb-2">
                                             {automations}%
                                         </div>
-                                        <div className="text-violet-300 text-sm font-medium">Automatización</div>
+                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Automatización</div>
                                     </div>
                                 </div>
                             </div>
@@ -930,22 +934,22 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ═══ PLATFORM PREVIEW ═══ */}
-                <section className="py-20 px-6 bg-gradient-to-b from-white to-gray-50/50">
+                <section className="py-12 sm:py-20 px-4 sm:px-6 bg-gradient-to-b from-white to-gray-50/50">
                     <div className="max-w-7xl mx-auto">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 sm:gap-16 items-center">
                             <div>
-                                <div className="inline-flex items-center space-x-2 bg-emerald-50 px-4 py-1.5 rounded-full text-sm font-semibold text-emerald-700 mb-4 border border-emerald-100">
+                                <div className="inline-flex items-center space-x-2 bg-emerald-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-emerald-700 mb-4 border border-emerald-100">
                                     <MessageSquare className="w-4 h-4" />
                                     <span>WhatsApp Nativo</span>
                                 </div>
-                                <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight mb-6">
+                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight mb-4 sm:mb-6">
                                     Chat integrado con{' '}
                                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-emerald-600">WhatsApp</span>
                                 </h2>
-                                <p className="text-lg text-gray-500 mb-8 leading-relaxed">
+                                <p className="text-sm sm:text-lg text-gray-500 mb-6 sm:mb-8 leading-relaxed">
                                     Conversa directamente con tus candidatos desde la plataforma. El bot IA responde 24/7, extrae datos automáticamente y escala a un humano cuando es necesario.
                                 </p>
-                                <div className="space-y-4">
+                                <div className="space-y-3 sm:space-y-4">
                                     {[
                                         'Respuestas automáticas con GPT-4',
                                         'Extracción inteligente de datos del candidato',
@@ -1013,22 +1017,22 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ═══ PRICING SECTION ═══ */}
-                <section id="pricing" className="py-20 px-6" ref={pricingRef}>
+                <section id="pricing" className="py-12 sm:py-20 px-4 sm:px-6" ref={pricingRef}>
                     <div className="max-w-7xl mx-auto">
-                        <div className={`text-center mb-16 transition-all duration-700 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-                            <div className="inline-flex items-center space-x-2 bg-amber-50 px-4 py-1.5 rounded-full text-sm font-semibold text-amber-700 mb-4 border border-amber-100">
+                        <div className={`text-center mb-10 sm:mb-16 transition-all duration-700 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
+                            <div className="inline-flex items-center space-x-2 bg-amber-50 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold text-amber-700 mb-4 border border-amber-100">
                                 <Zap className="w-4 h-4" />
                                 <span>Planes</span>
                             </div>
-                            <h2 className="text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                            <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
                                 Elige el plan ideal para ti
                             </h2>
-                            <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+                            <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
                                 Sin contratos. Sin letras pequeñas. Escala cuando quieras.
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto">
                             {/* Starter */}
                             <div className={`bg-white rounded-2xl border border-gray-100 p-8 hover:border-gray-200 hover:shadow-lg transition-all duration-500 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{ transitionDelay: '0ms' }}>
                                 <div className="mb-6">
@@ -1053,7 +1057,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </div>
 
                             {/* Pro — featured */}
-                            <div className={`relative bg-gradient-to-b from-violet-600 to-indigo-700 rounded-2xl p-8 text-white shadow-2xl shadow-violet-300/30 scale-105 transition-all duration-500 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{ transitionDelay: '100ms' }}>
+                            <div className={`relative bg-gradient-to-b from-violet-600 to-indigo-700 rounded-2xl p-6 sm:p-8 text-white shadow-2xl shadow-violet-300/30 md:scale-105 transition-all duration-500 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{ transitionDelay: '100ms' }}>
                                 <div className="absolute top-0 right-6 -translate-y-1/2">
                                     <span className="bg-gradient-to-r from-amber-400 to-orange-400 text-gray-900 text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
                                         ⭐ Más popular
@@ -1106,13 +1110,13 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ═══ FAQ SECTION ═══ */}
-                <section id="faq" className="py-20 px-6 bg-gray-50/50">
+                <section id="faq" className="py-12 sm:py-20 px-4 sm:px-6 bg-gray-50/50">
                     <div className="max-w-3xl mx-auto">
-                        <div className="text-center mb-12">
-                            <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight mb-4">
+                        <div className="text-center mb-8 sm:mb-12">
+                            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight mb-4">
                                 Preguntas frecuentes
                             </h2>
-                            <p className="text-gray-500 text-lg">Todo lo que necesitas saber sobre la plataforma.</p>
+                            <p className="text-gray-500 text-sm sm:text-lg px-2">Todo lo que necesitas saber sobre la plataforma.</p>
                         </div>
 
                         <div className="space-y-3">
@@ -1138,9 +1142,9 @@ const LandingPage = ({ onLoginSuccess }) => {
                 </section>
 
                 {/* ═══ CTA SECTION ═══ */}
-                <section className="py-20 px-6">
+                <section className="py-12 sm:py-20 px-4 sm:px-6">
                     <div className="max-w-7xl mx-auto">
-                        <div className="relative rounded-[2rem] overflow-hidden p-12 md:p-16 text-center" style={{
+                        <div className="relative rounded-2xl sm:rounded-[2rem] overflow-hidden p-8 sm:p-12 md:p-16 text-center" style={{
                             background: 'linear-gradient(135deg, #EDE9FE 0%, #E0F2FE 50%, #F3E8FF 100%)'
                         }}>
                             <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -1149,16 +1153,16 @@ const LandingPage = ({ onLoginSuccess }) => {
                             </div>
 
                             <div className="relative z-10 max-w-2xl mx-auto">
-                                <h2 className="text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
+                                <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
                                     ¿Listo para revolucionar tu reclutamiento?
                                 </h2>
-                                <p className="text-lg text-gray-600 mb-8">
+                                <p className="text-sm sm:text-lg text-gray-600 mb-6 sm:mb-8 px-2">
                                     Únete a las empresas que ya reclutan 10x más rápido con inteligencia artificial.
                                 </p>
-                                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
                                     <button
                                         onClick={() => setIsLoginOpen(true)}
-                                        className="px-8 py-3.5 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold rounded-full shadow-lg shadow-violet-300/40 hover:shadow-violet-400/50 transition-all duration-300 transform hover:-translate-y-0.5 flex items-center space-x-2"
+                                        className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-bold rounded-full shadow-lg shadow-violet-300/40 hover:shadow-violet-400/50 transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center space-x-2"
                                     >
                                         <span>Empezar ahora</span>
                                         <ArrowRight className="w-4 h-4" />
@@ -1167,7 +1171,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         href="https://wa.me/528112345678"
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="px-8 py-3.5 bg-white/80 backdrop-blur-sm border border-gray-200 text-gray-700 font-semibold rounded-full hover:bg-white hover:border-gray-300 transition-all duration-300 flex items-center space-x-2"
+                                        className="w-full sm:w-auto px-8 py-3.5 bg-white/80 backdrop-blur-sm border border-gray-200 text-gray-700 font-semibold rounded-full hover:bg-white hover:border-gray-300 transition-all duration-300 flex items-center justify-center space-x-2"
                                     >
                                         <WhatsAppIcon className="w-4 h-4 text-green-600" />
                                         <span>Hablar con ventas</span>
@@ -1180,11 +1184,11 @@ const LandingPage = ({ onLoginSuccess }) => {
             </main>
 
             {/* ═══ FOOTER ═══ */}
-            <footer className="bg-gray-950 text-gray-400 py-16 px-6">
+            <footer className="bg-gray-950 text-gray-400 py-10 sm:py-16 px-4 sm:px-6">
                 <div className="max-w-7xl mx-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-8 sm:gap-12 mb-8 sm:mb-12">
                         {/* Brand */}
-                        <div className="md:col-span-1">
+                        <div className="col-span-2 sm:col-span-2 md:col-span-1">
                             <div className="flex items-center space-x-2.5 mb-4">
                                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-violet-600 rounded-lg flex items-center justify-center">
                                     <BrainCircuit className="w-4.5 h-4.5 text-white stroke-[1.5] rotate-90" />
@@ -1200,24 +1204,24 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                         {/* Links */}
                         <div>
-                            <h4 className="text-white font-semibold mb-4 text-sm">Producto</h4>
-                            <div className="space-y-2.5">
+                            <h4 className="text-white font-semibold mb-3 sm:mb-4 text-sm">Producto</h4>
+                            <div className="space-y-2 sm:space-y-2.5">
                                 {['Características', 'Precios', 'Integraciones', 'Changelog'].map((l, i) => (
                                     <a key={i} href="#" className="block text-sm text-gray-500 hover:text-violet-400 transition-colors">{l}</a>
                                 ))}
                             </div>
                         </div>
                         <div>
-                            <h4 className="text-white font-semibold mb-4 text-sm">Recursos</h4>
-                            <div className="space-y-2.5">
+                            <h4 className="text-white font-semibold mb-3 sm:mb-4 text-sm">Recursos</h4>
+                            <div className="space-y-2 sm:space-y-2.5">
                                 {['Documentación', 'API', 'Guías', 'Blog'].map((l, i) => (
                                     <a key={i} href="#" className="block text-sm text-gray-500 hover:text-violet-400 transition-colors">{l}</a>
                                 ))}
                             </div>
                         </div>
-                        <div>
-                            <h4 className="text-white font-semibold mb-4 text-sm">Compañía</h4>
-                            <div className="space-y-2.5">
+                        <div className="col-span-2 sm:col-span-1">
+                            <h4 className="text-white font-semibold mb-3 sm:mb-4 text-sm">Compañía</h4>
+                            <div className="space-y-2 sm:space-y-2.5">
                                 {['Nosotros', 'Contacto', 'Privacidad', 'Términos'].map((l, i) => (
                                     <a key={i} href="#" className="block text-sm text-gray-500 hover:text-violet-400 transition-colors">{l}</a>
                                 ))}
@@ -1225,14 +1229,14 @@ const LandingPage = ({ onLoginSuccess }) => {
                         </div>
                     </div>
 
-                    <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-                        <p className="text-sm text-gray-600">
+                    <div className="border-t border-gray-800 pt-6 sm:pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+                        <p className="text-xs sm:text-sm text-gray-600 text-center md:text-left">
                             © {new Date().getFullYear()} Candidatic IA. Todos los derechos reservados.
                         </p>
                         <div className="flex items-center space-x-6">
-                            <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-sm">Privacidad</a>
-                            <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-sm">Términos</a>
-                            <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-sm">Cookies</a>
+                            <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Privacidad</a>
+                            <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Términos</a>
+                            <a href="#" className="text-gray-600 hover:text-violet-400 transition-colors text-xs sm:text-sm">Cookies</a>
                         </div>
                     </div>
                 </div>

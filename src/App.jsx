@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Menu } from 'lucide-react';
 import { useToast } from './hooks/useToast';
 import Button from './components/ui/Button';
 import Sidebar from './components/Sidebar';
@@ -31,6 +31,7 @@ function App() {
   const [activeSection, setActiveSection] = useState('candidates');
   const [isAppReady, setIsAppReady] = useState(false);
   const [rolePermissions, setRolePermissions] = useState({});
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toast, showToast, hideToast, ToastComponent } = useToast();
 
   // Check LocalStorage for session
@@ -172,6 +173,8 @@ function App() {
         onLogout={handleLogout}
         user={user}
         onUserUpdate={setUser}
+        isMobileOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       {/* Main Content */}
@@ -179,42 +182,51 @@ function App() {
 
         {/* Top Bar — título de sección + saludo + tema */}
         <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90 shrink-0">
-          <div className="px-8 py-4">
+          <div className="px-4 sm:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {activeSection === 'candidates' ? 'Candidatos'
-                    : activeSection === 'chat' ? 'Chat Web'
-                    : activeSection === 'bulks' ? 'Envíos Masivos (Bulks)'
-                    : activeSection === 'bot-ia' ? 'Bot IA'
-                    : activeSection === 'automations' ? 'Automatizaciones'
-                    : activeSection === 'vacancies' ? 'Vacantes'
-                    : activeSection === 'history' ? 'Historial'
-                    : activeSection === 'users' ? 'Usuarios'
-                    : activeSection === 'post-maker' ? 'Post Maker'
-                    : activeSection === 'media-library' ? 'Biblioteca Multimedia'
-                    : activeSection === 'projects' ? 'Proyectos'
-                    : activeSection === 'bypass' ? 'ByPass Intelligence'
-                    : 'Configuración'}
-                </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
-                    : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
-                    : activeSection === 'bulks' ? 'Manda mensajes en secuencia a múltiples candidatos a la vez'
-                    : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
-                    : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
-                    : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
-                    : activeSection === 'history' ? 'Historial de conversaciones'
-                    : activeSection === 'users' ? 'Gestión de equipo y permisos'
-                    : activeSection === 'post-maker' ? 'Creación de posts para Facebook'
-                    : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
-                    : activeSection === 'projects' ? 'Gestión y organización de proyectos'
-                    : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos'
-                    : 'Credenciales y configuración del sistema'}
-                </p>
+              <div className="flex items-center space-x-3 min-w-0">
+                {/* Mobile hamburger */}
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
+                >
+                  <Menu className="w-6 h-6 text-gray-700 dark:text-gray-300" />
+                </button>
+                <div className="min-w-0">
+                  <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
+                    {activeSection === 'candidates' ? 'Candidatos'
+                      : activeSection === 'chat' ? 'Chat Web'
+                      : activeSection === 'bulks' ? 'Envíos Masivos'
+                      : activeSection === 'bot-ia' ? 'Bot IA'
+                      : activeSection === 'automations' ? 'Automatizaciones'
+                      : activeSection === 'vacancies' ? 'Vacantes'
+                      : activeSection === 'history' ? 'Historial'
+                      : activeSection === 'users' ? 'Usuarios'
+                      : activeSection === 'post-maker' ? 'Post Maker'
+                      : activeSection === 'media-library' ? 'Biblioteca'
+                      : activeSection === 'projects' ? 'Proyectos'
+                      : activeSection === 'bypass' ? 'ByPass'
+                      : 'Configuración'}
+                  </h1>
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">
+                    {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
+                      : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
+                      : activeSection === 'bulks' ? 'Manda mensajes en secuencia a múltiples candidatos a la vez'
+                      : activeSection === 'bot-ia' ? 'Configuración del comportamiento del Bot'
+                      : activeSection === 'automations' ? 'Reglas de extracción inteligente de datos'
+                      : activeSection === 'vacancies' ? 'Gestión y publicación de vacantes'
+                      : activeSection === 'history' ? 'Historial de conversaciones'
+                      : activeSection === 'users' ? 'Gestión de equipo y permisos'
+                      : activeSection === 'post-maker' ? 'Creación de posts para Facebook'
+                      : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
+                      : activeSection === 'projects' ? 'Gestión y organización de proyectos'
+                      : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos'
+                      : 'Credenciales y configuración del sistema'}
+                  </p>
+                </div>
               </div>
 
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2 sm:space-x-4 shrink-0">
                 {/* Greeting */}
                 {user && user.name && (
                   <div className="hidden md:flex items-center space-x-2 animate-in fade-in slide-in-from-right-4 duration-700">
@@ -250,7 +262,7 @@ function App() {
           </div>
         </header>
 
-        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' ? 'p-0' : 'px-8 py-8'}`}>
+        <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8'}`}>
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} />
           ) : activeSection === 'chat' ? (
@@ -286,10 +298,10 @@ function App() {
         </main>
 
         {/* Footer */}
-        <footer className="py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90">
-          <div className="px-8">
-            <p className="text-center text-sm text-gray-500 dark:text-gray-400">
-              Candidatic IA v1.0 • Desarrollado con ❤️ para Candidatic
+        <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90">
+          <div className="px-4 sm:px-8">
+            <p className="text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+              Candidatic IA v1.0 • Hecho con ❤️
             </p>
           </div>
         </footer>
