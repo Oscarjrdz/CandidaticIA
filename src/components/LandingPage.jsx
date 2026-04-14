@@ -279,59 +279,59 @@ const LandingPage = ({ onLoginSuccess }) => {
     /* ─── FAQ ─── */
     const [openFaq, setOpenFaq] = useState(null);
     const faqs = [
-        { q: '¿Qué es Candidatic IA?', a: 'Es una plataforma de reclutamiento potenciada por inteligencia artificial que automatiza la búsqueda, filtrado y contacto de candidatos a través de WhatsApp, con un bot conversacional inteligente que extrae datos y programa citas automáticamente.' },
-        { q: '¿Necesito conocimientos técnicos?', a: 'No. La plataforma está diseñada para reclutadores. Todo se maneja desde un dashboard visual intuitivo, sin necesidad de código o configuraciones técnicas.' },
-        { q: '¿Cómo funciona la búsqueda con IA?', a: 'Escribes en lenguaje natural lo que buscas (ej. "Contador con 3 años de experiencia en Monterrey") y la IA busca en toda tu base de candidatos, rankeando los mejores matches semánticamente.' },
-        { q: '¿Puedo enviar mensajes masivos?', a: 'Sí. El módulo de Bulks te permite enviar mensajes personalizados a cientos de candidatos con protección anti-ban, delays inteligentes y personalización automática por nombre.' },
-        { q: '¿Se integra con WhatsApp Business?', a: 'Usamos una integración directa multi-instancia que permite manejar múltiples líneas de WhatsApp simultáneamente, con routing determinístico de candidatos.' },
+        { q: '¿Qué es Candidatic IA?', a: 'Somos una agencia de reclutamiento potenciada por inteligencia artificial. Usamos WhatsApp y un bot conversacional inteligente para buscar, filtrar y contactar candidatos, extrayendo datos y agendando citas automáticamente para tu empresa.' },
+        { q: '¿Necesito contratar un reclutador interno?', a: 'No. Nosotros nos encargamos de todo el proceso de reclutamiento por ti. Nuestro equipo + IA trabajan de la mano para encontrar al candidato ideal, sin que necesites dedicar tiempo ni recursos internos.' },
+        { q: '¿Cómo encuentran a los candidatos?', a: 'Utilizamos inteligencia artificial para buscar en nuestra base de datos con lenguaje natural (ej. "Contador con 3 años de experiencia en Monterrey"). La IA rankea los mejores perfiles semánticamente y los contacta por WhatsApp.' },
+        { q: '¿Cómo contactan a los candidatos?', a: 'A través de WhatsApp con mensajes personalizados, un bot de IA que los pre-filtra automáticamente, y seguimiento en tiempo real. Todo profesional, rápido y con toque humano cuando se necesita.' },
+        { q: '¿Cuánto tiempo tarda el proceso?', a: 'Gracias a nuestra tecnología de IA y WhatsApp, podemos entregar candidatos pre-filtrados en cuestión de días, no semanas. Nuestro bot trabaja 24/7 contactando y entrevistando candidatos por ti.' },
     ];
 
     /* ─── FEATURES DATA ─── */
     const features = [
         {
             icon: <BrainCircuit className="w-6 h-6" />,
-            title: 'Bot IA Conversacional',
-            desc: 'Chatbot con GPT que conversa naturalmente, extrae datos del candidato (nombre, experiencia, ciudad) y agenda citas automáticamente.',
+            title: 'Reclutamiento con IA',
+            desc: 'Nuestro bot con GPT conversa naturalmente con candidatos por WhatsApp, extrae sus datos (nombre, experiencia, ciudad) y agenda citas automáticamente para ti.',
             color: 'from-violet-500 to-purple-600',
             bgLight: 'bg-violet-50',
             textColor: 'text-violet-600'
         },
         {
             icon: <Search className="w-6 h-6" />,
-            title: 'Búsqueda Semántica',
-            desc: 'Busca candidatos con lenguaje natural. La IA entiende contexto, sinónimos y requisitos complejos para encontrar el match perfecto.',
+            title: 'Búsqueda Inteligente',
+            desc: 'Dinos qué perfil necesitas en lenguaje natural y nuestra IA busca en miles de candidatos, rankeando los mejores matches para tu vacante.',
             color: 'from-blue-500 to-cyan-500',
             bgLight: 'bg-blue-50',
             textColor: 'text-blue-600'
         },
         {
             icon: <Send className="w-6 h-6" />,
-            title: 'Envíos Masivos',
-            desc: 'Manda mensajes a cientos de candidatos con personalización inteligente, delays anti-ban y seguimiento en tiempo real.',
+            title: 'Contacto Masivo por WhatsApp',
+            desc: 'Contactamos a cientos de candidatos por WhatsApp con mensajes personalizados, seguimiento en tiempo real y respuestas inmediatas de nuestro bot IA.',
             color: 'from-emerald-500 to-green-600',
             bgLight: 'bg-emerald-50',
             textColor: 'text-emerald-600'
         },
         {
             icon: <Workflow className="w-6 h-6" />,
-            title: 'ByPass Intelligence',
-            desc: 'Routing automático de candidatos a reclutadores específicos basado en reglas inteligentes, zona y disponibilidad.',
+            title: 'Pre-filtrado Automático',
+            desc: 'Nuestro bot filtra candidatos automáticamente según tus requisitos, zona y disponibilidad. Solo te presentamos a los mejores perfiles.',
             color: 'from-amber-500 to-orange-500',
             bgLight: 'bg-amber-50',
             textColor: 'text-amber-600'
         },
         {
             icon: <FileText className="w-6 h-6" />,
-            title: 'Vacantes & Proyectos',
-            desc: 'Gestiona vacantes con editor visual, asigna candidatos a proyectos y trackea el pipeline de reclutamiento completo.',
+            title: 'Entrega de Candidatos',
+            desc: 'Te entregamos candidatos pre-filtrados y listos para entrevista, con toda su información organizada y citas agendadas.',
             color: 'from-rose-500 to-pink-600',
             bgLight: 'bg-rose-50',
             textColor: 'text-rose-600'
         },
         {
             icon: <BarChart3 className="w-6 h-6" />,
-            title: 'Automatizaciones',
-            desc: 'Reglas de extracción automática de datos, recordatorios programados y flujos de trabajo que eliminan toda tarea manual.',
+            title: 'Proceso 24/7',
+            desc: 'Nuestro bot y equipo trabajan las 24 horas. Mientras tú descansas, nosotros seguimos contactando, filtrando y agendando candidatos.',
             color: 'from-indigo-500 to-blue-700',
             bgLight: 'bg-indigo-50',
             textColor: 'text-indigo-600'
@@ -340,10 +340,10 @@ const LandingPage = ({ onLoginSuccess }) => {
 
     /* ─── HOW IT WORKS ─── */
     const steps = [
-        { num: '01', title: 'Conecta tu WhatsApp', desc: 'Escanea el QR y vincula tu línea en segundos. Soportamos múltiples instancias simultáneas.', icon: <WhatsAppIcon className="w-6 h-6" /> },
-        { num: '02', title: 'Configura tu Bot IA', desc: 'Define el tono, preguntas y flujo de conversación. El bot extrae datos automáticamente de cada candidato.', icon: <Bot className="w-6 h-6" /> },
-        { num: '03', title: 'Publica y Atrae', desc: 'Crea posts atractivos con el Post Maker, compártelos en redes y deja que los candidatos te contacten.', icon: <Globe className="w-6 h-6" /> },
-        { num: '04', title: 'Recluta Inteligentemente', desc: 'Busca con IA, filtra por perfil, envía masivos y gestiona todo desde un solo dashboard.', icon: <Target className="w-6 h-6" /> },
+        { num: '01', title: 'Cuéntanos tu vacante', desc: 'Dinos qué perfil necesitas: puesto, experiencia, zona y requisitos. Nosotros nos encargamos del resto.', icon: <FileText className="w-6 h-6" /> },
+        { num: '02', title: 'Activamos la IA', desc: 'Nuestro bot de WhatsApp con GPT comienza a contactar y entrevistar candidatos automáticamente, 24/7.', icon: <Bot className="w-6 h-6" /> },
+        { num: '03', title: 'Filtramos por ti', desc: 'La IA pre-filtra candidatos según tus requisitos. Nuestro equipo valida y selecciona a los mejores perfiles.', icon: <Target className="w-6 h-6" /> },
+        { num: '04', title: 'Recibe candidatos', desc: 'Te entregamos candidatos listos para entrevista con datos completos y citas agendadas. ¡Así de fácil!', icon: <WhatsAppIcon className="w-6 h-6" /> },
     ];
 
     /* ─── SCROLL REVEAL ─── */
@@ -559,19 +559,19 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
                                         <span className="relative inline-flex rounded-full h-2 w-2 bg-violet-500"></span>
                                     </span>
-                                    <span>Conoce a Brenda, tu reclutadora IA</span>
+                                    <span>Agencia de reclutamiento con IA + WhatsApp</span>
                                 </div>
 
                                 {/* Headline */}
                                 <h1 className="hero-text-2 text-3xl sm:text-4xl md:text-5xl lg:text-[3.5rem] xl:text-6xl font-extrabold tracking-tight text-gray-900 mb-4 sm:mb-6 leading-[1.1]">
-                                    Revoluciona tu{' '}<br className="hidden sm:inline" />
+                                    Reclutamos por ti{' '}<br className="hidden sm:inline" />
                                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600">
-                                        Reclutamiento con IA
+                                        con IA y WhatsApp
                                     </span>
                                 </h1>
 
                                 <p className="hero-text-3 text-sm sm:text-base lg:text-lg text-gray-500 max-w-lg mx-auto lg:mx-0 mb-6 sm:mb-8 leading-relaxed">
-                                    Brenda es tu bot de reclutamiento con GPT. Conversa con candidatos, extrae datos automáticamente y agenda entrevistas. ¡Pruébala ahora mismo! →
+                                    Somos tu agencia de reclutamiento con inteligencia artificial. Brenda, nuestra reclutadora IA, contacta candidatos por WhatsApp, los filtra y te agenda entrevistas. ¡Pruébala! →
                                 </p>
 
                                 {/* CTA Buttons */}
@@ -789,7 +789,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                 {/* ═══ LOGOS / SOCIAL PROOF ═══ */}
                 <section className="py-8 sm:py-12 px-4 sm:px-6">
                     <div className="max-w-5xl mx-auto text-center">
-                        <p className="text-xs sm:text-sm font-semibold text-gray-400 uppercase tracking-widest mb-6 sm:mb-8">Empresas que ya confían en nosotros</p>
+                        <p className="text-xs sm:text-sm font-semibold text-gray-400 uppercase tracking-widest mb-6 sm:mb-8">Empresas que ya reclutan con nosotros</p>
                         <div className="flex flex-wrap items-center justify-center gap-x-6 sm:gap-x-12 gap-y-4 sm:gap-y-6 opacity-40">
                             {['Grupo Monterrey', 'TalentoMX', 'RecruiterPro', 'HRTech Labs', 'FastHire'].map((name, i) => (
                                 <span key={i} className="text-base sm:text-xl font-bold text-gray-400 tracking-tight whitespace-nowrap">{name}</span>
@@ -807,11 +807,11 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 <span>Funcionalidades</span>
                             </div>
                             <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-                                Todo lo que necesitas para<br />
-                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">reclutar mejor</span>
+                                ¿Por qué elegirnos como tu<br />
+                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-violet-600">agencia de reclutamiento?</span>
                             </h2>
                             <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
-                                Una suite completa de herramientas potenciadas por inteligencia artificial, diseñadas para reclutadores modernos.
+                                Combinamos inteligencia artificial, WhatsApp y un equipo experto para encontrar al talento ideal para tu empresa.
                             </p>
                         </div>
 
@@ -848,10 +848,10 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 <span>Proceso</span>
                             </div>
                             <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-                                ¿Cómo funciona?
+                                ¿Cómo trabajamos?
                             </h2>
                             <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
-                                En solo 4 pasos automatiza completamente tu proceso de reclutamiento.
+                                En solo 4 pasos te entregamos candidatos listos para entrevista.
                             </p>
                         </div>
 
@@ -899,7 +899,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     Números que hablan por sí solos
                                 </h2>
                                 <p className="text-violet-200 text-center mb-8 sm:mb-12 text-sm sm:text-lg">
-                                    Resultados reales de empresas que usan Candidatic IA
+                                    Resultados reales de empresas que reclutan con Candidatic IA
                                 </p>
 
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8">
@@ -907,19 +907,19 @@ const LandingPage = ({ onLoginSuccess }) => {
                                         <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-1 sm:mb-2">
                                             {candidates.toLocaleString()}+
                                         </div>
-                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Candidatos gestionados</div>
+                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Candidatos contactados</div>
                                     </div>
                                     <div className="text-center" ref={messagesRef}>
                                         <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-1 sm:mb-2">
                                             {messages.toLocaleString()}+
                                         </div>
-                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Mensajes enviados</div>
+                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Mensajes por WhatsApp</div>
                                     </div>
                                     <div className="text-center" ref={companiesRef}>
                                         <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-1 sm:mb-2">
                                             {companies}+
                                         </div>
-                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Empresas activas</div>
+                                        <div className="text-violet-300 text-xs sm:text-sm font-medium">Empresas confían en nosotros</div>
                                     </div>
                                     <div className="text-center" ref={automationsRef}>
                                         <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-1 sm:mb-2">
@@ -943,19 +943,19 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     <span>WhatsApp Nativo</span>
                                 </div>
                                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight mb-4 sm:mb-6">
-                                    Chat integrado con{' '}
+                                    Reclutamos vía{' '}
                                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-emerald-600">WhatsApp</span>
                                 </h2>
                                 <p className="text-sm sm:text-lg text-gray-500 mb-6 sm:mb-8 leading-relaxed">
-                                    Conversa directamente con tus candidatos desde la plataforma. El bot IA responde 24/7, extrae datos automáticamente y escala a un humano cuando es necesario.
+                                    Nuestro bot de IA contacta candidatos directamente por WhatsApp, los entrevista 24/7, extrae sus datos automáticamente y escala a nuestro equipo humano cuando es necesario.
                                 </p>
                                 <div className="space-y-3 sm:space-y-4">
                                     {[
-                                        'Respuestas automáticas con GPT-4',
-                                        'Extracción inteligente de datos del candidato',
-                                        'Agendamiento automático de citas',
-                                        'Handover a reclutador cuando se necesita',
-                                        'Multi-instancia con routing inteligente'
+                                        'Bot de WhatsApp con GPT-4 que entrevista candidatos',
+                                        'Extracción automática de datos del candidato',
+                                        'Agendamiento de entrevistas sin intervención',
+                                        'Equipo humano de respaldo para casos complejos',
+                                        'Contacto masivo personalizado por WhatsApp'
                                     ].map((item, i) => (
                                         <div key={i} className="flex items-center space-x-3">
                                             <div className="w-6 h-6 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center shrink-0">
@@ -1025,10 +1025,10 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 <span>Planes</span>
                             </div>
                             <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-                                Elige el plan ideal para ti
+                                Planes a tu medida
                             </h2>
                             <p className="text-sm sm:text-lg text-gray-500 max-w-2xl mx-auto px-2">
-                                Sin contratos. Sin letras pequeñas. Escala cuando quieras.
+                                Elige el servicio que mejor se adapte a tus necesidades de reclutamiento.
                             </p>
                         </div>
 
@@ -1036,15 +1036,15 @@ const LandingPage = ({ onLoginSuccess }) => {
                             {/* Starter */}
                             <div className={`bg-white rounded-2xl border border-gray-100 p-8 hover:border-gray-200 hover:shadow-lg transition-all duration-500 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{ transitionDelay: '0ms' }}>
                                 <div className="mb-6">
-                                    <h3 className="text-lg font-bold text-gray-900 mb-1">Starter</h3>
-                                    <p className="text-sm text-gray-500">Para equipos pequeños</p>
+                                    <h3 className="text-lg font-bold text-gray-900 mb-1">Básico</h3>
+                                    <p className="text-sm text-gray-500">Para vacantes puntuales</p>
                                 </div>
                                 <div className="mb-6">
-                                    <span className="text-4xl font-black text-gray-900">$1,499</span>
-                                    <span className="text-gray-500 text-sm"> /mes MXN</span>
+                                    <span className="text-4xl font-black text-gray-900">$2,999</span>
+                                    <span className="text-gray-500 text-sm"> /vacante MXN</span>
                                 </div>
                                 <div className="space-y-3 mb-8">
-                                    {['1 línea de WhatsApp', '500 candidatos', 'Bot IA básico', 'Búsqueda semántica', 'Soporte por chat'].map((f, i) => (
+                                    {['Contacto por WhatsApp con IA', 'Hasta 100 candidatos contactados', 'Pre-filtrado automático', 'Entrega de candidatos listos', 'Soporte por chat'].map((f, i) => (
                                         <div key={i} className="flex items-center space-x-2.5 text-sm">
                                             <Check className="w-4 h-4 text-green-500 shrink-0" />
                                             <span className="text-gray-600">{f}</span>
@@ -1052,7 +1052,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     ))}
                                 </div>
                                 <button onClick={() => setIsLoginOpen(true)} className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-700 font-semibold hover:border-violet-300 hover:text-violet-700 transition-all duration-300 text-sm">
-                                    Empezar gratis
+                                    Solicitar servicio
                                 </button>
                             </div>
 
@@ -1064,15 +1064,15 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     </span>
                                 </div>
                                 <div className="mb-6">
-                                    <h3 className="text-lg font-bold mb-1">Pro</h3>
-                                    <p className="text-sm text-violet-200">Para reclutadores serios</p>
+                                    <h3 className="text-lg font-bold mb-1">Agencia Pro</h3>
+                                    <p className="text-sm text-violet-200">Para reclutamiento continuo</p>
                                 </div>
                                 <div className="mb-6">
-                                    <span className="text-4xl font-black">$3,499</span>
+                                    <span className="text-4xl font-black">$7,999</span>
                                     <span className="text-violet-200 text-sm"> /mes MXN</span>
                                 </div>
                                 <div className="space-y-3 mb-8">
-                                    {['3 líneas de WhatsApp', 'Candidatos ilimitados', 'Bot IA avanzado (GPT-4)', 'Envíos masivos', 'ByPass Intelligence', 'Vacantes & Proyectos', 'Post Maker', 'Soporte prioritario'].map((f, i) => (
+                                    {['Vacantes ilimitadas', 'Contacto masivo por WhatsApp', 'Bot IA avanzado (GPT-4)', 'Pre-filtrado + validación humana', 'Candidatos entregados con cita agendada', 'Reportes semanales de avance', 'Reclutador dedicado a tu cuenta', 'Soporte prioritario'].map((f, i) => (
                                         <div key={i} className="flex items-center space-x-2.5 text-sm">
                                             <Check className="w-4 h-4 text-green-300 shrink-0" />
                                             <span className="text-violet-100">{f}</span>
@@ -1080,7 +1080,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                     ))}
                                 </div>
                                 <button onClick={() => setIsLoginOpen(true)} className="w-full py-3 rounded-xl bg-white text-violet-700 font-bold hover:bg-violet-50 transition-all duration-300 text-sm shadow-lg">
-                                    Comenzar ahora
+                                    Contratar agencia
                                 </button>
                             </div>
 
@@ -1088,13 +1088,13 @@ const LandingPage = ({ onLoginSuccess }) => {
                             <div className={`bg-white rounded-2xl border border-gray-100 p-8 hover:border-gray-200 hover:shadow-lg transition-all duration-500 ${pricingVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`} style={{ transitionDelay: '200ms' }}>
                                 <div className="mb-6">
                                     <h3 className="text-lg font-bold text-gray-900 mb-1">Enterprise</h3>
-                                    <p className="text-sm text-gray-500">Para agencias de reclutamiento</p>
+                                    <p className="text-sm text-gray-500">Para reclutamiento a gran escala</p>
                                 </div>
                                 <div className="mb-6">
                                     <span className="text-4xl font-black text-gray-900">Custom</span>
                                 </div>
                                 <div className="space-y-3 mb-8">
-                                    {['Líneas ilimitadas', 'Candidatos ilimitados', 'IA personalizada', 'Todas las funcionalidades', 'API dedicada', 'White-label', 'SLA garantizado', 'Account manager'].map((f, i) => (
+                                    {['Volumen ilimitado de vacantes', 'IA personalizada a tu empresa', 'Equipo dedicado de reclutadores', 'Integración con tu ATS', 'Reportes ejecutivos', 'SLA garantizado', 'Account manager exclusivo', 'Reclutamiento especializado'].map((f, i) => (
                                         <div key={i} className="flex items-center space-x-2.5 text-sm">
                                             <Check className="w-4 h-4 text-green-500 shrink-0" />
                                             <span className="text-gray-600">{f}</span>
@@ -1116,7 +1116,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                             <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900 tracking-tight mb-4">
                                 Preguntas frecuentes
                             </h2>
-                            <p className="text-gray-500 text-sm sm:text-lg px-2">Todo lo que necesitas saber sobre la plataforma.</p>
+                            <p className="text-gray-500 text-sm sm:text-lg px-2">Todo lo que necesitas saber sobre nuestro servicio de reclutamiento.</p>
                         </div>
 
                         <div className="space-y-3">
@@ -1154,10 +1154,10 @@ const LandingPage = ({ onLoginSuccess }) => {
 
                             <div className="relative z-10 max-w-2xl mx-auto">
                                 <h2 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-gray-900 tracking-tight mb-4">
-                                    ¿Listo para revolucionar tu reclutamiento?
+                                    ¿Listo para que reclutemos por ti?
                                 </h2>
                                 <p className="text-sm sm:text-lg text-gray-600 mb-6 sm:mb-8 px-2">
-                                    Únete a las empresas que ya reclutan 10x más rápido con inteligencia artificial.
+                                    Únete a las empresas que ya encontraron al candidato ideal con nuestra agencia de reclutamiento con IA.
                                 </p>
                                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
                                     <button
@@ -1198,13 +1198,13 @@ const LandingPage = ({ onLoginSuccess }) => {
                                 </span>
                             </div>
                             <p className="text-sm text-gray-500 leading-relaxed">
-                                Plataforma de reclutamiento potenciada por inteligencia artificial para el mercado latinoamericano.
+                                Agencia de reclutamiento potenciada por inteligencia artificial y WhatsApp para el mercado latinoamericano.
                             </p>
                         </div>
 
                         {/* Links */}
                         <div>
-                            <h4 className="text-white font-semibold mb-3 sm:mb-4 text-sm">Producto</h4>
+                            <h4 className="text-white font-semibold mb-3 sm:mb-4 text-sm">Servicios</h4>
                             <div className="space-y-2 sm:space-y-2.5">
                                 {['Características', 'Precios', 'Integraciones', 'Changelog'].map((l, i) => (
                                     <a key={i} href="#" className="block text-sm text-gray-500 hover:text-violet-400 transition-colors">{l}</a>
