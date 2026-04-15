@@ -4,6 +4,7 @@ import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
 import Input from './ui/Input';
+import Select from './ui/Select';
 
 const AVAILABLE_SECTIONS = [
     { id: 'settings', name: 'Configuración' },
@@ -520,29 +521,23 @@ const UsersSection = ({ showToast }) => {
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Rol</label>
-                            <select
-                                value={formData.role}
-                                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 outline-none text-sm"
-                            >
-                                {roles.map(r => (
-                                    <option key={r.id} value={r.name}>{r.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Estado</label>
-                            <select
-                                value={formData.status}
-                                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 outline-none text-sm"
-                            >
-                                <option value="Active">Activo</option>
-                                <option value="Inactive">Inactivo</option>
-                            </select>
-                        </div>
+                        <Select
+                            label="Rol"
+                            value={formData.role}
+                            onChange={(val) => setFormData({ ...formData, role: val })}
+                            options={roles.map(r => ({ value: r.name, label: r.name }))}
+                            placeholder="Seleccionar rol..."
+                        />
+                        <Select
+                            label="Estado"
+                            value={formData.status}
+                            onChange={(val) => setFormData({ ...formData, status: val })}
+                            options={[
+                                { value: 'Active', label: 'Activo', color: '#10b981' },
+                                { value: 'Inactive', label: 'Inactivo', color: '#ef4444' }
+                            ]}
+                            placeholder="Estado..."
+                        />
                     </div>
 
                     {/* === ASIGNACIONES POR USUARIO === */}

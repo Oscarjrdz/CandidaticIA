@@ -504,8 +504,18 @@ export default async function handler(req, res) {
                 const aiPromise = (async () => {
                     try {
                         const redis = getRedisClient();
-                        const isActive = await redis?.get('bot_ia_active');
-                        if (isActive === 'false' || candidate?.blocked === true) return;
+                        let isBotActive = await redis?.get('bot_ia_active') !== 'false';
+                        
+                        try {
+                            const rawInstances = await redis?.get('ultramsg_instances');
+                            if (rawInstances && capturedInstanceId) {
+                                const parsedInsts = JSON.parse(rawInstances);
+                                const thisInst = parsedInsts.find(i => i.instanceId === capturedInstanceId);
+                                if (thisInst && thisInst.botActive === false) isBotActive = false;
+                            }
+                        } catch (e) {}
+
+                        if (!isBotActive || candidate?.blocked === true) return;
 
                         let finalAgentInput = agentInput;
 

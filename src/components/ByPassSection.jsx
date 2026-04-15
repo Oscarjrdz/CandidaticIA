@@ -129,6 +129,7 @@ const ByPassSection = ({ showToast }) => {
 
     // Run Search State
     const [searchResults, setSearchResults] = useState([]);
+    const [selectedCandidateIds, setSelectedCandidateIds] = useState(new Set());
     const [searchLoading, setSearchLoading] = useState(false);
     const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
     const [searchRuleName, setSearchRuleName] = useState('');
@@ -396,7 +397,9 @@ const ByPassSection = ({ showToast }) => {
             });
             const data = await res.json();
             if (data.success) {
-                setSearchResults(data.candidates || []);
+                const results = data.candidates || [];
+                setSearchResults(results);
+                setSelectedCandidateIds(new Set(results.map(c => c.id)));
                 setTotalScanned(data.totalScanned || 0);
             } else {
                 showToast(data.error || 'Error en la búsqueda', 'error');
@@ -439,10 +442,18 @@ const ByPassSection = ({ showToast }) => {
         setTagAppliedCount(0);
         let applied = 0;
 
+        // Filter results by selection
+        const targets = searchResults.filter(c => selectedCandidateIds.has(c.id));
+        if (targets.length === 0) {
+            showToast('Selecciona al menos un candidato', 'error');
+            setApplyingTag(false);
+            return;
+        }
+
         // Batch update in chunks of 10
         const chunkSize = 10;
-        for (let i = 0; i < searchResults.length; i += chunkSize) {
-            const chunk = searchResults.slice(i, i + chunkSize);
+        for (let i = 0; i < targets.length; i += chunkSize) {
+            const chunk = targets.slice(i, i + chunkSize);
             const promises = chunk.map(async (c) => {
                 const existingTags = c.tags || [];
                 if (existingTags.includes(tagToApply)) return; // Skip already tagged
@@ -936,6 +947,17 @@ const ByPassSection = ({ showToast }) => {
                                             <table className="w-full text-left">
                                                 <thead className="sticky top-0 z-10">
                                                     <tr className="bg-slate-50 dark:bg-slate-900/50">
+                                                        <th className="px-4 py-3 w-8">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={selectedCandidateIds.size === searchResults.length && searchResults.length > 0}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) setSelectedCandidateIds(new Set(searchResults.map(c => c.id)));
+                                                                    else setSelectedCandidateIds(new Set());
+                                                                }}
+                                                                className="w-4 h-4 text-amber-500 rounded border-slate-300 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700"
+                                                            />
+                                                        </th>
                                                         <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">#</th>
                                                         <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Nombre</th>
                                                         <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">WhatsApp</th>
@@ -950,6 +972,19 @@ const ByPassSection = ({ showToast }) => {
                                                 <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
                                                     {searchResults.map((c, idx) => (
                                                         <tr key={c.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors">
+                                                            <td className="px-4 py-3 w-8">
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    checked={selectedCandidateIds.has(c.id)}
+                                                                    onChange={(e) => {
+                                                                        const newSet = new Set(selectedCandidateIds);
+                                                                        if (e.target.checked) newSet.add(c.id);
+                                                                        else newSet.delete(c.id);
+                                                                        setSelectedCandidateIds(newSet);
+                                                                    }}
+                                                                    className="w-4 h-4 text-amber-500 rounded border-slate-300 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700"
+                                                                />
+                                                            </td>
                                                             <td className="px-4 py-3 text-xs font-black text-slate-300">{idx + 1}</td>
                                                             <td className="px-4 py-3 text-xs font-bold text-slate-800 dark:text-white truncate max-w-[160px]">{c.nombreReal}</td>
                                                             <td className="px-4 py-3 text-[10px] font-mono text-slate-500">{c.whatsapp}</td>

@@ -9,7 +9,7 @@ const InstancesSection = ({ showToast }) => {
     const [statuses, setStatuses] = useState({});
     const [loading, setLoading] = useState(false);
     const [editingIndex, setEditingIndex] = useState(null); // null means no edit, -1 means new, else index
-    const [formData, setFormData] = useState({ name: '', identifier: '', instanceId: '', token: '' });
+    const [formData, setFormData] = useState({ name: '', identifier: '', instanceId: '', token: '', botActive: true });
     const [copied, setCopied] = useState(false);
     
     // QR Code Check State
@@ -128,12 +128,12 @@ const InstancesSection = ({ showToast }) => {
 
     const openEdit = (index) => {
         const inst = instances[index];
-        setFormData({ name: inst.name, identifier: inst.identifier, instanceId: inst.instanceId, token: inst.token });
+        setFormData({ name: inst.name, identifier: inst.identifier, instanceId: inst.instanceId, token: inst.token, botActive: inst.botActive !== false });
         setEditingIndex(index);
     };
 
     const openNew = () => {
-        setFormData({ name: '', identifier: '', instanceId: '', token: '' });
+        setFormData({ name: '', identifier: '', instanceId: '', token: '', botActive: true });
         setEditingIndex(-1);
     };
 
@@ -302,6 +302,21 @@ const InstancesSection = ({ showToast }) => {
                             onChange={(e) => setFormData({...formData, token: e.target.value})}
                             helperText="Tu Token de seguridad para esta conexión."
                         />
+                        <div className="md:col-span-2 mt-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <div>
+                                <h4 className="text-sm font-bold text-slate-800 dark:text-white">Motor de Inteligencia Artificial</h4>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Si se desactiva, Brenda ignorará los mensajes que entren por esta línea, pero el dashboard seguirá recibiendo los chats.</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="sr-only peer" 
+                                    checked={formData.botActive}
+                                    onChange={(e) => setFormData({...formData, botActive: e.target.checked})}
+                                />
+                                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
                     </div>
 
                     <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-3">
@@ -347,6 +362,11 @@ const InstancesSection = ({ showToast }) => {
                                                     {inst.candidateCount > 0 && (
                                                         <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold border border-blue-100 dark:border-blue-800/50">
                                                             {inst.candidateCount} candidatos
+                                                        </span>
+                                                    )}
+                                                    {inst.botActive === false && (
+                                                        <span className="ml-2 px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-bold border border-red-100 dark:border-red-800/50">
+                                                            🤖 Bot Desactivado
                                                         </span>
                                                     )}
                                                 </span>
