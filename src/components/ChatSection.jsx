@@ -176,17 +176,17 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         return rolePermissions[filterKey] === true;
     };
 
-    // Filter projects by role-allowed list
+    // Filter projects by user-level assignment
     const filteredProjects = (() => {
         if (!user || user.role === 'SuperAdmin') return projects;
-        const allowed = rolePermissions?.allowed_projects;
+        const allowed = user?.allowed_projects;
         if (!Array.isArray(allowed) || allowed.length === 0) return projects; // no restriction set yet
         return projects.filter(p => allowed.includes(p.id));
     })();
 
     const filteredManualProjects = (() => {
         if (!user || user.role === 'SuperAdmin') return manualProjects;
-        const allowed = rolePermissions?.allowed_crm_projects;
+        const allowed = user?.allowed_crm_projects;
         if (!Array.isArray(allowed) || allowed.length === 0) return manualProjects;
         return manualProjects.filter(p => allowed.includes(p.id));
     })();
@@ -210,8 +210,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             setRoleAllowedCandidateIds(null);
             return;
         }
-        const allowedProjects = rolePermissions?.allowed_projects;
-        const allowedCrm = rolePermissions?.allowed_crm_projects;
+        const allowedProjects = user?.allowed_projects;
+        const allowedCrm = user?.allowed_crm_projects;
         const hasProjectRestriction = Array.isArray(allowedProjects) && allowedProjects.length > 0;
         const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
 
@@ -475,7 +475,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
         // --- RBAC Base Filter: Only show candidates from allowed projects ---
         if (roleAllowedCandidateIds !== null) {
-            const allowedCrm = rolePermissions?.allowed_crm_projects;
+            const allowedCrm = user?.allowed_crm_projects;
             const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
 
             const inAllowedProject = roleAllowedCandidateIds.has(c.id);
@@ -863,7 +863,14 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                             </button>
                             {showDropdown === 'labels' && (
                                 <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                    {(Array.isArray(availableTags) ? availableTags : []).map(tagObj => {
+                                    {(Array.isArray(availableTags) ? availableTags : []).filter(tagObj => {
+                                        // User-level label filtering
+                                        if (!user || user.role === 'SuperAdmin') return true;
+                                        const userLabels = user?.allowed_labels;
+                                        if (!Array.isArray(userLabels) || userLabels.length === 0) return true;
+                                        const name = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                        return userLabels.includes(name);
+                                    }).map(tagObj => {
                                         const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
                                         const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;

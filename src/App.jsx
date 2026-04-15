@@ -70,11 +70,13 @@ function App() {
       return;
     }
     
-    fetch('/api/roles')
-      .then(res => res.json())
-      .then(data => {
-         if (data.success && data.roles) {
-             const currentUserRole = data.roles.find(r => r.name === user.role);
+    Promise.all([
+      fetch('/api/roles').then(r => r.json()),
+      fetch('/api/users').then(r => r.json())
+    ])
+      .then(([rolesData, usersData]) => {
+         if (rolesData.success && rolesData.roles) {
+             const currentUserRole = rolesData.roles.find(r => r.name === user.role);
              if (currentUserRole && currentUserRole.permissions) {
                  setRolePermissions(currentUserRole.permissions);
                  if (currentUserRole.permissions['candidates'] !== true) {
@@ -87,13 +89,22 @@ function App() {
                  }
              }
          }
+         // Refresh user data with user-level assignments (allowed_projects, allowed_crm_projects, allowed_labels)
+         if (usersData.success && usersData.users) {
+             const freshUser = usersData.users.find(u => u.id === user.id || u.whatsapp === user.whatsapp);
+             if (freshUser) {
+                 const merged = { ...user, ...freshUser };
+                 setUser(merged);
+                 localStorage.setItem('candidatic_user_session', JSON.stringify(merged));
+             }
+         }
          setIsAppReady(true);
       })
       .catch(e => {
          console.error('Failed fetching role perms in App', e);
          setIsAppReady(true);
       });
-  }, [user]);
+  }, [user?.id]);
 
   // Global heartbeat — Web Worker impulsado para que NO se congele al cambiar de pestaña
   useEffect(() => {

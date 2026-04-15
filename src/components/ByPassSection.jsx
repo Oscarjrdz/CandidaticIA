@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Zap, Plus, GitMerge, Tag, Calendar, Loader2, Save, Trash2, Pencil, Power, MapPin, GraduationCap, Users, Check, ChevronDown, X, Layers, Target, ArrowRight, ShieldCheck, ZapOff } from 'lucide-react';
+import { Zap, Plus, GitMerge, Tag, Calendar, Loader2, Save, Trash2, Pencil, Power, MapPin, GraduationCap, Users, Check, ChevronDown, X, Layers, Target, ArrowRight, ShieldCheck, ZapOff, Search, Tags } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -127,6 +127,19 @@ const ByPassSection = ({ showToast }) => {
     const [systemActive, setSystemActive] = useState(false);
     const [dragOverIndex, setDragOverIndex] = useState(null);
 
+    // Run Search State
+    const [searchResults, setSearchResults] = useState([]);
+    const [searchLoading, setSearchLoading] = useState(false);
+    const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+    const [searchRuleName, setSearchRuleName] = useState('');
+    const [totalScanned, setTotalScanned] = useState(0);
+    const [allTags, setAllTags] = useState([]);
+    const [selectedTag, setSelectedTag] = useState('');
+    const [newTagName, setNewTagName] = useState('');
+    const [newTagColor, setNewTagColor] = useState('#3b82f6');
+    const [applyingTag, setApplyingTag] = useState(false);
+    const [tagAppliedCount, setTagAppliedCount] = useState(0);
+
     // Form State
     const [formData, setFormData] = useState({
         name: '',
@@ -154,7 +167,18 @@ const ByPassSection = ({ showToast }) => {
         loadProjects();
         loadCategories();
         loadSystemStatus();
+        loadTags();
     }, []);
+
+    const loadTags = async () => {
+        try {
+            const res = await fetch('/api/tags');
+            const data = await res.json();
+            if (data.success) setAllTags(data.tags || []);
+        } catch (e) {
+            console.error('Error loading tags:', e);
+        }
+    };
 
     const loadSystemStatus = async () => {
         try {
@@ -346,6 +370,101 @@ const ByPassSection = ({ showToast }) => {
         });
     };
 
+    // -------- RUN SEARCH --------
+    const handleRunSearch = async (rule) => {
+        setSearchRuleName(rule.name);
+        setSearchResults([]);
+        setSearchLoading(true);
+        setIsSearchModalOpen(true);
+        setSelectedTag('');
+        setNewTagName('');
+        setTagAppliedCount(0);
+
+        try {
+            const res = await fetch('/api/bypass-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    minAge: rule.minAge,
+                    maxAge: rule.maxAge,
+                    municipios: rule.municipios || [],
+                    escolaridades: rule.escolaridades || [],
+                    categories: rule.categories || [],
+                    gender: rule.gender || 'Cualquiera'
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setSearchResults(data.candidates || []);
+                setTotalScanned(data.totalScanned || 0);
+            } else {
+                showToast(data.error || 'Error en la búsqueda', 'error');
+            }
+        } catch (error) {
+            console.error('Run Search Error:', error);
+            showToast('Error de conexión en búsqueda', 'error');
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    const handleApplyTag = async () => {
+        let tagToApply = selectedTag;
+
+        // If creating a new tag
+        if (!tagToApply && newTagName.trim()) {
+            tagToApply = newTagName.trim();
+            // Add to global tags list
+            const updatedTags = [...allTags, { name: tagToApply, color: newTagColor }];
+            try {
+                await fetch('/api/tags', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tags: updatedTags })
+                });
+                setAllTags(updatedTags);
+            } catch (e) {
+                showToast('Error creando etiqueta', 'error');
+                return;
+            }
+        }
+
+        if (!tagToApply) {
+            showToast('Selecciona o crea una etiqueta primero', 'error');
+            return;
+        }
+
+        setApplyingTag(true);
+        setTagAppliedCount(0);
+        let applied = 0;
+
+        // Batch update in chunks of 10
+        const chunkSize = 10;
+        for (let i = 0; i < searchResults.length; i += chunkSize) {
+            const chunk = searchResults.slice(i, i + chunkSize);
+            const promises = chunk.map(async (c) => {
+                const existingTags = c.tags || [];
+                if (existingTags.includes(tagToApply)) return; // Skip already tagged
+                const newTags = [...existingTags, tagToApply];
+                try {
+                    await fetch('/api/candidates', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: c.id, tags: newTags })
+                    });
+                    applied++;
+                    setTagAppliedCount(applied);
+                } catch (e) {
+                    console.error(`Error tagging ${c.id}:`, e);
+                }
+            });
+            await Promise.all(promises);
+        }
+
+        showToast(`Etiqueta "${tagToApply}" aplicada a ${applied} candidatos`, 'success');
+        setApplyingTag(false);
+    };
+
     return (
         <div className="space-y-4 w-full pb-8">
             {/* Master ByPass Controller: Matched to Bot IA style */}
@@ -483,6 +602,13 @@ const ByPassSection = ({ showToast }) => {
 
                                 {/* Actions */}
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                    <button
+                                        onClick={() => handleRunSearch(rule)}
+                                        title="Run Search — Buscar candidatos"
+                                        className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-xl hover:text-emerald-600 transition-all"
+                                    >
+                                        <Search className="w-4 h-4" />
+                                    </button>
                                     <button
                                         onClick={() => handleToggleActive(rule)}
                                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
@@ -643,6 +769,189 @@ const ByPassSection = ({ showToast }) => {
                             </Button>
                         </div>
                     </div>
+                </div>
+            </Modal>
+
+            {/* ===== RUN SEARCH RESULTS MODAL ===== */}
+            <Modal
+                isOpen={isSearchModalOpen}
+                onClose={() => setIsSearchModalOpen(false)}
+                title={`Resultados: ${searchRuleName}`}
+                maxWidth="max-w-6xl"
+            >
+                <div className="p-6 space-y-6">
+                    {searchLoading ? (
+                        <div className="flex flex-col items-center justify-center py-20 gap-4">
+                            <div className="relative w-16 h-16">
+                                <div className="absolute inset-0 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin"></div>
+                                <Search className="absolute inset-4 w-8 h-8 text-blue-600 animate-pulse" />
+                            </div>
+                            <p className="text-sm font-bold text-slate-400 animate-pulse">Buscando en TODOS los candidatos sin proyecto...</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Stats Header */}
+                            <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-900/20 dark:to-blue-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800/30">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-emerald-600 shadow-lg shadow-emerald-500/20 flex items-center justify-center">
+                                        <Users className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-2xl font-black text-emerald-700 dark:text-emerald-400">{searchResults.length}</p>
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Candidatos encontrados</p>
+                                    </div>
+                                </div>
+                                <div className="text-[10px] font-bold text-slate-400 text-right">
+                                    <p>Escaneados: <span className="font-black text-blue-600">{totalScanned.toLocaleString()}</span></p>
+                                    <p>Sin proyecto asignado</p>
+                                </div>
+                            </div>
+
+                            {searchResults.length > 0 && (
+                                <>
+                                    {/* Tag Assignment Panel */}
+                                    <div className="p-5 bg-amber-50/50 dark:bg-amber-900/10 rounded-2xl border-2 border-amber-200/50 dark:border-amber-800/30 space-y-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center">
+                                                <Tags className="w-4 h-4 text-white" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-sm font-black text-slate-800 dark:text-white">Asignar Etiqueta Masiva</h4>
+                                                <p className="text-[10px] text-slate-400 font-bold">Se aplicará a los {searchResults.length} candidatos encontrados</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col md:flex-row items-stretch gap-3">
+                                            {/* Select existing tag */}
+                                            <div className="flex-1">
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Etiqueta existente</label>
+                                                <select
+                                                    value={selectedTag}
+                                                    onChange={(e) => { setSelectedTag(e.target.value); setNewTagName(''); }}
+                                                    className="w-full h-12 px-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all"
+                                                >
+                                                    <option value="">Seleccionar etiqueta...</option>
+                                                    {allTags.map(t => (
+                                                        <option key={t.name} value={t.name}>🏷️ {t.name} ({t.count || 0})</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            <div className="flex items-end">
+                                                <span className="text-[10px] font-black text-slate-300 pb-3">O</span>
+                                            </div>
+
+                                            {/* Create new tag */}
+                                            <div className="flex-1">
+                                                <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Crear nueva</label>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="color"
+                                                        value={newTagColor}
+                                                        onChange={(e) => setNewTagColor(e.target.value)}
+                                                        className="w-12 h-12 rounded-xl border-2 border-slate-200 dark:border-slate-700 cursor-pointer"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Nombre nueva etiqueta..."
+                                                        value={newTagName}
+                                                        onChange={(e) => { setNewTagName(e.target.value); setSelectedTag(''); }}
+                                                        className="flex-1 h-12 px-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Apply Button */}
+                                            <div className="flex items-end">
+                                                <button
+                                                    onClick={handleApplyTag}
+                                                    disabled={applyingTag || (!selectedTag && !newTagName.trim())}
+                                                    className={`h-12 px-8 rounded-xl text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2 transition-all shadow-lg ${
+                                                        applyingTag
+                                                            ? 'bg-amber-400 cursor-wait'
+                                                            : (!selectedTag && !newTagName.trim())
+                                                            ? 'bg-slate-300 cursor-not-allowed'
+                                                            : 'bg-amber-600 hover:bg-amber-700 hover:scale-[1.02] shadow-amber-500/20'
+                                                    }`}
+                                                >
+                                                    {applyingTag ? (
+                                                        <>
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                            {tagAppliedCount}/{searchResults.length}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Tag className="w-4 h-4" />
+                                                            Aplicar
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Results Table */}
+                                    <div className="rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden">
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left">
+                                                <thead>
+                                                    <tr className="bg-slate-50 dark:bg-slate-900/50">
+                                                        <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">#</th>
+                                                        <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Nombre</th>
+                                                        <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">WhatsApp</th>
+                                                        <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Edad</th>
+                                                        <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Municipio</th>
+                                                        <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Escolaridad</th>
+                                                        <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Categoría</th>
+                                                        <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Género</th>
+                                                        <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Tags</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-50 dark:divide-slate-800/50">
+                                                    {searchResults.map((c, idx) => (
+                                                        <tr key={c.id} className="hover:bg-blue-50/30 dark:hover:bg-blue-900/10 transition-colors">
+                                                            <td className="px-4 py-3 text-xs font-black text-slate-300">{idx + 1}</td>
+                                                            <td className="px-4 py-3 text-xs font-bold text-slate-800 dark:text-white truncate max-w-[160px]">{c.nombreReal}</td>
+                                                            <td className="px-4 py-3 text-[10px] font-mono text-slate-500">{c.whatsapp}</td>
+                                                            <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{c.edad}</td>
+                                                            <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300 truncate max-w-[120px]">{c.municipio}</td>
+                                                            <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{c.escolaridad}</td>
+                                                            <td className="px-4 py-3">
+                                                                <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-[8px] font-black text-blue-600 dark:text-blue-400 rounded-full border border-blue-100/50">
+                                                                    {c.categoria}
+                                                                </span>
+                                                            </td>
+                                                            <td className="px-4 py-3 text-xs text-slate-600 dark:text-slate-300">{c.genero}</td>
+                                                            <td className="px-4 py-3">
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {(c.tags || []).map(t => (
+                                                                        <span key={t} className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-[7px] font-black text-slate-500 rounded">{t}</span>
+                                                                    ))}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        {searchResults.length > 50 && (
+                                            <div className="px-4 py-3 bg-slate-50 dark:bg-slate-900/30 text-center">
+                                                <p className="text-[10px] font-bold text-slate-400">Mostrando {searchResults.length} candidatos — scroll horizontal para ver más columnas</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+
+                            {!searchLoading && searchResults.length === 0 && (
+                                <div className="py-20 text-center">
+                                    <Search className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+                                    <h3 className="text-lg font-black text-slate-300">Sin resultados</h3>
+                                    <p className="text-sm text-slate-400 mt-1">No hay candidatos sin proyecto que cumplan estos criterios.</p>
+                                </div>
+                            )}
+                        </>
+                    )}
                 </div>
             </Modal>
         </div>
