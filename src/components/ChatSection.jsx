@@ -513,9 +513,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         // --- Strict Inbox para Reclutadores (Sin botón 'Todos') ---
         if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
             const hasAnyTag = Array.isArray(c?.tags) && c.tags.length > 0;
-            const hasAnyProj = c?.currentVacancyId;
-            const hasAnyCrm = c?.manualProjectId;
-            if (!hasAnyTag && !hasAnyProj && !hasAnyCrm) return false;
+            if (!hasAnyTag) return false;
         }
 
         if (activeFilter === 'unread' && c?.unread !== true) return false;
@@ -980,7 +978,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         const userLabels = user?.allowed_labels;
                                         if (!Array.isArray(userLabels) || userLabels.length === 0) return true;
                                         const name = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                        return userLabels.includes(name);
+                                        return userLabels.some(l => typeof l === 'string' && l.trim().toLowerCase() === name.trim().toLowerCase());
                                     }).map(tagObj => {
                                         const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
