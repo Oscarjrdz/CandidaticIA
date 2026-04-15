@@ -170,7 +170,27 @@ const InstanceCard = ({ instance, index, onUpdate, onDelete, onStatusCheck, show
                                 type="checkbox" 
                                 className="sr-only peer" 
                                 checked={instance.botActive !== false}
-                                onChange={(e) => onUpdate(index, 'botActive', e.target.checked)}
+                                onChange={async (e) => {
+                                    const val = e.target.checked;
+                                    onUpdate(index, 'botActive', val);
+                                    
+                                    // Auto-save just this toggle
+                                    try {
+                                        const res = await fetch('/api/bot-ia/instances');
+                                        let currentInstances = [];
+                                        if (res.ok) currentInstances = await res.json();
+                                        
+                                        if (Array.isArray(currentInstances) && currentInstances.length > index) {
+                                            currentInstances[index].botActive = val;
+                                            await fetch('/api/bot-ia/instances', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ instances: currentInstances })
+                                            });
+                                            showToast(`Motor de IA ${val ? 'encendido' : 'apagado'} para ${instance.name || 'Línea'}`, 'success');
+                                        }
+                                    } catch (err) {}
+                                }}
                             />
                             <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-500"></div>
                         </label>
