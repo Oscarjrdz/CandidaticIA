@@ -149,6 +149,11 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const [filterValue, setFilterValue] = useState(null);
     const activeFilterRef = useRef('all');
     const filterValueRef = useRef(null);
+    const selectedChatRef = useRef(null);
+
+    useEffect(() => {
+        selectedChatRef.current = selectedChat;
+    }, [selectedChat]);
 
     useEffect(() => {
         activeFilterRef.current = activeFilter;
@@ -452,7 +457,16 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
             const result = await getCandidates(5000, 0, "", false, tagParam);
             if (result.success) {
-                const fetchedCandidates = result.candidates || [];
+                let fetchedCandidates = result.candidates || [];
+                const activeId = selectedChatRef.current?.id;
+                
+                // Enforce optimistic clear out-of-closure for the active chat
+                if (activeId) {
+                    fetchedCandidates = fetchedCandidates.map(c => 
+                        c.id === activeId ? { ...c, unread: false } : c
+                    );
+                }
+                
                 setCandidates(fetchedCandidates);
                 if (fetchedCandidates.length > 0) {
                     setSelectedChat(current => {
