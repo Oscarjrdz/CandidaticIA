@@ -864,7 +864,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
             
             {/* LADO IZQUIERDO: LISTA DE CHATS */}
-            <div className={`w-full md:w-[30%] lg:w-[35%] xl:w-[400px] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] ${selectedChat ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`w-full md:w-[30%] lg:w-[35%] xl:w-[500px] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] ${selectedChat ? 'hidden md:flex' : 'flex'}`}>
                 
                 {/* Eliminada la barra Header Izquierdo a petición del usuario */}
 
@@ -983,14 +983,20 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
                                         const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
+                                        const tagUnread = baseCandidates.filter(c => c?.unread === true && Array.isArray(c.tags) && c.tags.includes(tName)).length;
                                         return (
                                             <div 
                                                 key={tName}
                                                 onClick={() => { setActiveFilter('label'); setFilterValue(tName); setShowDropdown(null); }}
                                                 className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
                                             >
-                                                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: tColor }}></span>
-                                                {display}
+                                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
+                                                <span className="truncate flex-1">{display}</span>
+                                                {tagUnread > 0 && (
+                                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+                                                        {tagUnread > 99 ? '99+' : tagUnread}
+                                                    </span>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -1028,20 +1034,28 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         {filteredProjects.length === 0 ? (
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
                                         ) : (
-                                            filteredProjects.map(project => (
-                                                <div
-                                                    key={project.id}
-                                                    onClick={() => {
-                                                        setAiProjectFilter(project.id);
-                                                        setAiStepFilter(null);
-                                                        setShowDropdown(null);
-                                                    }}
-                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                    title={project.name}
-                                                >
-                                                    {project.name}
-                                                </div>
-                                            ))
+                                            filteredProjects.map(project => {
+                                                const projUnread = baseCandidates.filter(c => c?.unread === true && c.currentVacancyId === project.id).length;
+                                                return (
+                                                    <div
+                                                        key={project.id}
+                                                        onClick={() => {
+                                                            setAiProjectFilter(project.id);
+                                                            setAiStepFilter(null);
+                                                            setShowDropdown(null);
+                                                        }}
+                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
+                                                        title={project.name}
+                                                    >
+                                                        <span className="truncate flex-1">{project.name}</span>
+                                                        {projUnread > 0 && (
+                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+                                                                {projUnread > 99 ? '99+' : projUnread}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
                                         )}
                                     </div>
                                 )}
@@ -1087,16 +1101,24 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                         {activeProject.steps?.length === 0 ? (
                                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos</div>
                                                         ) : (
-                                                            activeProject.steps?.map(step => (
-                                                                <div
-                                                                    key={step.id}
-                                                                    onClick={() => { setAiStepFilter(step.id); setShowDropdown(null); }}
-                                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                                    title={step.name}
-                                                                >
-                                                                    {step.name}
-                                                                </div>
-                                                            ))
+                                                            activeProject.steps?.map(step => {
+                                                                const stepUnread = baseCandidates.filter(c => c?.unread === true && c.currentVacancyId === aiProjectFilter && c.pasoActual === step.id).length;
+                                                                return (
+                                                                    <div
+                                                                        key={step.id}
+                                                                        onClick={() => { setAiStepFilter(step.id); setShowDropdown(null); }}
+                                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
+                                                                        title={step.name}
+                                                                    >
+                                                                        <span className="truncate flex-1">{step.name}</span>
+                                                                        {stepUnread > 0 && (
+                                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+                                                                                {stepUnread > 99 ? '99+' : stepUnread}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })
                                                         )}
                                                     </div>
                                                 )}
@@ -1137,20 +1159,28 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         {filteredManualProjects.length === 0 ? (
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pipelines</div>
                                         ) : (
-                                            filteredManualProjects.map(project => (
-                                                <div
-                                                    key={project.id}
-                                                    onClick={() => {
-                                                        setManualPipelineFilter(project.id);
-                                                        setManualStepFilter(null);
-                                                        setShowDropdown(null);
-                                                    }}
-                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                    title={project.name}
-                                                >
-                                                    {project.name}
-                                                </div>
-                                            ))
+                                            filteredManualProjects.map(project => {
+                                                const crmUnread = baseCandidates.filter(c => c?.unread === true && c.manualProjectId === project.id).length;
+                                                return (
+                                                    <div
+                                                        key={project.id}
+                                                        onClick={() => {
+                                                            setManualPipelineFilter(project.id);
+                                                            setManualStepFilter(null);
+                                                            setShowDropdown(null);
+                                                        }}
+                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
+                                                        title={project.name}
+                                                    >
+                                                        <span className="truncate flex-1">{project.name}</span>
+                                                        {crmUnread > 0 && (
+                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+                                                                {crmUnread > 99 ? '99+' : crmUnread}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })
                                         )}
                                     </div>
                                 )}
@@ -1289,6 +1319,14 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </div>
+                                    </div>
+                                    {/* Info row: edad, escolaridad, municipio */}
+                                    <div className="flex items-center gap-2 mt-1 text-[10px] text-[#8696a0] dark:text-[#697882] truncate">
+                                        {chat.edad && <span>{chat.edad} años</span>}
+                                        {chat.edad && chat.escolaridad && <span>•</span>}
+                                        {chat.escolaridad && <span className="truncate">{chat.escolaridad}</span>}
+                                        {(chat.edad || chat.escolaridad) && chat.municipio && <span>•</span>}
+                                        {chat.municipio && <span className="truncate">{chat.municipio}</span>}
                                     </div>
                                 </div>
                             </div>
