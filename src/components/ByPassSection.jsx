@@ -139,6 +139,7 @@ const ByPassSection = ({ showToast }) => {
     const [newTagColor, setNewTagColor] = useState('#3b82f6');
     const [applyingTag, setApplyingTag] = useState(false);
     const [tagAppliedCount, setTagAppliedCount] = useState(0);
+    const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -822,19 +823,58 @@ const ByPassSection = ({ showToast }) => {
                                         </div>
 
                                         <div className="flex flex-col md:flex-row items-stretch gap-3">
-                                            {/* Select existing tag */}
+                                            {/* Custom tag dropdown (replaces native select) */}
                                             <div className="flex-1">
                                                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5 block">Etiqueta existente</label>
-                                                <select
-                                                    value={selectedTag}
-                                                    onChange={(e) => { setSelectedTag(e.target.value); setNewTagName(''); }}
-                                                    className="w-full h-12 px-4 border-2 border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-900 text-sm font-bold text-slate-700 dark:text-slate-200 focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 transition-all"
-                                                >
-                                                    <option value="">Seleccionar etiqueta...</option>
-                                                    {allTags.map(t => (
-                                                        <option key={t.name} value={t.name}>🏷️ {t.name} ({t.count || 0})</option>
-                                                    ))}
-                                                </select>
+                                                <div className="relative">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setTagDropdownOpen(!tagDropdownOpen)}
+                                                        className={`w-full h-12 px-4 border-2 rounded-xl bg-white dark:bg-slate-900 text-sm font-bold text-left flex items-center justify-between gap-2 transition-all ${
+                                                            tagDropdownOpen
+                                                                ? 'border-amber-500 ring-4 ring-amber-500/10'
+                                                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                                                        }`}
+                                                    >
+                                                        {selectedTag ? (
+                                                            <span className="flex items-center gap-2 text-slate-700 dark:text-slate-200 truncate">
+                                                                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: allTags.find(t => t.name === selectedTag)?.color || '#3b82f6' }}></span>
+                                                                {selectedTag}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-slate-400">Seleccionar etiqueta...</span>
+                                                        )}
+                                                        <svg className={`w-4 h-4 text-slate-400 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                    </button>
+
+                                                    {tagDropdownOpen && (
+                                                        <div className="absolute z-50 top-full mt-2 left-0 right-0 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-h-52 overflow-y-auto">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => { setSelectedTag(''); setNewTagName(''); setTagDropdownOpen(false); }}
+                                                                className="w-full text-left px-4 py-2.5 text-sm text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                                                            >
+                                                                — Ninguna —
+                                                            </button>
+                                                            {allTags.map(t => (
+                                                                <button
+                                                                    key={t.name}
+                                                                    type="button"
+                                                                    onClick={() => { setSelectedTag(t.name); setNewTagName(''); setTagDropdownOpen(false); }}
+                                                                    className={`w-full text-left px-4 py-2.5 text-sm font-medium flex items-center gap-3 transition-colors ${
+                                                                        selectedTag === t.name
+                                                                            ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400'
+                                                                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                                                                    }`}
+                                                                >
+                                                                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.color || '#3b82f6' }}></span>
+                                                                    <span className="truncate">{t.name}</span>
+                                                                    <span className="ml-auto text-[10px] font-bold text-slate-400">({t.count || 0})</span>
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             <div className="flex items-end">
@@ -890,11 +930,11 @@ const ByPassSection = ({ showToast }) => {
                                         </div>
                                     </div>
 
-                                    {/* Results Table */}
+                                    {/* Results Table — with vertical scroll */}
                                     <div className="rounded-2xl border-2 border-slate-100 dark:border-slate-800 overflow-hidden">
-                                        <div className="overflow-x-auto">
+                                        <div className="overflow-x-auto max-h-[45vh] overflow-y-auto">
                                             <table className="w-full text-left">
-                                                <thead>
+                                                <thead className="sticky top-0 z-10">
                                                     <tr className="bg-slate-50 dark:bg-slate-900/50">
                                                         <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">#</th>
                                                         <th className="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-slate-400">Nombre</th>

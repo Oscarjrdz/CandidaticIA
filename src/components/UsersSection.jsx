@@ -30,6 +30,10 @@ const AVAILABLE_CHAT_FILTERS = [
     { id: 'filter_crm', name: 'CRM Manual' }
 ];
 
+const AVAILABLE_EXTRA_PERMS = [
+    { id: 'can_manage_tags', name: 'Crear / Editar Etiquetas' }
+];
+
 const UsersSection = ({ showToast }) => {
     const [activeTab, setActiveTab] = useState('users');
     const [users, setUsers] = useState([]);
@@ -137,7 +141,9 @@ const UsersSection = ({ showToast }) => {
         setSaving(true);
         try {
             const method = editingUser ? 'PUT' : 'POST';
-            const body = editingUser ? { ...formData, id: editingUser.id } : formData;
+            // Ensure the user ID is always present for PUT — use whatsapp as fallback
+            const userId = editingUser?.id || editingUser?.whatsapp;
+            const body = editingUser ? { ...formData, id: userId, whatsapp: formData.whatsapp || editingUser.whatsapp } : formData;
 
             const res = await fetch('/api/users', {
                 method,
@@ -682,6 +688,26 @@ const UsersSection = ({ showToast }) => {
                                     />
                                     <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none">
                                         {filter.name}
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-3">Permisos Extra</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto p-2 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                            {AVAILABLE_EXTRA_PERMS.map(perm => (
+                                <label key={perm.id} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!roleFormData.permissions[perm.id]}
+                                        onChange={() => togglePermission(perm.id)}
+                                        disabled={editingRole && editingRole.name === 'SuperAdmin'}
+                                        className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 dark:focus:ring-amber-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                    />
+                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none">
+                                        {perm.name}
                                     </span>
                                 </label>
                             ))}
