@@ -1447,20 +1447,28 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                             No hay vacantes configuradas con "Info para el bot"
                                                         </div>
                                                     ) : (
-                                                        vacancies.map(vac => (
-                                                            <div key={vac.id}
-                                                                onClick={() => injectVacancy(vac)}
-                                                                className={`px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-[#111b21] cursor-pointer transition-colors flex items-center gap-2 ${
-                                                                    selectedChat?.currentVacancyId === vac.id
-                                                                    ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 font-bold'
-                                                                    : 'text-[#111b21] dark:text-[#e9edef]'
-                                                                }`}
-                                                            >
-                                                                <Briefcase className="w-3.5 h-3.5 shrink-0" />
-                                                                <span className="truncate">{vac.name}</span>
-                                                                {selectedChat?.currentVacancyId === vac.id && <Check className="w-3.5 h-3.5 ml-auto text-blue-500 shrink-0" />}
-                                                            </div>
-                                                        ))
+                                                        vacancies.map(vac => {
+                                                            const vacUnread = baseCandidates.filter(c => c?.unread === true && c.currentVacancyId === vac.id).length;
+                                                            return (
+                                                                <div key={vac.id}
+                                                                    onClick={() => injectVacancy(vac)}
+                                                                    className={`px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-[#111b21] cursor-pointer transition-colors flex items-center gap-2 ${
+                                                                        selectedChat?.currentVacancyId === vac.id
+                                                                        ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 font-bold'
+                                                                        : 'text-[#111b21] dark:text-[#e9edef]'
+                                                                    }`}
+                                                                >
+                                                                    <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                                                                    <span className="truncate flex-1">{vac.name}</span>
+                                                                    {selectedChat?.currentVacancyId === vac.id && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+                                                                    {vacUnread > 0 && (
+                                                                        <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+                                                                            {vacUnread}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })
                                                     )}
                                                 </div>
                                             </div>
