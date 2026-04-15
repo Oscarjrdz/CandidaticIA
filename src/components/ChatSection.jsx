@@ -543,6 +543,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         if (manualStepFilter && c?.manualProjectStepId !== manualStepFilter) return false;
 
         return true;
+    }).sort((a, b) => {
+        if (a?.unread && !b?.unread) return -1;
+        if (!a?.unread && b?.unread) return 1;
+        return 0; // Maintain recent timestamp sorting from backend
     });
 
     // ── Badge counts (from same candidates array, applying only RBAC filter, not category filter) ──
@@ -550,9 +554,17 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         if (roleAllowedCandidateIds !== null) {
             const allowedCrm = user?.allowed_crm_projects;
             const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
+            const allowedLabels = user?.allowed_labels;
+            const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
+
             const inAllowedProject = roleAllowedCandidateIds.has(c.id);
             const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
-            if (!inAllowedProject && !inAllowedCrm) return false;
+            const inAllowedLabel = hasLabelRestriction && Array.isArray(c?.tags) && c.tags.some(t => {
+                const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : t?.name?.trim().toLowerCase();
+                return allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
+            });
+
+            if (!inAllowedProject && !inAllowedCrm && !inAllowedLabel) return false;
         }
         return true;
     });
