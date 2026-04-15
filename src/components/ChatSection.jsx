@@ -552,9 +552,11 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     });
     const badgeCounts = {
         all: baseCandidates.length,
-        unread: baseCandidates.filter(c => c?.unread === true).length,
+        allUnread: baseCandidates.filter(c => c?.unread === true).length,
         complete: baseCandidates.filter(c => isProfileComplete(c)).length,
-        incomplete: baseCandidates.filter(c => !isProfileComplete(c)).length
+        completeUnread: baseCandidates.filter(c => isProfileComplete(c) && c?.unread === true).length,
+        incomplete: baseCandidates.filter(c => !isProfileComplete(c)).length,
+        incompleteUnread: baseCandidates.filter(c => !isProfileComplete(c) && c?.unread === true).length
     };
 
     // Scroll to bottom
@@ -895,10 +897,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
-                                Todos
-                                {badgeCounts.all > 0 && (
-                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#8696a0] text-white text-[10px] font-bold rounded-full">
-                                        {badgeCounts.all > 999 ? '999+' : badgeCounts.all}
+                                Todos ({badgeCounts.all})
+                                {badgeCounts.allUnread > 0 && (
+                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
+                                        {badgeCounts.allUnread > 99 ? '99+' : badgeCounts.allUnread}
                                     </span>
                                 )}
                             </button>
@@ -912,10 +914,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
-                                No leídos
-                                {badgeCounts.unread > 0 && (
+                                No leídos ({badgeCounts.allUnread})
+                                {badgeCounts.allUnread > 0 && (
                                     <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
-                                        {badgeCounts.unread > 99 ? '99+' : badgeCounts.unread}
+                                        {badgeCounts.allUnread > 99 ? '99+' : badgeCounts.allUnread}
                                     </span>
                                 )}
                             </button>
@@ -929,10 +931,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
-                                Completos
-                                {badgeCounts.complete > 0 && (
-                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-green-500 text-white text-[10px] font-bold rounded-full">
-                                        {badgeCounts.complete > 999 ? '999+' : badgeCounts.complete}
+                                Completos ({badgeCounts.complete})
+                                {badgeCounts.completeUnread > 0 && (
+                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
+                                        {badgeCounts.completeUnread > 99 ? '99+' : badgeCounts.completeUnread}
                                     </span>
                                 )}
                             </button>
@@ -946,10 +948,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
-                                Incompletos
-                                {badgeCounts.incomplete > 0 && (
-                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-orange-500 text-white text-[10px] font-bold rounded-full">
-                                        {badgeCounts.incomplete > 999 ? '999+' : badgeCounts.incomplete}
+                                Incompletos ({badgeCounts.incomplete})
+                                {badgeCounts.incompleteUnread > 0 && (
+                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
+                                        {badgeCounts.incompleteUnread > 99 ? '99+' : badgeCounts.incompleteUnread}
                                     </span>
                                 )}
                             </button>
