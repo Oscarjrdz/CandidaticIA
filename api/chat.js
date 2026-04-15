@@ -1,4 +1,4 @@
-import { getMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus } from './utils/storage.js';
+import { getMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
 import { sendUltraMsgMessage, getUltraMsgConfig } from './whatsapp/utils.js';
@@ -19,7 +19,51 @@ export default async function handler(req, res) {
             }
 
             const messages = await getMessages(candidateId);
+
+            // Auto-clear unread flag when recruiter opens this chat
+            try {
+                await updateCandidate(candidateId, { unread: false });
+            } catch (e) {
+                console.warn('⚠️ Failed to clear unread flag:', e.message);
+            }
+
             return res.status(200).json({ success: true, messages });
+        }
+
+        // PUT - Lock/Unlock chat (anti-duplication)
+        if (req.method === 'PUT') {
+            const { action, candidateId, userName } = req.body;
+            if (!candidateId) return res.status(400).json({ error: 'Falta candidateId' });
+
+            const redis = getRedisClient();
+            if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
+
+            const lockKey = `chat_lock:${candidateId}`;
+
+            if (action === 'lock') {
+                // Set lock with 60s TTL (heartbeat renews it)
+                await redis.set(lockKey, JSON.stringify({
+                    user: userName || 'Reclutador',
+                    lockedAt: new Date().toISOString()
+                }), 'EX', 60);
+                return res.status(200).json({ success: true, locked: true });
+            }
+
+            if (action === 'unlock') {
+                await redis.del(lockKey);
+                return res.status(200).json({ success: true, locked: false });
+            }
+
+            if (action === 'heartbeat') {
+                // Renew TTL
+                const exists = await redis.exists(lockKey);
+                if (exists) {
+                    await redis.expire(lockKey, 60);
+                }
+                return res.status(200).json({ success: true });
+            }
+
+            return res.status(400).json({ error: 'Invalid action' });
         }
 
         if (req.method === 'POST') {

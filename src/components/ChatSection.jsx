@@ -109,6 +109,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const [editTagName, setEditTagName] = useState("");
     const [editTagColor, setEditTagColor] = useState("#3b82f6");
     const [vacancies, setVacancies] = useState([]);
+    const [chatLocks, setChatLocks] = useState({});
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
 
@@ -201,7 +203,31 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
         // 🟢 Live auto-update for the sidebar (every 3 seconds)
         const interval = setInterval(loadCandidates, 3000);
-        return () => clearInterval(interval);
+
+        // 🔔 Poll chat stats (unread counts + locks) every 4s
+        const statsInterval = setInterval(async () => {
+            try {
+                const res = await fetch('/api/chat-stats');
+                const data = await res.json();
+                if (data.success) {
+                    setUnreadCount(data.unreadCount || 0);
+                    setChatLocks(data.locks || {});
+                }
+            } catch (e) { /* silent */ }
+        }, 4000);
+        // Initial fetch
+        (async () => {
+            try {
+                const res = await fetch('/api/chat-stats');
+                const data = await res.json();
+                if (data.success) {
+                    setUnreadCount(data.unreadCount || 0);
+                    setChatLocks(data.locks || {});
+                }
+            } catch (e) { /* silent */ }
+        })();
+
+        return () => { clearInterval(interval); clearInterval(statsInterval); };
     }, []);
 
     // RBAC: Load candidate IDs from all allowed projects to create base filter
@@ -484,7 +510,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             if (!inAllowedProject && !inAllowedCrm) return false;
         }
 
-        if (activeFilter === 'unread' && c?.hasUnreadMessages !== true) return false;
+        if (activeFilter === 'unread' && c?.unread !== true) return false;
         if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
         if (activeFilter === 'profile') {
             const isComplete = isProfileComplete(c);
@@ -518,12 +544,49 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
     // Load messages
     useEffect(() => {
-        if (selectedChat) {
-            loadMessages();
-            const interval = setInterval(loadMessages, 3000);
-            return () => clearInterval(interval);
-        }
-    }, [selectedChat]);
+        if (!selectedChat) return;
+
+        loadMessages();
+        const interval = setInterval(loadMessages, 3000);
+
+        // 🔒 Lock this chat for me
+        const currentUser = user?.name || 'Reclutador';
+        const lockChat = async () => {
+            try {
+                await fetch('/api/chat', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'lock', candidateId: selectedChat.id, userName: currentUser })
+                });
+            } catch (e) { /* silent */ }
+        };
+        lockChat();
+
+        // Heartbeat every 30s
+        const heartbeatInterval = setInterval(async () => {
+            try {
+                await fetch('/api/chat', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'heartbeat', candidateId: selectedChat.id })
+                });
+            } catch (e) { /* silent */ }
+        }, 30000);
+
+        // Optimistic unread clear
+        setCandidates(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread: false } : c));
+
+        return () => {
+            clearInterval(interval);
+            clearInterval(heartbeatInterval);
+            // Unlock on deselect
+            fetch('/api/chat', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'unlock', candidateId: selectedChat.id })
+            }).catch(() => {});
+        };
+    }, [selectedChat?.id]);
 
     const handleToggleTag = async (tag) => {
         if (!selectedChat) return;
@@ -814,13 +877,18 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                         {canSeeFilter('filter_unread') && (
                             <button 
                                 onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
                                     activeFilter === 'unread' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
                                 No leídos
+                                {unreadCount > 0 && (
+                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
+                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                    </span>
+                                )}
                             </button>
                         )}
                         {canSeeFilter('filter_complete') && (
@@ -1139,7 +1207,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
                                                 <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
                                             ) : null}
-                                            <span className={`text-xs whitespace-nowrap text-[#667781] dark:text-[#8696a0]`}>{formatRelativeDate(chat.ultimoMensaje)}</span>
+                                            <span className={`text-xs whitespace-nowrap ${chat.unread ? 'text-[#25d366] font-bold' : 'text-[#667781] dark:text-[#8696a0]'}`}>{formatRelativeDate(chat.ultimoMensaje)}</span>
                                         </div>
                                     </div>
                                     <div className="flex justify-between items-center mt-0.5">
@@ -1151,7 +1219,19 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                 • {isProfileComplete(chat) ? 'Perfil completo' : 'Perfil incompleto'}
                                             </span>
                                         </div>
-                                        <div className="flex items-center shrink-0 ml-1">
+                                        <div className="flex items-center shrink-0 ml-1 gap-1">
+                                            {/* Unread green dot */}
+                                            {chat.unread && (
+                                                <span className="w-5 h-5 flex items-center justify-center bg-[#25d366] text-white text-[9px] font-bold rounded-full shadow-sm">
+                                                    !
+                                                </span>
+                                            )}
+                                            {/* Lock indicator - someone else is attending */}
+                                            {chatLocks[chat.id] && chatLocks[chat.id].user !== (user?.name || '') && (
+                                                <span className="text-[9px] text-amber-500 font-semibold truncate max-w-[60px]" title={`${chatLocks[chat.id].user} está atendiendo`}>
+                                                    👤{chatLocks[chat.id].user?.split(' ')[0]}
+                                                </span>
+                                            )}
                                             <button
                                                 onClick={(e) => handleBlockToggle(chat, e)}
                                                 disabled={blockLoading}
