@@ -88,7 +88,7 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
                 {/* Unread Badge */}
                 {badge > 0 && (
                     <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-[#25d366] text-white text-[11px] font-bold rounded-full shadow-lg shadow-green-500/30 animate-pulse">
-                        {badge > 99 ? '99+' : badge}
+                        {badge}
                     </span>
                 )}
 

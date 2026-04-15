@@ -42,7 +42,7 @@ const CustomProjectDropdown = ({ activeProjectId, projects, onChange, candidates
                                     <span className={`${isSelected ? '' : 'ml-5'} truncate flex-1`}>{p.name}</span>
                                     {pipelineUnread > 0 && (
                                         <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
-                                            {pipelineUnread > 99 ? '99+' : pipelineUnread}
+                                            {pipelineUnread}
                                         </span>
                                     )}
                                 </div>

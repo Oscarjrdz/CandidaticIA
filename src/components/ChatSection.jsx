@@ -450,7 +450,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const loadCandidates = async () => {
         try {
             const tagParam = activeFilterRef.current === 'label' ? filterValueRef.current : "";
-            const result = await getCandidates(200, 0, "", false, tagParam);
+            const result = await getCandidates(5000, 0, "", false, tagParam);
             if (result.success) {
                 const fetchedCandidates = result.candidates || [];
                 setCandidates(fetchedCandidates);
@@ -894,7 +894,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 Todos ({badgeCounts.all})
                                 {badgeCounts.allUnread > 0 && (
                                     <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
-                                        {badgeCounts.allUnread > 99 ? '99+' : badgeCounts.allUnread}
+                                        {badgeCounts.allUnread}
                                     </span>
                                 )}
                             </button>
@@ -911,7 +911,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 No leídos ({badgeCounts.allUnread})
                                 {badgeCounts.allUnread > 0 && (
                                     <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
-                                        {badgeCounts.allUnread > 99 ? '99+' : badgeCounts.allUnread}
+                                        {badgeCounts.allUnread}
                                     </span>
                                 )}
                             </button>
@@ -928,7 +928,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 Completos ({badgeCounts.complete})
                                 {badgeCounts.completeUnread > 0 && (
                                     <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
-                                        {badgeCounts.completeUnread > 99 ? '99+' : badgeCounts.completeUnread}
+                                        {badgeCounts.completeUnread}
                                     </span>
                                 )}
                             </button>
@@ -945,7 +945,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 Incompletos ({badgeCounts.incomplete})
                                 {badgeCounts.incompleteUnread > 0 && (
                                     <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
-                                        {badgeCounts.incompleteUnread > 99 ? '99+' : badgeCounts.incompleteUnread}
+                                        {badgeCounts.incompleteUnread}
                                     </span>
                                 )}
                             </button>
@@ -988,7 +988,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                 <span className="truncate flex-1">{display}</span>
                                                 {tagUnread > 0 && (
                                                     <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
-                                                        {tagUnread > 99 ? '99+' : tagUnread}
+                                                        {tagUnread}
                                                     </span>
                                                 )}
                                             </div>
@@ -1044,7 +1044,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                         <span className="truncate flex-1">{project.name}</span>
                                                         {projUnread > 0 && (
                                                             <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
-                                                                {projUnread > 99 ? '99+' : projUnread}
+                                                                {projUnread}
                                                             </span>
                                                         )}
                                                     </div>
@@ -1107,7 +1107,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                                         <span className="truncate flex-1">{step.name}</span>
                                                                         {stepUnread > 0 && (
                                                                             <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
-                                                                                {stepUnread > 99 ? '99+' : stepUnread}
+                                                                                {stepUnread}
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -1169,7 +1169,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                         <span className="truncate flex-1">{project.name}</span>
                                                         {crmUnread > 0 && (
                                                             <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
-                                                                {crmUnread > 99 ? '99+' : crmUnread}
+                                                                {crmUnread}
                                                             </span>
                                                         )}
                                                     </div>
@@ -1232,7 +1232,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                                         <span className="truncate flex-1">{step.name}</span>
                                                                         {stepUnread > 0 && (
                                                                             <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
-                                                                                {stepUnread > 99 ? '99+' : stepUnread}
+                                                                                {stepUnread}
                                                                             </span>
                                                                         )}
                                                                     </div>
