@@ -597,6 +597,12 @@ const ByPassSection = ({ showToast }) => {
                                         {rule.categories?.map(c => (
                                             <span key={c} className="px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-[8px] font-black text-blue-600 dark:text-blue-400 rounded border border-blue-100/50 dark:border-blue-800/20">{c.toUpperCase()}</span>
                                         ))}
+                                        {rule.escolaridades?.map(e => (
+                                            <span key={`esc_${e}`} className="px-1.5 py-0.5 bg-teal-50 dark:bg-teal-900/20 text-[8px] font-black text-teal-600 dark:text-teal-400 rounded border border-teal-100/50 dark:border-teal-800/20 max-w-[80px] truncate">{e.toUpperCase()}</span>
+                                        ))}
+                                        {rule.municipios?.map(m => (
+                                            <span key={`mun_${m}`} className="px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-[8px] font-black text-amber-600 dark:text-amber-400 rounded border border-amber-100/50 dark:border-amber-800/20 max-w-[80px] truncate">{m.toUpperCase()}</span>
+                                        ))}
                                         <span className="px-1.5 py-0.5 bg-slate-50 dark:bg-slate-800 text-[8px] font-black text-slate-400 rounded border border-slate-100 dark:border-slate-700">{rule.minAge || 0}-{rule.maxAge || 99} años</span>
                                         {rule.gender && rule.gender !== 'Cualquiera' && (
                                             <span className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-[8px] font-black text-purple-600 dark:text-purple-400 rounded border border-purple-100/50">{rule.gender}</span>

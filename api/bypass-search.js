@@ -65,6 +65,7 @@ export default async function handler(req, res) {
             // Municipio filter
             const cMun = normalizeStr(c.municipio);
             if (municipios && municipios.length > 0) {
+                if (!cMun) return false; // If required but missing, no match
                 const isMatch = municipios.some(rm => {
                     const rMun = normalizeStr(rm);
                     return rMun.includes(cMun) || cMun.includes(rMun);
@@ -75,6 +76,7 @@ export default async function handler(req, res) {
             // Escolaridad filter
             const cEsc = normalizeStr(c.escolaridad);
             if (escolaridades && escolaridades.length > 0) {
+                if (!cEsc) return false; // If required but missing, no match
                 const isMatch = escolaridades.some(re => {
                     const rEsc = normalizeStr(re);
                     return rEsc.includes(cEsc) || cEsc.includes(rEsc);
