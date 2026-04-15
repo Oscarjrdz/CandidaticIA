@@ -664,9 +664,13 @@ const CandidatesSection = ({ showToast }) => {
                 {/* Búsqueda */}
                 <div className="flex flex-wrap gap-2 sm:gap-4 items-center">
                     <MagicSearch
-                        onResults={(results, ai) => {
+                        onResults={(results, ai, queryText) => {
                             setAiFilteredCandidates(results);
-                            setAiExplanation(ai?.explanation || 'Búsqueda completada');
+                            if (queryText) {
+                                setAiExplanation(`Buscaste: "${queryText}"`);
+                            } else {
+                                setAiExplanation(ai?.explanation || 'Búsqueda completada');
+                            }
                         }}
                         showToast={showToast}
                     />
