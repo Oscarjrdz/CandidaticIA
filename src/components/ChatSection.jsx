@@ -533,14 +533,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         return true;
     });
 
-    // ── Badge counts (computed from base candidates after RBAC/search, before category filter) ──
+    // ── Badge counts (from same candidates array, applying only RBAC filter, not category filter) ──
     const baseCandidates = (candidates || []).filter(c => {
-        const searchVal = (searchQuery || "").toLowerCase();
-        const matchesSearch = 
-            (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
-            (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
-            (c?.whatsapp && String(c.whatsapp).includes(searchVal));
-        if (!matchesSearch && searchVal !== "") return false;
         if (roleAllowedCandidateIds !== null) {
             const allowedCrm = user?.allowed_crm_projects;
             const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
@@ -1226,16 +1220,24 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                         {activeProject.steps?.length === 0 ? (
                                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos</div>
                                                         ) : (
-                                                            activeProject.steps?.map(step => (
-                                                                <div
-                                                                    key={step.id}
-                                                                    onClick={() => { setManualStepFilter(step.id); setShowDropdown(null); }}
-                                                                    className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer truncate"
-                                                                    title={step.name}
-                                                                >
-                                                                    {step.name}
-                                                                </div>
-                                                            ))
+                                                            activeProject.steps?.map(step => {
+                                                                const stepUnread = baseCandidates.filter(c => c?.unread === true && c.manualProjectId === manualPipelineFilter && c.manualProjectStepId === step.id).length;
+                                                                return (
+                                                                    <div
+                                                                        key={step.id}
+                                                                        onClick={() => { setManualStepFilter(step.id); setShowDropdown(null); }}
+                                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
+                                                                        title={step.name}
+                                                                    >
+                                                                        <span className="truncate flex-1">{step.name}</span>
+                                                                        {stepUnread > 0 && (
+                                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+                                                                                {stepUnread > 99 ? '99+' : stepUnread}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })
                                                         )}
                                                     </div>
                                                 )}
@@ -1822,6 +1824,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                     selectedChat={selectedChat}
                     onClose={() => setShowRightPanel(false)}
                     showToast={showToast}
+                    candidates={candidates}
                     onCandidateUpdated={(updatedCandidate) => {
                         setCandidates(prev => prev.map(c => c.id === updatedCandidate.id ? updatedCandidate : c));
                         if(selectedChat?.id === updatedCandidate.id) setSelectedChat(updatedCandidate);

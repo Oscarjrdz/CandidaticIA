@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, X, GripVertical, Check, Trash2, Edit2, Box, ArrowRight, Loader2, ListTodo, ChevronDown } from 'lucide-react';
 import { updateCandidate } from '../services/candidatesService';
 
-const CustomProjectDropdown = ({ activeProjectId, projects, onChange }) => {
+const CustomProjectDropdown = ({ activeProjectId, projects, onChange, candidates = [] }) => {
     const [isOpen, setIsOpen] = useState(false);
     
     const activeProject = projects.find(p => p.id === activeProjectId);
@@ -31,14 +31,20 @@ const CustomProjectDropdown = ({ activeProjectId, projects, onChange }) => {
                         </div>
                         {projects.map(p => {
                             const isSelected = activeProjectId === p.id;
+                            const pipelineUnread = candidates.filter(c => c?.unread === true && c.manualProjectId === p.id).length;
                             return (
                                 <div 
                                     key={p.id}
                                     onClick={() => { onChange(p.id); setIsOpen(false); }}
                                     className={`px-3 py-2 text-sm cursor-pointer transition-colors flex items-center gap-2 ${isSelected ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400 font-semibold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2a3942]'}`}
                                 >
-                                    {isSelected && <Check className="w-3.5 h-3.5" />}
-                                    <span className={isSelected ? "" : "ml-5 truncate"}>{p.name}</span>
+                                    {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
+                                    <span className={`${isSelected ? '' : 'ml-5'} truncate flex-1`}>{p.name}</span>
+                                    {pipelineUnread > 0 && (
+                                        <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+                                            {pipelineUnread > 99 ? '99+' : pipelineUnread}
+                                        </span>
+                                    )}
                                 </div>
                             );
                         })}
@@ -49,7 +55,7 @@ const CustomProjectDropdown = ({ activeProjectId, projects, onChange }) => {
     );
 };
 
-export default function ManualProjectsSidepanel({ selectedChat, onClose, showToast, onCandidateUpdated }) {
+export default function ManualProjectsSidepanel({ selectedChat, onClose, showToast, onCandidateUpdated, candidates = [] }) {
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -316,7 +322,8 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
                                     <CustomProjectDropdown 
                                         activeProjectId={activeProjectId} 
                                         projects={projects} 
-                                        onChange={(val) => handleAssignCandidate(val, null)} 
+                                        onChange={(val) => handleAssignCandidate(val, null)}
+                                        candidates={candidates}
                                     />
                                 </div>
 
