@@ -930,7 +930,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 {activeFilter === 'label' ? filterValue : 'Etiquetas'} <span className="ml-1 text-[9px]">▼</span>
                             </button>
                             {showDropdown === 'labels' && (
-                                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
                                     {(Array.isArray(availableTags) ? availableTags : []).filter(tagObj => {
                                         // User-level label filtering
                                         if (!user || user.role === 'SuperAdmin') return true;
@@ -983,7 +983,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                     {!aiProjectFilter && <span className="ml-1 text-[9px]">▼</span>}
                                 </button>
                                 {showDropdown === 'aiProject' && (
-                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                    <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
                                         {filteredProjects.length === 0 ? (
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
                                         ) : (
@@ -1036,7 +1036,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                     {!aiStepFilter && <span className="ml-1 text-[9px]">▼</span>}
                                                 </button>
                                                 {showDropdown === 'aiStep' && (
-                                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                                    <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
                                                         <div
                                                             onClick={() => { setAiStepFilter(null); setShowDropdown(null); }}
                                                             className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] font-medium"
@@ -1092,7 +1092,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                     {!manualPipelineFilter && <span className="ml-1 text-[9px]">▼</span>}
                                 </button>
                                 {showDropdown === 'manualPipeline' && (
-                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                    <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
                                         {filteredManualProjects.length === 0 ? (
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pipelines</div>
                                         ) : (
@@ -1145,7 +1145,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                     {!manualStepFilter && <span className="ml-1 text-[9px]">▼</span>}
                                                 </button>
                                                 {showDropdown === 'manualStep' && (
-                                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
+                                                    <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
                                                         <div
                                                             onClick={() => { setManualStepFilter(null); setShowDropdown(null); }}
                                                             className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] font-medium"
@@ -1393,7 +1393,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             <button className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5`}>
                                                 <Tag className="w-5 h-5" />
                                             </button>
-                                            <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/menu:opacity-100 pointer-events-none group-hover/menu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+                                            <div className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/menu:opacity-100 pointer-events-none group-hover/menu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
                                                 <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111b21]">
                                                     <span>Etiquetar candidato</span>
                                                 </div>
