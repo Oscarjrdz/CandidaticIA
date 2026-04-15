@@ -107,6 +107,11 @@ const InstanceCard = ({ instance, index, onUpdate, onDelete, onStatusCheck, show
                                     <Users className="w-3 h-3" /> {instance.candidateCount}
                                 </span>
                             )}
+                            {instance.botActive === false && (
+                                <span className="text-[10px] font-bold text-red-500 bg-red-100 dark:bg-red-900/30 px-1.5 py-0.5 rounded">
+                                    Bot OFF
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -153,6 +158,23 @@ const InstanceCard = ({ instance, index, onUpdate, onDelete, onStatusCheck, show
                         onChange={(e) => onUpdate(index, 'token', e.target.value)}
                         helperText="UUID de seguridad del Gateway"
                     />
+
+                    {/* Bot AI Toggle */}
+                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-lg p-3 border border-slate-100 dark:border-slate-700 flex items-center justify-between mt-2">
+                        <div>
+                            <h4 className="text-xs font-bold text-slate-800 dark:text-white">Inteligencia Artificial</h4>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">Activar para que Brenda responda chats. Si desactivas, funciona modo manual.</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
+                            <input 
+                                type="checkbox" 
+                                className="sr-only peer" 
+                                checked={instance.botActive !== false}
+                                onChange={(e) => onUpdate(index, 'botActive', e.target.checked)}
+                            />
+                            <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
 
                     <div className="flex items-center gap-2 pt-1">
                         <button
@@ -269,7 +291,8 @@ const UltraMsgSettings = ({ showToast }) => {
             identifier: `CAND-${String(prev.length + 1).padStart(2, '0')}`,
             instanceId: '',
             token: '',
-            status: 'active'
+            status: 'active',
+            botActive: true
         }]);
         showToast('Nueva línea agregada. Completa los datos y guarda.', 'success');
     };
@@ -288,7 +311,8 @@ const UltraMsgSettings = ({ showToast }) => {
                     identifier: `CAND-${String(instances.length + 1).padStart(2, '0')}`,
                     instanceId: data.instance_id,
                     token: data.token,
-                    status: 'active'
+                    status: 'active',
+                    botActive: true
                 };
                 setInstances(prev => [...prev, newInstance]);
                 showToast(`Instancia ${data.instance_id} creada en el Gateway. ¡Guarda y escanea el QR!`, 'success');
