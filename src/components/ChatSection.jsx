@@ -533,6 +533,30 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         return true;
     });
 
+    // ── Badge counts (computed from base candidates after RBAC/search, before category filter) ──
+    const baseCandidates = (candidates || []).filter(c => {
+        const searchVal = (searchQuery || "").toLowerCase();
+        const matchesSearch = 
+            (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
+            (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
+            (c?.whatsapp && String(c.whatsapp).includes(searchVal));
+        if (!matchesSearch && searchVal !== "") return false;
+        if (roleAllowedCandidateIds !== null) {
+            const allowedCrm = user?.allowed_crm_projects;
+            const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
+            const inAllowedProject = roleAllowedCandidateIds.has(c.id);
+            const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
+            if (!inAllowedProject && !inAllowedCrm) return false;
+        }
+        return true;
+    });
+    const badgeCounts = {
+        all: baseCandidates.length,
+        unread: baseCandidates.filter(c => c?.unread === true).length,
+        complete: baseCandidates.filter(c => isProfileComplete(c)).length,
+        incomplete: baseCandidates.filter(c => !isProfileComplete(c)).length
+    };
+
     // Scroll to bottom
     const prevMessagesLength = useRef(0);
     useEffect(() => {
@@ -865,13 +889,18 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                         {canSeeFilter('filter_todos') && (
                             <button 
                                 onClick={() => { setActiveFilter('all'); setFilterValue(null); setAiProjectFilter(null); setAiStepFilter(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
                                     activeFilter === 'all' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
                                 Todos
+                                {badgeCounts.all > 0 && (
+                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#8696a0] text-white text-[10px] font-bold rounded-full">
+                                        {badgeCounts.all > 999 ? '999+' : badgeCounts.all}
+                                    </span>
+                                )}
                             </button>
                         )}
                         {canSeeFilter('filter_unread') && (
@@ -884,9 +913,9 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 }`}
                             >
                                 No leídos
-                                {unreadCount > 0 && (
+                                {badgeCounts.unread > 0 && (
                                     <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
-                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                        {badgeCounts.unread > 99 ? '99+' : badgeCounts.unread}
                                     </span>
                                 )}
                             </button>
@@ -894,25 +923,35 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                         {canSeeFilter('filter_complete') && (
                             <button 
                                 onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setShowDropdown(null); }}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
                                     activeFilter === 'profile' && filterValue === 'complete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
                                 Completos
+                                {badgeCounts.complete > 0 && (
+                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-green-500 text-white text-[10px] font-bold rounded-full">
+                                        {badgeCounts.complete > 999 ? '999+' : badgeCounts.complete}
+                                    </span>
+                                )}
                             </button>
                         )}
                         {canSeeFilter('filter_incomplete') && (
                             <button 
                                 onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setShowDropdown(null); }}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
                                     activeFilter === 'profile' && filterValue === 'incomplete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
                                 Incompletos
+                                {badgeCounts.incomplete > 0 && (
+                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-orange-500 text-white text-[10px] font-bold rounded-full">
+                                        {badgeCounts.incomplete > 999 ? '999+' : badgeCounts.incomplete}
+                                    </span>
+                                )}
                             </button>
                         )}
 
