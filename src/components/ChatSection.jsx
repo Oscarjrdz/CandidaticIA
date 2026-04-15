@@ -510,6 +510,14 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             if (!inAllowedProject && !inAllowedCrm) return false;
         }
 
+        // --- Strict Inbox para Reclutadores (Sin botón 'Todos') ---
+        if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
+            const hasAnyTag = Array.isArray(c?.tags) && c.tags.length > 0;
+            const hasAnyProj = c?.currentVacancyId;
+            const hasAnyCrm = c?.manualProjectId;
+            if (!hasAnyTag && !hasAnyProj && !hasAnyCrm) return false;
+        }
+
         if (activeFilter === 'unread' && c?.unread !== true) return false;
         if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
         if (activeFilter === 'profile') {
@@ -863,7 +871,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                 {/* Eliminada la barra Header Izquierdo a petición del usuario */}
 
                 {/* Barra de Búsqueda y Filtros Rápidos */}
-                <div className="p-2 bg-white dark:bg-[#111b21] flex flex-col gap-2 border-b border-[#f0f2f5] dark:border-[#222e35] relative z-10">
+                <div className="p-2 bg-white dark:bg-[#111b21] flex flex-col gap-2 border-b border-[#f0f2f5] dark:border-[#222e35] relative z-50">
                     <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-1.5 flex items-center">
                         <Search className="w-4 h-4 text-[#54656f] dark:text-[#aebac1] mr-3" />
                         <input 
