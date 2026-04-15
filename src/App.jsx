@@ -192,7 +192,7 @@ function App() {
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 
         {/* Top Bar — título de sección + saludo + tema */}
-        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90 shrink-0">
+        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 shrink-0" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>
           <div className="px-4 sm:px-8 py-3 sm:py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3 min-w-0">
@@ -309,7 +309,7 @@ function App() {
         </main>
 
         {/* Footer */}
-        <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10 backdrop-blur-lg bg-opacity-90 dark:bg-opacity-90">
+        <footer className="py-3 sm:py-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0 sticky bottom-0 z-10" style={{ WebkitBackdropFilter: 'blur(12px)', backdropFilter: 'blur(12px)', backgroundColor: 'rgba(255,255,255,0.9)' }}>
           <div className="px-4 sm:px-8">
             <p className="text-center text-xs sm:text-sm text-gray-500 dark:text-gray-400">
               Candidatic IA v1.0 • Hecho con ❤️

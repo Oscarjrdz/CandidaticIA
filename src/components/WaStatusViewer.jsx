@@ -148,7 +148,7 @@ export default function WaStatusViewer({ triggerRefresh = 0 }) {
                         <X className="w-6 h-6" />
                     </button>
 
-                    <div className="w-full max-w-[420px] h-[100dvh] flex flex-col bg-black relative mx-auto" style={{
+                    <div className="w-full max-w-[420px] h-screen flex flex-col bg-black relative mx-auto" style={{
                         boxShadow: '0 0 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05)'
                     }}>
                         {/* 👆 Progress bars (Snapchat style) */}

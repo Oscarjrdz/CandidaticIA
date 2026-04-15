@@ -268,7 +268,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate,
                 </nav>
 
                 {/* Footer / Bottom Items */}
-                <div className="relative p-4 mt-auto border-t border-white/5 bg-white/5 backdrop-blur-sm">
+                <div className="relative p-4 mt-auto border-t border-white/5 bg-white/5" style={{ WebkitBackdropFilter: 'blur(4px)', backdropFilter: 'blur(4px)' }}>
                     <div className="space-y-2">
                         {bottomItem && (
                             <button
