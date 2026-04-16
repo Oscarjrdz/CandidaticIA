@@ -252,7 +252,6 @@ function App() {
                       </div>
                     </div>
                   )}
-                </div>
                   <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">
                     {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
                       : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
