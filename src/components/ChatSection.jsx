@@ -1160,7 +1160,9 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                     </div>
 
                     {/* Filter Chips */}
-                    <div className="flex flex-wrap content-start items-start gap-2 pb-1 pt-0 min-h-[105px]">
+                    <div className="flex flex-col gap-2 pb-2 min-h-[105px]">
+                        {/* Renglón 1: Estados */}
+                        <div className="flex flex-wrap items-start gap-2">
                         {canSeeFilter('filter_todos') && (
                             <button 
                                 onClick={() => { setActiveFilter('all'); setFilterValue(null); setAiProjectFilter(null); setAiStepFilter(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
@@ -1197,8 +1199,11 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 Incompletos ({badgeCounts.incomplete})
                             </button>
                         )}
+                        </div>
 
-                        {/* Etiquetas Dropdown */}
+                        {/* Renglón 2: Etiquetas */}
+                        <div className="flex flex-wrap items-start gap-2">
+                            {/* Etiquetas Dropdown */}
                         {canSeeFilter('filter_labels') && (
                         <div className="relative">
                             <button 
@@ -1247,12 +1252,16 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         );
                                     })}
                                 </div>
+                                </div>
                             )}
                         </div>
                         )}
+                        </div>
 
-                        {/* Riel A: Proyectos (Maletín) */}
-                        {canSeeFilter('filter_projects') && (
+                        {/* Renglón 3: Proyectos y CRM Manual */}
+                        <div className="flex flex-wrap items-start gap-2">
+                            {/* Riel A: Proyectos (Maletín) */}
+                            {canSeeFilter('filter_projects') && (
                         <div className="flex items-center gap-1 shrink-0">
                             <div className="relative">
                                 <button 
