@@ -856,6 +856,19 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         }
     };
 
+    const injectVacancy = (vac) => {
+        if (!vac || !vac.messageDescription) return;
+        setNewMessage((prev) => {
+            const baseStr = prev ? prev.trim() + '\n\n' : '';
+            return baseStr + vac.messageDescription;
+        });
+        setShowDropdown(null);
+        setTimeout(() => {
+            const input = document.getElementById('chat-msg-input');
+            if (input) input.focus();
+        }, 50);
+    };
+
     const handleSend = async (e) => {
         if (e) e.preventDefault();
         const msg = newMessage.trim();
@@ -1799,7 +1812,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             </div>
                                         )}
 
-                                        <div className="relative inline-block min-w-[50px] max-w-full group/msgbody">
+                                        <div className="relative inline-block min-w-[110px] max-w-full group/msgbody">
                                             {/* Media Rendering */}
                                             {msg.mediaUrl && (
                                                 <div className="mb-0.5 rounded overflow-hidden mt-1 cursor-pointer">
@@ -1822,9 +1835,9 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
                                             {/* Text Rendering */}
                                             {msg.content && (
-                                                <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '10px', paddingRight: '48px', paddingTop: msg.mediaUrl ? '2px' : '0' }} dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) }}></div>
+                                                <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '16px', paddingRight: '80px', paddingTop: msg.mediaUrl ? '2px' : '0' }} dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) }}></div>
                                             )}
-                                            {!msg.content && <div style={{ paddingBottom: '10px', paddingRight: '48px' }}></div>}
+                                            {!msg.content && <div style={{ paddingBottom: '16px', paddingRight: '80px' }}></div>}
                                             
                                             {/* Reaction Badges */}
                                             {msg.reactions && msg.reactions.length > 0 && (
