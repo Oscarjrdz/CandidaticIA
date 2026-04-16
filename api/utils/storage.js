@@ -1271,6 +1271,42 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
     return false;
 };
 
+export const updateMessageReaction = async (candidateId, messageId, emoji) => {
+    const client = getClient();
+    if (!client || !candidateId || !messageId) return false;
+
+    const key = `messages:${candidateId}`;
+    try {
+        const raw = await client.lrange(key, 0, -1);
+        const messages = raw.map(r => JSON.parse(r));
+
+        const index = messages.findIndex(m => m.ultraMsgId === messageId || m.id === messageId);
+        if (index !== -1) {
+            const msg = messages[index];
+            if (!msg.reactions) msg.reactions = [];
+            
+            // Si el emoji viene vacio significa remover la reaccion del candidato
+            if (!emoji) {
+                msg.reactions = []; // Simplificacion: Asume 1 reaccion
+            } else {
+                // Buscamos si ya reaccionó para actualizar o añadir
+                const exists = msg.reactions.find(r => typeof r === 'string' ? true : r.emoji);
+                if (exists) {
+                    msg.reactions = [emoji];
+                } else {
+                    msg.reactions.push(emoji);
+                }
+            }
+            
+            await client.lset(key, index, JSON.stringify(msg));
+            return { updated: true, msg };
+        }
+    } catch (e) {
+        console.error('❌ [Storage] updateMessageReaction Error:', e);
+    }
+    return false;
+};
+
 /**
  * ATOMIC WEBHOOK TRANSACTION (F1 Mode)
  * Consolidates: saveEvent, saveMessage, updateCandidate, incrementMessageStats

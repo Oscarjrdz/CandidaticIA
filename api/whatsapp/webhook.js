@@ -21,7 +21,8 @@ import {
     getUsers,
     saveUser,
     saveWebhookTransaction,
-    markMessageAsDone
+    markMessageAsDone,
+    updateMessageReaction
 } from '../utils/storage.js';
 import { getUltraMsgConfig, getUltraMsgContact } from './utils.js';
 import { FEATURES } from '../utils/feature-flags.js';
@@ -460,6 +461,7 @@ export default async function handler(req, res) {
                     if (messageData.message.imageMessage) messageType = 'image';
                     else if (messageData.message.audioMessage) messageType = 'audio';
                     else if (messageData.message.stickerMessage) messageType = 'sticker';
+                    else if (messageData.message.reactionMessage) messageType = 'reaction';
                     else messageType = 'text';
                 }
                 messageType = messageType || 'text';
@@ -511,6 +513,28 @@ export default async function handler(req, res) {
                     from: 'user', content: body, type: messageType,
                     timestamp: new Date().toISOString()
                 };
+
+                // --- REACTION HANDLING ---
+                if (messageType === 'reaction' || messageData.reaction) {
+                    const reactionPayload = messageData.reaction || messageData.message?.reactionMessage;
+                    if (reactionPayload) {
+                        const targetMsgId = reactionPayload.stanzaId || reactionPayload.key?.id;
+                        const emoji = reactionPayload.text || '';
+                        
+                        // Ignoramos si reaccionó a nuestra historia o a un error 
+                        if (targetMsgId && candidateId) {
+                            await updateMessageReaction(candidateId, targetMsgId, emoji);
+                            
+                            // Emit a notification (optional, depends on frontend)
+                            const redis = getRedisClient();
+                            if (redis) {
+                                await redis.del('stats:bot:last_calc');
+                            }
+                        }
+                        
+                        return res.status(200).send('reaction_processed');
+                    }
+                }
 
                 if (messageData.media) {
                     msgToSave.mediaUrl = messageData.media;
