@@ -1144,6 +1144,7 @@ export const processMessage = async (candidateId, incomingMessage, msgId = null)
         const candidateUpdates = {
             lastBotMessageAt: new Date().toISOString(),
             ultimoMensaje: new Date().toISOString(),
+            unreadMsgCount: 0,
             esNuevo: candidateData.esNuevo === 'SI' ? 'NO' : candidateData.esNuevo
         };
 

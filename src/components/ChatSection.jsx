@@ -1388,8 +1388,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             </div>
                                             <div className="flex items-center shrink-0 ml-1 gap-1">
                                                 {isUnread && (
-                                                    <div className="w-[18px] h-[18px] rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center mr-1 shadow-sm shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.15)] animate-pulse">
-                                                        <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                                    <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center mr-1 shadow-sm shrink-0 text-white text-[11px] font-bold">
+                                                        {chat.unreadMsgCount || 1}
                                                     </div>
                                                 )}
                                                 {chatLocks[chat.id] && chatLocks[chat.id].user !== (user?.name || '') && (

@@ -521,6 +521,7 @@ export default async function handler(req, res) {
                     ...candidate,
                     ultimoMensaje: new Date().toISOString(),
                     lastUserMessageAt: new Date().toISOString(),
+                    unreadMsgCount: (Number(candidate?.unreadMsgCount) || 0) + 1,
                     instanceId: capturedInstanceId || candidate?.instanceId // 🔄 DYNAMIC: Respond via the number they just wrote to
                 };
 
@@ -531,6 +532,12 @@ export default async function handler(req, res) {
                     eventData: messageData,
                     statsType: 'incoming'
                 });
+                
+                // Force instant SSE stat recalculation so unread badge goes up in realtime
+                const redisForCache = getRedisClient();
+                if (redisForCache) {
+                    await redisForCache.del('stats:bot:last_calc');
+                }
 
                 // --- AI PROCESSING (Turbo Mode - Async Queue) ---
                 const aiPromise = (async () => {

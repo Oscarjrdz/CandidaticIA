@@ -187,6 +187,12 @@ export default async function handler(req, res) {
             await updateCandidate(candidateId, {
                 ultimoMensaje: timestamp
             });
+            
+            // Force instant SSE stat recalculation so unread badge drops in realtime
+            const redisClient = getRedisClient();
+            if (redisClient) {
+                await redisClient.del('stats:bot:last_calc');
+            }
 
             return res.status(200).json({ success: true, message: msgToSave });
         }
