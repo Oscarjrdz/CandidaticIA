@@ -64,7 +64,7 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
-            const { candidateId, message, type = 'text', mediaUrl, base64Data } = req.body;
+            const { candidateId, message, type = 'text', mediaUrl, base64Data, replyToId } = req.body;
 
             if (!candidateId || (!message && !mediaUrl)) {
                 return res.status(400).json({ error: 'Faltan datos requeridos' });
@@ -92,6 +92,16 @@ export default async function handler(req, res) {
                 status: 'queued',
                 timestamp: timestamp
             };
+
+            if (replyToId) {
+                msgToSave.contextInfo = {
+                    quotedMessage: {
+                        stanzaId: replyToId,
+                        participant: candidate.whatsapp, // Simplification
+                        conversation: ''
+                    }
+                };
+            }
 
             await saveMessage(candidateId, msgToSave);
 
@@ -127,13 +137,15 @@ export default async function handler(req, res) {
 
 
                 const cleanTo = candidate.whatsapp.replace(/\D/g, '');
+                
+                const extraParams = {};
+                if (replyToId) extraParams.referenceId = replyToId;
 
                 if (type === 'text') {
-                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat');
+                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat', extraParams);
                 } else {
-                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, deliveryContent, type, {
-                        caption: finalMessage
-                    });
+                    extraParams.caption = finalMessage;
+                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, deliveryContent, type, extraParams);
                 }
 
                 if (sendResult) {

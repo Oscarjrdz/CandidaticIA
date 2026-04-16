@@ -105,6 +105,11 @@ export const sendUltraMsgMessage = async (instanceId, token, to, body, type = 'c
             to: formattedTo,
             priority: extraParams.priority !== undefined ? extraParams.priority : 10 // Default to 10 for safety, but we'll use 0 for bots
         };
+        if (extraParams.referenceId) {
+            payload.referenceId = extraParams.referenceId;
+            payload.priority = 'reply'; // Force reply queue behavior in Gateway
+        }
+        
         const isHttp = typeof body === 'string' && body.startsWith('http');
 
         switch (endpoint) {

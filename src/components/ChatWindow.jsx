@@ -4,6 +4,7 @@ import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
 import CandidateADNCard from './CandidateADNCard';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
+import { Virtuoso } from 'react-virtuoso';
 const formatWhatsAppText = (text) => {
     if (!text) return '';
     return text
@@ -35,6 +36,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const [newMessage, setNewMessage] = useState('');
     const [sending, setSending] = useState(false);
     const [availableFields, setAvailableFields] = useState([]);
+    const [replyToMsg, setReplyToMsg] = useState(null);
     const { updatedCandidate } = useCandidatesSSE();
 
     // Recording State
@@ -54,7 +56,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
     // Refs
     const windowRef = useRef(null);
-    const messagesEndRef = useRef(null);
+    const virtuosoRef = useRef(null);
 
     // Reset position when opening
     useEffect(() => {
@@ -105,11 +107,10 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     };
 
     // Auto-scroll ONLY on new messages
+    // Auto-scroll ONLY on new messages
+    // (Virtuoso maneja esto con followOutput, por lo que deshabilitamos el scroll manual viejo)
     const prevMessagesLength = useRef(0);
     useEffect(() => {
-        if (messages.length > prevMessagesLength.current) {
-            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
         prevMessagesLength.current = messages.length;
     }, [messages]);
 
@@ -159,6 +160,16 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             timestamp: new Date().toISOString()
         };
 
+        if (replyToMsg) {
+            optimisticMsg.contextInfo = {
+                quotedMessage: {
+                    stanzaId: replyToMsg.id,
+                    participant: replyToMsg.from === 'me' ? 'me' : candidate.whatsapp,
+                    conversation: replyToMsg.content || 'Media'
+                }
+            };
+        }
+
         // Empujar inmediato a la pantalla
         setMessages(prev => [...prev, optimisticMsg]);
         
@@ -166,6 +177,10 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         setNewMessage('');
         setAudioBlob(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
+        
+        // Extraer captura actual de la cita antes de limpiar
+        const currentReplyToMsg = replyToMsg;
+        setReplyToMsg(null);
 
         try {
             let payload = {
@@ -174,6 +189,10 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 type: forceType,
                 mediaUrl: forceMedia
             };
+            
+            if (currentReplyToMsg) {
+                payload.replyToId = currentReplyToMsg.id;
+            }
 
             // Handle Audio Recording Attachment
             if (isAudioUpload) {
@@ -422,6 +441,108 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         return [{...msg, content}];
     }) : [];
 
+    // --- RENDER MESSAGE ---
+    const renderMessage = (idx, msg) => {
+        if (!msg) return null;
+        const isMe = msg.from === 'me' || msg.from === 'bot';
+        
+        // Find previous message for tail logic
+        const prevMsg = idx > 0 ? displayMessages[idx - 1] : null;
+        const isPrevMe = prevMsg ? (prevMsg.from === 'me' || prevMsg.from === 'bot') : null;
+        const isFirstInSeries = !prevMsg || isMe !== isPrevMe;
+
+        return (
+            <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} group relative ${!isFirstInSeries ? '-mt-1.5' : ''} px-2`}>
+                {/* 🔄 Botón de Cotizar (Reply) Oculto hasta Hover */}
+                <button
+                    onClick={() => setReplyToMsg(msg)}
+                    className={`absolute top-1/2 -translate-y-1/2 ${isMe ? 'right-full mr-2' : 'left-full ml-2'} opacity-0 group-hover:opacity-100 p-1.5 rounded-full bg-white/50 dark:bg-black/50 shadow-sm text-gray-500 hover:text-blue-500 transition-all cursor-pointer z-20`}
+                    title="Responder mensaje"
+                >
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4"></polyline><path d="M20 20v-7a4 4 0 0 0-4-4H4"></path></svg>
+                </button>
+
+                <div className={`
+                    max-w-[85%] rounded-[7.5px] px-2 py-1.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative z-10
+                    ${isMe
+                        ? `bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tr-none' : ''}`
+                        : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tl-none' : ''}`}
+                `}>
+                    {/* Tail */}
+                    {isFirstInSeries && (
+                        <div 
+                            className={`absolute top-0 w-3 h-3 ${isMe ? '-right-2 bg-[#d9fdd3] dark:bg-[#005c4b]' : '-left-2 bg-white dark:bg-[#202c33]'}`} 
+                            style={{ clipPath: isMe ? 'polygon(0 0, 0 100%, 100% 0)' : 'polygon(100% 0, 100% 100%, 0 0)' }}
+                        />
+                    )}
+
+                    {/* Quote Context (Cita visual) si el mensaje es respuesta */}
+                    {msg.contextInfo?.quotedMessage && (
+                        <div className="bg-black/5 dark:bg-black/20 rounded-[4px] p-2 mb-1.5 border-l-4 border-blue-400 text-[11.5px] overflow-hidden whitespace-nowrap text-ellipsis cursor-pointer opacity-80" onClick={() => {}}>
+                            <span className="font-bold text-blue-500 dark:text-blue-400 block mb-0.5">
+                                {msg.contextInfo.quotedMessage.participant === 'me' ? 'Tú' : candidate?.nombre || 'Usuario'}
+                            </span>
+                            <span className="text-gray-600 dark:text-gray-300">
+                                {msg.contextInfo.quotedMessage.conversation || 'Audio / Imagen'}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Media Rendering */}
+                    {msg.mediaUrl && (
+                        <div className="mb-2 rounded-lg overflow-hidden border border-black/5 relative min-w-[200px]">
+                            {(msg.type === 'image' || msg.type === 'image_received') && (
+                                <img src={msg.mediaUrl} loading="lazy" alt="Media" className="max-w-full h-auto max-h-[300px] object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.mediaUrl, '_blank')} />
+                            )}
+                            {(msg.type === 'video' || msg.type === 'video_received') && (
+                                <video src={msg.mediaUrl} controls className="max-w-full h-auto" />
+                            )}
+                            {(msg.type === 'audio' || msg.type === 'voice' || msg.type === 'ptt' || msg.type === 'audio_received') && (
+                                <div className="flex flex-col space-y-1 p-1 bg-black/5 dark:bg-white/5 rounded-lg">
+                                    <audio src={msg.mediaUrl} controls className="max-w-full h-8 mt-1 block" style={{ filter: isMe ? 'sepia(100%) hue-rotate(90deg) saturate(300%)' : '' }} />
+                                    <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-600 dark:text-blue-400 opacity-60 hover:underline pl-1 text-right block mt-1">
+                                        Descargar audio
+                                    </a>
+                                </div>
+                            )}
+                            {(msg.type === 'document' || msg.type === 'doc_received') && (
+                                <div className="p-3 bg-black/5 flex items-center space-x-2 cursor-pointer" onClick={() => window.open(msg.mediaUrl, '_blank')}>
+                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" className="text-gray-600 dark:text-gray-300"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                                    <span className="text-xs font-medium underline">Ver documento</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {!msg.content && msg.mediaUrl && (msg.type === 'voice' || msg.type === 'ptt') && (
+                        <p className="text-[11px] italic opacity-50 mb-1">Nota de voz</p>
+                    )}
+
+                    {msg.content && (
+                        <div className="relative inline-block min-w-[40px] max-w-full">
+                            <div 
+                                className="whitespace-pre-wrap leading-[1.35] inline-block break-words" 
+                                style={{ paddingBottom: '10px', paddingRight: '48px' }}
+                                dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) }}
+                            />
+                        </div>
+                    )}
+
+                    <div className={`flex items-center space-x-1 select-none pr-1 ${msg.content ? 'absolute bottom-[3px] right-2' : 'justify-end mt-1'}`}>
+                        <p className="text-[10.5px] text-gray-500/90 dark:text-gray-400/90 font-medium">
+                            {safeFormatTime(msg.timestamp)}
+                        </p>
+                        {isMe && (
+                            <span className={`text-[12.5px] font-bold uppercase leading-none ${msg.status === 'seen' || msg.status === 'read' ? 'text-[#53bdeb]' : 'text-gray-400/80'}`}>
+                                {msg.status === 'seen' || msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : msg.status === 'queued' ? '...' : '✓'}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
             {/* Backdrop opcional - lo haremos invisible para dar sensación 'flotante' real, 
@@ -495,7 +616,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 <VacancyHistoryCard candidateId={candidate?.id} />
 
                 {/* Messages Area - WhatsApp Original Styling */}
-                <div className="h-96 overflow-y-auto p-4 space-y-2 relative text-[14.2px] bg-[#efeae2] dark:bg-[#0b141a]">
+                <div className="h-[450px] flex flex-col relative text-[14.2px] bg-[#efeae2] dark:bg-[#0b141a]">
                     <div 
                         className="absolute inset-0 z-0 opacity-[0.4] dark:opacity-[0.05] pointer-events-none"
                         style={{
@@ -505,93 +626,23 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                         }}
                     ></div>
                     
-                    <div className="relative z-10 space-y-2 pb-2">
                     {displayMessages.length === 0 ? (
-                        <div className="text-center py-2 bg-[#ffeed0] dark:bg-[#cca868]/10 text-[#111b21] dark:text-[#f7cd73]/70 rounded-lg mx-auto w-4/5 shadow-sm select-none mt-2 border border-black/5 dark:border-white/5">
-                            <p className="text-[10.5px] leading-tight">Los mensajes están protegidos de extremo a extremo por Candidatic.</p>
+                        <div className="relative z-10 text-center py-2 bg-[#ffeed0] dark:bg-[#cca868]/10 text-[#111b21] dark:text-[#f7cd73]/70 rounded-lg mx-auto w-4/5 shadow-sm select-none mt-4 border border-black/5 dark:border-white/5">
+                            <p className="text-[10.5px] leading-tight">Los mensajes están protegidos por Candidatic IA Nivel Meta.</p>
                         </div>
                     ) : (
-                        displayMessages.map((msg, idx) => {
-                            if (!msg) return null; // Safe guard
-                            const isMe = msg.from === 'me' || msg.from === 'bot';
-                            
-                            const prevMsg = idx > 0 ? displayMessages[idx - 1] : null;
-                            const isPrevMe = prevMsg ? (prevMsg.from === 'me' || prevMsg.from === 'bot') : null;
-                            const isFirstInSeries = !prevMsg || isMe !== isPrevMe;
-
-                            return (
-                                <div key={idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group relative ${!isFirstInSeries ? '-mt-1.5' : ''}`}>
-                                    <div className={`
-                                        max-w-[85%] rounded-[7.5px] px-2 py-1.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative z-10
-                                        ${isMe
-                                            ? `bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tr-none' : ''}`
-                                            : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tl-none' : ''}`}
-                                    `}>
-                                        {/* Tail */}
-                                        {isFirstInSeries && (
-                                            <div 
-                                                className={`absolute top-0 w-3 h-3 ${isMe ? '-right-2 bg-[#d9fdd3] dark:bg-[#005c4b]' : '-left-2 bg-white dark:bg-[#202c33]'}`} 
-                                                style={{ clipPath: isMe ? 'polygon(0 0, 0 100%, 100% 0)' : 'polygon(100% 0, 100% 100%, 0 0)' }}
-                                            />
-                                        )}
-
-                                        {/* Media Rendering */}
-                                        {msg.mediaUrl && (
-                                            <div className="mb-2 rounded-lg overflow-hidden border border-black/5">
-                                                {(msg.type === 'image' || msg.type === 'image_received') && (
-                                                    <img src={msg.mediaUrl} alt="Media" className="max-w-full h-auto cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.mediaUrl, '_blank')} />
-                                                )}
-                                                {(msg.type === 'video' || msg.type === 'video_received') && (
-                                                    <video src={msg.mediaUrl} controls className="max-w-full h-auto" />
-                                                )}
-                                                {(msg.type === 'audio' || msg.type === 'voice' || msg.type === 'ptt' || msg.type === 'audio_received') && (
-                                                    <div className="flex flex-col space-y-1">
-                                                        <audio src={msg.mediaUrl} controls className="max-w-full h-10 mt-1" />
-                                                        <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 dark:text-blue-400 underline pl-1">
-                                                            Abrir audio en pestaña nueva
-                                                        </a>
-                                                    </div>
-                                                )}
-                                                {(msg.type === 'document' || msg.type === 'doc_received') && (
-                                                    <div className="p-3 bg-black/5 flex items-center space-x-2 cursor-pointer" onClick={() => window.open(msg.mediaUrl, '_blank')}>
-                                                        <Paperclip className="w-4 h-4" />
-                                                        <span className="text-xs font-medium underline">Ver documento</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-
-                                        {!msg.content && msg.mediaUrl && (msg.type === 'voice' || msg.type === 'ptt') && (
-                                            <p className="text-[11px] italic opacity-50 mb-1">Nota de voz</p>
-                                        )}
-
-                                        {msg.content && (
-                                            <div className="relative inline-block min-w-[40px] max-w-full">
-                                                <div 
-                                                    className="whitespace-pre-wrap leading-[1.35] inline-block break-words" 
-                                                    style={{ paddingBottom: '10px', paddingRight: '48px' }}
-                                                    dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) }}
-                                                />
-                                            </div>
-                                        )}
-
-                                        <div className={`flex items-center space-x-1 select-none pr-1 ${msg.content ? 'absolute bottom-[3px] right-2' : 'justify-end mt-1'}`}>
-                                            <p className="text-[10.5px] text-gray-500/90 dark:text-gray-400/90 font-medium">
-                                                {safeFormatTime(msg.timestamp)}
-                                            </p>
-                                            {isMe && (
-                                                <span className={`text-[12.5px] font-bold uppercase leading-none ${msg.status === 'seen' || msg.status === 'read' ? 'text-[#53bdeb]' : 'text-gray-400/80'}`}>
-                                                    {msg.status === 'seen' || msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : '✓'}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })
+                        <div className="flex-1 relative z-10">
+                            <Virtuoso
+                                ref={virtuosoRef}
+                                data={displayMessages}
+                                initialTopMostItemIndex={displayMessages.length - 1}
+                                followOutput="smooth"
+                                alignToBottom
+                                itemContent={renderMessage}
+                                className="w-full h-full [&>div]:py-2 [&>div]:space-y-1.5 custom-scrollbar"
+                            />
+                        </div>
                     )}
-                    <div ref={messagesEndRef} className="h-2" />
-                    </div>
                 </div>
 
                 {/* Variable Tray */}
@@ -617,8 +668,27 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     </div>
                 )}
 
-                {/* Input Area */}
-                <div className="p-3 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                {/* Input Area (With Reply Context Banner) */}
+                <div className="flex flex-col bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+                    
+                    {/* Reply Banner preview */}
+                    {replyToMsg && (
+                        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between animate-in slide-in-from-bottom-2">
+                            <div className="flex-1 border-l-4 border-blue-500 pl-3">
+                                <p className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                                    Respondiendo a {replyToMsg.from === 'user' ? candidate.nombre : 'Tú'}
+                                </p>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-1">
+                                    {replyToMsg.content || 'Media/Audio adjunto'}
+                                </p>
+                            </div>
+                            <button onClick={() => setReplyToMsg(null)} className="p-1 text-gray-400 hover:text-red-500 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="p-3">
                     {isRecording ? (
                         <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/20 px-4 py-2 rounded-lg animate-pulse">
                             <div className="flex items-center space-x-3 text-red-600 dark:text-red-400">
