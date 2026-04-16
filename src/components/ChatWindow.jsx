@@ -100,19 +100,57 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
     // Real-Time Updates Listener (Replaces Short-Polling)
     useEffect(() => {
-        if (!isOpen || !candidate || !updatedCandidate) return;
-        
-        const isMatchById = updatedCandidate.candidateId === candidate.id;
-        const isMatchByPhone = updatedCandidate.phoneMatch && candidate.whatsapp && candidate.whatsapp.includes(updatedCandidate.phoneMatch);
-        
-        if (isMatchById || isMatchByPhone) {
-            // Signal received that this candidate has a new message!
-            if (updatedCandidate?.updates?.newMessage || updatedCandidate?.updates?.ultimoMensaje) {
-                // Fetch directly to get the full formatted message immediately
-                loadMessages();
-            }
-        }
-    }, [updatedCandidate]);
+        if (!isOpen || !candidate) return;
+
+        // Escucha el evento directo del WebSocket
+        const handleWsUpsert = (e) => {
+             const payload = e.detail;
+             if (!payload) return;
+             
+             const rawPhone = candidate.whatsapp ? candidate.whatsapp.replace(/\D/g, '') : '';
+             const jid = payload.remoteJid || payload.from || payload.sender || payload.id || '';
+             const msgPhone = typeof jid === 'string' ? jid.split('@')[0] : '';
+             
+             // Si el origen del socket coincide con el teléfono de este candidato abierto
+             if (rawPhone && msgPhone && (msgPhone.includes(rawPhone) || rawPhone.includes(msgPhone))) {
+                 
+                 // Búsqueda profunda de texto para inyectar la viñeta inmediatamente
+                 let textContent = '';
+                 if (payload.text) textContent = payload.text;
+                 else if (payload.message?.conversation) textContent = payload.message.conversation;
+                 else if (payload.message?.extendedTextMessage?.text) textContent = payload.message.extendedTextMessage.text;
+                 else if (payload.content) textContent = payload.content;
+
+                 const isFromMe = payload.fromMe || false;
+                 
+                 const newMsg = {
+                     id: payload.messageId || payload.id || `ws_${Date.now()}`,
+                     from: isFromMe ? 'me' : 'candidate', // si lo envía el sistema, o si nos llega del candidato
+                     content: textContent || '',
+                     type: payload.type || 'text',
+                     mediaUrl: payload.mediaUrl || null,
+                     timestamp: new Date().toISOString(),
+                     status: 'received'
+                 };
+                 
+                 // Inyección Zero-Latency instantánea a la pantalla del usuario
+                 if (textContent || payload.mediaUrl || payload.type === 'image' || payload.type === 'audio') {
+                     setMessages(prev => {
+                         // Evita inyectar doble si la base de datos fue más rápida que el socket (raro)
+                         if (prev.some(m => m.id === newMsg.id)) return prev;
+                         return [...prev, newMsg];
+                     });
+                 }
+                 
+                 // Ejecutar carga silente al backend (1s y 3s después) para refrescar identificadores reales y URLs de multimedia locales
+                 setTimeout(loadMessages, 1200);
+                 setTimeout(loadMessages, 3500);
+             }
+        };
+
+        window.addEventListener('gateway_msg_upsert', handleWsUpsert);
+        return () => window.removeEventListener('gateway_msg_upsert', handleWsUpsert);
+    }, [isOpen, candidate]);
 
     const loadFields = async () => {
         try {
