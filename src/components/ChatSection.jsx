@@ -8,7 +8,15 @@ const safeFormatTime = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase();
+    return new Intl.DateTimeFormat('es-MX', {
+        timeZone: 'America/Monterrey',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    }).format(d).replace(' p. m.', ' pm').replace(' a. m.', ' am').replace(',', '');
 };
 
 const toTitleCase = (str) => {
