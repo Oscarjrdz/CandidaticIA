@@ -124,14 +124,36 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const handleSend = async (e, forceType = 'text', forceMedia = null) => {
         if (e) e.preventDefault();
 
+        // 1. Capturar datos actuales
         const messageToProcess = newMessage.trim();
-        if ((!messageToProcess && !audioBlob && !forceMedia) || sending) return;
+        const tempAudioBlob = audioBlob;
+        
+        if (!messageToProcess && !tempAudioBlob && !forceMedia) return;
 
-        setSending(true);
+        // --- OPTIMISTIC UI: Sensación instantánea WhatsApp Web ---
+        const tempId = `temp_${Date.now()}`;
+        const isAudioUpload = !!(tempAudioBlob && !forceMedia);
+        const previewMediaUrl = isAudioUpload ? URL.createObjectURL(tempAudioBlob) : forceMedia;
+
+        const optimisticMsg = {
+            id: tempId,
+            from: 'me',
+            content: messageToProcess,
+            type: isAudioUpload ? 'voice' : forceType,
+            mediaUrl: previewMediaUrl,
+            status: 'queued', // Status para relojito
+            timestamp: new Date().toISOString()
+        };
+
+        // Empujar inmediato a la pantalla
+        setMessages(prev => [...prev, optimisticMsg]);
+        
+        // Limpiar inputs al instante para dejar libre el cajón de texto
+        setNewMessage('');
+        setAudioBlob(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+
         try {
-            // Apply variable substitution locally for instant feedback if possible
-            // But real substitution happens in backend.
-
             let payload = {
                 candidateId: candidate.id,
                 message: messageToProcess,
@@ -140,26 +162,25 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             };
 
             // Handle Audio Recording Attachment
-            if (audioBlob && !forceMedia) {
+            if (isAudioUpload) {
                 const reader = new FileReader();
                 const base64Promise = new Promise((resolve) => {
                     reader.onloadend = () => resolve(reader.result);
-                    reader.readAsDataURL(audioBlob);
+                    reader.readAsDataURL(tempAudioBlob);
                 });
                 const base64 = await base64Promise;
 
-                // Upload to Redis for history persistence & scale
                 const uploadRes = await fetch('/api/upload', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: base64 }) // Endpoint accepts 'image' field for any base64
+                    body: JSON.stringify({ image: base64 })
                 });
                 const uploadData = await uploadRes.json();
 
                 if (uploadData.success) {
-                    payload.mediaUrl = uploadData.url; // Relative URL, backend will convert to absolute
+                    payload.mediaUrl = uploadData.url;
                     payload.type = 'voice';
-                    payload.base64Data = base64; // Stripped in backend orchestration
+                    payload.base64Data = base64;
                 } else {
                     throw new Error('Falló el procesamiento del audio');
                 }
@@ -174,18 +195,19 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             const data = await res.json();
 
             if (data.success) {
-                setNewMessage('');
-                setAudioBlob(null);
-                loadMessages();
+                // Actualizar estado del DOM con el mensaje real que trajo de regreso sin esperar al polling
+                setMessages(prev => prev.map(m => m.id === tempId ? { ...m, ...data.message, status: data.message?.status || 'sent' } : m));
             } else {
                 const errorMsg = data.details || data.error || 'Error desconocido';
+                // Retirar mensaje engañoso que falló
+                setMessages(prev => prev.filter(m => m.id !== tempId));
                 alert('Error al enviar: ' + errorMsg);
             }
         } catch (error) {
             console.error('Error enviando:', error);
+            // Retirar mensaje engañoso si se fue el internet
+            setMessages(prev => prev.filter(m => m.id !== tempId));
             alert('Error de conexión: ' + error.message);
-        } finally {
-            setSending(false);
         }
     };
 
