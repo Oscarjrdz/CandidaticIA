@@ -602,10 +602,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
         return true;
     }).sort((a, b) => {
-        // ALWAYS pin the selected chat to the very top if it's open, so it doesn't disappear when clicking it
-        if (a.id === selectedChat?.id) return -1;
-        if (b.id === selectedChat?.id) return 1;
-
         if (a?.unread && !b?.unread) return -1;
         if (!a?.unread && b?.unread) return 1;
         return 0; // Maintain recent timestamp sorting from backend
