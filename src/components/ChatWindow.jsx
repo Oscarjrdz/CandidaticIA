@@ -133,8 +133,13 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const handleSend = async (e, forceType = 'text', forceMedia = null) => {
         if (e) e.preventDefault();
 
-        // 1. Capturar datos actuales
-        const messageToProcess = newMessage.trim();
+        // 1. Extraer datos directos del DOM para evitar retrasos de React (Stale State)
+        let messageToProcess = newMessage;
+        if (e && e.target && e.target.tagName === 'INPUT') {
+            messageToProcess = e.target.value;
+        }
+        messageToProcess = messageToProcess.trim();
+
         const tempAudioBlob = audioBlob;
         
         if (!messageToProcess && !tempAudioBlob && !forceMedia) return;
@@ -683,7 +688,8 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                                         value={newMessage}
                                         onChange={(e) => setNewMessage(e.target.value)}
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
+                                            // Prevenir envíos de mensajes al presionar Enter durante composición de acentos (isComposing)
+                                            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                                                 e.preventDefault();
                                                 handleSend(e);
                                             }
