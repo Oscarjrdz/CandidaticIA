@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     let lastNewCheck = Date.now() - 5000; // Look back 5s initially
     let lastUpdateCheck = Date.now() - 5000;
 
-    const pollInterval = setInterval(async () => {
+    const runPoll = async () => {
         try {
             if (!redis) return;
 
@@ -109,7 +109,11 @@ export default async function handler(req, res) {
         } catch (error) {
             console.error('SSE poll error:', error);
         }
-    }, 2000);
+    };
+
+    // Execute immediately upon connection so the UI doesn't wait 2 seconds, then loop
+    runPoll();
+    const pollInterval = setInterval(runPoll, 2000);
 
     req.on('close', () => {
         clearInterval(keepAliveInterval);

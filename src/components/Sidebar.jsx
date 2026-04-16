@@ -84,7 +84,7 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
                     <div className="absolute left-0 w-1 h-6 bg-blue-400 rounded-r-full" />
                 )}
                 <Icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 ${isActive ? 'scale-110 text-white' : 'group-hover:scale-105'}`} />
-                <span className={`font-medium text-sm flex-1 pr-2 text-left ${isActive ? 'font-bold' : ''}`}>
+                <span className={`font-medium text-sm flex-1 pr-2 text-left whitespace-nowrap ${isActive ? 'font-bold' : ''}`}>
                     {item.label}
                 </span>
 
