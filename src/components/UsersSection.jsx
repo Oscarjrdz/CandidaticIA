@@ -569,28 +569,20 @@ const UsersSection = ({ showToast }) => {
                 maxWidth="max-w-4xl"
             >
                 <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-                    <Input
-                        label="Nombre Completo"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        required
-                        placeholder="Ej: Oscar Rodriguez"
-                    />
                     <div className="grid grid-cols-2 gap-4">
+                        <Input
+                            label="Nombre Completo"
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            required
+                            placeholder="Ej: Oscar Rodriguez"
+                        />
                         <Input
                             label="WhatsApp"
                             value={formData.whatsapp}
                             onChange={(e) => setFormData({ ...formData, whatsapp: e.target.value })}
                             required
-                            placeholder="Ej: 8116038195"
-                        />
-                        <Input
-                            label="PIN de Autorización"
-                            value={formData.pin}
-                            onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
-                            required
-                            maxLength={4}
-                            placeholder="Ej: 1234"
+                            placeholder="Ej: 5218116038195"
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
