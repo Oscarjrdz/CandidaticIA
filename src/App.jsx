@@ -224,14 +224,13 @@ function App() {
 
                   {/* Top Bar Presence Facepile (Meta Style) */}
                   {activeSection === 'chat' && onlineUsers && onlineUsers.length > 0 && (
-                    <div className="hidden sm:flex items-center" title="Usuarios en línea">
+                    <div className="hidden sm:flex items-center">
                       <div className="flex -space-x-2 mr-2">
                         {onlineUsers.slice(0, 4).map((u, i) => (
                           <div key={i} className="relative group">
                             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white dark:border-gray-800 bg-gradient-to-br from-blue-400 to-indigo-500 text-white flex items-center justify-center text-xs font-bold uppercase shadow-sm">
                               {u.userName ? u.userName.charAt(0) : '?'}
                             </div>
-                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
                             <div className="absolute left-1/2 -bottom-8 transform -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                               {u.userId === (user?.id || user?.whatsapp) ? 'Tú (en línea)' : `${u.userName} (en línea)`}
                             </div>
