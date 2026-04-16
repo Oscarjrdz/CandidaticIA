@@ -1501,9 +1501,9 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                             )}
                         </div>
                         )}
-
-                    </div>
-                </div>
+                        </div> {/* Cierra Row 3 */}
+                    </div> {/* Cierra outer flex-col */}
+                </div> {/* Cierra header container */}
 
                 {/* Lista de Contactos — VIRTUALIZADA */}
                 <div className="flex-1 overflow-hidden bg-white dark:bg-[#111b21]">
