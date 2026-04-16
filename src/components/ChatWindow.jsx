@@ -3,7 +3,7 @@ import { X, Send, Loader2, MessageCircle, Move, Copy, Tag, Mic, Trash, Check, Pa
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
 import CandidateADNCard from './CandidateADNCard';
-
+import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 const formatWhatsAppText = (text) => {
     if (!text) return '';
     return text
@@ -35,6 +35,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const [newMessage, setNewMessage] = useState('');
     const [sending, setSending] = useState(false);
     const [availableFields, setAvailableFields] = useState([]);
+    const { updatedCandidate } = useCandidatesSSE();
 
     // Recording State
     const [isRecording, setIsRecording] = useState(false);
@@ -73,15 +74,23 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         return () => window.removeEventListener('keydown', handleEsc);
     }, [isOpen, onClose]);
 
-    // Chat Polling & Validation
+    // Chat Initialization (One-time load) & Fields
     useEffect(() => {
         if (isOpen && candidate) {
             loadMessages();
             loadFields();
-            const interval = setInterval(loadMessages, 3000);
-            return () => clearInterval(interval);
         }
     }, [isOpen, candidate]);
+
+    // SSE Real-Time Updates Listener (Replaces Short-Polling)
+    useEffect(() => {
+        if (isOpen && candidate && updatedCandidate?.id === candidate.id) {
+            // Signal received that this candidate has a new message!
+            if (updatedCandidate?.updates?.newMessage) {
+                loadMessages();
+            }
+        }
+    }, [updatedCandidate]);
 
     const loadFields = async () => {
         try {
@@ -629,7 +638,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                             </div>
                         </div>
                     ) : (
-                        <form onSubmit={handleSend} className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 w-full">
                             {audioBlob ? (
                                 <div className="flex-1 flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-800">
                                     <div className="flex items-center space-x-2 text-blue-700 dark:text-blue-300">
@@ -673,6 +682,12 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                                         type="text"
                                         value={newMessage}
                                         onChange={(e) => setNewMessage(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleSend(e);
+                                            }
+                                        }}
                                         placeholder="Escribe un mensaje..."
                                         className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-gray-200 dark:focus:ring-gray-700/50 focus:outline-none text-sm"
                                         autoFocus
@@ -680,13 +695,14 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                                 </>
                             )}
                             <Button
-                                type="submit"
-                                disabled={(!newMessage.trim() && !audioBlob) || sending}
-                                className={`rounded-lg w-10 h-10 flex items-center justify-center p-0 ${sending ? 'opacity-70' : ''}`}
+                                type="button"
+                                onClick={handleSend}
+                                disabled={!newMessage.trim() && !audioBlob}
+                                className={`rounded-lg w-10 h-10 flex items-center justify-center p-0`}
                             >
-                                {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                <Send className="w-4 h-4" />
                             </Button>
-                        </form>
+                        </div>
                     )}
                 </div>
             </div>

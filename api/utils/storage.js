@@ -1235,6 +1235,12 @@ export const saveMessage = async (candidateId, message) => {
                 console.log(`[Storage] Follow-up detected for ${candidateId}. Count: ${cand.followUps}`);
             }
         }
+
+        // TRIGGER SSE: Notify frontends of a new chat message to eliminate short-polling
+        import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
+            notifyCandidateUpdate(candidateId, { newMessage: true }).catch(() => {});
+        }).catch(err => console.error("Could not import sse-notify", err));
+
     } catch (e) {
         console.error('❌ [Storage] saveMessage Error:', e);
     }
