@@ -555,67 +555,75 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     };
 
     // Fast search filter for the list with robust safety checks
-    const filteredCandidates = (candidates || []).filter(c => {
-        const searchVal = (debouncedSearch || "").toLowerCase();
-        const matchesSearch = 
-            (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
-            (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
-            (c?.whatsapp && String(c.whatsapp).includes(searchVal));
-            
-        if (!matchesSearch && searchVal !== "") return false;
+    const filteredCandidates = useMemo(() => {
+        const result = (candidates || []).filter(c => {
+            const searchVal = (debouncedSearch || "").toLowerCase();
+            const matchesSearch = 
+                (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
+                (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
+                (c?.whatsapp && String(c.whatsapp).includes(searchVal));
+                
+            if (!matchesSearch && searchVal !== "") return false;
 
-        // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
-        if (roleAllowedCandidateIds !== null) {
-            const allowedCrm = user?.allowed_crm_projects;
-            const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
-            const allowedLabels = user?.allowed_labels;
-            const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
+            // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
+            if (roleAllowedCandidateIds !== null) {
+                const allowedCrm = user?.allowed_crm_projects;
+                const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
+                const allowedLabels = user?.allowed_labels;
+                const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
 
-            const inAllowedProject = roleAllowedCandidateIds.has(c.id);
-            const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
-            const inAllowedLabel = hasLabelRestriction && Array.isArray(c?.tags) && c.tags.some(t => {
-                const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : t?.name?.trim().toLowerCase();
-                return allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
-            });
+                const inAllowedProject = roleAllowedCandidateIds.has(c.id);
+                const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
+                const inAllowedLabel = hasLabelRestriction && Array.isArray(c?.tags) && c.tags.some(t => {
+                    const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : t?.name?.trim().toLowerCase();
+                    return allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
+                });
 
-            if (!inAllowedProject && !inAllowedCrm && !inAllowedLabel) return false;
-        }
+                if (!inAllowedProject && !inAllowedCrm && !inAllowedLabel) return false;
+            }
 
-        // --- Strict Inbox para Reclutadores (Sin botón 'Todos') ---
-        if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
-            const hasAnyTag = Array.isArray(c?.tags) && c.tags.length > 0;
-            if (!hasAnyTag) return false;
-        }
+            // --- Strict Inbox para Reclutadores (Sin botón 'Todos') ---
+            if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
+                const hasAnyTag = Array.isArray(c?.tags) && c.tags.length > 0;
+                if (!hasAnyTag) return false;
+            }
 
-        if (activeFilter === 'unread' && c?.unread !== true) {
-            // Pin the selected chat in the UI even if it's no longer unread while they are actively viewing it
-            if (selectedChatRef.current?.id !== c.id) return false;
-        }
-        if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
-        if (activeFilter === 'profile') {
-            const isComplete = isProfileComplete(c);
-            if (filterValue === 'complete' && !isComplete) return false;
-            if (filterValue === 'incomplete' && isComplete) return false;
-        }
+            if (activeFilter === 'unread' && c?.unread !== true) {
+                // Pin the selected chat in the UI even if it's no longer unread while they are actively viewing it
+                if (selectedChatRef.current?.id !== c.id) return false;
+            }
+            if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
+            if (activeFilter === 'profile') {
+                const isComplete = isProfileComplete(c);
+                if (filterValue === 'complete' && !isComplete) return false;
+                if (filterValue === 'incomplete' && isComplete) return false;
+            }
 
-        // --- Ruta A: Filtros Marketing ---
-        if (aiProjectFilter) {
-            if (!aiProjectCandidates) return false; // Todavía cargando los candidatos del proyecto
-            const matchingCand = aiProjectCandidates.find(pc => pc.id === c.id);
-            if (!matchingCand) return false; // No pertenece a este proyecto
-            if (aiStepFilter && matchingCand.projectMetadata?.stepId !== aiStepFilter) return false; // No está en este paso
-        }
+            // --- Ruta A: Filtros Marketing ---
+            if (aiProjectFilter) {
+                if (!aiProjectCandidates) return false; // Todavía cargando los candidatos del proyecto
+                const matchingCand = aiProjectCandidates.find(pc => pc.id === c.id);
+                if (!matchingCand) return false; // No pertenece a este proyecto
+                if (aiStepFilter && matchingCand.projectMetadata?.stepId !== aiStepFilter) return false; // No está en este paso
+            }
 
-        // --- Ruta B: Filtros CRM Manual ---
-        if (manualPipelineFilter && c?.manualProjectId !== manualPipelineFilter) return false;
-        if (manualStepFilter && c?.manualProjectStepId !== manualStepFilter) return false;
+            // --- Ruta B: Filtros CRM Manual ---
+            if (manualPipelineFilter && c?.manualProjectId !== manualPipelineFilter) return false;
+            if (manualStepFilter && c?.manualProjectStepId !== manualStepFilter) return false;
 
-        return true;
-    }).sort((a, b) => {
-        if (a?.unread && !b?.unread) return -1;
-        if (!a?.unread && b?.unread) return 1;
-        return 0; // Maintain recent timestamp sorting from backend
-    });
+            return true;
+        });
+
+        return result.sort((a, b) => {
+            if (a?.unread && !b?.unread) return -1;
+            if (!a?.unread && b?.unread) return 1;
+            return 0; // Maintain recent timestamp sorting from backend
+        });
+    }, [
+        candidates, debouncedSearch, roleAllowedCandidateIds, user, 
+        activeFilter, filterValue, aiProjectFilter, aiStepFilter, 
+        aiProjectCandidates, manualPipelineFilter, manualStepFilter
+    ]);
 
     // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
     const baseCandidates = useMemo(() => (candidates || []).filter(c => {
@@ -1410,6 +1418,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                         <Virtuoso
                             data={filteredCandidates}
                             overscan={10}
+                            computeItemKey={(index, chat) => chat.id}
                             itemContent={(index, chat) => (
                                 <div 
                                     onClick={() => setSelectedChat(chat)}
