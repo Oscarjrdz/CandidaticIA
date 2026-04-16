@@ -46,7 +46,24 @@ export const sendMessage = async (number, message, type = 'chat', extraParams = 
         const result = await sendUltraMsgMessage(config.instanceId, config.token, number, message, type, extraParams);
 
         if (!result.success) {
-            return { success: false, error: result.error || 'WhatsApp Send Error' };
+            if (result.data?.error === 'El número no existe en WhatsApp') {
+                try {
+                    const { getCandidateIdByPhone, updateCandidate } = await import('./storage.js');
+                    const candidateId = await getCandidateIdByPhone(phone);
+                    if (candidateId) {
+                        await updateCandidate(candidateId, { 
+                            status: 'Incontactable', 
+                            incontactable: true, 
+                            unread: false, 
+                            blocked: true 
+                        });
+                        console.log(`[🔗 Gateway] Número inválido interceptado: ${phone} -> Marcado como Incontactable.`);
+                    }
+                } catch (e) {
+                    console.error('Error al marcar candidato incontactable:', e.message);
+                }
+            }
+            return { success: false, error: result.error || result.data?.error || 'WhatsApp Send Error' };
         }
 
         return { success: true, data: result.data, via: 'gateway', instanceId: config.instanceId };
