@@ -656,6 +656,17 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         return hasCoreData && hasAgeData;
     };
 
+    // Helper: Evalúa en tiempo real si un chat está "no leído"
+    const checkIfUnread = (chat) => {
+        if (!chat) return false;
+        const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
+        const botTime = Math.max(
+            chat.lastBotMessageAt ? new Date(chat.lastBotMessageAt).getTime() : 0, 
+            chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0
+        );
+        return userTime > botTime + 1000 || chat.unreadMsgCount > 0;
+    };
+
     // Fast search filter for the list with robust safety checks
     const filteredCandidates = useMemo(() => {
         const result = (candidates || []).filter(c => {
@@ -714,10 +725,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         });
 
         return result.sort((a, b) => {
-            const isUnread = (chat) => !!chat._isUnread;
-
-            const aUnread = isUnread(a);
-            const bUnread = isUnread(b);
+            const aUnread = checkIfUnread(a);
+            const bUnread = checkIfUnread(b);
 
             if (aUnread && !bUnread) return -1;
             if (!aUnread && bUnread) return 1;
@@ -770,13 +779,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const unreadCounts = useMemo(() => {
         const counts = { tags: {}, aiProjects: {}, crmProjects: {} };
         for (const c of baseCandidates) {
-            const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-            const botTime = Math.max(
-                c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0, 
-                c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0
-            );
-            const isUnread = userTime > botTime + 1000 || c.unreadMsgCount > 0;
-            c._isUnread = isUnread; // Cache it on the object for quick sorting
+            const isUnread = checkIfUnread(c);
 
             if (isUnread) {
                 if (c.tags && Array.isArray(c.tags)) {
@@ -1061,14 +1064,11 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         setShowDropdown(null);
     };
 
-    const handleSend = async (msg) => {
-        if (!msg || sending || !selectedChat) return;
+    const handleSend = (msg) => {
+        if (!msg || !selectedChat) return;
 
         // Optimistic clear + focus so the user can immediately type again
         messageInputRef.current?.clearText();
-
-        setSending(true);
-        messageInputRef.current?.setSendingState(true);
 
         const currentCandidateId = selectedChat.id;
         
@@ -1082,31 +1082,31 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             fecha: new Date().toISOString()
         }]);
 
-        try {
-            const res = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ candidateId: selectedChat.id, message: msg, type: 'text' })
-            });
-            const data = await res.json();
+        // Fire and forget (No blocking 'await')
+        fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ candidateId: currentCandidateId, message: msg, type: 'text' })
+        }).then(res => res.json()).then(data => {
             if (data.success) {
-                loadMessages();
-                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
+                // If it's still the active chat, refresh messages
+                if (selectedChat?.id === currentCandidateId) {
+                    loadMessages();
+                }
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
             } else {
                 showToast && showToast('Error al enviar mensaje', 'error');
             }
-        } catch (error) {
+        }).catch(error => {
             console.error(error);
-            showToast && showToast('Error de red', 'error');
-        } finally {
-            setSending(false);
-            messageInputRef.current?.setSendingState(false);
-            // Backup focus
-            setTimeout(() => {
-                const input = document.getElementById('chat-msg-input');
-                if (input) input.focus();
-            }, 50);
-        }
+            showToast && showToast('Error de red al enviar', 'error');
+        });
+
+        // Backup focus
+        setTimeout(() => {
+            const input = document.getElementById('chat-msg-input');
+            if (input) input.focus();
+        }, 50);
     };
 
     // 🚀 MEMOIZED: Pre-compute display messages + formatted HTML (eliminates 700 regex ops/render)
@@ -1515,15 +1515,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                             overscan={10}
                             computeItemKey={(index, chat) => chat.id}
                             itemContent={(index, chat) => {
-                                let isUnread = false;
-                                const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
-                                const botTime1 = chat.lastBotMessageAt ? new Date(chat.lastBotMessageAt).getTime() : 0;
-                                const botTime2 = chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0;
-                                const bestBotTime = Math.max(botTime1, botTime2);
-
-                                if (userTime > 0) {
-                                    isUnread = userTime > (bestBotTime + 1000);
-                                }
+                                const isUnread = checkIfUnread(chat);
 
                                 return (
                                 <div 
