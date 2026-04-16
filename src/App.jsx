@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Moon, Sun, Menu } from 'lucide-react';
+import { Moon, Sun, Menu, Users } from 'lucide-react';
 import { useToast } from './hooks/useToast';
 import Button from './components/ui/Button';
 import Sidebar from './components/Sidebar';
@@ -20,6 +20,7 @@ import LoadingOverlay from './components/ui/LoadingOverlay';
 import LoginPage from './components/LoginPage';
 import LandingPage from './components/LandingPage';
 import { getTheme, saveTheme } from './utils/storage';
+import { usePresence } from './hooks/usePresence';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -33,6 +34,7 @@ function App() {
   const [rolePermissions, setRolePermissions] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toast, showToast, hideToast, ToastComponent } = useToast();
+  const { onlineUsers } = usePresence(user, activeSection);
 
   // Check LocalStorage for session
   useEffect(() => {
@@ -203,7 +205,7 @@ function App() {
                 >
                   <Menu className="w-6 h-6 text-gray-700 dark:text-gray-300" />
                 </button>
-                <div className="min-w-0">
+                <div className="min-w-0 flex items-center space-x-4">
                   <h1 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-white truncate">
                     {activeSection === 'candidates' ? 'Candidatos'
                       : activeSection === 'chat' ? 'Chat Web'
@@ -219,6 +221,38 @@ function App() {
                       : activeSection === 'bypass' ? 'ByPass'
                       : 'Configuración'}
                   </h1>
+
+                  {/* Top Bar Presence Facepile (Meta Style) */}
+                  {activeSection === 'chat' && onlineUsers && onlineUsers.length > 0 && (
+                    <div className="hidden sm:flex items-center" title="Usuarios en línea">
+                      <div className="flex -space-x-2 mr-2">
+                        {onlineUsers.slice(0, 4).map((u, i) => (
+                          <div key={i} className="relative group">
+                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white dark:border-gray-800 bg-gradient-to-br from-blue-400 to-indigo-500 text-white flex items-center justify-center text-xs font-bold uppercase shadow-sm">
+                              {u.userName ? u.userName.charAt(0) : '?'}
+                            </div>
+                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-gray-800 rounded-full"></div>
+                            <div className="absolute left-1/2 -bottom-8 transform -translate-x-1/2 bg-gray-900 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                              {u.userId === (user?.id || user?.whatsapp) ? 'Tú (en línea)' : `${u.userName} (en línea)`}
+                            </div>
+                          </div>
+                        ))}
+                        {onlineUsers.length > 4 && (
+                          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 border-white dark:border-gray-800 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 flex items-center justify-center text-xs font-bold shadow-sm z-10">
+                            +{onlineUsers.length - 4}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center text-xs text-green-600 dark:text-green-400 font-medium">
+                        <span className="relative flex h-2 w-2 mr-1.5">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                        </span>
+                        En línea
+                      </div>
+                    </div>
+                  )}
+                </div>
                   <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">
                     {activeSection === 'candidates' ? 'Gestión de candidatos de WhatsApp'
                       : activeSection === 'chat' ? 'Chatea nativamente con tus candidatos'
@@ -277,7 +311,7 @@ function App() {
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} user={user} />
           ) : activeSection === 'chat' ? (
-            <ChatSection showToast={showToast} user={user} rolePermissions={rolePermissions} />
+            <ChatSection showToast={showToast} user={user} rolePermissions={rolePermissions} onlineUsers={onlineUsers} />
           ) : activeSection === 'bulks' ? (
             <BulksSection showToast={showToast} />
           ) : activeSection === 'bot-ia' ? (

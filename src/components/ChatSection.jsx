@@ -235,13 +235,19 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
-const ChatSection = ({ showToast, user, rolePermissions }) => {
+export default function ChatSection({ showToast, user, rolePermissions, onlineUsers = [] }) {
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
     const { updatedCandidate: sseUpdate, newCandidate: sseNewCandidate } = useGatewaySocket();
     const [candidates, setCandidates] = useState([]);
+    const [selectedChat, setSelectedChat] = useState(null);
+
+    // Broadcast active chat changes back to global Presence (App.jsx)
+    useEffect(() => {
+        window.dispatchEvent(new CustomEvent('presence_chat_change', { detail: { chatId: selectedChat?.id || null } }));
+    }, [selectedChat]);
+
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
-    const [selectedChat, setSelectedChat] = useState(null);
     const [showRightPanel, setShowRightPanel] = useState(true);
     const [messages, setMessages] = useState([]);
     const messageInputRef = useRef(null);
@@ -414,7 +420,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
     // RBAC: Load candidate IDs from all allowed projects to create base filter
     useEffect(() => {
-        if (!user || user.role === 'SuperAdmin') {
+        if (!user || user.role === 'SuperAdmin' || rolePermissions?.['filter_todos'] === true) {
             setRoleAllowedCandidateIds(null);
             return;
         }
@@ -1652,11 +1658,24 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                         {chat.unreadMsgCount || 1}
                                                     </div>
                                                 )}
-                                                {chatLocks[chat.id] && chatLocks[chat.id].user !== (user?.name || '') && (
-                                                    <span className="text-[9px] text-amber-500 font-semibold truncate max-w-[60px]" title={`${chatLocks[chat.id].user} está atendiendo`}>
-                                                        👤{chatLocks[chat.id].user?.split(' ')[0]}
-                                                    </span>
-                                                )}
+                                                {(() => {
+                                                    const readers = (onlineUsers || []).filter(u => u.currentChatId === chat.id);
+                                                    if (readers.length === 0) return null;
+                                                    return (
+                                                        <div className="flex -space-x-1.5 mr-1 group/presence" title="Viendo este chat">
+                                                            {readers.map((r, idx) => (
+                                                                <div key={idx} className="relative group/tooltip">
+                                                                    <div className="w-4 h-4 rounded-full border border-white dark:border-[#202c33] bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-[8px] text-white font-bold shadow-sm ring-1 ring-black/5">
+                                                                        {r.userName ? r.userName.charAt(0).toUpperCase() : '?'}
+                                                                    </div>
+                                                                    <div className="absolute right-0 bottom-full mb-1 opacity-0 group-hover/tooltip:opacity-100 bg-gray-900 text-white text-[10px] py-0.5 px-1.5 rounded pointer-events-none whitespace-nowrap transition-opacity z-50">
+                                                                        {r.userId === (user?.id || user?.whatsapp) ? 'Tú lo estás viendo' : `${r.userName} viéndolo`}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    );
+                                                })()}
                                                 <button
                                                     onClick={(e) => handleBlockToggle(chat, e)}
                                                     disabled={blockLoading}
@@ -2415,6 +2434,4 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             )}
         </div>
     );
-};
-
-export default ChatSection;
+}
