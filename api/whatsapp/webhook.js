@@ -63,8 +63,29 @@ export default async function handler(req, res) {
 
     try {
         // 1. Handle Message Acknowledgments
-        if (eventType === 'message_ack' || eventType === 'message.ack') {
-            const { id, status, to } = messageData;
+        if (
+            eventType === 'message_ack' || 
+            eventType === 'message.ack' || 
+            eventType === 'messages.update' || 
+            eventType === 'MESSAGES_UPDATE'
+        ) {
+            let id, status, to;
+            
+            // Standard UltraMsg/Gateway
+            if (messageData.id && messageData.status) {
+                id = messageData.id;
+                status = messageData.status;
+                to = messageData.to;
+            } 
+            // EvolutionAPI messages.update
+            else if (messageData.key || (Array.isArray(messageData) && messageData[0]?.key)) {
+                const md = Array.isArray(messageData) ? messageData[0] : messageData;
+                id = md.key?.id;
+                status = md.update?.status;
+                to = md.key?.remoteJid;
+            }
+
+            if (!id || !status) return res.status(200).send('ignored_missing_ack_data');
 
             // 🟢 WA STATUS VIEW (ACK directed to status@broadcast)
             const remoteJid = messageData.__raw?.key?.remoteJid || to || '';
