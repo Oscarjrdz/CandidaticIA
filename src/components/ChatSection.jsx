@@ -8,15 +8,40 @@ const safeFormatTime = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return '';
-    return new Intl.DateTimeFormat('es-MX', {
+
+    const timeFormatter = new Intl.DateTimeFormat('es-MX', {
         timeZone: 'America/Monterrey',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
         hour12: true
-    }).format(d).replace(' p. m.', ' pm').replace(' a. m.', ' am').replace(',', '');
+    });
+    const timeStr = timeFormatter.format(d).replace(' p. m.', ' pm').replace(' a. m.', ' am').toLowerCase();
+
+    // Calculate elapsed days accurately in Monterrey timezone
+    const getMid = (dateObj) => {
+        const str = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', year: 'numeric', month: '2-digit', day: '2-digit' }).format(dateObj);
+        const [m, day, y] = str.split('/');
+        return new Date(y, m - 1, day);
+    };
+
+    const diffDays = Math.round((getMid(new Date()) - getMid(d)) / 86400000);
+
+    if (diffDays === 0) return `Hoy ${timeStr}`;
+    if (diffDays === 1) return `Ayer ${timeStr}`;
+    if (diffDays > 1 && diffDays < 7) {
+        const weekdayStr = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', weekday: 'long' }).format(d);
+        const capitalized = weekdayStr.charAt(0).toUpperCase() + weekdayStr.slice(1);
+        return `${capitalized} ${timeStr}`;
+    }
+
+    const dateStrFormatted = new Intl.DateTimeFormat('es-MX', {
+        timeZone: 'America/Monterrey',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    }).format(d);
+
+    return `${dateStrFormatted} ${timeStr}`;
 };
 
 const toTitleCase = (str) => {
