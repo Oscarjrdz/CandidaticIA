@@ -622,7 +622,25 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         });
 
         return result.sort((a, b) => {
-            return 0; // Maintain recent timestamp sorting from backend
+            const isUnread = (chat) => {
+                const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
+                const botTime = Math.max(
+                    chat.lastBotMessageAt ? new Date(chat.lastBotMessageAt).getTime() : 0, 
+                    chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0
+                );
+                return userTime > botTime + 1000 || chat.unreadMsgCount > 0;
+            };
+
+            const aUnread = isUnread(a);
+            const bUnread = isUnread(b);
+
+            if (aUnread && !bUnread) return -1;
+            if (!aUnread && bUnread) return 1;
+
+            // If both are unread or both are read, sort by latest active message
+            const timeA = a.ultimoMensaje ? new Date(a.ultimoMensaje).getTime() : 0;
+            const timeB = b.ultimoMensaje ? new Date(b.ultimoMensaje).getTime() : 0;
+            return timeB - timeA;
         });
     }, [
         candidates, debouncedSearch, roleAllowedCandidateIds, user, 
