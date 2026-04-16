@@ -31,10 +31,6 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' }) => {
         >
             <div
                 className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full ${maxWidth} border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col max-h-[90vh] animate-slide-up`}
-                style={{
-                    WebkitTransform: 'translateZ(0)',
-                    transform: 'translateZ(0)',
-                }}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header — always visible, never scrolls */}
@@ -51,7 +47,10 @@ const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' }) => {
                 </div>
 
                 {/* Content — scrollable on small laptop screens */}
-                <div className="flex-1 overflow-y-auto overscroll-contain">
+                <div 
+                    className="flex-1 overflow-y-auto"
+                    style={{ WebkitOverflowScrolling: 'touch' }}
+                >
                     <div className="p-6">
                         {children}
                     </div>
