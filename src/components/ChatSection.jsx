@@ -860,7 +860,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         if (!vac || !vac.messageDescription) return;
         setNewMessage((prev) => {
             const baseStr = prev ? prev.trim() + '\n\n' : '';
-            return baseStr + vac.messageDescription;
+            return baseStr + `💼 *Información sobre: ${vac.name}*\n\n${vac.messageDescription}`;
         });
         setShowDropdown(null);
         setTimeout(() => {
@@ -1885,7 +1885,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                             <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
                         </div>
                         
-                        <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg border-none shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow">
+                        <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg border-none shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow flex items-center pr-1">
                             <input 
                                 id="chat-msg-input"
                                 autoComplete="off"
@@ -1894,6 +1894,16 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 value={newMessage}
                                 onChange={(e) => setNewMessage(e.target.value)}
                             />
+                            {newMessage && (
+                                <button 
+                                    type="button" 
+                                    title="Limpiar texto"
+                                    onClick={() => setNewMessage('')}
+                                    className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-full mr-1 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            )}
                         </div>
                         
                         <div className="ml-3 mb-[6px] text-[#54656f] dark:text-[#8696a0]">
