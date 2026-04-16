@@ -244,6 +244,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             if (data.success) {
                 // Actualizar estado del DOM con el mensaje real que trajo de regreso sin esperar al polling
                 setMessages(prev => prev.map(m => m.id === tempId ? { ...m, ...data.message, status: data.message?.status || 'sent' } : m));
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: candidate.id } }));
             } else {
                 const errorMsg = data.details || data.error || 'Error desconocido';
                 // Retirar mensaje engañoso que falló

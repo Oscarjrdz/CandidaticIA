@@ -517,12 +517,15 @@ export default async function handler(req, res) {
                 }
 
                 // --- PERSISTENCE ---
+                // RE-FETCH candidate to prevent concurrent updates (e.g. from recruiter answering in UI) from being overwritten
+                const freshCandidate = await getCandidateById(candidateId) || candidate;
+
                 const updatedCandidate = {
-                    ...candidate,
+                    ...freshCandidate,
                     ultimoMensaje: new Date().toISOString(),
                     lastUserMessageAt: new Date().toISOString(),
-                    unreadMsgCount: (Number(candidate?.unreadMsgCount) || 0) + 1,
-                    instanceId: capturedInstanceId || candidate?.instanceId // 🔄 DYNAMIC: Respond via the number they just wrote to
+                    unreadMsgCount: (Number(freshCandidate?.unreadMsgCount) || 0) + 1,
+                    instanceId: capturedInstanceId || freshCandidate?.instanceId // 🔄 DYNAMIC: Respond via the number they just wrote to
                 };
 
                 await saveWebhookTransaction({

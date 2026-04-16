@@ -160,7 +160,8 @@ export default async function handler(req, res) {
                         // PERSIST TO REDIS
                         await updateCandidate(candidateId, {
                             ultimoMensajeBot: timestamp,
-                            lastBotMessageAt: timestamp
+                            lastBotMessageAt: timestamp,
+                            unreadMsgCount: 0
                         });
 
                         // Update the message in the Redis list

@@ -256,6 +256,21 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
+    // Optimistic unread clearance
+    useEffect(() => {
+        const handleReply = (e) => {
+            const { candidateId } = e.detail;
+            const now = new Date().toISOString();
+            setCandidates(prev => prev.map(c => 
+                c.id === candidateId 
+                    ? { ...c, unreadMsgCount: 0, lastBotMessageAt: now, ultimoMensajeBot: now } 
+                    : c
+            ));
+        };
+        window.addEventListener('candidate_replied', handleReply);
+        return () => window.removeEventListener('candidate_replied', handleReply);
+    }, []);
+
     // Load Data
     useEffect(() => {
         loadCandidates();
@@ -892,7 +907,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             
             // Reload chats for updated list status
             loadMessages();
-            loadCandidates();
+            window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
+            // loadCandidates(); // Removido para optimizar: SSE empuja la actualización o el optimistico lo maneja.
 
         } catch (err) {
             console.error('File send error:', err);
@@ -952,6 +968,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             const data = await res.json();
             if (data.success) {
                 loadMessages();
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
             } else {
                 showToast && showToast('Error al enviar mensaje', 'error');
             }
