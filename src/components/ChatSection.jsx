@@ -1509,11 +1509,13 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
                                 if (iconId === 'vacancies') {
                                     return (
-                                        <div key={iconId} className="relative group/vacmenu" {...dragProps}>
-                                            <button className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5`} title="Inyectar información de Vacante">
+                                        <div key={iconId} className="relative z-50" {...dragProps}>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === 'vacancies' ? null : 'vacancies'); }}
+                                                className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'vacancies' ? 'bg-black/5 dark:bg-white/5' : ''}`} title="Inyectar información de Vacante">
                                                 <Briefcase className="w-5 h-5 text-gray-500 hover:text-blue-500 transition-colors" />
                                             </button>
-                                            <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/vacmenu:opacity-100 pointer-events-none group-hover/vacmenu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+                                            <div className={`absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#202c33] rounded-lg shadow-xl transition-all z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col ${showDropdown === 'vacancies' ? 'opacity-100 pointer-events-auto translate-y-0' : 'opacity-0 pointer-events-none -translate-y-2'}`}>
                                                 <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21]">
                                                     Inyectar Info de Vacante
                                                 </div>
@@ -1554,11 +1556,13 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
                                 if (iconId === 'tags') {
                                     return (
-                                        <div key={iconId} className="relative group/menu" {...dragProps}>
-                                            <button className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5`}>
+                                        <div key={iconId} className="relative z-50" {...dragProps}>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); setShowDropdown(showDropdown === 'tags' ? null : 'tags'); }}
+                                                className={`${baseClass} hover:bg-black/5 dark:hover:bg-white/5 ${showDropdown === 'tags' ? 'bg-black/5 dark:bg-white/5' : ''}`}>
                                                 <Tag className="w-5 h-5" />
                                             </button>
-                                            <div className="absolute right-0 top-full mt-1 w-72 bg-white dark:bg-[#202c33] rounded-lg shadow-xl opacity-0 group-hover/menu:opacity-100 pointer-events-none group-hover/menu:pointer-events-auto transition-opacity z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col">
+                                            <div className={`absolute right-0 top-full mt-1 w-72 bg-white dark:bg-[#202c33] rounded-lg shadow-xl transition-all z-50 border border-gray-100 dark:border-gray-700 overflow-hidden flex flex-col ${showDropdown === 'tags' ? 'opacity-100 pointer-events-auto translate-y-0' : 'opacity-0 pointer-events-none -translate-y-2'}`}>
                                                 <div className="px-3 py-2 text-xs font-bold text-[#8696a0] border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#111b21]">
                                                     <span>Etiquetar candidato</span>
                                                 </div>
@@ -1763,7 +1767,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                     ></div>
 
                     {/* Mensajes */}
-                    <div className="flex-1 overflow-y-auto p-[5%] z-10 space-y-[2px]">
+                    <div className="flex-1 overflow-y-auto p-[5%] z-10 space-y-[2px]" onClick={() => setShowDropdown(null)}>
                         <div className="text-center py-2 bg-[#ffeed0] dark:bg-[#cca868]/10 text-[#111b21] dark:text-[#f7cd73]/70 rounded-lg mx-auto w-fit px-4 shadow-sm select-none mb-4 border border-black/5 dark:border-white/5">
                             <p className="text-[12px] leading-tight">Los mensajes están protegidos de extremo a extremo por Candidatic y la IA.</p>
                         </div>
