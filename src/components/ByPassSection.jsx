@@ -669,12 +669,12 @@ const ByPassSection = ({ showToast }) => {
                 maxWidth="max-w-[95vw]"
             >
                 <div className="p-8 space-y-12">
-                    {/* UNIFIED HORIZONTAL RIBBON v5.0 */}
-                    <div className="flex flex-col 2xl:flex-row items-stretch gap-8 bg-white dark:bg-slate-900/80 p-8 rounded-[48px] border-2 border-slate-100 dark:border-slate-800/50 shadow-2xl relative overflow-visible">
+                    {/* PREMIUM GRID LAYOUT v5.1 */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 bg-white dark:bg-slate-900/80 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800/50 shadow-xl relative overflow-visible">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none" />
 
                         {/* 1. IDENTIFIER (Always Input) */}
-                        <div className="w-full 2xl:w-[280px] space-y-3">
+                        <div className="w-full space-y-3">
                             <div className="flex items-center gap-2 px-1">
                                 <Tag className="w-3.5 h-3.5 text-blue-500" />
                                 <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Nombre de By Pass</label>
@@ -686,8 +686,6 @@ const ByPassSection = ({ showToast }) => {
                                 className="text-sm font-black py-4 px-5 rounded-xl border-2 focus:ring-8 focus:ring-blue-100/20 transition-all uppercase"
                             />
                         </div>
-
-                        <div className="hidden 2xl:block w-px bg-slate-100 dark:bg-slate-800 my-4" />
 
                         {/* 2. TARGET PROJECT (Single RibbonSelect) */}
                         <RibbonSelect
@@ -758,8 +756,8 @@ const ByPassSection = ({ showToast }) => {
                             iconSource={ZapOff}
                         />
 
-                        {/* 7. AGE GROUP (Compact) */}
-                        <div className="w-full 2xl:w-[150px] space-y-3">
+                        {/* 8. AGE GROUP (Compact) */}
+                        <div className="w-full space-y-3">
                             <div className="flex items-center gap-2 px-1">
                                 <Calendar className="w-3.5 h-3.5 text-blue-500" />
                                 <label className="text-[9px] font-black uppercase tracking-widest text-slate-400">Edad</label>
