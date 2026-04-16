@@ -223,6 +223,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ChatSection = ({ showToast, user, rolePermissions }) => {
+    const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
     const { updatedCandidate: sseUpdate, newCandidate: sseNewCandidate } = useGatewaySocket();
     const [candidates, setCandidates] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -1841,6 +1842,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                                     <span className="truncate">{display}</span>
                                                                     {isActive && <Check className="w-4 h-4 text-blue-500 ml-1" />}
                                                                 </div>
+                                                                {canManageTags && (
                                                                 <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
                                                                     <button 
                                                                         onClick={(e) => {
@@ -1865,10 +1867,13 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                                         <X className="w-3.5 h-3.5" />
                                                                     </button>
                                                                 </div>
+                                                                )}
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
+                                                {/* Modulo crear nueva etiqueta — solo para usuarios con permiso */}
+                                                {canManageTags && (
                                                 <div className="p-2 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-2 bg-gray-50 dark:bg-[#111b21]">
                                                     <div className="flex justify-between px-1">
                                                         {TAG_COLORS.map((c) => (
@@ -1914,6 +1919,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                         </button>
                                                     </div>
                                                 </div>
+                                                )}
                                             </div>
                                         </div>
                                     );
