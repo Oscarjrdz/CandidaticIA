@@ -783,6 +783,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 </div>
             </div>
         </div>
+        </div>
     );
 };
 
