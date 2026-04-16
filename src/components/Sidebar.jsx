@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut,
     MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X
@@ -85,6 +86,12 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
                 <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'scale-110 text-white' : 'group-hover:scale-105'}`} />
                 <span className={`font-medium text-sm flex-1 text-left ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
 
+                {badge > 0 && (
+                    <div className="mr-2 bg-[#25d366] dark:bg-[#00a884] text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap animate-in zoom-in duration-300">
+                        {badge > 99 ? '99+' : badge}
+                    </div>
+                )}
+
                 {/* Drag Handle */}
                 <div
                     {...attributes}
@@ -101,6 +108,9 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
 const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate, isMobileOpen, onClose }) => {
     const [items, setItems] = useState([]);
     const [rolePermissions, setRolePermissions] = useState(null);
+    const { globalStats } = useCandidatesSSE();
+    const unreadCount = globalStats?.unread || 0;
+
     useEffect(() => {
         // Fetch roles to get user permissions
         fetch('/api/roles')
@@ -260,6 +270,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate,
                                     item={item}
                                     activeSection={activeSection}
                                     onSectionChange={handleSectionClick}
+                                    badge={item.id === 'chat' ? unreadCount : 0}
                                 />
                             ))}
                         </SortableContext>

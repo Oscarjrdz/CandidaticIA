@@ -74,6 +74,7 @@ export default async function handler(req, res) {
             pipeline.scard('stats:list:pending');
             pipeline.get('stats:bot:flight_plan');
             pipeline.get('stats:bot:last_calc');
+            pipeline.get('stats:bot:unread');
 
             const results = await pipeline.exec();
 
@@ -83,6 +84,7 @@ export default async function handler(req, res) {
             const pending = results[3][1] || 0;
             const flightPlan = results[4][1] ? JSON.parse(results[4][1]) : null;
             const lastCalc = results[5][1];
+            const unreadCount = parseInt(results[6][1]) || 0;
 
             // Trigger background flight plan update if stale (5 mins)
             const now = Date.now();
@@ -99,6 +101,7 @@ export default async function handler(req, res) {
                     total: complete + pending,
                     complete: complete,
                     pending: pending,
+                    unread: unreadCount,
                     flightPlan
                 }
             });

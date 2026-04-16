@@ -41,6 +41,7 @@ export const calculateBotStats = async () => {
 
         // Fetch all pending IDs (Flight plan candidates only live here)
         const pendingIds = await redis.smembers('stats:list:pending');
+        let totalUnreadCount = 0;
 
         if (pendingIds && pendingIds.length > 0) {
             const CHUNK_SIZE = 100;
@@ -72,16 +73,35 @@ export const calculateBotStats = async () => {
                             if (dueTime <= todayEnd.getTime()) {
                                 const sessionKey = `proactive:${c.id}:${level}:${c.lastUserMessageAt}`;
                                 sessionKeyPipeline.get(sessionKey);
-                                processedInChunk.push({ level });
+                                processedInChunk.push({ level, c });
+                            } else {
+                                // Even if not due, we push to calculate unread without flightplan processing
+                                processedInChunk.push({ level: null, c });
                             }
+                        } else {
+                            processedInChunk.push({ level: null, c });
                         }
                     } catch (e) { }
                 });
 
                 const sessionResults = await sessionKeyPipeline.exec();
                 processedInChunk.forEach((item, idx) => {
-                    const { level } = item;
-                    flightPlan[level].total++;
+                    const { level, c } = item;
+                    if (level !== null && flightPlan[level]) {
+                        flightPlan[level].total++;
+                    }
+
+                    // Unread Count Logic (within the chunk, reusing the parsed candidate 'c')
+                    if (c) {
+                        const userT = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+                        const botT1 = c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0;
+                        const botT2 = c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0;
+                        const bestBotT = Math.max(botT1, botT2);
+                        if (userT > 0 && userT > (bestBotT + 1000)) {
+                            totalUnreadCount++;
+                        }
+                    }
+
                     const sItem = sessionResults[idx];
                     if (sItem && !sItem[0] && sItem[1]) {
                         const sRes = sItem[1];
@@ -116,6 +136,7 @@ export const calculateBotStats = async () => {
             pending: pendingCount,
             complete: completeCount,
             total: totalCalculated,
+            unread: totalUnreadCount,
             flightPlan
         };
 
@@ -123,6 +144,7 @@ export const calculateBotStats = async () => {
         await redis.set('stats:bot:complete', completeCount);
         await redis.set('stats:bot:pending', pendingCount);
         await redis.set('stats:bot:total', totalCalculated);
+        await redis.set('stats:bot:unread', totalUnreadCount);
         await redis.set('stats:bot:version', result.version);
         await redis.set('stats:bot:flight_plan', JSON.stringify(flightPlan));
         await redis.set('stats:bot:last_calc', now.toString());

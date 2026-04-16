@@ -20,10 +20,13 @@ export default async function handler(req, res) {
 
             // Get active chat locks (KEYS is fine here — typically < 10 keys)
             pipeline.keys('chat_lock:*');
+            pipeline.get('stats:bot:unread');
             
             const results = await pipeline.exec();
             
             const lockKeys = results[0][1] || [];
+            const unreadCountStr = results[1][1] || '0';
+            const unreadCount = parseInt(unreadCountStr) || 0;
 
             // Resolve locks
             const locks = {};
@@ -46,6 +49,7 @@ export default async function handler(req, res) {
 
             return res.status(200).json({
                 success: true,
+                unreadCount,
                 locks
             });
         }
