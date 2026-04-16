@@ -58,6 +58,13 @@ export class Orchestrator {
             logTrace(`   🔍 Evaluating Rule: ${rule.name}`);
             if (excludeProjectIds.includes(rule.projectId)) continue;
 
+            if (rule.excludedTags && rule.excludedTags.length > 0 && candidateData.tags && Array.isArray(candidateData.tags)) {
+                if (candidateData.tags.some(tag => rule.excludedTags.includes(tag))) {
+                    logTrace(`   ❌ Skipped: Empleado contiene etiqueta excluida.`);
+                    continue;
+                }
+            }
+
             const cAge = parseInt(candidateData.edad);
             if (!isNaN(cAge)) {
                 if (rule.minAge && cAge < parseInt(rule.minAge)) continue;

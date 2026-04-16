@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     try {
         const { getCandidates, getRedisClient } = await import('./utils/storage.js');
 
-        const { minAge, maxAge, municipios, escolaridades, categories, gender } = req.body;
+        const { minAge, maxAge, municipios, escolaridades, categories, gender, excludedTags } = req.body;
 
         // 1. Fetch ALL candidates (no limit) — server-side, no 200 cap
         const { candidates: allCandidates } = await getCandidates(50000, 0, '', false, '');
@@ -36,6 +36,11 @@ export default async function handler(req, res) {
             // Must NOT be in a project
             if (linkedIds.has(c.id)) return false;
             if (c.projectId || c.projectMetadata?.projectId) return false;
+
+            // Excluded tags check
+            if (excludedTags && excludedTags.length > 0 && c.tags && Array.isArray(c.tags)) {
+                if (c.tags.some(tag => excludedTags.includes(tag))) return false;
+            }
 
             // Age filter
             const cAge = parseInt(c.edad);

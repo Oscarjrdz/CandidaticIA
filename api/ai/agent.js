@@ -1037,6 +1037,10 @@ const getReengageVacancies = async (candidateData) => {
         const qualifyingVacancyIds = new Set();
 
         for (const rule of rules) {
+            // Excluded tags check
+            if (rule.excludedTags && rule.excludedTags.length > 0 && candidateData.tags && Array.isArray(candidateData.tags)) {
+                if (candidateData.tags.some(tag => rule.excludedTags.includes(tag))) continue;
+            }
             // Age Check
             const cAge = parseInt(candidateData.edad);
             if (!isNaN(cAge)) {
@@ -1680,6 +1684,9 @@ ${safeDnaLines}
                         const cEsc = normalizeStr(candidateData.escolaridad);
 
                         for (const rule of rules) {
+                            if (rule.excludedTags && rule.excludedTags.length > 0 && candidateData.tags && Array.isArray(candidateData.tags)) {
+                                if (candidateData.tags.some(tag => rule.excludedTags.includes(tag))) continue;
+                            }
                             if (!isNaN(cAge)) {
                                 if (rule.minAge && cAge < parseInt(rule.minAge)) continue;
                                 if (rule.maxAge && cAge > parseInt(rule.maxAge)) continue;
@@ -1838,6 +1845,10 @@ ${safeDnaLines}
 
                             for (const rule of rules) {
                                 if (rejectedProjectIds.includes(rule.projectId)) continue;
+
+                                if (rule.excludedTags && rule.excludedTags.length > 0 && candidateData.tags && Array.isArray(candidateData.tags)) {
+                                    if (candidateData.tags.some(tag => rule.excludedTags.includes(tag))) continue;
+                                }
 
                                 if (!isNaN(cAge)) {
                                     if (rule.minAge && cAge < parseInt(rule.minAge)) continue;

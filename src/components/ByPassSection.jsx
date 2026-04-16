@@ -151,6 +151,7 @@ const ByPassSection = ({ showToast }) => {
         municipios: [],
         escolaridades: [],
         categories: [],
+        excludedTags: [],
         gender: 'Cualquiera'
     });
 
@@ -243,6 +244,7 @@ const ByPassSection = ({ showToast }) => {
             municipios: [],
             escolaridades: [],
             categories: [],
+            excludedTags: [],
             gender: 'Cualquiera'
         });
         setIsModalOpen(true);
@@ -258,6 +260,7 @@ const ByPassSection = ({ showToast }) => {
             municipios: rule.municipios || [],
             escolaridades: rule.escolaridades || [],
             categories: rule.categories || [],
+            excludedTags: rule.excludedTags || [],
             gender: rule.gender || 'Cualquiera'
         });
         setIsModalOpen(true);
@@ -392,7 +395,8 @@ const ByPassSection = ({ showToast }) => {
                     municipios: rule.municipios || [],
                     escolaridades: rule.escolaridades || [],
                     categories: rule.categories || [],
-                    gender: rule.gender || 'Cualquiera'
+                    gender: rule.gender || 'Cualquiera',
+                    excludedTags: rule.excludedTags || []
                 })
             });
             const data = await res.json();
@@ -607,6 +611,11 @@ const ByPassSection = ({ showToast }) => {
                                         {rule.gender && rule.gender !== 'Cualquiera' && (
                                             <span className="px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-[8px] font-black text-purple-600 dark:text-purple-400 rounded border border-purple-100/50">{rule.gender}</span>
                                         )}
+                                        {rule.excludedTags?.map(t => (
+                                            <span key={`excl_${t}`} className="px-1.5 py-0.5 bg-red-50 dark:bg-red-900/20 text-[8px] font-black text-red-600 dark:text-red-400 rounded border border-red-100/50 dark:border-red-800/20 max-w-[80px] truncate flex items-center gap-1">
+                                                <ZapOff className="w-2 h-2" /> {t.toUpperCase()}
+                                            </span>
+                                        ))}
                                     </div>
                                 </div>
 
@@ -737,6 +746,16 @@ const ByPassSection = ({ showToast }) => {
                             onToggle={(v) => toggleArrayItem('escolaridades', v)}
                             placeholder="CUALQUIER GRADO"
                             iconSource={GraduationCap}
+                        />
+
+                        {/* 7. EXCLUIR ETIQUETAS (Multi RibbonSelect) */}
+                        <RibbonSelect
+                            label="Excluir Etiquetas"
+                            options={allTags}
+                            selected={formData.excludedTags}
+                            onToggle={(v) => toggleArrayItem('excludedTags', v)}
+                            placeholder="NINGUNA"
+                            iconSource={ZapOff}
                         />
 
                         {/* 7. AGE GROUP (Compact) */}
