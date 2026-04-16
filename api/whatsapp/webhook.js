@@ -57,6 +57,13 @@ export default async function handler(req, res) {
     const eventType = payload.event_type || payload.event || payload.eventName;
     const messageData = payload.data || payload; // Fallback to payload if data is not present
 
+    try {
+        const redis = await import('../utils/storage.js').then(m => m.getRedisClient());
+        if (redis) {
+            await redis.set('debug:last_webhook_raw', JSON.stringify({ eventType, body: req.body }));
+        }
+    } catch(e) {}
+
     if (!eventType) {
         return res.status(200).json({ success: true, message: 'Heartbeat or invalid payload' });
     }
