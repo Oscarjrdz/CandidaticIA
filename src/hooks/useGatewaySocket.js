@@ -44,18 +44,20 @@ export function useGatewaySocket() {
         };
 
         const handleUpsert = (payload) => {
-            // Emite de forma global para ChatWindow, ChatSection u otros componentes que ocupen inyectar la burbuja en vivo
-            window.dispatchEvent(new CustomEvent('gateway_msg_upsert', { detail: payload }));
+            console.log('📨 WS Upsert:', payload); // Debug 
+            // Si el backend envuelve el contenido en "data" (ej: {event_type: '...', data: {...}})
+            const safePayload = payload.data || payload; 
             
-            // Replicar comportamiento SSE retroactivo para refrescar la lista de candidatos:
-            // Al no conocer el candidateId, mandamos un pulso para que ChatSection relaje pero refresque localmente el número
-            const jid = payload.remoteJid || payload.from || payload.sender || payload.id || '';
+            // Emite de forma global para ChatWindow, ChatSection u otros componentes
+            window.dispatchEvent(new CustomEvent('gateway_msg_upsert', { detail: safePayload }));
+            
+            const jid = safePayload.remoteJid || safePayload.from || safePayload.sender || safePayload.id || '';
             const rawPhone = typeof jid === 'string' ? jid.split('@')[0] : '';
             
             if (rawPhone && isMounted) {
                 // Generamos un "falso" updatedCandidate pero con una bandera extra de phoneMatch
                 setUpdatedCandidate({
-                     candidateId: payload.candidateId || null, 
+                     candidateId: safePayload.candidateId || null, 
                      phoneMatch: rawPhone,
                      updates: { ultimoMensaje: new Date().toISOString() } 
                 });
@@ -63,7 +65,8 @@ export function useGatewaySocket() {
         };
 
         const handleUpdate = (payload) => {
-            window.dispatchEvent(new CustomEvent('gateway_msg_update', { detail: payload }));
+            const safePayload = payload.data || payload; 
+            window.dispatchEvent(new CustomEvent('gateway_msg_update', { detail: safePayload }));
         };
 
         // Si ya estaba conectado para este montaje de componente

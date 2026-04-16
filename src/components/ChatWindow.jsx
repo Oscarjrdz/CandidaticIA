@@ -116,7 +116,8 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                  
                  // Búsqueda profunda de texto para inyectar la viñeta inmediatamente
                  let textContent = '';
-                 if (payload.text) textContent = payload.text;
+                 if (payload.body) textContent = payload.body; // <-- Formato real de Railway 
+                 else if (payload.text) textContent = payload.text;
                  else if (payload.message?.conversation) textContent = payload.message.conversation;
                  else if (payload.message?.extendedTextMessage?.text) textContent = payload.message.extendedTextMessage.text;
                  else if (payload.content) textContent = payload.content;
