@@ -1101,14 +1101,42 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
                                         const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
+                                        
+                                        // Calculate unread count for this label
+                                        let unreadCount = 0;
+                                        if (candidates) {
+                                            for (const c of candidates) {
+                                                if (Array.isArray(c.tags) && c.tags.some(t => {
+                                                    const tagStr = typeof t === 'string' ? t : t?.name;
+                                                    return tagStr?.trim().toLowerCase() === tName.trim().toLowerCase();
+                                                })) {
+                                                    const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+                                                    const botTime = Math.max(
+                                                        c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0, 
+                                                        c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0
+                                                    );
+                                                    if (userTime > botTime + 1000 || c.unreadMsgCount > 0) {
+                                                        unreadCount++;
+                                                    }
+                                                }
+                                            }
+                                        }
+
                                         return (
                                             <div 
                                                 key={tName}
                                                 onClick={() => { setActiveFilter('label'); setFilterValue(tName); setShowDropdown(null); }}
-                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
+                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center justify-between"
                                             >
-                                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
-                                                <span className="truncate flex-1">{display}</span>
+                                                <div className="flex items-center gap-2 truncate pr-2">
+                                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
+                                                    <span className="truncate flex-1">{display}</span>
+                                                </div>
+                                                {unreadCount > 0 && (
+                                                    <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
+                                                        {unreadCount}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -1147,6 +1175,23 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
                                         ) : (
                                             filteredProjects.map(project => {
+                                                // Calculate unread count for this project
+                                                let unreadCount = 0;
+                                                if (candidates) {
+                                                    for (const c of candidates) {
+                                                        if (c.projectId === project.id) {
+                                                            const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+                                                            const botTime = Math.max(
+                                                                c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0, 
+                                                                c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0
+                                                            );
+                                                            if (userTime > botTime + 1000 || c.unreadMsgCount > 0) {
+                                                                unreadCount++;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
                                                 return (
                                                     <div
                                                         key={project.id}
@@ -1155,10 +1200,15 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                             setAiStepFilter(null);
                                                             setShowDropdown(null);
                                                         }}
-                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
+                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center justify-between"
                                                         title={project.name}
                                                     >
-                                                        <span className="truncate flex-1">{project.name}</span>
+                                                        <span className="truncate flex-1 pr-2">{project.name}</span>
+                                                        {unreadCount > 0 && (
+                                                            <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
+                                                                {unreadCount}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })
@@ -1260,6 +1310,23 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pipelines</div>
                                         ) : (
                                             filteredManualProjects.map(project => {
+                                                // Calculate unread count for this manual project
+                                                let unreadCount = 0;
+                                                if (candidates) {
+                                                    for (const c of candidates) {
+                                                        if (c.manualProjectId === project.id) {
+                                                            const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+                                                            const botTime = Math.max(
+                                                                c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0, 
+                                                                c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0
+                                                            );
+                                                            if (userTime > botTime + 1000 || c.unreadMsgCount > 0) {
+                                                                unreadCount++;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+
                                                 return (
                                                     <div
                                                         key={project.id}
@@ -1268,10 +1335,15 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                             setManualStepFilter(null);
                                                             setShowDropdown(null);
                                                         }}
-                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center gap-2"
+                                                        className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center justify-between"
                                                         title={project.name}
                                                     >
-                                                        <span className="truncate flex-1">{project.name}</span>
+                                                        <span className="truncate flex-1 pr-2">{project.name}</span>
+                                                        {unreadCount > 0 && (
+                                                            <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
+                                                                {unreadCount}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 );
                                             })
