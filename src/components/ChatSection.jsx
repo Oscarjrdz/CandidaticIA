@@ -148,7 +148,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const [editTagColor, setEditTagColor] = useState("#3b82f6");
     const [vacancies, setVacancies] = useState([]);
     const [editingVac, setEditingVac] = useState(null);
-
+    const [chatLocks, setChatLocks] = useState({});
 
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
 
