@@ -521,8 +521,7 @@ export default async function handler(req, res) {
                     ...candidate,
                     ultimoMensaje: new Date().toISOString(),
                     lastUserMessageAt: new Date().toISOString(),
-                    instanceId: capturedInstanceId || candidate?.instanceId, // 🔄 DYNAMIC: Respond via the number they just wrote to
-                    unread: true
+                    instanceId: capturedInstanceId || candidate?.instanceId // 🔄 DYNAMIC: Respond via the number they just wrote to
                 };
 
                 await saveWebhookTransaction({

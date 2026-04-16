@@ -20,10 +20,6 @@ export default async function handler(req, res) {
 
             const messages = await getMessages(candidateId);
 
-            // Removed auto-clear of unread flag on chat open.
-            // Following the rule: "un candidato sin leer debe ser un candidato que hablo y no se le respondio"
-            // The unread flag is now ONLY cleared when the recruiter actually posts a response.
-
             return res.status(200).json({ success: true, messages });
         }
 
@@ -115,11 +111,6 @@ export default async function handler(req, res) {
             }
 
             await saveMessage(candidateId, msgToSave);
-
-            // 🔥 CLEAR UNREAD IMMEDIATELY TO PREVENT UI FLICKER 🔥
-            // If we wait for the webhook/UltraMsg to finish, the 3s UI polling 
-            // will fetch the stale unread:true and cause the bubble to ghost
-            await updateCandidate(candidateId, { unread: false });
 
             // 2. Send via UltraMsg
             try {

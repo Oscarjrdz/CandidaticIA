@@ -836,18 +836,6 @@ export const updateCandidate = async (id, data) => {
     // [SIN TANTO ROLLO] Atomic Status Sync
     await syncCandidateStats(id, updated);
 
-    // 🔥 ATOMIC UNREAD TRACKING: Sync Redis SET for O(1) SCARD counts
-    if ('unread' in data) {
-        const client = getClient();
-        if (client) {
-            if (data.unread === true) {
-                await client.sadd('stats:unread:ids', id);
-            } else {
-                await client.srem('stats:unread:ids', id);
-            }
-        }
-    }
-
     return await saveCandidate(updated);
 };
 

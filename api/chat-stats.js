@@ -17,19 +17,13 @@ export default async function handler(req, res) {
             if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
             const pipeline = redis.pipeline();
-            
-            // 1. O(1) unread count from atomic SET
-            pipeline.scard('stats:unread:ids');
-            pipeline.smembers('stats:unread:ids');
-            
-            // 2. Get active chat locks (KEYS is fine here — typically < 10 keys)
+
+            // Get active chat locks (KEYS is fine here — typically < 10 keys)
             pipeline.keys('chat_lock:*');
             
             const results = await pipeline.exec();
             
-            const unreadCount = results[0][1] || 0;
-            const unreadIds = results[1][1] || [];
-            const lockKeys = results[2][1] || [];
+            const lockKeys = results[0][1] || [];
 
             // Resolve locks
             const locks = {};
@@ -52,8 +46,6 @@ export default async function handler(req, res) {
 
             return res.status(200).json({
                 success: true,
-                unreadCount,
-                unreadIds,
                 locks
             });
         }

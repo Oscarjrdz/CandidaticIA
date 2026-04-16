@@ -54,7 +54,6 @@ export const sendMessage = async (number, message, type = 'chat', extraParams = 
                         await updateCandidate(candidateId, { 
                             status: 'Incontactable', 
                             incontactable: true, 
-                            unread: false, 
                             blocked: true 
                         });
                         console.log(`[🔗 Gateway] Número inválido interceptado: ${phone} -> Marcado como Incontactable.`);

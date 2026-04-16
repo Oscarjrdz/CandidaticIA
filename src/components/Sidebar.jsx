@@ -85,13 +85,6 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
                 <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'scale-110 text-white' : 'group-hover:scale-105'}`} />
                 <span className={`font-medium text-sm flex-1 text-left ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
 
-                {/* Unread Badge */}
-                {badge > 0 && (
-                    <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-[#25d366] text-white text-[11px] font-bold rounded-full shadow-lg shadow-green-500/30 animate-pulse">
-                        {badge}
-                    </span>
-                )}
-
                 {/* Drag Handle */}
                 <div
                     {...attributes}
@@ -108,24 +101,6 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
 const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate, isMobileOpen, onClose }) => {
     const [items, setItems] = useState([]);
     const [rolePermissions, setRolePermissions] = useState(null);
-    const [unreadCount, setUnreadCount] = useState(0);
-
-    // Poll unread count every 5s
-    useEffect(() => {
-        const fetchUnread = async () => {
-            try {
-                const res = await fetch('/api/chat-stats');
-                const data = await res.json();
-                if (data.success) {
-                    setUnreadCount(data.unreadCount || 0);
-                }
-            } catch (e) { /* silent */ }
-        };
-        fetchUnread();
-        const interval = setInterval(fetchUnread, 5000);
-        return () => clearInterval(interval);
-    }, []);
-
     useEffect(() => {
         // Fetch roles to get user permissions
         fetch('/api/roles')
@@ -285,7 +260,6 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate,
                                     item={item}
                                     activeSection={activeSection}
                                     onSectionChange={handleSectionClick}
-                                    badge={item.id === 'chat' ? unreadCount : 0}
                                 />
                             ))}
                         </SortableContext>

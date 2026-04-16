@@ -31,7 +31,6 @@ const CustomProjectDropdown = ({ activeProjectId, projects, onChange, candidates
                         </div>
                         {projects.map(p => {
                             const isSelected = activeProjectId === p.id;
-                            const pipelineUnread = candidates.filter(c => c?.unread === true && c.manualProjectId === p.id).length;
                             return (
                                 <div 
                                     key={p.id}
@@ -40,11 +39,6 @@ const CustomProjectDropdown = ({ activeProjectId, projects, onChange, candidates
                                 >
                                     {isSelected && <Check className="w-3.5 h-3.5 shrink-0" />}
                                     <span className={`${isSelected ? '' : 'ml-5'} truncate flex-1`}>{p.name}</span>
-                                    {pipelineUnread > 0 && (
-                                        <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
-                                            {pipelineUnread}
-                                        </span>
-                                    )}
                                 </div>
                             );
                         })}

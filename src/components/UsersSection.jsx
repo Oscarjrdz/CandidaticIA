@@ -23,8 +23,7 @@ const AVAILABLE_SECTIONS = [
 
 const AVAILABLE_CHAT_FILTERS = [
     { id: 'filter_todos', name: 'Todos' },
-    { id: 'filter_unread', name: 'No leídos' },
-    { id: 'filter_complete', name: 'Completos' },
+    { id: 'filter_complete', name: 'Perfil Completo' },
     { id: 'filter_incomplete', name: 'Incompletos' },
     { id: 'filter_labels', name: 'Etiquetas' },
     { id: 'filter_projects', name: 'Proyectos' },
