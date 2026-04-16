@@ -1542,27 +1542,27 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                 <div className={`flex-1 flex flex-col bg-[#efeae2] dark:bg-[#0b141a] h-full relative ${!selectedChat ? 'hidden md:flex' : 'flex'}`}>
                     
                     {/* Header Chat */}
-                    <div className="h-[59px] px-4 py-2 flex items-center justify-between bg-[#f0f2f5] dark:bg-[#202c33] z-20 shadow-sm">
-                        <div className="flex items-center cursor-pointer">
+                    <div className="min-h-[59px] px-4 py-2 flex items-center justify-between bg-[#f0f2f5] dark:bg-[#202c33] z-20 shadow-sm">
+                        <div className="flex items-center cursor-pointer flex-1 min-w-0 pr-4">
                             <button 
                                 className="md:hidden mr-2 p-1 text-[#54656f] dark:text-[#aebac1]"
                                 onClick={() => setSelectedChat(null)}
                             >
                                 <ArrowLeft className="w-6 h-6" />
                             </button>
-                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center mr-3 font-bold text-blue-600 overflow-hidden">
+                            <div className="min-w-[40px] w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center mr-3 font-bold text-blue-600 overflow-hidden shrink-0">
                                 <img 
                                     src={selectedChat.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.nombre || 'C')}&background=random&color=fff`} 
                                     className="w-full h-full object-cover" 
                                     alt="profile" 
                                 />
                             </div>
-                            <div className="flex flex-col">
-                                <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] flex items-center gap-2 max-w-full">
-                                    <span className="truncate">
+                            <div className="flex flex-col min-w-0 flex-1">
+                                <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] flex flex-wrap items-center gap-x-2 gap-y-1 max-w-full">
+                                    <span className="truncate max-w-full">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </span>
-                                    <div className="flex items-center gap-1 overflow-hidden shrink-0 hide-scrollbar" style={{ maskImage: 'linear-gradient(to right, black 80%, transparent)' }}>
+                                    <div className="flex flex-wrap items-center gap-1 shrink-0">
                                         {selectedChat.tags && selectedChat.tags.map(t => {
                                             const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                             const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
