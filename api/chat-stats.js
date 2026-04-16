@@ -1,34 +1,45 @@
 /**
- * Chat Stats API — Ultra-fast unread count + active locks
- * GET /api/chat-stats → { unreadCount, unreadIds, locks }
+ * Chat Stats API — O(1) unread count + active locks
+ * GET /api/chat-stats → { unreadCount, locks }
+ * 
+ * Uses Redis SET 'stats:unread:ids' maintained atomically by updateCandidate()
+ * instead of scanning all 5000 candidates every request.
  */
 
 export default async function handler(req, res) {
     if (req.method === 'OPTIONS') return res.status(200).end();
 
     try {
-        const { getRedisClient, getCandidates } = await import('./utils/storage.js');
+        const { getRedisClient } = await import('./utils/storage.js');
 
         if (req.method === 'GET') {
             const redis = getRedisClient();
             if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
-            // 1. Get all candidates and count unreads
-            const { candidates } = await getCandidates(5000);
-            const unreadCandidates = candidates.filter(c => c.unread === true);
-            const unreadCount = unreadCandidates.length;
-            const unreadIds = unreadCandidates.map(c => c.id);
+            const pipeline = redis.pipeline();
+            
+            // 1. O(1) unread count from atomic SET
+            pipeline.scard('stats:unread:ids');
+            pipeline.smembers('stats:unread:ids');
+            
+            // 2. Get active chat locks (KEYS is fine here — typically < 10 keys)
+            pipeline.keys('chat_lock:*');
+            
+            const results = await pipeline.exec();
+            
+            const unreadCount = results[0][1] || 0;
+            const unreadIds = results[1][1] || [];
+            const lockKeys = results[2][1] || [];
 
-            // 2. Get active chat locks
-            const lockKeys = await redis.keys('chat_lock:*');
+            // Resolve locks
             const locks = {};
             if (lockKeys.length > 0) {
-                const pipeline = redis.pipeline();
-                lockKeys.forEach(k => pipeline.get(k));
-                const results = await pipeline.exec();
+                const lockPipeline = redis.pipeline();
+                lockKeys.forEach(k => lockPipeline.get(k));
+                const lockResults = await lockPipeline.exec();
                 lockKeys.forEach((k, i) => {
                     const candidateId = k.replace('chat_lock:', '');
-                    const val = results[i][1];
+                    const val = lockResults[i][1];
                     if (val) {
                         try {
                             locks[candidateId] = JSON.parse(val);

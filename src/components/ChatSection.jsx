@@ -4,6 +4,7 @@ import EmojiPicker from 'emoji-picker-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
+import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 
 const safeFormatTime = (dateStr) => {
     if (!dateStr) return '';
@@ -128,8 +129,10 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ChatSection = ({ showToast, user, rolePermissions }) => {
+    const { updatedCandidate: sseUpdate, newCandidate: sseNewCandidate } = useCandidatesSSE();
     const [candidates, setCandidates] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
     const [selectedChat, setSelectedChat] = useState(null);
     const [showRightPanel, setShowRightPanel] = useState(true);
     const [messages, setMessages] = useState([]);
@@ -247,6 +250,12 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         return manualProjects.filter(p => allowed.includes(p.id));
     })();
 
+    // Debounce search input (300ms)
+    useEffect(() => {
+        const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
     // Load Data
     useEffect(() => {
         loadCandidates();
@@ -255,10 +264,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         loadManualProjects();
         loadProjects();
 
-        // 🟢 Live auto-update for the sidebar (every 3 seconds)
-        const interval = setInterval(loadCandidates, 3000);
+        // 🟢 FALLBACK polling (SSE handles real-time, this is safety net)
+        const interval = setInterval(loadCandidates, 15000);
 
-        // 🔔 Poll chat stats (unread counts + locks) every 4s
+        // 🔔 Poll chat stats (unread counts + locks) — now O(1) on backend
         const statsInterval = setInterval(async () => {
             try {
                 const res = await fetch('/api/chat-stats');
@@ -268,7 +277,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                     setChatLocks(data.locks || {});
                 }
             } catch (e) { /* silent */ }
-        }, 4000);
+        }, 15000);
         // Initial fetch
         (async () => {
             try {
@@ -546,7 +555,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
     // Fast search filter for the list with robust safety checks
     const filteredCandidates = (candidates || []).filter(c => {
-        const searchVal = (searchQuery || "").toLowerCase();
+        const searchVal = (debouncedSearch || "").toLowerCase();
         const matchesSearch = 
             (c?.nombreReal && String(c.nombreReal).toLowerCase().includes(searchVal)) ||
             (c?.nombre && String(c.nombre).toLowerCase().includes(searchVal)) ||
@@ -644,12 +653,30 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         prevMessagesLength.current = messages.length;
     }, [messages]);
 
+    // 🚀 SSE-DRIVEN: Reload candidates + messages when SSE fires
+    useEffect(() => {
+        if (!sseUpdate) return;
+        // A candidate was updated (new message arrived, status changed, etc)
+        loadCandidates();
+        // If the update is for the currently open chat, reload messages instantly
+        if (sseUpdate.candidateId === selectedChat?.id) {
+            loadMessages();
+        }
+    }, [sseUpdate]);
+
+    // 🆕 SSE: New candidate arrived
+    useEffect(() => {
+        if (!sseNewCandidate) return;
+        loadCandidates();
+    }, [sseNewCandidate]);
+
     // Load messages
     useEffect(() => {
         if (!selectedChat) return;
 
         loadMessages();
-        const interval = setInterval(loadMessages, 3000);
+        // 🟢 FALLBACK polling (SSE handles real-time, this is safety net)
+        const interval = setInterval(loadMessages, 10000);
 
         // 🔒 Lock this chat for me
         const currentUser = user?.name || 'Reclutador';
