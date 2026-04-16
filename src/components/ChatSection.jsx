@@ -725,13 +725,20 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         });
 
         return result.sort((a, b) => {
+            // ALWAYS keep selected chat at the top
+            if (selectedChat?.id) {
+                if (a.id === selectedChat.id && b.id !== selectedChat.id) return -1;
+                if (b.id === selectedChat.id && a.id !== selectedChat.id) return 1;
+            }
+
             const aUnread = checkIfUnread(a);
             const bUnread = checkIfUnread(b);
 
+            // Unread messages next
             if (aUnread && !bUnread) return -1;
             if (!aUnread && bUnread) return 1;
 
-            // If both are unread or both are read, sort by latest active message
+            // Finally sort by latest activity date
             const timeA = a.ultimoMensaje ? new Date(a.ultimoMensaje).getTime() : 0;
             const timeB = b.ultimoMensaje ? new Date(b.ultimoMensaje).getTime() : 0;
             return timeB - timeA;
@@ -739,7 +746,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     }, [
         candidates, debouncedSearch, roleAllowedCandidateIds, user, 
         activeFilter, filterValue, aiProjectFilter, aiStepFilter, 
-        aiProjectCandidates, manualPipelineFilter, manualStepFilter
+        aiProjectCandidates, manualPipelineFilter, manualStepFilter,
+        selectedChat?.id
     ]);
 
     // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
@@ -1520,7 +1528,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 return (
                                 <div 
                                     onClick={() => setSelectedChat(chat)}
-                                    className={`flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors ${selectedChat?.id === chat.id ? 'bg-[#f0f2f5] dark:bg-[#2a3942]' : ''}`}
+                                    className={`flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-4 ${selectedChat?.id === chat.id ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] shadow-sm relative z-10' : 'border-transparent'}`}
                                 >
                                     <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden">
                                         <img 
