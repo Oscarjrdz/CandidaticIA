@@ -1100,6 +1100,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             showToast && showToast('Error de red', 'error');
         } finally {
             setSending(false);
+            messageInputRef.current?.setSendingState(false);
             // Backup focus
             setTimeout(() => {
                 const input = document.getElementById('chat-msg-input');
