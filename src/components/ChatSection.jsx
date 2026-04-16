@@ -1770,6 +1770,9 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
                         {displayMessages.map((msg, i) => {
                             if (!msg) return null;
+                            // Prevenir renderizado de burbujas fantasma (eventos de sistema sin texto ni multimedia)
+                            if (!msg.content && !msg.mediaUrl) return null;
+                            
                             const isMe = msg.from === 'me' || msg.from === 'bot';
                             const prevMsg = i > 0 ? displayMessages[i - 1] : null;
                             const isPrevMe = prevMsg ? (prevMsg.from === 'me' || prevMsg.from === 'bot') : null;
