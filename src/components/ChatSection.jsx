@@ -458,14 +458,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             const result = await getCandidates(5000, 0, "", false, tagParam);
             if (result.success) {
                 let fetchedCandidates = result.candidates || [];
-                const activeId = selectedChatRef.current?.id;
-                
-                // Enforce optimistic clear out-of-closure for the active chat
-                if (activeId) {
-                    fetchedCandidates = fetchedCandidates.map(c => 
-                        c.id === activeId ? { ...c, unread: false } : c
-                    );
-                }
                 
                 setCandidates(fetchedCandidates);
                 if (fetchedCandidates.length > 0) {
@@ -536,7 +528,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             if (!hasAnyTag) return false;
         }
 
-        if (activeFilter === 'unread' && c?.unread !== true) return false;
+        if (activeFilter === 'unread' && c?.unread !== true) {
+            // Pin the selected chat in the UI even if it's no longer unread while they are actively viewing it
+            if (selectedChatRef.current?.id !== c.id) return false;
+        }
         if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
         if (activeFilter === 'profile') {
             const isComplete = isProfileComplete(c);
@@ -558,6 +553,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
         return true;
     }).sort((a, b) => {
+        // ALWAYS pin the selected chat to the very top if it's open, so it doesn't disappear when clicking it
+        if (a.id === selectedChat?.id) return -1;
+        if (b.id === selectedChat?.id) return 1;
+
         if (a?.unread && !b?.unread) return -1;
         if (!a?.unread && b?.unread) return 1;
         return 0; // Maintain recent timestamp sorting from backend
@@ -631,8 +630,9 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             } catch (e) { /* silent */ }
         }, 30000);
 
-        // Optimistic unread clear
-        setCandidates(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread: false } : c));
+        // Optimistic UI updates
+        // DO NOT clear unread on load anymore - clear it ONLY ON SEND.
+        // setCandidates(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread: false } : c));
 
         return () => {
             clearInterval(interval);
@@ -836,6 +836,11 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         }, 10);
 
         setSending(true);
+
+        const currentCandidateId = selectedChat.id;
+        
+        // Optimistic clear of unread!
+        setCandidates(prev => prev.map(c => c.id === currentCandidateId ? { ...c, unread: false } : c));
         
         // Optimistic append
         setMessages(prev => [...(prev || []), {

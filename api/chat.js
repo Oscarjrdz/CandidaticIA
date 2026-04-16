@@ -20,12 +20,9 @@ export default async function handler(req, res) {
 
             const messages = await getMessages(candidateId);
 
-            // Auto-clear unread flag when recruiter opens this chat
-            try {
-                await updateCandidate(candidateId, { unread: false });
-            } catch (e) {
-                console.warn('⚠️ Failed to clear unread flag:', e.message);
-            }
+            // Removed auto-clear of unread flag on chat open.
+            // Following the rule: "un candidato sin leer debe ser un candidato que hablo y no se le respondio"
+            // The unread flag is now ONLY cleared when the recruiter actually posts a response.
 
             return res.status(200).json({ success: true, messages });
         }
@@ -144,7 +141,8 @@ export default async function handler(req, res) {
                         // PERSIST TO REDIS
                         await updateCandidate(candidateId, {
                             ultimoMensajeBot: timestamp,
-                            lastBotMessageAt: timestamp
+                            lastBotMessageAt: timestamp,
+                            unread: false
                         });
 
                         // Update the message in the Redis list
