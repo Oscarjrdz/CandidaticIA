@@ -617,7 +617,7 @@ const CandidatesSection = ({ showToast }) => {
         } finally {
             setBlockLoading(prev => ({ ...prev, [candidate.id]: false }));
         }
-    };
+    }, [aiFilteredCandidates, showToast]);
 
     const handleDelete = React.useCallback(async (e, candidate) => {
         const { id, nombre } = candidate;
