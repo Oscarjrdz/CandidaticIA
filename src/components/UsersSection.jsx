@@ -689,121 +689,69 @@ const UsersSection = ({ showToast }) => {
 
                                 {/* Etiquetas visibles */}
                                 {!!perms['filter_labels'] && (
-                                    <div>
-                                        <div className="flex items-center justify-between mb-1">
-                                            <h4 className="text-sm font-bold text-gray-800 dark:text-white">🏷️ Etiquetas Visibles</h4>
-                                            <button
-                                                type="button"
-                                                onClick={() => { setTagManagerOpen(v => !v); setEditingTagIndex(null); setNewTagName(''); setNewTagColor('#3b82f6'); }}
-                                                className="flex items-center gap-1 text-[10px] font-bold text-amber-600 hover:text-amber-700 dark:text-amber-400 transition-colors uppercase tracking-wider"
-                                            >
-                                                <Tag className="w-3 h-3" />
-                                                {tagManagerOpen ? 'Cerrar gestor' : 'Crear / Editar etiquetas'}
-                                            </button>
-                                        </div>
-                                        <p className="text-[10px] text-gray-400 mb-2">Sin selección = ver todas. Marca cuales puede ver o marca “Ninguna”.</p>
-
-                                        {/* Checkboxes de etiquetas */}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-2 border border-amber-100 dark:border-amber-900 rounded-lg bg-amber-50/50 dark:bg-amber-900/10">
-                                            {/* Opción Ninguna etiqueta */}
-                                            <label className="col-span-full flex items-center space-x-3 cursor-pointer p-2 rounded-lg bg-amber-100/60 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors border border-amber-200 dark:border-amber-800">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={(formData.allowed_labels || []).includes('__none__')}
-                                                    onChange={() => {
-                                                        const hasNone = (formData.allowed_labels || []).includes('__none__');
-                                                        setFormData(f => ({ ...f, allowed_labels: hasNone ? [] : ['__none__'] }));
-                                                    }}
-                                                    className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 dark:bg-gray-700 dark:border-gray-600"
-                                                />
-                                                <span className="text-sm font-bold text-amber-700 dark:text-amber-300 select-none">🚫 Ninguna etiqueta (sin acceso por etiqueta)</span>
-                                            </label>
-                                            {/* Etiquetas individuales */}
-                                            {allTags.map(tagObj => {
-                                                const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                                const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
-                                                const isDisabled = (formData.allowed_labels || []).includes('__none__');
-                                                return (
-                                                    <label key={tName} className={`flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={(formData.allowed_labels || []).includes(tName)}
-                                                            onChange={() => toggleUserLabel(tName)}
-                                                            disabled={isDisabled}
-                                                            className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 dark:focus:ring-amber-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                                                        />
-                                                        <span className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-300 select-none truncate">
-                                                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
-                                                            {tName}
-                                                        </span>
-                                                    </label>
-                                                );
-                                            })}
-                                        </div>
-
-                                        {/* GESTOR DE ETIQUETAS (crear / editar) */}
-                                        {tagManagerOpen && (
-                                            <div className="mt-3 p-3 border border-amber-200 dark:border-amber-800 rounded-xl bg-amber-50/60 dark:bg-amber-900/10 space-y-2">
-                                                <p className="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-2">⚙️ Gestionar Etiquetas</p>
-                                                <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                                                    {allTags.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sin etiquetas aún</p>}
-                                                    {allTags.map((tagObj, idx) => {
-                                                        const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                                        const tColor = typeof tagObj === 'string' ? '#3b82f6' : (tagObj.color || '#3b82f6');
-                                                        const isEditing = editingTagIndex === idx;
-                                                        return (
-                                                            <div key={tName + idx} className="flex items-center gap-2">
-                                                                {isEditing ? (
-                                                                    <>
-                                                                        <div className="flex items-center gap-1">
-                                                                            {TAG_PALETTE.map(c => (
-                                                                                <button key={c} type="button" onClick={() => setNewTagColor(c)}
-                                                                                    className={`w-4 h-4 rounded-full shrink-0 transition-transform ${newTagColor === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400' : ''}`}
-                                                                                    style={{ backgroundColor: c }} />
-                                                                            ))}
-                                                                        </div>
-                                                                        <input type="text" value={newTagName} onChange={e => setNewTagName(e.target.value)}
-                                                                            className="flex-1 px-2 py-1 text-xs border border-amber-300 rounded-lg focus:outline-none dark:bg-gray-800 dark:border-amber-700 dark:text-white"
-                                                                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleUpdateTag(idx); } }} />
-                                                                        <button type="button" onClick={() => handleUpdateTag(idx)} disabled={savingTag} className="text-green-600 hover:text-green-700 p-0.5"><Check className="w-4 h-4" /></button>
-                                                                        <button type="button" onClick={() => { setEditingTagIndex(null); setNewTagName(''); }} className="text-gray-400 hover:text-gray-600 p-0.5"><X className="w-4 h-4" /></button>
-                                                                    </>
-                                                                ) : (
-                                                                    <>
-                                                                        <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: tColor }} />
-                                                                        <span className="text-xs text-gray-800 dark:text-gray-200 flex-1 truncate">{tName}</span>
-                                                                        <button type="button" onClick={() => startEditTag(idx)} className="p-0.5 text-gray-400 hover:text-blue-500"><Pencil className="w-3.5 h-3.5" /></button>
-                                                                        <button type="button" onClick={() => handleDeleteTag(idx)} disabled={savingTag} className="p-0.5 text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
-                                                                    </>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                                {editingTagIndex === null && (
-                                                    <div className="pt-2 border-t border-amber-200 dark:border-amber-800">
-                                                        <p className="text-[9px] font-black uppercase tracking-wider text-gray-400 mb-1.5">Nueva etiqueta</p>
-                                                        <div className="flex items-center gap-1 mb-2 flex-wrap">
-                                                            {TAG_PALETTE.map(c => (
-                                                                <button key={c} type="button" onClick={() => setNewTagColor(c)}
-                                                                    className={`w-5 h-5 rounded-full transition-transform ${newTagColor === c ? 'scale-125 ring-2 ring-offset-1 ring-gray-400' : ''}`}
-                                                                    style={{ backgroundColor: c }} />
-                                                            ))}
-                                                        </div>
-                                                        <div className="flex gap-2">
-                                                            <input type="text" value={newTagName} onChange={e => setNewTagName(e.target.value)}
-                                                                placeholder="Nombre de etiqueta..."
-                                                                className="flex-1 px-2 py-1.5 text-xs border border-amber-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-400 dark:bg-gray-800 dark:border-amber-700 dark:text-white"
-                                                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleCreateTag(); } }} />
-                                                            <button type="button" onClick={handleCreateTag} disabled={!newTagName.trim() || savingTag}
-                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors disabled:opacity-40">
-                                                                {savingTag ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />} Crear
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                    <div className="space-y-3">
+                                        {/* Checkboxes de etiquetas visibles */}
+                                        <div>
+                                            <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-1">🏷️ Etiquetas Visibles</h4>
+                                            <p className="text-[10px] text-gray-400 mb-2">Sin selección = ver todas. Marca cuales puede ver o marca "Ninguna".</p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-2 border border-amber-100 dark:border-amber-900 rounded-lg bg-amber-50/50 dark:bg-amber-900/10">
+                                                {/* Opción Ninguna etiqueta */}
+                                                <label className="col-span-full flex items-center space-x-3 cursor-pointer p-2 rounded-lg bg-amber-100/60 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors border border-amber-200 dark:border-amber-800">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={(formData.allowed_labels || []).includes('__none__')}
+                                                        onChange={() => {
+                                                            const hasNone = (formData.allowed_labels || []).includes('__none__');
+                                                            setFormData(f => ({ ...f, allowed_labels: hasNone ? [] : ['__none__'] }));
+                                                        }}
+                                                        className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 dark:bg-gray-700 dark:border-gray-600"
+                                                    />
+                                                    <span className="text-sm font-bold text-amber-700 dark:text-amber-300 select-none">🚫 Ninguna etiqueta (sin acceso por etiqueta)</span>
+                                                </label>
+                                                {/* Etiquetas individuales */}
+                                                {allTags.map(tagObj => {
+                                                    const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                                    const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                                    const isDisabled = (formData.allowed_labels || []).includes('__none__');
+                                                    return (
+                                                        <label key={tName} className={`flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-amber-100/50 dark:hover:bg-amber-900/20 transition-colors ${isDisabled ? 'opacity-40 pointer-events-none' : ''}`}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={(formData.allowed_labels || []).includes(tName)}
+                                                                onChange={() => toggleUserLabel(tName)}
+                                                                disabled={isDisabled}
+                                                                className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 dark:focus:ring-amber-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                                            />
+                                                            <span className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-300 select-none truncate">
+                                                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
+                                                                {tName}
+                                                            </span>
+                                                        </label>
+                                                    );
+                                                })}
                                             </div>
-                                        )}
+                                        </div>
+
+                                        {/* Permiso: ¿Puede editar etiquetas? */}
+                                        <div className="flex items-center justify-between p-3 border border-amber-200 dark:border-amber-800 rounded-xl bg-amber-50/40 dark:bg-amber-900/10">
+                                            <div>
+                                                <p className="text-sm font-semibold text-gray-800 dark:text-white">✏️ ¿Puede editar etiquetas?</p>
+                                                <p className="text-[10px] text-gray-400 mt-0.5">Permite crear, editar y eliminar etiquetas del sistema.</p>
+                                            </div>
+                                            <div className="relative">
+                                                <select
+                                                    value={formData.can_manage_tags ? 'yes' : 'no'}
+                                                    onChange={(e) => setFormData(f => ({ ...f, can_manage_tags: e.target.value === 'yes' }))}
+                                                    className="appearance-none pl-3 pr-8 py-2 text-sm font-bold bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-700 rounded-xl focus:ring-2 focus:ring-amber-400 focus:outline-none cursor-pointer text-gray-800 dark:text-gray-200"
+                                                >
+                                                    <option value="no">🚫 No puede</option>
+                                                    <option value="yes">✅ Sí puede</option>
+                                                </select>
+                                                <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                                                    <svg className="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </>
