@@ -230,8 +230,8 @@ const deleteDistributedItem = async (listKey, itemPrefix, id) => {
 export const saveAuthToken = async (phone, pin) => {
     const client = getClient();
     if (!client) return false;
-    // Set with expiry (5 mins)
-    await client.set(`${KEYS.AUTH_PREFIX}${phone}`, pin, 'EX', 300);
+    // Set with expiry (15 mins — gives user enough time to switch apps)
+    await client.set(`${KEYS.AUTH_PREFIX}${phone}`, pin, 'EX', 900);
     return true;
 };
 
