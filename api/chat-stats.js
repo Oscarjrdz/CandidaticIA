@@ -14,7 +14,7 @@ export default async function handler(req, res) {
             if (!redis) return res.status(500).json({ error: 'Redis unavailable' });
 
             // 1. Get all candidates and count unreads
-            const { candidates } = await getCandidates(500);
+            const { candidates } = await getCandidates(5000);
             const unreadCandidates = candidates.filter(c => c.unread === true);
             const unreadCount = unreadCandidates.length;
             const unreadIds = unreadCandidates.map(c => c.id);
