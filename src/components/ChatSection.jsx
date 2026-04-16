@@ -127,6 +127,99 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
         </span>
     );
 };
+// ─── Componente Input (Memoizado) ──────────────────────────────────────────────
+const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload }, ref) => {
+    const [localMessage, setLocalMessage] = useState("");
+    const [sending, setSending] = useState(false);
+    const [showEmojis, setShowEmojis] = useState(false);
+
+    React.useImperativeHandle(ref, () => ({
+        injectText: (newText) => {
+            setLocalMessage(prev => {
+                const baseStr = prev ? prev.trim() + '\n\n' : '';
+                return baseStr + newText;
+            });
+            setTimeout(() => {
+                const input = document.getElementById('chat-msg-input');
+                if (input) input.focus();
+            }, 50);
+        },
+        clearText: () => setLocalMessage(''),
+        setSendingState: (state) => setSending(state)
+    }));
+
+    const handleSubmit = (e) => {
+        if (e) e.preventDefault();
+        const msg = localMessage.trim();
+        if (!msg || sending) return;
+        onSend(msg);
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="min-h-[62px] px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] z-20 flex items-end shadow-sm relative">
+            {/* Emojis Menu — Lazy loaded */}
+            {showEmojis && (
+                <div className="absolute bottom-[70px] left-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                    <React.Suspense fallback={<div className="w-[320px] h-[400px] flex items-center justify-center bg-white dark:bg-[#202c33]"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+                        <EmojiPicker 
+                            onEmojiClick={(eData) => {
+                                setLocalMessage(prev => prev + eData.emoji);
+                            }}
+                            theme="auto"
+                            width={320}
+                            height={400}
+                            searchPlaceholder="Buscar emojis..."
+                            lazyLoadEmojis={true}
+                            skinTonesDisabled={true}
+                        />
+                    </React.Suspense>
+                </div>
+            )}
+
+            <div className="flex space-x-3 text-[#54656f] dark:text-[#8696a0] items-center mb-1 mr-2 px-1">
+                <button type="button" onClick={() => setShowEmojis(!showEmojis)} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[26px] h-[26px] stroke-[1.5]" /></button>
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors"><Plus className="w-[26px] h-[26px] stroke-[1.5]" /></button>
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+            </div>
+            
+            <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg border-none shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow flex items-center pr-1">
+                <input 
+                    id="chat-msg-input"
+                    autoComplete="off"
+                    className="w-full bg-transparent border-none outline-none py-2.5 px-4 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none overflow-hidden text-[15px]" 
+                    placeholder="Escribe un mensaje"
+                    value={localMessage}
+                    onChange={(e) => {
+                        setLocalMessage(e.target.value);
+                        onTyping();
+                    }}
+                />
+                {localMessage && (
+                    <button 
+                        type="button" 
+                        title="Limpiar texto"
+                        onClick={() => setLocalMessage('')}
+                        className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-full mr-1 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                )}
+            </div>
+            
+            <div className="ml-3 mb-[6px] text-[#54656f] dark:text-[#8696a0]">
+                {localMessage.trim() ? (
+                    <button type="submit" disabled={sending} className="p-1 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
+                        <Send className="w-6 h-6" />
+                    </button>
+                ) : (
+                    <button type="button" className="p-1 hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
+                        <Mic className="w-6 h-6" />
+                    </button>
+                )}
+            </div>
+        </form>
+    );
+});
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ChatSection = ({ showToast, user, rolePermissions }) => {
@@ -137,7 +230,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const [selectedChat, setSelectedChat] = useState(null);
     const [showRightPanel, setShowRightPanel] = useState(true);
     const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState("");
+    const messageInputRef = useRef(null);
     const [sending, setSending] = useState(false);
     const [loadingChats, setLoadingChats] = useState(true);
     const [availableTags, setAvailableTags] = useState([]);
@@ -169,7 +262,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         }
     };
 
-    const [showEmojis, setShowEmojis] = useState(false);
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
 
     // Quick Replies (Banco de Respuestas)
@@ -461,7 +553,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                 ) {
                     e.preventDefault();
                     e.stopPropagation();
-                    setNewMessage(qr.message);
+                    messageInputRef.current?.injectText(qr.message);
                     return;
                 }
             }
@@ -622,14 +714,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         });
 
         return result.sort((a, b) => {
-            const isUnread = (chat) => {
-                const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
-                const botTime = Math.max(
-                    chat.lastBotMessageAt ? new Date(chat.lastBotMessageAt).getTime() : 0, 
-                    chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0
-                );
-                return userTime > botTime + 1000 || chat.unreadMsgCount > 0;
-            };
+            const isUnread = (chat) => !!chat._isUnread;
 
             const aUnread = isUnread(a);
             const bUnread = isUnread(b);
@@ -680,6 +765,38 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             }
         }
         return { all, complete, incomplete };
+    }, [baseCandidates]);
+
+    const unreadCounts = useMemo(() => {
+        const counts = { tags: {}, aiProjects: {}, crmProjects: {} };
+        for (const c of baseCandidates) {
+            const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
+            const botTime = Math.max(
+                c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0, 
+                c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0
+            );
+            const isUnread = userTime > botTime + 1000 || c.unreadMsgCount > 0;
+            c._isUnread = isUnread; // Cache it on the object for quick sorting
+
+            if (isUnread) {
+                if (c.tags && Array.isArray(c.tags)) {
+                    c.tags.forEach(t => {
+                        const tName = typeof t === 'string' ? t : t.name;
+                        if (tName) {
+                            const normalized = tName.trim().toLowerCase();
+                            counts.tags[normalized] = (counts.tags[normalized] || 0) + 1;
+                        }
+                    });
+                }
+                if (c.projectId) {
+                    counts.aiProjects[c.projectId] = (counts.aiProjects[c.projectId] || 0) + 1;
+                }
+                if (c.manualProjectId) {
+                    counts.crmProjects[c.manualProjectId] = (counts.crmProjects[c.manualProjectId] || 0) + 1;
+                }
+            }
+        }
+        return counts;
     }, [baseCandidates]);
 
     // Scroll to bottom
@@ -940,30 +1057,18 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
     const injectVacancy = (vac) => {
         if (!vac || !vac.messageDescription) return;
-        setNewMessage((prev) => {
-            const baseStr = prev ? prev.trim() + '\n\n' : '';
-            return baseStr + `💼 *Información sobre: ${vac.name}*\n\n${vac.messageDescription}`;
-        });
+        messageInputRef.current?.injectText(`💼 *Información sobre: ${vac.name}*\n\n${vac.messageDescription}`);
         setShowDropdown(null);
-        setTimeout(() => {
-            const input = document.getElementById('chat-msg-input');
-            if (input) input.focus();
-        }, 50);
     };
 
-    const handleSend = async (e) => {
-        if (e) e.preventDefault();
-        const msg = newMessage.trim();
+    const handleSend = async (msg) => {
         if (!msg || sending || !selectedChat) return;
 
         // Optimistic clear + focus so the user can immediately type again
-        setNewMessage('');
-        setTimeout(() => {
-            const input = document.getElementById('chat-msg-input');
-            if (input) input.focus();
-        }, 10);
+        messageInputRef.current?.clearText();
 
         setSending(true);
+        messageInputRef.current?.setSendingState(true);
 
         const currentCandidateId = selectedChat.id;
         
@@ -1120,25 +1225,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
                                         const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
                                         
-                                        // Calculate unread count for this label
-                                        let unreadCount = 0;
-                                        if (candidates) {
-                                            for (const c of candidates) {
-                                                if (Array.isArray(c.tags) && c.tags.some(t => {
-                                                    const tagStr = typeof t === 'string' ? t : t?.name;
-                                                    return tagStr?.trim().toLowerCase() === tName.trim().toLowerCase();
-                                                })) {
-                                                    const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-                                                    const botTime = Math.max(
-                                                        c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0, 
-                                                        c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0
-                                                    );
-                                                    if (userTime > botTime + 1000 || c.unreadMsgCount > 0) {
-                                                        unreadCount++;
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        // Use global memoized count
+                                        const unreadCount = unreadCounts.tags[tName.trim().toLowerCase()] || 0;
 
                                         return (
                                             <div 
@@ -1193,22 +1281,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
                                         ) : (
                                             filteredProjects.map(project => {
-                                                // Calculate unread count for this project
-                                                let unreadCount = 0;
-                                                if (candidates) {
-                                                    for (const c of candidates) {
-                                                        if (c.projectId === project.id) {
-                                                            const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-                                                            const botTime = Math.max(
-                                                                c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0, 
-                                                                c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0
-                                                            );
-                                                            if (userTime > botTime + 1000 || c.unreadMsgCount > 0) {
-                                                                unreadCount++;
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                                // Use global memoized count
+                                                const unreadCount = unreadCounts.aiProjects[project.id] || 0;
 
                                                 return (
                                                     <div
@@ -1328,22 +1402,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pipelines</div>
                                         ) : (
                                             filteredManualProjects.map(project => {
-                                                // Calculate unread count for this manual project
-                                                let unreadCount = 0;
-                                                if (candidates) {
-                                                    for (const c of candidates) {
-                                                        if (c.manualProjectId === project.id) {
-                                                            const userTime = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-                                                            const botTime = Math.max(
-                                                                c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0, 
-                                                                c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0
-                                                            );
-                                                            if (userTime > botTime + 1000 || c.unreadMsgCount > 0) {
-                                                                unreadCount++;
-                                                            }
-                                                        }
-                                                    }
-                                                }
+                                                // Use global memoized count
+                                                const unreadCount = unreadCounts.crmProjects[project.id] || 0;
 
                                                 return (
                                                     <div
@@ -1977,68 +2037,13 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                     </div>
 
                     {/* Input Area */}
-                    <form onSubmit={handleSend} className="min-h-[62px] px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] z-20 flex items-end shadow-sm relative">
-                        {/* Emojis Menu — Lazy loaded */}
-                        {showEmojis && (
-                            <div className="absolute bottom-[70px] left-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                                <Suspense fallback={<div className="w-[320px] h-[400px] flex items-center justify-center bg-white dark:bg-[#202c33]"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
-                                    <EmojiPicker 
-                                        onEmojiClick={(eData) => {
-                                            setNewMessage(prev => prev + eData.emoji);
-                                        }}
-                                        theme="auto"
-                                        width={320}
-                                        height={400}
-                                        searchPlaceholder="Buscar emojis..."
-                                        lazyLoadEmojis={true}
-                                        skinTonesDisabled={true}
-                                    />
-                                </Suspense>
-                            </div>
-                        )}
-
-                        <div className="flex space-x-3 text-[#54656f] dark:text-[#8696a0] items-center mb-1 mr-2 px-1">
-                            <button type="button" onClick={() => setShowEmojis(!showEmojis)} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[26px] h-[26px] stroke-[1.5]" /></button>
-                            <button type="button" onClick={() => fileInputRef.current?.click()} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors"><Plus className="w-[26px] h-[26px] stroke-[1.5]" /></button>
-                            <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-                        </div>
-                        
-                        <div className="flex-1 bg-white dark:bg-[#2a3942] rounded-lg border-none shadow-[0_1px_0_rgba(11,20,26,.05)] focus-within:shadow-[0_1px_2px_rgba(11,20,26,.1)] transition-shadow flex items-center pr-1">
-                            <input 
-                                id="chat-msg-input"
-                                autoComplete="off"
-                                className="w-full bg-transparent border-none outline-none py-2.5 px-4 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none overflow-hidden text-[15px]" 
-                                placeholder="Escribe un mensaje"
-                                value={newMessage}
-                                onChange={(e) => {
-                                    setNewMessage(e.target.value);
-                                    handleTyping();
-                                }}
-                            />
-                            {newMessage && (
-                                <button 
-                                    type="button" 
-                                    title="Limpiar texto"
-                                    onClick={() => setNewMessage('')}
-                                    className="p-1.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-full mr-1 hover:bg-gray-100 dark:hover:bg-gray-700"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            )}
-                        </div>
-                        
-                        <div className="ml-3 mb-[6px] text-[#54656f] dark:text-[#8696a0]">
-                            {newMessage.trim() ? (
-                                <button type="submit" disabled={sending} className="p-1 text-[#54656f] dark:text-[#8696a0] hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
-                                    <Send className="w-6 h-6" />
-                                </button>
-                            ) : (
-                                <button type="button" className="p-1 hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors">
-                                    <Mic className="w-6 h-6" />
-                                </button>
-                            )}
-                        </div>
-                    </form>
+                    <MessageInputBox 
+                        ref={messageInputRef}
+                        onSend={handleSend}
+                        onTyping={handleTyping}
+                        fileInputRef={fileInputRef}
+                        handleFileUpload={handleFileUpload}
+                    />
                 </div>
             ) : (
                 <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35] border-l border-[#d1d7db] dark:border-[#222e35]">
@@ -2176,7 +2181,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 <div
                                     key={qr.id}
                                     className="px-4 py-3 border-b border-[#f0f2f5] dark:border-[#222e35] hover:bg-[#f0f2f5] dark:hover:bg-[#202c33] transition-colors group cursor-pointer"
-                                    onClick={() => { setNewMessage(qr.message); setShowQuickRepliesPanel(false); }}
+                                    onClick={() => { messageInputRef.current?.injectText(qr.message); setShowQuickRepliesPanel(false); }}
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="flex-1 min-w-0">
