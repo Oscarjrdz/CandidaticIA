@@ -933,6 +933,23 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
     const [blockLoading, setBlockLoading] = useState(false);
 
+    const autoSilenceBot = async (candidate) => {
+        if (!candidate || candidate.blocked) return;
+        try {
+            const result = await blockCandidate(candidate.id, true);
+            if (result.success) {
+                setCandidates(prev => prev.map(c =>
+                    c.id === candidate.id ? { ...c, blocked: true } : c
+                ));
+                // Only update selectedChat if it's currently selected (though it should be)
+                setSelectedChat(prev => prev?.id === candidate.id ? { ...prev, blocked: true } : prev);
+                showToast && showToast('IA silenciada automáticamente (intervención humana)', 'success');
+            }
+        } catch (e) {
+            console.error('Failed to auto-silence bot', e);
+        }
+    };
+
     const handleBlockToggle = async (chatToBlock, e) => {
         if (e) e.stopPropagation();
         if (!chatToBlock) return;
@@ -993,6 +1010,9 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const handleFileUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file || !selectedChat) return;
+
+        // Auto-silence bot on manual intervention
+        autoSilenceBot(selectedChat);
 
         // Reset input immediately so user can select the same file again if needed
         e.target.value = null;
@@ -1075,6 +1095,9 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
     const handleSend = (msg) => {
         if (!msg || !selectedChat) return;
+
+        // Auto-silence bot on manual intervention
+        autoSilenceBot(selectedChat);
 
         // Optimistic clear + focus so the user can immediately type again
         messageInputRef.current?.clearText();
