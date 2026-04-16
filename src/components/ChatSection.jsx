@@ -665,14 +665,20 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     }, [messages]);
 
     // 🚀 SSE-DRIVEN: Reload candidates + messages when SSE fires
+    // Debounced to prevent flickering from rapid bot reply cycles (unread:true → unread:false)
+    const sseCandidatesTimerRef = useRef(null);
     useEffect(() => {
         if (!sseUpdate) return;
-        // A candidate was updated (new message arrived, status changed, etc)
-        loadCandidates();
-        // If the update is for the currently open chat, reload messages instantly
+        // Messages for the actively viewed chat → reload INSTANTLY (no debounce)
         if (sseUpdate.candidateId === selectedChat?.id) {
             loadMessages();
         }
+        // Candidate list → DEBOUNCE 2s to batch rapid-fire SSE events
+        clearTimeout(sseCandidatesTimerRef.current);
+        sseCandidatesTimerRef.current = setTimeout(() => {
+            loadCandidates();
+        }, 2000);
+        return () => clearTimeout(sseCandidatesTimerRef.current);
     }, [sseUpdate]);
 
     // 🆕 SSE: New candidate arrived
