@@ -1253,7 +1253,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         );
                                     })}
                                 </div>
-                                </div>
                             )}
                         </div>
                         )}
