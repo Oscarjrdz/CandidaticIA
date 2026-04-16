@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2 } from 'lucide-react';
+import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2 } from 'lucide-react';
+import EmojiPicker from 'emoji-picker-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
@@ -142,6 +143,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const [editTagName, setEditTagName] = useState("");
     const [editTagColor, setEditTagColor] = useState("#3b82f6");
     const [vacancies, setVacancies] = useState([]);
+    const [editingVac, setEditingVac] = useState(null);
     const [chatLocks, setChatLocks] = useState({});
     const [unreadCount, setUnreadCount] = useState(0);
 
@@ -1542,21 +1544,30 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                             const vacUnread = baseCandidates.filter(c => c?.unread === true && c.currentVacancyId === vac.id).length;
                                                             return (
                                                                 <div key={vac.id}
-                                                                    onClick={() => injectVacancy(vac)}
-                                                                    className={`px-3 py-2 text-xs hover:bg-gray-50 dark:hover:bg-[#111b21] cursor-pointer transition-colors flex items-center gap-2 ${
+                                                                    className={`px-3 py-2 text-xs transition-colors flex items-center justify-between group/vacitem ${
                                                                         selectedChat?.currentVacancyId === vac.id
-                                                                        ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 font-bold'
-                                                                        : 'text-[#111b21] dark:text-[#e9edef]'
+                                                                        ? 'bg-blue-50 dark:bg-blue-900/20'
+                                                                        : 'hover:bg-gray-50 dark:hover:bg-[#111b21]'
                                                                     }`}
                                                                 >
-                                                                    <Briefcase className="w-3.5 h-3.5 shrink-0" />
-                                                                    <span className="truncate flex-1">{vac.name}</span>
-                                                                    {selectedChat?.currentVacancyId === vac.id && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
-                                                                    {vacUnread > 0 && (
-                                                                        <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
-                                                                            {vacUnread}
-                                                                        </span>
-                                                                    )}
+                                                                    <div onClick={(e) => { e.stopPropagation(); injectVacancy(vac); }} className="flex items-center gap-2 cursor-pointer flex-1 overflow-hidden">
+                                                                        <Briefcase className="w-3.5 h-3.5 shrink-0 text-[#111b21] dark:text-[#e9edef]" />
+                                                                        <span className={`truncate flex-1 ${selectedChat?.currentVacancyId === vac.id ? 'text-blue-600 font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>{vac.name}</span>
+                                                                        {selectedChat?.currentVacancyId === vac.id && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+                                                                        {vacUnread > 0 && (
+                                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+                                                                                {vacUnread}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); setEditingVac(vac); }} 
+                                                                        className="ml-2 p-1.5 text-gray-400 hover:text-blue-500 opacity-0 group-hover/vacitem:opacity-100 transition-opacity bg-white dark:bg-[#202c33] rounded-full shadow-sm border border-gray-200 dark:border-gray-600"
+                                                                        title="Editar información inyectable"
+                                                                    >
+                                                                        <Edit2 className="w-3 h-3" />
+                                                                    </button>
                                                                 </div>
                                                             );
                                                         })
@@ -1866,16 +1877,18 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                     <form onSubmit={handleSend} className="min-h-[62px] px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] z-20 flex items-end shadow-sm relative">
                         {/* Emojis Menu */}
                         {showEmojis && (
-                            <div className="absolute bottom-[70px] left-2 bg-white dark:bg-[#2a3942] rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 p-2 w-[220px] grid grid-cols-6 gap-1 z-50">
-                                {POPULAR_EMOJIS.map(emoji => (
-                                    <button 
-                                        key={emoji} type="button" 
-                                        onClick={() => { setNewMessage(prev => prev + emoji); setShowEmojis(false); }}
-                                        className="text-xl hover:bg-black/5 dark:hover:bg-white/5 rounded p-1 transition-colors"
-                                    >
-                                        {emoji}
-                                    </button>
-                                ))}
+                            <div className="absolute bottom-[70px] left-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
+                                <EmojiPicker 
+                                    onEmojiClick={(eData) => {
+                                        setNewMessage(prev => prev + eData.emoji);
+                                    }}
+                                    theme="auto"
+                                    width={320}
+                                    height={400}
+                                    searchPlaceholder="Buscar emojis..."
+                                    lazyLoadEmojis={true}
+                                    skinTonesDisabled={true}
+                                />
                             </div>
                         )}
 
@@ -1959,6 +1972,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                             <X className="w-5 h-5" />
                         </button>
                     </div>
+                    {/* Panel cont... */}
 
                     {/* Create / Edit Form */}
                     <div className="p-3 border-b border-[#f0f2f5] dark:border-[#222e35] space-y-2">
@@ -2094,6 +2108,61 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 </div>
                             ))
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* VACANCY EDIT MODAL */}
+            {editingVac && (
+                <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-[#202c33] w-full max-w-lg rounded-xl shadow-xl overflow-hidden flex flex-col">
+                        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] flex justify-between items-center">
+                            <h3 className="font-bold text-[#111b21] dark:text-[#e9edef] truncate pr-4">Editar Info de {editingVac.name}</h3>
+                            <button onClick={() => setEditingVac(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6 flex-1 overflow-y-auto">
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wider">
+                                Texto a inyectar (Info para el bot)
+                            </label>
+                            <textarea
+                                value={editingVac.messageDescription || ''}
+                                onChange={(e) => setEditingVac({...editingVac, messageDescription: e.target.value})}
+                                rows={10}
+                                className="w-full text-sm p-3 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg border border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-[#202c33] outline-none transition-all text-[#111b21] dark:text-[#d1d7db] resize-none"
+                                placeholder="Escribe aquí la información de la vacante para inyectar/enviar..."
+                            />
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#111b21]">
+                            <button 
+                                onClick={() => setEditingVac(null)}
+                                className="px-4 py-2 font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        const res = await fetch('/api/vacancies', {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ id: editingVac.id, messageDescription: editingVac.messageDescription })
+                                        });
+                                        const { success, data } = await res.json();
+                                        if (success) {
+                                            setVacancies(prev => prev.map(v => v.id === data.id ? data : v));
+                                            setEditingVac(null);
+                                        }
+                                    } catch(e) {
+                                        console.error(e);
+                                    }
+                                }}
+                                className="px-5 py-2 font-medium bg-[#00a884] text-white rounded-lg hover:bg-[#008f6f] shadow-sm transition-colors"
+                            >
+                                Guardar Cambios
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
