@@ -643,7 +643,7 @@ const CandidatesSection = ({ showToast }) => {
         } else {
             showToast(`Error: ${result.error}`, 'error');
         }
-    };
+    }, [showToast, loadCandidates]);
 
     const handleOpenChat = React.useCallback((candidate) => {
         setSelectedCandidate(candidate);
