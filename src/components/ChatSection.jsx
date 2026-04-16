@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2 } from 'lucide-react';
+import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply } from 'lucide-react';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
@@ -256,6 +256,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     const [vacancies, setVacancies] = useState([]);
     const [editingVac, setEditingVac] = useState(null);
     const [chatLocks, setChatLocks] = useState({});
+    const [reactionPopupId, setReactionPopupId] = useState(null);
+    const [replyingToMsg, setReplyingToMsg] = useState(null);
 
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
 
