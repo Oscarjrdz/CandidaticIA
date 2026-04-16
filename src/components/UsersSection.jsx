@@ -190,7 +190,8 @@ const UsersSection = ({ showToast }) => {
                 status: user.status,
                 allowed_projects: user.allowed_projects || [],
                 allowed_crm_projects: user.allowed_crm_projects || [],
-                allowed_labels: user.allowed_labels || []
+                allowed_labels: user.allowed_labels || [],
+                can_manage_tags: user.can_manage_tags || false
             });
         } else {
             setEditingUser(null);
@@ -622,7 +623,7 @@ const UsersSection = ({ showToast }) => {
                                     <div>
                                         <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-1">📂 Proyectos Asignados</h4>
                                         <p className="text-[10px] text-gray-400 mb-2">Sin selección = ver todos. Marca “Ninguno” para restringir a cero.</p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-2 border border-blue-100 dark:border-blue-900 rounded-lg bg-blue-50/50 dark:bg-blue-900/10">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto p-2 border border-blue-100 dark:border-blue-900 rounded-lg bg-blue-50/50 dark:bg-blue-900/10">
                                             {/* Opción Ninguno */}
                                             <label className="col-span-full flex items-center space-x-3 cursor-pointer p-2 rounded-lg bg-blue-100/60 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors border border-blue-200 dark:border-blue-800">
                                                 <input
@@ -658,7 +659,7 @@ const UsersSection = ({ showToast }) => {
                                     <div>
                                         <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-1">📋 Pipelines CRM Asignados</h4>
                                         <p className="text-[10px] text-gray-400 mb-2">Sin selección = ver todos. Marca “Ninguno” para restringir a cero.</p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-2 border border-purple-100 dark:border-purple-900 rounded-lg bg-purple-50/50 dark:bg-purple-900/10">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto p-2 border border-purple-100 dark:border-purple-900 rounded-lg bg-purple-50/50 dark:bg-purple-900/10">
                                             {/* Opción Ninguno */}
                                             <label className="col-span-full flex items-center space-x-3 cursor-pointer p-2 rounded-lg bg-purple-100/60 dark:bg-purple-900/30 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors border border-purple-200 dark:border-purple-800">
                                                 <input
@@ -695,7 +696,7 @@ const UsersSection = ({ showToast }) => {
                                         <div>
                                             <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-1">🏷️ Etiquetas Visibles</h4>
                                             <p className="text-[10px] text-gray-400 mb-2">Sin selección = ver todas. Marca cuales puede ver o marca "Ninguna".</p>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-2 border border-amber-100 dark:border-amber-900 rounded-lg bg-amber-50/50 dark:bg-amber-900/10">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 overflow-y-auto p-2 border border-amber-100 dark:border-amber-900 rounded-lg bg-amber-50/50 dark:bg-amber-900/10">
                                                 {/* Opción Ninguna etiqueta */}
                                                 <label className="col-span-full flex items-center space-x-3 cursor-pointer p-2 rounded-lg bg-amber-100/60 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors border border-amber-200 dark:border-amber-800">
                                                     <input

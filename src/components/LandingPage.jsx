@@ -415,7 +415,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                             <form onSubmit={handlePhoneSubmit} className="space-y-6">
                                                 <div className="space-y-3 text-center">
                                                     <label className="text-xs sm:text-sm font-bold text-gray-400 uppercase tracking-widest">WhatsApp (10 dígitos)</label>
-                                                    <div className="flex justify-center gap-1 sm:gap-1.5 flex-wrap">
+                                                    <div className="flex justify-center gap-1 overflow-x-auto">
                                                         {Array(10).fill(0).map((_, i) => (
                                                             <input key={i} id={`phone-${i}`} type="text" inputMode="numeric" maxLength={1}
                                                                 value={phone[i] || ''}
@@ -426,7 +426,7 @@ const LandingPage = ({ onLoginSuccess }) => {
                                                                 }}
                                                                 onKeyDown={(e) => { if (e.key === 'Backspace' && !phone[i] && i > 0) document.getElementById(`phone-${i - 1}`).focus(); }}
                                                                 onFocus={(e) => e.target.select()}
-                                                                className={`w-9 h-11 sm:w-12 sm:h-14 text-center text-lg sm:text-2xl font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_10px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-violet-400 focus:bg-white'}`}
+                                                                className={`w-8 h-10 shrink-0 text-center text-base font-bold rounded-lg border-2 outline-none transition-all duration-300 shadow-sm ${phone[i] ? 'border-green-500 text-green-600 bg-green-50/50 shadow-[0_0_8px_rgba(34,197,94,0.2)] transform scale-105' : 'border-gray-200 text-gray-400 bg-white/50 focus:border-violet-400 focus:bg-white'}`}
                                                             />
                                                         ))}
                                                     </div>

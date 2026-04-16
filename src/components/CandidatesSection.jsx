@@ -190,7 +190,8 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
     );
 }, areCandidatePropsEqual);
 
-const CandidatesSection = ({ showToast }) => {
+const CandidatesSection = ({ showToast, user }) => {
+    const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
     const [candidates, setCandidates] = useState([]);
     const [stats, setStats] = useState(null); // Live dashboard stats
     const [loading, setLoading] = useState(false);
@@ -1012,6 +1013,7 @@ const CandidatesSection = ({ showToast }) => {
                                                                 <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></div>
                                                                 <span className="font-medium truncate">{tName}</span>
                                                             </div>
+                                                            {canManageTags && (
                                                             <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
                                                                 <button 
                                                                     onClick={(e) => {
@@ -1036,13 +1038,15 @@ const CandidatesSection = ({ showToast }) => {
                                                                     <X className="w-3.5 h-3.5" />
                                                                 </button>
                                                             </div>
+                                                            )}
                                                         </div>
                                                     )
                                                 })
                                             )}
                                         </div>
 
-                                        {/* Modulo crear nueva etiqueta */}
+                                        {/* Modulo crear nueva etiqueta — solo para usuarios con permiso */}
+                                        {canManageTags && (
                                         <div className="p-2 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-2 bg-gray-50 dark:bg-[#111b21]">
                                             <div className="flex justify-between px-1">
                                                 {TAG_COLORS.map((c) => (
@@ -1092,6 +1096,7 @@ const CandidatesSection = ({ showToast }) => {
                                                 </button>
                                             </div>
                                         </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

@@ -275,7 +275,7 @@ function App() {
 
         <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8'}`}>
           {activeSection === 'candidates' ? (
-            <CandidatesSection showToast={showToast} />
+            <CandidatesSection showToast={showToast} user={user} />
           ) : activeSection === 'chat' ? (
             <ChatSection showToast={showToast} user={user} rolePermissions={rolePermissions} />
           ) : activeSection === 'bulks' ? (
