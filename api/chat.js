@@ -85,6 +85,26 @@ export default async function handler(req, res) {
 
             if (!ultraConfig) return res.status(400).json({ error: 'Faltan credenciales' });
 
+            if (type === 'reaction') {
+                if (!replyToId) return res.status(400).json({ error: 'Falta ID del mensaje a reaccionar' });
+                const { sendUltraMsgReaction } = await import('./whatsapp/utils.js');
+                
+                // Fire off the API
+                const sendResult = await sendUltraMsgReaction(ultraConfig.instanceId, ultraConfig.token, replyToId, message);
+                
+                if (sendResult) {
+                     const { updateMessageReaction } = await import('./utils/storage.js');
+                     await updateMessageReaction(candidateId, replyToId, message);
+                     
+                     // Force stat update for SSE
+                     const redisClient = getRedisClient();
+                     if (redisClient) await redisClient.del('stats:bot:last_calc');
+                     
+                     return res.status(200).json({ success: true, reaction: message, id: replyToId });
+                }
+                return res.status(500).json({ error: 'Error sending reaction' });
+            }
+
             const timestamp = new Date().toISOString();
             const msgId = `msg_${Date.now()}`;
 

@@ -128,7 +128,7 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
     );
 };
 // ─── Componente Input (Memoizado) ──────────────────────────────────────────────
-const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload }, ref) => {
+const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply }, ref) => {
     const [localMessage, setLocalMessage] = useState("");
     const [sending, setSending] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
@@ -156,7 +156,19 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
     };
 
     return (
-        <form onSubmit={handleSubmit} className="min-h-[62px] px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] z-20 flex items-end shadow-sm relative">
+        <div className="w-full flex flex-col shadow-[0_-2px_10px_rgba(0,0,0,0.02)] z-20">
+            {replyingToMsg && (
+                <div className="px-4 py-2 bg-[#f0f2f5] dark:bg-[#202c33] border-b border-gray-200 dark:border-gray-800 flex justify-between items-center slide-in-from-bottom-2 duration-200">
+                    <div className="flex-1 flex flex-col pl-3 border-l-4 border-blue-500 bg-black/5 dark:bg-white/5 py-1 px-3 rounded-r-lg max-w-[80%]">
+                        <span className="text-[11px] font-bold text-blue-500 mb-0.5">Respondiendo a {(replyingToMsg.from === 'me' || replyingToMsg.from === 'bot') ? 'Ti' : 'Candidato'}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 truncate">{replyingToMsg.content || '📄 Mensaje multimedia'}</span>
+                    </div>
+                    <button onClick={onCancelReply} className="ml-4 p-2 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+            )}
+            <form onSubmit={handleSubmit} className="min-h-[62px] px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] flex items-end relative">
             {/* Emojis Menu — Lazy loaded */}
             {showEmojis && (
                 <div className="absolute bottom-[70px] left-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
@@ -218,6 +230,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                 )}
             </div>
         </form>
+        </div>
     );
 });
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1093,6 +1106,36 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         setShowDropdown(null);
     };
 
+    const sendReactionToApi = async (candidateId, msg, emoji, showToast, setReactionPopupId, loadMessages) => {
+        setReactionPopupId(null);
+        if (!msg || !emoji) return;
+
+        const replyToId = msg.ultraMsgId || msg.id;
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    candidateId,
+                    message: emoji,
+                    type: 'reaction',
+                    replyToId: replyToId
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Optimistically load immediately
+                setTimeout(()=> loadMessages(), 100);
+            } else {
+                showToast && showToast('Error al enviar reacción', 'error');
+            }
+        } catch (err) {
+            console.error(err);
+            showToast && showToast('Error de red al enviar reacción', 'error');
+        }
+    };
+
     const handleSend = (msg) => {
         if (!msg || !selectedChat) return;
 
@@ -1103,6 +1146,20 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         messageInputRef.current?.clearText();
 
         const currentCandidateId = selectedChat.id;
+        const replyId = replyingToMsg ? (replyingToMsg.ultraMsgId || replyingToMsg.id) : null;
+        
+        // Optimistic contextualization
+        const contextInfoParams = replyId && replyingToMsg ? {
+            contextInfo: {
+                quotedMessage: {
+                    stanzaId: replyId,
+                    participant: (replyingToMsg.from !== 'me' && replyingToMsg.from !== 'bot') ? selectedChat.whatsapp : '',
+                    text: replyingToMsg.content || 'Mensaje multimedia'
+                }
+            }
+        } : {};
+
+        setReplyingToMsg(null);
         
         // Optimistic append
         setMessages(prev => [...(prev || []), {
@@ -1111,14 +1168,15 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             tipo: 'text',
             from: 'me',
             enviado_por_agente: 1, // Visual indicator for sent by us
-            fecha: new Date().toISOString()
+            fecha: new Date().toISOString(),
+            ...contextInfoParams
         }]);
 
         // Fire and forget (No blocking 'await')
         fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ candidateId: currentCandidateId, message: msg, type: 'text' })
+            body: JSON.stringify({ candidateId: currentCandidateId, message: msg, type: 'text', replyToId: replyId })
         }).then(res => res.json()).then(data => {
             if (data.success) {
                 // If it's still the active chat, refresh messages
@@ -2078,6 +2136,22 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Quick Actions (Hover) */}
+                                        <div className={`absolute top-1 ${isMe ? '-left-[72px]' : '-right-[72px]'} opacity-0 group-hover:opacity-100 flex gap-1 z-30 transition-opacity`}>
+                                            <button onClick={() => setReactionPopupId(msg.id)} title="Reaccionar" className="p-1.5 bg-white dark:bg-[#202c33] hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm border border-black/5 dark:border-white/5 rounded-[10px]"><Smile className="w-[18px] h-[18px] text-[#54656f] dark:text-[#8696a0]" /></button>
+                                            <button onClick={() => setReplyingToMsg(msg)} title="Responder" className="p-1.5 bg-white dark:bg-[#202c33] hover:bg-gray-50 dark:hover:bg-gray-800 shadow-sm border border-black/5 dark:border-white/5 rounded-[10px]"><Reply className="w-[18px] h-[18px] text-[#54656f] dark:text-[#8696a0]" /></button>
+                                        </div>
+
+                                        {/* Reaction Emoji Picker Popup */}
+                                        {reactionPopupId === msg.id && (
+                                            <div className={`absolute -top-[44px] ${isMe ? 'right-0' : 'left-0'} bg-white dark:bg-[#202c33] shadow-lg rounded-full px-3 py-2 flex items-center gap-3 z-50 border border-gray-200 dark:border-gray-800 slide-in-from-bottom-2`}>
+                                                {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+                                                    <button key={emoji} onClick={() => sendReactionToApi(selectedChat.id, msg, emoji, showToast, setReactionPopupId, loadMessages)} className="text-xl hover:scale-150 transition-transform origin-bottom">{emoji}</button>
+                                                ))}
+                                                <button onClick={() => setReactionPopupId(null)} className="ml-1 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"><X className="w-3.5 h-3.5 text-gray-400" /></button>
+                                            </div>
+                                        )}
 
                                         <div className={`flex items-center space-x-1 select-none pr-1 absolute bottom-[3px] right-2`}>
                                             <p className="text-[10px] text-[#667781] dark:text-[#8696a0] font-medium leading-none">
