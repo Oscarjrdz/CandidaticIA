@@ -39,23 +39,32 @@ export const calculateBotStats = async () => {
         todayEnd.setHours(23, 59, 59, 999);
         const utcToday = new Date().toISOString().split('T')[0];
 
-        // Fetch all pending IDs (Flight plan candidates only live here)
-        const pendingIds = await redis.smembers('stats:list:pending');
+        // Fetch all IDs (Flight plan candidates only live in pending)
+        const pendingIds = await redis.smembers('stats:list:pending') || [];
+        const completeIds = await redis.smembers('stats:list:complete') || [];
         let totalUnreadCount = 0;
+        
+        // Combine all IDs to accurately count unread chats globally across all status buckets
+        // Tag them so we only do flightplan logic for pending ones
+        const allIdsToAudit = [
+            ...pendingIds.map(id => ({ id, isPending: true })),
+            ...completeIds.map(id => ({ id, isPending: false }))
+        ];
 
-        if (pendingIds && pendingIds.length > 0) {
+        if (allIdsToAudit.length > 0) {
             const CHUNK_SIZE = 100;
-            for (let i = 0; i < pendingIds.length; i += CHUNK_SIZE) {
-                const chunk = pendingIds.slice(i, i + CHUNK_SIZE);
+            for (let i = 0; i < allIdsToAudit.length; i += CHUNK_SIZE) {
+                const chunk = allIdsToAudit.slice(i, i + CHUNK_SIZE);
                 const pipeline = redis.pipeline();
-                chunk.forEach(id => pipeline.get(`candidate:${id}`));
+                chunk.forEach(item => pipeline.get(`candidate:${item.id}`));
 
                 const results = await pipeline.exec();
                 const sessionKeyPipeline = redis.pipeline();
                 const processedInChunk = [];
 
-                results.forEach(([err, res]) => {
+                results.forEach(([err, res], idx) => {
                     if (err || !res) return;
+                    const { isPending } = chunk[idx];
                     try {
                         const c = JSON.parse(res);
                         const tUser = new Date(c.lastUserMessageAt || 0).getTime();
@@ -63,8 +72,11 @@ export const calculateBotStats = async () => {
                         const lastInteraction = Math.max(tUser, tBot);
                         const hoursInactive = (now - lastInteraction) / (1000 * 60 * 60);
 
-                        const sortedStages = [...inactiveStages].sort((a, b) => b.hours - a.hours);
-                        const currentStage = sortedStages.find(s => hoursInactive >= s.hours);
+                        let currentStage = null;
+                        if (isPending) {
+                            const sortedStages = [...inactiveStages].sort((a, b) => b.hours - a.hours);
+                            currentStage = sortedStages.find(s => hoursInactive >= s.hours);
+                        }
 
                         if (currentStage) {
                             const level = currentStage.hours;
