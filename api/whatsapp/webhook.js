@@ -228,7 +228,7 @@ export default async function handler(req, res) {
             }
 
             // IGNORE OUTGOING MESSAGES
-            if (messageData.fromMe || messageData.from_me) {
+            if (messageData.fromMe || messageData.from_me || mData.key?.fromMe || mData.fromMe) {
                 await logTelemetry('ingress_ignored_outgoing', { msgId, from });
                 return res.status(200).send('from_me_ignored');
             }
