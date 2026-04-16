@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Loader2, MessageCircle, Move, Copy, Tag, Mic, Trash, Check, Paperclip } from 'lucide-react';
+import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as ImageIcon, Send, ArrowLeft, RefreshCw, X, Play, Square, Download, Smile, Plus, Camera, MoreVertical, Reply, Copy, Check, CheckCheck, Clock } from 'lucide-react';
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
 import CandidateADNCard from './CandidateADNCard';
-import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
+import { useGatewaySocket } from '../hooks/useGatewaySocket';
 import { Virtuoso } from 'react-virtuoso';
 const formatWhatsAppText = (text) => {
     if (!text) return '';
@@ -37,7 +37,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const [sending, setSending] = useState(false);
     const [availableFields, setAvailableFields] = useState([]);
     const [replyToMsg, setReplyToMsg] = useState(null);
-    const { updatedCandidate } = useCandidatesSSE();
+    const { updatedCandidate } = useGatewaySocket();
 
     // Recording State
     const [isRecording, setIsRecording] = useState(false);
@@ -98,11 +98,17 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         }
     }, [isOpen, candidate]);
 
-    // SSE Real-Time Updates Listener (Replaces Short-Polling)
+    // Real-Time Updates Listener (Replaces Short-Polling)
     useEffect(() => {
-        if (isOpen && candidate && updatedCandidate?.id === candidate.id) {
+        if (!isOpen || !candidate || !updatedCandidate) return;
+        
+        const isMatchById = updatedCandidate.candidateId === candidate.id;
+        const isMatchByPhone = updatedCandidate.phoneMatch && candidate.whatsapp && candidate.whatsapp.includes(updatedCandidate.phoneMatch);
+        
+        if (isMatchById || isMatchByPhone) {
             // Signal received that this candidate has a new message!
-            if (updatedCandidate?.updates?.newMessage) {
+            if (updatedCandidate?.updates?.newMessage || updatedCandidate?.updates?.ultimoMensaje) {
+                // Fetch directly to get the full formatted message immediately
                 loadMessages();
             }
         }

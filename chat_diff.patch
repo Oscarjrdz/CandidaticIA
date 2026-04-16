@@ -1,0 +1,300 @@
+diff --git a/src/components/ChatSection.jsx b/src/components/ChatSection.jsx
+index 619eccf..2c39d54 100644
+--- a/src/components/ChatSection.jsx
++++ b/src/components/ChatSection.jsx
+@@ -148,8 +148,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+     const [editTagColor, setEditTagColor] = useState("#3b82f6");
+     const [vacancies, setVacancies] = useState([]);
+     const [editingVac, setEditingVac] = useState(null);
+-    const [chatLocks, setChatLocks] = useState({});
+-    const [unreadCount, setUnreadCount] = useState(0);
++
+ 
+     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
+ 
+@@ -198,7 +197,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+     const [draggedIcon, setDraggedIcon] = useState(null);
+ 
+     // Filter Chips State
+-    const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'unread', 'label', 'profile'
++    const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'label', 'profile'
+     const [filterValue, setFilterValue] = useState(null);
+     const activeFilterRef = useRef('all');
+     const filterValueRef = useRef(null);
+@@ -273,10 +272,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+             try {
+                 const res = await fetch('/api/chat-stats');
+                 const data = await res.json();
+-                if (data.success) {
+-                    setUnreadCount(data.unreadCount || 0);
+                     setChatLocks(data.locks || {});
+-                }
+             } catch (e) { /* silent */ }
+         }, 15000);
+         // Initial fetch
+@@ -285,7 +281,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                 const res = await fetch('/api/chat-stats');
+                 const data = await res.json();
+                 if (data.success) {
+-                    setUnreadCount(data.unreadCount || 0);
+                     setChatLocks(data.locks || {});
+                 }
+             } catch (e) { /* silent */ }
+@@ -588,10 +583,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                 if (!hasAnyTag) return false;
+             }
+ 
+-            if (activeFilter === 'unread' && c?.unread !== true) {
+-                // Pin the selected chat in the UI even if it's no longer unread while they are actively viewing it
+-                if (selectedChatRef.current?.id !== c.id) return false;
+-            }
++
+             if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
+             if (activeFilter === 'profile') {
+                 const isComplete = isProfileComplete(c);
+@@ -615,8 +607,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+         });
+ 
+         return result.sort((a, b) => {
+-            if (a?.unread && !b?.unread) return -1;
+-            if (!a?.unread && b?.unread) return 1;
+             return 0; // Maintain recent timestamp sorting from backend
+         });
+     }, [
+@@ -646,21 +636,17 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+     }), [candidates, roleAllowedCandidateIds, user]);
+ 
+     const badgeCounts = useMemo(() => {
+-        let all = 0, allUnread = 0, complete = 0, completeUnread = 0, incomplete = 0, incompleteUnread = 0;
++        let all = 0, complete = 0, incomplete = 0;
+         for (const c of baseCandidates) {
+             all++;
+-            const unread = c?.unread === true;
+-            if (unread) allUnread++;
+             const profComplete = isProfileComplete(c);
+             if (profComplete) {
+                 complete++;
+-                if (unread) completeUnread++;
+             } else {
+                 incomplete++;
+-                if (unread) incompleteUnread++;
+             }
+         }
+-        return { all, allUnread, complete, completeUnread, incomplete, incompleteUnread };
++        return { all, complete, incomplete };
+     }, [baseCandidates]);
+ 
+     // Scroll to bottom
+@@ -728,8 +714,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+         }, 30000);
+ 
+         // Optimistic UI updates
+-        // DO NOT clear unread on load anymore - clear it ONLY ON SEND.
+-        // setCandidates(prev => prev.map(c => c.id === selectedChat.id ? { ...c, unread: false } : c));
+ 
+         return () => {
+             clearInterval(interval);
+@@ -949,9 +933,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+ 
+         const currentCandidateId = selectedChat.id;
+         
+-        // Optimistic clear of unread!
+-        setCandidates(prev => prev.map(c => c.id === currentCandidateId ? { ...c, unread: false } : c));
+-        
+         // Optimistic append
+         setMessages(prev => [...(prev || []), {
+             id: 'temp-' + Date.now(),
+@@ -1050,28 +1031,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                 }`}
+                             >
+                                 Todos ({badgeCounts.all})
+-                                {badgeCounts.allUnread > 0 && (
+-                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
+-                                        {badgeCounts.allUnread}
+-                                    </span>
+-                                )}
+-                            </button>
+-                        )}
+-                        {canSeeFilter('filter_unread') && (
+-                            <button 
+-                                onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
+-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
+-                                    activeFilter === 'unread' 
+-                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+-                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+-                                }`}
+-                            >
+-                                No leídos ({badgeCounts.allUnread})
+-                                {badgeCounts.allUnread > 0 && (
+-                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
+-                                        {badgeCounts.allUnread}
+-                                    </span>
+-                                )}
+                             </button>
+                         )}
+                         {canSeeFilter('filter_complete') && (
+@@ -1084,11 +1043,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                 }`}
+                             >
+                                 Completos ({badgeCounts.complete})
+-                                {badgeCounts.completeUnread > 0 && (
+-                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
+-                                        {badgeCounts.completeUnread}
+-                                    </span>
+-                                )}
+                             </button>
+                         )}
+                         {canSeeFilter('filter_incomplete') && (
+@@ -1101,11 +1055,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                 }`}
+                             >
+                                 Incompletos ({badgeCounts.incomplete})
+-                                {badgeCounts.incompleteUnread > 0 && (
+-                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full">
+-                                        {badgeCounts.incompleteUnread}
+-                                    </span>
+-                                )}
+                             </button>
+                         )}
+ 
+@@ -1135,7 +1084,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                         const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                         const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                         const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
+-                                        const tagUnread = baseCandidates.filter(c => c?.unread === true && Array.isArray(c.tags) && c.tags.includes(tName)).length;
+                                         return (
+                                             <div 
+                                                 key={tName}
+@@ -1144,11 +1092,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                             >
+                                                 <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
+                                                 <span className="truncate flex-1">{display}</span>
+-                                                {tagUnread > 0 && (
+-                                                    <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+-                                                        {tagUnread}
+-                                                    </span>
+-                                                )}
+                                             </div>
+                                         );
+                                     })}
+@@ -1187,7 +1130,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
+                                         ) : (
+                                             filteredProjects.map(project => {
+-                                                const projUnread = baseCandidates.filter(c => c?.unread === true && c.currentVacancyId === project.id).length;
+                                                 return (
+                                                     <div
+                                                         key={project.id}
+@@ -1200,11 +1142,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                         title={project.name}
+                                                     >
+                                                         <span className="truncate flex-1">{project.name}</span>
+-                                                        {projUnread > 0 && (
+-                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+-                                                                {projUnread}
+-                                                            </span>
+-                                                        )}
+                                                     </div>
+                                                 );
+                                             })
+@@ -1254,7 +1191,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos</div>
+                                                         ) : (
+                                                             activeProject.steps?.map(step => {
+-                                                                const stepUnread = baseCandidates.filter(c => c?.unread === true && c.currentVacancyId === aiProjectFilter && c.pasoActual === step.id).length;
+                                                                 return (
+                                                                     <div
+                                                                         key={step.id}
+@@ -1263,11 +1199,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                                         title={step.name}
+                                                                     >
+                                                                         <span className="truncate flex-1">{step.name}</span>
+-                                                                        {stepUnread > 0 && (
+-                                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+-                                                                                {stepUnread}
+-                                                                            </span>
+-                                                                        )}
+                                                                     </div>
+                                                                 );
+                                                             })
+@@ -1312,7 +1243,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pipelines</div>
+                                         ) : (
+                                             filteredManualProjects.map(project => {
+-                                                const crmUnread = baseCandidates.filter(c => c?.unread === true && c.manualProjectId === project.id).length;
+                                                 return (
+                                                     <div
+                                                         key={project.id}
+@@ -1325,11 +1255,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                         title={project.name}
+                                                     >
+                                                         <span className="truncate flex-1">{project.name}</span>
+-                                                        {crmUnread > 0 && (
+-                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+-                                                                {crmUnread}
+-                                                            </span>
+-                                                        )}
+                                                     </div>
+                                                 );
+                                             })
+@@ -1379,7 +1304,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                             <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos</div>
+                                                         ) : (
+                                                             activeProject.steps?.map(step => {
+-                                                                const stepUnread = baseCandidates.filter(c => c?.unread === true && c.manualProjectId === manualPipelineFilter && c.manualProjectStepId === step.id).length;
+                                                                 return (
+                                                                     <div
+                                                                         key={step.id}
+@@ -1388,11 +1312,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                                         title={step.name}
+                                                                     >
+                                                                         <span className="truncate flex-1">{step.name}</span>
+-                                                                        {stepUnread > 0 && (
+-                                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+-                                                                                {stepUnread}
+-                                                                            </span>
+-                                                                        )}
+                                                                     </div>
+                                                                 );
+                                                             })
+@@ -1440,7 +1359,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                 {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
+                                                     <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
+                                                 ) : null}
+-                                                <span className={`text-xs whitespace-nowrap ${chat.unread ? 'text-[#25d366] font-bold' : 'text-[#667781] dark:text-[#8696a0]'}`}>{formatRelativeDate(chat.ultimoMensaje)}</span>
++                                                <span className="text-xs whitespace-nowrap text-[#667781] dark:text-[#8696a0]">{formatRelativeDate(chat.ultimoMensaje)}</span>
+                                             </div>
+                                         </div>
+                                         <div className="flex justify-between items-center mt-0.5">
+@@ -1453,11 +1372,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                 </span>
+                                             </div>
+                                             <div className="flex items-center shrink-0 ml-1 gap-1">
+-                                                {chat.unread && (
+-                                                    <span className="w-5 h-5 flex items-center justify-center bg-[#25d366] text-white text-[9px] font-bold rounded-full shadow-sm">
+-                                                        !
+-                                                    </span>
+-                                                )}
+                                                 {chatLocks[chat.id] && chatLocks[chat.id].user !== (user?.name || '') && (
+                                                     <span className="text-[9px] text-amber-500 font-semibold truncate max-w-[60px]" title={`${chatLocks[chat.id].user} está atendiendo`}>
+                                                         👤{chatLocks[chat.id].user?.split(' ')[0]}
+@@ -1608,7 +1522,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                         </div>
+                                                     ) : (
+                                                         vacancies.map(vac => {
+-                                                            const vacUnread = baseCandidates.filter(c => c?.unread === true && c.currentVacancyId === vac.id).length;
+                                                             return (
+                                                                 <div key={vac.id}
+                                                                     className={`px-3 py-2 text-xs transition-colors flex items-center justify-between group/vacitem ${
+@@ -1621,11 +1534,6 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
+                                                                         <Briefcase className="w-3.5 h-3.5 shrink-0 text-[#111b21] dark:text-[#e9edef]" />
+                                                                         <span className={`truncate flex-1 ${selectedChat?.currentVacancyId === vac.id ? 'text-blue-600 font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>{vac.name}</span>
+                                                                         {selectedChat?.currentVacancyId === vac.id && <Check className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
+-                                                                        {vacUnread > 0 && (
+-                                                                            <span className="min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-[#25d366] text-white text-[10px] font-bold rounded-full shrink-0">
+-                                                                                {vacUnread}
+-                                                                            </span>
+-                                                                        )}
+                                                                     </div>
+                                                                     
+                                                                     <button 

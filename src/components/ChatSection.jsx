@@ -4,7 +4,7 @@ const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
-import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
+import { useGatewaySocket } from '../hooks/useGatewaySocket';
 import { Virtuoso } from 'react-virtuoso';
 
 const safeFormatTime = (dateStr) => {
@@ -223,7 +223,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ChatSection = ({ showToast, user, rolePermissions }) => {
-    const { updatedCandidate: sseUpdate, newCandidate: sseNewCandidate } = useCandidatesSSE();
+    const { updatedCandidate: sseUpdate, newCandidate: sseNewCandidate } = useGatewaySocket();
     const [candidates, setCandidates] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -371,8 +371,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         loadManualProjects();
         loadProjects();
 
-        // 🟢 FALLBACK polling (SSE handles real-time, this is safety net)
-        const interval = setInterval(loadCandidates, 5000);
+        // 🟢 FALLBACK polling (WebSockets handles real-time, this is safety net)
+        const interval = setInterval(loadCandidates, 60000);
 
         // 🔔 Poll chat stats (unread counts + locks) — now O(1) on backend
         const statsInterval = setInterval(async () => {
@@ -817,7 +817,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
     useEffect(() => {
         if (!sseUpdate) return;
         // Messages for the actively viewed chat → reload INSTANTLY (no debounce)
-        if (sseUpdate.candidateId === selectedChat?.id) {
+        if (sseUpdate.candidateId === selectedChat?.id || (selectedChat?.whatsapp && sseUpdate.phoneMatch === selectedChat.whatsapp)) {
             loadMessages();
         }
         // Candidate list → DEBOUNCE 2s to batch rapid-fire SSE events
@@ -840,7 +840,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
         loadMessages();
         // 🟢 FALLBACK polling (SSE handles real-time, this is safety net)
-        const interval = setInterval(loadMessages, 3000);
+        const interval = setInterval(loadMessages, 60000);
 
         // 🔒 Lock this chat for me
         const currentUser = user?.name || 'Reclutador';

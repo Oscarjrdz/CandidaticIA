@@ -14,7 +14,7 @@ import { getFields } from '../services/automationsService';
 import { deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
 import { generateChatHistoryText } from '../services/chatExportService';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
-import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
+import { useGatewaySocket } from '../hooks/useGatewaySocket';
 import WaStatusCreator from './WaStatusCreator';
 import WaStatusViewer from './WaStatusViewer';
 
@@ -385,7 +385,7 @@ const CandidatesSection = ({ showToast }) => {
 
 
     // 📡 SSE: Real-time candidate updates
-    const { newCandidate, updatedCandidate, globalStats } = useCandidatesSSE();
+    const { newCandidate, updatedCandidate, globalStats } = useGatewaySocket();
 
     // Listen for new candidates via SSE
     useEffect(() => {
@@ -404,21 +404,33 @@ const CandidatesSection = ({ showToast }) => {
         }
     }, [newCandidate, showToast]);
 
-    // Listen for updated candidates via SSE
+    // Listen for updated candidates via WebSocket
     useEffect(() => {
-        if (updatedCandidate && updatedCandidate.candidateId && updatedCandidate.updates) {
+        if (updatedCandidate && (updatedCandidate.candidateId || updatedCandidate.phoneMatch) && updatedCandidate.updates) {
             setCandidates(prev => {
-                const index = prev.findIndex(c => c.id === updatedCandidate.candidateId);
+                const index = prev.findIndex(c => 
+                    (updatedCandidate.candidateId && c.id === updatedCandidate.candidateId) || 
+                    (updatedCandidate.phoneMatch && c.whatsapp && c.whatsapp.includes(updatedCandidate.phoneMatch))
+                );
                 if (index === -1) return prev; // Not in list, ignore
 
                 const updatedList = [...prev];
                 updatedList[index] = { ...updatedList[index], ...updatedCandidate.updates };
+                
+                // Si cambiaron la hora del último mensaje, lo mandamos al tope de la lista optimísticamente
+                if (updatedCandidate.updates.ultimoMensaje) {
+                     return updatedList.sort((a, b) => new Date(b.ultimoMensaje || 0) - new Date(a.ultimoMensaje || 0));
+                }
                 return updatedList;
             });
 
             // Si el candidato actualizado es el que está seleccionado en el chat lateral, actualizarlo también
-            if (selectedCandidate && selectedCandidate.id === updatedCandidate.candidateId) {
-                setSelectedCandidate(prev => ({ ...prev, ...updatedCandidate.updates }));
+            if (selectedCandidate) {
+                 const matchId = updatedCandidate.candidateId && selectedCandidate.id === updatedCandidate.candidateId;
+                 const matchPhone = updatedCandidate.phoneMatch && selectedCandidate.whatsapp && selectedCandidate.whatsapp.includes(updatedCandidate.phoneMatch);
+                 if (matchId || matchPhone) {
+                     setSelectedCandidate(prev => ({ ...prev, ...updatedCandidate.updates }));
+                 }
             }
         }
     }, [updatedCandidate]);
@@ -483,7 +495,7 @@ const CandidatesSection = ({ showToast }) => {
                 setCandidates(newCandidates);
                 if (newStats) setStats(prev => ({ ...prev, ...newStats })); // Merge live stats
             }
-        }, 3000);
+        }, 60000);
 
         subscription.updateParams(LIMIT, (currentPage - 1) * LIMIT, search);
         subscription.start();
