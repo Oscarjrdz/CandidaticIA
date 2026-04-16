@@ -48,7 +48,7 @@ const RibbonSelect = ({ label, options, selected, onToggle, placeholder = "Selec
     };
 
     return (
-        <div className="flex-1 min-w-[180px] group" ref={containerRef}>
+        <div className={`flex-1 min-w-[180px] group ${isOpen ? 'z-50 relative' : 'relative'}`} ref={containerRef}>
             <div className="flex items-center gap-2 mb-1.5 px-1">
                 <label className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-blue-500 transition-colors">
                     {label}
@@ -670,7 +670,7 @@ const ByPassSection = ({ showToast }) => {
             >
                 <div className="p-8 space-y-12">
                     {/* PREMIUM GRID LAYOUT v5.1 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 bg-white dark:bg-slate-900/80 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800/50 shadow-xl relative overflow-visible">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 bg-white dark:bg-slate-900/80 p-8 rounded-[40px] border border-slate-100 dark:border-slate-800/50 shadow-xl relative z-20 overflow-visible">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none" />
 
                         {/* 1. IDENTIFIER (Always Input) */}
