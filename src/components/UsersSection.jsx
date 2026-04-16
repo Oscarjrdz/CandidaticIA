@@ -565,6 +565,7 @@ const UsersSection = ({ showToast }) => {
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
                 title={editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
+                maxWidth="max-w-4xl"
             >
                 <form onSubmit={handleSubmit} className="space-y-4 pt-2">
                     <Input
@@ -615,7 +616,7 @@ const UsersSection = ({ showToast }) => {
                     {formData.role && formData.role !== 'SuperAdmin' && (() => {
                         const perms = getRolePermissions(formData.role);
                         return (
-                            <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-gray-100 dark:border-gray-700">
                                 {/* Proyectos AI asignados */}
                                 {!!perms['filter_projects'] && allProjects.length > 0 && (
                                     <div>
@@ -754,7 +755,7 @@ const UsersSection = ({ showToast }) => {
                                         </div>
                                     </div>
                                 )}
-                            </>
+                            </div>
                         );
                     })()}
 
