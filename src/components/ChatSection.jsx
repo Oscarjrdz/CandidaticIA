@@ -1338,7 +1338,18 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                             data={filteredCandidates}
                             overscan={10}
                             computeItemKey={(index, chat) => chat.id}
-                            itemContent={(index, chat) => (
+                            itemContent={(index, chat) => {
+                                let isUnread = false;
+                                const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
+                                const botTime1 = chat.lastBotMessageAt ? new Date(chat.lastBotMessageAt).getTime() : 0;
+                                const botTime2 = chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0;
+                                const bestBotTime = Math.max(botTime1, botTime2);
+
+                                if (userTime > 0) {
+                                    isUnread = userTime > (bestBotTime + 1000);
+                                }
+
+                                return (
                                 <div 
                                     onClick={() => setSelectedChat(chat)}
                                     className={`flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors ${selectedChat?.id === chat.id ? 'bg-[#f0f2f5] dark:bg-[#2a3942]' : ''}`}
@@ -1354,17 +1365,21 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                     </div>
                                     <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
                                         <div className="flex justify-between items-baseline mb-1">
-                                            <h3 className="text-[17px] text-[#111b21] dark:text-[#e9edef] truncate">{toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}</h3>
+                                            <h3 className={`text-[17px] truncate transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
+                                                {toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}
+                                            </h3>
                                             <div className="flex items-center gap-1 shrink-0 ml-2">
                                                 {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
                                                     <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
                                                 ) : null}
-                                                <span className="text-xs whitespace-nowrap text-[#667781] dark:text-[#8696a0]">{formatRelativeDate(chat.ultimoMensaje)}</span>
+                                                <span className={`text-xs whitespace-nowrap ${isUnread ? 'text-[#25d366] dark:text-[#00a884] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
+                                                    {formatRelativeDate(chat.ultimoMensaje)}
+                                                </span>
                                             </div>
                                         </div>
                                         <div className="flex justify-between items-center mt-0.5">
                                             <div className="flex items-center gap-1.5 truncate">
-                                                <p className="text-[13px] text-[#667781] dark:text-[#8696a0] truncate">
+                                                <p className={`text-[13px] truncate ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
                                                     {chat.currentVacancyName || 'WhatsApp'}
                                                 </p>
                                                 <span className={`text-[11px] font-light tracking-wide shrink-0 font-sans ${isProfileComplete(chat) ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}>
@@ -1372,6 +1387,11 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                                 </span>
                                             </div>
                                             <div className="flex items-center shrink-0 ml-1 gap-1">
+                                                {isUnread && (
+                                                    <div className="w-[18px] h-[18px] rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center mr-1 shadow-sm shrink-0 shadow-[0_1px_2px_rgba(0,0,0,0.15)] animate-pulse">
+                                                        <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                                    </div>
+                                                )}
                                                 {chatLocks[chat.id] && chatLocks[chat.id].user !== (user?.name || '') && (
                                                     <span className="text-[9px] text-amber-500 font-semibold truncate max-w-[60px]" title={`${chatLocks[chat.id].user} está atendiendo`}>
                                                         👤{chatLocks[chat.id].user?.split(' ')[0]}
@@ -1403,7 +1423,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         </div>
                                     </div>
                                 </div>
-                            )}
+                                );
+                            }}
                         />
                     )}
                 </div>
