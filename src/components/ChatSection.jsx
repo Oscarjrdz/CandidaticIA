@@ -2002,6 +2002,26 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                         )}
 
                                         <div className="relative inline-block min-w-[110px] max-w-full group/msgbody">
+                                            {/* Quoted Message Rendering */}
+                                            {msg.contextInfo?.quotedMessage && (
+                                                <div 
+                                                    className="mb-1.5 mt-0.5 rounded px-2 py-1.5 border-l-4 text-[12.5px] cursor-default bg-black/5 dark:bg-white/5"
+                                                    style={{ 
+                                                        borderColor: (msg.contextInfo.quotedMessage.participant && msg.contextInfo.quotedMessage.participant.includes(selectedChat?.whatsapp)) ? '#eb5398' : (isMe ? '#027a61' : '#53bdeb')
+                                                    }}
+                                                >
+                                                    <div 
+                                                        className="font-bold mb-0.5 capitalize truncate"
+                                                        style={{ color: (msg.contextInfo.quotedMessage.participant && msg.contextInfo.quotedMessage.participant.includes(selectedChat?.whatsapp)) ? '#eb5398' : (isMe ? '#027a61' : '#53bdeb') }}
+                                                    >
+                                                        {(msg.contextInfo.quotedMessage.participant && msg.contextInfo.quotedMessage.participant.includes(selectedChat?.whatsapp)) ? (selectedChat?.nombre?.split(' ')[0] || 'Candidato') : 'Tú'}
+                                                    </div>
+                                                    <div className="line-clamp-3 text-[#111b21]/80 dark:text-[#e9edef]/80 break-words leading-tight">
+                                                        {msg.contextInfo.quotedMessage.text || '📄 Mensaje multimedia'}
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             {/* Media Rendering */}
                                             {msg.mediaUrl && (
                                                 <div className="mb-0.5 rounded overflow-hidden mt-1 cursor-pointer">

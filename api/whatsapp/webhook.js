@@ -514,6 +514,19 @@ export default async function handler(req, res) {
                     timestamp: new Date().toISOString()
                 };
 
+                // --- QUOTE HANDLING ---
+                const rawContext = messageData.contextInfo || messageData.message?.extendedTextMessage?.contextInfo || messageData.message?.imageMessage?.contextInfo || messageData.message?.videoMessage?.contextInfo;
+                if (rawContext && rawContext.stanzaId) {
+                    msgToSave.contextInfo = {
+                        quotedMessage: {
+                            stanzaId: rawContext.stanzaId,
+                            participant: rawContext.participant,
+                            // intentamos guardar un texto amigable para mostrar rápido en ui
+                            text: rawContext.quotedMessage?.conversation || rawContext.quotedMessage?.extendedTextMessage?.text || (rawContext.quotedMessage?.imageMessage ? '📷 Imagen' : '')
+                        }
+                    };
+                }
+
                 // --- REACTION HANDLING ---
                 if (messageType === 'reaction' || messageData.reaction) {
                     const reactionPayload = messageData.reaction || messageData.message?.reactionMessage;
