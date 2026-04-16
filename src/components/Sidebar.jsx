@@ -83,11 +83,13 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
                 {isActive && (
                     <div className="absolute left-0 w-1 h-6 bg-blue-400 rounded-r-full" />
                 )}
-                <Icon className={`w-5 h-5 transition-transform duration-300 shrink-0 ${isActive ? 'scale-110 text-white' : 'group-hover:scale-105'}`} />
-                <span className={`font-medium text-sm flex-1 text-left whitespace-nowrap truncate ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
+                <Icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 ${isActive ? 'scale-110 text-white' : 'group-hover:scale-105'}`} />
+                <span className={`font-medium text-sm flex-1 text-left whitespace-nowrap truncate ${isActive ? 'font-bold' : ''}`}>
+                    {item.label}
+                </span>
 
                 {badge > 0 && (
-                    <div className="mr-2 bg-[#25d366] dark:bg-[#00a884] text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm shrink-0 animate-in zoom-in duration-300">
+                    <div className="mr-2 flex-shrink-0 bg-[#25d366] dark:bg-[#00a884] text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in duration-300">
                         {badge}
                     </div>
                 )}
