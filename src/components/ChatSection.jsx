@@ -372,7 +372,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         loadProjects();
 
         // 🟢 FALLBACK polling (WebSockets handles real-time, this is safety net)
-        const interval = setInterval(loadCandidates, 60000);
+        const interval = setInterval(loadCandidates, 5000);
 
         // 🔔 Poll chat stats (unread counts + locks) — now O(1) on backend
         const statsInterval = setInterval(async () => {
@@ -840,7 +840,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
         loadMessages();
         // 🟢 FALLBACK polling (SSE handles real-time, this is safety net)
-        const interval = setInterval(loadMessages, 60000);
+        const interval = setInterval(loadMessages, 3000);
 
         // 🔒 Lock this chat for me
         const currentUser = user?.name || 'Reclutador';

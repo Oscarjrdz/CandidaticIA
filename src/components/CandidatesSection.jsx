@@ -495,7 +495,7 @@ const CandidatesSection = ({ showToast }) => {
                 setCandidates(newCandidates);
                 if (newStats) setStats(prev => ({ ...prev, ...newStats })); // Merge live stats
             }
-        }, 60000);
+        }, 3000);
 
         subscription.updateParams(LIMIT, (currentPage - 1) * LIMIT, search);
         subscription.start();
