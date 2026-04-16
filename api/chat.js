@@ -1,7 +1,7 @@
 import { getMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
-import { sendUltraMsgMessage, getUltraMsgConfig } from './whatsapp/utils.js';
+import { sendUltraMsgMessage, sendUltraMsgPresence, getUltraMsgConfig } from './whatsapp/utils.js';
 
 // Candidatic legacy URLs removed as per UltraMsg migration.
 
@@ -60,6 +60,17 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true });
             }
 
+            if (action === 'presence') {
+                const candidate = await getCandidateById(candidateId);
+                const ultraConfig = await getUltraMsgConfig(candidate?.instanceId);
+                if (candidate && ultraConfig) {
+                    const cleanTo = candidate.whatsapp.replace(/\D/g, '');
+                    await sendUltraMsgPresence(ultraConfig.instanceId, ultraConfig.token, cleanTo, 'composing');
+                    return res.status(200).json({ success: true });
+                }
+                return res.status(400).json({ success: false, error: 'Configuración no encontrada' });
+            }
+
             return res.status(400).json({ error: 'Invalid action' });
         }
 
@@ -104,6 +115,11 @@ export default async function handler(req, res) {
             }
 
             await saveMessage(candidateId, msgToSave);
+
+            // 🔥 CLEAR UNREAD IMMEDIATELY TO PREVENT UI FLICKER 🔥
+            // If we wait for the webhook/UltraMsg to finish, the 3s UI polling 
+            // will fetch the stale unread:true and cause the bubble to ghost
+            await updateCandidate(candidateId, { unread: false });
 
             // 2. Send via UltraMsg
             try {
@@ -153,8 +169,7 @@ export default async function handler(req, res) {
                         // PERSIST TO REDIS
                         await updateCandidate(candidateId, {
                             ultimoMensajeBot: timestamp,
-                            lastBotMessageAt: timestamp,
-                            unread: false
+                            lastBotMessageAt: timestamp
                         });
 
                         // Update the message in the Redis list

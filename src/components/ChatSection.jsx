@@ -151,6 +151,20 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
+    const lastPresenceTimeRef = useRef(0);
+
+    const handleTyping = () => {
+        if (!selectedChat) return;
+        const now = Date.now();
+        if (now - lastPresenceTimeRef.current > 8000) {
+            lastPresenceTimeRef.current = now;
+            fetch('/api/chat', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'presence', candidateId: selectedChat.id, status: 'composing' })
+            }).catch(() => {});
+        }
+    };
 
     const [showEmojis, setShowEmojis] = useState(false);
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
@@ -1905,7 +1919,10 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                                 className="w-full bg-transparent border-none outline-none py-2.5 px-4 text-[#111b21] dark:text-[#d1d7db] placeholder-[#8696a0] resize-none overflow-hidden text-[15px]" 
                                 placeholder="Escribe un mensaje"
                                 value={newMessage}
-                                onChange={(e) => setNewMessage(e.target.value)}
+                                onChange={(e) => {
+                                    setNewMessage(e.target.value);
+                                    handleTyping();
+                                }}
                             />
                             {newMessage && (
                                 <button 

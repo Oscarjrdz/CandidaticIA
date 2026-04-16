@@ -57,6 +57,20 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     // Refs
     const windowRef = useRef(null);
     const virtuosoRef = useRef(null);
+    const lastPresenceTimeRef = useRef(0);
+
+    const handleTyping = () => {
+        if (!candidate || !candidate.id) return;
+        const now = Date.now();
+        if (now - lastPresenceTimeRef.current > 8000) {
+            lastPresenceTimeRef.current = now;
+            fetch('/api/chat', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'presence', candidateId: candidate.id, status: 'composing' })
+            }).catch(() => {});
+        }
+    };
 
     // Reset position when opening
     useEffect(() => {
@@ -756,7 +770,10 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                                     <input
                                         type="text"
                                         value={newMessage}
-                                        onChange={(e) => setNewMessage(e.target.value)}
+                                        onChange={(e) => {
+                                            setNewMessage(e.target.value);
+                                            handleTyping();
+                                        }}
                                         onKeyDown={(e) => {
                                             // Prevenir envíos de mensajes al presionar Enter durante composición de acentos (isComposing)
                                             if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
