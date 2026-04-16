@@ -828,11 +828,11 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         if (sseUpdate.candidateId === selectedChat?.id || (selectedChat?.whatsapp && sseUpdate.phoneMatch === selectedChat.whatsapp)) {
             loadMessages();
         }
-        // Candidate list → DEBOUNCE 2s to batch rapid-fire SSE events
+        // Candidate list → DEBOUNCE 500ms to batch rapid-fire SSE events (antiflicker, not antiban)
         clearTimeout(sseCandidatesTimerRef.current);
         sseCandidatesTimerRef.current = setTimeout(() => {
             loadCandidates();
-        }, 2000);
+        }, 500);
         return () => clearTimeout(sseCandidatesTimerRef.current);
     }, [sseUpdate]);
 

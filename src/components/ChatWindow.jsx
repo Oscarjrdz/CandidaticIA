@@ -142,10 +142,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                          return [...prev, newMsg];
                      });
                  }
-                 
-                 // Ejecutar carga silente al backend (1s y 3s después) para refrescar identificadores reales y URLs de multimedia locales
-                 setTimeout(loadMessages, 1200);
-                 setTimeout(loadMessages, 3500);
+                 // Sin delays artificiales — el Gateway ya fue antibanneado en Railway
              }
         };
 
