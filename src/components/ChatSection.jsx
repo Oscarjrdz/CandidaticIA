@@ -372,7 +372,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         loadProjects();
 
         // 🟢 FALLBACK polling (SSE handles real-time, this is safety net)
-        const interval = setInterval(loadCandidates, 15000);
+        const interval = setInterval(loadCandidates, 5000);
 
         // 🔔 Poll chat stats (unread counts + locks) — now O(1) on backend
         const statsInterval = setInterval(async () => {
@@ -381,7 +381,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                 const data = await res.json();
                     setChatLocks(data.locks || {});
             } catch (e) { /* silent */ }
-        }, 15000);
+        }, 5000);
         // Initial fetch
         (async () => {
             try {
@@ -442,7 +442,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
         loadAllowedCandidates();
         // Refresh every 15s in case projects change
-        const interval = setInterval(loadAllowedCandidates, 15000);
+        const interval = setInterval(loadAllowedCandidates, 5000);
         return () => clearInterval(interval);
     }, [user, rolePermissions]);
 
@@ -840,7 +840,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
         loadMessages();
         // 🟢 FALLBACK polling (SSE handles real-time, this is safety net)
-        const interval = setInterval(loadMessages, 10000);
+        const interval = setInterval(loadMessages, 3000);
 
         // 🔒 Lock this chat for me
         const currentUser = user?.name || 'Reclutador';
