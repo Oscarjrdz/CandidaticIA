@@ -83,6 +83,11 @@ export default async function handler(req, res) {
                 id = md.key?.id;
                 status = md.update?.status;
                 to = md.key?.remoteJid;
+                
+                try {
+                    const redis = await import('../utils/storage.js').then(m => m.getRedisClient());
+                    if (redis) await redis.set('debug:last_ack', JSON.stringify({ eventType, parsedId: id, parsedStatus: status, raw: messageData, md }));
+                } catch(e){}
             }
 
             if (!id || !status) return res.status(200).send('ignored_missing_ack_data');
