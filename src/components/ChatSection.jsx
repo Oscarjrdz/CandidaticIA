@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2 } from 'lucide-react';
-import EmojiPicker from 'emoji-picker-react';
+const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
+import { Virtuoso } from 'react-virtuoso';
 
 const safeFormatTime = (dateStr) => {
     if (!dateStr) return '';
@@ -616,8 +617,8 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         return 0; // Maintain recent timestamp sorting from backend
     });
 
-    // ── Badge counts (from same candidates array, applying only RBAC filter, not category filter) ──
-    const baseCandidates = (candidates || []).filter(c => {
+    // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
+    const baseCandidates = useMemo(() => (candidates || []).filter(c => {
         if (roleAllowedCandidateIds !== null) {
             const allowedCrm = user?.allowed_crm_projects;
             const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
@@ -634,15 +635,25 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
             if (!inAllowedProject && !inAllowedCrm && !inAllowedLabel) return false;
         }
         return true;
-    });
-    const badgeCounts = {
-        all: baseCandidates.length,
-        allUnread: baseCandidates.filter(c => c?.unread === true).length,
-        complete: baseCandidates.filter(c => isProfileComplete(c)).length,
-        completeUnread: baseCandidates.filter(c => isProfileComplete(c) && c?.unread === true).length,
-        incomplete: baseCandidates.filter(c => !isProfileComplete(c)).length,
-        incompleteUnread: baseCandidates.filter(c => !isProfileComplete(c) && c?.unread === true).length
-    };
+    }), [candidates, roleAllowedCandidateIds, user]);
+
+    const badgeCounts = useMemo(() => {
+        let all = 0, allUnread = 0, complete = 0, completeUnread = 0, incomplete = 0, incompleteUnread = 0;
+        for (const c of baseCandidates) {
+            all++;
+            const unread = c?.unread === true;
+            if (unread) allUnread++;
+            const profComplete = isProfileComplete(c);
+            if (profComplete) {
+                complete++;
+                if (unread) completeUnread++;
+            } else {
+                incomplete++;
+                if (unread) incompleteUnread++;
+            }
+        }
+        return { all, allUnread, complete, completeUnread, incomplete, incompleteUnread };
+    }, [baseCandidates]);
 
     // Scroll to bottom
     const prevMessagesLength = useRef(0);
@@ -962,25 +973,30 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
         }
     };
 
-    const displayMessages = Array.isArray(messages) ? messages.flatMap((msg) => {
-        if (!msg) return [];
-        let content = msg.content || '';
-        if (content.includes('[REACCI')) {
-            content = content.replace(/\[REACCI[OÓ]N:\s*.*?\]/gi, '').trim();
-            if (!content && !msg.mediaUrl) return [];
-        }
+    // 🚀 MEMOIZED: Pre-compute display messages + formatted HTML (eliminates 700 regex ops/render)
+    const displayMessages = useMemo(() => {
+        if (!Array.isArray(messages)) return [];
+        return messages.flatMap((msg) => {
+            if (!msg) return [];
+            let content = msg.content || '';
+            if (content.includes('[REACCI')) {
+                content = content.replace(/\[REACCI[OÓ]N:\s*.*?\]/gi, '').trim();
+                if (!content && !msg.mediaUrl) return [];
+            }
 
-        if (content && content.includes('[MSG_SPLIT]')) {
-            const parts = content.split('[MSG_SPLIT]').filter(p => p.trim());
-            return parts.map((part, index) => ({
-                ...msg,
-                content: part.trim(),
-                mediaUrl: index === 0 ? msg.mediaUrl : null,
-                isSplit: true
-            }));
-        }
-        return [{...msg, content}];
-    }) : [];
+            if (content && content.includes('[MSG_SPLIT]')) {
+                const parts = content.split('[MSG_SPLIT]').filter(p => p.trim());
+                return parts.map((part, index) => ({
+                    ...msg,
+                    content: part.trim(),
+                    mediaUrl: index === 0 ? msg.mediaUrl : null,
+                    isSplit: true,
+                    _formattedHtml: formatWhatsAppText(part.trim())
+                }));
+            }
+            return [{...msg, content, _formattedHtml: formatWhatsAppText(content)}];
+        });
+    }, [messages]);
 
     return (
         <div className="flex h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
@@ -1380,87 +1396,86 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                     </div>
                 </div>
 
-                {/* Lista de Contactos */}
-                <div className="flex-1 overflow-y-auto bg-white dark:bg-[#111b21] custom-scrollbar">
+                {/* Lista de Contactos — VIRTUALIZADA */}
+                <div className="flex-1 overflow-hidden bg-white dark:bg-[#111b21]">
                     {loadingChats ? (
                         <div className="p-4 text-center text-sm text-[#8696a0]">Cargando chats...</div>
                     ) : (
-                        filteredCandidates.map(chat => (
-                            <div 
-                                key={chat.id} 
-                                onClick={() => setSelectedChat(chat)}
-                                className={`flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors ${selectedChat?.id === chat.id ? 'bg-[#f0f2f5] dark:bg-[#2a3942]' : ''}`}
-                            >
-                                <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden">
-                                    <img 
-                                        src={chat.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.nombre || 'C')}&background=random&color=fff`} 
-                                        className="w-full h-full object-cover" 
-                                        alt="profile" 
-                                        onError={(e)=>{e.target.onerror=null; e.target.src='https://ui-avatars.com/api/?name=User';}}
-                                    />
-                                    {/* chat.online is mock, remove for now or derive */}
-                                </div>
-                                <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
-                                    <div className="flex justify-between items-baseline mb-1">
-                                        <h3 className="text-[17px] text-[#111b21] dark:text-[#e9edef] truncate">{toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}</h3>
-                                        <div className="flex items-center gap-1 shrink-0 ml-2">
-                                            {/* Palomitas en el preview si el último mensaje fue saliente */}
-                                            {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
-                                                <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
-                                            ) : null}
-                                            <span className={`text-xs whitespace-nowrap ${chat.unread ? 'text-[#25d366] font-bold' : 'text-[#667781] dark:text-[#8696a0]'}`}>{formatRelativeDate(chat.ultimoMensaje)}</span>
-                                        </div>
+                        <Virtuoso
+                            data={filteredCandidates}
+                            overscan={10}
+                            itemContent={(index, chat) => (
+                                <div 
+                                    onClick={() => setSelectedChat(chat)}
+                                    className={`flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors ${selectedChat?.id === chat.id ? 'bg-[#f0f2f5] dark:bg-[#2a3942]' : ''}`}
+                                >
+                                    <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden">
+                                        <img 
+                                            src={chat.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.nombre || 'C')}&background=random&color=fff`} 
+                                            className="w-full h-full object-cover" 
+                                            alt="profile" 
+                                            loading="lazy"
+                                            onError={(e)=>{e.target.onerror=null; e.target.src='https://ui-avatars.com/api/?name=User';}}
+                                        />
                                     </div>
-                                    <div className="flex justify-between items-center mt-0.5">
-                                        <div className="flex items-center gap-1.5 truncate">
-                                            <p className="text-[13px] text-[#667781] dark:text-[#8696a0] truncate">
-                                                {chat.currentVacancyName || 'WhatsApp'}
-                                            </p>
-                                            <span className={`text-[11px] font-light tracking-wide shrink-0 font-sans ${isProfileComplete(chat) ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}>
-                                                • {isProfileComplete(chat) ? 'Perfil completo' : 'Perfil incompleto'}
-                                            </span>
+                                    <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
+                                        <div className="flex justify-between items-baseline mb-1">
+                                            <h3 className="text-[17px] text-[#111b21] dark:text-[#e9edef] truncate">{toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}</h3>
+                                            <div className="flex items-center gap-1 shrink-0 ml-2">
+                                                {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
+                                                    <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
+                                                ) : null}
+                                                <span className={`text-xs whitespace-nowrap ${chat.unread ? 'text-[#25d366] font-bold' : 'text-[#667781] dark:text-[#8696a0]'}`}>{formatRelativeDate(chat.ultimoMensaje)}</span>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center shrink-0 ml-1 gap-1">
-                                            {/* Unread green dot */}
-                                            {chat.unread && (
-                                                <span className="w-5 h-5 flex items-center justify-center bg-[#25d366] text-white text-[9px] font-bold rounded-full shadow-sm">
-                                                    !
+                                        <div className="flex justify-between items-center mt-0.5">
+                                            <div className="flex items-center gap-1.5 truncate">
+                                                <p className="text-[13px] text-[#667781] dark:text-[#8696a0] truncate">
+                                                    {chat.currentVacancyName || 'WhatsApp'}
+                                                </p>
+                                                <span className={`text-[11px] font-light tracking-wide shrink-0 font-sans ${isProfileComplete(chat) ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}>
+                                                    • {isProfileComplete(chat) ? 'Perfil completo' : 'Perfil incompleto'}
                                                 </span>
-                                            )}
-                                            {/* Lock indicator - someone else is attending */}
-                                            {chatLocks[chat.id] && chatLocks[chat.id].user !== (user?.name || '') && (
-                                                <span className="text-[9px] text-amber-500 font-semibold truncate max-w-[60px]" title={`${chatLocks[chat.id].user} está atendiendo`}>
-                                                    👤{chatLocks[chat.id].user?.split(' ')[0]}
-                                                </span>
-                                            )}
-                                            <button
-                                                onClick={(e) => handleBlockToggle(chat, e)}
-                                                disabled={blockLoading}
-                                                className={`w-7 h-3.5 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center shadow-inner ${chat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                                                title={chat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
-                                            >
-                                                <div className={`absolute w-2.5 h-2.5 rounded-full bg-white shadow transition-transform duration-200 ${chat.blocked ? 'translate-x-[16px]' : 'translate-x-0.5'}`}></div>
-                                            </button>
-                                            <button
-                                                onClick={(e) => handleDeleteChat(chat, e)}
-                                                className="ml-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                                                title="Eliminar chat"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            </div>
+                                            <div className="flex items-center shrink-0 ml-1 gap-1">
+                                                {chat.unread && (
+                                                    <span className="w-5 h-5 flex items-center justify-center bg-[#25d366] text-white text-[9px] font-bold rounded-full shadow-sm">
+                                                        !
+                                                    </span>
+                                                )}
+                                                {chatLocks[chat.id] && chatLocks[chat.id].user !== (user?.name || '') && (
+                                                    <span className="text-[9px] text-amber-500 font-semibold truncate max-w-[60px]" title={`${chatLocks[chat.id].user} está atendiendo`}>
+                                                        👤{chatLocks[chat.id].user?.split(' ')[0]}
+                                                    </span>
+                                                )}
+                                                <button
+                                                    onClick={(e) => handleBlockToggle(chat, e)}
+                                                    disabled={blockLoading}
+                                                    className={`w-7 h-3.5 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center shadow-inner ${chat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                                                    title={chat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
+                                                >
+                                                    <div className={`absolute w-2.5 h-2.5 rounded-full bg-white shadow transition-transform duration-200 ${chat.blocked ? 'translate-x-[16px]' : 'translate-x-0.5'}`}></div>
+                                                </button>
+                                                <button
+                                                    onClick={(e) => handleDeleteChat(chat, e)}
+                                                    className="ml-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                                    title="Eliminar chat"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-1 text-[10px] text-[#8696a0] dark:text-[#697882] truncate">
+                                            {chat.edad && <span>{chat.edad} años</span>}
+                                            {chat.edad && chat.escolaridad && <span>•</span>}
+                                            {chat.escolaridad && <span className="truncate">{chat.escolaridad}</span>}
+                                            {(chat.edad || chat.escolaridad) && chat.municipio && <span>•</span>}
+                                            {chat.municipio && <span className="truncate">{chat.municipio}</span>}
                                         </div>
                                     </div>
-                                    {/* Info row: edad, escolaridad, municipio */}
-                                    <div className="flex items-center gap-2 mt-1 text-[10px] text-[#8696a0] dark:text-[#697882] truncate">
-                                        {chat.edad && <span>{chat.edad} años</span>}
-                                        {chat.edad && chat.escolaridad && <span>•</span>}
-                                        {chat.escolaridad && <span className="truncate">{chat.escolaridad}</span>}
-                                        {(chat.edad || chat.escolaridad) && chat.municipio && <span>•</span>}
-                                        {chat.municipio && <span className="truncate">{chat.municipio}</span>}
-                                    </div>
                                 </div>
-                            </div>
-                        ))
+                            )}
+                        />
                     )}
                 </div>
             </div>
@@ -1883,7 +1898,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
                                             {/* Text Rendering */}
                                             {msg.content && (
-                                                <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '16px', paddingRight: '80px', paddingTop: msg.mediaUrl ? '2px' : '0' }} dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) }}></div>
+                                                <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '16px', paddingRight: '80px', paddingTop: msg.mediaUrl ? '2px' : '0' }} dangerouslySetInnerHTML={{ __html: msg._formattedHtml || formatWhatsAppText(msg.content) }}></div>
                                             )}
                                             {!msg.content && <div style={{ paddingBottom: '16px', paddingRight: '80px' }}></div>}
                                             
@@ -1912,20 +1927,22 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
 
                     {/* Input Area */}
                     <form onSubmit={handleSend} className="min-h-[62px] px-4 py-[10px] bg-[#f0f2f5] dark:bg-[#202c33] z-20 flex items-end shadow-sm relative">
-                        {/* Emojis Menu */}
+                        {/* Emojis Menu — Lazy loaded */}
                         {showEmojis && (
                             <div className="absolute bottom-[70px] left-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                                <EmojiPicker 
-                                    onEmojiClick={(eData) => {
-                                        setNewMessage(prev => prev + eData.emoji);
-                                    }}
-                                    theme="auto"
-                                    width={320}
-                                    height={400}
-                                    searchPlaceholder="Buscar emojis..."
-                                    lazyLoadEmojis={true}
-                                    skinTonesDisabled={true}
-                                />
+                                <Suspense fallback={<div className="w-[320px] h-[400px] flex items-center justify-center bg-white dark:bg-[#202c33]"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+                                    <EmojiPicker 
+                                        onEmojiClick={(eData) => {
+                                            setNewMessage(prev => prev + eData.emoji);
+                                        }}
+                                        theme="auto"
+                                        width={320}
+                                        height={400}
+                                        searchPlaceholder="Buscar emojis..."
+                                        lazyLoadEmojis={true}
+                                        skinTonesDisabled={true}
+                                    />
+                                </Suspense>
                             </div>
                         )}
 
