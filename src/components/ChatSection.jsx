@@ -957,7 +957,7 @@ const ChatSection = ({ showToast, user, rolePermissions }) => {
                     </div>
 
                     {/* Filter Chips */}
-                    <div className="flex flex-wrap gap-2 pb-1 pt-0">
+                    <div className="flex flex-wrap content-start items-start gap-2 pb-1 pt-0 min-h-[105px]">
                         {canSeeFilter('filter_todos') && (
                             <button 
                                 onClick={() => { setActiveFilter('all'); setFilterValue(null); setAiProjectFilter(null); setAiStepFilter(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
