@@ -730,7 +730,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 if (filterValue === 'complete' && !isComplete) return false;
                 if (filterValue === 'incomplete' && isComplete) return false;
             }
-            if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
 
             // --- Ruta A: Filtros Marketing ---
             if (aiProjectFilter) {
@@ -794,7 +793,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     }), [candidates, roleAllowedCandidateIds, user]);
 
     const badgeCounts = useMemo(() => {
-        let all = 0, complete = 0, incomplete = 0, unread = 0;
+        let all = 0, complete = 0, incomplete = 0;
         for (const c of baseCandidates) {
             all++;
             const profComplete = isProfileComplete(c);
@@ -803,17 +802,21 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             } else {
                 incomplete++;
             }
-            if (checkIfUnread(c)) unread++;
         }
-        return { all, complete, incomplete, unread };
+        return { all, complete, incomplete };
     }, [baseCandidates]);
-
     const unreadCounts = useMemo(() => {
-        const counts = { tags: {}, aiProjects: {}, crmProjects: {} };
+        const counts = { tags: {}, aiProjects: {}, crmProjects: {}, complete: 0, incomplete: 0 };
         for (const c of baseCandidates) {
             const isUnread = checkIfUnread(c);
 
             if (isUnread) {
+                if (isProfileComplete(c)) {
+                    counts.complete++;
+                } else {
+                    counts.incomplete++;
+                }
+
                 if (c.tags && Array.isArray(c.tags)) {
                     c.tags.forEach(t => {
                         const tName = typeof t === 'string' ? t : t.name;
@@ -1286,6 +1289,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 }`}
                             >
                                 Completos ({badgeCounts.complete})
+                                {unreadCounts.complete > 0 && (
+                                    <div className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5">
+                                        {unreadCounts.complete}
+                                    </div>
+                                )}
                             </button>
                         )}
                         {canSeeFilter('filter_incomplete') && (
@@ -1298,21 +1306,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 }`}
                             >
                                 Incompletos ({badgeCounts.incomplete})
-                            </button>
-                        )}
-                        {canSeeFilter('filter_todos') && (
-                            <button 
-                                onClick={() => { setActiveFilter('unread'); setFilterValue(true); setShowDropdown(null); }}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
-                                    activeFilter === 'unread' 
-                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                                }`}
-                            >
-                                Sin contestar
-                                {badgeCounts.unread > 0 && (
-                                    <div className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center text-white text-[9px] font-bold shadow-sm">
-                                        {badgeCounts.unread}
+                                {unreadCounts.incomplete > 0 && (
+                                    <div className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5">
+                                        {unreadCounts.incomplete}
                                     </div>
                                 )}
                             </button>
@@ -1650,7 +1646,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                     </div>
                                     <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
                                         <div className="flex justify-between items-baseline mb-1">
-                                            <h3 className={`text-[17px] truncate transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
+                                            <h3 className={`text-[17px] truncate min-w-0 flex-1 transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
                                                 {toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}
                                             </h3>
                                             <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -1749,26 +1745,17 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 />
                             </div>
                             <div className="flex flex-col min-w-0 flex-1">
-                                <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] flex flex-wrap items-center gap-x-2 gap-y-1 max-w-full">
-                                    <span className="truncate max-w-full">
+                                <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] flex items-center gap-x-2 w-full min-w-0 overflow-hidden">
+                                    <span className="truncate shrink">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </span>
-                                    <div className="flex flex-wrap items-center gap-1 shrink-0">
+                                    <div className="flex items-center gap-1 shrink-0">
                                         {selectedChat.tags && selectedChat.tags.map(t => {
                                             const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                             const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
                                             return (
-                                                <span 
-                                                    key={t} 
-                                                    onClick={(e) => { e.stopPropagation(); handleToggleTag(t); }}
-                                                    className="group relative flex items-center justify-center text-[9px] px-2 py-[2px] rounded-full text-white font-bold tracking-wider uppercase whitespace-nowrap opacity-90 shadow-sm cursor-pointer transition-all hover:pr-4" 
-                                                    style={{ backgroundColor: tColor }}
-                                                    title="Click para desasignar"
-                                                >
-                                                    <span className="truncate">{t}</span>
-                                                    <span className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <X size={10} strokeWidth={3} />
-                                                    </span>
+                                                <span key={t} className="text-[9px] px-2 py-[2px] rounded-full text-white font-bold tracking-wider uppercase whitespace-nowrap opacity-90 shadow-sm" style={{ backgroundColor: tColor }}>
+                                                    {t}
                                                 </span>
                                             );
                                         })}
