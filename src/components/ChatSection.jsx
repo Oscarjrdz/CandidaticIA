@@ -1748,17 +1748,20 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 />
                             </div>
                             <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
-                                <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] truncate w-full min-w-0 whitespace-nowrap">
-                                    {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
+                                <div className="flex items-center min-w-0 w-full">
+                                    <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] truncate shrink whitespace-nowrap">
+                                        {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
+                                    </h2>
+                                    <div className="flex items-center shrink-0 ml-1.5 overflow-visible pt-1 pb-1 pr-1">
                                     {selectedChat.tags && selectedChat.tags.map(t => {
                                         const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                         const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
                                         return (
-                                            <span key={t} className="group/tag relative inline-flex items-center text-xs px-2.5 py-0.5 rounded-full text-white font-medium whitespace-nowrap opacity-90 shadow-sm cursor-default ml-2 align-middle" style={{ backgroundColor: tColor, verticalAlign: 'middle' }}>
+                                            <span key={t} className="group/tag relative inline-flex items-center text-xs px-2.5 py-0.5 rounded-full text-white font-medium whitespace-nowrap opacity-90 shadow-sm cursor-default ml-1.5 align-middle" style={{ backgroundColor: tColor }}>
                                                 {t}
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleToggleTag(t); }}
-                                                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-gray-800/80 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover/tag:opacity-100 transition-opacity duration-150 shadow"
+                                                    className="absolute -top-1 -right-1.5 w-4 h-4 rounded-full bg-gray-800/80 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover/tag:opacity-100 transition-opacity duration-150 shadow z-10"
                                                     title={`Desvincular "${t}"`}
                                                 >
                                                     <X className="w-2.5 h-2.5" />
@@ -1766,7 +1769,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                             </span>
                                         );
                                     })}
-                                </h2>
+                                    </div>
+                                </div>
                                 <p className="text-xs text-[#667781] dark:text-[#8696a0] truncate mt-0.5">
                                     {selectedChat.whatsapp} • últ. msj {formatRelativeDate(selectedChat.ultimoMensaje)}
                                 </p>
