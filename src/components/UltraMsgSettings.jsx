@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Smartphone, Plus, Trash2, Check, Copy, Save, Wifi, WifiOff, QrCode, RefreshCw, Users, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Smartphone, Plus, Trash2, Check, Copy, Save, Wifi, WifiOff, QrCode, RefreshCw, Users, ChevronDown, ChevronUp, Loader2, Repeat, AlertTriangle } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Input from './ui/Input';
@@ -253,6 +253,13 @@ const UltraMsgSettings = ({ showToast }) => {
     const [copied, setCopied] = useState(false);
     const [creatingNew, setCreatingNew] = useState(false);
 
+    // ═══ SWITCH INSTANCIA STATE ═══
+    const [switchActive, setSwitchActive] = useState(false);
+    const [switchFrom, setSwitchFrom] = useState('');
+    const [switchTo, setSwitchTo] = useState('');
+    const [tattooCount, setTattooCount] = useState(0);
+    const [switchLoading, setSwitchLoading] = useState(false);
+
     // Load instances from Redis (multi-instance array)
     useEffect(() => {
         const load = async () => {
@@ -288,6 +295,23 @@ const UltraMsgSettings = ({ showToast }) => {
             }
         };
         load();
+    }, []);
+
+    // Load switch state
+    useEffect(() => {
+        const loadSwitch = async () => {
+            try {
+                const res = await fetch('/api/bot-ia/instance-switch');
+                if (res.ok) {
+                    const data = await res.json();
+                    setSwitchActive(data.active || false);
+                    setSwitchFrom(data.fromInstanceId || '');
+                    setSwitchTo(data.toInstanceId || '');
+                    setTattooCount(data.tattooCount || 0);
+                }
+            } catch (e) { /* silent */ }
+        };
+        loadSwitch();
     }, []);
 
     const handleUpdate = (index, field, value) => {
@@ -447,6 +471,125 @@ const UltraMsgSettings = ({ showToast }) => {
                                 showToast={showToast}
                             />
                         ))}
+                    </div>
+                )}
+
+                {/* ═══ SWITCH INSTANCIA — Failover Panel ═══ */}
+                {instances.length >= 2 && (
+                    <div className={`
+                        rounded-xl p-4 border-2 smooth-transition
+                        ${switchActive
+                            ? 'border-amber-400 dark:border-amber-600 bg-gradient-to-r from-amber-50/80 to-orange-50/50 dark:from-amber-950/30 dark:to-orange-950/20'
+                            : 'border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50'
+                        }
+                    `}>
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                                <Repeat className={`w-4 h-4 ${switchActive ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}`} />
+                                <h4 className={`text-sm font-bold ${switchActive ? 'text-amber-800 dark:text-amber-200' : 'text-gray-700 dark:text-gray-300'}`}>
+                                    Switch Instancia
+                                </h4>
+                                {switchActive && tattooCount > 0 && (
+                                    <span className="text-[10px] font-bold bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-200 px-1.5 py-0.5 rounded-full">
+                                        {tattooCount} migrados
+                                    </span>
+                                )}
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={switchActive}
+                                    disabled={switchLoading}
+                                    onChange={async (e) => {
+                                        const newActive = e.target.checked;
+                                        
+                                        if (newActive && (!switchFrom || !switchTo || switchFrom === switchTo)) {
+                                            showToast('Selecciona las instancias de origen y destino primero', 'error');
+                                            return;
+                                        }
+
+                                        setSwitchLoading(true);
+                                        try {
+                                            const res = await fetch('/api/bot-ia/instance-switch', {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({
+                                                    active: newActive,
+                                                    fromInstanceId: switchFrom,
+                                                    toInstanceId: switchTo
+                                                })
+                                            });
+                                            if (res.ok) {
+                                                const data = await res.json();
+                                                setSwitchActive(data.active);
+                                                setTattooCount(data.tattooCount || 0);
+                                                showToast(
+                                                    newActive
+                                                        ? '⚡ Switch activado — candidatos se migrarán al enviar mensaje'
+                                                        : '⏹️ Switch desactivado — candidatos migrados permanecen en destino',
+                                                    'success'
+                                                );
+                                            } else {
+                                                showToast('Error al cambiar switch', 'error');
+                                            }
+                                        } catch (err) {
+                                            showToast('Error de conexión', 'error');
+                                        } finally {
+                                            setSwitchLoading(false);
+                                        }
+                                    }}
+                                />
+                                <div className={`w-9 h-5 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all
+                                    ${switchActive
+                                        ? 'bg-amber-500 peer-checked:after:translate-x-full after:border-amber-300'
+                                        : 'bg-slate-200 dark:bg-slate-700 after:border-slate-300 dark:after:border-slate-600'
+                                    }
+                                `}></div>
+                            </label>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                                <label className="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider">De (caída)</label>
+                                <select
+                                    value={switchFrom}
+                                    onChange={(e) => setSwitchFrom(e.target.value)}
+                                    disabled={switchActive}
+                                    className="w-full text-xs px-2.5 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 disabled:opacity-50"
+                                >
+                                    <option value="">Seleccionar...</option>
+                                    {instances.map((inst, i) => (
+                                        <option key={inst.instanceId || i} value={inst.instanceId}>
+                                            {inst.identifier || inst.name || `Línea ${i+1}`}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wider">A (activa)</label>
+                                <select
+                                    value={switchTo}
+                                    onChange={(e) => setSwitchTo(e.target.value)}
+                                    disabled={switchActive}
+                                    className="w-full text-xs px-2.5 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 disabled:opacity-50"
+                                >
+                                    <option value="">Seleccionar...</option>
+                                    {instances.map((inst, i) => (
+                                        <option key={inst.instanceId || i} value={inst.instanceId}>
+                                            {inst.identifier || inst.name || `Línea ${i+1}`}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex items-start gap-1.5">
+                            <AlertTriangle className="w-3 h-3 text-amber-500 mt-0.5 shrink-0" />
+                            <p className="text-[10px] text-amber-700 dark:text-amber-400 leading-tight">
+                                Los candidatos migrados <strong>NO regresan</strong> a la instancia original. El tatuaje es permanente.
+                            </p>
+                        </div>
                     </div>
                 )}
 

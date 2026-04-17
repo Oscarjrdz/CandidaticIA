@@ -389,12 +389,15 @@ export default async function handler(req, res) {
                 const capturedInstanceId = activeConfig?.instanceId || webhookInstanceId || null;
 
                 // 🗺️ FAST INSTANCE MAP: Persist phone→instanceId for O(1) messenger lookups
+                // 🛡️ TATTOO GUARD A: Don't overwrite if candidate has a permanent instance tattoo
                 if (capturedInstanceId) {
                     try {
                         const redis = getRedisClient();
                         if (redis) {
-                            // TTL 90 days — refreshed every time they message
-                            redis.set(`candidate_instance:${phone}`, capturedInstanceId, 'EX', 7776000).catch(() => {});
+                            if (!candidate?.instanceTattoo) {
+                                // TTL 90 days — refreshed every time they message
+                                redis.set(`candidate_instance:${phone}`, capturedInstanceId, 'EX', 7776000).catch(() => {});
+                            }
                         }
                     } catch (e) { /* non-critical */ }
                 }
@@ -413,7 +416,8 @@ export default async function handler(req, res) {
                     const currentNorm = normalize(candidate.instanceId);
                     const incomingNorm = normalize(capturedInstanceId);
 
-                    if (currentNorm && incomingNorm && currentNorm !== incomingNorm) {
+                    // 🛡️ TATTOO GUARD B: Never deep-delete a tattooed candidate — their instance was deliberately reassigned
+                    if (currentNorm && incomingNorm && currentNorm !== incomingNorm && !candidate.instanceTattoo) {
                         if (isDebug) console.log(`[WEBHOOK/INSTANCE-SWITCH] 🔄 Candidate ${phone} switched from ${candidate.instanceId} to ${capturedInstanceId}. Performing full reset...`);
                         
                         // Deep delete (same as RESET command): wipes candidate, messages, locks, state keys

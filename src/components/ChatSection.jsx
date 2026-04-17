@@ -268,6 +268,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const [reactionPopupId, setReactionPopupId] = useState(null);
     const [replyingToMsg, setReplyingToMsg] = useState(null);
 
+    // ═══ INSTANCE MAP for I01/I02 badges ═══
+    const [instanceMap, setInstanceMap] = useState(new Map());
+
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
 
     const messagesEndRef = useRef(null);
@@ -395,6 +398,24 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         loadVacanciesList();
         loadManualProjects();
         loadProjects();
+
+        // Load instance map for I01/I02 badges
+        (async () => {
+            try {
+                const res = await fetch('/api/bot-ia/instances');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (Array.isArray(data)) {
+                        const map = new Map();
+                        data.forEach((inst, idx) => {
+                            const label = `I${String(idx + 1).padStart(2, '0')}`;
+                            if (inst.instanceId) map.set(inst.instanceId, label);
+                        });
+                        setInstanceMap(map);
+                    }
+                }
+            } catch (e) { /* silent */ }
+        })();
 
         // 🟢 FALLBACK polling (WebSockets handles real-time, this is safety net)
         const interval = setInterval(loadCandidates, 5000);
@@ -1669,6 +1690,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                                 <span className={`text-[11px] font-light tracking-wide shrink-0 font-sans ${isProfileComplete(chat) ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}>
                                                     • {isProfileComplete(chat) ? 'Perfil completo' : 'Perfil incompleto'}
                                                 </span>
+                                                {chat.instanceId && instanceMap.get(chat.instanceId) && (
+                                                    <span className="text-[10px] font-mono tracking-tight shrink-0" style={{ color: 'rgba(74, 222, 128, 0.4)' }}>
+                                                        {instanceMap.get(chat.instanceId)}
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="flex items-center shrink-0 ml-1 gap-1">
                                                 {isUnread && (

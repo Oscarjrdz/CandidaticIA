@@ -35,6 +35,47 @@ export const sendMessage = async (number, message, type = 'chat', extraParams = 
             }
         }
 
+        // ═══ LAZY TATTOO: Reroute if instance switch is active ═══
+        // When the switch is ON and this candidate's instance matches the dead one,
+        // reroute to the destination instance and permanently tattoo the candidate.
+        // "Candidato que contacto, candidato que tatúo."
+        if (targetInstanceId) {
+            try {
+                const redis = getRedisClient();
+                if (redis) {
+                    const switchActive = await redis.get('instance_switch_active');
+                    if (switchActive === 'true') {
+                        const switchFrom = await redis.get('instance_switch_from');
+                        const switchTo = await redis.get('instance_switch_to');
+                        const normalize = (id) => String(id || '').replace(/^instance/, '');
+
+                        if (switchTo && normalize(targetInstanceId) === normalize(switchFrom)) {
+                            console.log(`[LAZY-TATTOO] 🔄 Rerouting ${phone}: ${targetInstanceId} → ${switchTo}`);
+                            targetInstanceId = switchTo;
+
+                            // TATTOO: Persist permanently (fire-and-forget, non-blocking)
+                            redis.set(`candidate_instance:${phone}`, switchTo, 'EX', 7776000).catch(() => {});
+
+                            // Also tattoo the candidate hash so chat.js, cron, etc. respect it
+                            try {
+                                const { getCandidateIdByPhone, updateCandidate } = await import('./storage.js');
+                                const candId = await getCandidateIdByPhone(phone);
+                                if (candId) {
+                                    updateCandidate(candId, {
+                                        instanceId: switchTo,
+                                        instanceTattoo: true
+                                    }).catch(() => {});
+                                }
+                            } catch (e) { /* non-critical */ }
+
+                            // Increment tattoo counter for dashboard visibility
+                            redis.incr('instance_switch_tattoo_count').catch(() => {});
+                        }
+                    }
+                }
+            } catch (e) { /* non-critical — proceed with original instance */ }
+        }
+
         // Resolve config (returns exact match or instances[0] as safe default)
         const config = await getUltraMsgConfig(targetInstanceId);
 
