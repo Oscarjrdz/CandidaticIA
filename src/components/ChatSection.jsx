@@ -1754,7 +1754,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                         const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                         const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
                                         return (
-                                            <span key={t} className="group/tag relative inline-flex items-center text-[9px] px-2 py-[1px] rounded-full text-white font-bold tracking-wider uppercase whitespace-nowrap opacity-90 shadow-sm cursor-default ml-1.5 align-middle leading-none" style={{ backgroundColor: tColor, verticalAlign: 'middle' }}>
+                                            <span key={t} className="group/tag relative inline-flex items-center text-xs px-2.5 py-0.5 rounded-full text-white font-medium whitespace-nowrap opacity-90 shadow-sm cursor-default ml-2 align-middle" style={{ backgroundColor: tColor, verticalAlign: 'middle' }}>
                                                 {t}
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleToggleTag(t); }}
