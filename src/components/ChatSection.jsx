@@ -730,6 +730,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 if (filterValue === 'complete' && !isComplete) return false;
                 if (filterValue === 'incomplete' && isComplete) return false;
             }
+            if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
 
             // --- Ruta A: Filtros Marketing ---
             if (aiProjectFilter) {
@@ -793,7 +794,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     }), [candidates, roleAllowedCandidateIds, user]);
 
     const badgeCounts = useMemo(() => {
-        let all = 0, complete = 0, incomplete = 0;
+        let all = 0, complete = 0, incomplete = 0, unread = 0;
         for (const c of baseCandidates) {
             all++;
             const profComplete = isProfileComplete(c);
@@ -802,8 +803,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             } else {
                 incomplete++;
             }
+            if (checkIfUnread(c)) unread++;
         }
-        return { all, complete, incomplete };
+        return { all, complete, incomplete, unread };
     }, [baseCandidates]);
 
     const unreadCounts = useMemo(() => {
@@ -1296,6 +1298,23 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 }`}
                             >
                                 Incompletos ({badgeCounts.incomplete})
+                            </button>
+                        )}
+                        {canSeeFilter('filter_todos') && (
+                            <button 
+                                onClick={() => { setActiveFilter('unread'); setFilterValue(true); setShowDropdown(null); }}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
+                                    activeFilter === 'unread' 
+                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                                }`}
+                            >
+                                Sin contestar
+                                {badgeCounts.unread > 0 && (
+                                    <div className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center text-white text-[9px] font-bold shadow-sm">
+                                        {badgeCounts.unread}
+                                    </div>
+                                )}
                             </button>
                         )}
                         </div>
