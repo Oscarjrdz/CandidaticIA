@@ -49,7 +49,10 @@ const safeFormatTime = (dateStr) => {
 
 const toTitleCase = (str) => {
     if (!str) return '';
-    return str.toString().toLowerCase().split(' ').map(word => 
+    const trimmed = str.toString().trim();
+    const lc = trimmed.toLowerCase();
+    if (!trimmed || lc === 'null' || lc === 'undefined' || lc === 'none' || lc === 'n/a' || lc === '-' || lc === '.') return '';
+    return trimmed.toLowerCase().split(' ').map(word => 
         word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
 };
@@ -1645,8 +1648,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                         />
                                     </div>
                                     <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
-                                        <div className="flex justify-between items-baseline mb-1">
-                                            <h3 className={`text-[17px] truncate min-w-0 flex-1 transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
+                                        <div className="flex flex-row justify-between items-center mb-1 w-full min-w-0">
+                                            <h3 className={`text-[17px] truncate flex-1 min-w-0 transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
                                                 {toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}
                                             </h3>
                                             <div className="flex items-center gap-1 shrink-0 ml-2">
@@ -1744,9 +1747,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                     alt="profile" 
                                 />
                             </div>
-                            <div className="flex flex-col min-w-0 flex-1">
-                                <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] flex items-center gap-x-2 w-full min-w-0 overflow-hidden">
-                                    <span className="truncate shrink">
+                            <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+                                <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] flex items-center gap-x-2 w-full min-w-0">
+                                    <span className="truncate flex-1 min-w-0">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </span>
                                     <div className="flex items-center gap-1 shrink-0">
