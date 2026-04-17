@@ -11,8 +11,8 @@ export default async function handler(req, res) {
                 const defaultUser = {
                     id: 'user_default_admin',
                     name: 'Oscar Rodriguez',
-                    whatsapp: '8116038195',
-                    pin: '1234',
+                    whatsapp: '5218116038195',
+                    fixedPin: '1234',
                     role: 'SuperAdmin',
                     status: 'Active',
                     createdAt: new Date().toISOString()

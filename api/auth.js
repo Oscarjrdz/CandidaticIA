@@ -60,11 +60,10 @@ export default async function handler(req, res) {
         if (action === 'request-pin') {
             // ALWAYS Allow PIN generation for any valid number (Existing OR New)
 
-            // ⚡️ ADMIN BYPASS: Skip SMS for Super Admin
-            if (whatsappNumber === ADMIN_NUMBER) {
-                // Simplemente guardamos un token dummy (aunque el admin usa '1234' hardcoded en verify)
-                // Esto permite que el frontend proceda sin esperar el SMS.
-                return res.status(200).json({ exists: true, adminBypass: true });
+            // ⚡️ FIXED PIN BYPASS: If user has a fixedPin (or legacy pin) configured, skip SMS entirely
+            const userFixedPin = user?.fixedPin || user?.pin;
+            if (user && userFixedPin) {
+                return res.status(200).json({ exists: true, fixedPinUser: true });
             }
 
             const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
@@ -91,9 +90,10 @@ export default async function handler(req, res) {
 
             // Check PIN validity first
             if (!validPin || validPin !== pin) {
-                // If using default admin password mechanism as backup
-                if (whatsappNumber === '5218116038195' && pin === '1234') {
-                    // Allow default hardcoded PIN for Super Admin as backup
+                // Fixed PIN fallback: if user has a fixedPin (or legacy pin) configured, accept it
+                const userFixedPin = user?.fixedPin || user?.pin;
+                if (user && userFixedPin && pin === userFixedPin) {
+                    // Allow fixed PIN login
                 } else {
                     return res.status(401).json({ error: 'PIN inválido o expirado' });
                 }

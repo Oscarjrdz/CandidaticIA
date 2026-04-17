@@ -456,6 +456,7 @@ const UsersSection = ({ showToast }) => {
                                     <tr>
                                         <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Usuario</th>
                                         <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">WhatsApp</th>
+                                        <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">PIN Fijo</th>
                                         <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Rol</th>
                                         <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm">Estado</th>
                                         <th className="py-4 px-6 font-semibold text-gray-700 dark:text-gray-300 text-sm text-right">Acciones</th>
@@ -473,12 +474,37 @@ const UsersSection = ({ showToast }) => {
                                                     </div>
                                                     <div>
                                                         <p className="font-bold text-gray-900 dark:text-white text-sm">{user.name}</p>
-                                                        <p className="text-xs text-gray-500">PIN: {user.pin || '****'}</p>
                                                     </div>
                                                 </div>
                                             </td>
                                             <td className="py-4 px-6 text-sm text-gray-700 dark:text-gray-300">
                                                 {user.whatsapp}
+                                            </td>
+                                            <td className="py-4 px-6">
+                                                <input
+                                                    type="text"
+                                                    maxLength={6}
+                                                    placeholder="—"
+                                                    defaultValue={user.fixedPin || user.pin || ''}
+                                                    className="w-20 text-center text-sm font-mono tracking-widest bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-blue-300 focus:border-blue-400 focus:outline-none dark:text-white placeholder-gray-300 dark:placeholder-gray-600 transition-all"
+                                                    onBlur={async (e) => {
+                                                        const newPin = e.target.value.trim();
+                                                        if (newPin === (user.fixedPin || user.pin || '')) return;
+                                                        try {
+                                                            const res = await fetch('/api/users', {
+                                                                method: 'PUT',
+                                                                headers: { 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ id: user.id || user.whatsapp, whatsapp: user.whatsapp, fixedPin: newPin || null })
+                                                            });
+                                                            const data = await res.json();
+                                                            if (data.success) {
+                                                                showToast(newPin ? `PIN fijo guardado: ${newPin}` : 'PIN fijo eliminado', 'success');
+                                                                loadData();
+                                                            }
+                                                        } catch { showToast('Error guardando PIN', 'error'); }
+                                                    }}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                                                />
                                             </td>
                                             <td className="py-4 px-6">
                                                 <span className="flex items-center space-x-1.5 text-sm">
