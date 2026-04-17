@@ -1758,8 +1758,17 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                             const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                             const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
                                             return (
-                                                <span key={t} className="text-[9px] px-2 py-[2px] rounded-full text-white font-bold tracking-wider uppercase whitespace-nowrap opacity-90 shadow-sm" style={{ backgroundColor: tColor }}>
-                                                    {t}
+                                                <span 
+                                                    key={t} 
+                                                    onClick={(e) => { e.stopPropagation(); handleToggleTag(t); }}
+                                                    className="group relative flex items-center justify-center text-[9px] px-2 py-[2px] rounded-full text-white font-bold tracking-wider uppercase whitespace-nowrap opacity-90 shadow-sm cursor-pointer transition-all hover:pr-4" 
+                                                    style={{ backgroundColor: tColor }}
+                                                    title="Click para desasignar"
+                                                >
+                                                    <span className="truncate">{t}</span>
+                                                    <span className="absolute right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <X size={10} strokeWidth={3} />
+                                                    </span>
                                                 </span>
                                             );
                                         })}
