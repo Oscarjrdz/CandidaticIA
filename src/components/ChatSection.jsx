@@ -1749,7 +1749,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                             </div>
                             <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
                                 <h2 className="text-[17px] font-medium text-[#111b21] dark:text-[#e9edef] flex items-center gap-x-2 w-full min-w-0">
-                                    <span className="truncate flex-1 min-w-0">
+                                    <span className="truncate min-w-0">
                                         {toTitleCase(selectedChat.nombreReal || selectedChat.nombre) || selectedChat.whatsapp}
                                     </span>
                                     <div className="flex items-center gap-1 shrink-0">
@@ -1757,8 +1757,15 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                             const tObj = availableTags.find(at => (typeof at === 'string' ? at : at.name) === t);
                                             const tColor = tObj ? (tObj.color || '#3b82f6') : '#3b82f6';
                                             return (
-                                                <span key={t} className="text-[9px] px-2 py-[2px] rounded-full text-white font-bold tracking-wider uppercase whitespace-nowrap opacity-90 shadow-sm" style={{ backgroundColor: tColor }}>
+                                                <span key={t} className="group/tag relative text-[9px] px-2 py-[2px] rounded-full text-white font-bold tracking-wider uppercase whitespace-nowrap opacity-90 shadow-sm cursor-default" style={{ backgroundColor: tColor }}>
                                                     {t}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleToggleTag(t); }}
+                                                        className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-gray-800/80 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover/tag:opacity-100 transition-opacity duration-150 shadow"
+                                                        title={`Desvincular "${t}"`}
+                                                    >
+                                                        <X className="w-2.5 h-2.5" />
+                                                    </button>
                                                 </span>
                                             );
                                         })}
