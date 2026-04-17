@@ -443,6 +443,13 @@ const CandidatesSection = ({ showToast, user }) => {
         }
     }, [globalStats]);
 
+    const subscriptionRef = useRef(null);
+    const aiFilteredCandidatesRef = useRef(aiFilteredCandidates);
+    
+    useEffect(() => {
+        aiFilteredCandidatesRef.current = aiFilteredCandidates;
+    }, [aiFilteredCandidates]);
+
     useEffect(() => {
         const loadInitialData = async () => {
             // Cargar candidatos
@@ -492,19 +499,28 @@ const CandidatesSection = ({ showToast, user }) => {
         // Polling de candidatos
         const subscription = new CandidatesSubscription((newCandidates, newStats) => {
             // Only update if not filtering by AI (polling refreshes full list based on current page/search)
-            if (!aiFilteredCandidates) {
+            if (!aiFilteredCandidatesRef.current) {
                 setCandidates(newCandidates);
                 if (newStats) setStats(prev => ({ ...prev, ...newStats })); // Merge live stats
             }
         }, 3000);
 
-        subscription.updateParams(LIMIT, (currentPage - 1) * LIMIT, search);
+        subscriptionRef.current = subscription;
+        subscription.updateParams(LIMIT, 0, '');
         subscription.start();
 
-        return () => subscription.stop();
-    }, [aiFilteredCandidates]); // Restart/Update subscription when context changes
+        return () => {
+            subscription.stop();
+            subscriptionRef.current = null;
+        };
+    }, []); // Se ejecuta solo una vez al inicio
 
-
+    // Dynamic subscription params updater
+    useEffect(() => {
+        if (subscriptionRef.current) {
+            subscriptionRef.current.updateParams(LIMIT, (currentPage - 1) * LIMIT, search);
+        }
+    }, [currentPage, search]);
 
     // AI Action Flow
     const [aiActionOpen, setAiActionOpen] = useState(false);
@@ -574,7 +590,12 @@ const CandidatesSection = ({ showToast, user }) => {
             isFirstRun.current = false;
             return;
         }
-        loadCandidates(currentPage);
+        
+        const timer = setTimeout(() => {
+            loadCandidates(currentPage);
+        }, 400); // 400ms debounce to prevent rapid fetching and UI jitter
+        
+        return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, search]);
 
