@@ -86,18 +86,17 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
     const isDelivered = isRead || status === 'delivered';
     const isSent = isDelivered || status === 'sent';
 
-    // Tamaños
+    // Proporción original: 16x15
     const w = size === 'sm' ? 16 : 18;
-    const h = size === 'sm' ? 11 : 12;
+    const h = size === 'sm' ? 15 : 17;
 
-    // Colores
     const color = isRead ? '#53bdeb' : '#8696a0';
 
     if (!isSent) {
         // Reloj / en cola
         return (
-            <span className="inline-flex items-center leading-none">
-                <svg viewBox="0 0 16 15" width={w - 4} height={h} fill="none">
+            <span className="inline-flex items-center self-end mb-[1px] ml-1">
+                <svg viewBox="0 0 16 15" width={w - 3} height={h - 3} fill="none">
                     <path d="M10.25 7H8.5V4h-1v4h3.25V7zM8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z" fill="#8696a0" opacity="0.6" />
                 </svg>
             </span>
@@ -107,8 +106,8 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
     if (!isDelivered) {
         // Un solo check (enviado)
         return (
-            <span className="inline-flex items-center leading-none">
-                <svg viewBox="0 0 16 15" width={w - 3} height={h} fill="none">
+            <span className="inline-flex items-center self-end mb-[1px] ml-1">
+                <svg viewBox="0 0 16 15" width={w} height={h} fill="none">
                     <path d="M15.01 3.316l-8.316 8.316L3.926 8.86l1.3-1.3 1.468 1.468 7.016-7.016 1.3 1.3z" fill="#8696a0" />
                 </svg>
             </span>
@@ -117,7 +116,7 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
 
     // Doble palomita (entregado o leído)
     return (
-        <span className="inline-flex items-center leading-none">
+        <span className="inline-flex items-center self-end mb-[1px] ml-1">
             <svg viewBox="0 0 16 15" width={w} height={h} fill="none">
                 <path d="M15.01 3.316l-8.316 8.316L3.926 8.86l1.3-1.3 1.468 1.468 7.016-7.016 1.3 1.3zm-4.406 0L5.3 8.625l-2.6-2.6-1.3 1.3 3.9 3.9 6.604-6.609-1.3-1.3z" fill={color} />
             </svg>
