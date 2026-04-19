@@ -33,10 +33,14 @@ export default async function handler(req, res) {
             let value;
 
             if (type === 'credentials') {
-                value = await redis.get('ultramsg_credentials');
+                // Meta Cloud API — credentials are in environment variables
                 return res.status(200).json({
                     success: true,
-                    data: value ? JSON.parse(value) : null
+                    data: {
+                        phoneNumberId: process.env.META_PHONE_NUMBER_ID || '',
+                        wabaId: process.env.META_WABA_ID || '',
+                        configured: !!(process.env.META_PHONE_NUMBER_ID && process.env.META_ACCESS_TOKEN)
+                    }
                 });
             }
 
@@ -94,16 +98,10 @@ export default async function handler(req, res) {
             }
 
             if (type === 'credentials') {
-                // Validate UltraMsg credentials structure
-                if (!data.instanceId || !data.token) {
-                    return res.status(400).json({ error: 'Invalid credentials format (instanceId and token required)' });
-                }
-
-                await redis.set('ultramsg_credentials', JSON.stringify(data));
-
+                // Meta Cloud API credentials are managed via environment variables
                 return res.status(200).json({
                     success: true,
-                    message: 'Credentials saved'
+                    message: 'Credentials are managed via environment variables (META_PHONE_NUMBER_ID, META_ACCESS_TOKEN)'
                 });
             }
 

@@ -276,9 +276,8 @@ REGLAS DE ORO:
                     }
 
                     for (let i = 0; i < messagesToSend.length; i++) {
-                        // 🎯 Per-candidate instance resolution for multi-instance support
-                        const candConfig = await getUltraMsgConfig(cand.instanceId);
-                        if (!candConfig?.instanceId) {
+                        const candConfig = await getUltraMsgConfig();
+                        if (!candConfig) {
                             logs.push(`🔴 Sin config WhatsApp para ${cand.nombre}. Saltando envío.`);
                             break;
                         }
@@ -331,9 +330,8 @@ REGLAS DE ORO:
                         let candidateFirstName = (cand.nombreReal || cand.nombre || 'Candidato').split(' ')[0];
                         let p = `¡Mira ${candidateFirstName}! Te comparto la vacante que encontré para ti: ⏬\n\n${vacancyContext.messageDescription || vacancyContext.description || ''}`;
 
-                        // 🎯 Per-candidate instance resolution
-                        const failsafeConfig = await getUltraMsgConfig(cand.instanceId);
-                        if (!failsafeConfig?.instanceId) {
+                        const failsafeConfig = await getUltraMsgConfig();
+                        if (!failsafeConfig) {
                             logs.push(`❌[PIPELINE FAILSAFE] Sin config WhatsApp para ${cand.nombre}.`);
                             continue;
                         }

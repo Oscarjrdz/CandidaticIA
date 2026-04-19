@@ -24,8 +24,8 @@ export default async function handler(req, res) {
             return res.status(404).json({ success: false, error: 'Candidato no encontrado' });
         }
 
-        const config = await getUltraMsgConfig(candidate?.instanceId);
-        if (!config || !config.instanceId || !config.token) {
+        const config = await getUltraMsgConfig();
+        if (!config) {
             return res.status(500).json({ success: false, error: 'Configuración de WhatsApp incompleta' });
         }
 
@@ -36,8 +36,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
             success: true,
             message: block ? 'Chat silenciado de la IA correctamente' : 'IA reactivada para este chat',
-            instanceId: config.instanceId,
-            remote: { success: true } // Siempre true para la UI
+            remote: { success: true }
         });
 
     } catch (error) {

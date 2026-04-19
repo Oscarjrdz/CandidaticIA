@@ -96,10 +96,10 @@ export default async function handler(req, res) {
                 continue;
             }
 
-            // ── Load specific Instance Config ─────────────────────────────────
-            const config = await getUltraMsgConfig(candidate?.instanceId);
-            if (!config?.instanceId || !config?.token) {
-                console.warn(`[SEND-REMINDERS] No UltraMsg config for instance ${candidate?.instanceId} — skipping`);
+            // ── Load Meta Cloud API Config ──────────────────────────────────
+            const config = await getUltraMsgConfig();
+            if (!config) {
+                console.warn(`[SEND-REMINDERS] No Meta API config — skipping`);
                 skipped++;
                 continue;
             }

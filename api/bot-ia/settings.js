@@ -13,8 +13,6 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
         try {
             const {
-                instanceId,
-                token,
                 systemPrompt,
                 isActive,
                 openClawActive,
@@ -24,33 +22,12 @@ export default async function handler(req, res) {
                 aiModel
             } = req.body;
 
-            // 1. WhatsApp Config (UltraMsg - Instances)
-            if (instanceId !== undefined || token !== undefined || req.body.name !== undefined || req.body.identifier !== undefined) {
-                const existingConfig = await redis.get('ultramsg_credentials');
-                let config = {};
-                try {
-                    config = existingConfig ? JSON.parse(existingConfig) : {};
-                    // Ensure it's an object
-                    if (typeof config !== 'object' || config === null) config = {};
-                } catch (e) {
-                    console.error('⚠️ [API] Corrupted JSON in ultramsg_credentials, resetting...');
-                    config = {};
-                }
-
-                if (instanceId !== undefined) config.instanceId = instanceId;
-                if (token !== undefined) config.token = token;
-                if (req.body.name !== undefined) config.name = req.body.name;
-                if (req.body.identifier !== undefined) config.identifier = req.body.identifier;
-                
-                await redis.set('ultramsg_credentials', JSON.stringify(config));
-            }
-
-            // 2. AI Prompt
+            // AI Prompt
             if (systemPrompt !== undefined) {
                 await redis.set('bot_ia_prompt', systemPrompt);
             }
 
-            // 3. Master Bot Switch (CRITICAL FIX)
+            // Master Bot Switch
             if (isActive !== undefined) {
                 await redis.set('bot_ia_active', isActive ? 'true' : 'false');
             }
@@ -60,7 +37,7 @@ export default async function handler(req, res) {
                 await redis.set('openclaw_active', openClawActive ? 'true' : 'false');
             }
 
-            // 7. Advanced Internal Protocols
+            // Advanced Internal Protocols
             if (extractionRules !== undefined) await redis.set('bot_extraction_rules', extractionRules);
             if (cerebro1Rules !== undefined) await redis.set('bot_cerebro1_rules', cerebro1Rules);
             if (cerebro2Context !== undefined) await redis.set('bot_cerebro2_context', cerebro2Context);
@@ -77,7 +54,6 @@ export default async function handler(req, res) {
     // GET - Load settings
     if (req.method === 'GET') {
         try {
-            const ultramsgConfig = await redis.get('ultramsg_credentials') || await redis.get('ultramsg_config');
             const systemPrompt = await redis.get('bot_ia_prompt');
             const isActive = await redis.get('bot_ia_active');
             const openClawActive = await redis.get('openclaw_active');
@@ -86,28 +62,7 @@ export default async function handler(req, res) {
             const cerebro2Context = await redis.get('bot_cerebro2_context');
             const aiModel = await redis.get('bot_ia_model');
 
-            let instanceId = '';
-            let token = '';
-            let name = '';
-            let identifier = '';
-
-            if (ultramsgConfig) {
-                try {
-                    const parsed = JSON.parse(ultramsgConfig);
-                    instanceId = parsed.instanceId || '';
-                    token = parsed.token || '';
-                    name = parsed.name || '';
-                    identifier = parsed.identifier || '';
-                } catch (e) {
-                    console.error('⚠️ [Settings] Corrupted ultramsg_credentials JSON');
-                }
-            }
-
             return res.status(200).json({
-                instanceId,
-                token,
-                name,
-                identifier,
                 systemPrompt: systemPrompt || '',
                 isActive: isActive === 'true',
                 openClawActive: openClawActive === 'true',

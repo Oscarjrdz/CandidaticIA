@@ -135,7 +135,7 @@ const tickEngine = async (state) => {
                 addLog(state, `⚠️ Candidato ${candidateId} no encontrado en DB. Saltando.`);
             } else {
                 const finalMessage = substituteVariables(messageTemplate, candidate);
-                const ultraConfig = await getUltraMsgConfig(candidate?.instanceId);
+                const ultraConfig = await getUltraMsgConfig();
 
                 if (!ultraConfig) {
                     addLog(state, `🔴 Sin config UltraMsg para ${candidateId}. Saltando.`);

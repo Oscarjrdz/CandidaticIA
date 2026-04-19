@@ -38,9 +38,9 @@ export default async function handler(req, res) {
             fullPhone = cleanPhone;
         }
 
-        // Get default WhatsApp instance config
+        // Get Meta Cloud API config
         const config = await getUltraMsgConfig();
-        if (!config || !config.instanceId || !config.token) {
+        if (!config) {
             return res.status(500).json({ error: 'WhatsApp no configurado' });
         }
 

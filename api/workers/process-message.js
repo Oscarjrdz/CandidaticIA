@@ -7,7 +7,7 @@ import {
     markMessageAsDone,
     getCandidateById
 } from '../utils/storage.js';
-import { sendUltraMsgPresence, getUltraMsgConfig, sendUltraMsgRead } from '../whatsapp/utils.js';
+import { markMessageAsRead } from '../whatsapp/utils.js';
 
 export const maxDuration = 60; // Extend Vercel timeout for LLM bursts
 
@@ -56,19 +56,9 @@ async function drainWaitlist(candidateId, fromPhone) {
                     await new Promise(r => setTimeout(r, 2000));
                 }
                 
-                // Fetch candidate to know which instanceId to use
-                const candData = await getCandidateById(candidateId);
-                const candInstanceId = candData?.instanceId || null;
-                
-                // 🔹 UI MIMICRY: Mark as Read & Show "escribiendo..." if fromPhone is available
-                if (fromPhone) {
-                    getUltraMsgConfig(candInstanceId).then(config => {
-                        if (config) {
-                            sendUltraMsgPresence(config.instanceId, config.token, fromPhone, 'composing');
-                            // Mark all drained messages as read asynchronously!
-                            msgIds.forEach(mId => sendUltraMsgRead(config.instanceId, config.token, fromPhone, mId));
-                        }
-                    }).catch(() => {});
+                // 🔹 UI MIMICRY: Mark all drained messages as read
+                if (fromPhone && msgIds.length > 0) {
+                    msgIds.forEach(mId => markMessageAsRead(mId).catch(() => {}));
                 }
 
                 await logTelemetry('processing_start', { candidateId, count: pendingMsgs.length, attempt: attempts });

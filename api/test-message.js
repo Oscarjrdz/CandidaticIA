@@ -14,16 +14,8 @@ export default async function handler(req, res) {
     try {
         const cleanPhone = phone.replace(/\D/g, '');
 
-        // Look up the candidate's assigned instance
-        let resolvedInstanceId = null;
-        try {
-            const { getRedisClient } = await import('./utils/storage.js');
-            const redis = getRedisClient();
-            if (redis) resolvedInstanceId = await redis.get(`candidate_instance:${cleanPhone}`);
-        } catch (e) { /* non-critical */ }
-
-        const config = await getUltraMsgConfig(resolvedInstanceId);
-        if (!config || !config.instanceId || !config.token) {
+        const config = await getUltraMsgConfig();
+        if (!config) {
             return res.status(503).json({ success: false, error: 'WhatsApp config missing' });
         }
 

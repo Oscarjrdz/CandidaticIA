@@ -26,8 +26,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
   const [showLogin, setShowLogin] = useState(false);
-  const [instanceId, setInstanceId] = useState('');
-  const [token, setToken] = useState('');
+
   const [theme, setTheme] = useState('light');
   const [activeSection, setActiveSection] = useState('candidates');
   const [isAppReady, setIsAppReady] = useState(false);
@@ -152,10 +151,7 @@ function App() {
     }, 500);
   };
 
-  const handleCredentialsChange = (newInstanceId, newToken) => {
-    setInstanceId(newInstanceId);
-    setToken(newToken);
-  };
+
 
   // AUTH GUARD
   if (isAuthChecking) {
@@ -332,9 +328,6 @@ function App() {
 
           ) : (
             <SettingsSection
-              instanceId={instanceId}
-              token={token}
-              onCredentialsChange={handleCredentialsChange}
               showToast={showToast}
             />
           )}
