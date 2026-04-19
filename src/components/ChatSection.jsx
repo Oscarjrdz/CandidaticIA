@@ -1304,7 +1304,29 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 {/* Eliminada la barra Header Izquierdo a petición del usuario */}
 
                 {/* Barra de Búsqueda y Filtros Rápidos */}
-                <div className="p-2 bg-white dark:bg-[#111b21] flex flex-col gap-2 border-b border-[#f0f2f5] dark:border-[#222e35] relative z-50">
+                {loadingChats ? (
+                    <div className="w-full h-full flex flex-col bg-white dark:bg-[#111b21] p-4 animate-pulse">
+                        <div className="h-10 bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg w-full mb-3"></div>
+                        <div className="flex gap-2 mb-3">
+                            <div className="h-7 w-20 bg-[#f0f2f5] dark:bg-[#202c33] rounded-full"></div>
+                            <div className="h-7 w-28 bg-[#f0f2f5] dark:bg-[#202c33] rounded-full"></div>
+                            <div className="h-7 w-24 bg-[#f0f2f5] dark:bg-[#202c33] rounded-full"></div>
+                        </div>
+                        <div className="flex flex-col gap-4 mt-4">
+                            {[...Array(8)].map((_, i) => (
+                                <div key={i} className="flex gap-3 items-center">
+                                    <div className="w-12 h-12 rounded-full bg-[#f0f2f5] dark:bg-[#202c33] shrink-0"></div>
+                                    <div className="flex flex-col gap-2 flex-1">
+                                        <div className="h-4 bg-[#f0f2f5] dark:bg-[#202c33] rounded w-32"></div>
+                                        <div className="h-3 bg-[#f0f2f5] dark:bg-[#202c33] rounded w-full"></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <div className="p-2 bg-white dark:bg-[#111b21] flex flex-col gap-2 border-b border-[#f0f2f5] dark:border-[#222e35] relative z-50">
                     <div className="bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg px-3 py-1.5 flex items-center">
                         <Search className="w-4 h-4 text-[#54656f] dark:text-[#aebac1] mr-3" />
                         <input 
@@ -1677,9 +1699,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
                 {/* Lista de Contactos — VIRTUALIZADA */}
                 <div className="flex-1 overflow-hidden bg-white dark:bg-[#111b21]">
-                    {loadingChats ? (
-                        <div className="p-4 text-center text-sm text-[#8696a0]">Cargando chats...</div>
-                    ) : (
                         <Virtuoso
                             data={filteredCandidates}
                             overscan={10}
@@ -1780,8 +1799,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 );
                             }}
                         />
-                    )}
                 </div>
+                </>
+                )}
             </div>
 
             {/* LADO DERECHO: CHAT BODY */}
