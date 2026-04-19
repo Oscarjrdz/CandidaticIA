@@ -50,6 +50,25 @@ const cleanPhoneNumber = (raw = '') => {
 };
 
 export default async function handler(req, res) {
+    // ═══ META CLOUD API: Webhook Verification (GET) ═══
+    // Meta sends a GET request with hub.mode, hub.verify_token, and hub.challenge
+    // to verify webhook ownership. We must respond with the challenge value.
+    if (req.method === 'GET') {
+        const mode = req.query['hub.mode'];
+        const token = req.query['hub.verify_token'];
+        const challenge = req.query['hub.challenge'];
+
+        const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || 'candidatic_webhook_2026';
+
+        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+            console.log('[META WEBHOOK] ✅ Verification successful');
+            return res.status(200).send(challenge);
+        } else {
+            console.error('[META WEBHOOK] ❌ Verification failed — token mismatch');
+            return res.status(403).send('Forbidden');
+        }
+    }
+
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
