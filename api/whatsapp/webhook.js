@@ -234,8 +234,7 @@ export default async function handler(req, res) {
                 }
             }
 
-            // ✅ Mark as read automatically
-            markMessageAsRead(msgId).catch(() => { });
+            // (Removed markMessageAsRead automatically so it only turns blue when recruiter OPENS the chat)
 
             await logTelemetry('ingress', {
                 msgId, from: phone, type: messageType,

@@ -268,6 +268,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const [reactionPopupId, setReactionPopupId] = useState(null);
     const [replyingToMsg, setReplyingToMsg] = useState(null);
 
+    // Typing Indicators
+    const [botTyping, setBotTyping] = useState(false);
+    const [recruiterTypingName, setRecruiterTypingName] = useState('');
+    const typingTimersRef = useRef({});
+
     // ═══ INSTANCE MAP for I01/I02 badges ═══
 
 
@@ -731,7 +736,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 if (!hasAnyTag) return false;
             }
 
-
             if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
             if (activeFilter === 'profile') {
                 const isComplete = isProfileComplete(c);
@@ -814,11 +818,12 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         return { all, complete, incomplete };
     }, [baseCandidates]);
     const unreadCounts = useMemo(() => {
-        const counts = { tags: {}, aiProjects: {}, crmProjects: {}, complete: 0, incomplete: 0 };
+        const counts = { tags: {}, aiProjects: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0 };
         for (const c of baseCandidates) {
             const isUnread = checkIfUnread(c);
 
             if (isUnread) {
+                counts.all++;
                 if (isProfileComplete(c)) {
                     counts.complete++;
                 } else {
@@ -859,9 +864,42 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const sseCandidatesTimerRef = useRef(null);
     useEffect(() => {
         if (!sseUpdate) return;
+        
+        // 💬 Handle Typing Events
+        if (sseUpdate.updates?.bot_typing !== undefined) {
+            if (sseUpdate.candidateId === selectedChat?.id) {
+                setBotTyping(sseUpdate.updates.bot_typing);
+            }
+        }
+        if (sseUpdate.updates?.recruiterTyping !== undefined) {
+            if (sseUpdate.candidateId === selectedChat?.id) {
+                // Ignore our own typing
+                if ((user?.name || 'Reclutador') !== sseUpdate.updates.recruiterTyping) {
+                    setRecruiterTypingName(sseUpdate.updates.recruiterTyping);
+                    clearTimeout(typingTimersRef.current.recruiter);
+                    typingTimersRef.current.recruiter = setTimeout(() => setRecruiterTypingName(''), 8000);
+                }
+            }
+        }
+
         // Messages for the actively viewed chat → reload INSTANTLY (no debounce)
         if (sseUpdate.candidateId === selectedChat?.id || (selectedChat?.whatsapp && sseUpdate.phoneMatch === selectedChat.whatsapp)) {
-            loadMessages();
+            // Also if messageStatusUpdate came in, update the messages array directly if possible, or just reload messages
+            if (sseUpdate.updates?.messageStatusUpdate) {
+                const { id, status, additionalData } = sseUpdate.updates.messageStatusUpdate;
+                setMessages(prev => {
+                    const idx = prev.findIndex(m => m.ultraMsgId === id || m.id === id);
+                    if (idx !== -1) {
+                        const newArr = [...prev];
+                        newArr[idx] = { ...newArr[idx], status, ...additionalData };
+                        return newArr;
+                    }
+                    return prev;
+                });
+            } else if (sseUpdate.updates?.newMessage || !sseUpdate.updates?.recruiterTyping && sseUpdate.updates?.bot_typing === undefined) {
+                // Fetch full messages array only if it's not JUST a typing indicator or status update
+                loadMessages();
+            }
         }
         // Candidate list → DEBOUNCE 500ms to batch rapid-fire SSE events (antiflicker, not antiban)
         clearTimeout(sseCandidatesTimerRef.current);
@@ -884,6 +922,18 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         loadMessages();
         // 🟢 FALLBACK polling (SSE handles real-time, this is safety net)
         const interval = setInterval(loadMessages, 3000);
+
+        // 👁️ Mark messages as read (triggers blue ticks on candidate's phone)
+        const markAsRead = async () => {
+            try {
+                await fetch('/api/chat', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'mark_read', candidateId: selectedChat.id })
+                });
+            } catch(e) {}
+        };
+        markAsRead();
 
         // 🔒 Lock this chat for me
         const currentUser = user?.name || 'Reclutador';
@@ -1284,7 +1334,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
-                                Todos ({badgeCounts.all})
                             </button>
                         )}
                         {canSeeFilter('filter_complete') && (
@@ -2223,6 +2272,23 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 </div>
                             );
                         })}
+                        
+                        {/* Typing Indicators */}
+                        {(botTyping || recruiterTypingName) && (
+                            <div className="flex items-center gap-2 mt-2 mb-1 px-4 self-start animate-fade-in slide-in-from-bottom-2">
+                                <div className="bg-white dark:bg-[#202c33] px-3 py-2 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-2 border border-black/5 dark:border-white/5">
+                                    <span className="text-[11px] font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent italic flex items-center">
+                                        {botTyping ? '✨ Brenda' : recruiterTypingName} escribiendo
+                                    </span>
+                                    <div className="flex gap-[3px] items-center h-full ml-0.5 mt-[2px]">
+                                        <div className="w-1 h-1 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                                        <div className="w-1 h-1 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                                        <div className="w-1 h-1 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         <div ref={messagesEndRef} />
                     </div>
 

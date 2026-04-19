@@ -56,13 +56,24 @@ async function drainWaitlist(candidateId, fromPhone) {
                     await new Promise(r => setTimeout(r, 2000));
                 }
                 
-                // 🔹 UI MIMICRY: Mark all drained messages as read
+                // 🔹 UI MIMICRY: Mark all drained messages as read (Optional, but makes candidate see bot is reading)
                 if (fromPhone && msgIds.length > 0) {
                     msgIds.forEach(mId => markMessageAsRead(mId).catch(() => {}));
                 }
 
+                // 🚀 FIRE SSE! Tell UI Bot is typing
+                import('../utils/sse-notify.js').then(({ notifyCandidateUpdate }) => {
+                    notifyCandidateUpdate(candidateId, { bot_typing: true }).catch(() => {});
+                }).catch(() => {});
+
                 await logTelemetry('processing_start', { candidateId, count: pendingMsgs.length, attempt: attempts });
                 await processMessage(candidateId, aggregatedText, msgIds[0] || null);
+                
+                // 🚀 FIRE SSE! Bot finished typing
+                import('../utils/sse-notify.js').then(({ notifyCandidateUpdate }) => {
+                    notifyCandidateUpdate(candidateId, { bot_typing: false }).catch(() => {});
+                }).catch(() => {});
+
                 await logTelemetry('ai_complete', { candidateId });
                 await Promise.all(msgIds.map(id => markMessageAsDone(id).catch(() => { })));
 

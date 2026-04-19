@@ -57,8 +57,27 @@ export default async function handler(req, res) {
             }
 
             if (action === 'presence') {
-                // Meta Cloud API does not support typing indicators via API
+                // We'll use this now to emit SSE typing status internally for recruiters
+                if (req.body.status === 'composing') {
+                    import('./utils/sse-notify.js').then(({ notifyCandidateUpdate }) => {
+                        notifyCandidateUpdate(candidateId, { recruiterTyping: userName || 'Alguien' }).catch(() => {});
+                    }).catch(()=> { });
+                }
                 return res.status(200).json({ success: true });
+            }
+
+            if (action === 'mark_read') {
+                const messages = await getMessages(candidateId);
+                // Find the latest incoming message
+                const latestIncoming = [...messages].reverse().find(m => m.from !== 'bot' && m.from !== 'me');
+                if (latestIncoming && (latestIncoming.id || latestIncoming.ultraMsgId)) {
+                    const msgId = latestIncoming.id || latestIncoming.ultraMsgId;
+                    import('./whatsapp/utils.js').then(async ({ markMessageAsRead }) => {
+                        await markMessageAsRead(msgId);
+                    }).catch(e => console.error("Error importing markMessageAsRead", e));
+                    return res.status(200).json({ success: true, marked: msgId });
+                }
+                return res.status(200).json({ success: true, marked: null });
             }
 
             return res.status(400).json({ error: 'Invalid action' });

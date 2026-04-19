@@ -1261,6 +1261,14 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
         if (index !== -1) {
             messages[index] = { ...messages[index], status, ...additionalData };
             await client.lset(key, index, JSON.stringify(messages[index]));
+            
+            // 🚀 FIRE SSE! Update Chat UI checks in real time
+            import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
+                notifyCandidateUpdate(candidateId, { 
+                    messageStatusUpdate: { id: ultraMsgId, status, additionalData } 
+                }).catch(() => {});
+            }).catch(err => console.error("Could not import sse-notify", err));
+
             return true;
         } else {
             console.warn(`⚠️ [Storage] updateMessageStatus: Message ${ultraMsgId} NOT FOUND in ${key}`);
@@ -1368,6 +1376,16 @@ export const saveWebhookTransaction = async ({
         const errors = results.filter(([err]) => err);
         if (errors.length > 0) {
             console.error('❌ [Storage] Pipeline Transaction had partial failures:', errors);
+        } else {
+            // 🚀 FIRE SSE! Update Chat UI instantly for incoming webhook events
+            if (candidateId) {
+                import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
+                    notifyCandidateUpdate(candidateId, { 
+                        newMessage: !!message,
+                        statusUpdate: !!candidateUpdates
+                    }).catch(() => {});
+                }).catch(() => {});
+            }
         }
         return results;
     } catch (e) {
