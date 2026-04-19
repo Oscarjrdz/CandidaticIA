@@ -87,32 +87,29 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
     const isSent = isDelivered || status === 'sent';
 
     // Tamaños
-    const w = size === 'sm' ? 14 : 17;
-    const h = size === 'sm' ? 10 : 11;
+    const w = size === 'sm' ? 16 : 18;
+    const h = size === 'sm' ? 11 : 12;
 
     // Colores
     const color = isRead ? '#53bdeb' : '#8696a0';
 
     if (!isSent) {
-        // Reloj / en cola — un solo tilde pequeño gris
+        // Reloj / en cola
         return (
-            <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
-                <svg viewBox="0 0 16 11" width={w} height={h} fill="none">
-                    <path d="M15.01 3.316L7.412 11 4.502 8.216 6.6 6.083l1.812 1.758 6.497-6.482L15.01 3.316z" fill={color} />
+            <span className="inline-flex items-center leading-none">
+                <svg viewBox="0 0 16 15" width={w - 4} height={h} fill="none">
+                    <path d="M10.25 7H8.5V4h-1v4h3.25V7zM8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z" fill="#8696a0" opacity="0.6" />
                 </svg>
             </span>
         );
     }
 
     if (!isDelivered) {
-        // Enviado — doble palomita, la segunda más tenue
+        // Un solo check (enviado)
         return (
-            <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
-                <svg viewBox="0 0 18 11" width={w + 2} height={h} fill="none">
-                    {/* primera palomita */}
-                    <path d="M17.394 1.755l-8.91 9.03-4.56-4.59 1.42-1.41 3.14 3.16 7.48-7.59 1.43 1.4z" fill={color} />
-                    {/* segunda palomita (offset) */}
-                    <path d="M12.394 1.755l-5.91 6.03-1.06-1.07 1.42-1.41.82.83 5.48-5.59 1.25 1.21z" fill={color} opacity="0.55" />
+            <span className="inline-flex items-center leading-none">
+                <svg viewBox="0 0 16 15" width={w - 3} height={h} fill="none">
+                    <path d="M15.01 3.316l-8.316 8.316L3.926 8.86l1.3-1.3 1.468 1.468 7.016-7.016 1.3 1.3z" fill="#8696a0" />
                 </svg>
             </span>
         );
@@ -120,12 +117,9 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
 
     // Doble palomita (entregado o leído)
     return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}>
-            <svg viewBox="0 0 18 11" width={w + 2} height={h} fill={color}>
-                {/* Palomita derecha */}
-                <path d="M17.394 1.755l-8.91 9.03-4.56-4.59 1.42-1.41 3.14 3.16 7.48-7.59 1.43 1.4z" />
-                {/* Palomita izquierda (solapada) */}
-                <path d="M11.394 1.755l-5.91 6.03-1.56-1.57 1.42-1.41.82.83 5.48-5.59 1.25 1.21z" opacity={isRead ? '1' : '0.55'} />
+        <span className="inline-flex items-center leading-none">
+            <svg viewBox="0 0 16 15" width={w} height={h} fill="none">
+                <path d="M15.01 3.316l-8.316 8.316L3.926 8.86l1.3-1.3 1.468 1.468 7.016-7.016 1.3 1.3zm-4.406 0L5.3 8.625l-2.6-2.6-1.3 1.3 3.9 3.9 6.604-6.609-1.3-1.3z" fill={color} />
             </svg>
         </span>
     );
