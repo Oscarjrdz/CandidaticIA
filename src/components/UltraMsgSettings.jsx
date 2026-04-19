@@ -103,39 +103,39 @@ const WhatsAppSettings = ({ showToast }) => {
                     </div>
 
                     {/* Details grid */}
-                    {status?.connected && (
+                    {(status?.connected || loading) && (
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
                             <div>
                                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Nombre Verificado</p>
-                                <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{status?.verifiedName || '—'}</p>
+                                {loading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{status?.verifiedName || '—'}</p>}
                             </div>
                             <div>
                                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Plataforma</p>
-                                <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{status?.platformType || 'CLOUD_API'}</p>
+                                {loading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{status?.platformType || 'CLOUD_API'}</p>}
                             </div>
                             <div>
                                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Throughput</p>
-                                <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{status?.throughput || 'STANDARD'}</p>
+                                {loading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-20 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">{status?.throughput || 'STANDARD'}</p>}
                             </div>
                             <div>
                                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Verificación</p>
-                                <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">
+                                {loading ? <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-24 mt-1 animate-pulse"></div> : <p className="text-xs text-gray-800 dark:text-white font-medium mt-0.5">
                                     {status?.codeVerification === 'VERIFIED' ? '✅ Verificado' : status?.codeVerification || '—'}
-                                </p>
+                                </p>}
                             </div>
                         </div>
                     )}
                 </div>
 
                 {/* ====== USAGE ANALYTICS ====== */}
-                {status?.connected && analytics && !analytics.error && (
+                {((status?.connected && analytics && !analytics.error) || loading) && (
                     <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
                         {/* Header */}
                         <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 <span className="text-xs font-bold text-gray-700 dark:text-gray-200">
-                                    Consumo del Mes — {analytics.period}
+                                    {loading ? 'Calculando consumo...' : `Consumo del Mes — ${analytics?.period}`}
                                 </span>
                             </div>
                             <span className="text-[9px] font-semibold text-blue-500 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded-full">
@@ -151,7 +151,7 @@ const WhatsAppSettings = ({ showToast }) => {
                                     <MessageCircle className="w-3.5 h-3.5 text-gray-400" />
                                     <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total</span>
                                 </div>
-                                <p className="text-xl font-bold text-gray-900 dark:text-white">{analytics.totalConversations?.toLocaleString() || '0'}</p>
+                                {loading ? <div className="h-7 w-12 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-gray-900 dark:text-white">{analytics?.totalConversations?.toLocaleString() || '0'}</p>}
                                 <p className="text-[10px] text-gray-400 mt-0.5">conversaciones</p>
                             </div>
 
@@ -161,7 +161,7 @@ const WhatsAppSettings = ({ showToast }) => {
                                     <Check className="w-3.5 h-3.5 text-emerald-500" />
                                     <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Gratis</span>
                                 </div>
-                                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{analytics.freeMessages?.toLocaleString() || '0'}</p>
+                                {loading ? <div className="h-7 w-12 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{analytics?.freeMessages?.toLocaleString() || '0'}</p>}
                                 <p className="text-[10px] text-emerald-500/70 mt-0.5">servicio (24h)</p>
                             </div>
 
@@ -171,7 +171,7 @@ const WhatsAppSettings = ({ showToast }) => {
                                     <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
                                     <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider">Templates</span>
                                 </div>
-                                <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{analytics.paidMessages?.toLocaleString() || '0'}</p>
+                                {loading ? <div className="h-7 w-12 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{analytics?.paidMessages?.toLocaleString() || '0'}</p>}
                                 <p className="text-[10px] text-amber-500/70 mt-0.5">con costo</p>
                             </div>
 
@@ -181,13 +181,13 @@ const WhatsAppSettings = ({ showToast }) => {
                                     <DollarSign className="w-3.5 h-3.5 text-purple-500" />
                                     <span className="text-[10px] font-semibold text-purple-500 uppercase tracking-wider">Estimado</span>
                                 </div>
-                                <p className="text-xl font-bold text-purple-600 dark:text-purple-400">${analytics.estimatedCostMXN?.toLocaleString() || '0'}</p>
-                                <p className="text-[10px] text-purple-500/70 mt-0.5">MXN (~${analytics.estimatedCostUSD || '0'} USD)</p>
+                                {loading ? <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-purple-600 dark:text-purple-400">${analytics?.estimatedCostMXN?.toLocaleString() || '0'}</p>}
+                                <p className="text-[10px] text-purple-500/70 mt-0.5">MXN (~${analytics?.estimatedCostUSD || '0'} USD)</p>
                             </div>
                         </div>
 
                         {/* Category Breakdown */}
-                        {analytics.byCategory && Object.keys(analytics.byCategory).length > 0 && (
+                        {analytics?.byCategory && Object.keys(analytics.byCategory).length > 0 && !loading && (
                             <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30">
                                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Desglose por Categoría</p>
                                 <div className="flex flex-wrap gap-2">

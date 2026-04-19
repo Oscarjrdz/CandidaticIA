@@ -200,7 +200,7 @@ export default async function handler(req, res) {
                         });
 
                         // Update the message in the Redis list
-                        const remoteId = sendResult.data?.id || sendResult.data?.messageId;
+                        const remoteId = sendResult.messageId || sendResult.data?.messages?.[0]?.id || sendResult.data?.id || sendResult.data?.messageId;
                         const updatedData = {
                             status: 'sent',
                             ultraMsgId: remoteId
