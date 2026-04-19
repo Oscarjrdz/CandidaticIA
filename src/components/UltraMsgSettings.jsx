@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Smartphone, Wifi, Check, Copy, Shield, Zap } from 'lucide-react';
+import { Smartphone, Wifi, Check, Copy, Shield, Zap, TrendingUp, DollarSign, MessageCircle, BarChart3 } from 'lucide-react';
 import Card from './ui/Card';
 
 /**
- * WhatsAppSettings — Meta Cloud API Single Line Status
- * Clean, read-only display of the connected Meta WhatsApp Business line.
+ * WhatsAppSettings — Meta Cloud API Status + Usage Analytics
  */
 const WhatsAppSettings = ({ showToast }) => {
     const [status, setStatus] = useState(null);
@@ -35,6 +34,8 @@ const WhatsAppSettings = ({ showToast }) => {
         showToast?.('URL del webhook copiada', 'success');
         setTimeout(() => setCopied(false), 2000);
     };
+
+    const analytics = status?.analytics;
 
     return (
         <Card
@@ -125,6 +126,116 @@ const WhatsAppSettings = ({ showToast }) => {
                         </div>
                     )}
                 </div>
+
+                {/* ====== USAGE ANALYTICS ====== */}
+                {status?.connected && analytics && !analytics.error && (
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+                        {/* Header */}
+                        <div className="px-4 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <BarChart3 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                <span className="text-xs font-bold text-gray-700 dark:text-gray-200">
+                                    Consumo del Mes — {analytics.period}
+                                </span>
+                            </div>
+                            <span className="text-[9px] font-semibold text-blue-500 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded-full">
+                                PER-MESSAGE PRICING
+                            </span>
+                        </div>
+
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x divide-gray-100 dark:divide-gray-700">
+                            {/* Total Messages */}
+                            <div className="p-4 text-center">
+                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <MessageCircle className="w-3.5 h-3.5 text-gray-400" />
+                                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total</span>
+                                </div>
+                                <p className="text-xl font-bold text-gray-900 dark:text-white">{analytics.totalConversations?.toLocaleString() || '0'}</p>
+                                <p className="text-[10px] text-gray-400 mt-0.5">conversaciones</p>
+                            </div>
+
+                            {/* Free */}
+                            <div className="p-4 text-center">
+                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                    <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Gratis</span>
+                                </div>
+                                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{analytics.freeMessages?.toLocaleString() || '0'}</p>
+                                <p className="text-[10px] text-emerald-500/70 mt-0.5">servicio (24h)</p>
+                            </div>
+
+                            {/* Paid */}
+                            <div className="p-4 text-center">
+                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
+                                    <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider">Templates</span>
+                                </div>
+                                <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{analytics.paidMessages?.toLocaleString() || '0'}</p>
+                                <p className="text-[10px] text-amber-500/70 mt-0.5">con costo</p>
+                            </div>
+
+                            {/* Cost */}
+                            <div className="p-4 text-center">
+                                <div className="flex items-center justify-center gap-1.5 mb-1">
+                                    <DollarSign className="w-3.5 h-3.5 text-purple-500" />
+                                    <span className="text-[10px] font-semibold text-purple-500 uppercase tracking-wider">Estimado</span>
+                                </div>
+                                <p className="text-xl font-bold text-purple-600 dark:text-purple-400">${analytics.estimatedCostMXN?.toLocaleString() || '0'}</p>
+                                <p className="text-[10px] text-purple-500/70 mt-0.5">MXN (~${analytics.estimatedCostUSD || '0'} USD)</p>
+                            </div>
+                        </div>
+
+                        {/* Category Breakdown */}
+                        {analytics.byCategory && Object.keys(analytics.byCategory).length > 0 && (
+                            <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30">
+                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Desglose por Categoría</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {Object.entries(analytics.byCategory).map(([category, count]) => {
+                                        const colors = {
+                                            SERVICE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+                                            MARKETING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+                                            UTILITY: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+                                            AUTHENTICATION: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+                                            REFERRAL_CONVERSION: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300'
+                                        };
+                                        const labels = {
+                                            SERVICE: '💬 Servicio',
+                                            MARKETING: '📢 Marketing',
+                                            UTILITY: '⚙️ Utilidad',
+                                            AUTHENTICATION: '🔐 Auth',
+                                            REFERRAL_CONVERSION: '🔗 Referral'
+                                        };
+                                        const rate = analytics?.rates?.[category];
+                                        return (
+                                            <span key={category} className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${colors[category] || 'bg-gray-100 text-gray-600'}`}>
+                                                {labels[category] || category}: {count}
+                                                {rate ? ` • $${rate} MXN/msg` : category === 'SERVICE' ? ' • GRATIS' : ''}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Pricing Note */}
+                        <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-700 bg-emerald-50/50 dark:bg-emerald-950/10">
+                            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 leading-relaxed">
+                                💡 <strong>Brenda IA responde gratis</strong> — Los mensajes de servicio (respuestas a candidatos dentro de 24h) tienen costo $0.
+                                Solo se cobra por templates de marketing/utilidad enviados fuera de la ventana de servicio.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Analytics error */}
+                {analytics?.error && (
+                    <div className="rounded-lg p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-800/30">
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                            ⚠️ Analytics: {analytics.error}
+                        </p>
+                    </div>
+                )}
 
                 {/* Webhook URL */}
                 <div>
