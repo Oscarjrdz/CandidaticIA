@@ -110,10 +110,19 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                 </div>
             </td>
             <td className="py-0.5 px-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
-                    <img src={candidate.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(candidate.nombre || 'User')}&background=random&color=fff&size=128`}
-                         alt="Avatar" className="w-full h-full object-cover"
-                         onError={(e) => { e.target.onerror = null; e.target.src = 'https://ui-avatars.com/api/?name=User&background=gray&color=fff'; }} />
+                <div className="flex items-center justify-center w-8 h-8 rounded-full overflow-hidden">
+                    {candidate.profilePic ? (
+                        <img src={candidate.profilePic}
+                             alt="Avatar" className="w-full h-full object-cover"
+                             onError={(e) => { e.target.onerror = null; e.target.style.display = 'none'; e.target.parentElement.innerHTML = `<span class="flex items-center justify-center w-full h-full text-[11px] font-bold text-white" style="background:${['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((candidate.nombre||'U').charCodeAt(0)*7)%10]}">${(candidate.nombre||'U')[0].toUpperCase()}</span>`; }} />
+                    ) : (
+                        <span
+                            className="flex items-center justify-center w-full h-full text-[11px] font-bold text-white"
+                            style={{ background: ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((candidate.nombre||'U').charCodeAt(0)*7)%10] }}
+                        >
+                            {(candidate.nombre || 'U')[0].toUpperCase()}
+                        </span>
+                    )}
                 </div>
             </td>
             <td className="py-0.5 px-2.5">

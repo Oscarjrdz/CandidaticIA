@@ -1659,14 +1659,16 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                     onClick={() => setSelectedChat(chat)}
                                     className={`flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-4 ${selectedChat?.id === chat.id ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] shadow-sm relative z-10' : 'border-transparent'}`}
                                 >
-                                    <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden">
-                                        <img 
-                                            src={chat.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.nombre || 'C')}&background=random&color=fff`} 
-                                            className="w-full h-full object-cover" 
-                                            alt="profile" 
-                                            loading="lazy"
-                                            onError={(e)=>{e.target.onerror=null; e.target.src='https://ui-avatars.com/api/?name=User';}}
-                                        />
+                                    <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden">
+                                        {chat.profilePic ? (
+                                            <img src={chat.profilePic} className="w-full h-full object-cover" alt="profile" loading="lazy"
+                                                onError={(e)=>{e.target.onerror=null; e.target.style.display='none'; e.target.parentElement.innerHTML=`<span class="flex items-center justify-center w-full h-full text-lg font-bold text-white" style="background:${['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((chat.nombre||'C').charCodeAt(0)*7)%10]}">${(chat.nombre||'C')[0].toUpperCase()}</span>`;}} />
+                                        ) : (
+                                            <span className="flex items-center justify-center w-full h-full text-lg font-bold text-white rounded-full"
+                                                style={{ background: ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((chat.nombre||'C').charCodeAt(0)*7)%10] }}>
+                                                {(chat.nombre || 'C')[0].toUpperCase()}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
                                         <div className="flex flex-row justify-between items-center mb-1 w-full min-w-0">
@@ -1766,12 +1768,16 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                             >
                                 <ArrowLeft className="w-6 h-6" />
                             </button>
-                            <div className="min-w-[40px] w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center mr-3 font-bold text-blue-600 overflow-hidden shrink-0">
-                                <img 
-                                    src={selectedChat.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedChat.nombre || 'C')}&background=random&color=fff`} 
-                                    className="w-full h-full object-cover" 
-                                    alt="profile" 
-                                />
+                            <div className="min-w-[40px] w-10 h-10 rounded-full flex items-center justify-center mr-3 overflow-hidden shrink-0">
+                                {selectedChat.profilePic ? (
+                                    <img src={selectedChat.profilePic} className="w-full h-full object-cover" alt="profile"
+                                        onError={(e)=>{e.target.onerror=null; e.target.style.display='none'; e.target.parentElement.innerHTML=`<span class="flex items-center justify-center w-full h-full text-sm font-bold text-white" style="background:${['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((selectedChat.nombre||'C').charCodeAt(0)*7)%10]}">${(selectedChat.nombre||'C')[0].toUpperCase()}</span>`;}} />
+                                ) : (
+                                    <span className="flex items-center justify-center w-full h-full text-sm font-bold text-white rounded-full"
+                                        style={{ background: ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((selectedChat.nombre||'C').charCodeAt(0)*7)%10] }}>
+                                        {(selectedChat.nombre || 'C')[0].toUpperCase()}
+                                    </span>
+                                )}
                             </div>
                             <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
                                 <div className="flex items-center min-w-0 w-full">
