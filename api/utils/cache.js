@@ -15,6 +15,7 @@ const CACHE_TTL = {
     'assistant_ia_prompt': 300000,    // 5 min (Assistant 2.0 prompt)
     'custom_fields': 600000,          // 10 min (Dynamic fields)
     'automation_rules': 300000,       // 5 min (Automation rules)
+    'bypass_enabled': 0,              // 0 min (Bypass ON/OFF must be instant)
     'default': 300000                 // 5 min (fallback)
 };
 
