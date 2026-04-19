@@ -82,29 +82,8 @@ export default async function handler(req, res) {
 
             const finalMessage = message ? substituteVariables(message, candidate) : '';
 
-            // ═══ LAZY TATTOO: Reroute recruiter manual sends when switch is active ═══
-            let resolvedInstanceId = candidate?.instanceId;
-            try {
-                const redis = getRedisClient();
-                if (redis && resolvedInstanceId) {
-                    const switchActive = await redis.get('instance_switch_active');
-                    if (switchActive === 'true') {
-                        const switchFrom = await redis.get('instance_switch_from');
-                        const switchTo = await redis.get('instance_switch_to');
-                        const normalize = (id) => String(id || '').replace(/^instance/, '');
-                        if (switchTo && normalize(resolvedInstanceId) === normalize(switchFrom)) {
-                            resolvedInstanceId = switchTo;
-                            // Tattoo (fire-and-forget)
-                            const phone = candidate.whatsapp?.replace(/\D/g, '');
-                            if (phone) redis.set(`candidate_instance:${phone}`, switchTo, 'EX', 7776000).catch(() => {});
-                            updateCandidate(candidateId, { instanceId: switchTo, instanceTattoo: true }).catch(() => {});
-                            redis.incr('instance_switch_tattoo_count').catch(() => {});
-                        }
-                    }
-                }
-            } catch (e) { /* non-critical */ }
-
-            const ultraConfig = await getUltraMsgConfig(resolvedInstanceId);
+            // ═══ META CLOUD API: Single number, no instance routing ═══
+            const ultraConfig = await getUltraMsgConfig();
 
             if (!ultraConfig) return res.status(400).json({ error: 'Faltan credenciales' });
 

@@ -1,15 +1,16 @@
 /**
  * 📦 MEDIA ENGINE (Transaction-Level Delivery)
  * Specializes in sequenced and reliable media delivery (Stickers, PDFs, Images).
+ * Adapted for Meta Cloud API.
  */
-import { sendUltraMsgMessage } from '../whatsapp/utils.js';
+import { sendMetaMessage } from '../whatsapp/utils.js';
 import { getRedisClient } from './storage.js';
 
 export class MediaEngine {
     /**
      * Sends a "Congratulations" pack (Sticker + Optional Text)
      */
-    static async sendCongratsPack(config, phone, customStickerKey = 'bot_step_move_sticker', candidateId = null) {
+    static async sendCongratsPack(_config, phone, customStickerKey = 'bot_step_move_sticker', candidateId = null) {
         const client = getRedisClient();
         const stickerUrl = await client?.get(customStickerKey);
 
@@ -20,8 +21,7 @@ export class MediaEngine {
                     saveMessage(candidateId, { from: 'me', content: `[Sticker: ${stickerUrl}]`, timestamp: new Date().toISOString() }).catch(() => {});
                 });
             }
-            // Fast sequenced delivery
-            return await sendUltraMsgMessage(config.instanceId, config.token, phone, stickerUrl, 'sticker');
+            return await sendMetaMessage(phone, stickerUrl, 'sticker');
         }
         return false;
     }
@@ -29,7 +29,7 @@ export class MediaEngine {
     /**
      * Sends a generic media item with pre-flight check
      */
-    static async sendMedia(config, phone, mediaUrl, caption = "") {
+    static async sendMedia(_config, phone, mediaUrl, caption = "") {
         if (!mediaUrl) return false;
 
         console.log(`[MEDIA ENGINE] 📦 Sending Media: ${mediaUrl}`);
@@ -39,7 +39,7 @@ export class MediaEngine {
         if (mediaUrl.toLowerCase().endsWith('.pdf')) type = 'document';
         if (mediaUrl.toLowerCase().includes('sticker')) type = 'sticker';
 
-        return await sendUltraMsgMessage(config.instanceId, config.token, phone, mediaUrl, type, caption);
+        return await sendMetaMessage(phone, mediaUrl, type, { caption });
     }
 
     /**
