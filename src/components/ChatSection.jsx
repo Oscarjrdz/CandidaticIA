@@ -2298,6 +2298,23 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         <div ref={messagesEndRef} />
                     </div>
 
+                    {/* 24-Hour Window Warning Banner */}
+                    {(() => {
+                        const userMsgTime = selectedChat?.lastUserMessageAt ? new Date(selectedChat.lastUserMessageAt).getTime() : null;
+                        const is24hOpen = userMsgTime ? (Date.now() - userMsgTime < 24 * 60 * 60 * 1000) : false;
+                        
+                        if (selectedChat && !is24hOpen) {
+                            return (
+                                <div className="bg-orange-50 dark:bg-orange-900/20 px-4 py-2 text-center border-t border-orange-100 dark:border-orange-800/30">
+                                    <p className="text-[11px] text-orange-600 dark:text-orange-400 font-medium">
+                                        ⚠️ <b>Ventana de 24 hrs cerrada.</b> Si escribes manualmente, Meta rechazará el mensaje. Usa una plantilla pre-aprobada.
+                                    </p>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
+
                     {/* Input Area */}
                     <MessageInputBox 
                         ref={messageInputRef}
