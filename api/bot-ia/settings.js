@@ -15,7 +15,6 @@ export default async function handler(req, res) {
             const {
                 systemPrompt,
                 isActive,
-                openClawActive,
                 extractionRules,
                 cerebro1Rules,
                 cerebro2Context,
@@ -32,10 +31,6 @@ export default async function handler(req, res) {
                 await redis.set('bot_ia_active', isActive ? 'true' : 'false');
             }
 
-            // OpenClaw Master Switch
-            if (openClawActive !== undefined) {
-                await redis.set('openclaw_active', openClawActive ? 'true' : 'false');
-            }
 
             // Advanced Internal Protocols
             if (extractionRules !== undefined) await redis.set('bot_extraction_rules', extractionRules);
@@ -56,7 +51,6 @@ export default async function handler(req, res) {
         try {
             const systemPrompt = await redis.get('bot_ia_prompt');
             const isActive = await redis.get('bot_ia_active');
-            const openClawActive = await redis.get('openclaw_active');
             const extractionRules = await redis.get('bot_extraction_rules');
             const cerebro1Rules = await redis.get('bot_cerebro1_rules');
             const cerebro2Context = await redis.get('bot_cerebro2_context');
@@ -65,7 +59,6 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 systemPrompt: systemPrompt || '',
                 isActive: isActive === 'true',
-                openClawActive: openClawActive === 'true',
                 extractionRules: extractionRules || '',
                 cerebro1Rules: cerebro1Rules || '',
                 cerebro2Context: cerebro2Context || '',

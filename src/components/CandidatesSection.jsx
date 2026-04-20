@@ -15,8 +15,6 @@ import { deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatF
 import { generateChatHistoryText } from '../services/chatExportService';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
 import { useGatewaySocket } from '../hooks/useGatewaySocket';
-import WaStatusCreator from './WaStatusCreator';
-import WaStatusViewer from './WaStatusViewer';
 
 /**
  * Sortable Header Sub-component
@@ -240,8 +238,6 @@ const CandidatesSection = ({ showToast, user }) => {
     };
 
     const [search, setSearch] = useState('');
-    const [showStatusCreator, setShowStatusCreator] = useState(false);
-    const [statusViewerRefresh, setStatusViewerRefresh] = useState(0); // Trigger to fetch latest status
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
     const [hideIncomplete, setHideIncomplete] = useState(() => {
@@ -253,9 +249,6 @@ const CandidatesSection = ({ showToast, user }) => {
             return false;
         }
     });
-
-    const [openClawActive, setOpenClawActive] = useState(false);
-    const [openClawLoading, setOpenClawLoading] = useState(true);
 
     // Save to localStorage when it changes
     useEffect(() => {
@@ -466,17 +459,6 @@ const CandidatesSection = ({ showToast, user }) => {
 
             // Cargar campos dinámicos
             loadFields();
-
-            // Cargar settings OpenClaw
-            try {
-                const res = await fetch('/api/bot-ia/settings');
-                const data = await res.json();
-                if (res.ok) setOpenClawActive(!!data.openClawActive);
-            } catch (e) {
-                console.error('Error fetching settings', e);
-            } finally {
-                setOpenClawLoading(false);
-            }
         };
 
         const loadFields = async () => {
@@ -608,27 +590,6 @@ const CandidatesSection = ({ showToast, user }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentPage, search]);
 
-    const toggleOpenClaw = async () => {
-        const newState = !openClawActive;
-        setOpenClawLoading(true);
-        try {
-            const res = await fetch('/api/bot-ia/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ openClawActive: newState })
-            });
-            if (res.ok) {
-                setOpenClawActive(newState);
-                showToast && showToast(`Agente OpenClaw (VPS) ${newState ? 'Encendido' : 'Apagado'}`, 'success');
-            } else {
-                showToast && showToast('Error guardando config', 'error');
-            }
-        } catch (e) {
-            showToast && showToast('Error de red al alternar OpenClaw', 'error');
-        } finally {
-            setOpenClawLoading(false);
-        }
-    };
 
     /**
      * Alternar estado de bloqueo del candidato
@@ -849,31 +810,7 @@ const CandidatesSection = ({ showToast, user }) => {
                         </button>
                     </div>
 
-                    {/* OpenClaw VPS Agent Toggle */}
-                    <div className="flex items-center gap-2 bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)] cursor-pointer" onClick={toggleOpenClaw}>
-                        <div className="flex flex-col">
-                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Agente Externo</span>
-                            <span className={`text-[10px] font-bold ${openClawActive ? 'text-green-500' : 'text-gray-400'}`}>
-                                OPEN CLAW
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            disabled={openClawLoading}
-                            className={`
-                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none shadow-inner
-                                ${openClawActive ? 'bg-green-500' : 'bg-gray-400 dark:bg-gray-600'}
-                            `}
-                            title="Encender o apagar envío de webhooks a DigitalOcean OpenClaw"
-                        >
-                            <span
-                                className={`
-                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-md
-                                    ${openClawActive ? 'translate-x-6' : 'translate-x-1'}
-                                `}
-                            />
-                        </button>
-                    </div>
+
 
                     {/* AI Action Modal (Follow-up) */}
                     {aiActionOpen && (
@@ -915,28 +852,7 @@ const CandidatesSection = ({ showToast, user }) => {
                         <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
 
-                    {/* 📡 View WA Status Sub-Component */}
-                    <WaStatusViewer triggerRefresh={statusViewerRefresh} />
 
-                    {/* 📡 WhatsApp Status Creator Button */}
-                    <button
-                        type="button"
-                        id="wa-status-creator-btn"
-                        onClick={() => setShowStatusCreator(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all border relative overflow-hidden group"
-                        style={{
-                            background: 'linear-gradient(135deg, #075E54 0%, #25D366 100%)',
-                            color: '#fff',
-                            border: '1px solid rgba(37,211,102,0.4)',
-                            boxShadow: '0 0 12px rgba(37,211,102,0.25)',
-                        }}
-                        title="Crear estado de WhatsApp"
-                    >
-                        <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity rounded-xl" />
-                        <Radio className="w-3.5 h-3.5 animate-pulse" />
-                        <span>Estado WA</span>
-                        <Sparkles className="w-3 h-3 opacity-70" />
-                    </button>
                 </div>
 
                 {/* Alerta de filtrado por IA: iOS Style */}
@@ -1268,17 +1184,6 @@ const CandidatesSection = ({ showToast, user }) => {
                     candidate={selectedCandidate}
                 />
             </ErrorBoundary>
-
-            {/* 📡 WhatsApp Status Creator Modal */}
-            {showStatusCreator && (
-                <WaStatusCreator
-                    onClose={() => {
-                        setShowStatusCreator(false);
-                        setStatusViewerRefresh(prev => prev + 1);
-                    }}
-                    showToast={showToast}
-                />
-            )}
         </div >
     );
 };
