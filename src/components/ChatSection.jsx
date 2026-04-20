@@ -259,7 +259,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const [replyingToMsg, setReplyingToMsg] = useState(null);
 
     // Typing Indicators
-    const [botTyping, setBotTyping] = useState(false);
+
     const [recruiterTypingName, setRecruiterTypingName] = useState('');
     const typingTimersRef = useRef({});
 
@@ -855,12 +855,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     useEffect(() => {
         if (!sseUpdate) return;
         
-        // 💬 Handle Typing Events
-        if (sseUpdate.updates?.bot_typing !== undefined) {
-            if (sseUpdate.candidateId === selectedChat?.id) {
-                setBotTyping(sseUpdate.updates.bot_typing);
-            }
-        }
+
         if (sseUpdate.updates?.recruiterTyping !== undefined) {
             if (sseUpdate.candidateId === selectedChat?.id) {
                 // Ignore our own typing
@@ -886,7 +881,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     }
                     return prev;
                 });
-            } else if (sseUpdate.updates?.newMessage || !sseUpdate.updates?.recruiterTyping && sseUpdate.updates?.bot_typing === undefined) {
+            } else if (sseUpdate.updates?.newMessage || !sseUpdate.updates?.recruiterTyping) {
                 // Fetch full messages array only if it's not JUST a typing indicator or status update
                 loadMessages();
             }
@@ -2285,11 +2280,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         })}
                         
                         {/* Typing Indicators */}
-                        {(botTyping || recruiterTypingName) && (
+                        {recruiterTypingName && (
                             <div className="flex items-center gap-2 mt-2 mb-1 px-4 self-start animate-fade-in slide-in-from-bottom-2">
                                 <div className="bg-white dark:bg-[#202c33] px-3 py-2 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-2 border border-black/5 dark:border-white/5">
                                     <span className="text-[11px] font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent italic flex items-center">
-                                        {botTyping ? '✨ Brenda' : recruiterTypingName} escribiendo
+                                        {recruiterTypingName} escribiendo
                                     </span>
                                     <div className="flex gap-[3px] items-center h-full ml-0.5 mt-[2px]">
                                         <div className="w-1 h-1 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
