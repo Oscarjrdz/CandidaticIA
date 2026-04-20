@@ -298,6 +298,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     // Typing Indicators
 
     const [recruiterTypingName, setRecruiterTypingName] = useState('');
+    const [metaTemplates, setMetaTemplates] = useState([]);
     const typingTimersRef = useRef({});
 
     // ═══ INSTANCE MAP for I01/I02 badges ═══
