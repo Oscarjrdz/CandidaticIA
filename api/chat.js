@@ -202,17 +202,23 @@ export default async function handler(req, res) {
                             if (cType === 'body' || (comp.format || '').toLowerCase() === 'text') {
                                 const textInfo = comp.text || '';
                                 const varMatches = textInfo.match(/\{\{\d+\}\}/g) || [];
-                                if (varMatches.length > 0) {
+                                const uniqueVars = [...new Set(varMatches)];
+                                if (uniqueVars.length > 0) {
                                     componentsToSend.push({
                                         type: cType,
-                                        parameters: varMatches.map(() => ({ type: "text", text: candidateNameFallback }))
+                                        parameters: uniqueVars.map(() => ({ type: "text", text: candidateNameFallback }))
                                     });
                                 }
                             } else if (cType === 'header') {
                                 const format = (comp.format || '').toLowerCase();
                                 if (['image', 'video', 'document'].includes(format)) {
-                                    // Use mediaUrl if provided, otherwise a placeholder to prevent error 132000
-                                    const mUrl = req.body.mediaUrl || 'https://raw.githubusercontent.com/davidcelis/logo/master/logo.png';
+                                    // Use mediaUrl if provided, otherwise a strict placeholder format to prevent Meta API content-type rejections
+                                    const placeholders = {
+                                        image: 'https://raw.githubusercontent.com/davidcelis/logo/master/logo.png',
+                                        video: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+                                        document: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+                                    };
+                                    const mUrl = req.body.mediaUrl || placeholders[format] || placeholders.image;
                                     componentsToSend.push({
                                         type: 'header',
                                         parameters: [ { type: format, [format]: { link: mUrl } } ]
@@ -223,12 +229,13 @@ export default async function handler(req, res) {
                             (comp.buttons || []).forEach((btn, index) => {
                                 if ((btn.type || '').toLowerCase() === 'url' && (btn.url || '').includes('{{')) {
                                     const varMatches = (btn.url || '').match(/\{\{\d+\}\}/g) || [];
-                                    if (varMatches.length > 0) {
+                                    const uniqueVars = [...new Set(varMatches)];
+                                    if (uniqueVars.length > 0) {
                                         componentsToSend.push({
                                             type: 'button',
                                             sub_type: 'url',
                                             index: String(index),
-                                            parameters: varMatches.map(() => ({ type: "text", text: "0" }))
+                                            parameters: uniqueVars.map(() => ({ type: "text", text: "info" }))
                                         });
                                     }
                                 }
