@@ -86,7 +86,7 @@ export default async function handler(req, res) {
         if (req.method === 'POST') {
             const { candidateId, message, type = 'text', mediaUrl, base64Data, replyToId } = req.body;
 
-            if (!candidateId || (!message && !mediaUrl)) {
+            if (!candidateId || (!message && !mediaUrl && type !== 'template')) {
                 return res.status(400).json({ error: 'Faltan datos requeridos' });
             }
 
