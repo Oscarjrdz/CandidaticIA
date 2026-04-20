@@ -1345,7 +1345,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             body: JSON.stringify({ 
                 candidateId: currentCandidateId, 
                 type: 'template', 
-                templateData: { name: templateObj.name, language: templateObj.language } 
+                templateData: templateObj 
             })
         }).then(res => res.json()).then(data => {
             if (data.success && data.message) {

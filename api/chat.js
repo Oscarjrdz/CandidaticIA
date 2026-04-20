@@ -192,9 +192,16 @@ export default async function handler(req, res) {
                     const candidateNameFallback = String(candidate.nombreReal || candidate.nombre || 'Buen día').trim();
                     extraParams.templateName = tData.name;
                     extraParams.languageCode = tData.language || 'es_MX';
-                    extraParams.components = [
-                        { type: "body", parameters: [{ type: "text", text: candidateNameFallback }] }
-                    ];
+                    
+                    // Solo inyectar componentes si la plantilla realmente tiene variables {{1}}
+                    const bodyComp = tData.components?.find(c => c.type === 'BODY' || c.type === 'body');
+                    const requiresVariables = bodyComp && bodyComp.text && bodyComp.text.includes('{{1}}');
+
+                    if (requiresVariables) {
+                        extraParams.components = [
+                            { type: "body", parameters: [{ type: "text", text: candidateNameFallback }] }
+                        ];
+                    }
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, contentToSave, 'template', extraParams);
                 } else if (type === 'text') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat', extraParams);

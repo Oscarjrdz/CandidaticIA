@@ -159,11 +159,16 @@ const tickEngine = async (state) => {
                             // Fallback de nombre ("Buen día" en caso de vacío)
                             const candidateNameFallback = String(candidate.nombreReal || candidate.nombre || 'Buen día').trim();
                             
-                            // Asumimos que la plantilla tiene una variable en el Body y le pasamos el nombre
                             extraParams = {
                                 templateName,
-                                languageCode,
-                                components: [
+                                languageCode
+                            };
+                            
+                            const bodyComp = state.templateData.components?.find(c => c.type === 'BODY' || c.type === 'body');
+                            const requiresVariables = bodyComp && bodyComp.text && bodyComp.text.includes('{{1}}');
+
+                            if (requiresVariables) {
+                                extraParams.components = [
                                     {
                                         type: "body",
                                         parameters: [
@@ -173,8 +178,8 @@ const tickEngine = async (state) => {
                                             }
                                         ]
                                     }
-                                ]
-                            };
+                                ];
+                            }
                             
                             sendType = 'template';
                             msgToSaveStr = `[Plantilla Masiva: ${templateName}] Hola ${candidateNameFallback}...`;
