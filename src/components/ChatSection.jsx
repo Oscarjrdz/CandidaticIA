@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply } from 'lucide-react';
+import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap } from 'lucide-react';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
@@ -181,9 +181,46 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                 </div>
             )}
 
-            <div className="flex space-x-3 text-[#54656f] dark:text-[#8696a0] items-center mb-1 mr-2 px-1">
-                <button type="button" onClick={() => setShowEmojis(!showEmojis)} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[26px] h-[26px] stroke-[1.5]" /></button>
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors"><Plus className="w-[26px] h-[26px] stroke-[1.5]" /></button>
+            <div className="flex space-x-3 text-[#54656f] dark:text-[#8696a0] items-center mb-1 mr-2 px-1 relative">
+                <button type="button" title="Emojis" onClick={() => {setShowEmojis(!showEmojis); setShowTemplates(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors ${showEmojis ? 'text-blue-500' : ''}`}><Smile className="w-[26px] h-[26px] stroke-[1.5]" /></button>
+                <button type="button" title="Adjuntar Documento" onClick={() => fileInputRef.current?.click()} className="hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors"><Plus className="w-[26px] h-[26px] stroke-[1.5]" /></button>
+                
+                {/* Template Button */}
+                <div className="relative">
+                    <button type="button" title="Enviar Plantilla Oficial (Evade 24h)" onClick={() => {setShowTemplates(!showTemplates); setShowEmojis(false);}} className={`hover:text-[#111b21] dark:hover:text-[#d1d7db] transition-colors ${showTemplates ? 'text-green-500' : ''}`}>
+                        <Zap className="w-[24px] h-[24px] stroke-[1.5]" />
+                    </button>
+                    {showTemplates && (
+                        <div className="absolute bottom-10 left-0 w-64 bg-white dark:bg-[#111b21] rounded-lg shadow-xl border border-gray-200 dark:border-gray-800 z-[100] max-h-[300px] flex flex-col overflow-hidden">
+                            <div className="px-3 py-2 bg-green-50 dark:bg-green-900/20 text-xs text-green-700 dark:text-green-400 font-bold border-b border-green-100 dark:border-green-800">
+                                Plantillas Meta
+                            </div>
+                            <div className="overflow-y-auto w-full">
+                                {metaTemplates.length === 0 ? (
+                                    <div className="p-3 text-xs text-gray-400 text-center">Buscando plantillas...</div>
+                                ) : (
+                                    metaTemplates.map(t => (
+                                        <button 
+                                            key={t.id} 
+                                            type="button" 
+                                            className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
+                                            onClick={() => {
+                                                setShowTemplates(false);
+                                                if(window.confirm(`¿Seguro que quieres enviar la plantilla '${t.name}'? El sistema inyectará cualquier variable necesaria automáticamente.`)) {
+                                                    onSendTemplate(t);
+                                                }
+                                            }}
+                                        >
+                                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.name}</div>
+                                            <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest">{t.category}</div>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
             </div>
             
@@ -394,7 +431,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         loadManualProjects();
         loadProjects();
 
-
+        // Fetch Meta Templates in background
+        fetch('/api/whatsapp/templates')
+            .then(res => res.json())
+            .then(data => { if(data.success && data.data) setMetaTemplates(data.data.filter(t => t.status==='APPROVED')); })
+            .catch(() => {});
 
         // 🟢 FALLBACK polling (WebSockets handles real-time, this is safety net)
         const interval = setInterval(loadCandidates, 5000);
@@ -1263,6 +1304,48 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             const input = document.getElementById('chat-msg-input');
             if (input) input.focus();
         }, 50);
+    };
+
+    const handleSendTemplate = (templateObj) => {
+        if (!selectedChat) return;
+        autoSilenceBot(selectedChat);
+
+        const currentCandidateId = selectedChat.id;
+
+        // Optimistic append
+        setMessages(prev => [...(prev || []), {
+            id: 'temp-' + Date.now(),
+            content: `[Plantilla: ${templateObj.name}]`,
+            tipo: 'template',
+            from: 'me',
+            enviado_por_agente: 1,
+            fecha: new Date().toISOString()
+        }]);
+
+        fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                candidateId: currentCandidateId, 
+                type: 'template', 
+                templateData: { name: templateObj.name, language: templateObj.language } 
+            })
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                if (data.message && data.message.status === 'failed') {
+                    showToast(`Error de Meta: ${data.message.error || 'Desconocido'}`, 'error');
+                } else {
+                    showToast('Plantilla enviada correctamente', 'success');
+                }
+                if (selectedChat?.id === currentCandidateId) loadMessages();
+                window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
+            } else {
+                showToast(`Error al enviar plantilla: ${data.error || 'Desconocido'}`, 'error');
+            }
+        }).catch(error => {
+            console.error(error);
+            showToast('Error de red al enviar plantilla', 'error');
+        });
     };
 
     // 🚀 MEMOIZED: Pre-compute display messages + formatted HTML (eliminates 700 regex ops/render)
@@ -2332,6 +2415,10 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         onTyping={handleTyping}
                         fileInputRef={fileInputRef}
                         handleFileUpload={handleFileUpload}
+                        replyingToMsg={replyingToMsg}
+                        onCancelReply={() => setReplyingToMsg(null)}
+                        metaTemplates={metaTemplates}
+                        onSendTemplate={handleSendTemplate}
                     />
                 </div>
             ) : (

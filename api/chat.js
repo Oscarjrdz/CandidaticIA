@@ -123,12 +123,16 @@ export default async function handler(req, res) {
             const timestamp = new Date().toISOString();
             const msgId = `msg_${Date.now()}`;
 
+            let contentToSave = finalMessage;
+            if (type === 'template' && req.body.templateData) {
+                contentToSave = `[Plantilla: ${req.body.templateData.name}] Hola ${candidate.nombreReal || candidate.nombre || 'Buen día'}...`;
+            }
 
             // 1. Transactional Save
             const msgToSave = {
                 id: msgId,
                 from: 'me',
-                content: finalMessage,
+                content: contentToSave,
                 type: type,
                 mediaUrl: mediaUrl,
                 status: 'queued',
@@ -183,7 +187,16 @@ export default async function handler(req, res) {
                 const extraParams = {};
                 if (replyToId) extraParams.referenceId = replyToId;
 
-                if (type === 'text') {
+                if (type === 'template') {
+                    const tData = req.body.templateData;
+                    const candidateNameFallback = String(candidate.nombreReal || candidate.nombre || 'Buen día').trim();
+                    extraParams.templateName = tData.name;
+                    extraParams.languageCode = tData.language || 'es_MX';
+                    extraParams.components = [
+                        { type: "body", parameters: [{ type: "text", text: candidateNameFallback }] }
+                    ];
+                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, contentToSave, 'template', extraParams);
+                } else if (type === 'text') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat', extraParams);
                 } else {
                     extraParams.caption = finalMessage;
