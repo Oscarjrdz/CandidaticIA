@@ -165,18 +165,19 @@ const tickEngine = async (state) => {
                             };
                             
                             const bodyComp = state.templateData.components?.find(c => c.type === 'BODY' || c.type === 'body');
-                            const requiresVariables = bodyComp && bodyComp.text && bodyComp.text.includes('{{1}}');
+                            const bodyText = bodyComp?.text || '';
+                            const varMatches = bodyText.match(/\{\{\d+\}\}/g) || [];
+                            const varCount = varMatches.length;
 
-                            if (requiresVariables) {
+                            if (varCount > 0) {
+                                const params = [];
+                                for (let i = 0; i < varCount; i++) {
+                                    params.push({ type: "text", text: candidateNameFallback });
+                                }
                                 extraParams.components = [
                                     {
                                         type: "body",
-                                        parameters: [
-                                            {
-                                                type: "text",
-                                                text: candidateNameFallback
-                                            }
-                                        ]
+                                        parameters: params
                                     }
                                 ];
                             }

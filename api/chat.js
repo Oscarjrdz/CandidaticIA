@@ -193,13 +193,21 @@ export default async function handler(req, res) {
                     extraParams.templateName = tData.name;
                     extraParams.languageCode = tData.language || 'es_MX';
                     
-                    // Solo inyectar componentes si la plantilla realmente tiene variables {{1}}
+                    // Contar variables {{N}} exactas del body para inyectar la cantidad correcta
                     const bodyComp = tData.components?.find(c => c.type === 'BODY' || c.type === 'body');
-                    const requiresVariables = bodyComp && bodyComp.text && bodyComp.text.includes('{{1}}');
+                    const bodyText = bodyComp?.text || '';
+                    const varMatches = bodyText.match(/\{\{\d+\}\}/g) || [];
+                    const varCount = varMatches.length;
+                    
+                    console.log(`[TEMPLATE DEBUG] name=${tData.name}, bodyText="${bodyText}", varCount=${varCount}, components=`, JSON.stringify(tData.components));
 
-                    if (requiresVariables) {
+                    if (varCount > 0) {
+                        const params = [];
+                        for (let i = 0; i < varCount; i++) {
+                            params.push({ type: "text", text: candidateNameFallback });
+                        }
                         extraParams.components = [
-                            { type: "body", parameters: [{ type: "text", text: candidateNameFallback }] }
+                            { type: "body", parameters: params }
                         ];
                     }
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, contentToSave, 'template', extraParams);
