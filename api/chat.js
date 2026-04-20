@@ -217,6 +217,7 @@ export default async function handler(req, res) {
                 console.error('❌ Error sending via UltraMsg:', sendErr.message);
                 await updateMessageStatus(candidateId, msgToSave.id, 'failed', { error: sendErr.message });
                 msgToSave.status = 'failed';
+                msgToSave.error = sendErr.message;
             }
 
             // Update candidate last activity timestamps globally

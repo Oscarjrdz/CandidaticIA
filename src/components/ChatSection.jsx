@@ -1235,13 +1235,23 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             body: JSON.stringify({ candidateId: currentCandidateId, message: msg, type: 'text', replyToId: replyId })
         }).then(res => res.json()).then(data => {
             if (data.success) {
+                // If the message came back explicitly failed from Meta API (e.g., 24h rule)
+                if (data.message && data.message.status === 'failed') {
+                    const fallbackErrorStr = String(data.message.error || '').toLowerCase();
+                    if (fallbackErrorStr.includes('131047') || fallbackErrorStr.includes('24 hours')) {
+                        showToast('Bloqueado por Meta 🛑: Han pasado >24 hrs y no puedes mandarle mensaje libre. Usa una plantilla desde la sección Masivos.', 'error', 6000);
+                    } else {
+                        showToast(`Error de Meta: ${data.message.error || 'Desconocido'}`, 'error');
+                    }
+                }
+
                 // If it's still the active chat, refresh messages
                 if (selectedChat?.id === currentCandidateId) {
                     loadMessages();
                 }
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
             } else {
-                showToast && showToast('Error al enviar mensaje', 'error');
+                showToast && showToast(`Error al enviar mensaje: ${data.message?.error || data.error || 'Desconocido'}`, 'error');
             }
         }).catch(error => {
             console.error(error);
