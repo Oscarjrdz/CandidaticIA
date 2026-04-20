@@ -110,26 +110,24 @@ export class Orchestrator {
         }
 
         if (!targetProjectId) {
-            if (rules.length === 0) {
-                targetProjectId = await redis?.get('bypass_selection');
-                if (targetProjectId && targetProjectId !== 'null' && !excludeProjectIds.includes(targetProjectId)) {
-                    const selectedExists = projects.some(p => p.id === targetProjectId);
-                    if (selectedExists) matchedRuleName = 'Legacy Global Bypass';
-                    else targetProjectId = null;
-                } else {
-                    targetProjectId = null;
-                }
+            targetProjectId = await redis?.get('bypass_selection');
+            if (targetProjectId && targetProjectId !== 'null' && !excludeProjectIds.includes(targetProjectId)) {
+                const selectedExists = projects.some(p => p.id === targetProjectId);
+                if (selectedExists) matchedRuleName = 'Legacy Global Bypass';
+                else targetProjectId = null;
+            } else {
+                targetProjectId = null;
+            }
 
-                if (!targetProjectId && projects.length > 0) {
-                    const matchedProject = projects.find(p => {
-                        if (excludeProjectIds.includes(p.id)) return false;
-                        const vacancyIds = p.vacancyIds || [];
-                        return Array.isArray(vacancyIds) && vacancyIds.length > 0;
-                    });
-                    if (matchedProject) {
-                        targetProjectId = matchedProject.id;
-                        matchedRuleName = 'Fallback Default Project';
-                    }
+            if (!targetProjectId && projects.length > 0) {
+                const matchedProject = projects.find(p => {
+                    if (excludeProjectIds.includes(p.id)) return false;
+                    const vacancyIds = p.vacancyIds || [];
+                    return Array.isArray(vacancyIds) && vacancyIds.length > 0;
+                });
+                if (matchedProject) {
+                    targetProjectId = matchedProject.id;
+                    matchedRuleName = 'Fallback Default Project';
                 }
             }
         }
