@@ -86,18 +86,14 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
     const isDelivered = isRead || status === 'delivered';
     const isSent = isDelivered || status === 'sent';
 
-    // Proporción original: 16x15
-    const w = size === 'sm' ? 16 : 18;
-    const h = size === 'sm' ? 15 : 17;
-
     const color = isRead ? '#53bdeb' : '#8696a0';
 
     if (!isSent) {
         // Reloj / en cola
         return (
             <span className="inline-flex items-center self-end mb-[1px] ml-1">
-                <svg viewBox="0 0 16 15" width={w - 3} height={h - 3} fill="none">
-                    <path d="M10.25 7H8.5V4h-1v4h3.25V7zM8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13z" fill="#8696a0" opacity="0.6" />
+                <svg viewBox="0 0 12 12" width={12} height={12} fill="none">
+                    <path d="M6 1a5 5 0 100 10A5 5 0 006 1zm.5 5.5H4V5.25h1.25V3h1.25v3.5z" fill="#8696a0" opacity="0.55" />
                 </svg>
             </span>
         );
@@ -107,18 +103,19 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
         // Un solo check (enviado)
         return (
             <span className="inline-flex items-center self-end mb-[1px] ml-1">
-                <svg viewBox="0 0 16 15" width={w} height={h} fill="none">
-                    <path d="M15.01 3.316l-8.316 8.316L3.926 8.86l1.3-1.3 1.468 1.468 7.016-7.016 1.3 1.3z" fill="#8696a0" />
+                <svg viewBox="0 0 12 11" width={14} height={13} fill="none">
+                    <path d="M11.155 1.34l1.345 1.32L5.3 9.858 1.5 6.058l1.345-1.32L5.3 7.193z" fill="#8696a0" />
                 </svg>
             </span>
         );
     }
 
-    // Doble palomita (entregado o leído)
+    // Doble palomita (entregado o leído) — checks superpuestos estilo WhatsApp nativo
     return (
         <span className="inline-flex items-center self-end mb-[1px] ml-1">
-            <svg viewBox="0 0 16 15" width={w} height={h} fill="none">
-                <path d="M15.01 3.316l-8.316 8.316L3.926 8.86l1.3-1.3 1.468 1.468 7.016-7.016 1.3 1.3zm-4.406 0L5.3 8.625l-2.6-2.6-1.3 1.3 3.9 3.9 6.604-6.609-1.3-1.3z" fill={color} />
+            <svg viewBox="0 0 16 11" width={18} height={13} fill="none">
+                <path d="M11.071 0l-5.45 6.546-1.84-2.21L2.2 5.664 5.619 9.68 12.65 1.328z" fill={color} />
+                <path d="M14.871 0l-5.45 6.546-0.635-.762L7.205 7.112l2.217 2.568L16.451 1.328z" fill={color} />
             </svg>
         </span>
     );
