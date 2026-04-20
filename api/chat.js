@@ -193,22 +193,51 @@ export default async function handler(req, res) {
                     extraParams.templateName = tData.name;
                     extraParams.languageCode = tData.language || 'es_MX';
                     
-                    // Contar variables {{N}} exactas del body para inyectar la cantidad correcta
-                    const bodyComp = tData.components?.find(c => c.type === 'BODY' || c.type === 'body');
-                    const bodyText = bodyComp?.text || '';
-                    const varMatches = bodyText.match(/\{\{\d+\}\}/g) || [];
-                    const varCount = varMatches.length;
-                    
-                    console.log(`[TEMPLATE DEBUG] name=${tData.name}, bodyText="${bodyText}", varCount=${varCount}, components=`, JSON.stringify(tData.components));
-
-                    if (varCount > 0) {
-                        const params = [];
-                        for (let i = 0; i < varCount; i++) {
-                            params.push({ type: "text", text: candidateNameFallback });
+                    // Construcción dinámica de componentes (soporta BODY, HEADER textual/media, BUTTONS)
+                    const componentsToSend = [];
+                    (tData.components || []).forEach(comp => {
+                        const cType = (comp.type || '').toLowerCase();
+                        
+                        if (cType === 'body' || cType === 'header') {
+                            if (cType === 'body' || (comp.format || '').toLowerCase() === 'text') {
+                                const textInfo = comp.text || '';
+                                const varMatches = textInfo.match(/\{\{\d+\}\}/g) || [];
+                                if (varMatches.length > 0) {
+                                    componentsToSend.push({
+                                        type: cType,
+                                        parameters: varMatches.map(() => ({ type: "text", text: candidateNameFallback }))
+                                    });
+                                }
+                            } else if (cType === 'header') {
+                                const format = (comp.format || '').toLowerCase();
+                                if (['image', 'video', 'document'].includes(format)) {
+                                    // Use mediaUrl if provided, otherwise a placeholder to prevent error 132000
+                                    const mUrl = req.body.mediaUrl || 'https://raw.githubusercontent.com/davidcelis/logo/master/logo.png';
+                                    componentsToSend.push({
+                                        type: 'header',
+                                        parameters: [ { type: format, [format]: { link: mUrl } } ]
+                                    });
+                                }
+                            }
+                        } else if (cType === 'buttons') {
+                            (comp.buttons || []).forEach((btn, index) => {
+                                if ((btn.type || '').toLowerCase() === 'url' && (btn.url || '').includes('{{')) {
+                                    const varMatches = (btn.url || '').match(/\{\{\d+\}\}/g) || [];
+                                    if (varMatches.length > 0) {
+                                        componentsToSend.push({
+                                            type: 'button',
+                                            sub_type: 'url',
+                                            index: String(index),
+                                            parameters: varMatches.map(() => ({ type: "text", text: "0" }))
+                                        });
+                                    }
+                                }
+                            });
                         }
-                        extraParams.components = [
-                            { type: "body", parameters: params }
-                        ];
+                    });
+
+                    if (componentsToSend.length > 0) {
+                        extraParams.components = componentsToSend;
                     }
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, contentToSave, 'template', extraParams);
                 } else if (type === 'text') {

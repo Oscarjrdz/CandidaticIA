@@ -164,22 +164,50 @@ const tickEngine = async (state) => {
                                 languageCode
                             };
                             
-                            const bodyComp = state.templateData.components?.find(c => c.type === 'BODY' || c.type === 'body');
-                            const bodyText = bodyComp?.text || '';
-                            const varMatches = bodyText.match(/\{\{\d+\}\}/g) || [];
-                            const varCount = varMatches.length;
-
-                            if (varCount > 0) {
-                                const params = [];
-                                for (let i = 0; i < varCount; i++) {
-                                    params.push({ type: "text", text: candidateNameFallback });
-                                }
-                                extraParams.components = [
-                                    {
-                                        type: "body",
-                                        parameters: params
+                            // Construcción dinámica de componentes
+                            const componentsToSend = [];
+                            (state.templateData.components || []).forEach(comp => {
+                                const cType = (comp.type || '').toLowerCase();
+                                
+                                if (cType === 'body' || cType === 'header') {
+                                    if (cType === 'body' || (comp.format || '').toLowerCase() === 'text') {
+                                        const textInfo = comp.text || '';
+                                        const varMatches = textInfo.match(/\{\{\d+\}\}/g) || [];
+                                        if (varMatches.length > 0) {
+                                            componentsToSend.push({
+                                                type: cType,
+                                                parameters: varMatches.map(() => ({ type: "text", text: candidateNameFallback }))
+                                            });
+                                        }
+                                    } else if (cType === 'header') {
+                                        const format = (comp.format || '').toLowerCase();
+                                        if (['image', 'video', 'document'].includes(format)) {
+                                            const mUrl = 'https://raw.githubusercontent.com/davidcelis/logo/master/logo.png';
+                                            componentsToSend.push({
+                                                type: 'header',
+                                                parameters: [ { type: format, [format]: { link: mUrl } } ]
+                                            });
+                                        }
                                     }
-                                ];
+                                } else if (cType === 'buttons') {
+                                    (comp.buttons || []).forEach((btn, index) => {
+                                        if ((btn.type || '').toLowerCase() === 'url' && (btn.url || '').includes('{{')) {
+                                            const varMatches = (btn.url || '').match(/\{\{\d+\}\}/g) || [];
+                                            if (varMatches.length > 0) {
+                                                componentsToSend.push({
+                                                    type: 'button',
+                                                    sub_type: 'url',
+                                                    index: String(index),
+                                                    parameters: varMatches.map(() => ({ type: "text", text: "0" }))
+                                                });
+                                            }
+                                        }
+                                    });
+                                }
+                            });
+
+                            if (componentsToSend.length > 0) {
+                                extraParams.components = componentsToSend;
                             }
                             
                             sendType = 'template';
