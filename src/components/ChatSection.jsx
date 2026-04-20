@@ -1346,6 +1346,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
                             >
+                                Todos
                             </button>
                         )}
                         {canSeeFilter('filter_complete') && (
