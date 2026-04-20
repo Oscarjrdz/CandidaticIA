@@ -4,7 +4,7 @@ const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
-import { useGatewaySocket } from '../hooks/useGatewaySocket';
+import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import { Virtuoso } from 'react-virtuoso';
 
 const safeFormatTime = (dateStr) => {
@@ -230,7 +230,7 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
 
 export default function ChatSection({ showToast, user, rolePermissions, onlineUsers = [] }) {
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
-    const { updatedCandidate: sseUpdate, newCandidate: sseNewCandidate } = useGatewaySocket();
+    const { updatedCandidate: sseUpdate, newCandidate: sseNewCandidate } = useCandidatesSSE();
     const [candidates, setCandidates] = useState([]);
     const [selectedChat, setSelectedChat] = useState(null);
 

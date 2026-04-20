@@ -1217,7 +1217,7 @@ export const saveMessage = async (candidateId, message) => {
     }
     const key = `messages:${candidateId}`;
     try {
-        if (message.from === 'bot' && !message.status) {
+        if ((message.from === 'bot' || message.from === 'me') && !message.status) {
             message.status = 'read';
         }
         await client.rpush(key, JSON.stringify(message));
