@@ -88,6 +88,14 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
 
     const color = isRead ? '#53bdeb' : '#8696a0';
 
+    if (status === 'failed') {
+        return (
+            <span className="inline-flex items-center self-end mb-[1px] ml-1 text-red-500" title="Error de envío">
+                <svg viewBox="0 0 24 24" width={14} height={14} stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            </span>
+        );
+    }
+
     if (!isSent) {
         // Reloj / en cola
         return (
@@ -1260,13 +1268,14 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
         setReplyingToMsg(null);
         
-        // Optimistic append
+        const optimisticId = 'temp-' + Date.now();
         setMessages(prev => [...(prev || []), {
-            id: 'temp-' + Date.now(),
+            id: optimisticId,
             content: msg,
             tipo: 'text',
             from: 'me',
             enviado_por_agente: 1, // Visual indicator for sent by us
+            status: 'pending',
             fecha: new Date().toISOString(),
             ...contextInfoParams
         }]);
@@ -1277,9 +1286,12 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ candidateId: currentCandidateId, message: msg, type: 'text', replyToId: replyId })
         }).then(res => res.json()).then(data => {
-            if (data.success) {
-                // If the message came back explicitly failed from Meta API (e.g., 24h rule)
-                if (data.message && data.message.status === 'failed') {
+            if (data.success && data.message) {
+                // Instantly swap the temp pending message for the real failed/sent one
+                setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
+
+                // If it came back failed explicitly from Meta API (e.g., 24h rule)
+                if (data.message.status === 'failed') {
                     const fallbackErrorStr = String(data.message.error || '').toLowerCase();
                     if (fallbackErrorStr.includes('131047') || fallbackErrorStr.includes('24 hours')) {
                         showToast('Bloqueado por Meta 🛑: Han pasado >24 hrs. Toca el Rayito Verde ⚡ abajo para mandar una plantilla oficial.', 'error', 8000);
@@ -1288,15 +1300,17 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     }
                 }
 
-                // If it's still the active chat, refresh messages
+                // Call loadMessages to ensure consistency from DB
                 if (selectedChat?.id === currentCandidateId) {
                     loadMessages();
                 }
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
             } else {
-                showToast && showToast(`Error al enviar mensaje: ${data.message?.error || data.error || 'Desconocido'}`, 'error');
+                setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error || 'API Error' } : m));
+                showToast && showToast(`Error al enviar mensaje: ${data.error || 'Desconocido'}`, 'error');
             }
         }).catch(error => {
+            setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: 'Red desconectada' } : m));
             console.error(error);
             showToast && showToast('Error de red al enviar', 'error');
         });
@@ -1313,14 +1327,16 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         autoSilenceBot(selectedChat);
 
         const currentCandidateId = selectedChat.id;
+        const optimisticId = 'temp-' + Date.now();
 
         // Optimistic append
         setMessages(prev => [...(prev || []), {
-            id: 'temp-' + Date.now(),
+            id: optimisticId,
             content: `[Plantilla: ${templateObj.name}]`,
             tipo: 'template',
             from: 'me',
             enviado_por_agente: 1,
+            status: 'pending',
             fecha: new Date().toISOString()
         }]);
 
@@ -1333,18 +1349,23 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 templateData: { name: templateObj.name, language: templateObj.language } 
             })
         }).then(res => res.json()).then(data => {
-            if (data.success) {
-                if (data.message && data.message.status === 'failed') {
-                    showToast(`Error de Meta: ${data.message.error || 'Desconocido'}`, 'error');
+            if (data.success && data.message) {
+                setMessages(prev => prev.map(m => m.id === optimisticId ? data.message : m));
+
+                if (data.message.status === 'failed') {
+                    showToast(`Error de Meta al mandar plantilla: ${data.message.error || 'Desconocido'}`, 'error');
                 } else {
                     showToast('Plantilla enviada correctamente', 'success');
                 }
+                
                 if (selectedChat?.id === currentCandidateId) loadMessages();
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
             } else {
+                setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error || 'API Error' } : m));
                 showToast(`Error al enviar plantilla: ${data.error || 'Desconocido'}`, 'error');
             }
         }).catch(error => {
+            setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: 'Red desconectada' } : m));
             console.error(error);
             showToast('Error de red al enviar plantilla', 'error');
         });
@@ -2370,6 +2391,15 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                             )}
                                         </div>
                                     </div>
+                                    
+                                    {/* Mostrar Error Nativamente si falló */}
+                                    {msg.status === 'failed' && msg.error && (
+                                        <div className={`text-[10px] text-red-500 font-medium mt-1 ${isMe ? 'text-right' : 'text-left'}`}>
+                                            {String(msg.error).toLowerCase().includes('131047') || String(msg.error).toLowerCase().includes('24 hours') 
+                                                ? 'Bloqueado por Meta (Ventana 24 hrs). Usa el Rayito Verde ⚡' 
+                                                : `Falló: ${msg.error}`}
+                                        </div>
+                                    )}
                                 </div>
                             );
                         })}
