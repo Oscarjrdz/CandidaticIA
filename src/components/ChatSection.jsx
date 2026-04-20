@@ -121,10 +121,11 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
     );
 };
 // ─── Componente Input (Memoizado) ──────────────────────────────────────────────
-const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply }, ref) => {
+const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, handleFileUpload, replyingToMsg, onCancelReply, metaTemplates = [], onSendTemplate }, ref) => {
     const [localMessage, setLocalMessage] = useState("");
     const [sending, setSending] = useState(false);
     const [showEmojis, setShowEmojis] = useState(false);
+    const [showTemplates, setShowTemplates] = useState(false);
 
     React.useImperativeHandle(ref, () => ({
         injectText: (newText) => {
