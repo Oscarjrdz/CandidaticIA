@@ -1217,6 +1217,9 @@ export const saveMessage = async (candidateId, message) => {
     }
     const key = `messages:${candidateId}`;
     try {
+        if (message.from === 'bot' && !message.status) {
+            message.status = 'read';
+        }
         await client.rpush(key, JSON.stringify(message));
 
         // Detection of follow-up messages to increment counter
