@@ -273,14 +273,14 @@ export const sendUltraMsgRead = async (_instanceId, _token, _to, messageId) => {
 /**
  * 😀 Send a reaction to a message
  */
-export const sendMetaReaction = async (messageId, emoji) => {
-    if (!messageId) return null;
-    return sendMetaMessage('', emoji, 'reaction', { messageId });
+export const sendMetaReaction = async (toPhone, messageId, emoji) => {
+    if (!messageId || !toPhone) return null;
+    return sendMetaMessage(toPhone, emoji, 'reaction', { messageId });
 };
 
 // Legacy alias
-export const sendUltraMsgReaction = async (_instanceId, _token, msgId, emoji) => {
-    return sendMetaReaction(msgId, emoji);
+export const sendUltraMsgReaction = async (_instanceId, _token, messageId, emoji, toPhone = 'N/A') => {
+    return sendMetaMessage(toPhone, emoji, 'reaction', { messageId });
 };
 
 /**

@@ -105,7 +105,7 @@ export default async function handler(req, res) {
                 const { sendUltraMsgReaction } = await import('./whatsapp/utils.js');
                 
                 // Fire off the API
-                const sendResult = await sendUltraMsgReaction(ultraConfig.instanceId, ultraConfig.token, replyToId, message);
+                const sendResult = await sendUltraMsgReaction(ultraConfig.instanceId, ultraConfig.token, replyToId, message, candidate.whatsapp);
                 
                 if (sendResult) {
                      const { updateMessageReaction } = await import('./utils/storage.js');
