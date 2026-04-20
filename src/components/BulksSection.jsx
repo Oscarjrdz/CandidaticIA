@@ -11,7 +11,10 @@ const BulksSection = ({ showToast }) => {
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'complete', 'incomplete'
     const [mobileTab, setMobileTab] = useState('candidates'); // 'candidates', 'messages', 'settings'
 
-    // Col 2: Messages
+    // Col 2: Messages & Templates
+    const [bulkType, setBulkType] = useState('text'); // 'text' | 'template'
+    const [metaTemplates, setMetaTemplates] = useState([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState('');
     const [messages, setMessages] = useState([{ id: Date.now(), text: '' }]);
     const [cloningId, setCloningId] = useState(null);
     const messagesEndRef = useRef(null);
@@ -72,6 +75,12 @@ const BulksSection = ({ showToast }) => {
                 }
             })
             .catch(e => console.error("Could not load draft", e));
+
+        // Fetch Meta Templates
+        fetch('/api/whatsapp/templates')
+            .then(res => res.json())
+            .then(data => { if(data.success && data.data) setMetaTemplates(data.data.filter(t => t.status==='APPROVED')); })
+            .catch(() => {});
 
         return () => {
             worker.terminate();
@@ -159,9 +168,13 @@ const BulksSection = ({ showToast }) => {
         setMaxDelay(Number(camp.maxDelay) || 7);
         setPauseEvery(Number(camp.pauseEvery) || 10);
         setPauseFor(Number(camp.pauseFor) || 10);
-        setSelectedCandIds(new Set());
+        setBulkType(camp.bulkType || 'text');
+        if (camp.bulkType === 'template' && camp.templateData) {
+            setSelectedTemplateId(camp.templateData.id);
+        }
+        
         setShowHistory(false);
-        showToast && showToast("Plantilla cargada. Selecciona a tus destinatarios.", "success");
+        showToast && showToast("Campaña cargada. Selecciona a tus destinatarios.", "success");
     };
 
     const deleteCampaign = async (id) => {
@@ -284,10 +297,22 @@ const BulksSection = ({ showToast }) => {
     // Engine Actions
     const startBulk = async () => {
         if (selectedCandIds.size === 0) return showToast && showToast("Selecciona al menos un candidato", "error");
-        const validMsgs = messages.filter(m => m.text.trim()).map(m => m.text.trim());
-        if (validMsgs.length === 0) return showToast && showToast("Crea al menos un mensaje válido", "error");
+        
+        let validMsgs = [];
+        let tplData = null;
 
-        if (!window.confirm(`¿Estás seguro de contactar a ${selectedCandIds.size} candidatos alternando entre ${validMsgs.length} variaciones de mensaje?`)) {
+        if (bulkType === 'text') {
+            validMsgs = messages.filter(m => m.text.trim()).map(m => m.text.trim());
+            if (validMsgs.length === 0) return showToast && showToast("Crea al menos un mensaje válido", "error");
+        } else {
+            if (!selectedTemplateId) return showToast && showToast("Selecciona una plantilla válida", "error");
+            tplData = metaTemplates.find(t => t.id === selectedTemplateId);
+            if (!tplData) return showToast && showToast("Plantilla no encontrada", "error");
+        }
+
+        const qtyMsgStr = bulkType === 'text' ? `alternando entre ${validMsgs.length} variaciones de mensaje` : `usando la plantilla '${tplData.name}'`;
+        
+        if (!window.confirm(`¿Estás seguro de contactar a ${selectedCandIds.size} candidatos ${qtyMsgStr}?`)) {
             return;
         }
 
@@ -299,7 +324,9 @@ const BulksSection = ({ showToast }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     candidates: Array.from(selectedCandIds),
+                    bulkType,
                     messages: validMsgs,
+                    templateData: tplData,
                     minDelay, maxDelay, pauseEvery, pauseFor, campaignName
                 })
             });
@@ -439,50 +466,105 @@ const BulksSection = ({ showToast }) => {
 
             {/* COLUMN 2: MESSAGES */}
             <div className={`${mobileTab === 'messages' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[33%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a] min-h-0`}>
-                <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10 flex justify-between items-center">
-                    <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Variaciones de Mensaje</h2>
-                    <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded dark:bg-blue-900 dark:text-blue-300">{messages.length} opciones</span>
+                <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10 flex flex-col gap-3">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Contenido</h2>
+                    </div>
+                    {/* Toggle Mode */}
+                    <div className="flex bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-1" style={{opacity: isRunning ? 0.5 : 1, pointerEvents: isRunning ? 'none' : 'auto'}}>
+                        <button 
+                            onClick={() => setBulkType('text')}
+                            className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-all ${bulkType === 'text' ? 'bg-white dark:bg-[#111b21] text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            TXT LIBRE
+                        </button>
+                        <button 
+                            onClick={() => setBulkType('template')}
+                            className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-all ${bulkType === 'template' ? 'bg-white dark:bg-[#111b21] text-green-600 dark:text-green-400 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            PLANTILLA META ✨
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-                    {messages.map((msg, index) => (
-                        <div key={msg.id} className="bg-white dark:bg-[#111b21] rounded-lg shadow-sm p-3 relative border border-transparent focus-within:border-blue-400 dark:focus-within:border-blue-500 transition-colors">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Mensaje {index + 1}</span>
-                                <div className="flex gap-1" style={{opacity: isRunning ? 0.3 : 1, pointerEvents: isRunning ? 'none' : 'auto'}}>
-                                    <button onClick={() => cloneWithAI(msg)} disabled={cloningId === msg.id} className="text-purple-500 hover:bg-purple-100 p-1.5 rounded-md dark:hover:bg-purple-900/30 transition-colors" title="Clonar con IA">
-                                        {cloningId === msg.id ? <span className="animate-spin text-sm">⏳</span> : <Sparkles size={16} />}
-                                    </button>
-                                    <button onClick={() => duplicateMessage(msg)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded-md dark:hover:bg-blue-900/30 transition-colors" title="Duplicar">
-                                        <Copy size={16} />
-                                    </button>
-                                    <button onClick={() => deleteMessage(msg.id)} className="text-red-500 hover:bg-red-100 p-1.5 rounded-md dark:hover:bg-red-900/30 transition-colors" title="Eliminar">
-                                        <Trash2 size={16} />
-                                    </button>
+                    {bulkType === 'template' ? (
+                        <div className="bg-white dark:bg-[#111b21] rounded-xl shadow-sm p-4 relative border border-green-200 dark:border-green-900 flex flex-col gap-4">
+                            <div className="text-xs text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg text-center">
+                                Las plantillas evaden la regla de 24 horas y puedes mandarlas de forma segura.
+                            </div>
+                            <div>
+                                <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">Selecciona tu plantilla</label>
+                                <select 
+                                    value={selectedTemplateId} 
+                                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                                    disabled={isRunning}
+                                    className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border-none rounded-lg p-2.5 text-sm text-[#111b21] dark:text-[#e9edef] outline-none font-medium"
+                                >
+                                    <option value="">-- Elige una --</option>
+                                    {metaTemplates.map(t => (
+                                        <option key={t.id} value={t.id}>{t.name} ({t.language})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {selectedTemplateId && (
+                                <div className="bg-[#f0f2f5] dark:bg-[#202c33] p-3 rounded-lg border border-[#d1d7db] dark:border-[#222e35]">
+                                    <p className="text-[11px] font-bold text-gray-500 uppercase mb-2">Vista Previa & Variables</p>
+                                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                        {(() => {
+                                            const tData = metaTemplates.find(t => t.id === selectedTemplateId);
+                                            const bodyComponent = tData?.components?.find(c => c.type === 'BODY') || tData?.components?.find(c => c.type === 'body');
+                                            return bodyComponent ? bodyComponent.text : '[Sin cuerpo texto]';
+                                        })()}
+                                    </div>
+                                    <div className="mt-3 text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2.5 py-2 rounded border border-blue-100 dark:border-blue-900/40 font-medium">
+                                        💡 Identificamos `{'{{1}}'}` o `{'{{nombre...}}'}`. El motor inyectará automáticamente el nombre del candidato (con fallback "Buen día").
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        // TEXT MODE
+                        messages.map((msg, index) => (
+                            <div key={msg.id} className="bg-white dark:bg-[#111b21] rounded-lg shadow-sm p-3 relative border border-transparent focus-within:border-blue-400 dark:focus-within:border-blue-500 transition-colors">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Mensaje {index + 1}</span>
+                                    <div className="flex gap-1" style={{opacity: isRunning ? 0.3 : 1, pointerEvents: isRunning ? 'none' : 'auto'}}>
+                                        <button onClick={() => cloneWithAI(msg)} disabled={cloningId === msg.id} className="text-purple-500 hover:bg-purple-100 p-1.5 rounded-md dark:hover:bg-purple-900/30 transition-colors" title="Clonar con IA">
+                                            {cloningId === msg.id ? <span className="animate-spin text-sm">⏳</span> : <Sparkles size={16} />}
+                                        </button>
+                                        <button onClick={() => duplicateMessage(msg)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded-md dark:hover:bg-blue-900/30 transition-colors" title="Duplicar">
+                                            <Copy size={16} />
+                                        </button>
+                                        <button onClick={() => deleteMessage(msg.id)} className="text-red-500 hover:bg-red-100 p-1.5 rounded-md dark:hover:bg-red-900/30 transition-colors" title="Eliminar">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <textarea
+                                    value={msg.text}
+                                    onChange={(e) => updateMessage(msg.id, e.target.value)}
+                                    disabled={isRunning}
+                                    placeholder="Escribe tu mensaje aquí..."
+                                    className="w-full bg-transparent border-none outline-none resize-none min-h-[100px] text-sm text-[#111b21] dark:text-[#d1d7db]"
+                                />
+
+                                <div className="mt-2 flex flex-wrap gap-1 border-t border-gray-100 dark:border-gray-800 pt-2" style={{opacity: isRunning ? 0.3 : 1, pointerEvents: isRunning ? 'none' : 'auto'}}>
+                                    {POPULAR_EMOJIS.map(em => (
+                                        <button key={em} onClick={() => insertEmoji(msg.id, em)} className="hover:bg-gray-100 dark:hover:bg-gray-800 p-1 rounded transition-colors text-lg">
+                                            {em}
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
-                            
-                            <textarea
-                                value={msg.text}
-                                onChange={(e) => updateMessage(msg.id, e.target.value)}
-                                disabled={isRunning}
-                                placeholder="Escribe tu mensaje aquí..."
-                                className="w-full bg-transparent border-none outline-none resize-none min-h-[100px] text-sm text-[#111b21] dark:text-[#d1d7db]"
-                            />
-
-                            <div className="mt-2 flex flex-wrap gap-1 border-t border-gray-100 dark:border-gray-800 pt-2" style={{opacity: isRunning ? 0.3 : 1, pointerEvents: isRunning ? 'none' : 'auto'}}>
-                                {POPULAR_EMOJIS.map(em => (
-                                    <button key={em} onClick={() => insertEmoji(msg.id, em)} className="hover:bg-gray-100 dark:hover:bg-gray-800 p-1 rounded transition-colors text-lg">
-                                        {em}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
+                        ))
+                    )}
                     <div ref={messagesEndRef} />
                 </div>
 
-                {!isRunning && (
+                {!isRunning && bulkType === 'text' && (
                     <div className="p-4 bg-[#efeae2] dark:bg-[#0b141a]">
                         <button onClick={addEmptyMessage} className="w-full flex items-center justify-center gap-2 bg-white dark:bg-[#202c33] text-[#54656f] dark:text-[#aebac1] hover:text-[#111b21] dark:hover:text-white font-medium p-3 rounded-lg shadow-sm border border-[#d1d7db] dark:border-[#222e35] transition-all hover:shadow-md">
                             <Plus size={20} />

@@ -147,24 +147,58 @@ const tickEngine = async (state) => {
                         const timestamp = new Date().toISOString();
                         const msgId = `msg_bulk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
+                        let msgToSaveStr = finalMessage;
+                        let sendType = 'text';
+                        let extraParams = {};
+
+                        // ── TEMPLATE MODE ──
+                        if (state.bulkType === 'template' && state.templateData) {
+                            const templateName = state.templateData.name;
+                            const languageCode = state.templateData.language || 'es_MX';
+                            
+                            // Fallback de nombre ("Buen día" en caso de vacío)
+                            const candidateNameFallback = String(candidate.nombreReal || candidate.nombre || 'Buen día').trim();
+                            
+                            // Asumimos que la plantilla tiene una variable en el Body y le pasamos el nombre
+                            extraParams = {
+                                templateName,
+                                languageCode,
+                                components: [
+                                    {
+                                        type: "body",
+                                        parameters: [
+                                            {
+                                                type: "text",
+                                                text: candidateNameFallback
+                                            }
+                                        ]
+                                    }
+                                ]
+                            };
+                            
+                            sendType = 'template';
+                            msgToSaveStr = `[Plantilla Masiva: ${templateName}] Hola ${candidateNameFallback}...`;
+                        }
+
                         // 1. Guardar mensaje transaccional
                         const msgToSave = {
                             id: msgId,
                             from: 'me',
-                            content: finalMessage,
-                            type: 'text',
+                            content: msgToSaveStr,
+                            type: sendType === 'template' ? 'template' : 'text',
                             status: 'queued',
                             timestamp
                         };
                         await saveMessage(candidateId, msgToSave);
 
-                        // 2. Enviar via WhatsApp
+                        // 2. Enviar via WhatsApp (Cloud API maneja 'template' nativamente)
                         const sendResult = await sendUltraMsgMessage(
                             ultraConfig.instanceId,
                             ultraConfig.token,
                             cleanTo,
-                            finalMessage,
-                            'chat'
+                            msgToSaveStr,
+                            sendType,
+                            extraParams
                         );
 
                         if (sendResult && sendResult.success) {
@@ -243,10 +277,16 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
         }
 
-        const { candidates, messages, minDelay, maxDelay, pauseEvery, pauseFor, campaignName } = req.body;
+        const { candidates, messages, bulkType, templateData, minDelay, maxDelay, pauseEvery, pauseFor, campaignName } = req.body;
 
-        if (!candidates?.length || !messages?.length) {
-            return res.status(400).json({ error: 'Faltan candidatos o mensajes.' });
+        if (!candidates?.length) {
+            return res.status(400).json({ error: 'Faltan candidatos.' });
+        }
+        if (bulkType !== 'template' && !messages?.length) {
+            return res.status(400).json({ error: 'Faltan mensajes para el envío libre.' });
+        }
+        if (bulkType === 'template' && !templateData?.name) {
+            return res.status(400).json({ error: 'Falta configurar la plantilla a enviar.' });
         }
 
         const campaignId = campaignName ? `camp_${Date.now()}` : null;
@@ -254,8 +294,10 @@ export default async function handler(req, res) {
         const newState = {
             isRunning: true,
             isAborted: false,
+            bulkType: bulkType || 'text',
+            templateData: templateData || null,
             candidates,
-            messages,
+            messages: messages || [],
             minDelay: Number(minDelay) || 3,
             maxDelay: Number(maxDelay) || 7,
             pauseEvery: Number(pauseEvery) || 10,
@@ -282,7 +324,9 @@ export default async function handler(req, res) {
                         id: campaignId,
                         name: campaignName,
                         date: new Date().toISOString(),
-                        messages,
+                        bulkType: newState.bulkType,
+                        templateData: newState.templateData,
+                        messages: newState.messages,
                         minDelay: newState.minDelay,
                         maxDelay: newState.maxDelay,
                         pauseEvery: newState.pauseEvery,
