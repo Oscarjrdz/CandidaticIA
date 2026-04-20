@@ -125,7 +125,15 @@ export default async function handler(req, res) {
 
             let contentToSave = finalMessage;
             if (type === 'template' && req.body.templateData) {
-                contentToSave = `[Plantilla: ${req.body.templateData.name}] Hola ${candidate.nombreReal || candidate.nombre || 'Buen día'}...`;
+                const tData = req.body.templateData;
+                let realText = '';
+                if (tData.components) {
+                    const bodyComp = tData.components.find(c => (c.type || '').toUpperCase() === 'BODY');
+                    if (bodyComp && bodyComp.text) {
+                        realText = bodyComp.text.replace(/\{\{\d+\}\}/g, candidate.nombreReal || candidate.nombre || 'Candidato');
+                    }
+                }
+                contentToSave = `[Plantilla: ${tData.name}] ${realText}`.trim();
             }
 
             // 1. Transactional Save
@@ -202,11 +210,19 @@ export default async function handler(req, res) {
                             if (cType === 'body' || (comp.format || '').toLowerCase() === 'text') {
                                 const textInfo = comp.text || '';
                                 const varMatches = textInfo.match(/\{\{\d+\}\}/g) || [];
-                                const uniqueVars = [...new Set(varMatches)];
-                                if (uniqueVars.length > 0) {
+                                let expectedCount = [...new Set(varMatches)].length;
+                                
+                                // Source of truth from Meta's parsed examples
+                                if (cType === 'body' && comp.example?.body_text?.[0]) {
+                                    expectedCount = comp.example.body_text[0].length;
+                                } else if (cType === 'header' && comp.example?.header_text) {
+                                    expectedCount = comp.example.header_text.length;
+                                }
+
+                                if (expectedCount > 0) {
                                     componentsToSend.push({
                                         type: cType,
-                                        parameters: uniqueVars.map(() => ({ type: "text", text: candidateNameFallback }))
+                                        parameters: Array(expectedCount).fill(0).map(() => ({ type: "text", text: candidateNameFallback }))
                                     });
                                 }
                             } else if (cType === 'header') {
