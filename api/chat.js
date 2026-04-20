@@ -133,7 +133,7 @@ export default async function handler(req, res) {
                         realText = bodyComp.text.replace(/\{\{\d+\}\}/g, candidate.nombreReal || candidate.nombre || 'Candidato');
                     }
                 }
-                contentToSave = `[Plantilla: ${tData.name}] ${realText}`.trim();
+                contentToSave = `⚡ Plantilla: *${tData.name}*\n\n${realText}`.trim();
             }
 
             // 1. Transactional Save

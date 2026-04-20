@@ -231,7 +231,7 @@ const tickEngine = async (state) => {
                             if (bodyComp && bodyComp.text) {
                                 realText = bodyComp.text.replace(/\{\{\d+\}\}/g, candidateNameFallback);
                             }
-                            msgToSaveStr = `[Plantilla Masiva: ${templateName}] ${realText}`.trim();
+                            msgToSaveStr = `⚡ Plantilla masiva: *${templateName}*\n\n${realText}`.trim();
                         }
 
                         // 1. Guardar mensaje transaccional

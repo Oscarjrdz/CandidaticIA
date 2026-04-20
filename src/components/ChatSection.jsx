@@ -208,21 +208,26 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                                 {metaTemplates.length === 0 ? (
                                     <div className="p-3 text-xs text-gray-400 text-center">Buscando plantillas...</div>
                                 ) : (
-                                    metaTemplates.map(t => (
-                                        <button 
-                                            key={t.id} 
-                                            type="button" 
-                                            className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                onSendTemplate(t);
-                                                setShowTemplates(false);
-                                            }}
-                                        >
-                                            <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.name}</div>
-                                            <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest">{t.category}</div>
-                                        </button>
-                                    ))
+                                    metaTemplates.map(t => {
+                                        const bodyComp = (t.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
+                                        const bodyText = bodyComp?.text || '';
+                                        return (
+                                            <button 
+                                                key={t.id} 
+                                                type="button" 
+                                                className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    onSendTemplate(t);
+                                                    setShowTemplates(false);
+                                                }}
+                                            >
+                                                <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.name}</div>
+                                                {bodyText && <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5" title={bodyText}>{bodyText}</div>}
+                                                <div className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mt-1">{t.category}</div>
+                                            </button>
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>
