@@ -12,7 +12,7 @@ const BulksSection = ({ showToast }) => {
     const [mobileTab, setMobileTab] = useState('candidates'); // 'candidates', 'messages', 'settings'
 
     // Col 2: Messages & Templates
-    const [bulkType, setBulkType] = useState('text'); // 'text' | 'template'
+    const [bulkType, setBulkType] = useState('template'); // 'text' | 'template'
     const [metaTemplates, setMetaTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
     const [messages, setMessages] = useState([{ id: Date.now(), text: '' }]);
@@ -464,25 +464,17 @@ const BulksSection = ({ showToast }) => {
                 </div>
             </div>
 
-            {/* COLUMN 2: MESSAGES */}
+            {/* COLUMN 2: PLANTILLA */}
             <div className={`${mobileTab === 'messages' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[33%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a] min-h-0`}>
-                <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10 flex flex-col gap-3">
+                <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Contenido</h2>
-                    </div>
-                    {/* Toggle Mode */}
-                    <div className="flex bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-1" style={{opacity: isRunning ? 0.5 : 1, pointerEvents: isRunning ? 'none' : 'auto'}}>
+                        <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Plantilla a Enviar</h2>
                         <button 
-                            onClick={() => setBulkType('text')}
-                            className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-all ${bulkType === 'text' ? 'bg-white dark:bg-[#111b21] text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            onClick={() => setBulkType(bulkType === 'text' ? 'template' : 'text')}
+                            className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 underline cursor-pointer"
+                            disabled={isRunning}
                         >
-                            TXT LIBRE
-                        </button>
-                        <button 
-                            onClick={() => setBulkType('template')}
-                            className={`flex-1 py-1.5 text-[11px] font-bold rounded-md transition-all ${bulkType === 'template' ? 'bg-white dark:bg-[#111b21] text-green-600 dark:text-green-400 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            PLANTILLA META ✨
+                            {bulkType === 'template' ? 'Usar texto libre' : 'Volver a plantillas'}
                         </button>
                     </div>
                 </div>
@@ -491,7 +483,7 @@ const BulksSection = ({ showToast }) => {
                     {bulkType === 'template' ? (
                         <div className="bg-white dark:bg-[#111b21] rounded-xl shadow-sm p-4 relative border border-green-200 dark:border-green-900 flex flex-col gap-4">
                             <div className="text-xs text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg text-center">
-                                Las plantillas evaden la regla de 24 horas y puedes mandarlas de forma segura.
+                                ✅ Las plantillas evaden la regla de 24 horas. Envío seguro y masivo.
                             </div>
                             <div>
                                 <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">Selecciona tu plantilla</label>
@@ -501,7 +493,7 @@ const BulksSection = ({ showToast }) => {
                                     disabled={isRunning}
                                     className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border-none rounded-lg p-2.5 text-sm text-[#111b21] dark:text-[#e9edef] outline-none font-medium"
                                 >
-                                    <option value="">-- Elige una --</option>
+                                    <option value="">-- Elige una plantilla --</option>
                                     {metaTemplates.map(t => (
                                         <option key={t.id} value={t.id}>{t.name} ({t.language})</option>
                                     ))}
@@ -510,17 +502,27 @@ const BulksSection = ({ showToast }) => {
 
                             {selectedTemplateId && (
                                 <div className="bg-[#f0f2f5] dark:bg-[#202c33] p-3 rounded-lg border border-[#d1d7db] dark:border-[#222e35]">
-                                    <p className="text-[11px] font-bold text-gray-500 uppercase mb-2">Vista Previa & Variables</p>
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                    <p className="text-[11px] font-bold text-gray-500 uppercase mb-2">Vista Previa</p>
+                                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap bg-white dark:bg-[#111b21] p-3 rounded-lg border border-gray-200 dark:border-gray-700">
                                         {(() => {
                                             const tData = metaTemplates.find(t => t.id === selectedTemplateId);
                                             const bodyComponent = tData?.components?.find(c => c.type === 'BODY') || tData?.components?.find(c => c.type === 'body');
                                             return bodyComponent ? bodyComponent.text : '[Sin cuerpo texto]';
                                         })()}
                                     </div>
-                                    <div className="mt-3 text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2.5 py-2 rounded border border-blue-100 dark:border-blue-900/40 font-medium">
-                                        💡 Identificamos `{'{{1}}'}` o `{'{{nombre...}}'}`. El motor inyectará automáticamente el nombre del candidato (con fallback "Buen día").
-                                    </div>
+                                    {(() => {
+                                        const tData = metaTemplates.find(t => t.id === selectedTemplateId);
+                                        const bodyComponent = tData?.components?.find(c => c.type === 'BODY') || tData?.components?.find(c => c.type === 'body');
+                                        const hasVars = bodyComponent?.text?.match(/\{\{\d+\}\}/g);
+                                        if (hasVars) {
+                                            return (
+                                                <div className="mt-3 text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2.5 py-2 rounded border border-blue-100 dark:border-blue-900/40 font-medium">
+                                                    💡 Se detectaron {hasVars.length} variable(s). El motor inyectará el nombre del candidato automáticamente.
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -563,7 +565,6 @@ const BulksSection = ({ showToast }) => {
                     )}
                     <div ref={messagesEndRef} />
                 </div>
-
                 {!isRunning && bulkType === 'text' && (
                     <div className="p-4 bg-[#efeae2] dark:bg-[#0b141a]">
                         <button onClick={addEmptyMessage} className="w-full flex items-center justify-center gap-2 bg-white dark:bg-[#202c33] text-[#54656f] dark:text-[#aebac1] hover:text-[#111b21] dark:hover:text-white font-medium p-3 rounded-lg shadow-sm border border-[#d1d7db] dark:border-[#222e35] transition-all hover:shadow-md">
