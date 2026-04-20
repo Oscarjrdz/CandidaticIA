@@ -118,18 +118,6 @@ export class Orchestrator {
             } else {
                 targetProjectId = null;
             }
-
-            if (!targetProjectId && projects.length > 0) {
-                const matchedProject = projects.find(p => {
-                    if (excludeProjectIds.includes(p.id)) return false;
-                    const vacancyIds = p.vacancyIds || [];
-                    return Array.isArray(vacancyIds) && vacancyIds.length > 0;
-                });
-                if (matchedProject) {
-                    targetProjectId = matchedProject.id;
-                    matchedRuleName = 'Fallback Default Project';
-                }
-            }
         }
 
         if (trace.length > 0 && redis) {
