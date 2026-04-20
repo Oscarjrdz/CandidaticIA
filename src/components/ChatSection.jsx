@@ -213,11 +213,10 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
                                             key={t.id} 
                                             type="button" 
                                             className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-[#202c33] border-b border-gray-100 dark:border-gray-800 transition-colors"
-                                            onClick={() => {
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                onSendTemplate(t);
                                                 setShowTemplates(false);
-                                                if(window.confirm(`¿Seguro que quieres enviar la plantilla '${t.name}'? El sistema inyectará cualquier variable necesaria automáticamente.`)) {
-                                                    onSendTemplate(t);
-                                                }
                                             }}
                                         >
                                             <div className="text-sm font-medium text-gray-800 dark:text-gray-200">{t.name}</div>
