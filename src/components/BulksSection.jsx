@@ -89,6 +89,8 @@ const BulksSection = ({ showToast }) => {
     
     // Custom UI States
     const [showCompletionModal, setShowCompletionModal] = useState(false);
+    const [showStartModal, setShowStartModal] = useState(false);
+    const [startModalData, setStartModalData] = useState(null);
     const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
     const tagDropdownRef = useRef(null);
 
@@ -339,7 +341,7 @@ const BulksSection = ({ showToast }) => {
     };
 
     // Engine Actions
-    const startBulk = async () => {
+    const handleStartClick = () => {
         if (selectedCandIds.size === 0) return showToast && showToast("Selecciona al menos un candidato", "error");
         
         let validMsgs = [];
@@ -356,10 +358,18 @@ const BulksSection = ({ showToast }) => {
 
         const qtyMsgStr = bulkType === 'text' ? `enviando texto libre` : `usando la plantilla '${tplData.name}'`;
         
-        if (!window.confirm(`¿Estás seguro de contactar a ${selectedCandIds.size} candidatos ${qtyMsgStr}? (Los envíos serán inmediatos y sin demoras).`)) {
-            return;
-        }
+        setStartModalData({
+            count: selectedCandIds.size,
+            qtyMsgStr,
+            validMsgs,
+            tplData
+        });
+        setShowStartModal(true);
+    };
 
+    const confirmStartBulk = async () => {
+        if (!startModalData) return;
+        setShowStartModal(false);
         setIsSubmitting(true);
         try {
             const res = await fetch('/api/bulks?action=start', {
@@ -368,8 +378,8 @@ const BulksSection = ({ showToast }) => {
                 body: JSON.stringify({
                     candidates: Array.from(selectedCandIds),
                     bulkType,
-                    messages: validMsgs,
-                    templateData: tplData,
+                    messages: startModalData.validMsgs,
+                    templateData: startModalData.tplData,
                     templateParams: Object.keys(templateParams).length > 0 ? templateParams : null,
                     campaignName: customCampaignName.trim() || null
                 })
@@ -775,7 +785,7 @@ const BulksSection = ({ showToast }) => {
                         </button>
                     ) : (
                         <button 
-                            onClick={startBulk}
+                            onClick={handleStartClick}
                             className={`w-full ${isSubmitting ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'} text-white font-black tracking-wide py-4 px-4 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.2)] transition-all transform ${isSubmitting ? '' : 'hover:-translate-y-1 active:scale-[0.98]'} flex items-center justify-center gap-3 text-xl disabled:opacity-50 disabled:cursor-not-allowed`}
                             disabled={selectedCandIds.size === 0 || isSubmitting}
                         >
@@ -814,6 +824,37 @@ const BulksSection = ({ showToast }) => {
                         </div>
                     </div>
                 </div>
+            {/* CONFIRM START MODAL */}
+            {showStartModal && startModalData && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" style={{ animation: 'fadeIn 0.2s ease-out' }}>
+                    <div className="bg-white dark:bg-[#111b21] w-full max-w-md rounded-[24px] shadow-2xl overflow-hidden p-8 text-center flex flex-col items-center border border-gray-100 dark:border-gray-800" style={{ animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
+                        <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-6">
+                            <Send className="w-10 h-10 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-800 dark:text-white mb-2">Confirmar Lanzamiento</h2>
+                        <p className="text-gray-500 dark:text-gray-400 mb-8 font-medium">
+                            ¿Estás seguro de contactar a <strong className="text-gray-800 dark:text-gray-200">{startModalData.count}</strong> candidatos {startModalData.qtyMsgStr}?
+                            <br/><span className="text-sm mt-2 block opacity-80">(Los envíos serán inmediatos y sin demoras)</span>
+                        </p>
+                        
+                        <div className="flex gap-3 w-full">
+                            <button 
+                                onClick={() => setShowStartModal(false)}
+                                className="flex-1 bg-gray-100 hover:bg-gray-200 dark:bg-[#202c33] dark:hover:bg-[#2a3942] text-gray-700 dark:text-gray-300 font-bold py-4 rounded-xl transition-all text-sm tracking-wide"
+                            >
+                                CANCELAR
+                            </button>
+                            <button 
+                                onClick={confirmStartBulk}
+                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-[0_8px_16px_rgba(37,99,235,0.2)] transition-all transform hover:-translate-y-1 active:scale-[0.98] text-sm tracking-wide"
+                            >
+                                SÍ, ENVIAR AHORA
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* COMPLETION MODAL */}
             {showCompletionModal && (
                 <>
