@@ -160,39 +160,10 @@ export default async function handler(req, res) {
 
             await saveMessage(candidateId, msgToSave);
 
-            // 2. Send via UltraMsg
+            // 2. Send via Meta Cloud API
             try {
                 let sendResult;
-                let deliveryContent = base64Data || mediaUrl;
-
-                // Convert relative /api/image?id=xxx to an absolute URL for GatewayWapp
-                if (mediaUrl && !base64Data) {
-                    const protocol = req.headers['x-forwarded-proto'] || 'https';
-                    const host = req.headers.host || 'candidatic.com';
-
-                    let absoluteUrl = mediaUrl;
-
-                    // Handle /api/image?id=xxx format (our standard storage format)
-                    if (mediaUrl.startsWith('/api/image') && mediaUrl.includes('id=')) {
-                        const urlObj = new URL(mediaUrl, `${protocol}://${host}`);
-                        const id = urlObj.searchParams.get('id');
-                        if (id) {
-                            // Map type to extension for WhatsApp content-type hint
-                            const extMap = { image: '.jpg', video: '.mp4', audio: '.mp3', document: '.pdf' };
-                            const ext = extMap[type] || '';
-                            absoluteUrl = `${protocol}://${host}/api/media/${id}${ext}`;
-                        }
-                    } else if (mediaUrl.startsWith('/')) {
-                        // Any other relative URL → make absolute
-                        absoluteUrl = `${protocol}://${host}${mediaUrl}`;
-                    }
-
-                    deliveryContent = absoluteUrl;
-                }
-
-
                 const cleanTo = candidate.whatsapp.replace(/\D/g, '');
-                
                 const extraParams = {};
                 if (replyToId) extraParams.referenceId = replyToId;
 
@@ -229,7 +200,6 @@ export default async function handler(req, res) {
                             } else if (cType === 'header') {
                                 const format = (comp.format || '').toLowerCase();
                                 if (['image', 'video', 'document'].includes(format)) {
-                                    // Use mediaUrl if provided, otherwise a strict placeholder format to prevent Meta API content-type rejections
                                     const placeholders = {
                                         image: 'https://raw.githubusercontent.com/davidcelis/logo/master/logo.png',
                                         video: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
@@ -267,6 +237,57 @@ export default async function handler(req, res) {
                 } else if (type === 'text') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat', extraParams);
                 } else {
+                    // ═══ MEDIA (image/document/video/audio) ═══
+                    // If the mediaUrl is an internal Redis URL, upload to Meta first for reliability
+                    let deliveryContent = mediaUrl;
+                    const isInternalMedia = mediaUrl && mediaUrl.startsWith('/api/image') && mediaUrl.includes('id=');
+
+                    if (isInternalMedia) {
+                        try {
+                            const urlObj = new URL(mediaUrl, 'https://candidatic.com');
+                            const redisMediaId = urlObj.searchParams.get('id');
+                            if (redisMediaId) {
+                                const redis = getRedisClient();
+                                const [base64Str, metaRaw] = await Promise.all([
+                                    redis.get(`image:${redisMediaId}`),
+                                    redis.get(`meta:image:${redisMediaId}`)
+                                ]);
+
+                                if (base64Str) {
+                                    const meta = metaRaw ? JSON.parse(metaRaw) : {};
+                                    const buffer = Buffer.from(base64Str, 'base64');
+                                    const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
+                                    const filename = meta.filename || (type === 'document' ? 'documento.pdf' : 'imagen.jpg');
+
+                                    const { uploadMediaToMeta } = await import('./whatsapp/utils.js');
+                                    const uploadResult = await uploadMediaToMeta(buffer, mimeType, filename);
+
+                                    if (uploadResult?.mediaId) {
+                                        extraParams.mediaId = uploadResult.mediaId;
+                                        extraParams.filename = filename;
+                                        deliveryContent = ''; // Not needed when using mediaId
+                                    } else {
+                                        // Fallback to URL-based delivery
+                                        const protocol = req.headers['x-forwarded-proto'] || 'https';
+                                        const host = req.headers.host || 'candidatic.com';
+                                        const extMap = { image: '.jpg', video: '.mp4', audio: '.mp3', document: '.pdf' };
+                                        deliveryContent = `${protocol}://${host}/api/media/${redisMediaId}${extMap[type] || ''}`;
+                                    }
+                                }
+                            }
+                        } catch (uploadErr) {
+                            console.error('⚠️ Meta media upload failed, falling back to URL:', uploadErr.message);
+                            // Fallback: convert to absolute URL
+                            const protocol = req.headers['x-forwarded-proto'] || 'https';
+                            const host = req.headers.host || 'candidatic.com';
+                            deliveryContent = `${protocol}://${host}${mediaUrl}`;
+                        }
+                    } else if (mediaUrl && mediaUrl.startsWith('/')) {
+                        const protocol = req.headers['x-forwarded-proto'] || 'https';
+                        const host = req.headers.host || 'candidatic.com';
+                        deliveryContent = `${protocol}://${host}${mediaUrl}`;
+                    }
+
                     extraParams.caption = finalMessage;
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, deliveryContent, type, extraParams);
                 }

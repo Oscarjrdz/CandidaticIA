@@ -73,32 +73,31 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
         switch (type) {
             case 'image': {
                 let imgUrl = String(body).trim();
-                if (!imgUrl || imgUrl === 'null' || imgUrl === 'N/A') {
+                if (!extraParams.mediaId && (!imgUrl || imgUrl === 'null' || imgUrl === 'N/A')) {
                     return { success: true, data: { status: 'filtered_empty_media' } };
                 }
                 payload.type = 'image';
-                payload.image = { link: imgUrl };
+                payload.image = extraParams.mediaId ? { id: extraParams.mediaId } : { link: imgUrl };
                 if (extraParams.caption) payload.image.caption = extraParams.caption;
                 break;
             }
 
             case 'video': {
                 payload.type = 'video';
-                payload.video = { link: body };
+                payload.video = extraParams.mediaId ? { id: extraParams.mediaId } : { link: body };
                 if (extraParams.caption) payload.video.caption = extraParams.caption;
                 break;
             }
 
             case 'document': {
                 let docUrl = String(body).trim();
-                if (!docUrl || docUrl === 'null' || docUrl === 'N/A') {
+                if (!extraParams.mediaId && (!docUrl || docUrl === 'null' || docUrl === 'N/A')) {
                     return { success: true, data: { status: 'filtered_empty_media' } };
                 }
                 payload.type = 'document';
-                payload.document = {
-                    link: docUrl,
-                    filename: extraParams.filename || 'documento.pdf'
-                };
+                payload.document = extraParams.mediaId
+                    ? { id: extraParams.mediaId, filename: extraParams.filename || 'documento.pdf' }
+                    : { link: docUrl, filename: extraParams.filename || 'documento.pdf' };
                 if (extraParams.caption) payload.document.caption = extraParams.caption;
                 break;
             }
@@ -342,3 +341,50 @@ export const getUltraMsgContact = async () => null;
 export const resolveUltraMsgJid = async (_i, _t, phone) => phone;
 export const blockUltraMsgContact = async () => ({ success: false, error: 'Not supported by Meta API' });
 export const unblockUltraMsgContact = async () => ({ success: false, error: 'Not supported by Meta API' });
+
+/**
+ * 📤 Upload media to Meta's servers and get a media_id
+ * This is the reliable way to send media — Meta doesn't need to download from our servers.
+ *
+ * @param {Buffer} buffer  - File binary data
+ * @param {string} mimeType - e.g. 'application/pdf', 'image/jpeg'
+ * @param {string} [filename] - Optional filename for display
+ * @returns {{ mediaId: string } | null}
+ */
+export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => {
+    const config = getMetaConfig();
+    if (!config.phoneNumberId || !config.accessToken) {
+        console.error('❌ [uploadMediaToMeta] Missing Meta config');
+        return null;
+    }
+
+    try {
+        const FormData = (await import('form-data')).default;
+        const form = new FormData();
+        form.append('messaging_product', 'whatsapp');
+        form.append('file', buffer, { filename, contentType: mimeType });
+        form.append('type', mimeType);
+
+        const url = `${GRAPH_BASE_URL}/${config.phoneNumberId}/media`;
+        const response = await axios.post(url, form, {
+            headers: {
+                'Authorization': `Bearer ${config.accessToken}`,
+                ...form.getHeaders()
+            },
+            timeout: 30000,
+            maxContentLength: 20 * 1024 * 1024,
+            maxBodyLength: 20 * 1024 * 1024
+        });
+
+        if (response.data?.id) {
+            console.log(`✅ [uploadMediaToMeta] Uploaded ${filename} (${mimeType}) → media_id=${response.data.id}`);
+            return { mediaId: response.data.id };
+        }
+
+        console.error('❌ [uploadMediaToMeta] No media_id in response:', response.data);
+        return null;
+    } catch (error) {
+        console.error('❌ [uploadMediaToMeta] Error:', error.response?.data || error.message);
+        return null;
+    }
+};
