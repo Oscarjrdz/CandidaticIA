@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X } from 'lucide-react';
+import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { getCandidates } from '../services/candidatesService';
 
 const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
@@ -86,6 +86,21 @@ const BulksSection = ({ showToast }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [customCampaignName, setCustomCampaignName] = useState('');
     const [historyList, setHistoryList] = useState([]);
+    
+    // Custom UI States
+    const [showCompletionModal, setShowCompletionModal] = useState(false);
+    const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+    const tagDropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (tagDropdownRef.current && !tagDropdownRef.current.contains(e.target)) {
+                setTagDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
 
@@ -181,15 +196,8 @@ const BulksSection = ({ showToast }) => {
             
             if (isCurrentlyCompleted && wasRunning) {
                 setTimeout(() => {
-                    window.alert("¡Campaña finalizada exitosamente!");
-                    try {
-                        fetch('/api/bulks?action=clear', { method: 'POST' });
-                        setEngineState(null);
-                        setSelectedCandIds(new Set());
-                        setCustomCampaignName('');
-                        setTemplateParams({});
-                    } catch(e) {}
-                }, 300); // 300ms delay down below lets React render the 100% progress bar before freezing the GUI with the alert
+                    setShowCompletionModal(true);
+                }, 300); // 300ms delay down below lets React render the 100% progress bar before showing the modal
             }
         }
         prevEngineStateRef.current = engineState;
@@ -474,30 +482,60 @@ const BulksSection = ({ showToast }) => {
                     {/* Tag Filter Dropdown */}
                     {availableTags.length > 0 && (
                         <div className="flex items-center gap-2 pb-2">
-                            <div className="relative flex-1">
-                                <Tag className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 pointer-events-none" />
-                                <select
-                                    value={selectedTagFilter || ''}
-                                    onChange={(e) => setSelectedTagFilter(e.target.value || null)}
-                                    className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg pl-9 pr-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] outline-none font-medium appearance-none cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                            <div className="relative flex-1" ref={tagDropdownRef}>
+                                <div 
+                                    onClick={() => setTagDropdownOpen(!tagDropdownOpen)}
+                                    className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${selectedTagFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-8 py-2.5 text-sm outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
                                     style={selectedTagFilter ? {
-                                        borderColor: (availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTagFilter))?.color || '#3b82f6',
-                                        borderWidth: '2px'
+                                        boxShadow: `0 0 0 2px ${(availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTagFilter))?.color || '#3b82f6'}`,
+                                        borderColor: 'transparent'
                                     } : {}}
                                 >
-                                    <option value="">Todas las etiquetas</option>
-                                    {availableTags.map((tag, idx) => {
-                                        const tName = typeof tag === 'string' ? tag : tag.name;
-                                        const countWithTag = (candidates || []).filter(c =>
-                                            (c.tags || []).some(t => (typeof t === 'string' ? t : t.name) === tName)
-                                        ).length;
-                                        return (
-                                            <option key={idx} value={tName}>
-                                                {tName} ({countWithTag})
-                                            </option>
-                                        );
-                                    })}
-                                </select>
+                                    <Tag className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${selectedTagFilter ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={selectedTagFilter ? { color: (availableTags.find(t => (typeof t === 'string' ? t : t.name) === selectedTagFilter))?.color } : {}} />
+                                    <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{selectedTagFilter || 'Todas las etiquetas'}</span>
+                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${tagDropdownOpen ? 'rotate-180' : ''}`} />
+                                </div>
+                                
+                                {tagDropdownOpen && (
+                                    <div className="absolute z-50 w-full mt-2 bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl py-2 max-h-72 overflow-y-auto custom-scrollbar transform origin-top animate-expand-in">
+                                        <div 
+                                            onClick={() => { setSelectedTagFilter(null); setTagDropdownOpen(false); }}
+                                            className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center gap-2 ${!selectedTagFilter ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#111b21]'}`}
+                                        >
+                                            <div className="w-4 h-4 rounded border border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                                                {!selectedTagFilter && <div className="w-2 h-2 rounded-sm bg-indigo-500"></div>}
+                                            </div>
+                                            Todas las etiquetas
+                                        </div>
+                                        {availableTags.map((tag, idx) => {
+                                            const tName = typeof tag === 'string' ? tag : tag.name;
+                                            const tColor = typeof tag === 'string' ? '#3b82f6' : tag.color;
+                                            const countWithTag = (candidates || []).filter(c =>
+                                                (c.tags || []).some(t => (typeof t === 'string' ? t : t.name) === tName)
+                                            ).length;
+                                            const isSelected = selectedTagFilter === tName;
+                                            
+                                            // Solo mostrar etiquetas que tienen candidatos en esta vista
+                                            if (countWithTag === 0 && !isSelected) return null;
+                                            
+                                            return (
+                                                <div 
+                                                    key={idx}
+                                                    onClick={() => { setSelectedTagFilter(tName); setTagDropdownOpen(false); }}
+                                                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#111b21]'}`}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: tColor }}></div>
+                                                        <span className="truncate">{tName}</span>
+                                                    </div>
+                                                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-[#111b21] text-gray-500 dark:text-gray-400">
+                                                        {countWithTag}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                             {selectedTagFilter && (
                                 <button
@@ -776,8 +814,37 @@ const BulksSection = ({ showToast }) => {
                         </div>
                     </div>
                 </div>
+            {/* COMPLETION MODAL */}
+            {showCompletionModal && (
+                <>
+                    <style>{`
+                        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+                        @keyframes popIn { 
+                            0% { opacity: 0; transform: scale(0.9) translateY(10px); } 
+                            100% { opacity: 1; transform: scale(1) translateY(0); } 
+                        }
+                    `}</style>
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" style={{ animation: 'fadeIn 0.2s ease-out' }}>
+                        <div className="bg-white dark:bg-[#111b21] w-full max-w-sm rounded-[24px] shadow-2xl overflow-hidden p-8 text-center flex flex-col items-center border border-gray-100 dark:border-gray-800" style={{ animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
+                            <div className="w-20 h-20 bg-[#d9fdd3] dark:bg-[#0a332c] rounded-full flex items-center justify-center mb-6">
+                                <CheckCircle2 className="w-10 h-10 text-[#10a37f] dark:text-[#25d366]" />
+                            </div>
+                            <h2 className="text-2xl font-black text-gray-800 dark:text-white mb-2">¡Campaña Finalizada!</h2>
+                            <p className="text-gray-500 dark:text-gray-400 mb-8 font-medium">Los mensajes masivos han sido procesados exitosamente.</p>
+                            
+                            <button 
+                                onClick={() => {
+                                    setShowCompletionModal(false);
+                                    clearBulk();
+                                }}
+                                className="w-full bg-[#10a37f] hover:bg-[#0e906f] dark:bg-[#25d366] dark:hover:bg-[#1faa53] dark:text-[#111b21] text-white font-bold py-4 rounded-xl shadow-[0_8px_16px_rgba(16,163,127,0.2)] dark:shadow-[0_8px_16px_rgba(37,211,102,0.1)] transition-all transform hover:-translate-y-1 active:scale-[0.98] text-lg tracking-wide"
+                            >
+                                ACEPTAR Y LIMPIAR
+                            </button>
+                        </div>
+                    </div>
+                </>
             )}
-            
         </div>
     );
 };
