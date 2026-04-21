@@ -70,6 +70,16 @@ export default async function handler(req, res) {
     }
 
     try {
+        const payloadStr = JSON.stringify(payload);
+        const { getRedisClient } = await import('../utils/storage.js');
+        const client = getRedisClient();
+        if (client) {
+            await client.lpush('debug:catcher_payload_last', payloadStr);
+            await client.ltrim('debug:catcher_payload_last', 0, 5); // Guardar los ultimos 5
+        }
+    } catch(e) {}
+
+    try {
         // --- 1. PROCESAR MENSAJES ENTRANTES (CAPTURAR LEADS) ---
         if (eventType === 'message_received' || eventType === 'message.incoming' || eventType === 'messages.upsert') {
             
