@@ -14,34 +14,10 @@ const GatewayCatcherSettings = ({ showToast }) => {
 
     return (
         <Card
-            title="Gateway Catcher (Atrapaleads silencioso)"
+            title="Webhook catcher"
             icon={Database}
-            actions={
-                <span className="text-[10px] font-bold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <FishSymbol className="w-3 h-3" /> Base de Datos
-                </span>
-            }
         >
             <div className="space-y-4">
-                {/* Introduction / Explain */}
-                <div className="rounded-xl p-4 border border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50/50 to-white dark:from-purple-950/20 dark:to-gray-800">
-                    <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-900/40 flex flex-shrink-0 items-center justify-center border border-purple-200 dark:border-purple-800/50 mt-1">
-                            <FishSymbol className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <span className="font-semibold text-sm text-gray-900 dark:text-white">
-                                    Receptor Independiente
-                                </span>
-                            </div>
-                            <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-1 leading-relaxed">
-                                Escucha mensajes entrantes desde una instancia Baileys / EvolutionAPI / WappGateway para <strong>capturar número, nombre y foto</strong> del prospecto. Almacena silenciosamente en la base de datos para posteriores envíos masivos via Meta Oficial.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
                 {/* Webhook URL */}
                 <div className="pt-2">
                     <div className="flex items-center justify-between mb-2">
