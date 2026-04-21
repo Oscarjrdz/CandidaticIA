@@ -1049,12 +1049,17 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
     };
 
+    // Debounce state to avoid collision between optimistic messages and SSE/interval redraws
+    const isSendingMediaRef = useRef(false);
+
     const loadMessages = async () => {
         if (!selectedChat?.id) return;
+        if (isSendingMediaRef.current) return; // Mute polling/SSE while an optimistic upload is in flight
+
         try {
             const res = await fetch(`/api/chat?candidateId=${selectedChat.id}`);
             const data = await res.json();
-            if (data.success) {
+            if (data.success && !isSendingMediaRef.current) {
                 setMessages(data.messages || []);
             }
         } catch (e) {
@@ -1175,6 +1180,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         };
         setMessages(prev => [...prev, tempMsg]);
         setSending(true);
+        isSendingMediaRef.current = true; // Mute polling during upload
 
         try {
             // Upload file to local media store first
@@ -1230,6 +1236,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: err.message } : m));
         } finally {
             setSending(false);
+            isSendingMediaRef.current = false;
         }
     };
 
