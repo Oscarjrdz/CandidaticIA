@@ -2437,21 +2437,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                             );
                         })}
                         
-                        {/* Typing Indicators */}
-                        {recruiterTypingName && (
-                            <div className="flex items-center gap-2 mt-2 mb-1 px-4 self-start animate-fade-in slide-in-from-bottom-2">
-                                <div className="bg-white dark:bg-[#202c33] px-3 py-2 rounded-2xl rounded-tl-sm shadow-sm flex items-center gap-2 border border-black/5 dark:border-white/5">
-                                    <span className="text-[11px] font-semibold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent italic flex items-center">
-                                        {recruiterTypingName} escribiendo
-                                    </span>
-                                    <div className="flex gap-[3px] items-center h-full ml-0.5 mt-[2px]">
-                                        <div className="w-1 h-1 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                        <div className="w-1 h-1 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                                        <div className="w-1 h-1 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        {/* Typing Indicators (Removed as requested) */}
 
                     <div ref={messagesEndRef} />
                     </div>
