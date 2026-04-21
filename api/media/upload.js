@@ -67,18 +67,17 @@ export default async function handler(req, res) {
         const key = `image:${id}`;
         const metaKey = `meta:image:${id}`;
 
-        // Store in Redis (persistent, no expiration)
-        const pipeline = redis.pipeline();
-        pipeline.set(key, base64Data);
-        pipeline.set(metaKey, JSON.stringify({
-            mime: mimeType,
-            filename: originalFilename,
-            size: fileSize,
-            createdAt: new Date().toISOString()
-        }));
-        // Add to media library sorted set for MediaLibrarySection
-        pipeline.zadd('candidatic:media_library', Date.now(), id);
-        await pipeline.exec();
+        // Store in Redis with explicit TTL to avoid allkeys-lru passive eviction issues
+        await Promise.all([
+            redis.set(key, base64Data, 'EX', 172800), // 48h
+            redis.set(metaKey, JSON.stringify({
+                mime: mimeType,
+                filename: originalFilename,
+                size: fileSize,
+                createdAt: new Date().toISOString()
+            }), 'EX', 172800),
+            redis.zadd('candidatic:media_library', Date.now(), id)
+        ]);
 
         // Also upload to Meta to pre-cache the media_id for instant sending
         let metaMediaId = null;

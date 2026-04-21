@@ -361,9 +361,15 @@ export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => 
     try {
         const FormData = (await import('form-data')).default;
         const form = new FormData();
+        
+        let basicType = 'document';
+        if (mimeType.startsWith('image/')) basicType = 'image';
+        else if (mimeType.startsWith('video/')) basicType = 'video';
+        else if (mimeType.startsWith('audio/')) basicType = 'audio';
+
         form.append('messaging_product', 'whatsapp');
         form.append('file', buffer, { filename, contentType: mimeType });
-        form.append('type', mimeType);
+        form.append('type', basicType);
 
         const url = `${GRAPH_BASE_URL}/${config.phoneNumberId}/media`;
         const response = await axios.post(url, form, {
