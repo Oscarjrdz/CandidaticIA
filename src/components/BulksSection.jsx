@@ -370,7 +370,9 @@ const BulksSection = ({ showToast }) => {
             if (data.success) {
                 showToast && showToast("Campaña iniciada", "success");
                 setCustomCampaignName('');
-                fetchEngineStatus();
+                // Establecer estado localmente para garantizar que wasRunning sea true
+                if (data.state) setEngineState(data.state);
+                setTimeout(fetchEngineStatus, 1000);
             } else {
                 showToast && showToast(data.error || "Error al iniciar", "error");
             }
