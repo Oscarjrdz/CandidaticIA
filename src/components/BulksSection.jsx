@@ -576,7 +576,7 @@ const BulksSection = ({ showToast }) => {
                                     {(() => {
                                         const tData = metaTemplates.find(t => t.id === selectedTemplateId);
                                         const bodyComponent = tData?.components?.find(c => c.type === 'BODY') || tData?.components?.find(c => c.type === 'body');
-                                        const hasVars = bodyComponent?.text?.match(/\{\{\d+\}\}/g);
+                                        const hasVars = bodyComponent?.text?.match(/\{\{[^}]+\}\}/g);
                                         if (hasVars) {
                                             const uniqueVars = [...new Set(hasVars)];
                                             return (

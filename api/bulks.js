@@ -163,7 +163,7 @@ const tickEngine = async (state) => {
                                     if (cType === 'body' || cType === 'header') {
                                         if (cType === 'body' || (comp.format || '').toLowerCase() === 'text') {
                                             const textInfo = comp.text || '';
-                                            const varMatches = textInfo.match(/\{\{\d+\}\}/g) || [];
+                                            const varMatches = textInfo.match(/\{\{[^}]+\}\}/g) || [];
                                             let expectedCount = [...new Set(varMatches)].length;
                                             
                                             // Source of truth from Meta's parsed examples
@@ -226,8 +226,11 @@ const tickEngine = async (state) => {
                                 let realText = '';
                                 const bodyComp = (state.templateData.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
                                 if (bodyComp && bodyComp.text) {
-                                    realText = bodyComp.text.replace(/\{\{(\d+)\}\}/g, (match, num) => {
-                                        return state.templateParams?.[num] || candidateNameFallback;
+                                    realText = bodyComp.text.replace(/\{\{[^}]+\}\}/g, (match) => {
+                                        // Extract the var key — could be numeric "1" or named "categoriavac"
+                                        const varKey = match.replace(/[{}]/g, '');
+                                        // Try numeric key first ("1"), then named key
+                                        return state.templateParams?.[varKey] || state.templateParams?.['1'] || candidateNameFallback;
                                     });
                                 }
                                 const displayName = templateName.replace(/_/g, ' ');
