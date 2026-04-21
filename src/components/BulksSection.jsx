@@ -75,6 +75,7 @@ const BulksSection = ({ showToast }) => {
     const [bulkType, setBulkType] = useState('template'); // 'text' | 'template'
     const [metaTemplates, setMetaTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
+    const [templateParams, setTemplateParams] = useState({});
     const [messageText, setMessageText] = useState('');
     
     // Engine State
@@ -335,6 +336,7 @@ const BulksSection = ({ showToast }) => {
                     bulkType,
                     messages: validMsgs,
                     templateData: tplData,
+                    templateParams: Object.keys(templateParams).length > 0 ? templateParams : null,
                     campaignName: null
                 })
             });
@@ -545,7 +547,10 @@ const BulksSection = ({ showToast }) => {
                                 <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">Selecciona tu plantilla</label>
                                 <select 
                                     value={selectedTemplateId} 
-                                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                                    onChange={(e) => {
+                                        setSelectedTemplateId(e.target.value);
+                                        setTemplateParams({});
+                                    }}
                                     disabled={isRunning}
                                     className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border-none rounded-lg p-3 text-[15px] text-[#111b21] dark:text-[#e9edef] outline-none font-bold shadow-sm"
                                 >
@@ -571,10 +576,27 @@ const BulksSection = ({ showToast }) => {
                                         const bodyComponent = tData?.components?.find(c => c.type === 'BODY') || tData?.components?.find(c => c.type === 'body');
                                         const hasVars = bodyComponent?.text?.match(/\{\{\d+\}\}/g);
                                         if (hasVars) {
+                                            const uniqueVars = [...new Set(hasVars)];
                                             return (
-                                                <div className="mt-3 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-3 py-2.5 rounded border border-blue-200 dark:border-blue-800 font-bold flex gap-2 items-center">
-                                                    <span>💡</span>
-                                                    Se detectaron {hasVars.length} variable(s). El sistema inyectará el nombre del candidato automáticamente.
+                                                <div className="mt-3 flex flex-col gap-2">
+                                                    <div className="text-[11px] font-bold text-gray-500 uppercase">Valores de Variables</div>
+                                                    {uniqueVars.map((v, idx) => {
+                                                        const varNum = v.replace(/[{}]/g, '');
+                                                        return (
+                                                            <div key={idx} className="flex items-center gap-2">
+                                                                <span className="text-xs font-mono bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-1 rounded font-bold shrink-0">{v}</span>
+                                                                <input
+                                                                    type="text"
+                                                                    value={templateParams[varNum] || ''}
+                                                                    onChange={(e) => setTemplateParams(prev => ({ ...prev, [varNum]: e.target.value }))}
+                                                                    placeholder="Nombre del candidato (auto)"
+                                                                    className="flex-1 bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm text-[#111b21] dark:text-[#e9edef] outline-none focus:border-blue-400 transition-colors"
+                                                                    disabled={isRunning}
+                                                                />
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Deja vacío para usar el nombre del candidato automáticamente.</p>
                                                 </div>
                                             );
                                         }

@@ -174,9 +174,15 @@ const tickEngine = async (state) => {
                                             }
 
                                             if (expectedCount > 0) {
+                                                const params = Array(expectedCount).fill(0).map((_, pIdx) => {
+                                                    // Use custom param if provided, else fallback to candidate name
+                                                    const paramKey = String(pIdx + 1);
+                                                    const customVal = state.templateParams?.[paramKey];
+                                                    return { type: "text", text: customVal || candidateNameFallback };
+                                                });
                                                 componentsToSend.push({
                                                     type: cType,
-                                                    parameters: Array(expectedCount).fill(0).map(() => ({ type: "text", text: candidateNameFallback }))
+                                                    parameters: params
                                                 });
                                             }
                                         } else if (cType === 'header') {
@@ -220,7 +226,9 @@ const tickEngine = async (state) => {
                                 let realText = '';
                                 const bodyComp = (state.templateData.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
                                 if (bodyComp && bodyComp.text) {
-                                    realText = bodyComp.text.replace(/\{\{\d+\}\}/g, candidateNameFallback);
+                                    realText = bodyComp.text.replace(/\{\{(\d+)\}\}/g, (match, num) => {
+                                        return state.templateParams?.[num] || candidateNameFallback;
+                                    });
                                 }
                                 const displayName = templateName.replace(/_/g, ' ');
                                 msgToSaveStr = `⚡ Plantilla masiva: *${displayName}*\n\n${realText}`.trim();
@@ -320,7 +328,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Ya hay un envío en curso. Aborta primero.' });
         }
 
-        const { candidates, messages, bulkType, templateData, minDelay, maxDelay, pauseEvery, pauseFor, campaignName } = req.body;
+        const { candidates, messages, bulkType, templateData, templateParams, minDelay, maxDelay, pauseEvery, pauseFor, campaignName } = req.body;
 
         if (!candidates?.length) {
             return res.status(400).json({ error: 'Faltan candidatos.' });
@@ -340,6 +348,7 @@ export default async function handler(req, res) {
             isAborted: false,
             bulkType: bulkType || 'text',
             templateData: templateData || null,
+            templateParams: templateParams || null,
             candidates,
             messages: messages || [],
             minDelay: 0,
