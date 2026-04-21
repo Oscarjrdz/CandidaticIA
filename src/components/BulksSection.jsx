@@ -172,6 +172,30 @@ const BulksSection = ({ showToast }) => {
         return () => clearTimeout(timer);
     }, [messageText, selectedCandIds]);
 
+    // Auto-alert on campaign complete
+    const prevEngineStateRef = useRef(null);
+    useEffect(() => {
+        if (engineState) {
+            const isCurrentlyCompleted = !engineState.isRunning && (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1));
+            const wasRunning = prevEngineStateRef.current && prevEngineStateRef.current.isRunning;
+            
+            if (isCurrentlyCompleted && wasRunning) {
+                setTimeout(() => {
+                    if (window.confirm("¡Campaña finalizada exitosamente! ¿Deseas limpiar la pantalla para configurar una nueva campaña?")) {
+                        try {
+                            fetch('/api/bulks?action=clear', { method: 'POST' });
+                            setEngineState(null);
+                            setSelectedCandIds(new Set());
+                            setCustomCampaignName('');
+                            setTemplateParams({});
+                        } catch(e) {}
+                    }
+                }, 300); // 300ms delay down below lets React render the 100% progress bar before freezing the GUI with the confirm alert
+            }
+        }
+        prevEngineStateRef.current = engineState;
+    }, [engineState]);
+
     const loadCandidates = async () => {
         try {
             const result = await getCandidates(2000, 0, "");
