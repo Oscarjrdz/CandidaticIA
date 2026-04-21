@@ -26,10 +26,37 @@ const cleanPhoneNumber = (raw = '') => {
     return withoutDevice.replace(/\D/g, '');
 };
 
+// Automáticamente crea la etiqueta global CATCHER la primera vez que se ejecute si no existe
+const ensureCatcherTagExists = async () => {
+    try {
+        const client = getRedisClient();
+        if (!client) return;
+        const raw = await client.get('candidatic:chat_tags');
+        let tags = raw ? JSON.parse(raw) : [
+            {name: 'Urgente', color: '#64748b'}, {name: 'Entrevista', color: '#f97316'},
+            {name: 'Contratado', color: '#eab308'}, {name: 'Rechazado', color: '#22c55e'},
+            {name: 'Duda', color: '#3b82f6'}
+        ];
+        
+        tags = tags.map(t => typeof t === 'string' ? {name: t, color: '#3b82f6'} : t);
+        
+        if (!tags.find(t => t.name === 'CATCHER')) {
+            tags.push({name: 'CATCHER', color: '#8b5cf6'}); // Color morado/púrpura
+            await client.set('candidatic:chat_tags', JSON.stringify(tags));
+            console.log('[GATEWAY CATCHER] 🏷️ Etiqueta global CATCHER creada exitosamente.');
+        }
+    } catch (e) {
+        console.error('Error asegurando la etiqueta CATCHER:', e);
+    }
+};
+
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
+
+    // Asegurar fondo etiqueta globalmente sin bloquear respuesta
+    ensureCatcherTagExists();
 
     const payload = req.body;
     
@@ -75,15 +102,31 @@ export default async function handler(req, res) {
             
             // La foto suele venir en ciertos payloads de EvolutionAPI o podemos forzar un update ligero
             // NOTA: En EvolutionAPI la URL de perfil a veces viene en 'profilePictureUrl' o 'picture'
+            // Y está anidado en el obj de 'sender' (en webhooks messages.upsert)
             const profilePicOptions = [
-                payload.profilePictureUrl,
-                payload.picture,
-                messageData.profilePictureUrl,
-                messageData.picture,
-                mData.profilePictureUrl,
-                mData.picture
+                payload?.sender?.profilePictureUrl,
+                payload?.sender?.profilePicUrl,
+                payload?.sender?.picture,
+                payload?.data?.sender?.profilePictureUrl,
+                payload?.data?.sender?.profilePicUrl,
+                payload?.data?.sender?.picture,
+                payload?.profilePictureUrl,
+                payload?.picture,
+                messageData?.sender?.profilePictureUrl,
+                messageData?.sender?.profilePicUrl,
+                messageData?.sender?.picture,
+                messageData?.profilePictureUrl,
+                messageData?.picture,
+                mData?.sender?.profilePictureUrl,
+                mData?.sender?.profilePicUrl,
+                mData?.sender?.picture,
+                mData?.profilePictureUrl,
+                mData?.picture
             ];
-            const profilePicUrl = profilePicOptions.find(p => p && p.startsWith('http')) || null;
+            
+            // Clean up missing/undefined array entries before finding
+            const validOptions = profilePicOptions.filter(p => typeof p === 'string' && p.trim() !== '');
+            const profilePicUrl = validOptions.find(p => p.startsWith('http')) || null;
 
             // Instancia que lo capturó
             const capturedInstanceId = messageData.instanceId || payload.instanceId || payload.instance?.instanceId || req.headers['x-instance-id'] || 'gateway_catcher';
@@ -92,18 +135,9 @@ export default async function handler(req, res) {
             let candidateId = await getCandidateIdByPhone(phone);
             
             if (candidateId) {
-                // Si ya existe, solo actualizamos su foto si viene una nueva, o marcamos que se contactó
-                let updatePayload = {
-                    ultimoMensaje: new Date().toISOString()
-                };
-                
-                // Si recibimos una url de foto nueva y válida
-                if (profilePicUrl) {
-                    updatePayload.profilePic = profilePicUrl;
-                }
-
-                await updateCandidate(candidateId, updatePayload);
-                console.log(`[GATEWAY CATCHER] Candidato actualizado: ${phone}`);
+                // Si ya existe en base, NO se hace nada, tal como se solicitó para aplicar solo a nuevos.
+                console.log(`[GATEWAY CATCHER] Ignorado - Candidato ya existe: ${phone}`);
+                return res.status(200).send('existing_lead_ignored');
                 
             } else {
                 // Es un Lead NUEVO. Lo guardamos en la base general pero silencioso
@@ -114,13 +148,14 @@ export default async function handler(req, res) {
                     instanceId: capturedInstanceId,
                     profilePic: profilePicUrl,
                     status: 'Capturado', // Estatus especial para saber que es una base pasiva
+                    tags: ['CATCHER'], // Agregar la etiqueta que se creó globalmente
                     esNuevo: 'NO', // Evita que si más adelante se altera reciba mensaje de bienvenida automáticamente
                     bot_ia_active: false, // BLOQUEO HARD: Brenda IA no debe procesarlo nunca
                     primerContacto: new Date().toISOString(),
                     ultimoMensaje: new Date().toISOString()
                 });
                 
-                console.log(`[GATEWAY CATCHER] 🎣 LEAD CAPTURADO NUEVO: ${phone} - ${pushName}`);
+                console.log(`[GATEWAY CATCHER] 🎣 LEAD CAPTURADO NUEVO CATCHER: ${phone} - ${pushName}`);
             }
 
             // ⚠️ IMPORTANTE: RETORNAMOS 200 AQUI MIMSO.

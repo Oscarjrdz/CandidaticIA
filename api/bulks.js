@@ -425,7 +425,24 @@ export default async function handler(req, res) {
 
         // 🔥 TICK: Si está corriendo, intentar avanzar la cola
         if (state.isRunning && !state.isAborted) {
-            state = await tickEngine(state);
+            const redis = getRedisClient();
+            let lockAcquired = false;
+            
+            if (redis) {
+                const lock = await redis.set('bulk_lock', '1', 'EX', 10, 'NX');
+                if (lock) lockAcquired = true;
+            } else {
+                // Si no hay redis, pasamos (aunque para este serverless es vital tenerlo)
+                lockAcquired = true;
+            }
+
+            if (lockAcquired) {
+                try {
+                    state = await tickEngine(state);
+                } finally {
+                    if (redis) await redis.del('bulk_lock');
+                }
+            }
         }
 
         return res.status(200).json({ success: true, state });
