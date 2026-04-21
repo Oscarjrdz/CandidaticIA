@@ -136,10 +136,31 @@ export default async function handler(req, res) {
             
             // Clean up missing/undefined array entries before finding
             const validOptions = profilePicOptions.filter(p => typeof p === 'string' && p.trim() !== '');
-            const profilePicUrl = validOptions.find(p => p.startsWith('http')) || null;
+            let profilePicUrl = validOptions.find(p => p.startsWith('http')) || null;
 
             // Instancia que lo capturó
             const capturedInstanceId = messageData.instanceId || payload.instanceId || payload.instance?.instanceId || req.headers['x-instance-id'] || 'gateway_catcher';
+
+            // --- Novedad: Rescate manual de la foto usando el Gateway API directo ---
+            if (!profilePicUrl) {
+                try {
+                    console.log(`[GATEWAY CATCHER] Foto no venía en webhook. Extrayendo manualmente para: ${phone}...`);
+                    const fetchUrl = `https://gatewaywapp-production.up.railway.app/a2c8cea97a/contacts/profile-picture?token=0ef8455a4a5a45e099df7cd6851a24d2&to=${phone}@c.us`;
+                    
+                    const resPic = await fetch(fetchUrl);
+                    if (resPic.ok) {
+                        const jsonPic = await resPic.json();
+                        if (jsonPic.profile_picture && jsonPic.profile_picture.startsWith('http')) {
+                            profilePicUrl = jsonPic.profile_picture;
+                            console.log(`[GATEWAY CATCHER] 📸 Foto descargada con éxito: ${profilePicUrl.substring(0, 45)}...`);
+                        } else {
+                            console.log(`[GATEWAY CATCHER] No se encontró foto en API para: ${phone}`);
+                        }
+                    }
+                } catch (err) {
+                    console.error('[GATEWAY CATCHER] Error obteniendo foto manual:', err.message);
+                }
+            }
 
             // --- 2. BUSCAR O CREAR AL CANDIDATO EN LA BASE ---
             let candidateId = await getCandidateIdByPhone(phone);
