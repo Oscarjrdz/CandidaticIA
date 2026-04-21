@@ -416,6 +416,15 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, message: 'Bulk aborted' });
     }
 
+    // ─── CLEAR ───────────────────────────────────────────────────────────────
+    if (req.method === 'POST' && action === 'clear') {
+        const redis = getRedisClient();
+        if (redis) {
+            await redis.del(REDIS_KEY_STATE);
+        }
+        return res.status(200).json({ success: true, message: 'Bulk state cleared' });
+    }
+
     // ─── STATUS (+ TICK ENGINE) ──────────────────────────────────────────────
     if (req.method === 'GET' && action === 'status') {
         let state = await getState();

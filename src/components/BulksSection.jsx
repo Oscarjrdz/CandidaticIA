@@ -367,7 +367,18 @@ const BulksSection = ({ showToast }) => {
         } catch(e) {}
     };
 
+    const clearBulk = async () => {
+        try {
+            await fetch('/api/bulks?action=clear', { method: 'POST' });
+            setEngineState(null);
+            setSelectedCandIds(new Set());
+            setCustomCampaignName('');
+            setTemplateParams({});
+        } catch(e) {}
+    };
+
     const isRunning = engineState?.isRunning;
+    const isCompleted = engineState && !engineState.isRunning && (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) || engineState.isAborted);
 
     return (
         <div className="flex flex-col lg:flex-row h-full w-full bg-[#f0f2f5] dark:bg-[#111b21] font-sans">
@@ -670,7 +681,7 @@ const BulksSection = ({ showToast }) => {
                 {/* Primary Action Buttons */}
                 <div className="p-4 bg-white dark:bg-[#111b21] border-t border-[#d1d7db] dark:border-[#222e35] shadow-2xl relative z-20">
                     {/* Custom Campaign Name Input */}
-                    {!isRunning && (
+                    {!isRunning && !isCompleted && (
                         <div className="mb-4">
                             <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 ml-1">Nombre de la Campaña (Opcional)</label>
                             <input
@@ -690,6 +701,14 @@ const BulksSection = ({ showToast }) => {
                         >
                             <XCircle size={24} />
                             ABORTAR ENVÍOS
+                        </button>
+                    ) : isCompleted ? (
+                        <button 
+                            onClick={clearBulk}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white font-black tracking-wide py-4 px-4 rounded-xl shadow-[0_10px_20px_rgba(22,163,74,0.2)] transition-all transform hover:-translate-y-1 active:scale-[0.98] flex items-center justify-center gap-2 text-xl"
+                        >
+                            <span className="text-2xl">✨</span>
+                            CREAR NUEVA CAMPAÑA
                         </button>
                     ) : (
                         <button 
