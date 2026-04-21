@@ -83,6 +83,8 @@ const BulksSection = ({ showToast }) => {
 
     // History Modal State
     const [showHistory, setShowHistory] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [customCampaignName, setCustomCampaignName] = useState('');
     const [historyList, setHistoryList] = useState([]);
 
     const POPULAR_EMOJIS = ["😀","😂","🤣","😉","😊","😍","😘","🥰","🤔","🤫","👍","👎","👏","🙌","🔥","✨","💯","🎉"];
@@ -327,6 +329,7 @@ const BulksSection = ({ showToast }) => {
             return;
         }
 
+        setIsSubmitting(true);
         try {
             const res = await fetch('/api/bulks?action=start', {
                 method: 'POST',
@@ -337,18 +340,21 @@ const BulksSection = ({ showToast }) => {
                     messages: validMsgs,
                     templateData: tplData,
                     templateParams: Object.keys(templateParams).length > 0 ? templateParams : null,
-                    campaignName: null
+                    campaignName: customCampaignName.trim() || null
                 })
             });
             const data = await res.json();
             if (data.success) {
                 showToast && showToast("Campaña iniciada", "success");
+                setCustomCampaignName('');
                 fetchEngineStatus();
             } else {
                 showToast && showToast(data.error || "Error al iniciar", "error");
             }
         } catch (e) {
             showToast && showToast("Error de red", "error");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -598,7 +604,11 @@ const BulksSection = ({ showToast }) => {
                                                             </div>
                                                         );
                                                     })}
-                                                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">Deja vacío para usar el nombre del candidato automáticamente.</p>
+                                                    })}
+                                                    <div className="flex justify-between items-center mt-1">
+                                                        <p className="text-[10px] text-gray-400 dark:text-gray-500">Deja vacío para usar el nombre del candidato.</p>
+                                                        <p className="text-[10px] text-green-500 font-bold flex items-center gap-1"><span className="text-[14px]">✓</span> Se guarda al escribir</p>
+                                                    </div>
                                                 </div>
                                             );
                                         }
@@ -629,15 +639,15 @@ const BulksSection = ({ showToast }) => {
                         </div>
                     )}
 
-                    {/* Progress Engine Summary */}
+                                {/* Progress Engine Summary */}
                     {engineState && (
-                        <div className="mt-4 border border-indigo-100 dark:border-indigo-900/50 rounded-xl overflow-hidden bg-white dark:bg-[#111b21] shadow-sm">
-                            <div className={`p-3 text-white font-bold flex items-center justify-between ${engineState.isRunning ? 'bg-indigo-600' : 'bg-gray-600'}`}>
+                        <div className={`mt-4 border ${engineState.isRunning ? 'border-indigo-100 dark:border-indigo-900/50' : 'border-green-100 dark:border-green-900/50'} rounded-xl overflow-hidden bg-white dark:bg-[#111b21] shadow-sm transition-colors`}>
+                            <div className={`p-3 text-white font-bold flex items-center justify-between ${engineState.isRunning ? 'bg-indigo-600' : (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) ? 'bg-green-600' : 'bg-gray-600')}`}>
                                 <div className="flex items-center gap-2">
-                                    {engineState.isRunning ? <span className="animate-spin">⚙️</span> : '⏹️'}
-                                    <span>Estado del Envío Rápido</span>
+                                    {engineState.isRunning ? <span className="animate-spin">⚙️</span> : (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) ? '✅' : '⏹️')}
+                                    <span>{engineState.isRunning ? 'Progreso de Envío' : (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) ? 'Campaña Completada' : 'Envío Detenido')}</span>
                                 </div>
-                                <span className="text-xs bg-black/20 px-2 py-0.5 rounded-full">{engineState.isRunning ? 'Enviando...' : 'Detenido'}</span>
+                                <span className="text-xs bg-black/20 px-2 py-0.5 rounded-full">{engineState.isRunning ? 'Enviando...' : (engineState.currentCandidateIndex >= (engineState.candidates?.length || 1) ? '100%' : 'Detenido')}</span>
                             </div>
                             <div className="p-4">
                                 <div className="mb-4">
@@ -659,6 +669,20 @@ const BulksSection = ({ showToast }) => {
 
                 {/* Primary Action Buttons */}
                 <div className="p-4 bg-white dark:bg-[#111b21] border-t border-[#d1d7db] dark:border-[#222e35] shadow-2xl relative z-20">
+                    {/* Custom Campaign Name Input */}
+                    {!isRunning && (
+                        <div className="mb-4">
+                            <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5 ml-1">Nombre de la Campaña (Opcional)</label>
+                            <input
+                                type="text"
+                                value={customCampaignName}
+                                onChange={(e) => setCustomCampaignName(e.target.value)}
+                                placeholder="Ej: Invitación Monterrey"
+                                className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 focus:border-blue-500 rounded-lg p-3 text-sm text-[#111b21] dark:text-[#e9edef] outline-none transition-colors"
+                            />
+                        </div>
+                    )}
+
                     {isRunning ? (
                         <button 
                             onClick={abortBulk}
@@ -670,11 +694,11 @@ const BulksSection = ({ showToast }) => {
                     ) : (
                         <button 
                             onClick={startBulk}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black tracking-wide py-4 px-4 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.2)] transition-all transform hover:-translate-y-1 active:scale-[0.98] flex items-center justify-center gap-3 text-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={selectedCandIds.size === 0}
+                            className={`w-full ${isSubmitting ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'} text-white font-black tracking-wide py-4 px-4 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.2)] transition-all transform ${isSubmitting ? '' : 'hover:-translate-y-1 active:scale-[0.98]'} flex items-center justify-center gap-3 text-xl disabled:opacity-50 disabled:cursor-not-allowed`}
+                            disabled={selectedCandIds.size === 0 || isSubmitting}
                         >
-                            <Send size={24} />
-                            INICIAR CAMPAÑA INSTANTÁNEA
+                            {isSubmitting ? <span className="animate-spin text-2xl">⏳</span> : <Send size={24} />}
+                            {isSubmitting ? 'PREPARANDO ENVÍOS...' : 'INICIAR CAMPAÑA INSTANTÁNEA'}
                         </button>
                     )}
                 </div>
