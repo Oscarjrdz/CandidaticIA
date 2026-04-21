@@ -1187,24 +1187,43 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             if (!uploadRes.ok) throw new Error(uploadData.error || 'Error subiendo archivo');
 
             const mediaUrl = uploadData.url || uploadData.mediaUrl;
-            console.log(`📤 [FileUpload] Step 3: Sending via /api/chat with type=${msgType}, mediaUrl=${mediaUrl}`);
 
-            // Send via Chat API
-            const res = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    candidateId: selectedChat.id,
-                    message: '',
-                    type: msgType,
-                    mediaUrl
-                })
-            });
+            // Send via Chat API with automatic retry for cold-start 500s
+            let chatData = null;
+            let lastErr = null;
+            const maxRetries = 3;
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                console.log(`📤 [FileUpload] Step 3 (attempt ${attempt}/${maxRetries}): Sending via /api/chat with type=${msgType}, mediaUrl=${mediaUrl}`);
+                try {
+                    const res = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            candidateId: selectedChat.id,
+                            message: '',
+                            type: msgType,
+                            mediaUrl
+                        })
+                    });
+                    chatData = await res.json();
+                    console.log(`📤 [FileUpload] Step 4: Chat API response:`, { ok: res.ok, status: res.status, data: chatData });
 
-            const chatData = await res.json();
-            console.log(`📤 [FileUpload] Step 4: Chat API response:`, { ok: res.ok, status: res.status, data: chatData });
+                    if (res.ok) {
+                        lastErr = null;
+                        break; // Success
+                    }
+                    lastErr = chatData?.error || `HTTP ${res.status}`;
+                } catch (fetchErr) {
+                    lastErr = fetchErr.message;
+                }
+                // Wait before retry (1.5s)
+                if (attempt < maxRetries) {
+                    console.log(`📤 [FileUpload] Retrying in 1.5s...`);
+                    await new Promise(r => setTimeout(r, 1500));
+                }
+            }
 
-            if (!res.ok) throw new Error(chatData?.error || 'Error al enviar media');
+            if (lastErr) throw new Error(lastErr);
             
             // Reload chats for updated list status
             loadMessages();
@@ -1213,8 +1232,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         } catch (err) {
             console.error('❌ [FileUpload] FAILED at:', err.message, err);
             showToast && showToast('Error al mandar archivo: ' + err.message, 'error');
-            // Remove temp msg
-            setMessages(prev => prev.filter(m => m.id !== tempId));
+            // Mark as failed instead of removing — so the user sees it didn't go through
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed', error: err.message } : m));
         } finally {
             setSending(false);
         }
