@@ -9,21 +9,13 @@ const BulksSection = ({ showToast }) => {
     const [loadingChats, setLoadingChats] = useState(true);
     const [selectedCandIds, setSelectedCandIds] = useState(new Set());
     const [activeFilter, setActiveFilter] = useState('all'); // 'all', 'complete', 'incomplete'
-    const [mobileTab, setMobileTab] = useState('candidates'); // 'candidates', 'messages', 'settings'
+    const [mobileTab, setMobileTab] = useState('candidates'); // 'candidates', 'messages'
 
     // Col 2: Messages & Templates
     const [bulkType, setBulkType] = useState('template'); // 'text' | 'template'
     const [metaTemplates, setMetaTemplates] = useState([]);
     const [selectedTemplateId, setSelectedTemplateId] = useState('');
-    const [messages, setMessages] = useState([{ id: Date.now(), text: '' }]);
-    const [cloningId, setCloningId] = useState(null);
-    const messagesEndRef = useRef(null);
-
-    // Col 3: Settings & Status
-    const [minDelay, setMinDelay] = useState(3);
-    const [maxDelay, setMaxDelay] = useState(7);
-    const [pauseEvery, setPauseEvery] = useState(10);
-    const [pauseFor, setPauseFor] = useState(10);
+    const [messageText, setMessageText] = useState('');
     
     // Engine State
     const [engineState, setEngineState] = useState(null);
@@ -66,11 +58,7 @@ const BulksSection = ({ showToast }) => {
             .then(data => {
                 if (data.success && data.draft) {
                     const parsed = data.draft;
-                    if (parsed.messages) setMessages(parsed.messages);
-                    if (parsed.minDelay != null) setMinDelay(Number(parsed.minDelay) || 3);
-                    if (parsed.maxDelay != null) setMaxDelay(Number(parsed.maxDelay) || 7);
-                    if (parsed.pauseEvery != null) setPauseEvery(Number(parsed.pauseEvery) || 10);
-                    if (parsed.pauseFor != null) setPauseFor(Number(parsed.pauseFor) || 10);
+                    if (parsed.messageText) setMessageText(parsed.messageText);
                     if (parsed.selectedCandIds) setSelectedCandIds(new Set(parsed.selectedCandIds));
                 }
             })
@@ -91,11 +79,7 @@ const BulksSection = ({ showToast }) => {
     // Save draft state on change
     useEffect(() => {
         const draft = {
-            messages,
-            minDelay,
-            maxDelay,
-            pauseEvery,
-            pauseFor,
+            messageText,
             selectedCandIds: Array.from(selectedCandIds)
         };
         const timer = setTimeout(() => {
@@ -107,7 +91,7 @@ const BulksSection = ({ showToast }) => {
         }, 1200);
         
         return () => clearTimeout(timer);
-    }, [messages, minDelay, maxDelay, pauseEvery, pauseFor, selectedCandIds]);
+    }, [messageText, selectedCandIds]);
 
     const loadCandidates = async () => {
         try {
@@ -123,7 +107,7 @@ const BulksSection = ({ showToast }) => {
     };
 
     const fetchEngineStatus = async () => {
-        if (isFetchingRef.current) return; // Guard contra polls concurrentes
+        if (isFetchingRef.current) return;
         isFetchingRef.current = true;
         try {
             const res = await fetch('/api/bulks?action=status');
@@ -132,7 +116,6 @@ const BulksSection = ({ showToast }) => {
                 setEngineState(data.state);
             }
         } catch (e) {
-            // Network error — silencioso
         } finally {
             isFetchingRef.current = false;
         }
@@ -152,22 +135,9 @@ const BulksSection = ({ showToast }) => {
     };
 
     const reuseCampaign = (camp) => {
-        // El historial guarda messages como strings planos ["Hola", "Buenos días"]
-        // El frontend necesita objetos {id, text} — convertir si es necesario
         const rawMsgs = camp.messages || [];
-        const normalizedMsgs = rawMsgs.length > 0
-            ? rawMsgs.map((m, i) => {
-                if (typeof m === 'string') return { id: Date.now() + i, text: m };
-                if (m && typeof m === 'object' && m.text !== undefined) return { ...m, id: m.id || Date.now() + i };
-                return { id: Date.now() + i, text: String(m || '') };
-            })
-            : [{ id: Date.now(), text: '' }];
-
-        setMessages(normalizedMsgs);
-        setMinDelay(Number(camp.minDelay) || 3);
-        setMaxDelay(Number(camp.maxDelay) || 7);
-        setPauseEvery(Number(camp.pauseEvery) || 10);
-        setPauseFor(Number(camp.pauseFor) || 10);
+        setMessageText(rawMsgs[0] && typeof rawMsgs[0] === 'string' ? rawMsgs[0] : (rawMsgs[0]?.text || ''));
+        
         setBulkType(camp.bulkType || 'text');
         if (camp.bulkType === 'template' && camp.templateData) {
             setSelectedTemplateId(camp.templateData.id);
@@ -244,54 +214,8 @@ const BulksSection = ({ showToast }) => {
         }
     };
 
-    // Messages Logic
-    const addEmptyMessage = () => {
-        setMessages(prev => [...prev, { id: Date.now(), text: '' }]);
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    };
-
-    const updateMessage = (id, text) => {
-        setMessages(prev => prev.map(m => m.id === id ? { ...m, text } : m));
-    };
-
-    const deleteMessage = (id) => {
-        if (messages.length <= 1) return;
-        setMessages(prev => prev.filter(m => m.id !== id));
-    };
-
-    const duplicateMessage = (msg) => {
-        setMessages(prev => [...prev, { id: Date.now(), text: msg.text }]);
-        setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    };
-
-    const cloneWithAI = async (msg) => {
-        if (!msg.text.trim()) {
-            showToast && showToast("Escribe algo antes de usar la IA", "error");
-            return;
-        }
-        setCloningId(msg.id);
-        try {
-            const res = await fetch('/api/bulks?action=clone_ai', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: msg.text })
-            });
-            const data = await res.json();
-            if (data.success) {
-                setMessages(prev => [...prev, { id: Date.now(), text: data.result }]);
-                setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-            } else {
-                showToast && showToast(data.error || "Error clonando con IA", "error");
-            }
-        } catch (e) {
-            showToast && showToast("Error de red", "error");
-        } finally {
-            setCloningId(null);
-        }
-    };
-
-    const insertEmoji = (id, emoji) => {
-        setMessages(prev => prev.map(m => m.id === id ? { ...m, text: m.text + emoji } : m));
+    const insertEmoji = (emoji) => {
+        setMessageText(prev => prev + emoji);
     };
 
     // Engine Actions
@@ -302,17 +226,17 @@ const BulksSection = ({ showToast }) => {
         let tplData = null;
 
         if (bulkType === 'text') {
-            validMsgs = messages.filter(m => m.text.trim()).map(m => m.text.trim());
-            if (validMsgs.length === 0) return showToast && showToast("Crea al menos un mensaje válido", "error");
+            if (!messageText.trim()) return showToast && showToast("Crea un mensaje válido", "error");
+            validMsgs = [messageText.trim()];
         } else {
             if (!selectedTemplateId) return showToast && showToast("Selecciona una plantilla válida", "error");
             tplData = metaTemplates.find(t => t.id === selectedTemplateId);
             if (!tplData) return showToast && showToast("Plantilla no encontrada", "error");
         }
 
-        const qtyMsgStr = bulkType === 'text' ? `alternando entre ${validMsgs.length} variaciones de mensaje` : `usando la plantilla '${tplData.name}'`;
+        const qtyMsgStr = bulkType === 'text' ? `enviando texto libre` : `usando la plantilla '${tplData.name}'`;
         
-        if (!window.confirm(`¿Estás seguro de contactar a ${selectedCandIds.size} candidatos ${qtyMsgStr}?`)) {
+        if (!window.confirm(`¿Estás seguro de contactar a ${selectedCandIds.size} candidatos ${qtyMsgStr}? (Los envíos serán inmediatos y sin demoras).`)) {
             return;
         }
 
@@ -327,7 +251,7 @@ const BulksSection = ({ showToast }) => {
                     bulkType,
                     messages: validMsgs,
                     templateData: tplData,
-                    minDelay, maxDelay, pauseEvery, pauseFor, campaignName
+                    campaignName
                 })
             });
             const data = await res.json();
@@ -358,7 +282,7 @@ const BulksSection = ({ showToast }) => {
             
             {/* Mobile Tab Bar */}
             <div className="lg:hidden flex border-b border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] shrink-0">
-                {[{id:'candidates',label:'Destinatarios',emoji:'👥'},{id:'messages',label:'Mensajes',emoji:'💬'},{id:'settings',label:'Config',emoji:'⚙️'}].map(tab => (
+                {[{id:'candidates',label:'Destinatarios',emoji:'👥'},{id:'messages',label:'Mensaje y Enviar',emoji:'💬'}].map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setMobileTab(tab.id)}
@@ -377,7 +301,7 @@ const BulksSection = ({ showToast }) => {
             </div>
 
             {/* COLUMN 1: CANDIDATES */}
-            <div className={`${mobileTab === 'candidates' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[33%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] min-h-0`}>
+            <div className={`${mobileTab === 'candidates' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[40%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-white dark:bg-[#111b21] min-h-0`}>
                 <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35]">
                     <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db] mb-2">Destinatarios</h2>
                     
@@ -464,26 +388,36 @@ const BulksSection = ({ showToast }) => {
                 </div>
             </div>
 
-            {/* COLUMN 2: PLANTILLA */}
-            <div className={`${mobileTab === 'messages' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[33%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a] min-h-0`}>
-                <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Plantilla a Enviar</h2>
+            {/* COLUMN 2: PLANTILLA & ACTIONS */}
+            <div className={`${mobileTab === 'messages' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[60%] flex-col border-r border-[#d1d7db] dark:border-[#222e35] bg-[#efeae2] dark:bg-[#0b141a] min-h-0 relative`}>
+                <div className="p-3 bg-white dark:bg-[#111b21] border-b border-[#f0f2f5] dark:border-[#222e35] shadow-sm relative z-10 flex justify-between items-center">
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Mensaje a enviar</h2>
                         <button 
-                            onClick={() => setBulkType(bulkType === 'text' ? 'template' : 'text')}
-                            className="text-[10px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 underline cursor-pointer"
-                            disabled={isRunning}
+                            onClick={openHistory} 
+                            className="text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded shadow-sm flex items-center gap-1 font-bold transition-colors"
                         >
-                            {bulkType === 'template' ? 'Usar texto libre' : 'Volver a plantillas'}
+                            📜 Historial
                         </button>
                     </div>
+                    <button 
+                        onClick={() => setBulkType(bulkType === 'text' ? 'template' : 'text')}
+                        className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer"
+                        disabled={isRunning}
+                    >
+                        {bulkType === 'template' ? 'Usar texto libre' : 'Volver a plantillas (Recomendado)'}
+                    </button>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
                     {bulkType === 'template' ? (
                         <div className="bg-white dark:bg-[#111b21] rounded-xl shadow-sm p-4 relative border border-green-200 dark:border-green-900 flex flex-col gap-4">
-                            <div className="text-xs text-green-600 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg text-center">
-                                ✅ Las plantillas evaden la regla de 24 horas. Envío seguro y masivo.
+                            <div className="text-sm text-green-700 dark:text-green-400 font-bold bg-green-50 dark:bg-green-900/20 px-3 py-3 rounded-lg flex gap-2 items-center">
+                                <span className="text-xl">✅</span>
+                                <div>
+                                    <span className="block">Las plantillas evaden la regla de 24 horas.</span>
+                                    <span className="text-xs font-normal opacity-80 mt-0.5 block">Solo puedes enviar texto libre hacia personas que te escribieron en el último día. Para todo lo demás, usa Plantillas.</span>
+                                </div>
                             </div>
                             <div>
                                 <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1.5">Selecciona tu plantilla</label>
@@ -491,7 +425,7 @@ const BulksSection = ({ showToast }) => {
                                     value={selectedTemplateId} 
                                     onChange={(e) => setSelectedTemplateId(e.target.value)}
                                     disabled={isRunning}
-                                    className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border-none rounded-lg p-2.5 text-sm text-[#111b21] dark:text-[#e9edef] outline-none font-medium"
+                                    className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border-none rounded-lg p-3 text-[15px] text-[#111b21] dark:text-[#e9edef] outline-none font-bold shadow-sm"
                                 >
                                     <option value="">-- Elige una plantilla --</option>
                                     {metaTemplates.map(t => (
@@ -501,9 +435,9 @@ const BulksSection = ({ showToast }) => {
                             </div>
 
                             {selectedTemplateId && (
-                                <div className="bg-[#f0f2f5] dark:bg-[#202c33] p-3 rounded-lg border border-[#d1d7db] dark:border-[#222e35]">
+                                <div className="bg-[#f0f2f5] dark:bg-[#202c33] p-4 rounded-xl border border-[#d1d7db] dark:border-[#222e35]">
                                     <p className="text-[11px] font-bold text-gray-500 uppercase mb-2">Vista Previa</p>
-                                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap bg-white dark:bg-[#111b21] p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                                    <div className="text-base text-gray-800 dark:text-gray-200 whitespace-pre-wrap bg-white dark:bg-[#111b21] p-4 rounded-lg shadow-sm">
                                         {(() => {
                                             const tData = metaTemplates.find(t => t.id === selectedTemplateId);
                                             const bodyComponent = tData?.components?.find(c => c.type === 'BODY') || tData?.components?.find(c => c.type === 'body');
@@ -516,8 +450,9 @@ const BulksSection = ({ showToast }) => {
                                         const hasVars = bodyComponent?.text?.match(/\{\{\d+\}\}/g);
                                         if (hasVars) {
                                             return (
-                                                <div className="mt-3 text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 px-2.5 py-2 rounded border border-blue-100 dark:border-blue-900/40 font-medium">
-                                                    💡 Se detectaron {hasVars.length} variable(s). El motor inyectará el nombre del candidato automáticamente.
+                                                <div className="mt-3 text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-3 py-2.5 rounded border border-blue-200 dark:border-blue-800 font-bold flex gap-2 items-center">
+                                                    <span>💡</span>
+                                                    Se detectaron {hasVars.length} variable(s). El sistema inyectará el nombre del candidato automáticamente.
                                                 </div>
                                             );
                                         }
@@ -528,155 +463,60 @@ const BulksSection = ({ showToast }) => {
                         </div>
                     ) : (
                         // TEXT MODE
-                        messages.map((msg, index) => (
-                            <div key={msg.id} className="bg-white dark:bg-[#111b21] rounded-lg shadow-sm p-3 relative border border-transparent focus-within:border-blue-400 dark:focus-within:border-blue-500 transition-colors">
-                                <div className="flex justify-between items-center mb-2">
-                                    <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Mensaje {index + 1}</span>
-                                    <div className="flex gap-1" style={{opacity: isRunning ? 0.3 : 1, pointerEvents: isRunning ? 'none' : 'auto'}}>
-                                        <button onClick={() => cloneWithAI(msg)} disabled={cloningId === msg.id} className="text-purple-500 hover:bg-purple-100 p-1.5 rounded-md dark:hover:bg-purple-900/30 transition-colors" title="Clonar con IA">
-                                            {cloningId === msg.id ? <span className="animate-spin text-sm">⏳</span> : <Sparkles size={16} />}
-                                        </button>
-                                        <button onClick={() => duplicateMessage(msg)} className="text-blue-500 hover:bg-blue-100 p-1.5 rounded-md dark:hover:bg-blue-900/30 transition-colors" title="Duplicar">
-                                            <Copy size={16} />
-                                        </button>
-                                        <button onClick={() => deleteMessage(msg.id)} className="text-red-500 hover:bg-red-100 p-1.5 rounded-md dark:hover:bg-red-900/30 transition-colors" title="Eliminar">
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <textarea
-                                    value={msg.text}
-                                    onChange={(e) => updateMessage(msg.id, e.target.value)}
-                                    disabled={isRunning}
-                                    placeholder="Escribe tu mensaje aquí..."
-                                    className="w-full bg-transparent border-none outline-none resize-none min-h-[100px] text-sm text-[#111b21] dark:text-[#d1d7db]"
-                                />
+                        <div className="bg-white dark:bg-[#111b21] rounded-xl shadow-sm p-4 relative border border-transparent focus-within:border-blue-400 dark:focus-within:border-blue-500 transition-colors h-[40vh] flex flex-col">
+                            <div className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-3">Redactor de Texto Libre</div>
+                            <textarea
+                                value={messageText}
+                                onChange={(e) => setMessageText(e.target.value)}
+                                disabled={isRunning}
+                                placeholder="Escribe tu mensaje libre aquí. (Recuerda que solo llegará a personas que te enviaron mensaje en las últimas 24 horas)."
+                                className="w-full bg-[#f0f2f5] dark:bg-[#202c33] rounded-lg p-3 flex-1 border-none outline-none resize-none text-[15px] text-[#111b21] dark:text-[#e9edef]"
+                            />
 
-                                <div className="mt-2 flex flex-wrap gap-1 border-t border-gray-100 dark:border-gray-800 pt-2" style={{opacity: isRunning ? 0.3 : 1, pointerEvents: isRunning ? 'none' : 'auto'}}>
-                                    {POPULAR_EMOJIS.map(em => (
-                                        <button key={em} onClick={() => insertEmoji(msg.id, em)} className="hover:bg-gray-100 dark:hover:bg-gray-800 p-1 rounded transition-colors text-lg">
-                                            {em}
-                                        </button>
-                                    ))}
-                                </div>
+                            <div className="mt-4 flex flex-wrap gap-2 pt-2" style={{opacity: isRunning ? 0.3 : 1, pointerEvents: isRunning ? 'none' : 'auto'}}>
+                                {POPULAR_EMOJIS.map(em => (
+                                    <button key={em} onClick={() => insertEmoji(em)} className="hover:bg-gray-100 dark:hover:bg-gray-800 p-2 rounded-lg transition-colors text-xl bg-gray-50 dark:bg-[#1a2329] border border-gray-100 dark:border-gray-800">
+                                        {em}
+                                    </button>
+                                ))}
                             </div>
-                        ))
+                        </div>
                     )}
-                    <div ref={messagesEndRef} />
-                </div>
-                {!isRunning && bulkType === 'text' && (
-                    <div className="p-4 bg-[#efeae2] dark:bg-[#0b141a]">
-                        <button onClick={addEmptyMessage} className="w-full flex items-center justify-center gap-2 bg-white dark:bg-[#202c33] text-[#54656f] dark:text-[#aebac1] hover:text-[#111b21] dark:hover:text-white font-medium p-3 rounded-lg shadow-sm border border-[#d1d7db] dark:border-[#222e35] transition-all hover:shadow-md">
-                            <Plus size={20} />
-                            Agregar Mensaje
-                        </button>
-                    </div>
-                )}
-            </div>
 
-            {/* COLUMN 3: SETTINGS & STATUS */}
-            <div className={`${mobileTab === 'settings' ? 'flex' : 'hidden'} lg:flex w-full lg:w-[34%] flex-col bg-white dark:bg-[#111b21] min-h-0`}>
-                <div className="p-3 border-b border-[#f0f2f5] dark:border-[#222e35] flex justify-between items-center bg-[#f0f2f5] dark:bg-[#202c33]">
-                    <h2 className="text-lg font-bold text-[#111b21] dark:text-[#d1d7db]">Ejecución y Reglas</h2>
-                    <button onClick={openHistory} className="text-sm bg-white dark:bg-[#111b21] hover:bg-gray-50 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 py-1.5 px-3 rounded-lg shadow-sm flex items-center gap-1 font-medium transition-colors">
-                        📜 Historial
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4">
-                    {/* Settings Panel */}
-                    <div className={`space-y-6 ${isRunning ? 'opacity-50 pointer-events-none' : ''}`}>
-                        
-                        <div className="bg-[#f0f2f5] dark:bg-[#202c33] p-4 rounded-xl border border-[#d1d7db] dark:border-[#222e35]">
-                            <h3 className="text-sm font-bold text-[#111b21] dark:text-[#e9edef] mb-3 flex items-center gap-2">⏱️ Tiempos entre mensajes</h3>
-                            <p className="text-xs text-[#54656f] dark:text-[#8696a0] mb-4">Para evitar bloqueos de WhatsApp, los tiempos deben variar. Usaremos un número aleatorio entre el mínimo y máximo.</p>
-                            <div className="flex items-center gap-4">
-                                <div className="flex-1">
-                                    <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Mínimo (Segs)</label>
-                                    <input type="number" min="1" value={minDelay} onChange={e=>setMinDelay(parseInt(e.target.value) || 1)} className="w-full bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded p-2 text-sm outline-none focus:border-blue-500" />
+                    {/* Progress Engine Summary */}
+                    {engineState && (
+                        <div className="mt-4 border border-indigo-100 dark:border-indigo-900/50 rounded-xl overflow-hidden bg-white dark:bg-[#111b21] shadow-sm">
+                            <div className={`p-3 text-white font-bold flex items-center justify-between ${engineState.isRunning ? 'bg-indigo-600' : 'bg-gray-600'}`}>
+                                <div className="flex items-center gap-2">
+                                    {engineState.isRunning ? <span className="animate-spin">⚙️</span> : '⏹️'}
+                                    <span>Estado del Envío Rápido</span>
                                 </div>
-                                <span className="text-gray-400 mt-4">—</span>
-                                <div className="flex-1">
-                                    <label className="block text-[11px] font-bold text-gray-500 uppercase mb-1">Máximo (Segs)</label>
-                                    <input type="number" min="2" value={maxDelay} onChange={e=>setMaxDelay(parseInt(e.target.value) || 2)} className="w-full bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded p-2 text-sm outline-none focus:border-blue-500" />
+                                <span className="text-xs bg-black/20 px-2 py-0.5 rounded-full">{engineState.isRunning ? 'Enviando...' : 'Detenido'}</span>
+                            </div>
+                            <div className="p-4">
+                                <div className="mb-4">
+                                    <div className="flex justify-between text-sm font-bold text-gray-700 dark:text-gray-300 uppercase mb-2">
+                                        <span>Progreso</span>
+                                        <span>{Math.min(engineState.currentCandidateIndex, engineState.candidates?.length || 0)} / {engineState.candidates?.length || 0}</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+                                        <div className="bg-indigo-600 h-3 rounded-full transition-all duration-300" style={{width: `${(engineState.currentCandidateIndex / (engineState.candidates?.length || 1)) * 100}%`}}></div>
+                                    </div>
+                                </div>
+                                <div className="text-sm text-gray-600 dark:text-gray-300 font-bold bg-gray-50 dark:bg-[#202c33] p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+                                    Entregados exitosamente: <strong className="text-indigo-600 dark:text-indigo-400 text-lg ml-1">{engineState.totalSent}</strong>
                                 </div>
                             </div>
                         </div>
-
-                        <div className="bg-[#f0f2f5] dark:bg-[#202c33] p-4 rounded-xl border border-[#d1d7db] dark:border-[#222e35]">
-                            <h3 className="text-sm font-bold text-[#111b21] dark:text-[#e9edef] mb-3 flex items-center gap-2">☕ Descansos de Seguridad</h3>
-                            <p className="text-xs text-[#54656f] dark:text-[#8696a0] mb-4">Detener la ráfaga de mensajes cada cierta cantidad protege tu cuenta de Flags anti-spam de Meta.</p>
-                            <div className="flex items-center gap-2 text-sm text-[#111b21] dark:text-[#d1d7db]">
-                                <span>Descansar cada</span>
-                                <input type="number" min="1" value={pauseEvery} onChange={e=>setPauseEvery(parseInt(e.target.value) || 1)} className="w-16 bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded py-1 px-2 text-center outline-none focus:border-blue-500" />
-                                <span>sms por</span>
-                                <input type="number" min="1" value={pauseFor} onChange={e=>setPauseFor(parseInt(e.target.value) || 1)} className="w-16 bg-white dark:bg-[#111b21] border border-gray-300 dark:border-gray-700 rounded py-1 px-2 text-center outline-none focus:border-blue-500" />
-                                <span>Mins.</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Status Panel (Visible mostly when running or ended) */}
-                    <div className="mt-8">
-                        {engineState ? (
-                            <div className="border border-indigo-100 dark:border-indigo-900 rounded-xl overflow-hidden bg-white dark:bg-[#111b21] shadow-sm">
-                                <div className={`p-3 text-white font-bold flex items-center justify-between ${engineState.isRunning ? 'bg-indigo-600' : 'bg-gray-600'}`}>
-                                    <div className="flex items-center gap-2">
-                                        {engineState.isRunning ? <span className="animate-spin">⚙️</span> : '⏹️'}
-                                        <span>Estado del Motor</span>
-                                    </div>
-                                    <span className="text-xs bg-black/20 px-2 py-0.5 rounded-full">{engineState.isRunning ? 'Corriendo' : 'Detenido'}</span>
-                                </div>
-                                <div className="p-4">
-                                    <div className="mb-4">
-                                        <div className="flex justify-between text-xs font-bold text-gray-500 uppercase mb-1">
-                                            <span>Progreso de Contactos</span>
-                                            <span>{Math.min(engineState.currentCandidateIndex, engineState.candidates.length)} / {engineState.candidates.length}</span>
-                                        </div>
-                                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                                            <div className="bg-indigo-600 h-2 rounded-full transition-all duration-500" style={{width: `${(engineState.currentCandidateIndex / (engineState.candidates.length || 1)) * 100}%`}}></div>
-                                        </div>
-                                    </div>
-                                    {/* Countdown / Next send indicator */}
-                                    {engineState.isRunning && engineState.nextSendAt && (
-                                        <div className="mb-3 text-[12px] text-amber-600 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800">
-                                            {(() => {
-                                                const remaining = Math.max(0, Math.ceil((engineState.nextSendAt - Date.now()) / 1000));
-                                                if (remaining > 60) {
-                                                    const mins = Math.floor(remaining / 60);
-                                                    const secs = remaining % 60;
-                                                    return `☕ Descanso — próximo envío en ${mins}m ${secs}s`;
-                                                }
-                                                return `⏳ Próximo envío en ${remaining}s...`;
-                                            })()}
-                                        </div>
-                                    )}
-                                    <div className="text-[13px] text-gray-600 dark:text-gray-300 mb-2 font-medium">
-                                        Mensajes enviados exitosamente: <strong className="text-indigo-600 dark:text-indigo-400">{engineState.totalSent}</strong>
-                                        <span className="text-gray-400 ml-2">/ {engineState.candidates?.length || 0} contactos</span>
-                                    </div>
-                                    <div className="bg-gray-900 rounded-lg p-3 h-[150px] overflow-y-auto text-[11px] font-mono text-green-400 mt-2">
-                                        {engineState.logs?.length === 0 ? "Esperando acciones..." : engineState.logs.map((log, i) => (
-                                            <div key={i} className="mb-1">{log}</div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="text-center p-6 border border-dashed border-gray-300 dark:border-gray-700 rounded-xl">
-                                <p className="text-sm text-gray-500">El motor está en espera.</p>
-                            </div>
-                        )}
-                    </div>
+                    )}
                 </div>
 
                 {/* Primary Action Buttons */}
-                <div className="p-4 border-t border-[#f0f2f5] dark:border-[#222e35] bg-[#f0f2f5] dark:bg-[#202c33]">
+                <div className="p-4 bg-white dark:bg-[#111b21] border-t border-[#d1d7db] dark:border-[#222e35] shadow-2xl relative z-20">
                     {isRunning ? (
                         <button 
                             onClick={abortBulk}
-                            className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition-transform transform active:scale-95 flex items-center justify-center gap-2 text-lg"
+                            className="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-4 px-4 rounded-xl shadow-lg transition-transform transform active:scale-[0.98] flex items-center justify-center gap-2 text-xl"
                         >
                             <XCircle size={24} />
                             ABORTAR ENVÍOS
@@ -684,10 +524,11 @@ const BulksSection = ({ showToast }) => {
                     ) : (
                         <button 
                             onClick={startBulk}
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition-transform transform active:scale-95 flex items-center justify-center gap-2 text-lg"
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black tracking-wide py-4 px-4 rounded-xl shadow-[0_10px_20px_rgba(37,99,235,0.2)] transition-all transform hover:-translate-y-1 active:scale-[0.98] flex items-center justify-center gap-3 text-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={selectedCandIds.size === 0}
                         >
                             <Send size={24} />
-                            INICIAR CAMPAÑA
+                            INICIAR CAMPAÑA INSTANTÁNEA
                         </button>
                     )}
                 </div>

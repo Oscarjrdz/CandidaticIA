@@ -76,15 +76,7 @@ const addLog = (state, msg) => {
     if (state.logs.length > 80) state.logs.length = 80; // cap
 };
 
-const computeNextDelay = (state) => {
-    const minMs = (Number(state.minDelay) || 3) * 1000;
-    const maxMs = (Number(state.maxDelay) || 7) * 1000;
-    return Math.floor(Math.random() * (maxMs - minMs + 1) + minMs);
-};
-
-const computePauseDelay = (state) => {
-    return (Number(state.pauseFor) || 10) * 60 * 1000; // minutos → ms
-};
+// Delays eliminados por blast logic
 
 // ─── Core Tick Engine ────────────────────────────────────────────────────────
 
@@ -108,26 +100,25 @@ const tickEngine = async (state) => {
         return state;
     }
 
-    // Gate 4: aún no toca (delay / pausa)
-    if (state.nextSendAt && Date.now() < state.nextSendAt) {
-        return state; // Aún no es hora, no guardar (no cambió nada)
-    }
-
-    // Gate 5: lock — otro tick ya está procesando
+    // Gate 4: lock — otro tick ya está procesando
     if (processingLock) return state;
     processingLock = true;
 
     try {
-        // ─── ENVIAR MENSAJE ──────────────────────────────────────────────────
-        const candidateId = state.candidates[state.currentCandidateIndex];
+        let sentInTick = 0;
+        const BATCH_SIZE = 25;
 
-        // Selección aleatoria de variante
-        const randomIdx = Math.floor(Math.random() * state.messages.length);
-        const messageTemplate = state.messages[randomIdx];
+        while (sentInTick < BATCH_SIZE && state.currentCandidateIndex < state.candidates.length && state.isRunning && !state.isAborted) {
+            // ─── ENVIAR MENSAJE ──────────────────────────────────────────────────
+            const candidateId = state.candidates[state.currentCandidateIndex];
 
-        addLog(state, `⏳ Procesando ${state.currentCandidateIndex + 1}/${state.candidates.length} — Variante #${randomIdx + 1}`);
+            // Selección aleatoria de variante (o única si solo hay 1)
+            const randomIdx = Math.floor(Math.random() * (state.messages?.length || 1));
+            const messageTemplate = state.messages?.[randomIdx] || '';
 
-        let sendSuccess = false;
+            addLog(state, `🚀 Enviando ${state.currentCandidateIndex + 1}/${state.candidates.length}...`);
+
+            let sendSuccess = false;
 
         try {
             const candidate = await getCandidateById(candidateId);
@@ -244,66 +235,164 @@ const tickEngine = async (state) => {
                             status: 'queued',
                             timestamp
                         };
-                        await saveMessage(candidateId, msgToSave);
-
-                        // 2. Enviar via WhatsApp (Cloud API maneja 'template' nativamente)
-                        const sendResult = await sendUltraMsgMessage(
-                            ultraConfig.instanceId,
-                            ultraConfig.token,
-                            cleanTo,
-                            msgToSaveStr,
-                            sendType,
-                            extraParams
-                        );
-
-                        if (sendResult && sendResult.success) {
-                            await updateCandidate(candidateId, {
-                                ultimoMensajeBot: timestamp,
-                                lastBotMessageAt: timestamp,
-                                ultimoMensaje: timestamp
-                            });
-                            const remoteId = sendResult.data?.id || sendResult.data?.messageId;
-                            await updateMessageStatus(candidateId, msgToSave.id, 'sent', {
-                                status: 'sent',
-                                ultraMsgId: remoteId
-                            });
-                            addLog(state, `🟢 Enviado a ${candidate.nombreReal || candidate.whatsapp}`);
-                            sendSuccess = true;
+                        const cleanTo = (candidate.whatsapp || '').replace(/\D/g, '');
+                        if (!cleanTo) {
+                            addLog(state, `🔴 WhatsApp vacío para ${candidate.nombreReal || candidateId}. Saltando.`);
                         } else {
-                            addLog(state, `🔴 Error de API para ${candidate.whatsapp}: ${sendResult?.error || 'respuesta no exitosa'}`);
-                            // Marcar como fallido
-                            await updateMessageStatus(candidateId, msgToSave.id, 'failed', { status: 'failed' }).catch(() => {});
+                            const timestamp = new Date().toISOString();
+                            const msgId = `msg_bulk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+                            let msgToSaveStr = finalMessage;
+                            let sendType = 'text';
+                            let extraParams = {};
+
+                            // ── TEMPLATE MODE ──
+                            if (state.bulkType === 'template' && state.templateData) {
+                                const templateName = state.templateData.name;
+                                const languageCode = state.templateData.language || 'es_MX';
+                                
+                                // Fallback de nombre ("Buen día" en caso de vacío)
+                                const candidateNameFallback = String(candidate.nombreReal || candidate.nombre || 'Buen día').trim();
+                                
+                                extraParams = {
+                                    templateName,
+                                    languageCode
+                                };
+                                
+                                // Construcción dinámica de componentes
+                                const componentsToSend = [];
+                                (state.templateData.components || []).forEach(comp => {
+                                    const cType = (comp.type || '').toLowerCase();
+                                    
+                                    if (cType === 'body' || cType === 'header') {
+                                        if (cType === 'body' || (comp.format || '').toLowerCase() === 'text') {
+                                            const textInfo = comp.text || '';
+                                            const varMatches = textInfo.match(/\{\{\d+\}\}/g) || [];
+                                            let expectedCount = [...new Set(varMatches)].length;
+                                            
+                                            // Source of truth from Meta's parsed examples
+                                            if (cType === 'body' && comp.example?.body_text?.[0]) {
+                                                expectedCount = comp.example.body_text[0].length;
+                                            } else if (cType === 'header' && comp.example?.header_text) {
+                                                expectedCount = comp.example.header_text.length;
+                                            }
+
+                                            if (expectedCount > 0) {
+                                                componentsToSend.push({
+                                                    type: cType,
+                                                    parameters: Array(expectedCount).fill(0).map(() => ({ type: "text", text: candidateNameFallback }))
+                                                });
+                                            }
+                                        } else if (cType === 'header') {
+                                            const format = (comp.format || '').toLowerCase();
+                                            if (['image', 'video', 'document'].includes(format)) {
+                                                const placeholders = {
+                                                    image: 'https://raw.githubusercontent.com/davidcelis/logo/master/logo.png',
+                                                    video: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+                                                    document: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+                                                };
+                                                const mUrl = placeholders[format] || placeholders.image;
+                                                componentsToSend.push({
+                                                    type: 'header',
+                                                    parameters: [ { type: format, [format]: { link: mUrl } } ]
+                                                });
+                                            }
+                                        }
+                                    } else if (cType === 'buttons') {
+                                        (comp.buttons || []).forEach((btn, index) => {
+                                            if ((btn.type || '').toLowerCase() === 'url' && (btn.url || '').includes('{{')) {
+                                                const varMatches = (btn.url || '').match(/\{\{\d+\}\}/g) || [];
+                                                const uniqueVars = [...new Set(varMatches)];
+                                                if (uniqueVars.length > 0) {
+                                                    componentsToSend.push({
+                                                        type: 'button',
+                                                        sub_type: 'url',
+                                                        index: String(index),
+                                                        parameters: uniqueVars.map(() => ({ type: "text", text: "info" }))
+                                                    });
+                                                }
+                                            }
+                                        });
+                                    }
+                                });
+
+                                if (componentsToSend.length > 0) {
+                                    extraParams.components = componentsToSend;
+                                }
+                                
+                                sendType = 'template';
+                                let realText = '';
+                                const bodyComp = (state.templateData.components || []).find(c => (c.type || '').toUpperCase() === 'BODY');
+                                if (bodyComp && bodyComp.text) {
+                                    realText = bodyComp.text.replace(/\{\{\d+\}\}/g, candidateNameFallback);
+                                }
+                                const displayName = templateName.replace(/_/g, ' ');
+                                msgToSaveStr = `⚡ Plantilla masiva: *${displayName}*\n\n${realText}`.trim();
+                            }
+
+                            // 1. Guardar mensaje transaccional
+                            const msgToSave = {
+                                id: msgId,
+                                from: 'me',
+                                content: msgToSaveStr,
+                                type: sendType === 'template' ? 'template' : 'text',
+                                status: 'queued',
+                                timestamp
+                            };
+                            await saveMessage(candidateId, msgToSave);
+
+                            // 2. Enviar via WhatsApp (Cloud API maneja 'template' nativamente)
+                            const sendResult = await sendUltraMsgMessage(
+                                ultraConfig.instanceId,
+                                ultraConfig.token,
+                                cleanTo,
+                                msgToSaveStr,
+                                sendType,
+                                extraParams
+                            );
+
+                            if (sendResult && sendResult.success) {
+                                await updateCandidate(candidateId, {
+                                    ultimoMensajeBot: timestamp,
+                                    lastBotMessageAt: timestamp,
+                                    ultimoMensaje: timestamp
+                                });
+                                const remoteId = sendResult.data?.id || sendResult.data?.messageId;
+                                await updateMessageStatus(candidateId, msgToSave.id, 'sent', {
+                                    status: 'sent',
+                                    ultraMsgId: remoteId
+                                });
+                                addLog(state, `🟢 Enviado a ${candidate.nombreReal || candidate.whatsapp}`);
+                                sendSuccess = true;
+                            } else {
+                                addLog(state, `🔴 Error de API para ${candidate.whatsapp}: ${sendResult?.error || 'respuesta no exitosa'}`);
+                                // Marcar como fallido
+                                await updateMessageStatus(candidateId, msgToSave.id, 'failed', { status: 'failed' }).catch(() => {});
+                            }
                         }
                     }
                 }
+            } catch (e) {
+                addLog(state, `❌ Error procesando ${candidateId}: ${e.message}`);
             }
-        } catch (e) {
-            addLog(state, `❌ Error procesando ${candidateId}: ${e.message}`);
+
+            // ─── AVANZAR ÍNDICE ──────────────────────────────────────────────────
+            if (sendSuccess) state.totalSent++;
+            state.currentCandidateIndex++;
+            sentInTick++;
+
+            // Wait 50ms before sending the next to briefly yield event loop
+            await new Promise(r => setTimeout(r, 50));
         }
 
-        // ─── AVANZAR ÍNDICE ──────────────────────────────────────────────────
-        if (sendSuccess) state.totalSent++;
-        state.currentCandidateIndex++;
-
-        // ─── CALCULAR PRÓXIMO DELAY ──────────────────────────────────────────
-
-        // ¿Ya terminó?
+        // ¿Ya terminó todo el lote/campaña?
         if (state.currentCandidateIndex >= state.candidates.length) {
             state.isRunning = false;
             state.nextSendAt = null;
             addLog(state, '✅ Envío masivo completado. Todos los contactos procesados.');
-        }
-        // ¿Toca descanso de seguridad?
-        else if (state.totalSent > 0 && state.totalSent % (Number(state.pauseEvery) || 10) === 0) {
-            const pauseMs = computePauseDelay(state);
-            state.nextSendAt = Date.now() + pauseMs;
-            const pauseMins = Math.round(pauseMs / 60000);
-            addLog(state, `☕ Descanso de seguridad. Pausando ${pauseMins} minutos (hasta ${new Date(state.nextSendAt).toLocaleTimeString()})...`);
-        }
-        // Delay aleatorio normal
-        else {
-            const delayMs = computeNextDelay(state);
-            state.nextSendAt = Date.now() + delayMs;
+        } else {
+            // Continúa instantáneamente en el siguiente tick
+            state.nextSendAt = Date.now();
         }
 
         await saveState(state);
@@ -353,17 +442,17 @@ export default async function handler(req, res) {
             templateData: templateData || null,
             candidates,
             messages: messages || [],
-            minDelay: Number(minDelay) || 3,
-            maxDelay: Number(maxDelay) || 7,
-            pauseEvery: Number(pauseEvery) || 10,
-            pauseFor: Number(pauseFor) || 10,
+            minDelay: 0,
+            maxDelay: 0,
+            pauseEvery: 99999,
+            pauseFor: 0,
             currentCandidateIndex: 0,
             totalSent: 0,
             logs: [],
             campaignId,
             campaignName,
             startedAt: Date.now(),
-            nextSendAt: Date.now() + 2000 // Primer envío en 2 segundos
+            nextSendAt: Date.now()
         };
 
         addLog(newState, `🚀 Campaña iniciada para ${candidates.length} contactos con ${messages.length} variaciones.`);

@@ -2328,7 +2328,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                             const isFirstInSeries = !prevMsg || isMe !== isPrevMe;
 
                             return (
-                                <div key={msg.id + '-' + i} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? '-mt-1.5' : 'mt-1'}`}>
+                                <div key={msg.id + '-' + i} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group max-w-full relative ${!isFirstInSeries ? '-mt-1.5' : 'mt-1'} ${(msg.reactions && msg.reactions.length > 0) ? 'mb-4' : ''}`}>
                                     <div className={`
                                         max-w-[75%] rounded-[7.5px] px-2 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative text-[14.2px] z-10
                                         ${isMe
