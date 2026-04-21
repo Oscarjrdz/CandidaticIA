@@ -109,7 +109,7 @@ const GatewayCatcherSettings = ({ showToast }) => {
                     </button>
 
                     {dropdownOpen && (
-                        <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-[#111b21] border border-gray-200 dark:border-[#222e35] rounded-md shadow-xl max-h-48 overflow-y-auto z-[60]">
+                        <div className="absolute bottom-full left-0 mb-1 w-full bg-white dark:bg-[#111b21] border border-gray-200 dark:border-[#222e35] rounded-md shadow-xl max-h-48 overflow-y-auto z-[60]">
                             {tags.map((tag, idx) => (
                                 <button
                                     key={idx}
