@@ -70,50 +70,43 @@ const GatewayCatcherSettings = ({ showToast }) => {
             title="Webhook catcher"
             icon={Database}
         >
-            <div className="space-y-6">
+            <div className="space-y-3 pb-1">
                 {/* Asignacion de Etiqueta */}
                 <div>
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                            <Tag className="w-3.5 h-3.5" />
-                            Etiqueta predeterminada para nuevos perfiles:
-                        </span>
-                        {saving && <span className="text-[10px] text-gray-500 animate-pulse">Guardando...</span>}
-                    </div>
-                    <p className="text-[11px] text-gray-500 mb-2 leading-tight">Esta etiqueta se asignará automáticamente a cualquier contacto nuevo capturado por el Webhook (Mínimo requerido). No aplica retroactivamente a los contactos existentes.</p>
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center justify-between mb-1">
+                        <span className="flex items-center gap-1.5"><Tag className="w-3 h-3" /> Etiqueta predeterminada:</span>
+                        {saving && <span className="text-[9px] text-gray-500 animate-pulse font-normal">Guardando...</span>}
+                    </span>
+                    <p className="text-[10px] text-gray-500 mb-1.5 leading-tight">Se asignará solo a contactos nuevos. No retroactivo.</p>
                     <select
                         value={selectedTag}
                         onChange={handleTagChange}
                         disabled={saving}
-                        className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm text-[#111b21] dark:text-[#e9edef] outline-none font-medium appearance-none cursor-pointer hover:border-gray-400 disabled:opacity-50 transition-colors"
+                        className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border rounded px-2 py-1.5 text-xs text-[#111b21] dark:text-[#e9edef] outline-none font-medium appearance-none cursor-pointer shadow-sm hover:border-gray-400 disabled:opacity-50 transition-colors"
                         style={{
                             borderColor: (tags.find(t => t.name === selectedTag))?.color || '#8b5cf6',
-                            borderWidth: '2px'
+                            borderWidth: '1.5px'
                         }}
                     >
                         {tags.map((tag, idx) => (
-                            <option key={idx} value={tag.name}>
-                                {tag.name}
-                            </option>
+                            <option key={idx} value={tag.name}>{tag.name}</option>
                         ))}
                     </select>
                 </div>
                 
                 {/* Webhook URL */}
                 <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                            Webhook URL Catcher:
-                        </span>
+                    <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Webhook URL:</span>
                         <button
                             onClick={handleCopy}
-                            className="text-[10px] text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-bold flex items-center space-x-1 transition-colors"
+                            className="text-[10px] text-purple-600 hover:text-purple-700 dark:text-purple-400 font-bold flex items-center space-x-1 transition-colors bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded"
                         >
                             {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                            <span>{copied ? 'Copiado' : 'Copiar URL'}</span>
+                            <span>{copied ? 'Copiado' : 'Copiar'}</span>
                         </button>
                     </div>
-                    <code className="block w-full p-2.5 bg-gray-50 dark:bg-gray-900/80 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-mono break-all text-gray-700 dark:text-gray-300 shadow-inner">
+                    <code className="block w-full p-1.5 bg-gray-50 dark:bg-gray-900/80 rounded border border-gray-200 dark:border-gray-700 text-[10px] font-mono whitespace-nowrap overflow-x-auto text-gray-700 dark:text-gray-300 shadow-inner">
                         {typeof window !== 'undefined' ? window.location.origin : 'https://candidatic-ia.vercel.app'}/api/gateway/catcher
                     </code>
                 </div>
