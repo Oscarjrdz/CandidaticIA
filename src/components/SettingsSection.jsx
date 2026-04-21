@@ -9,7 +9,7 @@ import GatewayCatcherSettings from './GatewayCatcherSettings';
  */
 const SettingsSection = ({ showToast }) => {
     return (
-        <div className="max-w-6xl mx-auto space-y-6">
+        <div className="max-w-6xl mx-auto space-y-6 pb-12">
             {/* Header: Command Bar Style */}
             <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 flex flex-col md:flex-row items-center justify-between gap-4 min-h-[82px]">
                 <div className="flex items-center space-x-4">

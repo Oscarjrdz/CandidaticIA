@@ -36,17 +36,6 @@ const GatewayCatcherSettings = ({ showToast }) => {
                         {typeof window !== 'undefined' ? window.location.origin : 'https://candidatic-ia.vercel.app'}/api/gateway/catcher
                     </code>
                 </div>
-
-                {/* Status indicator note */}
-                <div className="flex items-start gap-2.5 p-3.5 bg-amber-50/70 dark:bg-amber-950/20 rounded-lg border border-amber-200/60 dark:border-amber-900/30">
-                    <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="text-[11px] text-amber-800 dark:text-amber-300 font-bold tracking-tight">AI BLOQUEADA ESTRICTAMENTE</p>
-                        <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80 mt-0.5 leading-relaxed font-medium">
-                            Los candidatos que entren por este Webhook serán etiquetados como <code className="bg-amber-100 dark:bg-amber-900/40 px-1 py-[1.5px] rounded border border-amber-200 dark:border-amber-800">Capturado</code> y <strong>Brenda IA nunca los atenderá ni les enviará mensajes.</strong> Quedan a la espera pasiva en la BD.
-                        </p>
-                    </div>
-                </div>
             </div>
         </Card>
     );
