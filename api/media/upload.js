@@ -80,10 +80,31 @@ export default async function handler(req, res) {
         pipeline.zadd('candidatic:media_library', Date.now(), id);
         await pipeline.exec();
 
+        // Also upload to Meta to pre-cache the media_id for instant sending
+        let metaMediaId = null;
+        try {
+            const { uploadMediaToMeta } = await import('../whatsapp/utils.js');
+            const result = await uploadMediaToMeta(fileBuffer, mimeType, originalFilename);
+            if (result?.mediaId) {
+                metaMediaId = result.mediaId;
+                // Store the media_id alongside the file metadata
+                await redis.set(metaKey, JSON.stringify({
+                    mime: mimeType,
+                    filename: originalFilename,
+                    size: fileSize,
+                    createdAt: new Date().toISOString(),
+                    metaMediaId: metaMediaId
+                }));
+                console.log(`[media/upload] ✅ Pre-uploaded to Meta → media_id=${metaMediaId}`);
+            }
+        } catch (e) {
+            console.error(`[media/upload] ⚠️ Meta pre-upload failed (will retry at send time):`, e.message);
+        }
+
         // URL que el chat.js puede convertir a absoluta para GatewayWapp
         const publicUrl = `/api/image?id=${id}`;
 
-        console.log(`[media/upload] ✅ Stored ${id} (${mimeType}, ${Math.round(fileSize / 1024)}KB)`);
+        console.log(`[media/upload] ✅ Stored ${id} (${mimeType}, ${Math.round(fileSize / 1024)}KB)${metaMediaId ? ' + Meta pre-cached' : ''}`);
 
         return res.status(200).json({
             success: true,
@@ -91,7 +112,8 @@ export default async function handler(req, res) {
             mediaUrl: publicUrl,
             id,
             mime: mimeType,
-            filename: originalFilename
+            filename: originalFilename,
+            metaMediaId
         });
 
     } catch (error) {

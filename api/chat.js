@@ -258,35 +258,43 @@ export default async function handler(req, res) {
                             
                             if (redisMediaId) {
                                 const redis = getRedisClient();
-                                const [base64Str, metaRaw] = await Promise.all([
-                                    redis.get(`image:${redisMediaId}`),
-                                    redis.get(`meta:image:${redisMediaId}`)
-                                ]);
+                                const metaRaw = await redis.get(`meta:image:${redisMediaId}`);
+                                const meta = metaRaw ? JSON.parse(metaRaw) : {};
+                                const filename = meta.filename || (type === 'document' ? 'documento.pdf' : 'imagen.jpg');
 
-                                if (base64Str) {
-                                    const meta = metaRaw ? JSON.parse(metaRaw) : {};
-                                    const buffer = Buffer.from(base64Str, 'base64');
-                                    const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
-                                    const filename = meta.filename || (type === 'document' ? 'documento.pdf' : 'imagen.jpg');
+                                // Strategy 1: Use pre-cached Meta media_id (from upload step — most reliable)
+                                if (meta.metaMediaId) {
+                                    extraParams.mediaId = meta.metaMediaId;
+                                    extraParams.filename = filename;
+                                    deliveryContent = '';
+                                    console.log(`✅ [Media] Using pre-cached Meta media_id=${meta.metaMediaId}`);
+                                } else {
+                                    // Strategy 2: Re-upload base64 from Redis to Meta
+                                    const base64Str = await redis.get(`image:${redisMediaId}`);
+                                    if (base64Str) {
+                                        const buffer = Buffer.from(base64Str, 'base64');
+                                        const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
 
-                                    console.log(`📤 [Media] Uploading ${filename} (${mimeType}, ${Math.round(buffer.length/1024)}KB) to Meta...`);
-                                    const { uploadMediaToMeta } = await import('./whatsapp/utils.js');
-                                    const uploadResult = await uploadMediaToMeta(buffer, mimeType, filename);
+                                        console.log(`📤 [Media] Re-uploading ${filename} (${mimeType}, ${Math.round(buffer.length/1024)}KB) to Meta...`);
+                                        const { uploadMediaToMeta } = await import('./whatsapp/utils.js');
+                                        const uploadResult = await uploadMediaToMeta(buffer, mimeType, filename);
 
-                                    if (uploadResult?.mediaId) {
-                                        extraParams.mediaId = uploadResult.mediaId;
-                                        extraParams.filename = filename;
-                                        deliveryContent = ''; // Not needed when using mediaId
-                                        console.log(`✅ [Media] Uploaded to Meta → media_id=${uploadResult.mediaId}`);
+                                        if (uploadResult?.mediaId) {
+                                            extraParams.mediaId = uploadResult.mediaId;
+                                            extraParams.filename = filename;
+                                            deliveryContent = '';
+                                            console.log(`✅ [Media] Re-uploaded to Meta → media_id=${uploadResult.mediaId}`);
+                                            // Cache for next time
+                                            meta.metaMediaId = uploadResult.mediaId;
+                                            redis.set(`meta:image:${redisMediaId}`, JSON.stringify(meta)).catch(() => {});
+                                        } else {
+                                            console.log(`⚠️ [Media] Meta upload returned no ID, falling back to URL`);
+                                            deliveryContent = makeAbsoluteUrl(mediaUrl, redisMediaId, type);
+                                        }
                                     } else {
-                                        // Fallback to URL-based delivery
-                                        console.log(`⚠️ [Media] Meta upload returned no ID, falling back to URL`);
+                                        console.log(`⚠️ [Media] No base64 data in Redis for ${redisMediaId}, falling back to URL`);
                                         deliveryContent = makeAbsoluteUrl(mediaUrl, redisMediaId, type);
                                     }
-                                } else {
-                                    // base64 not found in Redis — fall back to URL
-                                    console.log(`⚠️ [Media] No base64 data in Redis for ${redisMediaId}, falling back to URL`);
-                                    deliveryContent = makeAbsoluteUrl(mediaUrl, redisMediaId, type);
                                 }
                             } else {
                                 deliveryContent = makeAbsoluteUrl(mediaUrl, null, type);
