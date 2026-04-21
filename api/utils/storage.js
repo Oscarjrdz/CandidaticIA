@@ -1262,8 +1262,14 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
 
         const index = messages.findIndex(m => m.ultraMsgId === ultraMsgId || m.id === ultraMsgId);
         if (index !== -1) {
+            const oldStatus = messages[index].status;
             messages[index] = { ...messages[index], status, ...additionalData };
             await client.lset(key, index, JSON.stringify(messages[index]));
+            
+            // 📊 UPDATE CAMPAIGN STATS
+            if (messages[index].campaignId && oldStatus !== status && ['sent', 'delivered', 'read'].includes(status)) {
+                client.hincrby(`bulk_stats:${messages[index].campaignId}`, status, 1).catch(() => {});
+            }
             
             // 🚀 FIRE SSE! Update Chat UI checks in real time
             import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {

@@ -235,6 +235,9 @@ const tickEngine = async (state) => {
                                 status: 'queued',
                                 timestamp
                             };
+                            if (state.campaignId) {
+                                msgToSave.campaignId = state.campaignId;
+                            }
                             await saveMessage(candidateId, msgToSave);
 
                             // 2. Enviar via WhatsApp (Cloud API maneja 'template' nativamente)
@@ -471,6 +474,23 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'Failed getting history' });
         }
         return res.status(200).json({ success: true, history: [] });
+    }
+
+    // ─── HISTORY STATS ───────────────────────────────────────────────────────
+    if (req.method === 'GET' && action === 'history_stats') {
+        const { id } = req.query;
+        if (!id) return res.status(400).json({ error: 'Missing campaign ID' });
+        try {
+            const redis = getRedisClient();
+            if (redis) {
+                const raw = await redis.hgetall(`bulk_stats:${id}`);
+                const stats = raw || { sent: 0, delivered: 0, read: 0 };
+                return res.status(200).json({ success: true, stats });
+            }
+        } catch (e) {
+            return res.status(500).json({ error: 'Failed getting history stats' });
+        }
+        return res.status(200).json({ success: true, stats: { sent: 0, delivered: 0, read: 0 } });
     }
 
     // ─── HISTORY DELETE ──────────────────────────────────────────────────────

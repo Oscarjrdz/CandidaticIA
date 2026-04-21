@@ -2,6 +2,64 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle } from 'lucide-react';
 import { getCandidates } from '../services/candidatesService';
 
+const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
+    const [stats, setStats] = useState(null);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        let mounted = true;
+        setLoading(true);
+        fetch(`/api/bulks?action=history_stats&id=${h.id}`)
+            .then(res => res.json())
+            .then(data => {
+                if (mounted && data.success) {
+                    setStats(data.stats);
+                }
+                if (mounted) setLoading(false);
+            })
+            .catch(() => {
+                if (mounted) setLoading(false);
+            });
+        return () => { mounted = false; };
+    }, [h.id]);
+
+    return (
+        <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex flex-col hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors">
+            <div className="flex justify-between items-start w-full">
+                <div>
+                    <h3 className="font-bold text-gray-800 dark:text-gray-200">{h.name || "Campaña sin nombre"}</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-3">
+                        {new Date(h.date).toLocaleDateString()} • {h.status === 'running' ? '🚀' : h.status === 'completed' ? '✅' : '🛑'} {h.totalSent}/{h.totalTargets} procesados
+                    </p>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={()=>reuseCampaign(h)} className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 rounded font-bold text-xs flex items-center gap-1 transition-colors">
+                        👁️ Re-usar
+                    </button>
+                    <button onClick={()=>deleteCampaign(h.id)} className="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 rounded transition-colors">
+                        <Trash2 size={16} />
+                    </button>
+                </div>
+            </div>
+            {/* Stats Row */}
+            <div className="flex gap-6 mt-1 pt-3 border-t border-gray-100 dark:border-white/5">
+                <div className="flex flex-col">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">🟢 Enviados</span>
+                    <span className="font-mono text-sm text-gray-700 dark:text-gray-300">{loading ? '...' : (stats?.sent || 0)}</span>
+                </div>
+                <div className="flex flex-col">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">🔘 Entregados</span>
+                    <span className="font-mono text-sm text-gray-700 dark:text-gray-300">{loading ? '...' : (stats?.delivered || 0)}</span>
+                </div>
+                <div className="flex flex-col">
+                    <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">💙 Leídos</span>
+                    <span className="font-mono text-sm text-blue-600 dark:text-blue-400">{loading ? '...' : (stats?.read || 0)}</span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const BulksSection = ({ showToast }) => {
     // Col 1: Candidates
     const [candidates, setCandidates] = useState([]);
@@ -550,22 +608,12 @@ const BulksSection = ({ showToast }) => {
                             ) : (
                                 <div className="space-y-3">
                                     {historyList.map(h => (
-                                        <div key={h.id} className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-[#202c33] transition-colors">
-                                            <div>
-                                                <h3 className="font-bold text-gray-800 dark:text-gray-200">{h.name || "Campaña sin nombre"}</h3>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                    {new Date(h.date).toLocaleDateString()} • {h.status === 'running' ? '🚀' : h.status === 'completed' ? '✅' : '🛑'} {h.totalSent}/{h.totalTargets} enviados
-                                                </p>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <button onClick={()=>reuseCampaign(h)} className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 dark:text-indigo-300 rounded font-bold text-xs flex items-center gap-1 transition-colors">
-                                                    👁️ Re-usar
-                                                </button>
-                                                <button onClick={()=>deleteCampaign(h.id)} className="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400 rounded transition-colors">
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </div>
+                                        <CampaignHistoryItem 
+                                            key={h.id} 
+                                            h={h} 
+                                            reuseCampaign={reuseCampaign} 
+                                            deleteCampaign={deleteCampaign} 
+                                        />
                                     ))}
                                 </div>
                             )}
