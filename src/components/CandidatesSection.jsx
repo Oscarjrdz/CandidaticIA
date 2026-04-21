@@ -240,6 +240,7 @@ const CandidatesSection = ({ showToast, user }) => {
     const [search, setSearch] = useState('');
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
+    const [sortWhatsAppByDate, setSortWhatsAppByDate] = useState(null);
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
         try {
@@ -687,6 +688,14 @@ const CandidatesSection = ({ showToast, user }) => {
         displayedCandidates = displayedCandidates.filter(c => isProfileComplete(c));
     }
 
+    if (sortWhatsAppByDate) {
+        displayedCandidates = [...displayedCandidates].sort((a, b) => {
+            const dateA = new Date(a.primerContacto || a.createdAt || 0).getTime();
+            const dateB = new Date(b.primerContacto || b.createdAt || 0).getTime();
+            return sortWhatsAppByDate === 'asc' ? dateA - dateB : dateB - dateA;
+        });
+    }
+
     const totalPages = Math.ceil(totalItems / LIMIT);
 
     return (
@@ -1087,9 +1096,20 @@ const CandidatesSection = ({ showToast, user }) => {
                             <table className="w-full relative">
                                 <thead className="sticky top-0 z-20 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-sm shadow-sm ring-1 ring-black/5">
                                     <tr className="border-b border-gray-200 dark:border-gray-700 text-[10px] uppercase tracking-wider text-gray-500">
-                                        <th className="py-1 px-1 w-8"></th>
+                                        <th className="text-left py-1 px-1 w-8"></th>
                                         <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300"></th>
-                                        <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">WhatsApp</th>
+                                        <th 
+                                            className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer hover:text-blue-600 transition-colors select-none group"
+                                            onClick={() => setSortWhatsAppByDate(prev => prev === 'desc' ? 'asc' : 'desc')}
+                                            title="Ordenar por fecha de creación"
+                                        >
+                                            <div className="flex items-center gap-1">
+                                                WhatsApp
+                                                <span className={`text-[10px] ${sortWhatsAppByDate ? 'text-blue-500' : 'text-gray-400 opacity-0 group-hover:opacity-50'}`}>
+                                                    {sortWhatsAppByDate === 'desc' ? '↓' : sortWhatsAppByDate === 'asc' ? '↑' : '↕'}
+                                                </span>
+                                            </div>
+                                        </th>
                                         <th className="text-left py-1 px-2.5 font-semibold text-gray-700 dark:text-gray-300">From</th>
 
                                         {/* Dynamic Headers (Sortable) */}
