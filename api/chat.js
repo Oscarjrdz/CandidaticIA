@@ -241,11 +241,21 @@ export default async function handler(req, res) {
                     // If the mediaUrl is an internal Redis URL, upload to Meta first for reliability
                     let deliveryContent = mediaUrl;
                     const isInternalMedia = mediaUrl && mediaUrl.startsWith('/api/image') && mediaUrl.includes('id=');
+                    const makeAbsoluteUrl = (relUrl, mediaId, fileType) => {
+                        const protocol = req.headers['x-forwarded-proto'] || 'https';
+                        const host = req.headers.host || 'candidatic.com';
+                        if (mediaId) {
+                            const extMap = { image: '.jpg', video: '.mp4', audio: '.mp3', document: '.pdf' };
+                            return `${protocol}://${host}/api/media/${mediaId}${extMap[fileType] || ''}`;
+                        }
+                        return `${protocol}://${host}${relUrl}`;
+                    };
 
                     if (isInternalMedia) {
                         try {
                             const urlObj = new URL(mediaUrl, 'https://candidatic.com');
                             const redisMediaId = urlObj.searchParams.get('id');
+                            
                             if (redisMediaId) {
                                 const redis = getRedisClient();
                                 const [base64Str, metaRaw] = await Promise.all([
@@ -259,6 +269,7 @@ export default async function handler(req, res) {
                                     const mimeType = meta.mime || (type === 'document' ? 'application/pdf' : 'image/jpeg');
                                     const filename = meta.filename || (type === 'document' ? 'documento.pdf' : 'imagen.jpg');
 
+                                    console.log(`📤 [Media] Uploading ${filename} (${mimeType}, ${Math.round(buffer.length/1024)}KB) to Meta...`);
                                     const { uploadMediaToMeta } = await import('./whatsapp/utils.js');
                                     const uploadResult = await uploadMediaToMeta(buffer, mimeType, filename);
 
@@ -266,26 +277,26 @@ export default async function handler(req, res) {
                                         extraParams.mediaId = uploadResult.mediaId;
                                         extraParams.filename = filename;
                                         deliveryContent = ''; // Not needed when using mediaId
+                                        console.log(`✅ [Media] Uploaded to Meta → media_id=${uploadResult.mediaId}`);
                                     } else {
                                         // Fallback to URL-based delivery
-                                        const protocol = req.headers['x-forwarded-proto'] || 'https';
-                                        const host = req.headers.host || 'candidatic.com';
-                                        const extMap = { image: '.jpg', video: '.mp4', audio: '.mp3', document: '.pdf' };
-                                        deliveryContent = `${protocol}://${host}/api/media/${redisMediaId}${extMap[type] || ''}`;
+                                        console.log(`⚠️ [Media] Meta upload returned no ID, falling back to URL`);
+                                        deliveryContent = makeAbsoluteUrl(mediaUrl, redisMediaId, type);
                                     }
+                                } else {
+                                    // base64 not found in Redis — fall back to URL
+                                    console.log(`⚠️ [Media] No base64 data in Redis for ${redisMediaId}, falling back to URL`);
+                                    deliveryContent = makeAbsoluteUrl(mediaUrl, redisMediaId, type);
                                 }
+                            } else {
+                                deliveryContent = makeAbsoluteUrl(mediaUrl, null, type);
                             }
                         } catch (uploadErr) {
                             console.error('⚠️ Meta media upload failed, falling back to URL:', uploadErr.message);
-                            // Fallback: convert to absolute URL
-                            const protocol = req.headers['x-forwarded-proto'] || 'https';
-                            const host = req.headers.host || 'candidatic.com';
-                            deliveryContent = `${protocol}://${host}${mediaUrl}`;
+                            deliveryContent = makeAbsoluteUrl(mediaUrl, null, type);
                         }
                     } else if (mediaUrl && mediaUrl.startsWith('/')) {
-                        const protocol = req.headers['x-forwarded-proto'] || 'https';
-                        const host = req.headers.host || 'candidatic.com';
-                        deliveryContent = `${protocol}://${host}${mediaUrl}`;
+                        deliveryContent = makeAbsoluteUrl(mediaUrl, null, type);
                     }
 
                     extraParams.caption = finalMessage;
