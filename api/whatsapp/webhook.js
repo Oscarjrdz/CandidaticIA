@@ -105,11 +105,31 @@ export default async function handler(req, res) {
                 try {
                     if (recipientPhone.length >= 10) {
                         const candidateId = await getCandidateIdByPhone(recipientPhone);
-                        if (candidateId) await updateMessageStatus(candidateId, msgId, statusStr);
+                        if (candidateId) {
+                            // For failed messages, include the Meta error details
+                            if (statusStr === 'failed' && status.errors?.length > 0) {
+                                const metaError = status.errors[0];
+                                const errorText = `Meta Error #${metaError.code}: ${metaError.title || metaError.message || 'Unknown'}`;
+                                await updateMessageStatus(candidateId, msgId, statusStr, { error: errorText });
+
+                                // Save debug info for last failure
+                                const redis = getRedisClient();
+                                if (redis) {
+                                    redis.set('debug:last_meta_failure', JSON.stringify({
+                                        timestamp: new Date().toISOString(),
+                                        phone: recipientPhone,
+                                        msgId,
+                                        error: metaError
+                                    }), 'EX', 86400).catch(() => {});
+                                }
+                            } else {
+                                await updateMessageStatus(candidateId, msgId, statusStr);
+                            }
+                        }
                     }
                 } catch (e) { /* Silent fail */ }
 
-                // Handle delivery failures
+                // Handle specific failure actions
                 if (statusStr === 'failed' && status.errors?.length > 0) {
                     const errorCode = status.errors[0]?.code;
                     // 131026 = number not on WhatsApp
