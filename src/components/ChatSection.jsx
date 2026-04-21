@@ -937,8 +937,15 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     return prev;
                 });
             } else if (sseUpdate.updates?.newMessage || !sseUpdate.updates?.recruiterTyping) {
-                // Fetch full messages array only if it's not JUST a typing indicator or status update
-                loadMessages();
+                // Only reload if we DON'T have pending optimistic messages (temp_ prefix)
+                // Otherwise SSE would replace our optimistic messages before they're confirmed
+                setMessages(prev => {
+                    const hasOptimistic = prev.some(m => String(m.id).startsWith('temp_'));
+                    if (!hasOptimistic) {
+                        loadMessages();
+                    }
+                    return prev;
+                });
             }
         }
         // Candidate list → DEBOUNCE 500ms to batch rapid-fire SSE events (antiflicker, not antiban)
