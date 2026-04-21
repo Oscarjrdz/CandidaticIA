@@ -174,10 +174,19 @@ const tickEngine = async (state) => {
                                             }
 
                                             if (expectedCount > 0) {
+                                                const uniqueVars = [...new Set(varMatches)];
                                                 const params = Array(expectedCount).fill(0).map((_, pIdx) => {
-                                                    // Use custom param if provided, else fallback to candidate name
-                                                    const paramKey = String(pIdx + 1);
-                                                    const customVal = state.templateParams?.[paramKey];
+                                                    // Use custom param if provided
+                                                    const numKey = String(pIdx + 1);
+                                                    let customVal = state.templateParams?.[numKey];
+                                                    
+                                                    // Fallback to searching by named variable at this position
+                                                    if (!customVal && uniqueVars[pIdx]) {
+                                                        const stringKey = uniqueVars[pIdx].replace(/[{}]/g, '');
+                                                        customVal = state.templateParams?.[stringKey];
+                                                    }
+                                                    
+                                                    // Final fallback to candidate name
                                                     return { type: "text", text: customVal || candidateNameFallback };
                                                 });
                                                 componentsToSend.push({
