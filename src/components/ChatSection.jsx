@@ -1163,7 +1163,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             mediaUrl: localUrl,
             type: msgType,
             status: 'queued',
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            filename: file.name
         };
         setMessages(prev => [...prev, tempMsg]);
         setSending(true);
@@ -1188,45 +1189,31 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
             const mediaUrl = uploadData.url || uploadData.mediaUrl;
 
-            // Send via Chat API with automatic retry for cold-start 500s
-            let chatData = null;
-            let lastErr = null;
-            const maxRetries = 3;
-            for (let attempt = 1; attempt <= maxRetries; attempt++) {
-                console.log(`📤 [FileUpload] Step 3 (attempt ${attempt}/${maxRetries}): Sending via /api/chat with type=${msgType}, mediaUrl=${mediaUrl}`);
-                try {
-                    const res = await fetch('/api/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            candidateId: selectedChat.id,
-                            message: '',
-                            type: msgType,
-                            mediaUrl
-                        })
-                    });
-                    chatData = await res.json();
-                    console.log(`📤 [FileUpload] Step 4: Chat API response:`, { ok: res.ok, status: res.status, data: chatData });
+            // Update optimistic message with the real Redis URL (so it persists after page reload)
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, mediaUrl } : m));
 
-                    if (res.ok) {
-                        lastErr = null;
-                        break; // Success
-                    }
-                    lastErr = chatData?.error || `HTTP ${res.status}`;
-                } catch (fetchErr) {
-                    lastErr = fetchErr.message;
-                }
-                // Wait before retry (1.5s)
-                if (attempt < maxRetries) {
-                    console.log(`📤 [FileUpload] Retrying in 1.5s...`);
-                    await new Promise(r => setTimeout(r, 1500));
-                }
-            }
+            // Send via Chat API (single attempt — pre-upload makes retries unnecessary)
+            console.log(`📤 [FileUpload] Step 3: Sending via /api/chat with type=${msgType}, mediaUrl=${mediaUrl}`);
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    candidateId: selectedChat.id,
+                    message: '',
+                    type: msgType,
+                    mediaUrl
+                })
+            });
+            const chatData = await res.json();
+            console.log(`📤 [FileUpload] Step 4: Chat API response:`, { ok: res.ok, status: res.status, data: chatData });
 
-            if (lastErr) throw new Error(lastErr);
-            
-            // Reload chats for updated list status
-            loadMessages();
+            if (!res.ok) throw new Error(chatData?.error || 'Error al enviar media');
+
+            // Update optimistic message in-place (no flicker from loadMessages)
+            setMessages(prev => prev.map(m => m.id === tempId 
+                ? { ...m, id: chatData.message?.id || tempId, status: 'sent', ultraMsgId: chatData.message?.ultraMsgId }
+                : m
+            ));
             window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
 
         } catch (err) {
@@ -2378,7 +2365,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                                     )}
                                                     {msg.type === 'document' && (
                                                         <a href={msg.mediaUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-3 py-2 bg-black/5 dark:bg-white/5 rounded text-blue-500 hover:text-blue-600 font-medium break-all">
-                                                            <Paperclip className="w-4 h-4 shrink-0" /> DOCUMENTO ADJUNTO
+                                                            <Paperclip className="w-4 h-4 shrink-0" /> {msg.filename || 'DOCUMENTO ADJUNTO'}
                                                         </a>
                                                     )}
                                                 </div>
