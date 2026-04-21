@@ -1174,13 +1174,20 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             formData.append('file', file);
             formData.append('candidateId', selectedChat.id);
 
+            console.log(`📤 [FileUpload] Step 1: Uploading ${file.name} (${file.type}, ${Math.round(file.size/1024)}KB) as ${msgType}`);
+
             const uploadRes = await fetch('/api/media/upload', {
                 method: 'POST',
                 body: formData
             });
             const uploadData = await uploadRes.json();
             
+            console.log(`📤 [FileUpload] Step 2: Upload response:`, { ok: uploadRes.ok, status: uploadRes.status, data: uploadData });
+
             if (!uploadRes.ok) throw new Error(uploadData.error || 'Error subiendo archivo');
+
+            const mediaUrl = uploadData.url || uploadData.mediaUrl;
+            console.log(`📤 [FileUpload] Step 3: Sending via /api/chat with type=${msgType}, mediaUrl=${mediaUrl}`);
 
             // Send via Chat API
             const res = await fetch('/api/chat', {
@@ -1190,19 +1197,21 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     candidateId: selectedChat.id,
                     message: '',
                     type: msgType,
-                    mediaUrl: uploadData.url || uploadData.mediaUrl
+                    mediaUrl
                 })
             });
 
-            if (!res.ok) throw new Error('Error al enviar media');
+            const chatData = await res.json();
+            console.log(`📤 [FileUpload] Step 4: Chat API response:`, { ok: res.ok, status: res.status, data: chatData });
+
+            if (!res.ok) throw new Error(chatData?.error || 'Error al enviar media');
             
             // Reload chats for updated list status
             loadMessages();
             window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: selectedChat.id } }));
-            // loadCandidates(); // Removido para optimizar: SSE empuja la actualización o el optimistico lo maneja.
 
         } catch (err) {
-            console.error('File send error:', err);
+            console.error('❌ [FileUpload] FAILED at:', err.message, err);
             showToast && showToast('Error al mandar archivo: ' + err.message, 'error');
             // Remove temp msg
             setMessages(prev => prev.filter(m => m.id !== tempId));
