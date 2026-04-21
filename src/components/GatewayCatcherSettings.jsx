@@ -1,9 +1,38 @@
-import React, { useState } from 'react';
-import { Database, Link, Copy, Check, ShieldAlert, FishSymbol } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Database, Copy, Check, Tag } from 'lucide-react';
 import Card from './ui/Card';
 
 const GatewayCatcherSettings = ({ showToast }) => {
     const [copied, setCopied] = useState(false);
+    const [tags, setTags] = useState([]);
+    const [selectedTag, setSelectedTag] = useState('CATCHER');
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        fetch('/api/tags')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.tags) {
+                    const migrated = data.tags.map((t, i) => {
+                        if (typeof t === 'string') return { name: t, color: ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#a855f7','#ec4899','#8b5cf6','#64748b'][i % 9] };
+                        return t;
+                    });
+                    // Ensure CATCHER tag is visually present in options just in case
+                    if (!migrated.find(t => t.name === 'CATCHER')) {
+                        migrated.push({ name: 'CATCHER', color: '#8b5cf6' });
+                    }
+                    setTags(migrated);
+                }
+            })
+            .catch(() => {});
+            
+        fetch('/api/settings?type=catcher_tag')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.data) setSelectedTag(data.data);
+            })
+            .catch(() => {});
+    }, []);
 
     const handleCopy = () => {
         navigator.clipboard.writeText(`${window.location.origin}/api/gateway/catcher`);
@@ -12,14 +41,66 @@ const GatewayCatcherSettings = ({ showToast }) => {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const handleTagChange = async (e) => {
+        const newTag = e.target.value;
+        setSelectedTag(newTag);
+        setSaving(true);
+        
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'catcher_tag', data: newTag })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast?.('Etiqueta base de Catcher actualizada', 'success');
+            } else {
+                showToast?.('Error al guardar etiqueta', 'error');
+            }
+        } catch(err) {
+            showToast?.('Error de red al intentar guardar', 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     return (
         <Card
             title="Webhook catcher"
             icon={Database}
         >
-            <div className="space-y-4">
+            <div className="space-y-6">
+                {/* Asignacion de Etiqueta */}
+                <div>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+                            <Tag className="w-3.5 h-3.5" />
+                            Etiqueta predeterminada para nuevos perfiles:
+                        </span>
+                        {saving && <span className="text-[10px] text-gray-500 animate-pulse">Guardando...</span>}
+                    </div>
+                    <p className="text-[11px] text-gray-500 mb-2 leading-tight">Esta etiqueta se asignará automáticamente a cualquier contacto nuevo capturado por el Webhook (Mínimo requerido). No aplica retroactivamente a los contactos existentes.</p>
+                    <select
+                        value={selectedTag}
+                        onChange={handleTagChange}
+                        disabled={saving}
+                        className="w-full bg-[#f0f2f5] dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2.5 text-sm text-[#111b21] dark:text-[#e9edef] outline-none font-medium appearance-none cursor-pointer hover:border-gray-400 disabled:opacity-50 transition-colors"
+                        style={{
+                            borderColor: (tags.find(t => t.name === selectedTag))?.color || '#8b5cf6',
+                            borderWidth: '2px'
+                        }}
+                    >
+                        {tags.map((tag, idx) => (
+                            <option key={idx} value={tag.name}>
+                                {tag.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                
                 {/* Webhook URL */}
-                <div className="pt-2">
+                <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                             Webhook URL Catcher:

@@ -26,8 +26,8 @@ const cleanPhoneNumber = (raw = '') => {
     return withoutDevice.replace(/\D/g, '');
 };
 
-// Automáticamente crea la etiqueta global CATCHER la primera vez que se ejecute si no existe
-const ensureCatcherTagExists = async () => {
+// Automáticamente asegura que la etiqueta original o la dinámica exista en la configuración
+const ensureCatcherTagExists = async (tagToEnsure = 'CATCHER') => {
     try {
         const client = getRedisClient();
         if (!client) return;
@@ -40,13 +40,13 @@ const ensureCatcherTagExists = async () => {
         
         tags = tags.map(t => typeof t === 'string' ? {name: t, color: '#3b82f6'} : t);
         
-        if (!tags.find(t => t.name === 'CATCHER')) {
-            tags.push({name: 'CATCHER', color: '#8b5cf6'}); // Color morado/púrpura
+        if (!tags.find(t => t.name === tagToEnsure)) {
+            tags.push({name: tagToEnsure, color: '#8b5cf6'}); // Color morado/púrpura default para tags dinámicos
             await client.set('candidatic:chat_tags', JSON.stringify(tags));
-            console.log('[GATEWAY CATCHER] 🏷️ Etiqueta global CATCHER creada exitosamente.');
+            console.log(`[GATEWAY CATCHER] 🏷️ Etiqueta global ${tagToEnsure} asegurada en base de datos.`);
         }
     } catch (e) {
-        console.error('Error asegurando la etiqueta CATCHER:', e);
+        console.error('Error asegurando la etiqueta:', e);
     }
 };
 
@@ -55,10 +55,21 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    // Asegurar fondo etiqueta globalmente sin bloquear respuesta
-    ensureCatcherTagExists();
-
     const payload = req.body;
+    const { getRedisClient } = await import('../utils/storage.js');
+    const client = getRedisClient();
+    
+    // Identificar etiqueta dinámica
+    let tagToAssign = 'CATCHER';
+    try {
+        if (client) {
+            const customTag = await client.get('catcher_tag');
+            if (customTag) tagToAssign = customTag;
+        }
+    } catch(e) {}
+    
+    // Asegurar fondo etiqueta globalmente sin bloquear respuesta
+    ensureCatcherTagExists(tagToAssign);
     
     // Identificar tipo de evento para EvolutionAPI o estándar
     const eventType = payload.event_type || payload.event || payload.eventName;
@@ -179,7 +190,7 @@ export default async function handler(req, res) {
                     instanceId: capturedInstanceId,
                     profilePic: profilePicUrl,
                     status: 'Capturado', // Estatus especial para saber que es una base pasiva
-                    tags: ['CATCHER'], // Agregar la etiqueta que se creó globalmente
+                    tags: [tagToAssign], // Agregar la etiqueta dinámica actual configurada
                     esNuevo: 'NO', // Evita que si más adelante se altera reciba mensaje de bienvenida automáticamente
                     bot_ia_active: false, // BLOQUEO HARD: Brenda IA no debe procesarlo nunca
                     primerContacto: new Date().toISOString(),

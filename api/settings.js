@@ -85,6 +85,14 @@ export default async function handler(req, res) {
                 });
             }
 
+            if (type === 'catcher_tag') {
+                value = await redis.get('catcher_tag');
+                return res.status(200).json({
+                    success: true,
+                    data: value || 'CATCHER'
+                });
+            }
+
             return res.status(400).json({ error: 'Invalid type' });
         }
 
@@ -178,6 +186,17 @@ export default async function handler(req, res) {
                 return res.status(200).json({
                     success: true,
                     message: 'ByPass system status saved'
+                });
+            }
+
+            if (type === 'catcher_tag') {
+                if (typeof data !== 'string') {
+                    return res.status(400).json({ error: 'Invalid tag format' });
+                }
+                await redis.set('catcher_tag', data);
+                return res.status(200).json({
+                    success: true,
+                    message: 'Catcher tag saved'
                 });
             }
 
