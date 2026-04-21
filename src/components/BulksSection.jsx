@@ -181,16 +181,15 @@ const BulksSection = ({ showToast }) => {
             
             if (isCurrentlyCompleted && wasRunning) {
                 setTimeout(() => {
-                    if (window.confirm("¡Campaña finalizada exitosamente! ¿Deseas limpiar la pantalla para configurar una nueva campaña?")) {
-                        try {
-                            fetch('/api/bulks?action=clear', { method: 'POST' });
-                            setEngineState(null);
-                            setSelectedCandIds(new Set());
-                            setCustomCampaignName('');
-                            setTemplateParams({});
-                        } catch(e) {}
-                    }
-                }, 300); // 300ms delay down below lets React render the 100% progress bar before freezing the GUI with the confirm alert
+                    window.alert("¡Campaña finalizada exitosamente!");
+                    try {
+                        fetch('/api/bulks?action=clear', { method: 'POST' });
+                        setEngineState(null);
+                        setSelectedCandIds(new Set());
+                        setCustomCampaignName('');
+                        setTemplateParams({});
+                    } catch(e) {}
+                }, 300); // 300ms delay down below lets React render the 100% progress bar before freezing the GUI with the alert
             }
         }
         prevEngineStateRef.current = engineState;
