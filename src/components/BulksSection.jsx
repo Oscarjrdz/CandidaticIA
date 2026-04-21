@@ -824,6 +824,8 @@ const BulksSection = ({ showToast }) => {
                         </div>
                     </div>
                 </div>
+            )}
+            
             {/* CONFIRM START MODAL */}
             {showStartModal && startModalData && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md" style={{ animation: 'fadeIn 0.2s ease-out' }}>
