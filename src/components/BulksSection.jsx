@@ -326,8 +326,6 @@ const BulksSection = ({ showToast }) => {
             return;
         }
 
-        const campaignName = prompt("Ingresa un nombre para guardar esta configuración/campaña y usarla en el futuro. (Déjalo en blanco si no quieres guardarlo):", "");
-
         try {
             const res = await fetch('/api/bulks?action=start', {
                 method: 'POST',
@@ -337,7 +335,7 @@ const BulksSection = ({ showToast }) => {
                     bulkType,
                     messages: validMsgs,
                     templateData: tplData,
-                    campaignName
+                    campaignName: null
                 })
             });
             const data = await res.json();

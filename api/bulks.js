@@ -125,7 +125,7 @@ const tickEngine = async (state) => {
             if (!candidate) {
                 addLog(state, `⚠️ Candidato ${candidateId} no encontrado en DB. Saltando.`);
             } else {
-                const finalMessage = substituteVariables(messageTemplate, candidate);
+                const finalMessage = state.bulkType === 'template' ? '' : substituteVariables(messageTemplate, candidate);
                 const ultraConfig = await getUltraMsgConfig();
 
                 if (!ultraConfig) {
@@ -332,7 +332,8 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Falta configurar la plantilla a enviar.' });
         }
 
-        const campaignId = campaignName ? `camp_${Date.now()}` : null;
+        const campaignId = `camp_${Date.now()}`;
+        const displayName = campaignName || `Campaña ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
 
         const newState = {
             isRunning: true,
@@ -349,15 +350,15 @@ export default async function handler(req, res) {
             totalSent: 0,
             logs: [],
             campaignId,
-            campaignName,
+            campaignName: displayName,
             startedAt: Date.now(),
             nextSendAt: Date.now()
         };
 
-        addLog(newState, `🚀 Campaña iniciada para ${candidates.length} contactos con ${messages.length} variaciones.`);
+        addLog(newState, `🚀 Campaña "${displayName}" iniciada para ${candidates.length} contactos.`);
 
-        // Guardar campaña en historial
-        if (campaignId) {
+        // Guardar campaña en historial (siempre — campaignId siempre existe)
+        {
             try {
                 const redis = getRedisClient();
                 if (redis) {
@@ -365,7 +366,7 @@ export default async function handler(req, res) {
                     let history = raw ? (typeof raw === 'string' ? JSON.parse(raw) : raw) : [];
                     history.unshift({
                         id: campaignId,
-                        name: campaignName,
+                        name: displayName,
                         date: new Date().toISOString(),
                         bulkType: newState.bulkType,
                         templateData: newState.templateData,
