@@ -152,29 +152,7 @@ export default async function handler(req, res) {
 
             // Instancia que lo capturó
             const capturedInstanceId = messageData.instanceId || payload.instanceId || payload.instance?.instanceId || req.headers['x-instance-id'] || 'gateway_catcher';
-
-            // --- Novedad: Rescate manual de la foto usando el Gateway API directo ---
-            if (!profilePicUrl) {
-                try {
-                    console.log(`[GATEWAY CATCHER] Foto no venía en webhook. Extrayendo manualmente para: ${phone}...`);
-                    const catcherInstanceId = (client ? await client.get('catcher_instance_id') : null) || 'a2c8cea97a';
-                    const catcherToken = (client ? await client.get('catcher_instance_token') : null) || '0ef8455a4a5a45e099df7cd6851a24d2';
-                    const fetchUrl = `https://gatewaywapp-production.up.railway.app/${catcherInstanceId}/contacts/profile-picture?token=${catcherToken}&to=${phone}@c.us`;
-                    
-                    const resPic = await fetch(fetchUrl);
-                    if (resPic.ok) {
-                        const jsonPic = await resPic.json();
-                        if (jsonPic.profile_picture && jsonPic.profile_picture.startsWith('http')) {
-                            profilePicUrl = jsonPic.profile_picture;
-                            console.log(`[GATEWAY CATCHER] 📸 Foto descargada con éxito: ${profilePicUrl.substring(0, 45)}...`);
-                        } else {
-                            console.log(`[GATEWAY CATCHER] No se encontró foto en API para: ${phone}`);
-                        }
-                    }
-                } catch (err) {
-                    console.error('[GATEWAY CATCHER] Error obteniendo foto manual:', err.message);
-                }
-            }
+            // --- Photo fetch moved to fire-and-forget AFTER candidate is saved ---
 
             // --- 2. BUSCAR O CREAR AL CANDIDATO EN LA BASE ---
             let candidateId = await getCandidateIdByPhone(phone);
@@ -210,18 +188,42 @@ export default async function handler(req, res) {
                 const newCandidate = await saveCandidate({
                     whatsapp: phone,
                     nombre: pushName,
-                    origen: 'Captura Externa', // Para distinguirlo en métricas
+                    origen: 'Captura Externa',
                     instanceId: capturedInstanceId,
                     profilePic: profilePicUrl,
-                    status: 'Capturado', // Estatus especial para saber que es una base pasiva
-                    tags: [tagToAssign], // Agregar la etiqueta dinámica actual configurada
-                    esNuevo: 'NO', // Evita que si más adelante se altera reciba mensaje de bienvenida automáticamente
-                    bot_ia_active: false, // BLOQUEO HARD: Brenda IA no debe procesarlo nunca
+                    status: 'Capturado',
+                    tags: [tagToAssign],
+                    esNuevo: 'NO',
+                    bot_ia_active: false,
                     primerContacto: new Date().toISOString(),
                     ultimoMensaje: new Date().toISOString()
                 });
+
+                // 🚀 SSE: Notify dashboard IMMEDIATELY
+                try {
+                    const { notifyNewCandidate } = await import('../utils/sse-notify.js');
+                    notifyNewCandidate(newCandidate).catch(() => {});
+                } catch (e) {}
+
+                // 📸 Fire-and-forget: fetch photo WITHOUT blocking the response
+                if (!profilePicUrl) {
+                    const candId = newCandidate?.id;
+                    (async () => {
+                        try {
+                            const catcherInstanceId = (client ? await client.get('catcher_instance_id') : null) || 'a2c8cea97a';
+                            const catcherToken = (client ? await client.get('catcher_instance_token') : null) || '0ef8455a4a5a45e099df7cd6851a24d2';
+                            const picRes = await fetch(`https://gatewaywapp-production.up.railway.app/${catcherInstanceId}/contacts/profile-picture?token=${catcherToken}&to=${phone}@c.us`);
+                            if (picRes.ok) {
+                                const picData = await picRes.json();
+                                if (picData.profile_picture?.startsWith('http') && candId) {
+                                    await updateCandidate(candId, { profilePic: picData.profile_picture });
+                                }
+                            }
+                        } catch (e) {}
+                    })();
+                }
                 
-                console.log(`[GATEWAY CATCHER] 🎣 LEAD CAPTURADO NUEVO CATCHER: ${phone} - ${pushName}`);
+                console.log(`[GATEWAY CATCHER] 🎣 LEAD CAPTURADO: ${phone} - ${pushName}`);
             }
 
             // ⚠️ IMPORTANTE: RETORNAMOS 200 AQUI MIMSO.
