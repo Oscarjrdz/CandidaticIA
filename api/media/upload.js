@@ -2,6 +2,7 @@ import { getRedisClient } from '../utils/storage.js';
 import { IncomingForm } from 'formidable';
 import { readFileSync } from 'fs';
 import path from 'path';
+import os from 'os';
 
 export const config = {
     api: {
@@ -30,18 +31,13 @@ export default async function handler(req, res) {
             return res.status(500).json({ error: 'Database connection failed' });
         }
 
-        // Parse multipart form
         const form = new IncomingForm({
             maxFileSize: 16 * 1024 * 1024, // 16MB max
-            keepExtensions: true
+            keepExtensions: true,
+            uploadDir: os.tmpdir() // Explicitly set for Vercel Serverless
         });
 
-        const { fields, files } = await new Promise((resolve, reject) => {
-            form.parse(req, (err, fields, files) => {
-                if (err) reject(err);
-                else resolve({ fields, files });
-            });
-        });
+        const [fields, files] = await form.parse(req);
 
         const uploadedFile = files?.file?.[0] || files?.file;
         if (!uploadedFile) {
@@ -116,7 +112,7 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
-        console.error('[media/upload] ❌ Error:', error.message);
-        return res.status(500).json({ error: 'Error interno al subir archivo', details: error.message });
+        console.error('[media/upload] ❌ Error:', error.stack || error.message);
+        return res.status(500).json({ error: `Error interno: ${error.message}` });
     }
 }
