@@ -310,6 +310,123 @@ const isProfileCompleteStandalone = (c) => {
 const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 🧩 CustomSelect Component
+// ─────────────────────────────────────────────────────────────────────────────
+const ChevronIcon = () => (
+    <div className="flex items-center text-gray-500 dark:text-gray-400 shrink-0">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+    </div>
+);
+
+const CustomSelect = ({ name, value, options, onChange, placeholder, disabled = false }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const displayOptions = [...options];
+    if (value && !displayOptions.includes(value)) displayOptions.push(value);
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <div 
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                className={`w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] cursor-pointer border ${isOpen ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-transparent'} flex items-center justify-between transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+                <span className={`truncate ${!value ? 'text-gray-500 dark:text-gray-400' : ''}`}>{value || placeholder}</span>
+                <ChevronIcon />
+            </div>
+            {isOpen && !disabled && (
+                <div className="absolute z-[300] w-full mt-1 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 rounded-lg shadow-xl max-h-56 overflow-y-auto custom-scrollbar">
+                    {displayOptions.map((opt, idx) => (
+                        <div 
+                            key={idx}
+                            onClick={() => {
+                                onChange({ target: { name, value: opt } });
+                                setIsOpen(false);
+                            }}
+                            className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between border-b border-gray-50 dark:border-gray-700/50 last:border-0 ${value === opt ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium' : 'text-[#111b21] dark:text-[#d1d7db] hover:bg-[#f5f6f6] dark:hover:bg-[#2a3942]'}`}
+                        >
+                            <span className="truncate pr-2">{opt}</span>
+                            {value === opt && <Check className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 🧩 CustomSelect Component
+// ─────────────────────────────────────────────────────────────────────────────
+const ChevronIcon = () => (
+    <div className="flex items-center text-gray-500 dark:text-gray-400 shrink-0 pointer-events-none">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+    </div>
+);
+
+const CustomSelect = ({ name, value, options, onChange, placeholder, disabled = false }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const displayOptions = [...options];
+    if (value && !displayOptions.includes(value)) displayOptions.push(value);
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <div 
+                onClick={(e) => {
+                    e.preventDefault();
+                    if (!disabled) setIsOpen(!isOpen);
+                }}
+                className={`w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] cursor-pointer border ${isOpen ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-transparent'} flex items-center justify-between transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+                <span className={`truncate select-none ${!value ? 'text-gray-500 dark:text-gray-400' : ''}`}>{value || placeholder}</span>
+                <ChevronIcon />
+            </div>
+            {isOpen && !disabled && (
+                <div className="absolute z-[9999] w-full mt-1 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 rounded-lg shadow-2xl max-h-56 overflow-y-auto custom-scrollbar">
+                    {displayOptions.map((opt, idx) => (
+                        <div 
+                            key={idx}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onChange({ target: { name, value: opt } });
+                                setIsOpen(false);
+                            }}
+                            className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between border-b border-gray-50 dark:border-gray-700/50 last:border-0 ${value === opt ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium' : 'text-[#111b21] dark:text-[#d1d7db] hover:bg-[#f5f6f6] dark:hover:bg-[#2a3942]'}`}
+                        >
+                            <span className="truncate pr-2">{opt}</span>
+                            {value === opt && <Check className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 📝 Profile Edit Modal
 // ─────────────────────────────────────────────────────────────────────────────
 const ProfileModal = ({ candidate, onClose, onSave }) => {
@@ -343,66 +460,10 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    // CSS para el select con apariencia custom
-    const selectClasses = "w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] cursor-pointer border border-transparent focus:border-blue-500 appearance-none pr-10";
-
-    const ChevronIcon = () => (
-        <div className="flex items-center text-gray-500 dark:text-gray-400 shrink-0">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-        </div>
-    );
-
-    const CustomSelect = ({ name, value, options, onChange, placeholder, disabled = false }) => {
-        const [isOpen, setIsOpen] = useState(false);
-        const dropdownRef = useRef(null);
-
-        useEffect(() => {
-            const handleClickOutside = (event) => {
-                if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                    setIsOpen(false);
-                }
-            };
-            document.addEventListener('mousedown', handleClickOutside);
-            return () => document.removeEventListener('mousedown', handleClickOutside);
-        }, []);
-
-        const displayOptions = [...options];
-        if (value && !displayOptions.includes(value)) displayOptions.push(value);
-
-        return (
-            <div className="relative" ref={dropdownRef}>
-                <div 
-                    onClick={() => !disabled && setIsOpen(!isOpen)}
-                    className={`w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] cursor-pointer border ${isOpen ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-transparent'} flex items-center justify-between transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                    <span className={`truncate ${!value ? 'text-gray-500 dark:text-gray-400' : ''}`}>{value || placeholder}</span>
-                    <ChevronIcon />
-                </div>
-                {isOpen && !disabled && (
-                    <div className="absolute z-[300] w-full mt-1 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 rounded-lg shadow-xl max-h-56 overflow-y-auto">
-                        {displayOptions.map((opt, idx) => (
-                            <div 
-                                key={idx}
-                                onClick={() => {
-                                    onChange({ target: { name, value: opt } });
-                                    setIsOpen(false);
-                                }}
-                                className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between border-b border-gray-50 dark:border-gray-700/50 last:border-0 ${value === opt ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium' : 'text-[#111b21] dark:text-[#d1d7db] hover:bg-[#f5f6f6] dark:hover:bg-[#2a3942]'}`}
-                            >
-                                <span className="truncate pr-2">{opt}</span>
-                                {value === opt && <Check className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />}
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        );
-    };
-
     return (
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-[#202c33] w-full max-w-md rounded-xl shadow-xl overflow-hidden flex flex-col">
-                <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] flex justify-between items-center">
+            <div className="bg-white dark:bg-[#202c33] w-full max-w-md rounded-xl shadow-xl flex flex-col">
+                <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] flex justify-between items-center rounded-t-xl">
                     <h3 className="font-bold text-[#111b21] dark:text-[#e9edef] truncate pr-4">Perfil del Candidato</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
                         <X className="w-5 h-5" />
@@ -436,7 +497,7 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
                         <CustomSelect name="categoria" value={formData.categoria} options={botCategories} onChange={handleChange} placeholder={botCategories.length === 0 ? "Cargando..." : "Seleccione..."} disabled={botCategories.length === 0} />
                     </div>
                 </div>
-                <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#111b21]">
+                <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#111b21] rounded-b-xl">
                     <button onClick={onClose} className="px-4 py-2 font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors">Cancelar</button>
                     <button onClick={() => onSave(formData)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors">Guardar</button>
                 </div>
