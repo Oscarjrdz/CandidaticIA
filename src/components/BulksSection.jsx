@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X, ChevronDown, CheckCircle2, ArrowUpDown } from 'lucide-react';
 import { getCandidates } from '../services/candidatesService';
 
-const getRelativeTime = (c) => {
+const getCandidateTimestamp = (c) => {
     let timestamp = c.createdAt || c.timestamp;
     
     if (!timestamp && c.id && String(c.id).startsWith('cand_')) {
@@ -12,9 +12,15 @@ const getRelativeTime = (c) => {
         }
     }
     
-    if (!timestamp) return '';
+    if (!timestamp) return 0;
     const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return '';
+    return isNaN(date.getTime()) ? 0 : date.getTime();
+};
+
+const getRelativeTime = (c) => {
+    const ts = getCandidateTimestamp(c);
+    if (!ts) return '';
+    const date = new Date(ts);
     
     const now = new Date();
     const diffMs = now - date;
@@ -127,6 +133,7 @@ const BulksSection = ({ showToast }) => {
     const [showStartModal, setShowStartModal] = useState(false);
     const [startModalData, setStartModalData] = useState(null);
     const [tagDropdownOpen, setTagDropdownOpen] = useState(false);
+    const [timeSortOrder, setTimeSortOrder] = useState('desc'); // 'desc' o 'asc'
     const tagDropdownRef = useRef(null);
 
     useEffect(() => {
@@ -352,6 +359,10 @@ const BulksSection = ({ showToast }) => {
         }
 
         return true;
+    }).sort((a, b) => {
+        const tsA = getCandidateTimestamp(a);
+        const tsB = getCandidateTimestamp(b);
+        return timeSortOrder === 'desc' ? tsB - tsA : tsA - tsB;
     });
 
     const toggleCandidate = (id) => {
@@ -595,7 +606,19 @@ const BulksSection = ({ showToast }) => {
                     )}
 
                     <div className="flex justify-between items-center text-sm px-1">
-                        <span className="text-[#54656f] dark:text-[#8696a0] font-medium">{selectedCandIds.size} seleccionados</span>
+                        <div className="flex items-center gap-3">
+                            <span className="text-[#54656f] dark:text-[#8696a0] font-medium">{selectedCandIds.size} seleccionados</span>
+                            
+                            {/* Ordenamiento por tiempo */}
+                            <button 
+                                onClick={() => setTimeSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                                className="flex items-center gap-1.5 text-gray-500 hover:text-blue-600 transition-colors bg-gray-50 hover:bg-blue-50 dark:bg-gray-800 dark:hover:bg-blue-900/20 px-2 py-1 rounded-md"
+                                title={timeSortOrder === 'desc' ? "Viendo los más recientes primero" : "Viendo los más antiguos primero"}
+                            >
+                                <ArrowUpDown className="w-3.5 h-3.5" />
+                                <span className="text-[11px] font-semibold">{timeSortOrder === 'desc' ? 'Recientes' : 'Antiguos'}</span>
+                            </button>
+                        </div>
                         <button onClick={toggleAll} className="text-blue-500 hover:text-blue-600 font-medium cursor-pointer" disabled={isRunning}>
                             {selectedCandIds.size === filteredCandidates.length ? "Deseleccionar todos" : "Seleccionar todos"}
                         </button>
