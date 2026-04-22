@@ -322,12 +322,29 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
         categoria: candidate.categoria || ''
     });
 
+    const [botCategories, setBotCategories] = useState([]);
+
+    useEffect(() => {
+        fetch('/api/categories')
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.data && data.data.length > 0) {
+                    setBotCategories(data.data.map(c => c.name));
+                } else {
+                    setBotCategories(["Operativo", "Administrativo", "Otro"]);
+                }
+            })
+            .catch(err => setBotCategories(["Operativo", "Administrativo", "Otro"]));
+    }, []);
+
     const GENERO_OPTIONS = ["Hombre", "Mujer", "Otro"];
     const ESCOLARIDAD_OPTIONS = ["Primaria", "Secundaria", "Preparatoria", "Licenciatura", "Técnica", "Posgrado"];
-    const CATEGORIA_OPTIONS = ["Operativo", "Administrativo", "Ventas", "Almacén", "Mantenimiento", "Limpieza", "Seguridad", "Chofer", "Montacarguista", "Técnico", "Otro"];
-    const MUNICIPIO_OPTIONS = ["Monterrey", "Apodaca", "Guadalupe", "Escobedo", "San Nicolás", "Santa Catarina", "Juárez", "García", "San Pedro", "Pesquería", "Cadereyta", "Salinas Victoria", "Ciénega de Flores", "El Carmen", "Zuazua", "Otro"];
+    const MUNICIPIO_OPTIONS = ["Abasolo", "Acapulco", "Agualeguas", "Aguascalientes", "Aldama", "Allende", "Anáhuac", "Apodaca", "Aramberri", "Bustamante", "CDMX", "Cadereyta", "Cancún", "Carmen", "Celaya", "Cerralvo", "Chihuahua", "China", "Ciénega", "Ciudad Victoria", "Culiacán", "Doctor Arroyo", "Doctor Coss", "Doctor González", "Durango", "Ecatepec", "El Carmen", "Escobedo", "Galeana", "García", "General Bravo", "General Terán", "General Treviño", "General Zaragoza", "Guadalajara", "Guadalupe", "Hermosillo", "Hidalgo", "Higueras", "Hualahuises", "Irapuato", "Iturbide", "Juárez", "Lampazos", "León", "Linares", "Los Herreras", "Los Ramones", "Marín", "Matamoros", "Melchor Ocampo", "Mexicali", "Mier y Noriega", "Mina", "Monclova", "Montemorelos", "Monterrey", "Morelia", "Naucalpan", "Neza", "Nuevo Laredo", "Oaxaca", "Parás", "Pesquería", "Puebla", "Querétaro", "Rayones", "Reynosa", "Sabinas", "Salinas", "Saltillo", "San Luis Potosí", "San Nicolás", "San Pedro", "Santa Catarina", "Santiago", "Tampico", "Tijuana", "Tlalnepantla", "Toluca", "Torreón", "Vallecillo", "Veracruz", "Villaldama", "Zapopan", "Zuazua", "Otro"];
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+    // Improved generic styling for the selects to ensure legibility and OS-native look
+    const selectClasses = "w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] cursor-pointer border border-transparent focus:border-blue-500";
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
@@ -341,16 +358,16 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
                 <div className="p-6 flex-1 overflow-y-auto space-y-4">
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Nombre Real</label>
-                        <input type="text" name="nombreReal" value={formData.nombreReal} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db]" placeholder="Nombre completo" />
+                        <input type="text" name="nombreReal" value={formData.nombreReal} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500" placeholder="Nombre completo" />
                     </div>
                     <div className="flex gap-4">
                         <div className="flex-1">
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Edad</label>
-                            <input type="text" name="edad" value={formData.edad} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db]" placeholder="Ej. 25" />
+                            <input type="text" name="edad" value={formData.edad} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500" placeholder="Ej. 25" />
                         </div>
                         <div className="flex-1">
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Género</label>
-                            <select name="genero" value={formData.genero} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] appearance-none cursor-pointer">
+                            <select name="genero" value={formData.genero} onChange={handleChange} className={selectClasses}>
                                 <option value="" disabled>Seleccione...</option>
                                 {GENERO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                             </select>
@@ -358,16 +375,15 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Municipio</label>
-                        <select name="municipio" value={formData.municipio} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] appearance-none cursor-pointer">
+                        <select name="municipio" value={formData.municipio} onChange={handleChange} className={selectClasses}>
                             <option value="" disabled>Seleccione...</option>
                             {MUNICIPIO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            {/* Allow current DB value if not in standard list */}
                             {formData.municipio && !MUNICIPIO_OPTIONS.includes(formData.municipio) && <option value={formData.municipio}>{formData.municipio}</option>}
                         </select>
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Escolaridad</label>
-                        <select name="escolaridad" value={formData.escolaridad} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] appearance-none cursor-pointer">
+                        <select name="escolaridad" value={formData.escolaridad} onChange={handleChange} className={selectClasses}>
                             <option value="" disabled>Seleccione...</option>
                             {ESCOLARIDAD_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                             {formData.escolaridad && !ESCOLARIDAD_OPTIONS.includes(formData.escolaridad) && <option value={formData.escolaridad}>{formData.escolaridad}</option>}
@@ -375,10 +391,10 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Categoría</label>
-                        <select name="categoria" value={formData.categoria} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] appearance-none cursor-pointer">
-                            <option value="" disabled>Seleccione...</option>
-                            {CATEGORIA_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            {formData.categoria && !CATEGORIA_OPTIONS.includes(formData.categoria) && <option value={formData.categoria}>{formData.categoria}</option>}
+                        <select name="categoria" value={formData.categoria} onChange={handleChange} className={selectClasses} disabled={botCategories.length === 0}>
+                            <option value="" disabled>{botCategories.length === 0 ? "Cargando..." : "Seleccione..."}</option>
+                            {botCategories.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                            {formData.categoria && !botCategories.includes(formData.categoria) && <option value={formData.categoria}>{formData.categoria}</option>}
                         </select>
                     </div>
                 </div>
