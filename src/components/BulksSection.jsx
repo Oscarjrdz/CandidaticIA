@@ -647,15 +647,22 @@ const BulksSection = ({ showToast }) => {
                                     {(c.nombreReal || c.nombre || c.whatsapp || "?").charAt(0).toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-baseline mb-0.5">
-                                        <h3 className="font-semibold text-sm text-[#111b21] dark:text-[#e9edef] truncate pr-2">
+                                    <div className="flex justify-between items-start mb-0.5">
+                                        <h3 className="font-semibold text-sm text-[#111b21] dark:text-[#e9edef] truncate pr-2 pt-0.5">
                                             {c.nombreReal || c.nombre || c.whatsapp}
                                         </h3>
-                                        {getRelativeTime(c) && (
-                                            <span className="text-[11px] text-[#8696a0] whitespace-nowrap font-medium" title="Fecha de captura">
-                                                {getRelativeTime(c)}
-                                            </span>
-                                        )}
+                                        <div className="flex flex-col items-end shrink-0">
+                                            {getRelativeTime(c) && (
+                                                <span className="text-[11px] text-[#8696a0] whitespace-nowrap font-medium" title="Fecha de captura">
+                                                    {getRelativeTime(c)}
+                                                </span>
+                                            )}
+                                            {c.campaignName && (
+                                                <span className="text-[10px] text-indigo-500 dark:text-indigo-400 font-bold whitespace-nowrap mt-0.5" title={`Campaña Masiva: ${c.campaignName}`}>
+                                                    Campaña Masiva: {c.campaignName}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <p className="text-[13px] text-[#54656f] dark:text-[#8696a0] truncate">
                                         {c.whatsapp} • {c.tags?.length || 0} etiquetas

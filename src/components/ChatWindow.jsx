@@ -509,7 +509,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         const isFirstInSeries = !prevMsg || isMe !== isPrevMe;
 
         return (
-            <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} group relative ${!isFirstInSeries ? '-mt-1.5' : ''} px-2`}>
+            <div className={`flex ${isMe ? 'justify-end' : 'justify-start'} group relative ${!isFirstInSeries ? 'mt-0.5' : 'mt-2'} px-[4%]`}>
                 {/* 🔄 Botón de Cotizar (Reply) Oculto hasta Hover */}
                 <button
                     onClick={() => setReplyToMsg(msg)}
@@ -520,7 +520,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 </button>
 
                 <div className={`
-                    max-w-[85%] rounded-[7.5px] px-2 py-1.5 shadow-[0_1px_0.5px_rgba(11,20,26,.13)] relative z-10
+                    max-w-[88%] md:max-w-[80%] rounded-[10px] px-3 py-1.5 shadow-[0_1px_1.5px_rgba(11,20,26,.15)] relative z-10
                     ${isMe
                         ? `bg-[#d9fdd3] dark:bg-[#005c4b] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tr-none' : ''}`
                         : `bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] ${isFirstInSeries ? 'rounded-tl-none' : ''}`}
@@ -547,7 +547,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
 
                     {/* Media Rendering */}
                     {msg.mediaUrl && (
-                        <div className="mb-2 rounded-lg overflow-hidden border border-black/5 relative min-w-[200px]">
+                        <div className="mb-1 rounded-lg overflow-hidden border border-black/5 relative min-w-[200px]">
                             {(msg.type === 'image' || msg.type === 'image_received') && (
                                 <img src={msg.mediaUrl} loading="lazy" alt="Media" className="max-w-full h-auto max-h-[300px] object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.mediaUrl, '_blank')} />
                             )}
@@ -576,21 +576,20 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     )}
 
                     {msg.content && (
-                        <div className="relative inline-block min-w-[40px] max-w-full">
+                        <div className="relative min-w-[60px] max-w-full text-[14.5px]">
                             <div 
-                                className="whitespace-pre-wrap leading-[1.35] inline-block break-words" 
-                                style={{ paddingBottom: '10px', paddingRight: '48px' }}
-                                dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) }}
+                                className="whitespace-pre-wrap leading-snug break-words" 
+                                dangerouslySetInnerHTML={{ __html: formatWhatsAppText(msg.content) + '<span class="inline-block w-[60px] h-2 invisible pointer-events-none"></span>' }}
                             />
                         </div>
                     )}
 
-                    <div className={`flex items-center space-x-1 select-none pr-1 ${msg.content ? 'absolute bottom-[3px] right-2' : 'justify-end mt-1'}`}>
-                        <p className="text-[10.5px] text-gray-500/90 dark:text-gray-400/90 font-medium">
+                    <div className={`flex items-center space-x-1 select-none ${msg.content ? 'absolute bottom-1 right-2' : 'justify-end mt-1'}`}>
+                        <p className="text-[10px] text-gray-500/90 dark:text-gray-400/90 font-medium tracking-tight">
                             {safeFormatTime(msg.timestamp)}
                         </p>
                         {isMe && (
-                            <span className={`text-[12.5px] font-bold uppercase leading-none ${msg.status === 'seen' || msg.status === 'read' ? 'text-[#53bdeb]' : 'text-gray-400/80'}`}>
+                            <span className={`text-[13px] font-bold uppercase leading-none ${msg.status === 'seen' || msg.status === 'read' ? 'text-[#53bdeb]' : 'text-gray-400/80'}`}>
                                 {msg.status === 'seen' || msg.status === 'read' ? '✓✓' : msg.status === 'delivered' ? '✓✓' : msg.status === 'queued' ? '...' : '✓'}
                             </span>
                         )}
