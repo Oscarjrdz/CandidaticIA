@@ -2,6 +2,32 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { getCandidates } from '../services/candidatesService';
 
+const getRelativeTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffMins < 1) return 'hace un momento';
+    if (diffMins < 60) return `hace ${diffMins} min`;
+    if (diffHours < 24 && now.getDate() === date.getDate()) {
+        return `hace ${diffHours} hora${diffHours > 1 ? 's' : ''}`;
+    }
+    
+    if (diffDays === 1 || (diffHours < 48 && now.getDate() !== date.getDate())) return 'ayer';
+    if (diffDays < 7) {
+        const days = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+        return `el ${days[date.getDay()]}`;
+    }
+    
+    return date.toLocaleDateString();
+};
+
 const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -593,6 +619,11 @@ const BulksSection = ({ showToast }) => {
                                         <h3 className="font-semibold text-sm text-[#111b21] dark:text-[#e9edef] truncate pr-2">
                                             {c.nombreReal || c.nombre || c.whatsapp}
                                         </h3>
+                                        {c.createdAt && (
+                                            <span className="text-[11px] text-[#8696a0] whitespace-nowrap font-medium" title={new Date(c.createdAt).toLocaleString()}>
+                                                {getRelativeTime(c.createdAt)}
+                                            </span>
+                                        )}
                                     </div>
                                     <p className="text-[13px] text-[#54656f] dark:text-[#8696a0] truncate">
                                         {c.whatsapp} • {c.tags?.length || 0} etiquetas
