@@ -17,7 +17,8 @@ import {
     saveCandidate,
     updateCandidate,
     getCandidateById,
-    getRedisClient
+    getRedisClient,
+    saveMessage
 } from '../utils/storage.js';
 
 // Elimina caracteres no numéricos del número de teléfono y remueve sufijos
@@ -156,7 +157,9 @@ export default async function handler(req, res) {
             if (!profilePicUrl) {
                 try {
                     console.log(`[GATEWAY CATCHER] Foto no venía en webhook. Extrayendo manualmente para: ${phone}...`);
-                    const fetchUrl = `https://gatewaywapp-production.up.railway.app/a2c8cea97a/contacts/profile-picture?token=0ef8455a4a5a45e099df7cd6851a24d2&to=${phone}@c.us`;
+                    const catcherInstanceId = (client ? await client.get('catcher_instance_id') : null) || 'a2c8cea97a';
+                    const catcherToken = (client ? await client.get('catcher_instance_token') : null) || '0ef8455a4a5a45e099df7cd6851a24d2';
+                    const fetchUrl = `https://gatewaywapp-production.up.railway.app/${catcherInstanceId}/contacts/profile-picture?token=${catcherToken}&to=${phone}@c.us`;
                     
                     const resPic = await fetch(fetchUrl);
                     if (resPic.ok) {
@@ -177,8 +180,29 @@ export default async function handler(req, res) {
             let candidateId = await getCandidateIdByPhone(phone);
             
             if (candidateId) {
-                // Si ya existe en base, NO se hace nada, tal como se solicitó para aplicar solo a nuevos.
-                console.log(`[GATEWAY CATCHER] Ignorado - Candidato ya existe: ${phone}`);
+                // Check if this is a gateway_instance candidate touching the Catcher
+                const existingCandidate = await getCandidateById(candidateId);
+                if (existingCandidate?.origen === 'gateway_instance') {
+                    // Notify recruiter without changing origin
+                    await saveMessage(candidateId, {
+                        id: `sys_${Date.now()}`,
+                        from: 'system',
+                        content: '📲 Este candidato contactó al Catcher. Respóndele por Gateway.',
+                        type: 'system',
+                        timestamp: new Date().toISOString()
+                    });
+                    await updateCandidate(candidateId, {
+                        ultimoMensaje: new Date().toISOString(),
+                        unreadMsgCount: (existingCandidate.unreadMsgCount || 0) + 1
+                    });
+                    // SSE notify
+                    try {
+                        const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
+                        notifyCandidateUpdate(candidateId, { ultimoMensaje: new Date().toISOString(), newMessage: true }).catch(() => {});
+                    } catch (e) {}
+                    console.log(`[GATEWAY CATCHER] 📡 Gateway candidate ${phone} contacted Catcher. Alert injected.`);
+                }
+                // Si ya existe en base, NO se hace nada más
                 return res.status(200).send('existing_lead_ignored');
                 
             } else {

@@ -160,8 +160,15 @@ export default async function handler(req, res) {
 
             await saveMessage(candidateId, msgToSave);
 
-            // 2. Send via Meta Cloud API
+            // 2. Send message (auto-routing: Gateway vs Meta handled by sendUltraMsgMessage)
             try {
+                // ═══ BLOCK: Templates not supported on Gateway ═══
+                if (type === 'template' && candidate.origen === 'gateway_instance') {
+                    return res.status(400).json({
+                        error: 'Plantillas Meta no aplican para candidatos Gateway. Envía un mensaje directo.'
+                    });
+                }
+
                 let sendResult;
                 const cleanTo = candidate.whatsapp.replace(/\D/g, '');
                 const extraParams = {};

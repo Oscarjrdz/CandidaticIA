@@ -501,6 +501,20 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     // --- RENDER MESSAGE ---
     const renderMessage = (idx, msg) => {
         if (!msg) return null;
+
+        // ═══ SYSTEM MESSAGES (channel alerts, migration notices) ═══
+        if (msg.from === 'system' || msg.type === 'system') {
+            return (
+                <div className="flex justify-center my-2 px-[4%]" key={msg.id || idx}>
+                    <div className="px-3 py-1 bg-amber-50/80 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-700/40 rounded-lg shadow-sm max-w-[85%]">
+                        <span className="text-[11px] text-amber-800 dark:text-amber-300 font-medium leading-tight">
+                            {msg.content}
+                        </span>
+                    </div>
+                </div>
+            );
+        }
+
         const isMe = msg.from === 'me' || msg.from === 'bot';
         
         // Find previous message for tail logic

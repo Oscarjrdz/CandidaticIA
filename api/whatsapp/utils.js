@@ -233,8 +233,150 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
     }
 };
 
-// Legacy alias — existing code calls sendUltraMsgMessage
+// ═══════════════════════════════════════════════════════════════════
+// 📡 GATEWAY API — Send via non-Meta WhatsApp Gateway
+// ═══════════════════════════════════════════════════════════════════
+const GATEWAY_BASE_URL = 'https://gatewaywapp-production.up.railway.app';
+
+const sendViaGateway = async (phone, body, type = 'chat', extraParams = {}) => {
+    try {
+        const { getRedisClient } = await import('../utils/storage.js');
+        const redis = getRedisClient();
+        const instanceId = (redis ? await redis.get('gateway_instance_id') : null) || process.env.GATEWAY_INSTANCE_ID || '';
+        const token = (redis ? await redis.get('gateway_instance_token') : null) || process.env.GATEWAY_INSTANCE_TOKEN || '';
+
+        if (!instanceId || !token) {
+            console.error('❌ Gateway: Missing instance_id or token');
+            return { success: false, error: 'Gateway configuration missing' };
+        }
+
+        const to = `${String(phone).replace(/[^\d]/g, '')}@c.us`;
+        let endpoint, payload;
+
+        switch (type) {
+            case 'image': {
+                endpoint = `/${instanceId}/messages/image`;
+                // body can be a URL or base64
+                payload = { to, image: body, caption: extraParams.caption || '', token };
+                break;
+            }
+            case 'audio': {
+                endpoint = `/${instanceId}/messages/audio`;
+                payload = { to, audio: body, ptt: true, token };
+                break;
+            }
+            case 'document': {
+                endpoint = `/${instanceId}/messages/document`;
+                payload = { to, document: body, filename: extraParams.filename || 'documento.pdf', token };
+                break;
+            }
+            case 'sticker': {
+                endpoint = `/${instanceId}/messages/sticker`;
+                payload = { to, sticker: body, token };
+                break;
+            }
+            case 'location': {
+                endpoint = `/${instanceId}/messages/chat`;
+                const locText = `📍 ${extraParams.name || 'Ubicación'}\n${extraParams.address || ''}`.trim();
+                payload = { to, body: locText, token };
+                break;
+            }
+            case 'reaction': {
+                // Gateway doesn't support reactions the same way, skip silently
+                return { success: true, data: { status: 'reaction_skipped_gateway' }, via: 'gateway' };
+            }
+            case 'template': {
+                // Templates are Meta-only, should be blocked before reaching here
+                return { success: false, error: 'Templates not supported on Gateway' };
+            }
+            default: { // 'chat', 'text'
+                // Filter technical/empty messages (same as Meta)
+                const filterRegex = /^\[\s*(SILENCIO|NULL|UNDEFINED|REACCIÓN.*?|REACCION.*?)\s*\]$/i;
+                const bodyStr = String(body).trim();
+                if (!bodyStr || filterRegex.test(bodyStr) || bodyStr === "\n\n") {
+                    return { success: true, data: { status: 'filtered_internal_tag_or_empty' } };
+                }
+                endpoint = `/${instanceId}/messages/chat`;
+                payload = { to, body: bodyStr, token };
+                if (extraParams.referenceId) {
+                    payload.contextInfo = {
+                        stanzaId: extraParams.referenceId,
+                        participant: to,
+                        quotedMessage: { conversation: '' }
+                    };
+                }
+            }
+        }
+
+        const startTime = Date.now();
+        const response = await fetch(`${GATEWAY_BASE_URL}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const duration = Date.now() - startTime;
+        const data = await response.json();
+
+        // Debug logging
+        try {
+            const redis2 = getRedisClient();
+            if (redis2) {
+                redis2.set(`debug:gw_send:${phone}`, JSON.stringify({
+                    timestamp: new Date().toISOString(),
+                    duration,
+                    status: response.status,
+                    type,
+                    result: data
+                }), 'EX', 3600).catch(() => { });
+            }
+        } catch (e) { }
+
+        if (response.ok) {
+            // Track outgoing message stats
+            try {
+                const { incrementMessageStats } = await import('../utils/storage.js');
+                incrementMessageStats('outgoing').catch(() => { });
+            } catch (e) { }
+
+            console.error(`✅ [Gateway] Sent ${type} to ${phone} in ${duration}ms`);
+            return {
+                success: true,
+                data,
+                messageId: data?.id || data?.messageId,
+                via: 'gateway'
+            };
+        }
+
+        console.error(`❌ [Gateway] Error sending ${type}:`, data);
+        return { success: false, error: data?.error || `HTTP ${response.status}`, data, via: 'gateway' };
+
+    } catch (error) {
+        console.error('❌ Gateway fatal error:', error.message);
+        return { success: false, error: error.message, via: 'gateway' };
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔀 AUTO-ROUTING — Gateway vs Meta (the smart pipe)
+// ═══════════════════════════════════════════════════════════════════
 export const sendUltraMsgMessage = async (_instanceId, _token, to, body, type = 'chat', extraParams = {}) => {
+    // Auto-detect: is this candidate routed through Gateway?
+    try {
+        const phone = String(to).replace(/[^\d]/g, '');
+        const { getCandidateIdByPhone, getCandidateById } = await import('../utils/storage.js');
+        const candidateId = await getCandidateIdByPhone(phone);
+        if (candidateId) {
+            const candidate = await getCandidateById(candidateId);
+            if (candidate?.origen === 'gateway_instance') {
+                return sendViaGateway(phone, body, type, extraParams);
+            }
+        }
+    } catch (routingErr) {
+        // If routing check fails, fall through to Meta (safe default)
+        console.error('⚠️ Gateway routing check failed, defaulting to Meta:', routingErr.message);
+    }
+
+    // Default: Meta Cloud API
     return sendMetaMessage(to, body, type, extraParams);
 };
 

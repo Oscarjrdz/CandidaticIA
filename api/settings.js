@@ -93,6 +93,19 @@ export default async function handler(req, res) {
                 });
             }
 
+            // Gateway credentials (Catcher + Instance)
+            if (type === 'catcher_credentials') {
+                const id = await redis.get('catcher_instance_id') || '';
+                const token = await redis.get('catcher_instance_token') || '';
+                return res.status(200).json({ success: true, data: { instanceId: id, token } });
+            }
+
+            if (type === 'gateway_credentials') {
+                const id = await redis.get('gateway_instance_id') || '';
+                const token = await redis.get('gateway_instance_token') || '';
+                return res.status(200).json({ success: true, data: { instanceId: id, token } });
+            }
+
             return res.status(400).json({ error: 'Invalid type' });
         }
 
@@ -198,6 +211,21 @@ export default async function handler(req, res) {
                     success: true,
                     message: 'Catcher tag saved'
                 });
+            }
+
+            // Gateway credentials (Catcher + Instance)
+            if (type === 'catcher_credentials') {
+                if (!data || typeof data !== 'object') return res.status(400).json({ error: 'Invalid format' });
+                if (data.instanceId) await redis.set('catcher_instance_id', data.instanceId);
+                if (data.token) await redis.set('catcher_instance_token', data.token);
+                return res.status(200).json({ success: true, message: 'Catcher credentials saved' });
+            }
+
+            if (type === 'gateway_credentials') {
+                if (!data || typeof data !== 'object') return res.status(400).json({ error: 'Invalid format' });
+                if (data.instanceId) await redis.set('gateway_instance_id', data.instanceId);
+                if (data.token) await redis.set('gateway_instance_token', data.token);
+                return res.status(200).json({ success: true, message: 'Gateway credentials saved' });
             }
 
             return res.status(400).json({ error: 'Invalid type' });
