@@ -555,7 +555,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                     {(chat.edad || chat.escolaridad) && chat.municipio && <span className="shrink-0">•</span>}
                     {chat.municipio && <span className="truncate shrink-0">{chat.municipio}</span>}
                     {(chat.edad || chat.escolaridad || chat.municipio) && chat.categoria && <span className="shrink-0">•</span>}
-                    {chat.categoria && <span className="truncate font-semibold text-[#111b21] dark:text-[#d1d7db]">{chat.categoria}</span>}
+                    {chat.categoria && <span className="truncate shrink-0">{toTitleCase(chat.categoria)}</span>}
                 </div>
             </div>
         </div>
