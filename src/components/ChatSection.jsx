@@ -371,7 +371,7 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
 };
 
 // 🏎️ MEMOIZED ChatRow — only re-renders when THIS chat's data changes (not the whole list)
-const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId }) => {
+const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal }) => {
     const isUnread = checkIfUnreadStandalone(chat);
     const profileComplete = isProfileCompleteStandalone(chat);
     const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
