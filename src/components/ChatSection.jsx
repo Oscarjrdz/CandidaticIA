@@ -1793,26 +1793,31 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     {/* Filter Chips */}
                     <div className="flex flex-col gap-2 pb-2 min-h-[105px]">
                         {/* Renglón 1: Estados */}
-                        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] pb-1">
+                        <div 
+                            className="w-full flex flex-nowrap items-center justify-between gap-1 pb-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                            style={{ containerType: 'inline-size' }}
+                        >
                         {canSeeFilter('filter_todos') && (
                             <button 
                                 onClick={() => { setActiveFilter('all'); setFilterValue(null); setAiProjectFilter(null); setAiStepFilter(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
+                                className={`flex-1 flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[50px] ${
                                     activeFilter === 'all' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
+                                style={{ fontSize: 'clamp(9px, 2.5cqw, 12px)' }}
                             >
                                 Todos
                             </button>
                         )}
                         <button 
                             onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
-                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
+                            className={`flex-[1.2] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[70px] ${
                                 activeFilter === 'unread' 
                                 ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                 : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                             }`}
+                            style={{ fontSize: 'clamp(9px, 2.5cqw, 12px)' }}
                         >
                             No Leídos
                             {unreadCounts.all > 0 && (
@@ -1824,11 +1829,12 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         {canSeeFilter('filter_complete') && (
                             <button 
                                 onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setShowDropdown(null); }}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
+                                className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
                                     activeFilter === 'profile' && filterValue === 'complete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
+                                style={{ fontSize: 'clamp(9px, 2.5cqw, 12px)' }}
                             >
                                 Completos ({badgeCounts.complete})
                                 {unreadCounts.complete > 0 && (
@@ -1841,11 +1847,12 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         {canSeeFilter('filter_incomplete') && (
                             <button 
                                 onClick={() => { setActiveFilter('profile'); setFilterValue('incomplete'); setShowDropdown(null); }}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
+                                className={`flex-[1.5] flex justify-center px-1.5 py-1.5 rounded-full font-medium whitespace-nowrap transition-colors border border-transparent items-center gap-1 min-w-[90px] ${
                                     activeFilter === 'profile' && filterValue === 'incomplete' 
                                     ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                     : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                                 }`}
+                                style={{ fontSize: 'clamp(9px, 2.5cqw, 12px)' }}
                             >
                                 Incompletos ({badgeCounts.incomplete})
                                 {unreadCounts.incomplete > 0 && (
