@@ -112,7 +112,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                 </div>
             </td>
             <td className="py-0.5 px-2.5">
-                <div className={`flex items-center justify-center w-8 h-8 rounded-full overflow-hidden ${showEmptyRing && isChatEmpty(candidate) ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900' : ''}`}>
+                <div className={`flex items-center justify-center w-6 h-6 rounded-full overflow-hidden ${showEmptyRing && isChatEmpty(candidate) ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900' : ''}`}>
                     {candidate.profilePic ? (
                         <img src={candidate.profilePic}
                              alt="Avatar" className="w-full h-full object-cover"
