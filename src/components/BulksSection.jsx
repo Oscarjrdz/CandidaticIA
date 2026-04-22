@@ -347,7 +347,7 @@ const BulksSection = ({ showToast }) => {
 
         if (activeFilter === 'complete' && !isProfileComplete(c)) return false;
         if (activeFilter === 'incomplete' && isProfileComplete(c)) return false;
-        if (activeFilter === 'empty' && (c.ultimoMensaje || c.lastUserMessageAt)) return false;
+        if (activeFilter === 'empty' && (c.lastUserMessageAt || c.ultimoMensajeBot || c.lastBotMessageAt || c.unreadMsgCount > 0)) return false;
 
         // Tag filter
         if (selectedTagFilter) {
