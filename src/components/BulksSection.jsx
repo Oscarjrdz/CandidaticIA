@@ -2,9 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { getCandidates } from '../services/candidatesService';
 
-const getRelativeTime = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
+const getRelativeTime = (c) => {
+    let timestamp = c.createdAt || c.timestamp;
+    
+    if (!timestamp && c.id && String(c.id).startsWith('cand_')) {
+        const parts = String(c.id).split('_');
+        if (parts.length > 1 && !isNaN(parseInt(parts[1]))) {
+            timestamp = parseInt(parts[1]);
+        }
+    }
+    
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
     if (isNaN(date.getTime())) return '';
     
     const now = new Date();
@@ -619,9 +628,9 @@ const BulksSection = ({ showToast }) => {
                                         <h3 className="font-semibold text-sm text-[#111b21] dark:text-[#e9edef] truncate pr-2">
                                             {c.nombreReal || c.nombre || c.whatsapp}
                                         </h3>
-                                        {c.createdAt && (
-                                            <span className="text-[11px] text-[#8696a0] whitespace-nowrap font-medium" title={new Date(c.createdAt).toLocaleString()}>
-                                                {getRelativeTime(c.createdAt)}
+                                        {getRelativeTime(c) && (
+                                            <span className="text-[11px] text-[#8696a0] whitespace-nowrap font-medium" title="Fecha de captura">
+                                                {getRelativeTime(c)}
                                             </span>
                                         )}
                                     </div>
