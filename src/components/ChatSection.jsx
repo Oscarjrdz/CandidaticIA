@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin } from 'lucide-react';
 const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
@@ -278,6 +278,143 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// 🧱 STANDALONE HELPERS (outside component to avoid re-creation on every render)
+const checkIfUnreadStandalone = (chat) => {
+    if (!chat) return false;
+    const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
+    const botTime = Math.max(
+        chat.lastBotMessageAt ? new Date(chat.lastBotMessageAt).getTime() : 0, 
+        chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0
+    );
+    return userTime > botTime + 1000 || chat.unreadMsgCount > 0;
+};
+
+const isProfileCompleteStandalone = (c) => {
+    if (!c) return false;
+    const valToStr = (v) => v ? String(v).trim().toLowerCase() : '-';
+    const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
+    const hasCoreData = coreFields.every(f => {
+        const val = valToStr(c[f]);
+        if (val === '-' || val === 'null' || val === 'n/a' || val === 'na' || val === 'ninguno' || val === 'ninguna' || val === 'none' || val === 'desconocido' || val.includes('proporcionado') || val.length < 2) return false;
+        if (f === 'escolaridad') {
+            const junk = ['kinder', 'ninguna', 'sin estudios', 'no tengo', 'no curse', 'preescolar', 'maternal'];
+            if (junk.some(j => val.includes(j))) return false;
+        }
+        return true;
+    });
+    const ageVal = valToStr(c.edad || c.fechaNacimiento);
+    const hasAgeData = ageVal !== '-' && ageVal !== 'null' && ageVal !== 'n/a' && ageVal !== 'na';
+    return hasCoreData && hasAgeData;
+};
+
+const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'];
+
+// 🏎️ MEMOIZED ChatRow — only re-renders when THIS chat's data changes (not the whole list)
+const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId }) => {
+    const isUnread = checkIfUnreadStandalone(chat);
+    const profileComplete = isProfileCompleteStandalone(chat);
+    const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
+
+    return (
+        <div 
+            onClick={() => onSelect(chat)}
+            className={`flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-4 ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] shadow-sm relative z-10' : 'border-transparent'}`}
+        >
+            <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden">
+                {chat.profilePic ? (
+                    <img src={chat.profilePic} className="w-full h-full object-cover" alt="profile" loading="lazy"
+                        onError={(e)=>{e.target.onerror=null; e.target.style.display='none'; e.target.parentElement.innerHTML=`<span class="flex items-center justify-center w-full h-full text-lg font-bold text-white" style="background:${avatarColor}">${(chat.nombre||'C')[0].toUpperCase()}</span>`;}} />
+                ) : (
+                    <span className="flex items-center justify-center w-full h-full text-lg font-bold text-white rounded-full"
+                        style={{ background: avatarColor }}>
+                        {(chat.nombre || 'C')[0].toUpperCase()}
+                    </span>
+                )}
+            </div>
+            <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
+                <div className="flex flex-row justify-between items-center mb-1 w-full min-w-0">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        {isPinned && <Pin className="w-3 h-3 text-[#25d366] dark:text-[#00a884] shrink-0 fill-current" />}
+                        <h3 className={`text-[17px] truncate flex-1 min-w-0 transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
+                            {toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}
+                        </h3>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                        {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
+                            <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
+                        ) : null}
+                        <span className={`text-xs whitespace-nowrap ${isUnread ? 'text-[#25d366] dark:text-[#00a884] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
+                            {formatRelativeDate(chat.ultimoMensaje)}
+                        </span>
+                    </div>
+                </div>
+                <div className="flex justify-between items-center mt-0.5">
+                    <div className="flex items-center gap-1.5 truncate">
+                        <p className={`text-[13px] truncate ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
+                            {chat.currentVacancyName || 'WhatsApp'}
+                        </p>
+                        <span className={`text-[11px] font-light tracking-wide shrink-0 font-sans ${profileComplete ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}>
+                            • {profileComplete ? 'Perfil completo' : 'Perfil incompleto'}
+                        </span>
+                    </div>
+                    <div className="flex items-center shrink-0 ml-1 gap-1">
+                        {isUnread && (
+                            <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center mr-1 shadow-sm shrink-0 text-white text-[11px] font-bold">
+                                {chat.unreadMsgCount || 1}
+                            </div>
+                        )}
+                        {onlineReaders.length > 0 && (
+                            <div className="flex -space-x-1.5 mr-1 group/presence" title="Viendo este chat">
+                                {onlineReaders.map((r, idx) => (
+                                    <div key={idx} className="relative group/tooltip">
+                                        <div className="w-4 h-4 rounded-full border border-white dark:border-[#202c33] bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-[8px] text-white font-bold shadow-sm ring-1 ring-black/5">
+                                            {r.userName ? r.userName.charAt(0).toUpperCase() : '?'}
+                                        </div>
+                                        <div className="absolute right-0 bottom-full mb-1 opacity-0 group-hover/tooltip:opacity-100 bg-gray-900 text-white text-[10px] py-0.5 px-1.5 rounded pointer-events-none whitespace-nowrap transition-opacity z-50">
+                                            {r.userId === userId ? 'Tú lo estás viendo' : `${r.userName} viéndolo`}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onTogglePin(chat.id); }}
+                            className={`p-1 rounded transition-colors ${isPinned ? 'text-[#25d366] dark:text-[#00a884]' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 opacity-0 group-hover:opacity-100'}`}
+                            title={isPinned ? 'Desfijar chat' : 'Fijar chat (máx 3)'}
+                        >
+                            <Pin className={`w-3.5 h-3.5 ${isPinned ? 'fill-current' : ''}`} />
+                        </button>
+                        <button
+                            onClick={(e) => onBlock(chat, e)}
+                            disabled={blockLoading}
+                            className={`w-7 h-3.5 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center shadow-inner ${chat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                            title={chat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
+                        >
+                            <div className={`absolute w-2.5 h-2.5 rounded-full bg-white shadow transition-transform duration-200 ${chat.blocked ? 'translate-x-[16px]' : 'translate-x-0.5'}`}></div>
+                        </button>
+                        <button
+                            onClick={(e) => onDelete(chat, e)}
+                            className="ml-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                            title="Eliminar chat"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 mt-1 text-[10px] text-[#8696a0] dark:text-[#697882] truncate">
+                    {chat.edad && <span>{chat.edad} años</span>}
+                    {chat.edad && chat.escolaridad && <span>•</span>}
+                    {chat.escolaridad && <span className="truncate">{chat.escolaridad}</span>}
+                    {(chat.edad || chat.escolaridad) && chat.municipio && <span>•</span>}
+                    {chat.municipio && <span className="truncate">{chat.municipio}</span>}
+                </div>
+            </div>
+        </div>
+    );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function ChatSection({ showToast, user, rolePermissions, onlineUsers = [] }) {
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
     const { updatedCandidate: sseUpdate, newCandidate: sseNewCandidate } = useCandidatesSSE();
@@ -369,6 +506,20 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const filterValueRef = useRef(null);
     const selectedChatRef = useRef(null);
 
+    // 📌 PINNING SYSTEM (WhatsApp-native, max 3, persisted in localStorage)
+    const [pinnedChats, setPinnedChats] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('candidatic:pinned_chats') || '[]'); } catch { return []; }
+    });
+    const togglePin = useCallback((chatId) => {
+        setPinnedChats(prev => {
+            const next = prev.includes(chatId)
+                ? prev.filter(id => id !== chatId)
+                : prev.length >= 3 ? prev : [...prev, chatId];
+            localStorage.setItem('candidatic:pinned_chats', JSON.stringify(next));
+            return next;
+        });
+    }, []);
+
     useEffect(() => {
         selectedChatRef.current = selectedChat;
     }, [selectedChat]);
@@ -451,8 +602,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             .then(data => { if(data.success && data.data) setMetaTemplates(data.data.filter(t => t.status==='APPROVED')); })
             .catch(() => {});
 
-        // 🟢 FALLBACK polling (WebSockets handles real-time, this is safety net)
-        const interval = setInterval(loadCandidates, 5000);
+        // 🟢 SAFETY NET polling (SSE handles real-time, this is 60s fallback only)
+        const interval = setInterval(loadCandidates, 60000);
 
         // 🔔 Poll chat stats (unread counts + locks) — now O(1) on backend
         const statsInterval = setInterval(async () => {
@@ -521,8 +672,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         };
 
         loadAllowedCandidates();
-        // Refresh every 15s in case projects change
-        const interval = setInterval(loadAllowedCandidates, 5000);
+        // Refresh every 60s — RBAC permissions change rarely
+        const interval = setInterval(loadAllowedCandidates, 60000);
         return () => clearInterval(interval);
     }, [user, rolePermissions]);
 
@@ -715,37 +866,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
     };
 
-    const isProfileComplete = (c) => {
-        if (!c) return false;
-
-        const valToStr = (v) => v ? String(v).trim().toLowerCase() : '-';
-        const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
-        
-        const hasCoreData = coreFields.every(f => {
-            const val = valToStr(c[f]);
-            if (val === '-' || val === 'null' || val === 'n/a' || val === 'na' || val === 'ninguno' || val === 'ninguna' || val === 'none' || val === 'desconocido' || val.includes('proporcionado') || val.length < 2) return false;
-            if (f === 'escolaridad') {
-                const junk = ['kinder', 'ninguna', 'sin estudios', 'no tengo', 'no curse', 'preescolar', 'maternal'];
-                if (junk.some(j => val.includes(j))) return false;
-            }
-            return true;
-        });
-
-        const ageVal = valToStr(c.edad || c.fechaNacimiento);
-        const hasAgeData = ageVal !== '-' && ageVal !== 'null' && ageVal !== 'n/a' && ageVal !== 'na';
-        return hasCoreData && hasAgeData;
-    };
-
-    // Helper: Evalúa en tiempo real si un chat está "no leído"
-    const checkIfUnread = (chat) => {
-        if (!chat) return false;
-        const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
-        const botTime = Math.max(
-            chat.lastBotMessageAt ? new Date(chat.lastBotMessageAt).getTime() : 0, 
-            chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0
-        );
-        return userTime > botTime + 1000 || chat.unreadMsgCount > 0;
-    };
+    // Delegate to standalone versions (defined outside component for React.memo compatibility)
+    const isProfileComplete = isProfileCompleteStandalone;
+    const checkIfUnread = checkIfUnreadStandalone;
 
     // Fast search filter for the list with robust safety checks
     const filteredCandidates = useMemo(() => {
@@ -803,30 +926,25 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             return true;
         });
 
+        // 🏎️ Pre-compute timestamps ONCE (eliminates ~44,000 Date objects per sort)
+        const tsCache = new Map();
+        for (const c of result) {
+            tsCache.set(c.id, c.ultimoMensaje ? new Date(c.ultimoMensaje).getTime() : 0);
+        }
+
+        // WhatsApp-Native Sort: Pinned first → then strictly chronological
         return result.sort((a, b) => {
-            // ALWAYS keep selected chat at the top
-            if (selectedChat?.id) {
-                if (a.id === selectedChat.id && b.id !== selectedChat.id) return -1;
-                if (b.id === selectedChat.id && a.id !== selectedChat.id) return 1;
-            }
-
-            const aUnread = checkIfUnread(a);
-            const bUnread = checkIfUnread(b);
-
-            // Unread messages next
-            if (aUnread && !bUnread) return -1;
-            if (!aUnread && bUnread) return 1;
-
-            // Finally sort by latest activity date
-            const timeA = a.ultimoMensaje ? new Date(a.ultimoMensaje).getTime() : 0;
-            const timeB = b.ultimoMensaje ? new Date(b.ultimoMensaje).getTime() : 0;
-            return timeB - timeA;
+            const aPinned = pinnedChats.includes(a.id);
+            const bPinned = pinnedChats.includes(b.id);
+            if (aPinned && !bPinned) return -1;
+            if (!aPinned && bPinned) return 1;
+            return (tsCache.get(b.id) || 0) - (tsCache.get(a.id) || 0);
         });
     }, [
         candidates, debouncedSearch, roleAllowedCandidateIds, user, 
         activeFilter, filterValue, aiProjectFilter, aiStepFilter, 
         aiProjectCandidates, manualPipelineFilter, manualStepFilter,
-        selectedChat?.id
+        pinnedChats
     ]);
 
     // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
@@ -904,16 +1022,13 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         prevMessagesLength.current = messages.length;
     }, [messages]);
 
-    // 🚀 SSE-DRIVEN: Reload candidates + messages when SSE fires
-    // Debounced to prevent flickering from rapid bot reply cycles (unread:true → unread:false)
-    const sseCandidatesTimerRef = useRef(null);
+    // 🚀 SSE-DRIVEN: Surgical state updates (zero re-fetch architecture)
     useEffect(() => {
         if (!sseUpdate) return;
-        
 
+        // --- Typing indicator (unchanged) ---
         if (sseUpdate.updates?.recruiterTyping !== undefined) {
             if (sseUpdate.candidateId === selectedChat?.id) {
-                // Ignore our own typing
                 if ((user?.name || 'Reclutador') !== sseUpdate.updates.recruiterTyping) {
                     setRecruiterTypingName(sseUpdate.updates.recruiterTyping);
                     clearTimeout(typingTimersRef.current.recruiter);
@@ -922,9 +1037,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             }
         }
 
-        // Messages for the actively viewed chat → reload INSTANTLY (no debounce)
+        // --- Messages for the actively viewed chat → reload INSTANTLY ---
         if (sseUpdate.candidateId === selectedChat?.id || (selectedChat?.whatsapp && sseUpdate.phoneMatch === selectedChat.whatsapp)) {
-            // Also if messageStatusUpdate came in, update the messages array directly if possible, or just reload messages
             if (sseUpdate.updates?.messageStatusUpdate) {
                 const { id, status, additionalData } = sseUpdate.updates.messageStatusUpdate;
                 setMessages(prev => {
@@ -937,8 +1051,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     return prev;
                 });
             } else if (sseUpdate.updates?.newMessage || !sseUpdate.updates?.recruiterTyping) {
-                // Only reload if we DON'T have pending optimistic messages (temp_ prefix)
-                // Otherwise SSE would replace our optimistic messages before they're confirmed
                 setMessages(prev => {
                     const hasOptimistic = prev.some(m => String(m.id).startsWith('temp_'));
                     if (!hasOptimistic) {
@@ -948,18 +1060,50 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 });
             }
         }
-        // Candidate list → DEBOUNCE 500ms to batch rapid-fire SSE events (antiflicker, not antiban)
-        clearTimeout(sseCandidatesTimerRef.current);
-        sseCandidatesTimerRef.current = setTimeout(() => {
-            loadCandidates();
-        }, 500);
-        return () => clearTimeout(sseCandidatesTimerRef.current);
+
+        // --- SURGICAL CANDIDATE PATCH (replaces loadCandidates) ---
+        // Instead of re-fetching 2,042 candidates, patch ONLY the one that changed
+        if (sseUpdate.candidateId && sseUpdate.updates && !sseUpdate.updates?.recruiterTyping) {
+            const patch = sseUpdate.updates;
+            setCandidates(prev => prev.map(c => {
+                if (c.id !== sseUpdate.candidateId) return c; // ← same reference, React.memo skips
+                const updated = { ...c };
+                if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
+                if (patch.lastUserMessageAt) {
+                    updated.lastUserMessageAt = patch.lastUserMessageAt;
+                    updated.unreadMsgCount = (c.unreadMsgCount || 0) + 1;
+                }
+                if (patch.lastBotMessageAt) {
+                    updated.lastBotMessageAt = patch.lastBotMessageAt;
+                    updated.ultimoMensajeBot = patch.lastBotMessageAt;
+                }
+                if (patch.unreadMsgCount !== undefined) updated.unreadMsgCount = patch.unreadMsgCount;
+                return updated;
+            }));
+            // Also update selectedChat if it's the one that changed
+            if (selectedChat?.id === sseUpdate.candidateId) {
+                setSelectedChat(prev => {
+                    if (!prev || prev.id !== sseUpdate.candidateId) return prev;
+                    const updated = { ...prev };
+                    if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
+                    if (patch.lastBotMessageAt) {
+                        updated.lastBotMessageAt = patch.lastBotMessageAt;
+                        updated.ultimoMensajeBot = patch.lastBotMessageAt;
+                        updated.unreadMsgCount = 0; // We're viewing this chat
+                    }
+                    return updated;
+                });
+            }
+        }
     }, [sseUpdate]);
 
-    // 🆕 SSE: New candidate arrived
+    // 🆕 SSE: New candidate arrived → inject directly (zero re-fetch)
     useEffect(() => {
         if (!sseNewCandidate) return;
-        loadCandidates();
+        setCandidates(prev => {
+            if (prev.some(c => c.id === sseNewCandidate.id)) return prev; // already exists
+            return [sseNewCandidate, ...prev];
+        });
     }, [sseNewCandidate]);
 
     // Load messages
@@ -967,8 +1111,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         if (!selectedChat) return;
 
         loadMessages();
-        // 🟢 FALLBACK polling (SSE handles real-time, this is safety net)
-        const interval = setInterval(loadMessages, 3000);
+        // 🟢 SAFETY NET polling (SSE handles real-time, 15s fallback)
+        const interval = setInterval(loadMessages, 15000);
 
         // 👁️ Mark messages as read (triggers blue ticks on candidate's phone)
         const markAsRead = async () => {
@@ -1838,101 +1982,21 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                             data={filteredCandidates}
                             overscan={10}
                             computeItemKey={(index, chat) => chat.id}
-                            itemContent={(index, chat) => {
-                                const isUnread = checkIfUnread(chat);
-
-                                return (
-                                <div 
-                                    onClick={() => setSelectedChat(chat)}
-                                    className={`flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-4 ${selectedChat?.id === chat.id ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] shadow-sm relative z-10' : 'border-transparent'}`}
-                                >
-                                    <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden">
-                                        {chat.profilePic ? (
-                                            <img src={chat.profilePic} className="w-full h-full object-cover" alt="profile" loading="lazy"
-                                                onError={(e)=>{e.target.onerror=null; e.target.style.display='none'; e.target.parentElement.innerHTML=`<span class="flex items-center justify-center w-full h-full text-lg font-bold text-white" style="background:${['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((chat.nombre||'C').charCodeAt(0)*7)%10]}">${(chat.nombre||'C')[0].toUpperCase()}</span>`;}} />
-                                        ) : (
-                                            <span className="flex items-center justify-center w-full h-full text-lg font-bold text-white rounded-full"
-                                                style={{ background: ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'][((chat.nombre||'C').charCodeAt(0)*7)%10] }}>
-                                                {(chat.nombre || 'C')[0].toUpperCase()}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex-1 min-w-0 border-b border-[#f0f2f5] dark:border-[#222e35] pb-3 pt-1">
-                                        <div className="flex flex-row justify-between items-center mb-1 w-full min-w-0">
-                                            <h3 className={`text-[17px] truncate flex-1 min-w-0 transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
-                                                {toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}
-                                            </h3>
-                                            <div className="flex items-center gap-1 shrink-0 ml-2">
-                                                {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (
-                                                    <MessageStatusTicks status={chat.lastMessageStatus} size="sm" />
-                                                ) : null}
-                                                <span className={`text-xs whitespace-nowrap ${isUnread ? 'text-[#25d366] dark:text-[#00a884] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
-                                                    {formatRelativeDate(chat.ultimoMensaje)}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-between items-center mt-0.5">
-                                            <div className="flex items-center gap-1.5 truncate">
-                                                <p className={`text-[13px] truncate ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
-                                                    {chat.currentVacancyName || 'WhatsApp'}
-                                                </p>
-                                                <span className={`text-[11px] font-light tracking-wide shrink-0 font-sans ${isProfileComplete(chat) ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}>
-                                                    • {isProfileComplete(chat) ? 'Perfil completo' : 'Perfil incompleto'}
-                                                </span>
-
-                                            </div>
-                                            <div className="flex items-center shrink-0 ml-1 gap-1">
-                                                {isUnread && (
-                                                    <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center mr-1 shadow-sm shrink-0 text-white text-[11px] font-bold">
-                                                        {chat.unreadMsgCount || 1}
-                                                    </div>
-                                                )}
-                                                {(() => {
-                                                    const readers = (onlineUsers || []).filter(u => u.currentChatId === chat.id);
-                                                    if (readers.length === 0) return null;
-                                                    return (
-                                                        <div className="flex -space-x-1.5 mr-1 group/presence" title="Viendo este chat">
-                                                            {readers.map((r, idx) => (
-                                                                <div key={idx} className="relative group/tooltip">
-                                                                    <div className="w-4 h-4 rounded-full border border-white dark:border-[#202c33] bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-[8px] text-white font-bold shadow-sm ring-1 ring-black/5">
-                                                                        {r.userName ? r.userName.charAt(0).toUpperCase() : '?'}
-                                                                    </div>
-                                                                    <div className="absolute right-0 bottom-full mb-1 opacity-0 group-hover/tooltip:opacity-100 bg-gray-900 text-white text-[10px] py-0.5 px-1.5 rounded pointer-events-none whitespace-nowrap transition-opacity z-50">
-                                                                        {r.userId === (user?.id || user?.whatsapp) ? 'Tú lo estás viendo' : `${r.userName} viéndolo`}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    );
-                                                })()}
-                                                <button
-                                                    onClick={(e) => handleBlockToggle(chat, e)}
-                                                    disabled={blockLoading}
-                                                    className={`w-7 h-3.5 rounded-full relative transition-colors duration-200 focus:outline-none flex items-center shadow-inner ${chat.blocked ? 'bg-red-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                                                    title={chat.blocked ? 'Reactivar Chat IA' : 'Silenciar Chat IA'}
-                                                >
-                                                    <div className={`absolute w-2.5 h-2.5 rounded-full bg-white shadow transition-transform duration-200 ${chat.blocked ? 'translate-x-[16px]' : 'translate-x-0.5'}`}></div>
-                                                </button>
-                                                <button
-                                                    onClick={(e) => handleDeleteChat(chat, e)}
-                                                    className="ml-2 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
-                                                    title="Eliminar chat"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-1 text-[10px] text-[#8696a0] dark:text-[#697882] truncate">
-                                            {chat.edad && <span>{chat.edad} años</span>}
-                                            {chat.edad && chat.escolaridad && <span>•</span>}
-                                            {chat.escolaridad && <span className="truncate">{chat.escolaridad}</span>}
-                                            {(chat.edad || chat.escolaridad) && chat.municipio && <span>•</span>}
-                                            {chat.municipio && <span className="truncate">{chat.municipio}</span>}
-                                        </div>
-                                    </div>
-                                </div>
-                                );
-                            }}
+                            itemContent={(index, chat) => (
+                                <ChatRow
+                                    key={chat.id}
+                                    chat={chat}
+                                    isSelected={selectedChat?.id === chat.id}
+                                    isPinned={pinnedChats.includes(chat.id)}
+                                    onSelect={setSelectedChat}
+                                    onBlock={handleBlockToggle}
+                                    onDelete={handleDeleteChat}
+                                    onTogglePin={togglePin}
+                                    onlineReaders={(onlineUsers || []).filter(u => u.currentChatId === chat.id)}
+                                    blockLoading={blockLoading}
+                                    userId={user?.id || user?.whatsapp}
+                                />
+                            )}
                         />
                 </div>
                 </>

@@ -1240,9 +1240,16 @@ export const saveMessage = async (candidateId, message) => {
             }
         }
 
-        // TRIGGER SSE: Notify frontends of a new chat message to eliminate short-polling
+        // TRIGGER SSE: Notify frontends with enriched payload for surgical UI updates (zero re-fetch)
+        const now = new Date().toISOString();
+        const isFromUser = message.from === 'user';
         import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
-            notifyCandidateUpdate(candidateId, { newMessage: true }).catch(() => {});
+            notifyCandidateUpdate(candidateId, { 
+                newMessage: true,
+                messageFrom: message.from,
+                ultimoMensaje: now,
+                ...(isFromUser ? { lastUserMessageAt: now } : { lastBotMessageAt: now, unreadMsgCount: 0 })
+            }).catch(() => {});
         }).catch(err => console.error("Could not import sse-notify", err));
 
     } catch (e) {
@@ -1387,13 +1394,21 @@ export const saveWebhookTransaction = async ({
         if (errors.length > 0) {
             console.error('❌ [Storage] Pipeline Transaction had partial failures:', errors);
         } else {
-            // 🚀 FIRE SSE! Update Chat UI instantly for incoming webhook events
+            // 🚀 FIRE SSE! Enriched payload for surgical frontend updates (zero re-fetch)
             if (candidateId) {
+                const ssePayload = { 
+                    newMessage: !!message,
+                    statusUpdate: !!candidateUpdates
+                };
+                // Enrich with candidate fields so frontend can patch locally
+                if (candidateUpdates) {
+                    if (candidateUpdates.ultimoMensaje) ssePayload.ultimoMensaje = candidateUpdates.ultimoMensaje;
+                    if (candidateUpdates.lastUserMessageAt) ssePayload.lastUserMessageAt = candidateUpdates.lastUserMessageAt;
+                    if (candidateUpdates.lastBotMessageAt) ssePayload.lastBotMessageAt = candidateUpdates.lastBotMessageAt;
+                    if (candidateUpdates.unreadMsgCount !== undefined) ssePayload.unreadMsgCount = candidateUpdates.unreadMsgCount;
+                }
                 import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
-                    notifyCandidateUpdate(candidateId, { 
-                        newMessage: !!message,
-                        statusUpdate: !!candidateUpdates
-                    }).catch(() => {});
+                    notifyCandidateUpdate(candidateId, ssePayload).catch(() => {});
                 }).catch(() => {});
             }
         }
