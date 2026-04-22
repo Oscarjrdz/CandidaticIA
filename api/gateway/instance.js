@@ -219,6 +219,7 @@ export default async function handler(req, res) {
                 // ═══ NEW CANDIDATE ═══
                 ensureTagExists('GATEWAY');
 
+                const now = Date.now();
                 const newCandidate = await saveCandidate({
                     whatsapp: phone,
                     nombre: pushName,
@@ -228,8 +229,8 @@ export default async function handler(req, res) {
                     tags: ['GATEWAY'],
                     esNuevo: 'NO',
                     bot_ia_active: false,
-                    primerContacto: new Date().toISOString(),
-                    ultimoMensaje: new Date().toISOString(),
+                    primerContacto: new Date(now - 2000).toISOString(), // 2s before to bypass isEmptyChat (blue ring)
+                    ultimoMensaje: new Date(now).toISOString(),
                     unreadMsgCount: 1
                 });
 
