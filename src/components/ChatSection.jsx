@@ -347,10 +347,57 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
     const selectClasses = "w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] cursor-pointer border border-transparent focus:border-blue-500 appearance-none pr-10";
 
     const ChevronIcon = () => (
-        <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-500 dark:text-gray-400">
+        <div className="flex items-center text-gray-500 dark:text-gray-400 shrink-0">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
         </div>
     );
+
+    const CustomSelect = ({ name, value, options, onChange, placeholder, disabled = false }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const dropdownRef = useRef(null);
+
+        useEffect(() => {
+            const handleClickOutside = (event) => {
+                if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                    setIsOpen(false);
+                }
+            };
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }, []);
+
+        const displayOptions = [...options];
+        if (value && !displayOptions.includes(value)) displayOptions.push(value);
+
+        return (
+            <div className="relative" ref={dropdownRef}>
+                <div 
+                    onClick={() => !disabled && setIsOpen(!isOpen)}
+                    className={`w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] cursor-pointer border ${isOpen ? 'border-blue-500 ring-1 ring-blue-500/50' : 'border-transparent'} flex items-center justify-between transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                    <span className={`truncate ${!value ? 'text-gray-500 dark:text-gray-400' : ''}`}>{value || placeholder}</span>
+                    <ChevronIcon />
+                </div>
+                {isOpen && !disabled && (
+                    <div className="absolute z-[300] w-full mt-1 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                        {displayOptions.map((opt, idx) => (
+                            <div 
+                                key={idx}
+                                onClick={() => {
+                                    onChange({ target: { name, value: opt } });
+                                    setIsOpen(false);
+                                }}
+                                className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between border-b border-gray-50 dark:border-gray-700/50 last:border-0 ${value === opt ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium' : 'text-[#111b21] dark:text-[#d1d7db] hover:bg-[#f5f6f6] dark:hover:bg-[#2a3942]'}`}
+                            >
+                                <span className="truncate pr-2">{opt}</span>
+                                {value === opt && <Check className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400" />}
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
@@ -361,59 +408,32 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="p-6 flex-1 overflow-y-auto space-y-4">
+                <div className="p-6 flex-1 overflow-visible space-y-4">
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Nombre Real</label>
-                        <input type="text" name="nombreReal" value={formData.nombreReal} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500" placeholder="Nombre completo" />
+                        <input type="text" name="nombreReal" value={formData.nombreReal} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all" placeholder="Nombre completo" />
                     </div>
                     <div className="flex gap-4">
                         <div className="flex-1">
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Edad</label>
-                            <input type="text" name="edad" value={formData.edad} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500" placeholder="Ej. 25" />
+                            <input type="text" name="edad" value={formData.edad} onChange={handleChange} className="w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] border border-transparent focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 transition-all" placeholder="Ej. 25" />
                         </div>
                         <div className="flex-1">
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Género</label>
-                            <div className="relative">
-                                <select name="genero" value={formData.genero} onChange={handleChange} className={selectClasses}>
-                                    <option value="" disabled>Seleccione...</option>
-                                    {GENERO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                </select>
-                                <ChevronIcon />
-                            </div>
+                            <CustomSelect name="genero" value={formData.genero} options={GENERO_OPTIONS} onChange={handleChange} placeholder="Seleccione..." />
                         </div>
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Municipio</label>
-                        <div className="relative">
-                            <select name="municipio" value={formData.municipio} onChange={handleChange} className={selectClasses}>
-                                <option value="" disabled>Seleccione...</option>
-                                {MUNICIPIO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                {formData.municipio && !MUNICIPIO_OPTIONS.includes(formData.municipio) && <option value={formData.municipio}>{formData.municipio}</option>}
-                            </select>
-                            <ChevronIcon />
-                        </div>
+                        <CustomSelect name="municipio" value={formData.municipio} options={MUNICIPIO_OPTIONS} onChange={handleChange} placeholder="Seleccione..." />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Escolaridad</label>
-                        <div className="relative">
-                            <select name="escolaridad" value={formData.escolaridad} onChange={handleChange} className={selectClasses}>
-                                <option value="" disabled>Seleccione...</option>
-                                {ESCOLARIDAD_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                {formData.escolaridad && !ESCOLARIDAD_OPTIONS.includes(formData.escolaridad) && <option value={formData.escolaridad}>{formData.escolaridad}</option>}
-                            </select>
-                            <ChevronIcon />
-                        </div>
+                        <CustomSelect name="escolaridad" value={formData.escolaridad} options={ESCOLARIDAD_OPTIONS} onChange={handleChange} placeholder="Seleccione..." />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Categoría</label>
-                        <div className="relative">
-                            <select name="categoria" value={formData.categoria} onChange={handleChange} className={selectClasses} disabled={botCategories.length === 0}>
-                                <option value="" disabled>{botCategories.length === 0 ? "Cargando..." : "Seleccione..."}</option>
-                                {botCategories.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                {formData.categoria && !botCategories.includes(formData.categoria) && <option value={formData.categoria}>{formData.categoria}</option>}
-                            </select>
-                            <ChevronIcon />
-                        </div>
+                        <CustomSelect name="categoria" value={formData.categoria} options={botCategories} onChange={handleChange} placeholder={botCategories.length === 0 ? "Cargando..." : "Seleccione..."} disabled={botCategories.length === 0} />
                     </div>
                 </div>
                 <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#111b21]">
