@@ -347,6 +347,7 @@ const BulksSection = ({ showToast }) => {
 
         if (activeFilter === 'complete' && !isProfileComplete(c)) return false;
         if (activeFilter === 'incomplete' && isProfileComplete(c)) return false;
+        if (activeFilter === 'empty' && (c.ultimoMensaje || c.lastUserMessageAt)) return false;
 
         // Tag filter
         if (selectedTagFilter) {
@@ -533,6 +534,14 @@ const BulksSection = ({ showToast }) => {
                                 : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                             }`}
                         >Incompletos</button>
+                        <button 
+                            onClick={() => setActiveFilter('empty')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
+                                activeFilter === 'empty' 
+                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                            }`}
+                        >Vacíos</button>
                     </div>
 
                     {/* Tag Filter Dropdown */}

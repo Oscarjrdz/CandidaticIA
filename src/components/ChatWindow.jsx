@@ -546,30 +546,40 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     )}
 
                     {/* Media Rendering */}
-                    {msg.mediaUrl && (
-                        <div className="mb-1 rounded-lg overflow-hidden border border-black/5 relative min-w-[200px]">
-                            {(msg.type === 'image' || msg.type === 'image_received') && (
-                                <img src={msg.mediaUrl} loading="lazy" alt="Media" className="max-w-full h-auto max-h-[300px] object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(msg.mediaUrl, '_blank')} />
-                            )}
-                            {(msg.type === 'video' || msg.type === 'video_received') && (
-                                <video src={msg.mediaUrl} controls className="max-w-full h-auto" />
-                            )}
-                            {(msg.type === 'audio' || msg.type === 'voice' || msg.type === 'ptt' || msg.type === 'audio_received') && (
-                                <div className="flex flex-col space-y-1 p-1 bg-black/5 dark:bg-white/5 rounded-lg">
-                                    <audio src={msg.mediaUrl} controls className="max-w-full h-8 mt-1 block" style={{ filter: isMe ? 'sepia(100%) hue-rotate(90deg) saturate(300%)' : '' }} />
-                                    <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-600 dark:text-blue-400 opacity-60 hover:underline pl-1 text-right block mt-1">
-                                        Descargar audio
-                                    </a>
-                                </div>
-                            )}
-                            {(msg.type === 'document' || msg.type === 'doc_received') && (
-                                <div className="p-3 bg-black/5 flex items-center space-x-2 cursor-pointer" onClick={() => window.open(msg.mediaUrl, '_blank')}>
-                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" className="text-gray-600 dark:text-gray-300"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
-                                    <span className="text-xs font-medium underline">Ver documento</span>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    {msg.mediaUrl && (() => {
+                        const getSafeMediaUrl = (url) => {
+                            if (!url) return url;
+                            if (url.includes('lookaside.fbsbx.com') || url.includes('graph.facebook.com') || url.includes('whatsapp.net')) {
+                                return `/api/proxy?url=${encodeURIComponent(url)}`;
+                            }
+                            return url;
+                        };
+                        const safeUrl = getSafeMediaUrl(msg.mediaUrl);
+                        return (
+                            <div className="mb-1 rounded-lg overflow-hidden border border-black/5 relative min-w-[200px]">
+                                {(msg.type === 'image' || msg.type === 'image_received') && (
+                                    <img src={safeUrl} loading="lazy" alt="Media" className="max-w-full h-auto max-h-[300px] object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => window.open(safeUrl, '_blank')} />
+                                )}
+                                {(msg.type === 'video' || msg.type === 'video_received') && (
+                                    <video src={safeUrl} controls className="max-w-full h-auto" />
+                                )}
+                                {(msg.type === 'audio' || msg.type === 'voice' || msg.type === 'ptt' || msg.type === 'audio_received') && (
+                                    <div className="flex flex-col space-y-1 p-1 bg-black/5 dark:bg-white/5 rounded-lg">
+                                        <audio src={safeUrl} controls className="max-w-full h-8 mt-1 block" style={{ filter: isMe ? 'sepia(100%) hue-rotate(90deg) saturate(300%)' : '' }} />
+                                        <a href={safeUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-blue-600 dark:text-blue-400 opacity-60 hover:underline pl-1 text-right block mt-1">
+                                            Descargar audio
+                                        </a>
+                                    </div>
+                                )}
+                                {(msg.type === 'document' || msg.type === 'doc_received') && (
+                                    <div className="p-3 bg-black/5 flex items-center space-x-2 cursor-pointer" onClick={() => window.open(safeUrl, '_blank')}>
+                                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" className="text-gray-600 dark:text-gray-300"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                                        <span className="text-xs font-medium underline">Ver documento</span>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {!msg.content && msg.mediaUrl && (msg.type === 'voice' || msg.type === 'ptt') && (
                         <p className="text-[11px] italic opacity-50 mb-1">Nota de voz</p>
