@@ -1065,6 +1065,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 if (!hasAnyTag) return false;
             }
 
+            if (activeFilter === 'unread' && !checkIfUnread(c)) return false;
             if (activeFilter === 'label' && filterValue && !(Array.isArray(c?.tags) && c.tags.includes(filterValue))) return false;
             if (activeFilter === 'profile') {
                 const isComplete = isProfileComplete(c);
@@ -1805,6 +1806,21 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 Todos
                             </button>
                         )}
+                        <button 
+                            onClick={() => { setActiveFilter('unread'); setFilterValue(null); setShowDropdown(null); }}
+                            className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent flex items-center gap-1.5 ${
+                                activeFilter === 'unread' 
+                                ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
+                                : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
+                            }`}
+                        >
+                            No Leídos
+                            {unreadCounts.all > 0 && (
+                                <div className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[9px] font-bold shadow-sm -ml-0.5">
+                                    {unreadCounts.all}
+                                </div>
+                            )}
+                        </button>
                         {canSeeFilter('filter_complete') && (
                             <button 
                                 onClick={() => { setActiveFilter('profile'); setFilterValue('complete'); setShowDropdown(null); }}
