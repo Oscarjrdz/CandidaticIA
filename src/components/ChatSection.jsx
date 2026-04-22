@@ -309,6 +309,67 @@ const isProfileCompleteStandalone = (c) => {
 
 const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 📝 Profile Edit Modal
+// ─────────────────────────────────────────────────────────────────────────────
+const ProfileModal = ({ candidate, onClose, onSave }) => {
+    const [formData, setFormData] = useState({
+        nombreReal: candidate.nombreReal || candidate.nombre || '',
+        edad: candidate.edad || candidate.fechaNacimiento || '',
+        genero: candidate.genero || '',
+        municipio: candidate.municipio || '',
+        escolaridad: candidate.escolaridad || '',
+        categoria: candidate.categoria || ''
+    });
+
+    const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+
+    return (
+        <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-[#202c33] w-full max-w-md rounded-xl shadow-xl overflow-hidden flex flex-col">
+                <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-[#111b21] flex justify-between items-center">
+                    <h3 className="font-bold text-[#111b21] dark:text-[#e9edef] truncate pr-4">Perfil del Candidato</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+                <div className="p-6 flex-1 overflow-y-auto space-y-4">
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Nombre Real</label>
+                        <input type="text" name="nombreReal" value={formData.nombreReal} onChange={handleChange} className="w-full text-sm p-2 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db]" placeholder="Nombre completo" />
+                    </div>
+                    <div className="flex gap-4">
+                        <div className="flex-1">
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Edad</label>
+                            <input type="text" name="edad" value={formData.edad} onChange={handleChange} className="w-full text-sm p-2 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db]" placeholder="Ej. 25" />
+                        </div>
+                        <div className="flex-1">
+                            <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Género</label>
+                            <input type="text" name="genero" value={formData.genero} onChange={handleChange} className="w-full text-sm p-2 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db]" placeholder="Ej. Hombre" />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Municipio</label>
+                        <input type="text" name="municipio" value={formData.municipio} onChange={handleChange} className="w-full text-sm p-2 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db]" placeholder="Ej. Monterrey" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Escolaridad</label>
+                        <input type="text" name="escolaridad" value={formData.escolaridad} onChange={handleChange} className="w-full text-sm p-2 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db]" placeholder="Ej. Secundaria terminada" />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Categoría</label>
+                        <input type="text" name="categoria" value={formData.categoria} onChange={handleChange} className="w-full text-sm p-2 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db]" placeholder="Ej. Operativo" />
+                    </div>
+                </div>
+                <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#111b21]">
+                    <button onClick={onClose} className="px-4 py-2 font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-white transition-colors">Cancelar</button>
+                    <button onClick={() => onSave(formData)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors">Guardar</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // 🏎️ MEMOIZED ChatRow — only re-renders when THIS chat's data changes (not the whole list)
 const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId }) => {
     const isUnread = checkIfUnreadStandalone(chat);
@@ -353,7 +414,11 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         <p className={`text-[13px] truncate ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-medium' : 'text-[#667781] dark:text-[#8696a0]'}`}>
                             {chat.currentVacancyName || 'WhatsApp'}
                         </p>
-                        <span className={`text-[11px] font-light tracking-wide shrink-0 font-sans ${profileComplete ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}>
+                        <span 
+                            onClick={(e) => { e.stopPropagation(); onOpenProfileModal && onOpenProfileModal(chat); }}
+                            className={`text-[11px] font-light tracking-wide shrink-0 font-sans cursor-pointer hover:underline ${profileComplete ? 'text-green-500/90 dark:text-green-400/80' : 'text-red-400/90 dark:text-red-400/70'}`}
+                            title="Haz clic para ver/editar el perfil extraído por Brenda"
+                        >
                             • {profileComplete ? 'Perfil completo' : 'Perfil incompleto'}
                         </span>
                     </div>
@@ -455,6 +520,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const [chatLocks, setChatLocks] = useState({});
     const [reactionPopupId, setReactionPopupId] = useState(null);
     const [replyingToMsg, setReplyingToMsg] = useState(null);
+    const [profileModalCandidate, setProfileModalCandidate] = useState(null);
 
     // Typing Indicators
 
@@ -2013,6 +2079,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                     onlineReaders={(onlineUsers || []).filter(u => u.currentChatId === chat.id)}
                                     blockLoading={blockLoading}
                                     userId={user?.id || user?.whatsapp}
+                                    onOpenProfileModal={setProfileModalCandidate}
                                 />
                             )}
                         />
@@ -2770,6 +2837,34 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* PROFILE EDIT MODAL */}
+            {profileModalCandidate && (
+                <ProfileModal 
+                    candidate={profileModalCandidate}
+                    onClose={() => setProfileModalCandidate(null)}
+                    onSave={async (updates) => {
+                        // Optimistic UI update
+                        const updatedChat = { ...profileModalCandidate, ...updates };
+                        if (selectedChat?.id === updatedChat.id) setSelectedChat(updatedChat);
+                        setCandidates(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
+                        setProfileModalCandidate(null);
+                        
+                        try {
+                            const res = await fetch('/api/candidates', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: updatedChat.id, ...updates })
+                            });
+                            if (!res.ok) throw new Error('Failed to update candidate');
+                            showToast && showToast('Perfil actualizado correctamente', 'success');
+                        } catch (error) {
+                            console.error('Error updating profile:', error);
+                            showToast && showToast('Error al actualizar el perfil', 'error');
+                        }
+                    }}
+                />
             )}
         </div>
     );
