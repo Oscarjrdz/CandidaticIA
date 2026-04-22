@@ -318,7 +318,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
     return (
         <div 
             onClick={() => onSelect(chat)}
-            className={`flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-4 ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] shadow-sm relative z-10' : 'border-transparent'}`}
+            className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-4 ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] shadow-sm relative z-10' : 'border-transparent'}`}
         >
             <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden">
                 {chat.profilePic ? (
@@ -410,6 +410,17 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                 </div>
             </div>
         </div>
+    );
+}, (prevProps, nextProps) => {
+    // Custom comparator: only re-render if visual data changed
+    // This prevents re-renders caused by function reference changes (handleBlockToggle etc.)
+    return (
+        prevProps.chat === nextProps.chat &&
+        prevProps.isSelected === nextProps.isSelected &&
+        prevProps.isPinned === nextProps.isPinned &&
+        prevProps.blockLoading === nextProps.blockLoading &&
+        prevProps.onlineReaders.length === nextProps.onlineReaders.length &&
+        prevProps.userId === nextProps.userId
     );
 });
 
@@ -1125,6 +1136,13 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             } catch(e) {}
         };
         markAsRead();
+
+        // 🧹 Clear unread badge locally INSTANTLY (don't wait for next SSE/poll)
+        setCandidates(prev => prev.map(c =>
+            c.id === selectedChat.id && c.unreadMsgCount > 0
+                ? { ...c, unreadMsgCount: 0 }
+                : c
+        ));
 
         // 🔒 Lock this chat for me
         const currentUser = user?.name || 'Reclutador';
