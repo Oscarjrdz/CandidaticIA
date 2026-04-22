@@ -337,9 +337,9 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
             .catch(err => setBotCategories(["Operativo", "Administrativo", "Otro"]));
     }, []);
 
-    const GENERO_OPTIONS = ["Hombre", "Mujer", "Otro"];
+    const GENERO_OPTIONS = ["Hombre", "Mujer"];
     const ESCOLARIDAD_OPTIONS = ["Primaria", "Secundaria", "Preparatoria", "Licenciatura", "Técnica", "Posgrado"];
-    const MUNICIPIO_OPTIONS = ["Apodaca", "Cadereyta", "Ciénega de Flores", "El Carmen", "Escobedo", "García", "Guadalupe", "Juárez", "Monterrey", "Pesquería", "Salinas Victoria", "San Nicolás", "San Pedro", "Santa Catarina", "Santiago", "Zuazua", "Otro"];
+    const MUNICIPIO_OPTIONS = ["Abasolo", "Agualeguas", "Allende", "Anáhuac", "Apodaca", "Aramberri", "Bustamante", "Cadereyta Jiménez", "Cerralvo", "China", "Ciénega de Flores", "Doctor Arroyo", "Doctor Coss", "Doctor González", "El Carmen", "Galeana", "García", "General Bravo", "General Escobedo", "General Terán", "General Treviño", "General Zaragoza", "General Zuazua", "Guadalupe", "Hidalgo", "Higueras", "Hualahuises", "Iturbide", "Juárez", "Lampazos de Naranjo", "Linares", "Los Aldamas", "Los Herreras", "Los Ramones", "Marín", "Melchor Ocampo", "Mier y Noriega", "Mina", "Montemorelos", "Monterrey", "Parás", "Pesquería", "Rayones", "Sabinas Hidalgo", "Salinas Victoria", "San Nicolás de los Garza", "San Pedro Garza García", "Santa Catarina", "Santiago", "Vallecillo", "Villaldama"];
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -430,13 +430,14 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
     const isUnread = checkIfUnreadStandalone(chat);
     const profileComplete = isProfileCompleteStandalone(chat);
     const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
+    const isEmptyChat = chat.mensajesTotales === 0 || !chat.ultimoMensaje || (chat.primerContacto && chat.ultimoMensaje && Math.abs(new Date(chat.ultimoMensaje) - new Date(chat.primerContacto)) < 1000);
 
     return (
         <div 
             onClick={() => onSelect(chat)}
             className={`group flex items-center px-3 py-3 cursor-pointer hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-all duration-200 border-l-4 ${isSelected ? 'bg-[#f0f2f5] dark:bg-[#2a3942] border-[#25d366] dark:border-[#00a884] shadow-sm relative z-10' : 'border-transparent'}`}
         >
-            <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden">
+            <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center mr-3 relative overflow-hidden ${isEmptyChat ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#ffffff] dark:ring-offset-[#111b21]' : ''}`}>
                 {chat.profilePic ? (
                     <img src={chat.profilePic} className="w-full h-full object-cover" alt="profile" loading="lazy"
                         onError={(e)=>{e.target.onerror=null; e.target.style.display='none'; e.target.parentElement.innerHTML=`<span class="flex items-center justify-center w-full h-full text-lg font-bold text-white" style="background:${avatarColor}">${(chat.nombre||'C')[0].toUpperCase()}</span>`;}} />
