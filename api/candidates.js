@@ -105,7 +105,7 @@ export default async function handler(req, res) {
             // --- AI Logic for Nombre Real ---
             if (updates.nombreReal) {
                 const cleanedName = await cleanNameWithAI(updates.nombreReal);
-                updates.nombreReal = cleanedName;
+                updates.nombreReal = cleanedName || updates.nombreReal; // Fallback to human input if AI rejects/fails
 
                 // If name changed or gender is missing, trigger gender detection
                 const existing = await getCandidateById(id);
