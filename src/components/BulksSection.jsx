@@ -542,7 +542,9 @@ const BulksSection = ({ showToast }) => {
                                 ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                 : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                             }`}
-                        >Vacíos</button>
+                        >
+                            Vacíos ({(candidates || []).filter(c => !(c.lastUserMessageAt || c.ultimoMensajeBot || c.lastBotMessageAt || c.unreadMsgCount > 0)).length})
+                        </button>
                     </div>
 
                     {/* Tag Filter Dropdown */}
