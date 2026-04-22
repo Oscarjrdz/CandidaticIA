@@ -240,10 +240,9 @@ const GATEWAY_BASE_URL = 'https://gatewaywapp-production.up.railway.app';
 
 const sendViaGateway = async (phone, body, type = 'chat', extraParams = {}) => {
     try {
-        const { getRedisClient } = await import('../utils/storage.js');
-        const redis = getRedisClient();
-        const instanceId = (redis ? await redis.get('gateway_instance_id') : null) || process.env.GATEWAY_INSTANCE_ID || '';
-        const token = (redis ? await redis.get('gateway_instance_token') : null) || process.env.GATEWAY_INSTANCE_TOKEN || '';
+        const creds = await getGatewayCredsCached();
+        const instanceId = creds.id || process.env.GATEWAY_INSTANCE_ID || '';
+        const token = creds.token || process.env.GATEWAY_INSTANCE_TOKEN || '';
 
         if (!instanceId || !token) {
             console.error('❌ Gateway: Missing instance_id or token');
@@ -359,21 +358,64 @@ const sendViaGateway = async (phone, body, type = 'chat', extraParams = {}) => {
 // ═══════════════════════════════════════════════════════════════════
 // 🔀 AUTO-ROUTING — Gateway vs Meta (the smart pipe)
 // ═══════════════════════════════════════════════════════════════════
-export const sendUltraMsgMessage = async (_instanceId, _token, to, body, type = 'chat', extraParams = {}) => {
-    // Auto-detect: is this candidate routed through Gateway?
+
+// In-memory cache: phone → origin (TTL 30s) — eliminates Redis lookups on hot paths
+const _originCache = new Map();
+const ORIGIN_CACHE_TTL = 30_000; // 30 seconds
+
+const getCachedOrigin = async (phone) => {
+    const cached = _originCache.get(phone);
+    if (cached && Date.now() - cached.ts < ORIGIN_CACHE_TTL) {
+        return cached.origin;
+    }
+
+    // Cache miss: lookup in Redis (2 calls, but only once per 30s per phone)
     try {
-        const phone = String(to).replace(/[^\d]/g, '');
         const { getCandidateIdByPhone, getCandidateById } = await import('../utils/storage.js');
         const candidateId = await getCandidateIdByPhone(phone);
         if (candidateId) {
             const candidate = await getCandidateById(candidateId);
-            if (candidate?.origen === 'gateway_instance') {
-                return sendViaGateway(phone, body, type, extraParams);
+            const origin = candidate?.origen || 'unknown';
+            _originCache.set(phone, { origin, ts: Date.now() });
+            // Auto-cleanup: don't let cache grow unbounded
+            if (_originCache.size > 500) {
+                const oldest = _originCache.keys().next().value;
+                _originCache.delete(oldest);
             }
+            return origin;
         }
-    } catch (routingErr) {
-        // If routing check fails, fall through to Meta (safe default)
-        console.error('⚠️ Gateway routing check failed, defaulting to Meta:', routingErr.message);
+    } catch (e) { }
+
+    return null;
+};
+
+// Cache gateway credentials (TTL 60s)
+let _gwCredsCache = { id: '', token: '', ts: 0 };
+const getGatewayCredsCached = async () => {
+    if (_gwCredsCache.id && Date.now() - _gwCredsCache.ts < 60_000) {
+        return _gwCredsCache;
+    }
+    try {
+        const { getRedisClient } = await import('../utils/storage.js');
+        const redis = getRedisClient();
+        if (redis) {
+            const [id, token] = await Promise.all([
+                redis.get('gateway_instance_id'),
+                redis.get('gateway_instance_token')
+            ]);
+            _gwCredsCache = { id: id || '', token: token || '', ts: Date.now() };
+        }
+    } catch (e) { }
+    return _gwCredsCache;
+};
+
+export const sendUltraMsgMessage = async (_instanceId, _token, to, body, type = 'chat', extraParams = {}) => {
+    const phone = String(to).replace(/[^\d]/g, '');
+
+    // Fast path: check cached origin (0ms if cached, ~2ms if cache miss)
+    const origin = await getCachedOrigin(phone);
+    if (origin === 'gateway_instance') {
+        return sendViaGateway(phone, body, type, extraParams);
     }
 
     // Default: Meta Cloud API
