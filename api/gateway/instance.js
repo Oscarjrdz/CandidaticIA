@@ -22,7 +22,8 @@ import {
     getRedisClient,
     saveMessage,
     addToWaitlist,
-    saveWebhookTransaction
+    saveWebhookTransaction,
+    updateMessageStatus
 } from '../utils/storage.js';
 
 const cleanPhoneNumber = (raw = '') => {
@@ -255,6 +256,29 @@ export default async function handler(req, res) {
             }
 
             return res.status(200).send('message_processed');
+        } else if (eventType === 'message_ack' || eventType === 'message.ack') {
+            // ═══ HANDLE MESSAGE STATUS ACKS ═══
+            const msgId = messageData.id;
+            const statusStr = messageData.status; // sent, delivered, read
+            
+            // Extract the recipient phone from the raw update data
+            const raw = messageData.__raw || {};
+            const rawKey = raw.key || {};
+            const fromRaw = rawKey.remoteJid || rawKey.participant || '';
+            const recipientPhone = cleanPhoneNumber(fromRaw);
+
+            if (msgId && statusStr && recipientPhone.length >= 10) {
+                const candidateId = await getCandidateIdByPhone(recipientPhone);
+                if (candidateId) {
+                    await updateMessageStatus(candidateId, msgId, statusStr);
+                    // SSE update so the UI ticks change instantly
+                    try {
+                        const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
+                        notifyCandidateUpdate(candidateId, { status_update: true }).catch(() => {});
+                    } catch (e) {}
+                }
+            }
+            return res.status(200).send('ack_processed');
         }
 
         // ═══ ACK EVENTS ═══
