@@ -21,7 +21,8 @@ import {
     getCandidateById,
     getRedisClient,
     saveMessage,
-    addToWaitlist
+    addToWaitlist,
+    saveWebhookTransaction
 } from '../utils/storage.js';
 
 const cleanPhoneNumber = (raw = '') => {
@@ -37,24 +38,19 @@ const ensureTagExists = async (tagName = 'GATEWAY') => {
         let tags = raw ? JSON.parse(raw) : [];
         tags = tags.map(t => typeof t === 'string' ? { name: t, color: '#3b82f6' } : t);
         if (!tags.find(t => t.name === tagName)) {
-            tags.push({ name: tagName, color: '#7c3aed' }); // Purple for gateway
+            tags.push({ name: tagName, color: '#7c3aed' });
             await client.set('candidatic:chat_tags', JSON.stringify(tags));
-            console.log(`[GATEWAY INSTANCE] 🏷️ Tag "${tagName}" ensured.`);
         }
-    } catch (e) {
-        console.error('Error ensuring tag:', e);
-    }
+    } catch (e) { }
 };
 
 const extractMessageContent = (mData, messageData) => {
-    // Text messages
     const textBody =
         mData.body || mData.text ||
         mData.message?.conversation ||
         mData.message?.extendedTextMessage?.text ||
         messageData.body || messageData.text || '';
 
-    // Media
     const hasImage = !!(mData.message?.imageMessage || mData.mediaType === 'image');
     const hasAudio = !!(mData.message?.audioMessage || mData.mediaType === 'audio');
     const hasDocument = !!(mData.message?.documentMessage || mData.mediaType === 'document');
@@ -64,24 +60,32 @@ const extractMessageContent = (mData, messageData) => {
     let type = 'text';
     let content = textBody;
 
-    if (hasImage) {
-        type = 'image';
-        content = mData.message?.imageMessage?.caption || textBody || '[Imagen]';
-    } else if (hasAudio) {
-        type = 'audio';
-        content = '[Audio]';
-    } else if (hasDocument) {
-        type = 'document';
-        content = mData.message?.documentMessage?.fileName || '[Documento]';
-    } else if (hasVideo) {
-        type = 'video';
-        content = mData.message?.videoMessage?.caption || '[Video]';
-    } else if (hasSticker) {
-        type = 'sticker';
-        content = '[Sticker]';
-    }
+    if (hasImage) { type = 'image'; content = mData.message?.imageMessage?.caption || textBody || '[Imagen]'; }
+    else if (hasAudio) { type = 'audio'; content = '[Audio]'; }
+    else if (hasDocument) { type = 'document'; content = mData.message?.documentMessage?.fileName || '[Documento]'; }
+    else if (hasVideo) { type = 'video'; content = mData.message?.videoMessage?.caption || '[Video]'; }
+    else if (hasSticker) { type = 'sticker'; content = '[Sticker]'; }
 
     return { type, content: content || '[Mensaje]' };
+};
+
+// Fire-and-forget: fetch profile pic without blocking the response
+const fetchProfilePicAsync = async (phone, candidateId) => {
+    try {
+        const client = getRedisClient();
+        if (!client) return;
+        const gwId = await client.get('gateway_instance_id');
+        const gwToken = await client.get('gateway_instance_token');
+        if (!gwId || !gwToken) return;
+
+        const picRes = await fetch(`https://gatewaywapp-production.up.railway.app/${gwId}/contacts/profile-picture?token=${gwToken}&to=${phone}@c.us`);
+        if (picRes.ok) {
+            const picData = await picRes.json();
+            if (picData.profile_picture?.startsWith('http')) {
+                await updateCandidate(candidateId, { profilePic: picData.profile_picture });
+            }
+        }
+    } catch (e) { }
 };
 
 export default async function handler(req, res) {
@@ -92,13 +96,11 @@ export default async function handler(req, res) {
     const payload = req.body;
     const client = getRedisClient();
 
-    // Debug: store last payloads
-    try {
-        if (client) {
-            await client.lpush('debug:instance_payload_last', JSON.stringify(payload));
-            await client.ltrim('debug:instance_payload_last', 0, 5);
-        }
-    } catch (e) { }
+    // Debug: store last payloads (non-blocking)
+    if (client) {
+        client.lpush('debug:instance_payload_last', JSON.stringify(payload)).catch(() => {});
+        client.ltrim('debug:instance_payload_last', 0, 5).catch(() => {});
+    }
 
     const eventType = payload.event_type || payload.event || payload.eventName;
     const messageData = payload.data || payload;
@@ -119,17 +121,12 @@ export default async function handler(req, res) {
             const fromRaw = mData.from || mData.remoteJid || mData.key?.remoteJid || '';
             const phone = cleanPhoneNumber(fromRaw);
 
-            // Block groups, statuses, broadcasts
             if (fromRaw.includes('@g.us') || fromRaw.includes('status@broadcast') || fromRaw.includes('newsletter')) {
                 return res.status(200).send('broadcast_ignored');
             }
-
-            // Ignore short/invalid numbers
             if (phone.length < 10 || phone.length > 13) {
                 return res.status(200).send('invalid_number_ignored');
             }
-
-            // Ignore messages sent by ourselves
             if (messageData.fromMe || messageData.from_me || mData.key?.fromMe || mData.fromMe) {
                 return res.status(200).send('from_me_ignored');
             }
@@ -138,7 +135,7 @@ export default async function handler(req, res) {
             const msgId = mData.key?.id || mData.id || `gw_${Date.now()}`;
             const { type: msgType, content: msgContent } = extractMessageContent(mData, messageData);
 
-            // Profile pic extraction
+            // Quick profile pic check from payload only (no HTTP blocking)
             const profilePicOptions = [
                 payload?.sender?.profilePictureUrl, payload?.sender?.profilePicUrl, payload?.sender?.picture,
                 payload?.data?.sender?.profilePictureUrl, payload?.data?.sender?.profilePicUrl,
@@ -146,26 +143,19 @@ export default async function handler(req, res) {
                 mData?.sender?.profilePictureUrl, mData?.sender?.profilePicUrl,
                 messageData?.profilePictureUrl, mData?.profilePictureUrl
             ];
-            let profilePicUrl = profilePicOptions.find(p => typeof p === 'string' && p.startsWith('http')) || null;
-
-            // Fetch profile pic manually if not in payload
-            if (!profilePicUrl && client) {
-                try {
-                    const gwId = await client.get('gateway_instance_id');
-                    const gwToken = await client.get('gateway_instance_token');
-                    if (gwId && gwToken) {
-                        const picRes = await fetch(`https://gatewaywapp-production.up.railway.app/${gwId}/contacts/profile-picture?token=${gwToken}&to=${phone}@c.us`);
-                        if (picRes.ok) {
-                            const picData = await picRes.json();
-                            if (picData.profile_picture?.startsWith('http')) profilePicUrl = picData.profile_picture;
-                        }
-                    }
-                } catch (e) { }
-            }
+            const profilePicUrl = profilePicOptions.find(p => typeof p === 'string' && p.startsWith('http')) || null;
 
             // ═══ LOOKUP OR CREATE CANDIDATE ═══
             let candidateId = await getCandidateIdByPhone(phone);
             let candidate = candidateId ? await getCandidateById(candidateId) : null;
+
+            const msgToSave = {
+                id: msgId,
+                from: 'user',
+                content: msgContent,
+                type: msgType,
+                timestamp: new Date().toISOString()
+            };
 
             if (candidate) {
                 // ═══ EXISTING CANDIDATE ═══
@@ -173,10 +163,8 @@ export default async function handler(req, res) {
 
                 if (!wasGateway) {
                     // ═══ MIGRATION: Switch origin to gateway_instance ═══
-                    await updateCandidate(candidateId, {
-                        origen: 'gateway_instance',
-                        bot_ia_active: false
-                    });
+                    candidate.origen = 'gateway_instance';
+                    candidate.bot_ia_active = false;
 
                     // Insert system message marking the channel change
                     await saveMessage(candidateId, {
@@ -187,25 +175,33 @@ export default async function handler(req, res) {
                         timestamp: new Date().toISOString()
                     });
 
-                    console.log(`[GATEWAY INSTANCE] 🔄 MIGRATED ${phone} from "${candidate.origen}" to gateway_instance`);
+                    console.log(`[GATEWAY INSTANCE] 🔄 MIGRATED ${phone} to gateway_instance`);
                 }
 
-                // Save the incoming message
-                await saveMessage(candidateId, {
-                    id: msgId,
-                    from: phone,
-                    content: msgContent,
-                    type: msgType,
-                    timestamp: new Date().toISOString()
+                // ═══ ATOMIC PIPELINE: Save message + update candidate + SSE in 1 Redis roundtrip ═══
+                const updatedCandidate = {
+                    ...candidate,
+                    ultimoMensaje: new Date().toISOString(),
+                    lastUserMessageAt: new Date().toISOString(),
+                    unreadMsgCount: (Number(candidate.unreadMsgCount) || 0) + 1,
+                    ...(profilePicUrl && !candidate.profilePic ? { profilePic: profilePicUrl } : {})
+                };
+
+                await saveWebhookTransaction({
+                    candidateId,
+                    message: msgToSave,
+                    candidateUpdates: updatedCandidate,
+                    eventData: null,
+                    statsType: 'incoming'
                 });
 
-                // Update timestamps
-                const currentUnread = candidate.unreadMsgCount || 0;
-                await updateCandidate(candidateId, {
-                    ultimoMensaje: new Date().toISOString(),
-                    unreadMsgCount: currentUnread + 1,
-                    ...(profilePicUrl && !candidate.profilePic ? { profilePic: profilePicUrl } : {})
-                });
+                // Force instant SSE stat recalculation
+                if (client) client.del('stats:bot:last_calc').catch(() => {});
+
+                // Fire-and-forget: fetch photo if missing (doesn't block response)
+                if (!candidate.profilePic && !profilePicUrl) {
+                    fetchProfilePicAsync(phone, candidateId);
+                }
 
                 // If bot is active for this candidate, trigger AI
                 if (candidate.bot_ia_active === true && wasGateway) {
@@ -213,9 +209,8 @@ export default async function handler(req, res) {
                         await addToWaitlist(candidateId, { text: msgContent, msgId });
                         const { runTurboEngine } = await import('../workers/process-message.js');
                         await runTurboEngine(candidateId, phone);
-                        console.log(`[GATEWAY INSTANCE] 🤖 Bot triggered for ${phone}`);
                     } catch (botErr) {
-                        console.error(`[GATEWAY INSTANCE] Bot error for ${phone}:`, botErr.message);
+                        console.error(`[GATEWAY INSTANCE] Bot error:`, botErr.message);
                     }
                 }
 
@@ -231,7 +226,7 @@ export default async function handler(req, res) {
                     status: 'Capturado',
                     tags: ['GATEWAY'],
                     esNuevo: 'NO',
-                    bot_ia_active: false, // HARD: Bot OFF by default
+                    bot_ia_active: false,
                     primerContacto: new Date().toISOString(),
                     ultimoMensaje: new Date().toISOString(),
                     unreadMsgCount: 1
@@ -239,35 +234,31 @@ export default async function handler(req, res) {
 
                 candidateId = newCandidate?.id || await getCandidateIdByPhone(phone);
 
-                // Save the first message
+                // Save first message via atomic pipeline
                 if (candidateId) {
-                    await saveMessage(candidateId, {
-                        id: msgId,
-                        from: phone,
-                        content: msgContent,
-                        type: msgType,
-                        timestamp: new Date().toISOString()
+                    const freshCandidate = await getCandidateById(candidateId);
+                    await saveWebhookTransaction({
+                        candidateId,
+                        message: msgToSave,
+                        candidateUpdates: freshCandidate,
+                        eventData: null,
+                        statsType: 'incoming'
                     });
                 }
 
-                console.log(`[GATEWAY INSTANCE] 📡 NEW LEAD: ${phone} - ${pushName}`);
-            }
+                // Fire-and-forget: fetch photo if not in payload
+                if (!profilePicUrl && candidateId) {
+                    fetchProfilePicAsync(phone, candidateId);
+                }
 
-            // ═══ SSE: Real-time dashboard update ═══
-            try {
-                const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
-                await notifyCandidateUpdate(candidateId, {
-                    ultimoMensaje: new Date().toISOString(),
-                    newMessage: true
-                });
-            } catch (e) { }
+                console.log(`[GATEWAY INSTANCE] 📡 NEW: ${phone} - ${pushName}`);
+            }
 
             return res.status(200).send('message_processed');
         }
 
-        // ═══ ACK EVENTS (future: delivery receipts) ═══
+        // ═══ ACK EVENTS ═══
         if (eventType === 'message_ack' || eventType === 'messages.update') {
-            // TODO v2: Update message status (sent/delivered/read) for gateway messages
             return res.status(200).send('ack_noted');
         }
 
