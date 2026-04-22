@@ -106,7 +106,7 @@ const tickEngine = async (state) => {
 
     try {
         let sentInTick = 0;
-        const BATCH_SIZE = 25;
+        const BATCH_SIZE = 5;
 
         while (sentInTick < BATCH_SIZE && state.currentCandidateIndex < state.candidates.length && state.isRunning && !state.isAborted) {
             // ─── ENVIAR MENSAJE ──────────────────────────────────────────────────

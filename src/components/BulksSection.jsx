@@ -176,7 +176,7 @@ const BulksSection = ({ showToast }) => {
         const workerCode = `
             self.onmessage = function(e) {
                 if (e.data === 'start') {
-                    setInterval(() => self.postMessage('tick'), 1500);
+                    setInterval(() => self.postMessage('tick'), 600);
                 }
             };
         `;
