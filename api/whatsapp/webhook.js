@@ -224,7 +224,35 @@ export default async function handler(req, res) {
             if (mediaId) {
                 try {
                     const mediaData = await downloadMetaMedia(mediaId);
-                    if (mediaData?.url) {
+                    if (mediaData?.buffer) {
+                        const redis = getRedisClient();
+                        if (redis) {
+                            const base64Data = mediaData.buffer.toString('base64');
+                            if (base64Data.length < 15 * 1024 * 1024) { // Guard against huge files crashing Redis
+                                const id = `in_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+                                const key = `image:${id}`;
+                                const metaKey = `meta:image:${id}`;
+                                const mimeType = mediaData.mimeType || 'application/octet-stream';
+
+                                await Promise.all([
+                                    redis.set(key, base64Data, 'EX', 172800), // 48 hours TTL
+                                    redis.set(metaKey, JSON.stringify({
+                                        mime: mimeType,
+                                        filename: `media_${mediaId}`,
+                                        size: mediaData.fileSize || base64Data.length,
+                                        createdAt: new Date().toISOString()
+                                    }), 'EX', 172800)
+                                ]);
+                                
+                                mediaUrl = `/api/image?id=${id}`;
+                                console.log(`[Webhook] ✅ Media guardada localmente: ${mediaUrl} (${mimeType})`);
+                            } else {
+                                mediaUrl = mediaData.url; // Fallback to Meta URL if too large
+                            }
+                        } else {
+                            mediaUrl = mediaData.url; // Fallback to Meta URL if no Redis
+                        }
+                    } else if (mediaData?.url) {
                         mediaUrl = mediaData.url;
                     }
                 } catch (e) {
