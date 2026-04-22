@@ -22,19 +22,31 @@ export default async function handler(req, res) {
         const key = `image:${rawId}`;
         const metaKey = `meta:image:${rawId}`;
 
-        const [data, metaRaw] = await Promise.all([
-            client.get(key),
-            client.get(metaKey)
-        ]);
-
-        if (!data) {
-            return res.status(404).send('Not Found');
-        }
-
+        let data = await client.get(key);
+        const metaRaw = await client.get(metaKey);
         const meta = metaRaw ? JSON.parse(metaRaw) : { mime: 'image/jpeg' };
 
-        // Binary conversion
-        const buffer = Buffer.from(data, 'base64');
+        let buffer;
+        if (data) {
+            // Binary conversion from Redis cache
+            buffer = Buffer.from(data, 'base64');
+        } else if (meta.metaMediaId) {
+            // Dynamic fetch from Meta (since we stopped saving huge base64 blobs to Redis to prevent OOM)
+            try {
+                const { downloadMetaMedia } = await import('./whatsapp/utils.js');
+                const metaMedia = await downloadMetaMedia(meta.metaMediaId);
+                if (metaMedia && metaMedia.buffer) {
+                    buffer = metaMedia.buffer;
+                } else {
+                    return res.status(404).send('Meta media not available');
+                }
+            } catch (e) {
+                console.error('Error fetching media from Meta:', e.message);
+                return res.status(500).send('Error fetching from Meta');
+            }
+        } else {
+            return res.status(404).send('Not Found');
+        }
 
         // TRACKING: Log access to Redis for reachability debugging
         const accessLog = {
