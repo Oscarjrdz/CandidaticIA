@@ -339,12 +339,18 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
 
     const GENERO_OPTIONS = ["Hombre", "Mujer", "Otro"];
     const ESCOLARIDAD_OPTIONS = ["Primaria", "Secundaria", "Preparatoria", "Licenciatura", "Técnica", "Posgrado"];
-    const MUNICIPIO_OPTIONS = ["Abasolo", "Acapulco", "Agualeguas", "Aguascalientes", "Aldama", "Allende", "Anáhuac", "Apodaca", "Aramberri", "Bustamante", "CDMX", "Cadereyta", "Cancún", "Carmen", "Celaya", "Cerralvo", "Chihuahua", "China", "Ciénega", "Ciudad Victoria", "Culiacán", "Doctor Arroyo", "Doctor Coss", "Doctor González", "Durango", "Ecatepec", "El Carmen", "Escobedo", "Galeana", "García", "General Bravo", "General Terán", "General Treviño", "General Zaragoza", "Guadalajara", "Guadalupe", "Hermosillo", "Hidalgo", "Higueras", "Hualahuises", "Irapuato", "Iturbide", "Juárez", "Lampazos", "León", "Linares", "Los Herreras", "Los Ramones", "Marín", "Matamoros", "Melchor Ocampo", "Mexicali", "Mier y Noriega", "Mina", "Monclova", "Montemorelos", "Monterrey", "Morelia", "Naucalpan", "Neza", "Nuevo Laredo", "Oaxaca", "Parás", "Pesquería", "Puebla", "Querétaro", "Rayones", "Reynosa", "Sabinas", "Salinas", "Saltillo", "San Luis Potosí", "San Nicolás", "San Pedro", "Santa Catarina", "Santiago", "Tampico", "Tijuana", "Tlalnepantla", "Toluca", "Torreón", "Vallecillo", "Veracruz", "Villaldama", "Zapopan", "Zuazua", "Otro"];
+    const MUNICIPIO_OPTIONS = ["Apodaca", "Cadereyta", "Ciénega de Flores", "El Carmen", "Escobedo", "García", "Guadalupe", "Juárez", "Monterrey", "Pesquería", "Salinas Victoria", "San Nicolás", "San Pedro", "Santa Catarina", "Santiago", "Zuazua", "Otro"];
 
     const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-    // Improved generic styling for the selects to ensure legibility and OS-native look
-    const selectClasses = "w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] cursor-pointer border border-transparent focus:border-blue-500";
+    // CSS para el select con apariencia custom
+    const selectClasses = "w-full text-sm p-2.5 bg-[#f0f2f5] dark:bg-[#2a3942] rounded-lg outline-none text-[#111b21] dark:text-[#d1d7db] cursor-pointer border border-transparent focus:border-blue-500 appearance-none pr-10";
+
+    const ChevronIcon = () => (
+        <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none text-gray-500 dark:text-gray-400">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+        </div>
+    );
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
@@ -367,35 +373,47 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
                         </div>
                         <div className="flex-1">
                             <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Género</label>
-                            <select name="genero" value={formData.genero} onChange={handleChange} className={selectClasses}>
-                                <option value="" disabled>Seleccione...</option>
-                                {GENERO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            </select>
+                            <div className="relative">
+                                <select name="genero" value={formData.genero} onChange={handleChange} className={selectClasses}>
+                                    <option value="" disabled>Seleccione...</option>
+                                    {GENERO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                </select>
+                                <ChevronIcon />
+                            </div>
                         </div>
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Municipio</label>
-                        <select name="municipio" value={formData.municipio} onChange={handleChange} className={selectClasses}>
-                            <option value="" disabled>Seleccione...</option>
-                            {MUNICIPIO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            {formData.municipio && !MUNICIPIO_OPTIONS.includes(formData.municipio) && <option value={formData.municipio}>{formData.municipio}</option>}
-                        </select>
+                        <div className="relative">
+                            <select name="municipio" value={formData.municipio} onChange={handleChange} className={selectClasses}>
+                                <option value="" disabled>Seleccione...</option>
+                                {MUNICIPIO_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                {formData.municipio && !MUNICIPIO_OPTIONS.includes(formData.municipio) && <option value={formData.municipio}>{formData.municipio}</option>}
+                            </select>
+                            <ChevronIcon />
+                        </div>
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Escolaridad</label>
-                        <select name="escolaridad" value={formData.escolaridad} onChange={handleChange} className={selectClasses}>
-                            <option value="" disabled>Seleccione...</option>
-                            {ESCOLARIDAD_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            {formData.escolaridad && !ESCOLARIDAD_OPTIONS.includes(formData.escolaridad) && <option value={formData.escolaridad}>{formData.escolaridad}</option>}
-                        </select>
+                        <div className="relative">
+                            <select name="escolaridad" value={formData.escolaridad} onChange={handleChange} className={selectClasses}>
+                                <option value="" disabled>Seleccione...</option>
+                                {ESCOLARIDAD_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                {formData.escolaridad && !ESCOLARIDAD_OPTIONS.includes(formData.escolaridad) && <option value={formData.escolaridad}>{formData.escolaridad}</option>}
+                            </select>
+                            <ChevronIcon />
+                        </div>
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase">Categoría</label>
-                        <select name="categoria" value={formData.categoria} onChange={handleChange} className={selectClasses} disabled={botCategories.length === 0}>
-                            <option value="" disabled>{botCategories.length === 0 ? "Cargando..." : "Seleccione..."}</option>
-                            {botCategories.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                            {formData.categoria && !botCategories.includes(formData.categoria) && <option value={formData.categoria}>{formData.categoria}</option>}
-                        </select>
+                        <div className="relative">
+                            <select name="categoria" value={formData.categoria} onChange={handleChange} className={selectClasses} disabled={botCategories.length === 0}>
+                                <option value="" disabled>{botCategories.length === 0 ? "Cargando..." : "Seleccione..."}</option>
+                                {botCategories.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                {formData.categoria && !botCategories.includes(formData.categoria) && <option value={formData.categoria}>{formData.categoria}</option>}
+                            </select>
+                            <ChevronIcon />
+                        </div>
                     </div>
                 </div>
                 <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#111b21]">
