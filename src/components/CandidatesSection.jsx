@@ -494,10 +494,12 @@ const CandidatesSection = ({ showToast, user }) => {
         const subscription = new CandidatesSubscription((newCandidates, newStats) => {
             // Only update if not filtering by AI (polling refreshes full list based on current page/search)
             if (!aiFilteredCandidatesRef.current) {
-                setCandidates(newCandidates);
+                if (newCandidates !== null) {
+                    setCandidates(newCandidates);
+                }
                 if (newStats) setStats(prev => ({ ...prev, ...newStats })); // Merge live stats
             }
-        }, 3000);
+        }, 15000);
 
         subscriptionRef.current = subscription;
         subscription.updateParams(LIMIT, 0, '');

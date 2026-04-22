@@ -655,6 +655,7 @@ export const deleteCandidate = async (id) => {
             `debug:last_response:${id}`,
             `debug:ultramsg:${phone || id}`,
             `noInteresa:${id}`,
+            `vacancy_history:${id}`,
         ];
         await client.del(...stateKeys).catch(() => {});
 

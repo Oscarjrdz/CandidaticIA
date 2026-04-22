@@ -47,11 +47,11 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', includ
 };
 
 /**
- * Obtiene estadísticas de candidatos
+ * Obtiene estadísticas de candidatos de forma ultra ligera (sin array de candidatos)
  */
 export const getCandidatesStats = async () => {
     try {
-        const response = await fetch(`${API_BASE}/api/candidates?stats=true`);
+        const response = await fetch(`${API_BASE}/api/candidates?stats=true&limit=0`);
         const data = await response.json();
 
         if (!response.ok) {
@@ -154,13 +154,15 @@ export const deleteCandidate = async (id) => {
 };
 
 /**
- * Suscripción a candidatos con polling
+ * Suscripción a candidatos con polling optimizado
+ * Desacopla la consulta pesada de la lista de candidatos de la consulta ligera de estadísticas.
  */
 export class CandidatesSubscription {
-    constructor(callback, interval = 3000) {
+    constructor(callback, interval = 15000) { // 15 segundos para la lista pesada
         this.callback = callback;
         this.interval = interval;
         this.intervalId = null;
+        this.statsIntervalId = null;
         this.lastCount = 0;
         this.limit = 100;
         this.offset = 0;
@@ -174,18 +176,31 @@ export class CandidatesSubscription {
     }
 
     start() {
-        this.poll();
+        this.pollFull();
+        
+        // Loop 1: Lista completa de candidatos (Pesado, cada 15s)
         this.intervalId = setInterval(() => {
-            this.poll();
+            this.pollFull();
         }, this.interval);
+
+        // Loop 2: Estadísticas del dashboard (Ligero, cada 3s)
+        this.statsIntervalId = setInterval(() => {
+            this.pollStats();
+        }, 3000);
     }
 
-    async poll() {
-        // Request stats in every poll to keep dashboard alive
+    async pollFull() {
         const result = await getCandidates(this.limit, this.offset, this.search, true);
-
         if (result.success) {
             this.callback(result.candidates, result.stats);
+        }
+    }
+
+    async pollStats() {
+        const result = await getCandidatesStats();
+        if (result.success) {
+            // Pasamos null en candidates para indicar que es un update solo de stats
+            this.callback(null, result.stats);
         }
     }
 
@@ -193,6 +208,10 @@ export class CandidatesSubscription {
         if (this.intervalId) {
             clearInterval(this.intervalId);
             this.intervalId = null;
+        }
+        if (this.statsIntervalId) {
+            clearInterval(this.statsIntervalId);
+            this.statsIntervalId = null;
         }
     }
 }
