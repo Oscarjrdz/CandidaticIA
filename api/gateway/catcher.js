@@ -18,7 +18,8 @@ import {
     updateCandidate,
     getCandidateById,
     getRedisClient,
-    saveMessage
+    saveMessage,
+    updateMessageStatus
 } from '../utils/storage.js';
 
 // Elimina caracteres no numéricos del número de teléfono y remueve sufijos
@@ -230,6 +231,28 @@ export default async function handler(req, res) {
             // NO agregamos el mensaje al waitlist, NO llamamos a runTurboEngine(),
             // NO invocamos a procesarlo con Brenda IA.
             return res.status(200).send('lead_captured_silently');
+        } else if (eventType === 'message_ack' || eventType === 'message.ack') {
+            // ═══ HANDLE MESSAGE STATUS ACKS ═══
+            const msgId = messageData.id;
+            const statusStr = messageData.status; // sent, delivered, read
+            
+            // Extract the recipient phone from the raw update data
+            const raw = messageData.__raw || {};
+            const rawKey = raw.key || {};
+            const fromRaw = rawKey.remoteJid || rawKey.participant || '';
+            const recipientPhone = cleanPhoneNumber(fromRaw);
+
+            if (msgId && statusStr && recipientPhone.length >= 10) {
+                const candidateId = await getCandidateIdByPhone(recipientPhone);
+                if (candidateId) {
+                    await updateMessageStatus(candidateId, msgId, statusStr);
+                    try {
+                        const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
+                        notifyCandidateUpdate(candidateId, { status_update: true }).catch(() => {});
+                    } catch (e) {}
+                }
+            }
+            return res.status(200).send('ack_processed');
         }
 
         // --- 3. MANEJAR OTRAS COSAS CÓMO EVENTOS DE ERROR O ACKS ---
