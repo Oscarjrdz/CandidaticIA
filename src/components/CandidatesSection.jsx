@@ -82,6 +82,10 @@ const isProfileComplete = (c) => {
     return hasCoreData && hasAgeData;
 };
 
+const isChatEmpty = (c) => {
+    return !c.lastUserMessageAt && !c.ultimoMensajeBot && !c.lastBotMessageAt && !(c.unreadMsgCount > 0);
+};
+
 const areCandidatePropsEqual = (prev, next) => {
     if (prev.candidate !== next.candidate) return false;
     if (prev.columnOrder !== next.columnOrder) return false;
@@ -94,7 +98,7 @@ const areCandidatePropsEqual = (prev, next) => {
     return true;
 };
 
-const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoading, isBlockLoading, onOpenChat, onBlockToggle, onDelete, onMagicFix }) => {
+const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoading, isBlockLoading, onOpenChat, onBlockToggle, onDelete, onMagicFix, showEmptyRing }) => {
     const isComplete = isProfileComplete(candidate);
     return (
         <tr className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900 smooth-transition relative">
@@ -108,7 +112,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
                 </div>
             </td>
             <td className="py-0.5 px-2.5">
-                <div className="flex items-center justify-center w-8 h-8 rounded-full overflow-hidden">
+                <div className={`flex items-center justify-center w-8 h-8 rounded-full overflow-hidden ${showEmptyRing && isChatEmpty(candidate) ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-900' : ''}`}>
                     {candidate.profilePic ? (
                         <img src={candidate.profilePic}
                              alt="Avatar" className="w-full h-full object-cover"
@@ -241,6 +245,7 @@ const CandidatesSection = ({ showToast, user }) => {
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
     const [sortWhatsAppByDate, setSortWhatsAppByDate] = useState('desc');
+    const [showOnlyEmpty, setShowOnlyEmpty] = useState(false);
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
         try {
@@ -685,6 +690,10 @@ const CandidatesSection = ({ showToast, user }) => {
         displayedCandidates = displayedCandidates.filter(c => isProfileComplete(c));
     }
 
+    if (showOnlyEmpty) {
+        displayedCandidates = displayedCandidates.filter(c => isChatEmpty(c));
+    }
+
     if (sortWhatsAppByDate) {
         displayedCandidates = [...displayedCandidates].sort((a, b) => {
             const dateA = new Date(a.primerContacto || a.createdAt || 0).getTime();
@@ -811,6 +820,31 @@ const CandidatesSection = ({ showToast, user }) => {
                                 className={`
                                     inline-block h-4 w-4 transform rounded-full bg-white transition-transform
                                     ${!hideIncomplete ? 'translate-x-6' : 'translate-x-1'}
+                                `}
+                            />
+                        </button>
+                    </div>
+
+                    {/* Show Only Empty Chats Toggle */}
+                    <div className="flex items-center gap-2 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 px-3 py-1.5 rounded-xl shadow-sm cursor-pointer" onClick={() => setShowOnlyEmpty(!showOnlyEmpty)}>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-gray-400 leading-none">Vacíos</span>
+                            <span className={`text-[10px] font-bold ${showOnlyEmpty ? 'text-blue-600' : 'text-gray-400'}`}>
+                                {showOnlyEmpty ? 'FILTRADO' : 'TODOS'}
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            className={`
+                                relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
+                                ${showOnlyEmpty ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'}
+                            `}
+                            title="Mostrar solo candidatos con chat vacío"
+                        >
+                            <span
+                                className={`
+                                    inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                                    ${showOnlyEmpty ? 'translate-x-6' : 'translate-x-1'}
                                 `}
                             />
                         </button>
@@ -1153,6 +1187,7 @@ const CandidatesSection = ({ showToast, user }) => {
                                             onBlockToggle={handleBlockToggle}
                                             onMagicFix={handleMagicFix}
                                             onDelete={handleDelete}
+                                            showEmptyRing={true}
                                         />
                                     ))}
                                 </tbody>
