@@ -100,7 +100,7 @@ const MessageStatusTicks = ({ status, size = 'md' }) => {
         // Reloj / en cola
         return (
             <span className="inline-flex items-center self-end mb-[1px] ml-1">
-                <svg viewBox="0 0 12 12" width={12} height={12} fill="none">
+                <svg viewBox="0 0 12 12" width={12} height={12} fill="none" className="animate-[spin_2s_linear_infinite] origin-center">
                     <path d="M6 1a5 5 0 100 10A5 5 0 006 1zm.5 5.5H4V5.25h1.25V3h1.25v3.5z" fill="#8696a0" opacity="0.55" />
                 </svg>
             </span>
