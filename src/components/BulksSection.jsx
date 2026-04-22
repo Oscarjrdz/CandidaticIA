@@ -776,7 +776,6 @@ const BulksSection = ({ showToast }) => {
                                                             </div>
                                                         );
                                                     })}
-                                                    })}
                                                     <div className="flex justify-between items-center mt-1">
                                                         <p className="text-[10px] text-gray-400 dark:text-gray-500">Deja vacío para usar el nombre del candidato.</p>
                                                         <p className="text-[10px] text-green-500 font-bold flex items-center gap-1"><span className="text-[14px]">✓</span> Se guarda al escribir</p>
