@@ -1793,7 +1793,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     {/* Filter Chips */}
                     <div className="flex flex-col gap-2 pb-2 min-h-[105px]">
                         {/* Renglón 1: Estados */}
-                        <div className="flex flex-wrap items-start gap-2">
+                        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] pb-1">
                         {canSeeFilter('filter_todos') && (
                             <button 
                                 onClick={() => { setActiveFilter('all'); setFilterValue(null); setAiProjectFilter(null); setAiStepFilter(null); setManualPipelineFilter(null); setManualStepFilter(null); setShowDropdown(null); }}
