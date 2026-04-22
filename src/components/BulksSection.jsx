@@ -518,7 +518,9 @@ const BulksSection = ({ showToast }) => {
                                 ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                 : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                             }`}
-                        >Todos</button>
+                        >
+                            Todos ({(candidates || []).length})
+                        </button>
                         <button 
                             onClick={() => setActiveFilter('complete')}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
@@ -526,7 +528,9 @@ const BulksSection = ({ showToast }) => {
                                 ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                 : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                             }`}
-                        >Completos</button>
+                        >
+                            Completos ({(candidates || []).filter(c => isProfileComplete(c)).length})
+                        </button>
                         <button 
                             onClick={() => setActiveFilter('incomplete')}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
@@ -534,7 +538,9 @@ const BulksSection = ({ showToast }) => {
                                 ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
                                 : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
                             }`}
-                        >Incompletos</button>
+                        >
+                            Incompletos ({(candidates || []).filter(c => !isProfileComplete(c)).length})
+                        </button>
                         <button 
                             onClick={() => setActiveFilter('empty')}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
