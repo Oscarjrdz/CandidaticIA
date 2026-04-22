@@ -1842,59 +1842,84 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         </div>
 
                         {/* Renglón 2: Etiquetas */}
-                        <div className="flex flex-wrap items-start gap-2">
+                        <div className="w-full mt-2 mb-1">
                             {/* Etiquetas Dropdown */}
-                        {canSeeFilter('filter_labels') && (
-                        <div className="relative">
-                            <button 
-                                onClick={() => setShowDropdown(showDropdown === 'labels' ? null : 'labels')}
-                                className={`flex items-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border border-transparent ${
-                                    activeFilter === 'label' 
-                                    ? 'bg-[#d9fdd3] text-[#111b21] dark:bg-[#0a332c] dark:text-[#25d366]' 
-                                    : 'bg-[#f0f2f5] text-[#54656f] hover:bg-[#e9edef] dark:bg-[#202c33] dark:text-[#aebac1] dark:hover:bg-[#2a3942]'
-                                }`}
-                            >
-                                {activeFilter === 'label' ? filterValue : 'Etiquetas'} <span className="ml-1 text-[9px]">▼</span>
-                            </button>
-                            {showDropdown === 'labels' && (
-                                <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-50 py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                    {(Array.isArray(availableTags) ? availableTags : []).filter(tagObj => {
-                                        // User-level label filtering
-                                        if (!user || user.role === 'SuperAdmin') return true;
-                                        const userLabels = user?.allowed_labels;
-                                        if (!Array.isArray(userLabels) || userLabels.length === 0) return true;
-                                        const name = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                        return userLabels.some(l => typeof l === 'string' && l.trim().toLowerCase() === name.trim().toLowerCase());
-                                    }).map(tagObj => {
-                                        const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
-                                        const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
-                                        const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
-                                        
-                                        // Use global memoized count
-                                        const unreadCount = unreadCounts.tags[tName.trim().toLowerCase()] || 0;
+                            {canSeeFilter('filter_labels') && (
+                                <div className="relative w-full">
+                                    <div 
+                                        onClick={() => setShowDropdown(showDropdown === 'labels' ? null : 'labels')}
+                                        className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${activeFilter === 'label' ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-8 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
+                                        style={activeFilter === 'label' ? {
+                                            boxShadow: `0 0 0 2px ${(availableTags.find(t => (typeof t === 'string' ? t : t.name) === filterValue))?.color || '#3b82f6'}`,
+                                            borderColor: 'transparent'
+                                        } : {}}
+                                    >
+                                        <Tag className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${activeFilter === 'label' ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={activeFilter === 'label' ? { color: (availableTags.find(t => (typeof t === 'string' ? t : t.name) === filterValue))?.color } : {}} />
+                                        <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{activeFilter === 'label' ? filterValue : 'Todas las etiquetas'}</span>
+                                        <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'labels' ? 'rotate-180' : ''}`}>
+                                            <ChevronIcon />
+                                        </div>
+                                    </div>
+                                    
+                                    {activeFilter === 'label' && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setActiveFilter(null); setFilterValue(null); }}
+                                            className="absolute right-8 top-1/2 -translate-y-1/2 p-1 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors shrink-0 z-10"
+                                            title="Quitar filtro"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    )}
 
-                                        return (
+                                    {showDropdown === 'labels' && (
+                                        <div className="absolute top-full left-0 mt-2 w-full bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-[100] py-1 max-h-64 overflow-y-auto custom-scrollbar">
                                             <div 
-                                                key={tName}
-                                                onClick={() => { setActiveFilter('label'); setFilterValue(tName); setShowDropdown(null); }}
-                                                className="px-4 py-2.5 text-xs text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21] cursor-pointer flex items-center justify-between"
+                                                onClick={() => { setActiveFilter(null); setFilterValue(null); setShowDropdown(null); }}
+                                                className={`px-4 py-2.5 text-xs cursor-pointer flex items-center gap-2 ${!activeFilter ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
                                             >
-                                                <div className="flex items-center gap-2 truncate pr-2">
-                                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
-                                                    <span className="truncate flex-1">{display}</span>
+                                                <div className="w-3 h-3 rounded border border-gray-300 dark:border-gray-600 flex items-center justify-center">
+                                                    {!activeFilter && <div className="w-1.5 h-1.5 rounded-sm bg-indigo-500"></div>}
                                                 </div>
-                                                {unreadCount > 0 && (
-                                                    <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
-                                                        {unreadCount}
-                                                    </div>
-                                                )}
+                                                Todas las etiquetas
                                             </div>
-                                        );
-                                    })}
+                                            {(Array.isArray(availableTags) ? availableTags : []).filter(tagObj => {
+                                                // User-level label filtering
+                                                if (!user || user.role === 'SuperAdmin') return true;
+                                                const userLabels = user?.allowed_labels;
+                                                if (!Array.isArray(userLabels) || userLabels.length === 0) return true;
+                                                const name = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                                return userLabels.some(l => typeof l === 'string' && l.trim().toLowerCase() === name.trim().toLowerCase());
+                                            }).map(tagObj => {
+                                                const tName = typeof tagObj === 'string' ? tagObj : tagObj.name;
+                                                const tColor = typeof tagObj === 'string' ? '#3b82f6' : tagObj.color;
+                                                const display = tagObj.count !== undefined ? `${tName} (${tagObj.count})` : tName;
+                                                
+                                                // Use global memoized count
+                                                const unreadCount = unreadCounts.tags[tName.trim().toLowerCase()] || 0;
+                                                const isSelected = activeFilter === 'label' && filterValue === tName;
+
+                                                return (
+                                                    <div 
+                                                        key={tName}
+                                                        onClick={() => { setActiveFilter('label'); setFilterValue(tName); setShowDropdown(null); }}
+                                                        className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${isSelected ? 'bg-indigo-50 dark:bg-indigo-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
+                                                    >
+                                                        <div className="flex items-center gap-2 truncate pr-2">
+                                                            <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: tColor }}></span>
+                                                            <span className="truncate flex-1">{display}</span>
+                                                        </div>
+                                                        {unreadCount > 0 && (
+                                                            <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
+                                                                {unreadCount}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             )}
-                        </div>
-                        )}
                         </div>
 
                         {/* Renglón 3: Proyectos y CRM Manual */}
