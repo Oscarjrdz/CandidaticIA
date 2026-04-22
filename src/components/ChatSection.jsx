@@ -1848,7 +1848,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                 <div className="relative w-full">
                                     <div 
                                         onClick={() => setShowDropdown(showDropdown === 'labels' ? null : 'labels')}
-                                        className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${activeFilter === 'label' ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-8 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
+                                        className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${activeFilter === 'label' ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
                                         style={activeFilter === 'label' ? {
                                             boxShadow: `0 0 0 2px ${(availableTags.find(t => (typeof t === 'string' ? t : t.name) === filterValue))?.color || '#3b82f6'}`,
                                             borderColor: 'transparent'
@@ -1923,14 +1923,14 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         </div>
 
                         {/* Renglón 3: Proyectos y CRM Manual */}
-                        <div className="flex flex-wrap items-start gap-2 w-full">
+                        <div className="flex flex-col gap-2 w-full">
                             {/* Riel A: Proyectos (Maletín) */}
                             {canSeeFilter('filter_projects') && (
-                                <div className="flex-1 min-w-[200px] shrink-0 flex items-center gap-2">
-                                    <div className="relative flex-1">
+                                <div className="w-full flex flex-col gap-2">
+                                    <div className="relative w-full">
                                         <div 
                                             onClick={() => setShowDropdown(showDropdown === 'aiProject' ? null : 'aiProject')}
-                                            className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${aiProjectFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-8 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
+                                            className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${aiProjectFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
                                             style={aiProjectFilter ? {
                                                 boxShadow: `0 0 0 2px #3b82f6`,
                                                 borderColor: 'transparent'
@@ -1985,10 +1985,10 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                         const activeProject = projects.find(p => p.id === aiProjectFilter);
                                         if (!activeProject) return null;
                                         return (
-                                            <div className="relative flex-1">
+                                            <div className="relative w-full">
                                                 <div 
                                                     onClick={() => setShowDropdown(showDropdown === 'aiStep' ? null : 'aiStep')}
-                                                    className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${aiStepFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-3 pr-8 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
+                                                    className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${aiStepFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-3 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
                                                     style={aiStepFilter ? {
                                                         boxShadow: `0 0 0 2px #8b5cf6`,
                                                         borderColor: 'transparent'
@@ -2045,11 +2045,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
                             {/* Riel B: CRM Manual */}
                             {canSeeFilter('filter_crm') && (
-                                <div className="flex-1 min-w-[200px] shrink-0 flex items-center gap-2">
-                                    <div className="relative flex-1">
+                                <div className="w-full flex flex-col gap-2">
+                                    <div className="relative w-full">
                                         <div 
                                             onClick={() => setShowDropdown(showDropdown === 'manualPipeline' ? null : 'manualPipeline')}
-                                            className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${manualPipelineFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-8 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
+                                            className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${manualPipelineFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
                                             style={manualPipelineFilter ? {
                                                 boxShadow: `0 0 0 2px #f59e0b`,
                                                 borderColor: 'transparent'
@@ -2104,10 +2104,10 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                         const activeProject = manualProjects.find(p => p.id === manualPipelineFilter);
                                         if (!activeProject) return null;
                                         return (
-                                            <div className="relative flex-1">
+                                            <div className="relative w-full">
                                                 <div 
                                                     onClick={() => setShowDropdown(showDropdown === 'manualStep' ? null : 'manualStep')}
-                                                    className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${manualStepFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-3 pr-8 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
+                                                    className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${manualStepFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-3 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
                                                     style={manualStepFilter ? {
                                                         boxShadow: `0 0 0 2px #d97706`,
                                                         borderColor: 'transparent'
