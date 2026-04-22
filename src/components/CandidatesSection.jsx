@@ -240,7 +240,7 @@ const CandidatesSection = ({ showToast, user }) => {
     const [search, setSearch] = useState('');
     const [aiFilteredCandidates, setAiFilteredCandidates] = useState(null); // Results from AI
     const [aiExplanation, setAiExplanation] = useState('');
-    const [sortWhatsAppByDate, setSortWhatsAppByDate] = useState(null);
+    const [sortWhatsAppByDate, setSortWhatsAppByDate] = useState('desc');
     const [hideIncomplete, setHideIncomplete] = useState(() => {
         // Load initial state from localStorage if available
         try {
@@ -421,10 +421,7 @@ const CandidatesSection = ({ showToast, user }) => {
                 const updatedList = [...prev];
                 updatedList[index] = { ...updatedList[index], ...updatedCandidate.updates };
                 
-                // Si cambiaron la hora del último mensaje, lo mandamos al tope de la lista optimísticamente
-                if (updatedCandidate.updates.ultimoMensaje) {
-                     return updatedList.sort((a, b) => new Date(b.ultimoMensaje || 0) - new Date(a.ultimoMensaje || 0));
-                }
+                // Keep current sort order (by primerContacto/createdAt) — don't re-sort by ultimoMensaje
                 return updatedList;
             });
 

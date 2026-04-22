@@ -3,7 +3,8 @@ import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XC
 import { getCandidates } from '../services/candidatesService';
 
 const getCandidateTimestamp = (c) => {
-    let timestamp = c.createdAt || c.timestamp;
+    // Priority: primerContacto (real creation date) > createdAt > ID-embedded timestamp
+    let timestamp = c.primerContacto || c.createdAt || c.timestamp;
     
     if (!timestamp && c.id && String(c.id).startsWith('cand_')) {
         const parts = String(c.id).split('_');
