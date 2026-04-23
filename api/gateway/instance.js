@@ -281,6 +281,28 @@ export default async function handler(req, res) {
                 }
             }
             return res.status(200).send('ack_processed');
+        } else if (eventType === 'presence_update') {
+            // ═══ HANDLE PRESENCE UPDATES ═══
+            const raw = payload.__raw || {};
+            const candidatePhone = cleanPhoneNumber(raw.id || payload.id || '');
+            if (candidatePhone && candidatePhone.length >= 10) {
+                const candidateId = await getCandidateIdByPhone(candidatePhone);
+                if (candidateId) {
+                    const presences = payload.presences || raw.presences || {};
+                    const presenceData = Object.values(presences)[0];
+                    if (presenceData && presenceData.lastKnownPresence) {
+                        try {
+                            const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
+                            const isTyping = presenceData.lastKnownPresence === 'composing' || presenceData.lastKnownPresence === 'recording';
+                            // Emit false when they stop typing, or their name/true when they start
+                            notifyCandidateUpdate(candidateId, { 
+                                candidateTyping: isTyping ? true : false
+                            }).catch(() => {});
+                        } catch (e) {}
+                    }
+                }
+            }
+            return res.status(200).send('presence_processed');
         }
 
         // ═══ ACK EVENTS ═══

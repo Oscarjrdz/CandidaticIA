@@ -600,6 +600,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
     const [searchQuery, setSearchQuery] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
+    const [candidateTyping, setCandidateTyping] = useState(false);
     const [showRightPanel, setShowRightPanel] = useState(true);
     const [messages, setMessages] = useState([]);
     const messageInputRef = useRef(null);
@@ -1192,15 +1193,22 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         prevMessagesLength.current = messages.length;
     }, [messages]);
 
+    const selectedChatRef = useRef(selectedChat);
+    useEffect(() => {
+        selectedChatRef.current = selectedChat;
+    }, [selectedChat]);
+
     // 🚀 SSE-DRIVEN: Surgical state updates (zero re-fetch architecture)
     useEffect(() => {
         if (!sseUpdate) return;
+        
+        const currentChat = selectedChatRef.current;
         
         console.log('🔍 [SSE DEBUG] Received update for:', sseUpdate.candidateId, 'Selected:', selectedChat?.id);
 
         // --- Typing indicator (unchanged) ---
         if (sseUpdate.updates?.recruiterTyping !== undefined) {
-            if (sseUpdate.candidateId === selectedChat?.id) {
+            if (sseUpdate.candidateId === currentChat?.id) {
                 if ((user?.name || 'Reclutador') !== sseUpdate.updates.recruiterTyping) {
                     setRecruiterTypingName(sseUpdate.updates.recruiterTyping);
                     clearTimeout(typingTimersRef.current.recruiter);
@@ -1209,8 +1217,19 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             }
         }
 
+        // --- Candidate Typing indicator ---
+        if (sseUpdate.updates?.candidateTyping !== undefined) {
+            if (sseUpdate.candidateId === currentChat?.id) {
+                setCandidateTyping(sseUpdate.updates.candidateTyping);
+                clearTimeout(typingTimersRef.current.candidate);
+                if (sseUpdate.updates.candidateTyping) {
+                    typingTimersRef.current.candidate = setTimeout(() => setCandidateTyping(false), 8000);
+                }
+            }
+        }
+
         // --- Messages for the actively viewed chat → reload INSTANTLY ---
-        if (String(sseUpdate.candidateId) === String(selectedChat?.id) || (selectedChat?.whatsapp && String(sseUpdate.phoneMatch) === String(selectedChat.whatsapp))) {
+        if (String(sseUpdate.candidateId) === String(currentChat?.id) || (currentChat?.whatsapp && String(sseUpdate.phoneMatch) === String(currentChat.whatsapp))) {
             if (sseUpdate.updates?.messageStatusUpdate) {
                 const { id, status, additionalData } = sseUpdate.updates.messageStatusUpdate;
                 setMessages(prev => {
@@ -1291,7 +1310,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 return updated;
             }));
             // Also update selectedChat if it's the one that changed
-            if (selectedChat?.id === sseUpdate.candidateId) {
+            if (currentChat?.id === sseUpdate.candidateId) {
                 setSelectedChat(prev => {
                     if (!prev || prev.id !== sseUpdate.candidateId) return prev;
                     const updated = { ...prev };
@@ -1320,6 +1339,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             return [sseNewCandidate, ...prev];
         });
     }, [sseNewCandidate]);
+
+    // Reset typing when switching chats
+    useEffect(() => {
+        setCandidateTyping(false);
+    }, [selectedChat?.id]);
 
     // Load messages
     useEffect(() => {
