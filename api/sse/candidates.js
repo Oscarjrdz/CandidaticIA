@@ -68,7 +68,7 @@ export default async function handler(req, res) {
             pipeline.scard('stats:list:pending');
             pipeline.get('stats:bot:flight_plan');
             pipeline.get('stats:bot:last_calc');
-            pipeline.get('stats:bot:unread');
+            pipeline.get('stats:bot:unread_v2'); // renamed to avoid conflict with old backend
 
             const results = await pipeline.exec();
 

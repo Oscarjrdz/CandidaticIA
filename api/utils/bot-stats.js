@@ -163,7 +163,7 @@ export const calculateBotStats = async () => {
         await redis.set('stats:bot:complete', completeCount);
         await redis.set('stats:bot:pending', pendingCount);
         await redis.set('stats:bot:total', totalCalculated);
-        await redis.set('stats:bot:unread', totalUnreadCount);
+        await redis.set('stats:bot:unread_v2', totalUnreadCount);
         await redis.set('stats:bot:version', result.version);
         await redis.set('stats:bot:flight_plan', JSON.stringify(flightPlan));
         await redis.set('stats:bot:last_calc', now.toString());
