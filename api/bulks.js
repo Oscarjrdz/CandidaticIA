@@ -276,7 +276,7 @@ const tickEngine = async (state) => {
                                     lastBotMessageAt: timestamp,
                                     ultimoMensaje: timestamp
                                 });
-                                const remoteId = sendResult.data?.id || sendResult.data?.messageId;
+                                const remoteId = sendResult.messageId || sendResult.data?.messages?.[0]?.id || sendResult.data?.id || sendResult.data?.messageId;
                                 await updateMessageStatus(candidateId, msgToSave.id, 'sent', {
                                     status: 'sent',
                                     ultraMsgId: remoteId
