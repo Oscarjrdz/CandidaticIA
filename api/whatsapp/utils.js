@@ -412,6 +412,11 @@ const getGatewayCredsCached = async () => {
 export const sendUltraMsgMessage = async (_instanceId, _token, to, body, type = 'chat', extraParams = {}) => {
     const phone = String(to).replace(/[^\d]/g, '');
 
+    // Templates always go via Meta Cloud API (they are a Meta-only feature)
+    if (type === 'template') {
+        return sendMetaMessage(to, body, type, extraParams);
+    }
+
     // Fast path: check cached origin (0ms if cached, ~2ms if cache miss)
     const origin = await getCachedOrigin(phone);
     if (origin === 'gateway_instance') {
