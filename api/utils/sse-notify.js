@@ -16,10 +16,9 @@ export async function notifyNewCandidate(candidate) {
             timestamp: new Date().toISOString()
         };
 
-        // 🚀 Use a list to avoid race conditions and clock skew issues
-        await redis.rpush('sse:updates', JSON.stringify(notification));
-        await redis.expire('sse:updates', 60); // Safety cleanup
-        console.log('✅ SSE notification queued for NEW candidate:', candidate.id);
+        // 🚀 Broadcast to ALL connected clients instantly via Pub/Sub
+        await redis.publish('channel:sse:updates', JSON.stringify(notification));
+        console.log('✅ SSE Pub/Sub published for NEW candidate:', candidate.id);
     } catch (error) {
         console.error('❌ SSE notification error:', error);
     }
@@ -37,10 +36,9 @@ export async function notifyCandidateUpdate(candidateId, updates = {}) {
             timestamp: new Date().toISOString()
         };
 
-        // 🚀 Use a list to avoid race conditions (multiple updates in a short window)
-        await redis.rpush('sse:updates', JSON.stringify(notification));
-        await redis.expire('sse:updates', 60); // Safety cleanup
-        console.log('✅ SSE notification queued for UPDATED candidate:', candidateId);
+        // 🚀 Broadcast to ALL connected clients instantly via Pub/Sub
+        await redis.publish('channel:sse:updates', JSON.stringify(notification));
+        console.log('✅ SSE Pub/Sub published for UPDATED candidate:', candidateId);
     } catch (error) {
         console.error('❌ SSE candidate update notification error:', error);
     }

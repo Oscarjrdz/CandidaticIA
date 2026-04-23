@@ -102,7 +102,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     useEffect(() => {
         if (!isOpen || !candidate) return;
 
-        // Escucha el evento directo del WebSocket
+        // Escucha el evento directo del WebSocket (Baileys)
         const handleWsUpsert = (e) => {
              const payload = e.detail;
              if (!payload) return;
@@ -142,12 +142,44 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                          return [...prev, newMsg];
                      });
                  }
-                 // Sin delays artificiales — el Gateway ya fue antibanneado en Railway
              }
         };
 
+        // Escucha el evento unificado de SSE (Fallback/Webhook para múltiples instancias)
+        const handleSseUpdate = (e) => {
+            const data = e.detail;
+            if (!data) return;
+            if (data.candidateId !== candidate.id) return;
+
+            // Inyectar nuevo mensaje
+            if (data.newMessage && data.messagePayload) {
+                setMessages(prev => {
+                    // Evita inyectar doble si el WebSocket fue más rápido
+                    if (prev.some(m => m.id === data.messagePayload.id)) {
+                        // Si ya existe, podríamos actualizar su estado
+                        return prev.map(m => m.id === data.messagePayload.id ? { ...m, ...data.messagePayload } : m);
+                    }
+                    return [...prev, data.messagePayload];
+                });
+            } 
+            
+            // Inyectar actualización de estado (palomitas)
+            if (data.messageStatusUpdate) {
+                setMessages(prev => prev.map(m => 
+                    m.id === data.messageStatusUpdate.id 
+                        ? { ...m, status: data.messageStatusUpdate.status } 
+                        : m
+                ));
+            }
+        };
+
         window.addEventListener('gateway_msg_upsert', handleWsUpsert);
-        return () => window.removeEventListener('gateway_msg_upsert', handleWsUpsert);
+        window.addEventListener('sse:candidate:update', handleSseUpdate);
+        
+        return () => {
+            window.removeEventListener('gateway_msg_upsert', handleWsUpsert);
+            window.removeEventListener('sse:candidate:update', handleSseUpdate);
+        };
     }, [isOpen, candidate]);
 
     const loadFields = async () => {

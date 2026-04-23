@@ -34,26 +34,32 @@ export default async function handler(req, res) {
     }, 30000);
 
     const redis = getRedisClient();
+    
+    // 🚀 NEW: Dedicated subscriber client for Real-Time Pub/Sub
+    let subscriber = null;
+    try {
+        subscriber = redis.duplicate();
+        subscriber.subscribe('channel:sse:updates');
+        subscriber.on('message', (channel, message) => {
+            if (channel === 'channel:sse:updates') {
+                try {
+                    const update = JSON.parse(message);
+                    const eventType = update.type || 'candidate:update';
+                    sendEvent({ type: eventType, data: update });
+                } catch (err) {
+                    console.error('SSE Pub/Sub parse error:', err);
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Failed to setup SSE subscriber:', e);
+    }
 
     const runPoll = async () => {
         try {
             if (!redis) return;
 
-            // 1 & 2. Unified Candidate Events (Draining the list)
-            const updates = [];
-            let nextUpdate = await redis.lpop('sse:updates');
-            while (nextUpdate) {
-                updates.push(JSON.parse(nextUpdate));
-                if (updates.length > 25) break; // Limit per poll cycle
-                nextUpdate = await redis.lpop('sse:updates');
-            }
-
-            for (const update of updates) {
-                const eventType = update.type || 'candidate:update';
-                sendEvent({ type: eventType, data: update });
-            }
-
-            // 2. [SIN TANTO ROLLO] Instant Stats Signal
+            // 1. [SIN TANTO ROLLO] Instant Stats Signal
             // We use SCARD for O(1) performance. No heavy calculations here.
             const pipeline = redis.pipeline();
             pipeline.get('stats:msg:incoming');
@@ -106,6 +112,10 @@ export default async function handler(req, res) {
     req.on('close', () => {
         clearInterval(keepAliveInterval);
         clearInterval(pollInterval);
+        if (subscriber) {
+            subscriber.unsubscribe();
+            subscriber.quit();
+        }
         res.end();
     });
 }
