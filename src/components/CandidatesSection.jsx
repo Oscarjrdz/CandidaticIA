@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Radio, Tag, ChevronDown, X, Pencil, Plus } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Radio, Tag, ChevronDown, X, Pencil, Plus, AlertTriangle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -9,6 +9,7 @@ import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
 import MagicSearch from './MagicSearch';
 import Skeleton, { CardSkeleton, TableRowSkeleton } from './ui/Skeleton';
+import Modal from './ui/Modal';
 import { getCandidates, deleteCandidate, blockCandidate, CandidatesSubscription } from '../services/candidatesService';
 import { getFields } from '../services/automationsService';
 import { deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
@@ -211,6 +212,8 @@ const CandidatesSection = ({ showToast, user }) => {
     const [stats, setStats] = useState(null); // Live dashboard stats
     const [loading, setLoading] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(true); // NEW: Prevent ghosting
+    const [candidateToDelete, setCandidateToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
     // Dynamic Fields & Column Order State
     const [fields, setFields] = useState([]);
     const fieldsMap = React.useMemo(() => fields.reduce((acc, f) => ({ ...acc, [f.value]: f }), {}), [fields]);
@@ -632,31 +635,28 @@ const CandidatesSection = ({ showToast, user }) => {
         }
     }, [aiFilteredCandidates, showToast]);
 
-    const handleDelete = React.useCallback(async (e, candidate) => {
-        const { id, nombre } = candidate;
+    const handleDelete = React.useCallback((e, candidate) => {
         if (e && e.stopPropagation) e.stopPropagation();
+        setCandidateToDelete(candidate);
+    }, []);
 
-        if (!window.confirm(`¿Estás seguro de eliminar a "${nombre}" permanentemente?\n\nEsta acción no se puede deshacer.`)) {
-            return;
-        }
-
-        // Find candidate to get whatsapp number
-        
+    const confirmDelete = async () => {
+        if (!candidateToDelete) return;
+        setIsDeleting(true);
+        const { id, whatsapp } = candidateToDelete;
         const result = await deleteCandidate(id);
 
         if (result.success) {
-            // Delete local file
-            if (candidate) {
-                deleteLocalChatFile(candidate.whatsapp);
-                deleteChatFileId(candidate.whatsapp);
-            }
-
+            deleteLocalChatFile(whatsapp);
+            deleteChatFileId(whatsapp);
             showToast('Candidato eliminado correctamente', 'success');
+            setCandidateToDelete(null);
             loadCandidates();
         } else {
             showToast(`Error: ${result.error}`, 'error');
         }
-    }, [showToast, loadCandidates]);
+        setIsDeleting(false);
+    };
 
     const handleOpenChat = React.useCallback((candidate) => {
         setSelectedCandidate(candidate);
@@ -1242,7 +1242,52 @@ const CandidatesSection = ({ showToast, user }) => {
                     candidate={selectedCandidate}
                 />
             </ErrorBoundary>
-        </div >
+
+            {/* DELETE CONFIRMATION MODAL */}
+            <Modal
+                isOpen={!!candidateToDelete}
+                onClose={() => !isDeleting && setCandidateToDelete(null)}
+                title="Eliminar Candidato"
+                maxWidth="max-w-md"
+            >
+                <div className="flex flex-col items-center text-center pb-2">
+                    <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+                        <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">¿Estás seguro?</h3>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
+                        Estás a punto de eliminar a <span className="font-bold text-gray-900 dark:text-white">"{candidateToDelete?.nombre}"</span>. Esta acción no se puede deshacer y perderás todo su historial de chat.
+                    </p>
+                    
+                    <div className="flex flex-col sm:flex-row w-full gap-3">
+                        <Button 
+                            variant="secondary" 
+                            className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white"
+                            onClick={() => setCandidateToDelete(null)}
+                            disabled={isDeleting}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button 
+                            variant="danger" 
+                            className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white"
+                            onClick={confirmDelete}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Eliminando...
+                                </>
+                            ) : (
+                                <>
+                                    <Trash2 className="w-4 h-4 mr-2" /> Eliminar
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+        </div>
     );
 };
 
