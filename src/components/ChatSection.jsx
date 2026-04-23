@@ -1288,8 +1288,18 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         // 🟢 SAFETY NET polling (SSE handles real-time, 15s fallback)
         const interval = setInterval(loadMessages, 15000);
 
-        // ❌ Auto "mark as read" REMOVED per user request. 
-        // Viewing the chat no longer clears the unread badge or sends blue ticks.
+        // 🔵 Send blue ticks silently to the candidate's WhatsApp 
+        // (Does NOT modify the database unread state or clear the green badge)
+        const sendBlueTicks = async () => {
+            try {
+                await fetch('/api/chat', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'send_read_receipt', candidateId: selectedChat.id })
+                });
+            } catch(e) {}
+        };
+        sendBlueTicks();
 
         // 🔒 Lock this chat for me
         const currentUser = user?.name || 'Reclutador';

@@ -85,6 +85,20 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true, marked: null });
             }
 
+            if (action === 'send_read_receipt') {
+                const messages = await getMessages(candidateId);
+                // ONLY send blue ticks to WhatsApp, do NOT touch the database
+                const latestIncoming = [...messages].reverse().find(m => m.from !== 'bot' && m.from !== 'me');
+                if (latestIncoming && (latestIncoming.id || latestIncoming.ultraMsgId)) {
+                    const msgId = latestIncoming.id || latestIncoming.ultraMsgId;
+                    import('./whatsapp/utils.js').then(async ({ markMessageAsRead }) => {
+                        await markMessageAsRead(msgId);
+                    }).catch(e => console.error("Error importing markMessageAsRead", e));
+                    return res.status(200).json({ success: true, marked: msgId });
+                }
+                return res.status(200).json({ success: true, marked: null });
+            }
+
             if (action === 'mark_handled') {
                 // EXPLICIT BUTTON: Clear counter AND update botTime to bypass "last to speak" rule
                 const nowStr = new Date().toISOString();
