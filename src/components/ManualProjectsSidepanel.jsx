@@ -252,19 +252,42 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
     const handleAssignCandidate = async (projectId, stepId) => {
         if (!selectedChat) return;
         
-        // Se asume que el backend actualiza
+        // Update candidate record
         const res = await updateCandidate(selectedChat.id, {
             manualProjectId: projectId,
             manualProjectStepId: stepId
         });
 
         if (res.success) {
-            showToast && showToast('Pipeline actualizado', 'success');
+            // Sync with crm_links so the kanban CRM section sees this candidate
+            if (projectId) {
+                const targetStep = stepId || (projects.find(p => p.id === projectId)?.steps?.[0]?.id) || 'step_inicio';
+                try {
+                    await fetch('/api/manual_projects', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'linkCandidate', projectId, candidateId: selectedChat.id, stepId: targetStep })
+                    });
+                } catch (e) { console.error('crm_links sync error', e); }
+            } else {
+                // Unassigned — remove from all projects' crm_links
+                const oldProjectId = selectedChat?.manualProjectId;
+                if (oldProjectId) {
+                    try {
+                        await fetch('/api/manual_projects', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'unlinkCandidate', projectId: oldProjectId, candidateId: selectedChat.id })
+                        });
+                    } catch (e) { console.error('crm_links unsync error', e); }
+                }
+            }
+            showToast && showToast('Proyecto actualizado', 'success');
             if (onCandidateUpdated) {
-                onCandidateUpdated(res.candidate); // Propagar al padre para cambiar la UI del chat
+                onCandidateUpdated(res.candidate);
             }
         } else {
-            showToast && showToast('Error al asignar pipeline', 'error');
+            showToast && showToast('Error al asignar proyecto', 'error');
         }
     };
 
@@ -284,7 +307,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
             <div className="h-[59px] px-4 py-2 flex items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-[#202c33] shrink-0">
                 <div className="flex items-center gap-2">
                     <Box className="w-5 h-5 text-indigo-500" />
-                    <h2 className="text-[16px] font-semibold text-[#111b21] dark:text-[#e9edef]">CRM Manual</h2>
+                    <h2 className="text-[16px] font-semibold text-[#111b21] dark:text-[#e9edef]">CRM de Proyectos</h2>
                 </div>
                 <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors">
                     <X className="w-5 h-5 text-gray-500" />
@@ -320,7 +343,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
                         ) : (
                             <>
                                 <div className="bg-white dark:bg-[#111b21] border border-gray-100 dark:border-gray-800 rounded-xl p-4 shadow-sm">
-                                    <h3 className="text-[13px] font-bold text-gray-400 uppercase tracking-wider mb-3">Pipeline Asignado</h3>
+                                    <h3 className="text-[13px] font-bold text-gray-400 uppercase tracking-wider mb-3">Proyecto Asignado</h3>
                                     <CustomProjectDropdown 
                                         activeProjectId={activeProjectId} 
                                         projects={projects} 
@@ -331,7 +354,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
 
                                 {activeProject && activeProject.steps && activeProject.steps.length > 0 && (
                                     <div className="bg-white dark:bg-[#111b21] border border-gray-100 dark:border-gray-800 rounded-xl p-4 shadow-sm">
-                                        <h3 className="text-[13px] font-bold text-gray-400 uppercase tracking-wider mb-4">Pipeline Status</h3>
+                                        <h3 className="text-[13px] font-bold text-gray-400 uppercase tracking-wider mb-4">Paso Actual</h3>
                                         <div className="relative pl-3 space-y-5">
                                             {/* Linea vertical de conexion */}
                                             <div className="absolute left-[17px] top-2 bottom-2 w-0.5 bg-gray-100 dark:bg-gray-800 z-0 rounded-full"></div>
