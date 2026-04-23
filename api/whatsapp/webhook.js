@@ -28,7 +28,7 @@ import {
     markMessageAsDone,
     updateMessageReaction
 } from '../utils/storage.js';
-import { markMessageAsRead, downloadMetaMedia } from './utils.js';
+import { markMessageAsRead, downloadMetaMedia, uploadMediaToMeta } from './utils.js';
 import { FEATURES } from '../utils/feature-flags.js';
 import { sendMessage } from '../utils/messenger.js';
 import { notifyNewCandidate } from '../utils/sse-notify.js';
@@ -494,7 +494,24 @@ export default async function handler(req, res) {
                         };
                         const label = BRIDGE_LABELS[redisKey] || redisKey;
 
-                        await redis.set(redisKey, JSON.stringify({ url: mediaUrl, mediaId }));
+                        let outboundMediaId = mediaId;
+                        try {
+                            const imageId = mediaUrl.split('?id=')[1];
+                            if (imageId) {
+                                const base64 = await redis.get(`image:${imageId}`);
+                                if (base64) {
+                                    const buffer = Buffer.from(base64, 'base64');
+                                    const uploadResult = await uploadMediaToMeta(buffer, 'image/webp', 'sticker.webp');
+                                    if (uploadResult?.mediaId) {
+                                        outboundMediaId = uploadResult.mediaId;
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error uploading bridge sticker to Meta:', e);
+                        }
+
+                        await redis.set(redisKey, JSON.stringify({ url: mediaUrl, mediaId: outboundMediaId }));
                         await redis.del(`admin_state:${phone}`);
                         await sendMessage(adminNumber, `✅ ¡Puente *"${label}"* guardado con éxito! 🚀\n\nClave: \`${redisKey}\``);
                         continue;
