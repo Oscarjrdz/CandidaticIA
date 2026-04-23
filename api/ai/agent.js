@@ -4339,11 +4339,19 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                             const profileFields = ['categoria', 'municipio', 'escolaridad', 'fechaNacimiento', 'nombreReal'];
                             if (profileFields.includes(k) && candidateData[k] && String(candidateData[k]).trim().length > 2) {
                                 // Allow update only if new value is substantively different (not empty/junk)
-                                const oldVal = String(candidateData[k]).trim().toLowerCase();
-                                const newVal = str.toLowerCase();
-                                const aggregatedTextLower = aggregatedText.toLowerCase();
-                                // Solo permitir si el candidato MENCIONÓ el nuevo valor o el viejo en el contexto
-                                const candidateMentionedIt = aggregatedTextLower.includes(newVal) || aggregatedTextLower.includes(oldVal);
+                                const oldVal = String(candidateData[k]).trim();
+                                const newVal = str;
+                                const normText = aggregatedText.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+                                const normNew = newVal.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+                                const normOld = oldVal.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+                                
+                                // Solo permitir si el candidato MENCIONÓ el nuevo valor, el viejo, O si el bot combinó lo que el usuario escribió (ej. "Oscar" + "Rodriguez")
+                                const candidateMentionedIt = 
+                                    normText.includes(normNew) || 
+                                    normText.includes(normOld) ||
+                                    (normText.length > 2 && normNew.includes(normText)) || // Candidate typed "Rodriguez", bot output "Oscar Rodriguez"
+                                    (k === 'nombreReal' && normNew.includes(normOld)); // It's appending to existing name
+                                    
                                 if (!candidateMentionedIt) return false; // Bloquear overwrite silencioso/alucinado
                                 return str.length >= 3;
                             }

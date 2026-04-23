@@ -860,7 +860,14 @@ export const updateCandidate = async (id, data) => {
     // [SIN TANTO ROLLO] Atomic Status Sync
     await syncCandidateStats(id, updated);
 
-    return await saveCandidate(updated);
+    const saved = await saveCandidate(updated);
+    
+    // Fire SSE so the dashboard updates the candidate profile (e.g. AI extraction) instantly
+    import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
+        notifyCandidateUpdate(id, data).catch(() => {});
+    }).catch(() => {});
+    
+    return saved;
 };
 
 export const saveLastResponse = async (id, response) => {
