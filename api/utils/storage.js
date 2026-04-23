@@ -1424,6 +1424,11 @@ export const saveWebhookTransaction = async ({
                     newMessage: !!message,
                     statusUpdate: !!candidateUpdates
                 };
+                // Enrich with the full message object so frontend can instantly inject it
+                if (message) {
+                    ssePayload.messagePayload = message;
+                    ssePayload.messageFrom = message.from;
+                }
                 // Enrich with candidate fields so frontend can patch locally
                 if (candidateUpdates) {
                     if (candidateUpdates.ultimoMensaje) ssePayload.ultimoMensaje = candidateUpdates.ultimoMensaje;

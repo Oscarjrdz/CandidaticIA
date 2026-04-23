@@ -272,10 +272,11 @@ export default async function handler(req, res) {
                 const candidateId = await getCandidateIdByPhone(recipientPhone);
                 if (candidateId) {
                     await updateMessageStatus(candidateId, msgId, statusStr);
-                    // SSE update so the UI ticks change instantly
                     try {
                         const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
-                        notifyCandidateUpdate(candidateId, { status_update: true }).catch(() => {});
+                        notifyCandidateUpdate(candidateId, { 
+                            messageStatusUpdate: { id: msgId, status: statusStr } 
+                        }).catch(() => {});
                     } catch (e) {}
                 }
             }
