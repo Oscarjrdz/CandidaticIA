@@ -93,6 +93,14 @@ export default async function handler(req, res) {
                 });
             }
 
+            if (type === 'gateway_tag') {
+                value = await redis.get('gateway_tag');
+                return res.status(200).json({
+                    success: true,
+                    data: value || 'GATEWAY'
+                });
+            }
+
             // Gateway credentials (Catcher + Instance)
             if (type === 'catcher_credentials') {
                 const id = await redis.get('catcher_instance_id') || '';
@@ -210,6 +218,17 @@ export default async function handler(req, res) {
                 return res.status(200).json({
                     success: true,
                     message: 'Catcher tag saved'
+                });
+            }
+
+            if (type === 'gateway_tag') {
+                if (typeof data !== 'string') {
+                    return res.status(400).json({ error: 'Invalid tag format' });
+                }
+                await redis.set('gateway_tag', data);
+                return res.status(200).json({
+                    success: true,
+                    message: 'Gateway tag saved'
                 });
             }
 

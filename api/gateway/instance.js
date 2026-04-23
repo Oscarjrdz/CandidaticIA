@@ -41,6 +41,7 @@ const ensureTagExists = async (tagName = 'GATEWAY') => {
         if (!tags.find(t => t.name === tagName)) {
             tags.push({ name: tagName, color: '#7c3aed' });
             await client.set('candidatic:chat_tags', JSON.stringify(tags));
+            console.log(`[GATEWAY INSTANCE] 🏷️ Tag "${tagName}" ensured globally.`);
         }
     } catch (e) { }
 };
@@ -109,6 +110,15 @@ export default async function handler(req, res) {
     if (!eventType) {
         return res.status(200).json({ success: true, message: 'Heartbeat' });
     }
+
+    // Read dynamic tag from settings (mirrors Catcher pattern)
+    let tagToAssign = 'GATEWAY';
+    try {
+        if (client) {
+            const customTag = await client.get('gateway_tag');
+            if (customTag) tagToAssign = customTag;
+        }
+    } catch (e) {}
 
     try {
         // ═══ PROCESS INCOMING MESSAGES ═══
@@ -217,7 +227,7 @@ export default async function handler(req, res) {
 
                 } else {
                     // ═══ NEW CANDIDATE ═══
-                    ensureTagExists('GATEWAY');
+                    ensureTagExists(tagToAssign);
 
                     const now = Date.now();
                     const newCandidate = await saveCandidate({
@@ -226,7 +236,7 @@ export default async function handler(req, res) {
                         origen: 'gateway_instance',
                         profilePic: profilePicUrl,
                         status: 'Capturado',
-                        tags: ['GATEWAY'],
+                        tags: [tagToAssign],
                         esNuevo: 'NO',
                         bot_ia_active: false,
                         primerContacto: new Date(now - 2000).toISOString(), // 2s before to bypass isEmptyChat (blue ring)
