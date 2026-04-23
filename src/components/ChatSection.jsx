@@ -2898,8 +2898,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                             placeholder="Mensaje..."
                             value={qrForm.message}
                             onChange={(e) => setQrForm({ ...qrForm, message: e.target.value })}
-                            rows={3}
-                            className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors resize-none"
+                            rows={9}
+                            className="w-full text-xs px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202c33] text-[#111b21] dark:text-[#e9edef] outline-none focus:border-green-500 transition-colors resize-y"
                         />
                         <div className="flex items-center gap-2">
                             <div className="flex-1 relative">
