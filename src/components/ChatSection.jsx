@@ -618,6 +618,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const [reactionPopupId, setReactionPopupId] = useState(null);
     const [replyingToMsg, setReplyingToMsg] = useState(null);
     const [profileModalCandidate, setProfileModalCandidate] = useState(null);
+    // 🎨 Styled Confirm Modal (replaces ugly window.confirm)
+    const [confirmModal, setConfirmModal] = useState(null);
 
     // Typing Indicators
 
@@ -995,9 +997,15 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     };
 
     const deleteTagGlobal = async (tagName) => {
-        if (!window.confirm(`¿Seguro que deseas eliminar la etiqueta "${tagName}"?\n\nEsta acción eliminará la etiqueta de TODOS los candidatos que la tengan asignada actualmente.`)) {
-            return;
-        }
+        const confirmed = await new Promise(resolve => setConfirmModal({
+            title: 'Eliminar etiqueta',
+            message: `¿Seguro que deseas eliminar la etiqueta "${tagName}"? Esta acción eliminará la etiqueta de TODOS los candidatos que la tengan asignada actualmente.`,
+            confirmText: 'Eliminar',
+            variant: 'danger',
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false)
+        }));
+        if (!confirmed) return;
         
         try {
             const res = await fetch(`/api/tags?name=${encodeURIComponent(tagName)}`, {
@@ -1469,9 +1477,15 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         const isCurrentlyBlocked = chatToBlock.blocked === true;
         const action = isCurrentlyBlocked ? 'reactivar la IA para' : 'silenciar la IA de';
 
-        if (!window.confirm(`¿Estás seguro de que deseas ${action} este chat?`)) {
-            return;
-        }
+        const confirmed = await new Promise(resolve => setConfirmModal({
+            title: isCurrentlyBlocked ? 'Reactivar IA' : 'Silenciar IA',
+            message: `¿Estás seguro de que deseas ${action} este chat?`,
+            confirmText: isCurrentlyBlocked ? 'Reactivar' : 'Silenciar',
+            variant: isCurrentlyBlocked ? 'success' : 'warning',
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false)
+        }));
+        if (!confirmed) return;
 
         setBlockLoading(true);
         try {
@@ -1500,9 +1514,15 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         if (e) e.stopPropagation();
         if (!chatToDelete) return;
         
-        if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a ${chatToDelete.nombreReal || chatToDelete.nombre || chatToDelete.whatsapp}? Esta acción no se puede deshacer.`)) {
-            return;
-        }
+        const confirmed = await new Promise(resolve => setConfirmModal({
+            title: 'Eliminar candidato',
+            message: `¿Estás seguro de que deseas eliminar permanentemente a ${chatToDelete.nombreReal || chatToDelete.nombre || chatToDelete.whatsapp}? Esta acción no se puede deshacer.`,
+            confirmText: 'Eliminar',
+            variant: 'danger',
+            onConfirm: () => resolve(true),
+            onCancel: () => resolve(false)
+        }));
+        if (!confirmed) return;
 
         try {
             const result = await deleteCandidate(chatToDelete.id);
@@ -2976,10 +2996,18 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    if (window.confirm(`¿Eliminar "${qr.name}"?`)) {
-                                                        saveQuickReplies(quickReplies.filter(q => q.id !== qr.id));
-                                                        showToast && showToast('Respuesta eliminada', 'success');
-                                                    }
+                                                    setConfirmModal({
+                                                        title: 'Eliminar respuesta rápida',
+                                                        message: `¿Eliminar "${qr.name}"?`,
+                                                        confirmText: 'Eliminar',
+                                                        variant: 'danger',
+                                                        onConfirm: () => {
+                                                            saveQuickReplies(quickReplies.filter(q => q.id !== qr.id));
+                                                            showToast && showToast('Respuesta eliminada', 'success');
+                                                            setConfirmModal(null);
+                                                        },
+                                                        onCancel: () => setConfirmModal(null)
+                                                    });
                                                 }}
                                                 className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-full hover:bg-red-50 dark:hover:bg-red-900/20"
                                                 title="Eliminar"
@@ -3077,6 +3105,96 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     }}
                 />
             )}
+
+            {/* 🎨 STYLED CONFIRM MODAL (Candidatic-branded) */}
+            {confirmModal && (
+                <div 
+                    className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+                    onClick={(e) => { if (e.target === e.currentTarget) { confirmModal.onCancel(); setConfirmModal(null); } }}
+                >
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" style={{ animation: 'confirmFadeIn 0.2s ease-out' }} />
+                    
+                    {/* Modal Card */}
+                    <div 
+                        className="relative w-full max-w-[400px] rounded-2xl overflow-hidden shadow-2xl"
+                        style={{ animation: 'confirmSlideUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)' }}
+                    >
+                        {/* Gradient Top Bar */}
+                        <div className={`h-1.5 w-full ${
+                            confirmModal.variant === 'danger' ? 'bg-gradient-to-r from-red-500 via-rose-500 to-pink-500' :
+                            confirmModal.variant === 'warning' ? 'bg-gradient-to-r from-amber-400 via-orange-500 to-red-400' :
+                            confirmModal.variant === 'success' ? 'bg-gradient-to-r from-emerald-400 via-green-500 to-teal-500' :
+                            'bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500'
+                        }`} />
+                        
+                        <div className="bg-white dark:bg-[#1f2c34] p-6">
+                            {/* Icon */}
+                            <div className="flex justify-center mb-4">
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center ${
+                                    confirmModal.variant === 'danger' ? 'bg-red-50 dark:bg-red-900/20' :
+                                    confirmModal.variant === 'warning' ? 'bg-amber-50 dark:bg-amber-900/20' :
+                                    confirmModal.variant === 'success' ? 'bg-emerald-50 dark:bg-emerald-900/20' :
+                                    'bg-blue-50 dark:bg-blue-900/20'
+                                }`}>
+                                    {confirmModal.variant === 'danger' ? (
+                                        <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" /></svg>
+                                    ) : confirmModal.variant === 'warning' ? (
+                                        <svg className="w-7 h-7 text-amber-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" /></svg>
+                                    ) : confirmModal.variant === 'success' ? (
+                                        <svg className="w-7 h-7 text-emerald-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                    ) : (
+                                        <svg className="w-7 h-7 text-blue-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" /></svg>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* Title */}
+                            <h3 className="text-lg font-semibold text-center text-[#111b21] dark:text-[#e9edef] mb-2">
+                                {confirmModal.title}
+                            </h3>
+                            
+                            {/* Message */}
+                            <p className="text-sm text-center text-[#54656f] dark:text-[#8696a0] mb-6 leading-relaxed">
+                                {confirmModal.message}
+                            </p>
+                            
+                            {/* Buttons */}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => { confirmModal.onCancel(); setConfirmModal(null); }}
+                                    className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-[#54656f] dark:text-[#aebac1] bg-[#f0f2f5] dark:bg-[#202c33] hover:bg-[#e2e5e9] dark:hover:bg-[#2a3942] transition-all duration-200 active:scale-[0.97]"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={() => { confirmModal.onConfirm(); setConfirmModal(null); }}
+                                    className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white transition-all duration-200 active:scale-[0.97] ${
+                                        confirmModal.variant === 'danger' ? 'bg-red-500 hover:bg-red-600 shadow-lg shadow-red-500/25' :
+                                        confirmModal.variant === 'warning' ? 'bg-amber-500 hover:bg-amber-600 shadow-lg shadow-amber-500/25' :
+                                        confirmModal.variant === 'success' ? 'bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/25' :
+                                        'bg-blue-500 hover:bg-blue-600 shadow-lg shadow-blue-500/25'
+                                    }`}
+                                >
+                                    {confirmModal.confirmText || 'Aceptar'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Confirm Modal Animations */}
+            <style>{`
+                @keyframes confirmFadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes confirmSlideUp {
+                    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+                    to { opacity: 1; transform: scale(1) translateY(0); }
+                }
+            `}</style>
         </div>
     );
 }
