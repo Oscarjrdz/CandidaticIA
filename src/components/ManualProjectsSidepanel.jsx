@@ -366,7 +366,14 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
                                                 return (
                                                     <div 
                                                         key={step.id} 
-                                                        onClick={() => handleAssignCandidate(activeProject.id, step.id)}
+                                                        onClick={() => {
+                                                            if (isActive) {
+                                                                // Deselect — remove from step (keep project)
+                                                                handleAssignCandidate(activeProject.id, null);
+                                                            } else {
+                                                                handleAssignCandidate(activeProject.id, step.id);
+                                                            }
+                                                        }}
                                                         className="relative z-10 flex flex-col group cursor-pointer"
                                                     >
                                                         <div className="flex items-center gap-3">
