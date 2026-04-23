@@ -19,6 +19,7 @@ const AVAILABLE_SECTIONS = [
     { id: 'post-maker', name: 'Post Maker' },
     { id: 'media-library', name: 'Biblioteca Multimedia' },
     { id: 'projects', name: 'Proyectos' },
+    { id: 'projects-ia', name: 'Proyectos IA' },
     { id: 'bypass', name: 'ByPass Intelligence' }
 ];
 
@@ -28,7 +29,7 @@ const AVAILABLE_CHAT_FILTERS = [
     { id: 'filter_incomplete', name: 'Incompletos' },
     { id: 'filter_labels', name: 'Etiquetas' },
     { id: 'filter_projects', name: 'Proyectos' },
-    { id: 'filter_crm', name: 'CRM Manual' }
+    { id: 'filter_crm', name: 'CRM de Proyectos' }
 ];
 
 const AVAILABLE_EXTRA_PERMS = [
@@ -695,7 +696,7 @@ const UsersSection = ({ showToast }) => {
                                 {/* Pipelines CRM Manual asignados */}
                                 {!!perms['filter_crm'] && allManualProjects.length > 0 && (
                                     <div>
-                                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-1">📋 Pipelines CRM Asignados</h4>
+                                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-1">📋 Proyectos CRM Asignados</h4>
                                         <p className="text-[10px] text-gray-400 mb-2">Sin selección = ver todos. Marca “Ninguno” para restringir a cero.</p>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 border border-purple-100 dark:border-purple-900 rounded-lg bg-purple-50/50 dark:bg-purple-900/10">
                                             {/* Opción Ninguno */}

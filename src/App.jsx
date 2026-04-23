@@ -83,7 +83,7 @@ function App() {
                  setRolePermissions(currentUserRole.permissions);
                  if (currentUserRole.permissions['candidates'] !== true) {
                      // Fallback orderly based on typical Sidebar order
-                     const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
+                     const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'projects-ia', 'post-maker', 'users', 'settings'];
                      const fallback = fallbackKeys.find(k => currentUserRole.permissions[k] === true);
                      if (fallback) {
                          setActiveSection(fallback);
