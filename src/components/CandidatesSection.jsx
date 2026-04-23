@@ -10,6 +10,7 @@ import ChatWindow from './ChatWindow';
 import MagicSearch from './MagicSearch';
 import Skeleton, { CardSkeleton, TableRowSkeleton } from './ui/Skeleton';
 import Modal from './ui/Modal';
+import { useConfirmModal } from './ui/ConfirmModal';
 import { getCandidates, deleteCandidate, blockCandidate, CandidatesSubscription } from '../services/candidatesService';
 import { getFields } from '../services/automationsService';
 import { deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
@@ -208,6 +209,7 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
 
 const CandidatesSection = ({ showToast, user }) => {
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [candidates, setCandidates] = useState([]);
     const [stats, setStats] = useState(null); // Live dashboard stats
     const [loading, setLoading] = useState(false);
@@ -331,9 +333,13 @@ const CandidatesSection = ({ showToast, user }) => {
     };
 
     const deleteTagGlobal = async (tagName) => {
-        if (!window.confirm(`¿Seguro que deseas eliminar la etiqueta "${tagName}"?\n\nEsta acción eliminará la etiqueta de TODOS los candidatos que la tengan asignada actualmente.`)) {
-            return;
-        }
+        const ok = await showConfirm({
+            title: 'Eliminar etiqueta',
+            message: `¿Seguro que deseas eliminar la etiqueta "${tagName}"? Esta acción eliminará la etiqueta de TODOS los candidatos que la tengan asignada actualmente.`,
+            confirmText: 'Eliminar',
+            variant: 'danger'
+        });
+        if (!ok) return;
         
         try {
             const res = await fetch(`/api/tags?name=${encodeURIComponent(tagName)}`, {
@@ -1243,7 +1249,7 @@ const CandidatesSection = ({ showToast, user }) => {
                 />
             </ErrorBoundary>
 
-            {/* DELETE CONFIRMATION MODAL */}
+            {/* DELETE CONFIRMATION MODAL — Uses shared Candidatic branded component */}
             <Modal
                 isOpen={!!candidateToDelete}
                 onClose={() => !isDeleting && setCandidateToDelete(null)}
@@ -1287,6 +1293,7 @@ const CandidatesSection = ({ showToast, user }) => {
                     </div>
                 </div>
             </Modal>
+            {confirmModalJSX}
         </div>
     );
 };

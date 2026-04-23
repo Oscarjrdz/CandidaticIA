@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { useConfirmModal } from './ui/ConfirmModal';
 import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     GraduationCap, MapPin, MessageSquare, ExternalLink, FolderKanban,
@@ -394,6 +395,7 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
 };
 
 const ProjectsSection = ({ showToast, onActiveChange }) => {
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [projects, setProjects] = useState([]);
     const [activeProject, setActiveProject] = useState(null);
     const [projectCandidates, setProjectCandidates] = useState([]);
@@ -848,9 +850,13 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 return;
             }
 
-            const confirmMsg = `ADVERTENCIA: Hay ${candidatesInStep.length} candidatos en este paso.\n\nSe moverán al paso anterior: "${activeProject.steps[stepIndex - 1].name}".\n\n¿Deseas continuar?`;
-
-            if (!window.confirm(confirmMsg)) return;
+            const ok = await showConfirm({
+                title: 'Eliminar paso con candidatos',
+                message: `Hay ${candidatesInStep.length} candidatos en este paso. Se moverán al paso anterior: "${activeProject.steps[stepIndex - 1].name}". ¿Deseas continuar?`,
+                confirmText: 'Mover y eliminar',
+                variant: 'warning'
+            });
+            if (!ok) return;
 
             // Migrate candidates to previous step
             const previousStep = activeProject.steps[stepIndex - 1];
@@ -889,7 +895,13 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 setIsBatchLinking(false);
             }
         } else {
-            if (!window.confirm('¿Eliminar este paso?')) return;
+            const okDelete = await showConfirm({
+                title: 'Eliminar paso',
+                message: '¿Seguro que deseas eliminar este paso del pipeline?',
+                confirmText: 'Eliminar',
+                variant: 'danger'
+            });
+            if (!okDelete) return;
         }
 
         // Proceed to delete step
@@ -1965,6 +1977,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                     </Card>
                 </div>
             )}
+        {confirmModalJSX}
         </DndContext>
     );
 };

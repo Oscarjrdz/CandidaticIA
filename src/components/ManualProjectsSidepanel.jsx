@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, X, GripVertical, Check, Trash2, Edit2, Box, ArrowRight, Loader2, ListTodo, ChevronDown } from 'lucide-react';
+import { useConfirmModal } from './ui/ConfirmModal';
 import { updateCandidate } from '../services/candidatesService';
 
 const CustomProjectDropdown = ({ activeProjectId, projects, onChange, candidates = [] }) => {
@@ -50,6 +51,7 @@ const CustomProjectDropdown = ({ activeProjectId, projects, onChange, candidates
 };
 
 export default function ManualProjectsSidepanel({ selectedChat, onClose, showToast, onCandidateUpdated, candidates = [] }) {
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [projects, setProjects] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -134,7 +136,13 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
 
     const handleDeleteProject = async (id, e) => {
         e.stopPropagation();
-        if (!window.confirm('¿Seguro que deseas eliminar todo este proyecto?')) return;
+        const ok = await showConfirm({
+            title: 'Eliminar pipeline',
+            message: '¿Seguro que deseas eliminar todo este proyecto? Todos los pasos configurados se perderán.',
+            confirmText: 'Eliminar',
+            variant: 'danger'
+        });
+        if (!ok) return;
         try {
             const res = await fetch(`/api/manual_projects?id=${id}`, { method: 'DELETE' });
             if (res.ok) {
@@ -512,6 +520,7 @@ export default function ManualProjectsSidepanel({ selectedChat, onClose, showToa
                     </div>
                 )}
             </div>
+        {confirmModalJSX}
         </div>
     );
 }
