@@ -60,15 +60,20 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
         zIndex: isDragging ? 50 : 1
     };
 
+    const projColor = project.color || '#3b82f6';
+
     return (
         <div
             ref={setNodeRef}
-            style={style}
+            style={isActive
+                ? { ...style, backgroundColor: projColor, borderColor: projColor, boxShadow: `0 10px 25px -5px ${projColor}40` }
+                : { ...style, borderColor: `${projColor}30`, borderLeftWidth: '4px', borderLeftColor: projColor }
+            }
             {...attributes}
             onClick={onClick}
             className={`group p-4 rounded-2xl cursor-pointer border transition-all duration-300 ${isActive
-                ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20 scale-[1.02]'
-                : 'bg-white border-slate-100 dark:bg-slate-800 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-lg'
+                ? 'text-white shadow-xl scale-[1.02]'
+                : 'bg-white dark:bg-slate-800 dark:border-slate-700 hover:shadow-lg'
                 }`}
         >
             {/* Name row — full width, no icons competing */}
@@ -76,7 +81,7 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
                 <h3 className={`font-bold truncate ${isActive ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
                     {project.name}
                 </h3>
-                <p className={`text-xs mt-1 line-clamp-1 ${isActive ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
+                <p className={`text-xs mt-1 line-clamp-1 ${isActive ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>
                     {project.description || 'Sin descripción'}
                 </p>
             </div>
@@ -114,7 +119,7 @@ const SortableProjectItem = ({ id, project, isActive, onClick, onDelete, onEdit,
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>
                 </div>
-                <span className={`text-[10px] font-medium ${isActive ? 'text-blue-100' : 'text-slate-400'}`} {...listeners}>
+                <span className={`text-[10px] font-medium ${isActive ? 'text-white/70' : 'text-slate-400'}`} {...listeners}>
                     {project.createdAt ? new Date(project.createdAt).toLocaleDateString() : 'Sin fecha'}
                 </span>
             </div>
@@ -409,6 +414,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
     const [newProjectDesc, setNewProjectDesc] = useState('');
+    const [newProjectColor, setNewProjectColor] = useState('#3b82f6');
 
     // User Assignment
     const [users, setUsers] = useState([]);
@@ -594,6 +600,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                 body: JSON.stringify({
                     name: newProjectName,
                     description: newProjectDesc,
+                    color: newProjectColor,
                     assignedUsers,
                     vacancyIds: selectedVacancyIds,
                     startDate: startDate || new Date().toISOString().split('T')[0],
@@ -649,6 +656,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
     const resetForm = () => {
         setNewProjectName('');
         setNewProjectDesc('');
+        setNewProjectColor('#3b82f6');
         setAssignedUsers([]);
         setSelectedVacancyIds([]); // Limpiar la lista de prioridades
         setEditingProject(null);
@@ -659,6 +667,7 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
         setEditingProject(project);
         setNewProjectName(project.name || '');
         setNewProjectDesc(project.description || '');
+        setNewProjectColor(project.color || '#3b82f6');
         setAssignedUsers(project.assignedUsers || []);
         // Si el proyecto anterior solo tenía un vacancyId, lo migramos al arreglo
         setSelectedVacancyIds(project.vacancyIds || (project.vacancyId ? [project.vacancyId] : []));
@@ -1848,6 +1857,28 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                                     value={newProjectDesc}
                                     onChange={(e) => setNewProjectDesc(e.target.value)}
                                 />
+                            </div>
+
+                            {/* Project Color Picker */}
+                            <div>
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-3 block flex items-center gap-1.5">
+                                    <Palette className="w-3.5 h-3.5" />
+                                    Color del proyecto
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {STEP_IA_COLOR_PALETTE.map(color => (
+                                        <button
+                                            key={color}
+                                            onClick={() => setNewProjectColor(color)}
+                                            className={`w-9 h-9 rounded-2xl transition-all duration-200 border-2 hover:scale-110 ${
+                                                newProjectColor === color
+                                                    ? 'border-slate-800 dark:border-white scale-110 shadow-lg'
+                                                    : 'border-transparent hover:border-slate-300'
+                                            }`}
+                                            style={{ backgroundColor: color }}
+                                        />
+                                    ))}
+                                </div>
                             </div>
 
                             {/* Vacancy Linking (Orden de Prioridad) - Rediseñado */}

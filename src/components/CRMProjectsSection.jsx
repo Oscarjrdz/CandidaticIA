@@ -107,6 +107,7 @@ const CRMProjectsSection = ({ showToast, user }) => {
     const [showCreate, setShowCreate] = useState(false);
     const [projName, setProjName] = useState('');
     const [projDesc, setProjDesc] = useState('');
+    const [projColor, setProjColor] = useState('#3b82f6');
     const [editingProject, setEditingProject] = useState(null);
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -171,8 +172,8 @@ const CRMProjectsSection = ({ showToast, user }) => {
             const url = editingProject ? '/api/manual_projects' : '/api/manual_projects';
             const method = editingProject ? 'PUT' : 'POST';
             const body = editingProject
-                ? { id: editingProject.id, name: projName, description: projDesc }
-                : { name: projName, description: projDesc };
+                ? { id: editingProject.id, name: projName, description: projDesc, color: projColor }
+                : { name: projName, description: projDesc, color: projColor };
             const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             const data = await res.json();
             if (data.success) {
@@ -185,7 +186,7 @@ const CRMProjectsSection = ({ showToast, user }) => {
                     setActiveProject(data.data);
                     showToast('Proyecto creado', 'success');
                 }
-                setShowCreate(false); setProjName(''); setProjDesc(''); setEditingProject(null);
+                setShowCreate(false); setProjName(''); setProjDesc(''); setProjColor('#3b82f6'); setEditingProject(null);
             }
         } catch (e) { showToast('Error', 'error'); }
     };
@@ -392,7 +393,7 @@ const CRMProjectsSection = ({ showToast, user }) => {
             <div className="flex gap-6 h-full min-h-0">
                 {/* LEFT SIDEBAR — Project List */}
                 <div className="w-72 shrink-0 flex flex-col gap-3">
-                    <Button onClick={() => { setEditingProject(null); setProjName(''); setProjDesc(''); setShowCreate(true); }}
+                    <Button onClick={() => { setEditingProject(null); setProjName(''); setProjDesc(''); setProjColor('#3b82f6'); setShowCreate(true); }}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-3 font-bold shadow-lg shadow-blue-500/20">
                         <FolderPlus className="w-4 h-4 mr-2" /> Nuevo Proyecto
                     </Button>
@@ -402,30 +403,38 @@ const CRMProjectsSection = ({ showToast, user }) => {
                             <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
                         ) : projects.length === 0 ? (
                             <div className="text-center py-12 text-slate-400 text-sm">No hay proyectos aún</div>
-                        ) : projects.map(p => (
+                        ) : projects.map(p => {
+                            const pColor = p.color || '#3b82f6';
+                            const isActive = activeProject?.id === p.id;
+                            return (
                             <div key={p.id} onClick={() => setActiveProject(p)}
-                                className={`group p-4 rounded-2xl cursor-pointer border transition-all duration-300 ${activeProject?.id === p.id
-                                    ? 'bg-blue-600 border-blue-500 text-white shadow-xl shadow-blue-500/20 scale-[1.02]'
-                                    : 'bg-white border-slate-100 dark:bg-slate-800 dark:border-slate-700 hover:border-blue-300 hover:shadow-lg'}`}>
+                                className={`group p-4 rounded-2xl cursor-pointer border transition-all duration-300 ${isActive
+                                    ? 'text-white shadow-xl scale-[1.02]'
+                                    : 'bg-white dark:bg-slate-800 hover:shadow-lg'}`}
+                                style={isActive
+                                    ? { backgroundColor: pColor, borderColor: pColor, boxShadow: `0 10px 25px -5px ${pColor}40` }
+                                    : { borderColor: `${pColor}30`, borderLeftWidth: '4px', borderLeftColor: pColor }
+                                }>
                                 <div className="flex items-center justify-between">
                                     <div className="min-w-0 flex-1">
-                                        <h3 className={`font-bold truncate ${activeProject?.id === p.id ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>{p.name}</h3>
-                                        <p className={`text-xs mt-1 truncate ${activeProject?.id === p.id ? 'text-blue-100' : 'text-slate-400'}`}>{p.description || 'Sin descripción'}</p>
+                                        <h3 className={`font-bold truncate ${isActive ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>{p.name}</h3>
+                                        <p className={`text-xs mt-1 truncate ${isActive ? 'text-white/70' : 'text-slate-400'}`}>{p.description || 'Sin descripción'}</p>
                                     </div>
                                     <div className="flex gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); setEditingProject(p); setProjName(p.name); setProjDesc(p.description || ''); setShowCreate(true); }}
+                                        <button onClick={(e) => { e.stopPropagation(); setEditingProject(p); setProjName(p.name); setProjDesc(p.description || ''); setProjColor(p.color || '#3b82f6'); setShowCreate(true); }}
                                             className="p-1 rounded hover:bg-white/20"><Pencil className="w-3.5 h-3.5" /></button>
                                         <button onClick={(e) => handleClone(p.id, e)} className="p-1 rounded hover:bg-white/20"><Copy className="w-3.5 h-3.5" /></button>
                                         <button onClick={(e) => handleDelete(p.id, e)} className="p-1 rounded hover:bg-red-500/20 text-red-300"><Trash2 className="w-3.5 h-3.5" /></button>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 mt-2">
-                                    <span className={`text-[10px] font-medium ${activeProject?.id === p.id ? 'text-blue-200' : 'text-slate-400'}`}>
+                                    <span className={`text-[10px] font-medium ${isActive ? 'text-white/70' : 'text-slate-400'}`}>
                                         {p.steps?.length || 0} pasos
                                     </span>
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -549,6 +558,29 @@ const CRMProjectsSection = ({ showToast, user }) => {
                             className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm outline-none focus:border-blue-500 dark:text-white" autoFocus />
                         <textarea value={projDesc} onChange={e => setProjDesc(e.target.value)} placeholder="Descripción (opcional)" rows={2}
                             className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm outline-none focus:border-blue-500 dark:text-white resize-none" />
+
+                        {/* Color Picker */}
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                                <Palette className="w-3.5 h-3.5" />
+                                Color del proyecto
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {STEP_COLOR_PALETTE.map(color => (
+                                    <button
+                                        key={color}
+                                        onClick={() => setProjColor(color)}
+                                        className={`w-8 h-8 rounded-xl transition-all duration-200 border-2 hover:scale-110 ${
+                                            projColor === color
+                                                ? 'border-slate-800 dark:border-white scale-110 shadow-lg'
+                                                : 'border-transparent hover:border-slate-300'
+                                        }`}
+                                        style={{ backgroundColor: color }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+
                         <p className="text-xs text-slate-400">Se creará con un paso inicial "Inicio" que puedes renombrar.</p>
                         <div className="flex gap-3">
                             <Button onClick={() => setShowCreate(false)} className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl py-3 font-bold">Cancelar</Button>
