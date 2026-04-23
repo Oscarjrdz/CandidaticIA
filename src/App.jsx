@@ -15,6 +15,7 @@ import PostMakerSection from './components/PostMakerSection';
 import BotIASection from './components/BotIASection';
 import MediaLibrarySection from './components/MediaLibrarySection';
 import ProjectsSection from './components/ProjectsSection';
+import CRMProjectsSection from './components/CRMProjectsSection';
 import ByPassSection from './components/ByPassSection';
 import LoadingOverlay from './components/ui/LoadingOverlay';
 import LoginPage from './components/LoginPage';
@@ -214,6 +215,7 @@ function App() {
                       : activeSection === 'post-maker' ? 'Post Maker'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
+                      : activeSection === 'projects-ia' ? 'Proyectos IA'
                       : activeSection === 'bypass' ? 'ByPass'
                       : 'Configuración'}
                   </h1>
@@ -258,7 +260,8 @@ function App() {
                       : activeSection === 'users' ? 'Gestión de equipo y permisos'
                       : activeSection === 'post-maker' ? 'Creación de posts para Facebook'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
-                      : activeSection === 'projects' ? 'Gestión y organización de proyectos'
+                      : activeSection === 'projects' ? 'Kanban de reclutamiento manual'
+                      : activeSection === 'projects-ia' ? 'Proyectos con automatización IA'
                       : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos'
                       : 'Credenciales y configuración del sistema'}
                   </p>
@@ -322,6 +325,8 @@ function App() {
           ) : activeSection === 'media-library' ? (
             <MediaLibrarySection showToast={showToast} />
           ) : activeSection === 'projects' ? (
+            <CRMProjectsSection showToast={showToast} user={user} />
+          ) : activeSection === 'projects-ia' ? (
             <ProjectsSection showToast={showToast} />
           ) : activeSection === 'bypass' ? (
             <ByPassSection showToast={showToast} />
