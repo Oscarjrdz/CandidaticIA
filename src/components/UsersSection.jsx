@@ -11,16 +11,17 @@ const AVAILABLE_SECTIONS = [
     { id: 'settings', name: 'Configuración' },
     { id: 'candidates', name: 'Candidatos' },
     { id: 'chat', name: 'Chat Web' },
+    { id: 'bulks', name: 'Envíos Masivos' },
     { id: 'bot-ia', name: 'Bot IA' },
     { id: 'automations', name: 'Automatizaciones' },
     { id: 'vacancies', name: 'Vacantes' },
     { id: 'history', name: 'Historial' },
     { id: 'users', name: 'Usuarios' },
     { id: 'post-maker', name: 'Post Maker' },
-    { id: 'media-library', name: 'Biblioteca Multimedia' },
+    { id: 'media-library', name: 'Biblioteca' },
     { id: 'projects', name: 'Proyectos' },
     { id: 'projects-ia', name: 'Proyectos IA' },
-    { id: 'bypass', name: 'ByPass Intelligence' }
+    { id: 'bypass', name: 'ByPass' }
 ];
 
 const AVAILABLE_CHAT_FILTERS = [
@@ -827,18 +828,18 @@ const UsersSection = ({ showToast }) => {
                     />
 
                     <div>
-                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-3">Permisos de Secciones</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                        <h4 className="text-xs font-bold text-gray-800 dark:text-white mb-2">Permisos de Secciones</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 p-1.5 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                             {AVAILABLE_SECTIONS.map(section => (
-                                <label key={section.id} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                <label key={section.id} className="flex items-center space-x-2 cursor-pointer px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                     <input
                                         type="checkbox"
                                         checked={!!roleFormData.permissions[section.id]}
                                         onChange={() => togglePermission(section.id)}
                                         disabled={editingRole && editingRole.name === 'SuperAdmin'}
-                                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                        className="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
                                     />
-                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none">
+                                    <span className="text-xs font-medium text-gray-900 dark:text-gray-300 select-none">
                                         {section.name}
                                     </span>
                                 </label>
@@ -847,18 +848,18 @@ const UsersSection = ({ showToast }) => {
                     </div>
 
                     <div>
-                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-3">Filtros de Chat (Quiénes puede ver)</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                        <h4 className="text-xs font-bold text-gray-800 dark:text-white mb-2">Filtros de Chat (Quiénes puede ver)</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 p-1.5 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                             {AVAILABLE_CHAT_FILTERS.map(filter => (
-                                <label key={filter.id} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                <label key={filter.id} className="flex items-center space-x-2 cursor-pointer px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                     <input
                                         type="checkbox"
                                         checked={!!roleFormData.permissions[filter.id]}
                                         onChange={() => togglePermission(filter.id)}
                                         disabled={editingRole && editingRole.name === 'SuperAdmin'}
-                                        className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:focus:ring-purple-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                        className="w-3.5 h-3.5 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 dark:bg-gray-700 dark:border-gray-600"
                                     />
-                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none">
+                                    <span className="text-xs font-medium text-gray-900 dark:text-gray-300 select-none">
                                         {filter.name}
                                     </span>
                                 </label>
@@ -867,18 +868,18 @@ const UsersSection = ({ showToast }) => {
                     </div>
 
                     <div>
-                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-3">Permisos Extra</h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                        <h4 className="text-xs font-bold text-gray-800 dark:text-white mb-2">Permisos Extra</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 p-1.5 border border-gray-100 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                             {AVAILABLE_EXTRA_PERMS.map(perm => (
-                                <label key={perm.id} className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                                <label key={perm.id} className="flex items-center space-x-2 cursor-pointer px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                     <input
                                         type="checkbox"
                                         checked={!!roleFormData.permissions[perm.id]}
                                         onChange={() => togglePermission(perm.id)}
                                         disabled={editingRole && editingRole.name === 'SuperAdmin'}
-                                        className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 dark:focus:ring-amber-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+                                        className="w-3.5 h-3.5 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500 dark:bg-gray-700 dark:border-gray-600"
                                     />
-                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none">
+                                    <span className="text-xs font-medium text-gray-900 dark:text-gray-300 select-none">
                                         {perm.name}
                                     </span>
                                 </label>
