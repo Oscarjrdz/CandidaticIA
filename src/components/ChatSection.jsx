@@ -4,7 +4,7 @@ const EmojiPicker = lazy(() => import('emoji-picker-react'));
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
-import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
+import { useCandidatesSSE, useSSECandidateUpdate } from '../hooks/useCandidatesSSE';
 import { Virtuoso } from 'react-virtuoso';
 
 const safeFormatTime = (dateStr) => {
@@ -589,7 +589,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
 
 export default function ChatSection({ showToast, user, rolePermissions, onlineUsers = [] }) {
     const canManageTags = user?.role === 'SuperAdmin' || user?.can_manage_tags === true;
-    const { updatedCandidate: sseUpdate, newCandidate: sseNewCandidate } = useCandidatesSSE();
+    const { newCandidate: sseNewCandidate } = useCandidatesSSE();
     const [candidates, setCandidates] = useState([]);
     const [selectedChat, setSelectedChat] = useState(null);
 
@@ -1194,14 +1194,14 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     }, [messages]);
 
     // 🚀 SSE-DRIVEN: Surgical state updates (zero re-fetch architecture)
-    useEffect(() => {
+    // Uses DOM CustomEvent subscription to guarantee EVERY SSE event fires,
+    // bypassing React 18's automatic batching which swallows intermediate useState updates.
+    useSSECandidateUpdate((sseUpdate) => {
         if (!sseUpdate) return;
         
         const currentChat = selectedChatRef.current;
-        
-        console.log('🔍 [SSE DEBUG] Received update for:', sseUpdate.candidateId, 'Selected:', selectedChat?.id);
 
-        // --- Typing indicator (unchanged) ---
+        // --- Typing indicator ---
         if (sseUpdate.updates?.recruiterTyping !== undefined) {
             if (sseUpdate.candidateId === currentChat?.id) {
                 if ((user?.name || 'Reclutador') !== sseUpdate.updates.recruiterTyping) {
@@ -1223,7 +1223,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             }
         }
 
-        // --- Messages for the actively viewed chat → reload INSTANTLY ---
+        // --- Messages for the actively viewed chat → inject INSTANTLY ---
         if (String(sseUpdate.candidateId) === String(currentChat?.id) || (currentChat?.whatsapp && String(sseUpdate.phoneMatch) === String(currentChat.whatsapp))) {
             if (sseUpdate.updates?.messageStatusUpdate) {
                 const { id, status, additionalData } = sseUpdate.updates.messageStatusUpdate;
@@ -1240,15 +1240,14 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 if (sseUpdate.updates?.messagePayload) {
                     console.log('🚀 [SSE] Injecting INSTANT MESSAGE:', sseUpdate.updates.messagePayload);
                     // 🚀 O(1) Instant Message Injection (Meta Standard)
+                    // Functional update chains correctly even when React batches
                     setMessages(prev => {
-                        // Prevent duplicates
                         const newMsg = sseUpdate.updates.messagePayload;
+                        // Prevent duplicates
                         if (prev.some(m => m.id === newMsg.id || (m.ultraMsgId && m.ultraMsgId === newMsg.ultraMsgId))) {
-                            console.log('⚠️ [SSE] Ignored duplicate message injection:', newMsg.id);
                             return prev;
                         }
-                        // Smart deduplication: If we sent a message optimistically, SSE might arrive before fetch resolves.
-                        // We swap the temp message instead of appending to avoid visual duplicates.
+                        // Smart deduplication: swap optimistic temp message
                         if (newMsg.from === 'me') {
                             const pendingIndex = prev.findIndex(m => 
                                 m.status === 'pending' && 
@@ -1267,14 +1266,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                             }
                         }
 
-                        // Force UI to scroll to the newly injected message
                         setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
                         return [...prev, newMsg];
                     });
                 } else {
-                    console.log('⚠️ [SSE] No messagePayload provided in SSE. Falling back to loadMessages()...');
                     // Fallback for legacy hooks that don't send payload
-                    // Use ref to avoid stale closure over selectedChat
                     const chatId = selectedChatRef.current?.id;
                     if (chatId) {
                         fetch(`/api/chat?candidateId=${chatId}`)
@@ -1291,11 +1287,10 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
 
         // --- SURGICAL CANDIDATE PATCH (replaces loadCandidates) ---
-        // Instead of re-fetching 2,042 candidates, patch ONLY the one that changed
         if (sseUpdate.candidateId && sseUpdate.updates && !sseUpdate.updates?.recruiterTyping) {
             const patch = sseUpdate.updates;
             setCandidates(prev => prev.map(c => {
-                if (c.id !== sseUpdate.candidateId) return c; // ← same reference, React.memo skips
+                if (c.id !== sseUpdate.candidateId) return c;
                 const updated = { ...c };
                 if (patch.ultimoMensaje) updated.ultimoMensaje = patch.ultimoMensaje;
                 if (patch.lastUserMessageAt) {
@@ -1318,7 +1313,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     if (patch.lastBotMessageAt) {
                         updated.lastBotMessageAt = patch.lastBotMessageAt;
                         updated.ultimoMensajeBot = patch.lastBotMessageAt;
-                        updated.unreadMsgCount = 0; // We're viewing this chat
+                        updated.unreadMsgCount = 0;
                     }
                     if (patch.lastUserMessageAt) {
                         updated.lastUserMessageAt = patch.lastUserMessageAt;
@@ -1329,7 +1324,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 });
             }
         }
-    }, [sseUpdate]);
+    });
 
     // 🆕 SSE: New candidate arrived → inject directly (zero re-fetch)
     useEffect(() => {

@@ -4,19 +4,47 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  * React Hook for Server-Sent Events (SSE) real-time updates
  * Connects to SSE endpoint and listens for candidate events
  * 
- * IMPORTANT: Uses a monotonic counter to guarantee every SSE event
- * produces a unique state change — preventing React 18 batching
- * from swallowing intermediate updates.
+ * ARCHITECTURE: Uses CustomEvent dispatch to guarantee EVERY SSE event
+ * reaches consumers, bypassing React 18's automatic batching which
+ * would swallow intermediate updates when using useState.
+ * 
+ * Consumers should use the `useSSEEvent` helper to subscribe.
  */
+
+// ─── Global Event Bus (bypasses React batching) ───
+const SSE_EVENTS = {
+    CANDIDATE_UPDATE: 'sse:candidate:update',
+    CANDIDATE_NEW: 'sse:candidate:new',
+};
+
+/**
+ * Helper hook: Subscribe to SSE candidate update events.
+ * Guarantees every single event fires the callback, unlike useState.
+ * @param {Function} handler - Called with (data) for each SSE update
+ * @param {Array} deps - Dependencies for the handler (like useEffect deps)
+ */
+export function useSSECandidateUpdate(handler, deps = []) {
+    const handlerRef = useRef(handler);
+    // Keep ref current without re-subscribing
+    useEffect(() => { handlerRef.current = handler; });
+
+    useEffect(() => {
+        const listener = (e) => handlerRef.current(e.detail);
+        window.addEventListener(SSE_EVENTS.CANDIDATE_UPDATE, listener);
+        return () => window.removeEventListener(SSE_EVENTS.CANDIDATE_UPDATE, listener);
+    }, []); // Subscribe once, ref keeps handler current
+}
+
 export function useCandidatesSSE() {
     const [newCandidate, setNewCandidate] = useState(null);
+    // updatedCandidate kept for backward-compat with simple consumers
+    // (ProjectsSection, CandidatesSection) that only need "latest" value
     const [updatedCandidate, setUpdatedCandidate] = useState(null);
     const [globalStats, setGlobalStats] = useState(null);
     const [connected, setConnected] = useState(false);
     const [error, setError] = useState(null);
     const eventSourceRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
-    const seqRef = useRef(0); // Monotonic counter to force unique references
 
     useEffect(() => {
         let isMounted = true;
@@ -46,14 +74,15 @@ export function useCandidatesSSE() {
                         } else if (data.type === 'candidate:new') {
                             console.log('🆕 New candidate via SSE:', data.data);
                             setNewCandidate(data.data);
+                            window.dispatchEvent(new CustomEvent(SSE_EVENTS.CANDIDATE_NEW, { detail: data.data }));
                         } else if (data.type === 'candidate:update') {
-                            // 🚀 CRITICAL FIX: Stamp each update with a unique seq ID
-                            // so React always sees a new object reference, even if
-                            // two updates arrive for the same candidate in the same tick.
-                            seqRef.current += 1;
-                            const stamped = { ...data.data, _seq: seqRef.current };
-                            console.log('🔄 Candidate update via SSE:', stamped.candidateId, 'seq:', stamped._seq);
-                            setUpdatedCandidate(stamped);
+                            console.log('🔄 Candidate update via SSE:', data.data?.candidateId);
+                            // 🚀 CRITICAL: Dispatch via DOM CustomEvent to bypass React 18 batching.
+                            // This guarantees EVERY update fires the consumer's handler,
+                            // even when multiple SSE events arrive in the same tick.
+                            window.dispatchEvent(new CustomEvent(SSE_EVENTS.CANDIDATE_UPDATE, { detail: data.data }));
+                            // Also set state for backward-compat (simple consumers that only need latest)
+                            setUpdatedCandidate(data.data);
                         } else if (data.type === 'stats:global') {
                             setGlobalStats(data.data);
                         }
