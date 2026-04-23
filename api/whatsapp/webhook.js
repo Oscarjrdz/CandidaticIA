@@ -488,11 +488,8 @@ export default async function handler(req, res) {
                         await redis.del(`admin_state:${phone}`);
                         await sendMessage(adminNumber, `✅ ¡Puente *"${label}"* guardado con éxito! 🚀\n\nClave: \`${redisKey}\``);
                         continue;
-                    } else {
-                        await redis.set('bot_celebration_sticker', mediaUrl);
-                        await sendMessage(adminNumber, `✅ ¡Sticker de festejo (fin de perfil) guardado! ✨🎉`);
-                        continue;
                     }
+                    // If not waiting for a bridge sticker, fall through and treat as normal candidate message
                 }
 
                 // ── DEV SCREENSHOT CAPTURE ──
