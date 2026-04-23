@@ -1269,6 +1269,7 @@ export const saveMessage = async (candidateId, message) => {
         import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
             notifyCandidateUpdate(candidateId, { 
                 newMessage: true,
+                messagePayload: message, // 🚀 ENRICHED PAYLOAD: Send full object to avoid HTTP polling
                 messageFrom: message.from,
                 ultimoMensaje: now,
                 ...(isFromUser ? { lastUserMessageAt: now } : { lastBotMessageAt: now, unreadMsgCount: 0 })

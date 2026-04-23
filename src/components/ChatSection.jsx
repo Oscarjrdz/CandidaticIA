@@ -775,8 +775,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             .then(data => { if(data.success && data.data) setMetaTemplates(data.data.filter(t => t.status==='APPROVED')); })
             .catch(() => {});
 
-        // 🟢 SAFETY NET polling (SSE handles real-time, this is 60s fallback only)
-        const interval = setInterval(loadCandidates, 60000);
+        // 🚀 POLLING REMOVED: Trust the SSE `sseUpdate` for real-time candidate list updates.
 
         // 🔔 Poll chat stats (unread counts + locks) — now O(1) on backend
         const statsInterval = setInterval(async () => {
@@ -797,7 +796,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             } catch (e) { /* silent */ }
         })();
 
-        return () => { clearInterval(interval); clearInterval(statsInterval); };
+        return () => { clearInterval(statsInterval); };
     }, []);
 
     // RBAC: Load candidate IDs from all allowed projects to create base filter
@@ -845,9 +844,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         };
 
         loadAllowedCandidates();
-        // Refresh every 60s — RBAC permissions change rarely
-        const interval = setInterval(loadAllowedCandidates, 60000);
-        return () => clearInterval(interval);
     }, [user, rolePermissions]);
 
     // 🚀 NEW: Load Project Candidates specific to Riel A
@@ -1225,15 +1221,29 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     return prev;
                 });
             } else if (sseUpdate.updates?.newMessage || !sseUpdate.updates?.recruiterTyping) {
-                setMessages(prev => {
-                    const hasOptimistic = prev.some(m => String(m.id).startsWith('temp_'));
-                    if (!hasOptimistic) {
-                        loadMessages();
-                    }
-                    return prev;
-                });
+                if (sseUpdate.updates?.messagePayload) {
+                    // 🚀 O(1) Instant Message Injection (Meta Standard)
+                    setMessages(prev => {
+                        // Prevent duplicates
+                        const newMsg = sseUpdate.updates.messagePayload;
+                        if (prev.some(m => m.id === newMsg.id || (m.ultraMsgId && m.ultraMsgId === newMsg.ultraMsgId))) {
+                            return prev;
+                        }
+                        // Remove optimistic temp message if we got the real one
+                        const cleaned = prev.filter(m => !String(m.id).startsWith('temp_'));
+                        return [...cleaned, newMsg];
+                    });
+                } else {
+                    // Fallback for legacy hooks that don't send payload
+                    setMessages(prev => {
+                        const hasOptimistic = prev.some(m => String(m.id).startsWith('temp_'));
+                        if (!hasOptimistic) {
+                            loadMessages();
+                        }
+                        return prev;
+                    });
+                }
             }
-        }
 
         // --- SURGICAL CANDIDATE PATCH (replaces loadCandidates) ---
         // Instead of re-fetching 2,042 candidates, patch ONLY the one that changed
@@ -1265,6 +1275,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         updated.ultimoMensajeBot = patch.lastBotMessageAt;
                         updated.unreadMsgCount = 0; // We're viewing this chat
                     }
+                    if (patch.lastUserMessageAt) {
+                        updated.lastUserMessageAt = patch.lastUserMessageAt;
+                        updated.unreadMsgCount = (updated.unreadMsgCount || 0) + 1;
+                    }
+                    if (patch.unreadMsgCount !== undefined) updated.unreadMsgCount = patch.unreadMsgCount;
                     return updated;
                 });
             }
@@ -1285,8 +1300,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         if (!selectedChat) return;
 
         loadMessages();
-        // 🟢 SAFETY NET polling (SSE handles real-time, 15s fallback)
-        const interval = setInterval(loadMessages, 15000);
+        // 🚀 POLLING REMOVED: Trust the SSE `messagePayload` for real-time injection.
 
         // 🔵 Send blue ticks silently to the candidate's WhatsApp 
         // (Does NOT modify the database unread state or clear the green badge)
@@ -1328,7 +1342,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         // Optimistic UI updates
 
         return () => {
-            clearInterval(interval);
             clearInterval(heartbeatInterval);
             // Unlock on deselect
             fetch('/api/chat', {
@@ -1673,10 +1686,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     }
                 }
 
-                // Call loadMessages to ensure consistency from DB
-                if (selectedChat?.id === currentCandidateId) {
-                    loadMessages();
-                }
+                // 🚀 POLLING REMOVED: Trust the SSE `messagePayload` and optimistic UI for injection.
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
             } else {
                 setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error || 'API Error' } : m));
@@ -1731,7 +1741,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     showToast('Plantilla enviada correctamente', 'success');
                 }
                 
-                if (selectedChat?.id === currentCandidateId) loadMessages();
+                // 🚀 POLLING REMOVED: Trust the SSE `messagePayload` and optimistic UI for injection.
                 window.dispatchEvent(new CustomEvent('candidate_replied', { detail: { candidateId: currentCandidateId } }));
             } else {
                 setMessages(prev => prev.map(m => m.id === optimisticId ? { ...m, status: 'failed', error: data.error || 'API Error' } : m));
