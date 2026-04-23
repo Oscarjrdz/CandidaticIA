@@ -95,29 +95,29 @@ export default async function handler(req, res) {
     try {
         // --- 1. PROCESAR MENSAJES ENTRANTES (CAPTURAR LEADS) ---
         if (eventType === 'message_received' || eventType === 'message.incoming' || eventType === 'messages.upsert') {
-            
-            let mData = messageData;
-            // Si viene en array (EvolutionAPI messages.upsert)
-            if (messageData.messages && Array.isArray(messageData.messages) && messageData.messages.length > 0) {
-                mData = messageData.messages[0];
-            }
+
+            const messagesToProcess = (messageData.messages && Array.isArray(messageData.messages) && messageData.messages.length > 0) 
+                ? messageData.messages 
+                : [messageData];
+
+            for (let mData of messagesToProcess) {
 
             const fromRaw = mData.from || mData.remoteJid || mData.key?.remoteJid || '';
             const phone = cleanPhoneNumber(fromRaw);
 
             // Bloquear mensajes de grupos o estados
             if (fromRaw.includes('@g.us') || fromRaw.includes('status@broadcast') || fromRaw.includes('newsletter')) {
-                return res.status(200).send('broadcast_ignored');
+                continue;
             }
 
             // Ignorar basura, números cortos o falsos
             if (phone.length < 10 || phone.length > 13) {
-                return res.status(200).send('invalid_number_ignored');
+                continue;
             }
 
             // Ignorar mensajes enviados por nosotros mismos (Sync)
             if (messageData.fromMe || messageData.from_me || mData.key?.fromMe || mData.fromMe) {
-                return res.status(200).send('from_me_ignored');
+                continue;
             }
 
             // Extraer nombre y foto
@@ -182,7 +182,7 @@ export default async function handler(req, res) {
                     console.log(`[GATEWAY CATCHER] 📡 Gateway candidate ${phone} contacted Catcher. Alert injected.`);
                 }
                 // Si ya existe en base, NO se hace nada más
-                return res.status(200).send('existing_lead_ignored');
+                continue;
                 
             } else {
                 // Es un Lead NUEVO. Lo guardamos en la base general pero silencioso
@@ -230,6 +230,8 @@ export default async function handler(req, res) {
             // ⚠️ IMPORTANTE: RETORNAMOS 200 AQUI MIMSO.
             // NO agregamos el mensaje al waitlist, NO llamamos a runTurboEngine(),
             // NO invocamos a procesarlo con Brenda IA.
+            continue;
+            }
             return res.status(200).send('lead_captured_silently');
         } else if (eventType === 'message_ack' || eventType === 'message.ack') {
             // ═══ HANDLE MESSAGE STATUS ACKS ═══

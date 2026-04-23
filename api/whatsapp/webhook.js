@@ -154,7 +154,8 @@ export default async function handler(req, res) {
         // 2. HANDLE INCOMING MESSAGES
         // ════════════════════════════════════════════════
         if (value.messages && value.messages.length > 0) {
-            const metaMsg = value.messages[0];
+            for (const metaMsg of value.messages) {
+
             const contacts = value.contacts?.[0];
             const metadata = value.metadata;
 
@@ -262,15 +263,15 @@ export default async function handler(req, res) {
 
             // 🛡️ BLOCK GROUPS (Meta doesn't send group messages to Cloud API by default, but just in case)
             if (phone.length < 10 || phone.length > 13) {
-                return res.status(200).send('alien_number_ignored');
+                continue;
             }
             if (phone.length >= 12 && !phone.startsWith('52')) {
-                return res.status(200).send('non_mexican_number_ignored');
+                continue;
             }
 
             // 🛡️ DEDUP
             if (await isMessageProcessed(msgId)) {
-                return res.status(200).send('duplicate_ignored');
+                continue;
             }
 
             // 🛡️ IGNORE OLD MESSAGES
@@ -278,7 +279,7 @@ export default async function handler(req, res) {
                 const msgTimeMs = Number(timestamp) > 1e11 ? Number(timestamp) : Number(timestamp) * 1000;
                 const diffMins = (Date.now() - msgTimeMs) / 1000 / 60;
                 if (diffMins > 5) {
-                    return res.status(200).send('historical_message_ignored');
+                    continue;
                 }
             }
 
@@ -323,7 +324,7 @@ export default async function handler(req, res) {
                         const { key, label } = BRIDGE_COMMANDS[matchedCommand];
                         await redis.set(`admin_state:${phone}`, `waiting_bridge_sticker:${key}`);
                         await sendMessage(adminNumber, `✅ Listo. Ahora mándame el *STICKER* que quieres usar como puente para:\n\n🎯 *${label}*\n\nEspero tu sticker... 🌸`);
-                        return res.status(200).send('bridge_mode_active');
+                        continue;
                     }
 
                     // ── MOSTRAR PUENTES ──
@@ -345,7 +346,7 @@ export default async function handler(req, res) {
                             }
                         }
                         if (!anyFound) await sendMessage(adminNumber, '⚠️ Ningún puente configurado todavía. Usa los comandos *APRENDER PUENTE...* para enseñarle a Brenda.');
-                        return res.status(200).send('bridges_shown');
+                        continue;
                     }
 
                     // ── VINCULAR GRUPO (not applicable for Meta API, but kept for compat) ──
@@ -362,10 +363,10 @@ export default async function handler(req, res) {
                                     await saveUser(user);
                                     await sendMessage(adminNumber, `✅ Usuario ${user.name} (${targetPhone}) activado con éxito.`);
                                     await sendMessage(user.whatsapp, `🎉 ¡Felicidades ${user.name}! Tu cuenta ha sido activada. Ya puedes iniciar sesión en Candidatic IA. 🚀`);
-                                    return res.status(200).send('user_activated');
+                                    continue;
                                 } else {
                                     await sendMessage(adminNumber, `❌ No encontré ningún usuario pendiente con el número ${targetPhone}.`);
-                                    return res.status(200).send('user_not_found');
+                                    continue;
                                 }
                             } catch (err) {
                                 console.error('Error activating user:', err);
@@ -378,13 +379,13 @@ export default async function handler(req, res) {
                 const bodyTrim = body.trim();
                 const isAuthAttempt = /^\d{4}$/.test(bodyTrim);
                 if (isAuthAttempt && !bodyTrim.startsWith('19') && !bodyTrim.startsWith('20')) {
-                    return res.status(200).send('pin_ignored');
+                    continue;
                 }
 
                 try {
                     const allUsers = await getUsers();
                     const isPending = allUsers.find(u => u.whatsapp.includes(phone) && u.status === 'Pending');
-                    if (isPending && phone !== '8116038195') return res.status(200).send('pending_user_ignored');
+                    if (isPending && phone !== '8116038195') continue;
                 } catch (e) { }
 
                 // ── 🌪️ RESET COMMAND INTERCEPTOR ──
@@ -406,7 +407,7 @@ export default async function handler(req, res) {
                     } else {
                         await sendMessage(phone, `⚠️ *Aviso*: El número \`${targetPhone}\` no existe en la base de datos o ya fue reseteado.`);
                     }
-                    return res.status(200).send('reset_processed');
+                    continue;
                 }
 
                 // ═══ CANDIDATE LOOKUP ═══
@@ -453,7 +454,7 @@ export default async function handler(req, res) {
                     if (redisStat) await redisStat.del('stats:bot:last_calc');
 
                     console.log(`[META WEBHOOK] 📡 Gateway candidate ${phone} contacted Meta. Alert injected.`);
-                    return res.status(200).send('gateway_candidate_notified');
+                    continue;
                 }
 
                 if (!candidateId) {
@@ -485,11 +486,11 @@ export default async function handler(req, res) {
                         await redis.set(redisKey, mediaUrl);
                         await redis.del(`admin_state:${phone}`);
                         await sendMessage(adminNumber, `✅ ¡Puente *"${label}"* guardado con éxito! 🚀\n\nClave: \`${redisKey}\``);
-                        return res.status(200).send('bridge_sticker_captured');
+                        continue;
                     } else {
                         await redis.set('bot_celebration_sticker', mediaUrl);
                         await sendMessage(adminNumber, `✅ ¡Sticker de festejo (fin de perfil) guardado! ✨🎉`);
-                        return res.status(200).send('celebration_sticker_captured');
+                        continue;
                     }
                 }
 
@@ -498,7 +499,7 @@ export default async function handler(req, res) {
                     if (mediaUrl && body?.toLowerCase().includes('screen')) {
                         await redis.set('dev_last_screenshot', mediaUrl, 'EX', 86400);
                         await sendMessage(adminNumber, `📸 Screenshot guardado. La IA puede consultarlo ahora.`);
-                        return res.status(200).send('dev_screenshot_captured');
+                        continue;
                     }
                 }
 
@@ -535,7 +536,7 @@ export default async function handler(req, res) {
                             const redis = getRedisClient();
                             if (redis) await redis.del('stats:bot:last_calc');
                         }
-                        return res.status(200).send('reaction_processed');
+                        continue;
                     }
                 }
 
@@ -637,13 +638,15 @@ export default async function handler(req, res) {
 
                 await Promise.allSettled([aiPromise]);
 
-                return res.status(200).send('success');
+                continue;
 
             } catch (err) {
                 console.error(`⚠️ Webhook logic error for ${msgId}:`, err);
                 await unlockMessage(msgId);
-                return res.status(200).send('logic_error');
+                continue;
             }
+            }
+            return res.status(200).send('success');
         }
 
         return res.status(200).send('ignored');

@@ -114,148 +114,148 @@ export default async function handler(req, res) {
         // ═══ PROCESS INCOMING MESSAGES ═══
         if (eventType === 'message_received' || eventType === 'message.incoming' || eventType === 'messages.upsert') {
 
-            let mData = messageData;
-            if (messageData.messages && Array.isArray(messageData.messages) && messageData.messages.length > 0) {
-                mData = messageData.messages[0];
-            }
+            const messagesToProcess = (messageData.messages && Array.isArray(messageData.messages) && messageData.messages.length > 0) 
+                ? messageData.messages 
+                : [messageData];
 
-            const fromRaw = mData.from || mData.remoteJid || mData.key?.remoteJid || '';
-            const phone = cleanPhoneNumber(fromRaw);
+            for (let mData of messagesToProcess) {
+                const fromRaw = mData.from || mData.remoteJid || mData.key?.remoteJid || '';
+                const phone = cleanPhoneNumber(fromRaw);
 
-            if (fromRaw.includes('@g.us') || fromRaw.includes('status@broadcast') || fromRaw.includes('newsletter')) {
-                return res.status(200).send('broadcast_ignored');
-            }
-            if (phone.length < 10 || phone.length > 13) {
-                return res.status(200).send('invalid_number_ignored');
-            }
-            if (messageData.fromMe || messageData.from_me || mData.key?.fromMe || mData.fromMe) {
-                return res.status(200).send('from_me_ignored');
-            }
-
-            const pushName = messageData.pushname || messageData.pushName || messageData.name || mData.pushName || 'Desconocido';
-            const msgId = mData.key?.id || mData.id || `gw_${Date.now()}`;
-            const { type: msgType, content: msgContent } = extractMessageContent(mData, messageData);
-
-            // Quick profile pic check from payload only (no HTTP blocking)
-            const profilePicOptions = [
-                payload?.sender?.profilePictureUrl, payload?.sender?.profilePicUrl, payload?.sender?.picture,
-                payload?.data?.sender?.profilePictureUrl, payload?.data?.sender?.profilePicUrl,
-                messageData?.sender?.profilePictureUrl, messageData?.sender?.profilePicUrl,
-                mData?.sender?.profilePictureUrl, mData?.sender?.profilePicUrl,
-                messageData?.profilePictureUrl, mData?.profilePictureUrl
-            ];
-            const profilePicUrl = profilePicOptions.find(p => typeof p === 'string' && p.startsWith('http')) || null;
-
-            // ═══ LOOKUP OR CREATE CANDIDATE ═══
-            let candidateId = await getCandidateIdByPhone(phone);
-            let candidate = candidateId ? await getCandidateById(candidateId) : null;
-
-            const msgToSave = {
-                id: msgId,
-                from: 'user',
-                content: msgContent,
-                type: msgType,
-                timestamp: new Date().toISOString()
-            };
-
-            if (candidate) {
-                // ═══ EXISTING CANDIDATE ═══
-                const wasGateway = candidate.origen === 'gateway_instance';
-
-                if (!wasGateway) {
-                    // ═══ MIGRATION: Switch origin to gateway_instance ═══
-                    candidate.origen = 'gateway_instance';
-                    candidate.bot_ia_active = false;
-
-                    // Insert system message marking the channel change
-                    await saveMessage(candidateId, {
-                        id: `sys_${Date.now()}`,
-                        from: 'system',
-                        content: '📡 Canal actualizado — este candidato ahora se comunica por Gateway',
-                        type: 'system',
-                        timestamp: new Date().toISOString()
-                    });
-
-                    console.log(`[GATEWAY INSTANCE] 🔄 MIGRATED ${phone} to gateway_instance`);
+                if (fromRaw.includes('@g.us') || fromRaw.includes('status@broadcast') || fromRaw.includes('newsletter')) {
+                    continue; // Skip broadcast
+                }
+                if (phone.length < 10 || phone.length > 13) {
+                    continue; // Skip invalid
+                }
+                if (mData.fromMe || mData.from_me || mData.key?.fromMe) {
+                    continue; // Skip fromMe
                 }
 
-                // ═══ ATOMIC PIPELINE: Save message + update candidate + SSE in 1 Redis roundtrip ═══
-                const updatedCandidate = {
-                    ...candidate,
-                    ultimoMensaje: new Date().toISOString(),
-                    lastUserMessageAt: new Date().toISOString(),
-                    unreadMsgCount: (Number(candidate.unreadMsgCount) || 0) + 1,
-                    ...(profilePicUrl && !candidate.profilePic ? { profilePic: profilePicUrl } : {})
+                const pushName = mData.pushname || mData.pushName || mData.name || messageData.pushname || 'Desconocido';
+                const msgId = mData.key?.id || mData.id || `gw_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                const { type: msgType, content: msgContent } = extractMessageContent(mData, mData);
+
+                // Quick profile pic check from payload only (no HTTP blocking)
+                const profilePicOptions = [
+                    payload?.sender?.profilePictureUrl, payload?.sender?.profilePicUrl, payload?.sender?.picture,
+                    payload?.data?.sender?.profilePictureUrl, payload?.data?.sender?.profilePicUrl,
+                    messageData?.sender?.profilePictureUrl, messageData?.sender?.profilePicUrl,
+                    mData?.sender?.profilePictureUrl, mData?.sender?.profilePicUrl,
+                    messageData?.profilePictureUrl, mData?.profilePictureUrl
+                ];
+                const profilePicUrl = profilePicOptions.find(p => typeof p === 'string' && p.startsWith('http')) || null;
+
+                // ═══ LOOKUP OR CREATE CANDIDATE ═══
+                let candidateId = await getCandidateIdByPhone(phone);
+                let candidate = candidateId ? await getCandidateById(candidateId) : null;
+
+                const msgToSave = {
+                    id: msgId,
+                    from: 'user',
+                    content: msgContent,
+                    type: msgType,
+                    timestamp: new Date().toISOString()
                 };
 
-                await saveWebhookTransaction({
-                    candidateId,
-                    message: msgToSave,
-                    candidateUpdates: updatedCandidate,
-                    eventData: null,
-                    statsType: 'incoming'
-                });
+                if (candidate) {
+                    // ═══ EXISTING CANDIDATE ═══
+                    const wasGateway = candidate.origen === 'gateway_instance';
 
-                // Force instant SSE stat recalculation
-                if (client) client.del('stats:bot:last_calc').catch(() => {});
+                    if (!wasGateway) {
+                        // ═══ MIGRATION: Switch origin to gateway_instance ═══
+                        candidate.origen = 'gateway_instance';
+                        candidate.bot_ia_active = false;
 
-                // Fire-and-forget: fetch photo if missing (doesn't block response)
-                if (!candidate.profilePic && !profilePicUrl) {
-                    fetchProfilePicAsync(phone, candidateId);
-                }
+                        // Insert system message marking the channel change
+                        await saveMessage(candidateId, {
+                            id: `sys_${Date.now()}`,
+                            from: 'system',
+                            content: '📡 Canal actualizado — este candidato ahora se comunica por Gateway',
+                            type: 'system',
+                            timestamp: new Date().toISOString()
+                        });
 
-                // If bot is active for this candidate, trigger AI
-                if (candidate.bot_ia_active === true && wasGateway) {
-                    try {
-                        await addToWaitlist(candidateId, { text: msgContent, msgId });
-                        const { runTurboEngine } = await import('../workers/process-message.js');
-                        await runTurboEngine(candidateId, phone);
-                    } catch (botErr) {
-                        console.error(`[GATEWAY INSTANCE] Bot error:`, botErr.message);
+                        console.log(`[GATEWAY INSTANCE] 🔄 MIGRATED ${phone} to gateway_instance`);
                     }
-                }
 
-            } else {
-                // ═══ NEW CANDIDATE ═══
-                ensureTagExists('GATEWAY');
+                    // ═══ ATOMIC PIPELINE: Save message + update candidate + SSE in 1 Redis roundtrip ═══
+                    const updatedCandidate = {
+                        ...candidate,
+                        ultimoMensaje: new Date().toISOString(),
+                        lastUserMessageAt: new Date().toISOString(),
+                        unreadMsgCount: (Number(candidate.unreadMsgCount) || 0) + 1,
+                        ...(profilePicUrl && !candidate.profilePic ? { profilePic: profilePicUrl } : {})
+                    };
 
-                const now = Date.now();
-                const newCandidate = await saveCandidate({
-                    whatsapp: phone,
-                    nombre: pushName,
-                    origen: 'gateway_instance',
-                    profilePic: profilePicUrl,
-                    status: 'Capturado',
-                    tags: ['GATEWAY'],
-                    esNuevo: 'NO',
-                    bot_ia_active: false,
-                    primerContacto: new Date(now - 2000).toISOString(), // 2s before to bypass isEmptyChat (blue ring)
-                    ultimoMensaje: new Date(now).toISOString(),
-                    unreadMsgCount: 1
-                });
-
-                candidateId = newCandidate?.id || await getCandidateIdByPhone(phone);
-
-                // Save first message via atomic pipeline
-                if (candidateId) {
-                    const freshCandidate = await getCandidateById(candidateId);
                     await saveWebhookTransaction({
                         candidateId,
                         message: msgToSave,
-                        candidateUpdates: freshCandidate,
+                        candidateUpdates: updatedCandidate,
                         eventData: null,
                         statsType: 'incoming'
                     });
-                }
 
-                // Fire-and-forget: fetch photo if not in payload
-                if (!profilePicUrl && candidateId) {
-                    fetchProfilePicAsync(phone, candidateId);
-                }
+                    // Force instant SSE stat recalculation
+                    if (client) client.del('stats:bot:last_calc').catch(() => {});
 
-                console.log(`[GATEWAY INSTANCE] 📡 NEW: ${phone} - ${pushName}`);
+                    // Fire-and-forget: fetch photo if missing (doesn't block response)
+                    if (!candidate.profilePic && !profilePicUrl) {
+                        fetchProfilePicAsync(phone, candidateId);
+                    }
+
+                    // If bot is active for this candidate, trigger AI
+                    if (candidate.bot_ia_active === true && wasGateway) {
+                        try {
+                            await addToWaitlist(candidateId, { text: msgContent, msgId });
+                            const { runTurboEngine } = await import('../workers/process-message.js');
+                            await runTurboEngine(candidateId, phone);
+                        } catch (botErr) {
+                            console.error(`[GATEWAY INSTANCE] Bot error:`, botErr.message);
+                        }
+                    }
+
+                } else {
+                    // ═══ NEW CANDIDATE ═══
+                    ensureTagExists('GATEWAY');
+
+                    const now = Date.now();
+                    const newCandidate = await saveCandidate({
+                        whatsapp: phone,
+                        nombre: pushName,
+                        origen: 'gateway_instance',
+                        profilePic: profilePicUrl,
+                        status: 'Capturado',
+                        tags: ['GATEWAY'],
+                        esNuevo: 'NO',
+                        bot_ia_active: false,
+                        primerContacto: new Date(now - 2000).toISOString(), // 2s before to bypass isEmptyChat (blue ring)
+                        ultimoMensaje: new Date(now).toISOString(),
+                        unreadMsgCount: 1
+                    });
+
+                    candidateId = newCandidate?.id || await getCandidateIdByPhone(phone);
+
+                    // Save first message via atomic pipeline
+                    if (candidateId) {
+                        const freshCandidate = await getCandidateById(candidateId);
+                        await saveWebhookTransaction({
+                            candidateId,
+                            message: msgToSave,
+                            candidateUpdates: freshCandidate,
+                            eventData: null,
+                            statsType: 'incoming'
+                        });
+                    }
+
+                    // Fire-and-forget: fetch photo if not in payload
+                    if (!profilePicUrl && candidateId) {
+                        fetchProfilePicAsync(phone, candidateId);
+                    }
+
+                    console.log(`[GATEWAY INSTANCE] 📡 NEW: ${phone} - ${pushName}`);
+                }
             }
-
             return res.status(200).send('message_processed');
         } else if (eventType === 'message_ack' || eventType === 'message.ack') {
             // ═══ HANDLE MESSAGE STATUS ACKS ═══
