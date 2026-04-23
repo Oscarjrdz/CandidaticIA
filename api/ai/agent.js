@@ -1741,12 +1741,12 @@ ${safeDnaLines}
 
                         const listMsg = `¡Claro, ${candFirstName}! 🌟 Estas son nuestras vacantes disponibles:\n\n${vacancyLines.join('\n\n')}`;
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, listMsg, 'chat', { priority: 1 });
-                        saveMessage(candidateId, { from: 'me', content: listMsg, timestamp: new Date().toISOString() }).catch(() => {});
+                        saveMessage(candidateId, { from: 'bot', content: listMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
                         // 3. Close with a hook
                         const closingMsg = `¿Alguna de estas opciones te llama la atención? 😊`;
                         await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, closingMsg, 'chat', { priority: 1 });
-                        saveMessage(candidateId, { from: 'me', content: closingMsg, timestamp: new Date().toISOString() }).catch(() => {});
+                        saveMessage(candidateId, { from: 'bot', content: closingMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
                         // 4. Move candidate to first step of matched project to restart flow
                         const firstStep = targetProject.steps?.[0];
@@ -3008,7 +3008,7 @@ ${safeDnaLines}
                                     ];
                                     const _ackBubble = _CIT_CANCEL_ACK[_pvIdx % _CIT_CANCEL_ACK.length];
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _ackBubble, 'chat', { priority: 1 });
-                                    saveMessage(candidateId, { from: 'me', content: _ackBubble, timestamp: new Date().toISOString() }).catch(() => {});
+                                    saveMessage(candidateId, { from: 'bot', content: _ackBubble, timestamp: new Date().toISOString() }).catch(() => {});
                                     const _vacName = _nextVac.name || 'otra vacante';
                                     const _CIT_TEASER = [
                                         `🌟 Tenemos disponible: *${_vacName}*. ¿Te gustaría agendar una entrevista? 😊`,
@@ -3019,7 +3019,7 @@ ${safeDnaLines}
                                     ];
                                     const _teaserBubble = _CIT_TEASER[_pvIdx % _CIT_TEASER.length];
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _teaserBubble, 'chat', { priority: 2 });
-                                    saveMessage(candidateId, { from: 'me', content: _teaserBubble, timestamp: new Date().toISOString() }).catch(() => {});
+                                    saveMessage(candidateId, { from: 'bot', content: _teaserBubble, timestamp: new Date().toISOString() }).catch(() => {});
                                     candidateUpdates.currentVacancyIndex = _nextVacIdx;
                                     await Promise.all([setPivotPendingFlag(redis, candidateId), clearCitaPendingFlag(redis, candidateId)]).catch(() => {});
                                     hasExitTag = false;
@@ -3056,7 +3056,7 @@ ${safeDnaLines}
                         // Send the confirmation question and ABORT the exit move
                         if (config) {
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _niQuestion, 'chat', { priority: 1 });
-                            saveMessage(candidateId, { from: 'me', content: _niQuestion, timestamp: new Date().toISOString() }).catch(() => {});
+                            saveMessage(candidateId, { from: 'bot', content: _niQuestion, timestamp: new Date().toISOString() }).catch(() => {});
                         }
                         // Block the move — candidate must explicitly confirm
                         hasExitTag = false;
@@ -3679,7 +3679,7 @@ ${safeDnaLines}
                             } catch (e) {
                                 console.error('Error enviando pre-move:', e.message);
                             }
-                            saveMessage(candidateId, { from: 'me', content: cleanSpeech, timestamp: new Date().toISOString() }).catch(() => { });
+                            saveMessage(candidateId, { from: 'bot', content: cleanSpeech, timestamp: new Date().toISOString() }).catch(() => { });
                         }
 
 
@@ -3743,7 +3743,7 @@ ${safeDnaLines}
                                             finalMsg = finalMsg.replace(/\{\{\s*citaHora\s*\}\}/ig, metaDataForVars.citaHora || 'hora acordada');
 
                                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, finalMsg, 'chat', { priority: 1 });
-                                            saveMessage(candidateId, { from: 'me', content: finalMsg, timestamp: new Date().toISOString() }).catch(() => { });
+                                            saveMessage(candidateId, { from: 'bot', content: finalMsg, timestamp: new Date().toISOString() }).catch(() => { });
                                         }
                                         else if (item.type === 'image' && item.data?.url) {
                                             let imgUrl = item.data.url;
@@ -3757,7 +3757,7 @@ ${safeDnaLines}
                                                 options.caption = item.data.caption.trim();
                                             }
                                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, imgUrl, 'image', options);
-                                            saveMessage(candidateId, { from: 'me', content: `[Imagen Adjunta: ${imgUrl}]${options.caption ? `\nCaption: ${options.caption}` : ''}`, timestamp: new Date().toISOString() }).catch(() => { });
+                                            saveMessage(candidateId, { from: 'bot', content: `[Imagen Adjunta: ${imgUrl}]${options.caption ? `\nCaption: ${options.caption}` : ''}`, timestamp: new Date().toISOString() }).catch(() => { });
                                         }
                                         else if (item.type === 'location' && item.data?.lat && item.data?.lng) {
                                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, item.data.address || 'Ubicación', 'location', {
@@ -3767,7 +3767,7 @@ ${safeDnaLines}
                                                 name: item.data.name || item.data.title,
                                                 priority: 1
                                             });
-                                            saveMessage(candidateId, { from: 'me', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() }).catch(() => { });
+                                            saveMessage(candidateId, { from: 'bot', content: `[Ubicación: ${item.data.address} (${item.data.lat}, ${item.data.lng})]`, timestamp: new Date().toISOString() }).catch(() => { });
                                         }
 
                                         // Stagger between messages to guarantee WhatsApp delivery order
@@ -3799,7 +3799,7 @@ ${safeDnaLines}
                                 const bridgeSticker = await redis?.get(bridgeKey);
                                 if (bridgeSticker) {
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
-                                    saveMessage(candidateId, { from: 'me', content: `[Sticker: ${bridgeSticker}]`, timestamp: new Date().toISOString() }).catch(() => { });
+                                    saveMessage(candidateId, { from: 'bot', content: `[Sticker: ${bridgeSticker}]`, timestamp: new Date().toISOString() }).catch(() => { });
                                     // 🚀 BRIDGE GAP: Re-trigger "escribiendo..." right after the sticker
                                     // ONLY for non-terminal steps — if the next step is Citados/No Interesa/exit,
                                     // there's no follow-up GPT response and composing would hang forever.
@@ -3826,9 +3826,9 @@ ${safeDnaLines}
                                 const farewellPart1 = `Entiendo perfectamente, ${candFirstName} 🙏 Lamento que ninguna de nuestras oportunidades haya encajado contigo en este momento.`;
                                 const farewellPart2 = `Si en algún momento algo cambia y te interesa explorar una nueva vacante, aquí estaré para ayudarte. ¡Mucho éxito en tu búsqueda! 🍀👋`;
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, farewellPart1, 'chat', { priority: 1 });
-                                saveMessage(candidateId, { from: 'me', content: farewellPart1, timestamp: new Date().toISOString() }).catch(() => {});
+                                saveMessage(candidateId, { from: 'bot', content: farewellPart1, timestamp: new Date().toISOString() }).catch(() => {});
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, farewellPart2, 'chat', { priority: 1 });
-                                saveMessage(candidateId, { from: 'me', content: farewellPart2, timestamp: new Date().toISOString() }).catch(() => {});
+                                saveMessage(candidateId, { from: 'bot', content: farewellPart2, timestamp: new Date().toISOString() }).catch(() => {});
                                 // Clear vacancy linkage — both top-level AND projectMetadata (where the UI column reads from)
                                 candidateUpdates.currentVacancyName = null;
                                 candidateUpdates.currentVacancyIndex = null;
@@ -3879,7 +3879,7 @@ ${safeDnaLines}
 
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _dayListMsg, 'chat').catch(() => {});
                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, _dayAskMsg, 'chat').catch(() => {});
-                                await saveMessage(candidateId, { from: 'me', content: _dayListMsg + '[MSG_SPLIT]' + _dayAskMsg, timestamp: new Date().toISOString() });
+                                await saveMessage(candidateId, { from: 'bot', content: _dayListMsg + '[MSG_SPLIT]' + _dayAskMsg, timestamp: new Date().toISOString() });
                             } catch (_dlErr) {
                                 console.error('[DAY LIST] Failed to send day list on step entry:', _dlErr.message);
                             }
@@ -4027,7 +4027,7 @@ ${safeDnaLines}
                                     }
 
                                     const safeLogText = chainText.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
-                                    await saveMessage(candidateId, { from: 'me', content: safeLogText, timestamp: new Date().toISOString(), mediaUrl: mUrl && mUrl !== 'null' ? mUrl : null });
+                                    await saveMessage(candidateId, { from: 'bot', content: safeLogText, timestamp: new Date().toISOString(), mediaUrl: mUrl && mUrl !== 'null' ? mUrl : null });
                                 }
                             } catch (e) {
                                 console.error(`[RECRUITER BRAIN] Chain Fail: `, e.message);
@@ -4801,7 +4801,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             reactionPromise,
             updateCandidate(candidateId, candidateUpdates),
             saveMessage(candidateId, {
-                from: 'me',
+                from: 'bot',
                 content: dbContentToSave,
                 timestamp: new Date().toISOString()
             })
