@@ -68,19 +68,12 @@ export default async function handler(req, res) {
 
             if (action === 'mark_read') {
                 const messages = await getMessages(candidateId);
-                // Clear unread badge and prevent "last to speak" logic from triggering unread state
-                const nowStr = new Date().toISOString();
+                // Just clear the counter (blue ticks), but DO NOT update botTime so Rule 2 persists
                 try {
-                    await updateCandidate(candidateId, { 
-                        unreadMsgCount: 0,
-                        lastBotMessageAt: nowStr,
-                        ultimoMensajeBot: nowStr
-                    });
-                } catch (e) {
-                    console.error("Error updating candidate read status:", e);
-                }
+                    await updateCandidate(candidateId, { unreadMsgCount: 0 });
+                } catch (e) {}
 
-                // Find the latest incoming message to send the blue ticks to WhatsApp
+                // Send blue ticks to WhatsApp
                 const latestIncoming = [...messages].reverse().find(m => m.from !== 'bot' && m.from !== 'me');
                 if (latestIncoming && (latestIncoming.id || latestIncoming.ultraMsgId)) {
                     const msgId = latestIncoming.id || latestIncoming.ultraMsgId;
@@ -90,6 +83,19 @@ export default async function handler(req, res) {
                     return res.status(200).json({ success: true, marked: msgId });
                 }
                 return res.status(200).json({ success: true, marked: null });
+            }
+
+            if (action === 'mark_handled') {
+                // EXPLICIT BUTTON: Clear counter AND update botTime to bypass "last to speak" rule
+                const nowStr = new Date().toISOString();
+                try {
+                    await updateCandidate(candidateId, { 
+                        unreadMsgCount: 0,
+                        lastBotMessageAt: nowStr,
+                        ultimoMensajeBot: nowStr
+                    });
+                } catch (e) {}
+                return res.status(200).json({ success: true, marked: 'handled' });
             }
 
             return res.status(400).json({ error: 'Invalid action' });

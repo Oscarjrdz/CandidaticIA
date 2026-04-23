@@ -1482,7 +1482,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             await fetch('/api/chat', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: 'mark_read', candidateId: chatToMark.id })
+                body: JSON.stringify({ action: 'mark_handled', candidateId: chatToMark.id })
             });
         } catch(err) {
             console.error('Error marking as read', err);
