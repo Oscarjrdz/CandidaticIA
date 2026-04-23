@@ -153,7 +153,7 @@ export default async function handler(req, res) {
             }
 
             const timestamp = new Date().toISOString();
-            const msgId = `msg_${Date.now()}`;
+            const msgId = req.body.tempId || `msg_${Date.now()}`;
 
             let contentToSave = finalMessage;
             if (type === 'template' && req.body.templateData) {

@@ -282,7 +282,8 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                 candidateId: candidate.id,
                 message: messageToProcess,
                 type: forceType,
-                mediaUrl: forceMedia
+                mediaUrl: forceMedia,
+                tempId: tempId
             };
             
             if (currentReplyToMsg) {
