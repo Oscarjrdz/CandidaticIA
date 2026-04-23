@@ -1234,6 +1234,11 @@ export const saveMessage = async (candidateId, message) => {
         return message; 
     }
 
+    // Ensure message has an ID so SSE real-time tracking doesn't accidentally overwrite undefined IDs
+    if (!message.id) {
+        message.id = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    }
+
     const client = getClient();
     if (!client) {
         console.error('❌ [Storage] saveMessage failed: No Redis client');
