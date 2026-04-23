@@ -1269,17 +1269,21 @@ export const saveMessage = async (candidateId, message) => {
         }
 
         // TRIGGER SSE: Notify frontends with enriched payload for surgical UI updates (zero re-fetch)
-        const now = new Date().toISOString();
-        const isFromUser = message.from === 'user';
-        import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
-            notifyCandidateUpdate(candidateId, { 
-                newMessage: true,
-                messagePayload: message, // 🚀 ENRICHED PAYLOAD: Send full object to avoid HTTP polling
-                messageFrom: message.from,
-                ultimoMensaje: now,
-                ...(isFromUser ? { lastUserMessageAt: now } : { lastBotMessageAt: now, unreadMsgCount: 0 })
+        // ⚠️ SKIP for 'me' messages — those are sent by the dashboard and already rendered optimistically.
+        // Firing SSE for them causes a flash/duplication since the UI already has the message.
+        if (message.from !== 'me') {
+            const now = new Date().toISOString();
+            const isFromUser = message.from === 'user';
+            import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
+                notifyCandidateUpdate(candidateId, { 
+                    newMessage: true,
+                    messagePayload: message, // 🚀 ENRICHED PAYLOAD: Send full object to avoid HTTP polling
+                    messageFrom: message.from,
+                    ultimoMensaje: now,
+                    ...(isFromUser ? { lastUserMessageAt: now } : { lastBotMessageAt: now, unreadMsgCount: 0 })
+                }).catch(() => {});
             }).catch(() => {});
-        }).catch(err => console.error("Could not import sse-notify", err));
+        }
 
     } catch (e) {
         console.error('❌ [Storage] saveMessage Error:', e);
