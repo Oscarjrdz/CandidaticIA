@@ -34,35 +34,23 @@ export default async function handler(req, res) {
     }, 30000);
 
     const redis = getRedisClient();
-    let lastNewCheck = Date.now() - 5000; // Look back 5s initially
-    let lastUpdateCheck = Date.now() - 5000;
 
     const runPoll = async () => {
         try {
             if (!redis) return;
 
-            // 1. New Candidate Signal
-            const latestCandidate = await redis.get('sse_new_candidate');
-            if (latestCandidate) {
-                const candidate = JSON.parse(latestCandidate);
-                const candidateTime = new Date(candidate.timestamp || 0).getTime();
-                if (candidateTime > lastNewCheck) {
-                    sendEvent({ type: 'candidate:new', data: candidate });
-                    lastNewCheck = candidateTime;
-                }
-            }
-
-            // 2. Candidate Update Signal (Draining the list)
+            // 1 & 2. Unified Candidate Events (Draining the list)
             const updates = [];
             let nextUpdate = await redis.lpop('sse:updates');
             while (nextUpdate) {
                 updates.push(JSON.parse(nextUpdate));
-                if (updates.length > 15) break; // Limit per poll cycle
+                if (updates.length > 25) break; // Limit per poll cycle
                 nextUpdate = await redis.lpop('sse:updates');
             }
 
             for (const update of updates) {
-                sendEvent({ type: 'candidate:update', data: update });
+                const eventType = update.type || 'candidate:update';
+                sendEvent({ type: eventType, data: update });
             }
 
             // 2. [SIN TANTO ROLLO] Instant Stats Signal

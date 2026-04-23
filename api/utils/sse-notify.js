@@ -16,8 +16,10 @@ export async function notifyNewCandidate(candidate) {
             timestamp: new Date().toISOString()
         };
 
-        await redis.set('sse_new_candidate', JSON.stringify(notification), 'EX', 10);
-        console.log('✅ SSE notification sent for NEW candidate:', candidate.id);
+        // 🚀 Use a list to avoid race conditions and clock skew issues
+        await redis.rpush('sse:updates', JSON.stringify(notification));
+        await redis.expire('sse:updates', 60); // Safety cleanup
+        console.log('✅ SSE notification queued for NEW candidate:', candidate.id);
     } catch (error) {
         console.error('❌ SSE notification error:', error);
     }
