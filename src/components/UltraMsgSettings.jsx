@@ -169,17 +169,17 @@ const WhatsAppSettings = ({ showToast }) => {
                             <div className="p-4 text-center">
                                 <div className="flex items-center justify-center gap-1.5 mb-1">
                                     <TrendingUp className="w-3.5 h-3.5 text-amber-500" />
-                                    <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider">Templates</span>
+                                    <span className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider">Con Costo</span>
                                 </div>
                                 {loading ? <div className="h-7 w-12 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{analytics?.paidMessages?.toLocaleString() || '0'}</p>}
-                                <p className="text-[10px] text-amber-500/70 mt-0.5">con costo</p>
+                                <p className="text-[10px] text-amber-500/70 mt-0.5">mensajes</p>
                             </div>
 
                             {/* Cost */}
                             <div className="p-4 text-center">
                                 <div className="flex items-center justify-center gap-1.5 mb-1">
                                     <DollarSign className="w-3.5 h-3.5 text-purple-500" />
-                                    <span className="text-[10px] font-semibold text-purple-500 uppercase tracking-wider">Estimado</span>
+                                    <span className="text-[10px] font-semibold text-purple-500 uppercase tracking-wider">Costo Real</span>
                                 </div>
                                 {loading ? <div className="h-7 w-16 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-purple-600 dark:text-purple-400">${analytics?.estimatedCostMXN?.toLocaleString() || '0'}</p>}
                                 <p className="text-[10px] text-purple-500/70 mt-0.5">MXN (~${analytics?.estimatedCostUSD || '0'} USD)</p>
@@ -192,10 +192,10 @@ const WhatsAppSettings = ({ showToast }) => {
                                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Desglose por Tipo</p>
                                 <div className="flex flex-wrap gap-2">
                                     <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                                        💬 Servicio (IA + Chat): {analytics?.freeMessages?.toLocaleString() || '0'} • GRATIS
+                                        💬 Gratis (Servicio 24h): {analytics?.freeMessages?.toLocaleString() || '0'} msgs • $0
                                     </span>
                                     <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                                        ⚡ Templates (Rayito): {analytics?.paidMessages?.toLocaleString() || '0'} • ${analytics?.rates?.MARKETING || '0.40'} MXN/msg
+                                        ⚡ Con Costo (Templates): {analytics?.paidMessages?.toLocaleString() || '0'} msgs • ${analytics?.totalCost?.toLocaleString() || '0'} MXN
                                     </span>
                                 </div>
                             </div>

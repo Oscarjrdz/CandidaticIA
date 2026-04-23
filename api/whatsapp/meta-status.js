@@ -96,26 +96,38 @@ export default async function handler(req, res) {
                     console.warn('analytics field failed:', e.response?.data?.error?.message || e.message);
                 }
 
-                // ── Strategy 2: Count templates sent from our system (Redis) ──
-                let templatesSent = 0;
+                // ── Strategy 2: pricing_analytics (real cost from Meta billing) ──
+                let totalCost = 0;
+                let paidVolume = 0;
                 try {
-                    const { getRedisClient } = await import('../utils/storage.js');
-                    const redis = getRedisClient();
-                    if (redis) {
-                        // Count templates sent this month (tracked as candidatic:templates_sent:YYYY-MM)
-                        const monthKey = `candidatic:templates_sent:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                        const count = await redis.get(monthKey);
-                        templatesSent = parseInt(count) || 0;
+                    const priceRes = await axios.get(
+                        `https://graph.facebook.com/v25.0/${wabaId}`,
+                        {
+                            headers,
+                            timeout: 15000,
+                            params: {
+                                fields: `pricing_analytics.start(${since}).end(${until}).granularity(DAILY)`
+                            }
+                        }
+                    );
+                    const rawPrice = priceRes.data?.pricing_analytics;
+                    if (rawPrice?.data) {
+                        const dataPoints = rawPrice.data[0]?.data_points || [];
+                        for (const dp of dataPoints) {
+                            const vol = dp.volume || 0;
+                            const cost = dp.cost || 0;
+                            paidVolume += vol;
+                            totalCost += cost;
+                            if (cost > 0) paidMessages += vol;
+                            else freeMessages += vol;
+                        }
                     }
+                    estimatedCostMXN = totalCost;
                 } catch (e) {
-                    console.warn('Redis template count failed:', e.message);
+                    console.warn('pricing_analytics failed:', e.response?.data?.error?.message || e.message);
+                    // Fallback: assume all service = free
+                    freeMessages = totalSent;
                 }
-
-                // Service messages = total - templates (free within 24h window)
-                freeMessages = totalSent - templatesSent;
-                paidMessages = templatesSent;
-                // Estimate: all templates are MARKETING category (worst case)
-                estimatedCostMXN = templatesSent * MXN_RATES.MARKETING;
 
                 const USD_RATE = 17.5; // Approximate MXN/USD
 
@@ -124,14 +136,14 @@ export default async function handler(req, res) {
                     totalConversations,
                     totalSent,
                     totalDelivered,
-                    freeMessages: Math.max(freeMessages, 0),
+                    freeMessages,
                     paidMessages,
-                    byCategory: templatesSent > 0 ? { MARKETING: templatesSent } : {},
+                    totalCost: Math.round(totalCost * 100) / 100,
                     estimatedCostMXN: Math.round(estimatedCostMXN * 100) / 100,
                     estimatedCostUSD: Math.round((estimatedCostMXN / USD_RATE) * 100) / 100,
-                    pricingModel: 'PMP', // Per-Message Pricing
+                    pricingModel: 'PMP',
                     rates: MXN_RATES,
-                    note: 'Mensajes de servicio (respuestas dentro de 24h) son GRATIS. Solo se cobra por templates de marketing/utilidad/auth entregados.'
+                    note: 'Costos reales de Meta. Los mensajes de servicio (dentro de 24h) son GRATIS.'
                 };
             } catch (analyticsError) {
                 console.warn('Analytics fetch failed (non-critical):', analyticsError.response?.data?.error?.message || analyticsError.message);
