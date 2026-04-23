@@ -104,7 +104,7 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
 
             case 'sticker': {
                 payload.type = 'sticker';
-                payload.sticker = { link: body };
+                payload.sticker = extraParams.mediaId ? { id: extraParams.mediaId } : { link: body };
                 break;
             }
 

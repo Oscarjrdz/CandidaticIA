@@ -338,10 +338,20 @@ export default async function handler(req, res) {
 
                         let anyFound = false;
                         for (const bridge of ALL_BRIDGES) {
-                            const stickerUrl = await redis.get(bridge.key);
+                            const rawData = await redis.get(bridge.key);
+                            let stickerUrl = rawData;
+                            let metaMediaId = null;
+                            if (rawData?.startsWith('{')) {
+                                try {
+                                    const parsed = JSON.parse(rawData);
+                                    stickerUrl = parsed.url;
+                                    metaMediaId = parsed.mediaId;
+                                } catch (e) {}
+                            }
+
                             await sendMessage(adminNumber, `${bridge.label}\n📌 ${bridge.desc}\n${stickerUrl ? '✅ Configurado' : '❌ Sin configurar aún'}`);
-                            if (stickerUrl?.startsWith('http')) {
-                                await sendMessage(adminNumber, stickerUrl, 'sticker');
+                            if (stickerUrl) {
+                                await sendMessage(adminNumber, stickerUrl, 'sticker', { mediaId: metaMediaId });
                                 anyFound = true;
                             }
                         }
@@ -484,7 +494,7 @@ export default async function handler(req, res) {
                         };
                         const label = BRIDGE_LABELS[redisKey] || redisKey;
 
-                        await redis.set(redisKey, mediaUrl);
+                        await redis.set(redisKey, JSON.stringify({ url: mediaUrl, mediaId }));
                         await redis.del(`admin_state:${phone}`);
                         await sendMessage(adminNumber, `✅ ¡Puente *"${label}"* guardado con éxito! 🚀\n\nClave: \`${redisKey}\``);
                         continue;

@@ -12,16 +12,27 @@ export class MediaEngine {
      */
     static async sendCongratsPack(_config, phone, customStickerKey = 'bot_step_move_sticker', candidateId = null) {
         const client = getRedisClient();
-        const stickerUrl = await client?.get(customStickerKey);
+        const rawData = await client?.get(customStickerKey);
+
+        let stickerUrl = rawData;
+        let metaMediaId = null;
+
+        if (rawData?.startsWith('{')) {
+            try {
+                const parsed = JSON.parse(rawData);
+                stickerUrl = parsed.url || rawData;
+                metaMediaId = parsed.mediaId || null;
+            } catch (e) {}
+        }
 
         if (stickerUrl) {
             console.log(`[MEDIA ENGINE] 🚀 Sending Congrats Sticker: ${customStickerKey}`);
             if (candidateId) {
                 import('./storage.js').then(({ saveMessage }) => {
-                    saveMessage(candidateId, { from: 'me', content: `[Sticker: ${stickerUrl}]`, timestamp: new Date().toISOString() }).catch(() => {});
+                    saveMessage(candidateId, { from: 'bot', content: `[Sticker: ${stickerUrl}]`, timestamp: new Date().toISOString() }).catch(() => {});
                 });
             }
-            return await sendMetaMessage(phone, stickerUrl, 'sticker');
+            return await sendMetaMessage(phone, stickerUrl, 'sticker', { mediaId: metaMediaId });
         }
         return false;
     }
