@@ -68,7 +68,19 @@ export default async function handler(req, res) {
 
             if (action === 'mark_read') {
                 const messages = await getMessages(candidateId);
-                // Find the latest incoming message
+                // Clear unread badge and prevent "last to speak" logic from triggering unread state
+                const nowStr = new Date().toISOString();
+                try {
+                    await updateCandidate(candidateId, { 
+                        unreadMsgCount: 0,
+                        lastBotMessageAt: nowStr,
+                        ultimoMensajeBot: nowStr
+                    });
+                } catch (e) {
+                    console.error("Error updating candidate read status:", e);
+                }
+
+                // Find the latest incoming message to send the blue ticks to WhatsApp
                 const latestIncoming = [...messages].reverse().find(m => m.from !== 'bot' && m.from !== 'me');
                 if (latestIncoming && (latestIncoming.id || latestIncoming.ultraMsgId)) {
                     const msgId = latestIncoming.id || latestIncoming.ultraMsgId;

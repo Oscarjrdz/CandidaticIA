@@ -1472,9 +1472,10 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         if (e) e.stopPropagation();
         if (!chatToMark) return;
 
-        // Optimistic update
+        // Optimistic update: we must trick the logic userTime > botTime by setting botTime to now
+        const now = new Date().toISOString();
         setCandidates(prev => prev.map(c => 
-            c.id === chatToMark.id ? { ...c, unreadMsgCount: 0 } : c
+            c.id === chatToMark.id ? { ...c, unreadMsgCount: 0, lastBotMessageAt: now, ultimoMensajeBot: now } : c
         ));
 
         try {
