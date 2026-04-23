@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import {
     Users, Settings, Bot, History, Zap, Briefcase, Send, User, LogOut,
-    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X
+    MessageSquare, Layout, Smartphone, Folder, FolderKanban, GripVertical, Wifi, BrainCircuit, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import {
     DndContext,
@@ -43,7 +43,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'settings', label: 'Settings', icon: Settings, position: 'bottom' }
 ];
 
-const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
+const SortableMenuItem = ({ item, activeSection, onSectionChange, badge, isCollapsed }) => {
     const {
         attributes,
         listeners,
@@ -72,8 +72,9 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
             <button
                 onClick={() => onSectionChange(item.id)}
                 className={`
-                    w-full flex items-center space-x-3 px-4 py-3 rounded-xl
+                    w-full flex items-center px-4 py-3 rounded-xl
                     transition-all duration-300 relative
+                    ${isCollapsed ? 'lg:justify-center space-x-3 lg:space-x-0' : 'space-x-3'}
                     ${isActive
                         ? 'bg-white/15 text-white shadow-lg backdrop-blur-md'
                         : 'text-blue-100/70 hover:text-white hover:bg-white/10'
@@ -85,13 +86,14 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
                     <div className="absolute left-0 w-1 h-6 bg-blue-400 rounded-r-full" />
                 )}
                 <Icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 ${isActive ? 'scale-110 text-white' : 'group-hover:scale-105'}`} />
-                <span className={`font-medium text-sm flex-1 pr-2 text-left whitespace-nowrap ${isActive ? 'font-bold' : ''}`}>
+                
+                <span className={`font-medium text-sm flex-1 pr-2 text-left whitespace-nowrap ${isActive ? 'font-bold' : ''} ${isCollapsed ? 'lg:hidden' : ''}`}>
                     {item.label}
                 </span>
 
                 {badge > 0 && (
-                    <div className="mr-2 flex-shrink-0 bg-[#25d366] dark:bg-[#00a884] text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in duration-300">
-                        {badge}
+                    <div className={`mr-2 flex-shrink-0 bg-[#25d366] dark:bg-[#00a884] text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-sm animate-in zoom-in duration-300 ${isCollapsed ? 'lg:absolute lg:top-1 lg:right-1 lg:px-1.5 lg:text-[10px]' : ''}`}>
+                        {isCollapsed && badge > 99 ? '99+' : badge}
                     </div>
                 )}
 
@@ -99,7 +101,7 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
                 <div
                     {...attributes}
                     {...listeners}
-                    className="opacity-0 group-hover:opacity-40 hover:opacity-100 cursor-grab active:cursor-grabbing p-1 -mr-2 transition-opacity"
+                    className={`opacity-0 group-hover:opacity-40 hover:opacity-100 cursor-grab active:cursor-grabbing p-1 -mr-2 transition-opacity ${isCollapsed ? 'lg:hidden' : ''}`}
                 >
                     <GripVertical className="w-4 h-4" />
                 </div>
@@ -111,8 +113,19 @@ const SortableMenuItem = ({ item, activeSection, onSectionChange, badge }) => {
 const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate, isMobileOpen, onClose }) => {
     const [items, setItems] = useState([]);
     const [rolePermissions, setRolePermissions] = useState(null);
+    const [isCollapsed, setIsCollapsed] = useState(() => {
+        return localStorage.getItem('sidebar_collapsed') === 'true';
+    });
     const { globalStats } = useCandidatesSSE();
     const unreadCount = globalStats?.unread || 0;
+
+    const toggleCollapse = () => {
+        setIsCollapsed(prev => {
+            const next = !prev;
+            localStorage.setItem('sidebar_collapsed', next);
+            return next;
+        });
+    };
 
     useEffect(() => {
         // Fetch roles to get user permissions
@@ -230,7 +243,8 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate,
             )}
 
             <aside className={`
-                fixed lg:sticky top-0 left-0 h-screen w-64 bg-blue-700 flex flex-col overflow-hidden shadow-2xl transition-all duration-300 z-50
+                fixed lg:sticky top-0 left-0 h-screen bg-blue-700 flex flex-col overflow-hidden shadow-2xl transition-all duration-300 z-50
+                ${isCollapsed ? 'w-64 lg:w-20' : 'w-64'}
                 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             `}>
                 <div className="absolute inset-0 bg-gradient-to-b from-blue-600 via-blue-700 to-blue-800 pointer-events-none" />
@@ -238,18 +252,18 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate,
                 {/* Logo/Header */}
                 <div className="relative p-6 mb-2">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <div className={`flex items-center space-x-3 ${isCollapsed ? 'lg:justify-center lg:w-full lg:space-x-0' : ''}`}>
                             <div className="relative flex-shrink-0 transition-transform duration-300 hover:scale-105">
                                 <BrainCircuit className="w-8 h-8 text-white stroke-[2] drop-shadow-md rotate-90" />
                             </div>
-                            <h2 className="text-[20px] font-extrabold text-white tracking-wider flex items-center drop-shadow-sm ml-1">
+                            <h2 className={`text-[20px] font-extrabold text-white tracking-wider flex items-center drop-shadow-sm ml-1 ${isCollapsed ? 'lg:hidden' : ''}`}>
                                 CANDIDATIC&nbsp;<span className="tracking-tighter">IΛ</span>
                             </h2>
                         </div>
                         {/* Mobile close button */}
                         <button
                             onClick={onClose}
-                            className="lg:hidden p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                            className={`lg:hidden p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors ${isCollapsed ? '' : ''}`}
                         >
                             <X className="w-5 h-5" />
                         </button>
@@ -274,6 +288,7 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate,
                                     activeSection={activeSection}
                                     onSectionChange={handleSectionClick}
                                     badge={item.id === 'chat' ? unreadCount : 0}
+                                    isCollapsed={isCollapsed}
                                 />
                             ))}
                         </SortableContext>
@@ -287,25 +302,38 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout, user, onUserUpdate,
                             <button
                                 onClick={() => handleSectionClick(bottomItem.id)}
                                 className={`
-                                    w-full flex items-center space-x-3 px-4 py-3 rounded-xl
+                                    w-full flex items-center px-4 py-3 rounded-xl
                                     transition-all duration-300 group
+                                    ${isCollapsed ? 'lg:justify-center space-x-3 lg:space-x-0' : 'space-x-3'}
                                     ${activeSection === bottomItem.id
                                         ? 'bg-white/15 text-white'
                                         : 'text-blue-100/70 hover:text-white hover:bg-white/10'
                                     }
                                 `}
+                                title={bottomItem.label}
                             >
-                                <Settings className="w-5 h-5" />
-                                <span className="font-medium text-sm">{bottomItem.label}</span>
+                                <Settings className="w-5 h-5 flex-shrink-0" />
+                                <span className={`font-medium text-sm flex-1 text-left ${isCollapsed ? 'lg:hidden' : ''}`}>{bottomItem.label}</span>
                             </button>
                         )}
 
                         <button
                             onClick={onLogout}
-                            className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 group text-red-300 hover:text-red-100 hover:bg-red-500/20"
+                            className={`w-full flex items-center px-4 py-3 rounded-xl transition-all duration-300 group text-red-300 hover:text-red-100 hover:bg-red-500/20 ${isCollapsed ? 'lg:justify-center space-x-3 lg:space-x-0' : 'space-x-3'}`}
+                            title="Cerrar Sesión"
                         >
-                            <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
-                            <span className="font-medium text-sm">Cerrar Sesión</span>
+                            <LogOut className={`w-5 h-5 flex-shrink-0 transition-transform ${isCollapsed ? '' : 'group-hover:-translate-x-1'}`} />
+                            <span className={`font-medium text-sm flex-1 text-left ${isCollapsed ? 'lg:hidden' : ''}`}>Cerrar Sesión</span>
+                        </button>
+                        
+                        {/* Collapse Toggle */}
+                        <button
+                            onClick={toggleCollapse}
+                            className={`w-full items-center px-4 py-3 rounded-xl transition-all duration-300 group text-blue-200 hover:text-white hover:bg-white/10 hidden lg:flex ${isCollapsed ? 'lg:justify-center space-x-3 lg:space-x-0' : 'space-x-3'}`}
+                            title={isCollapsed ? 'Expandir menú' : 'Ocultar menú'}
+                        >
+                            {isCollapsed ? <ChevronRight className="w-5 h-5 flex-shrink-0" /> : <ChevronLeft className="w-5 h-5 flex-shrink-0" />}
+                            <span className={`font-medium text-sm flex-1 text-left ${isCollapsed ? 'lg:hidden' : ''}`}>Ocultar menú</span>
                         </button>
                     </div>
                 </div>
