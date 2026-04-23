@@ -96,41 +96,26 @@ export default async function handler(req, res) {
                     console.warn('analytics field failed:', e.response?.data?.error?.message || e.message);
                 }
 
-                // ── Strategy 2: conversation_analytics (conversation-level) ──
+                // ── Strategy 2: Count templates sent from our system (Redis) ──
+                let templatesSent = 0;
                 try {
-                    const convRes = await axios.get(
-                        `https://graph.facebook.com/v25.0/${wabaId}`,
-                        {
-                            headers,
-                            timeout: 15000,
-                            params: {
-                                fields: `conversation_analytics.start(${since}).end(${until}).granularity(MONTHLY).phone_numbers([${phoneNumberId}]).dimensions(["CONVERSATION_CATEGORY","CONVERSATION_TYPE"])`
-                            }
-                        }
-                    );
-                    const rawConv = convRes.data?.conversation_analytics;
-                    if (rawConv?.data) {
-                        const dataPoints = rawConv.data[0]?.data_points || [];
-                        for (const dp of dataPoints) {
-                            const category = dp.CONVERSATION_CATEGORY || 'UNKNOWN';
-                            const type = dp.CONVERSATION_TYPE || 'REGULAR';
-                            const count = dp.conversation || 0;
-
-                            // Only override total if analytics field returned 0
-                            if (totalConversations === 0) totalConversations += count;
-                            byCategory[category] = (byCategory[category] || 0) + count;
-
-                            if (type === 'FREE_TIER' || type === 'FREE_ENTRY_POINT' || category === 'SERVICE') {
-                                freeMessages += count;
-                            } else {
-                                paidMessages += count;
-                                estimatedCostMXN += count * (MXN_RATES[category] || 0.15);
-                            }
-                        }
+                    const { getRedisClient } = await import('../utils/storage.js');
+                    const redis = getRedisClient();
+                    if (redis) {
+                        // Count templates sent this month (tracked as candidatic:templates_sent:YYYY-MM)
+                        const monthKey = `candidatic:templates_sent:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                        const count = await redis.get(monthKey);
+                        templatesSent = parseInt(count) || 0;
                     }
                 } catch (e) {
-                    console.warn('conversation_analytics field failed:', e.response?.data?.error?.message || e.message);
+                    console.warn('Redis template count failed:', e.message);
                 }
+
+                // Service messages = total - templates (free within 24h window)
+                freeMessages = totalSent - templatesSent;
+                paidMessages = templatesSent;
+                // Estimate: all templates are MARKETING category (worst case)
+                estimatedCostMXN = templatesSent * MXN_RATES.MARKETING;
 
                 const USD_RATE = 17.5; // Approximate MXN/USD
 
@@ -139,9 +124,9 @@ export default async function handler(req, res) {
                     totalConversations,
                     totalSent,
                     totalDelivered,
-                    freeMessages,
+                    freeMessages: Math.max(freeMessages, 0),
                     paidMessages,
-                    byCategory,
+                    byCategory: templatesSent > 0 ? { MARKETING: templatesSent } : {},
                     estimatedCostMXN: Math.round(estimatedCostMXN * 100) / 100,
                     estimatedCostUSD: Math.round((estimatedCostMXN / USD_RATE) * 100) / 100,
                     pricingModel: 'PMP', // Per-Message Pricing

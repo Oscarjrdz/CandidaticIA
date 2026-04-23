@@ -143,6 +143,16 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                 if (extraParams.components) {
                     payload.template.components = extraParams.components;
                 }
+                // Track template send for cost analytics
+                try {
+                    const { getRedisClient } = await import('../utils/storage.js');
+                    const redis = getRedisClient();
+                    if (redis) {
+                        const now = new Date();
+                        const monthKey = `candidatic:templates_sent:${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                        await redis.incr(monthKey);
+                    }
+                } catch (e) {}
                 break;
             }
 

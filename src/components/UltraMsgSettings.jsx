@@ -186,34 +186,17 @@ const WhatsAppSettings = ({ showToast }) => {
                             </div>
                         </div>
 
-                        {/* Category Breakdown */}
-                        {analytics?.byCategory && Object.keys(analytics.byCategory).length > 0 && !loading && (
+                        {/* Category Breakdown - Always show */}
+                        {!loading && (
                             <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30">
-                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Desglose por Categoría</p>
+                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Desglose por Tipo</p>
                                 <div className="flex flex-wrap gap-2">
-                                    {Object.entries(analytics.byCategory).map(([category, count]) => {
-                                        const colors = {
-                                            SERVICE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-                                            MARKETING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-                                            UTILITY: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-                                            AUTHENTICATION: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
-                                            REFERRAL_CONVERSION: 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300'
-                                        };
-                                        const labels = {
-                                            SERVICE: '💬 Servicio',
-                                            MARKETING: '📢 Marketing',
-                                            UTILITY: '⚙️ Utilidad',
-                                            AUTHENTICATION: '🔐 Auth',
-                                            REFERRAL_CONVERSION: '🔗 Referral'
-                                        };
-                                        const rate = analytics?.rates?.[category];
-                                        return (
-                                            <span key={category} className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${colors[category] || 'bg-gray-100 text-gray-600'}`}>
-                                                {labels[category] || category}: {count}
-                                                {rate ? ` • $${rate} MXN/msg` : category === 'SERVICE' ? ' • GRATIS' : ''}
-                                            </span>
-                                        );
-                                    })}
+                                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                        💬 Servicio (IA + Chat): {analytics?.freeMessages?.toLocaleString() || '0'} • GRATIS
+                                    </span>
+                                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                                        ⚡ Templates (Rayito): {analytics?.paidMessages?.toLocaleString() || '0'} • ${analytics?.rates?.MARKETING || '0.40'} MXN/msg
+                                    </span>
                                 </div>
                             </div>
                         )}
