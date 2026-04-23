@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
 import { Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin } from 'lucide-react';
-const EmojiPicker = lazy(() => import('emoji-picker-react'));
+import EmojiPicker from 'emoji-picker-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
@@ -175,19 +175,17 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
             {/* Emojis Menu — Lazy loaded */}
             {showEmojis && (
                 <div className="absolute bottom-[70px] left-2 shadow-2xl z-[100] rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700">
-                    <React.Suspense fallback={<div className="w-[320px] h-[400px] flex items-center justify-center bg-white dark:bg-[#202c33]"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
-                        <EmojiPicker 
-                            onEmojiClick={(eData) => {
-                                setLocalMessage(prev => prev + eData.emoji);
-                            }}
-                            theme="auto"
-                            width={320}
-                            height={400}
-                            searchPlaceholder="Buscar emojis..."
-                            lazyLoadEmojis={true}
-                            skinTonesDisabled={true}
-                        />
-                    </React.Suspense>
+                    <EmojiPicker 
+                        onEmojiClick={(eData) => {
+                            setLocalMessage(prev => prev + eData.emoji);
+                        }}
+                        theme="auto"
+                        width={320}
+                        height={400}
+                        searchPlaceholder="Buscar emojis..."
+                        lazyLoadEmojis={true}
+                        skinTonesDisabled={true}
+                    />
                 </div>
             )}
 

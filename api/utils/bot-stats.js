@@ -105,12 +105,19 @@ export const calculateBotStats = async () => {
 
                     // Unread Count Logic (within the chunk, reusing the parsed candidate 'c')
                     if (c) {
-                        const userT = c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0;
-                        const botT1 = c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0;
-                        const botT2 = c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0;
-                        const bestBotT = Math.max(botT1, botT2);
-                        if (userT > 0 && userT > (bestBotT + 1000)) {
+                        if (c.unreadMsgCount > 0) {
                             totalUnreadCount++;
+                        } else {
+                            const userT = Math.max(
+                                c.lastUserMessageAt ? new Date(c.lastUserMessageAt).getTime() : 0,
+                                c.ultimoMensaje ? new Date(c.ultimoMensaje).getTime() : 0
+                            );
+                            const botT1 = c.lastBotMessageAt ? new Date(c.lastBotMessageAt).getTime() : 0;
+                            const botT2 = c.ultimoMensajeBot ? new Date(c.ultimoMensajeBot).getTime() : 0;
+                            const bestBotT = Math.max(botT1, botT2);
+                            if (userT > 0 && userT > (bestBotT + 1000)) {
+                                totalUnreadCount++;
+                            }
                         }
                     }
 
