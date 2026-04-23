@@ -120,6 +120,30 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true });
             }
 
+            if (action === 'reorderCandidates') {
+                const { projectId, stepId, candidateIds } = body;
+                if (!projectId || !stepId || !candidateIds?.length) return res.status(400).json({ error: 'Missing data' });
+
+                const linksRaw = await redis.get(`${LINKS_PREFIX}${projectId}`);
+                let links = linksRaw ? JSON.parse(linksRaw) : [];
+
+                // Separate links for this step vs other steps
+                const otherLinks = links.filter(l => l.stepId !== stepId);
+                const stepLinks = links.filter(l => l.stepId === stepId);
+
+                // Reorder step links according to candidateIds order
+                const reordered = candidateIds
+                    .map(id => stepLinks.find(l => l.candidateId === id))
+                    .filter(Boolean);
+
+                // Add any step links that weren't in the candidateIds list (safety net)
+                const reorderedIds = new Set(reordered.map(l => l.candidateId));
+                const remaining = stepLinks.filter(l => !reorderedIds.has(l.candidateId));
+
+                await redis.set(`${LINKS_PREFIX}${projectId}`, JSON.stringify([...otherLinks, ...reordered, ...remaining]));
+                return res.status(200).json({ success: true });
+            }
+
             if (action === 'updateSteps') {
                 const { projectId, steps } = body;
                 if (!projectId || !steps) return res.status(400).json({ error: 'Missing data' });

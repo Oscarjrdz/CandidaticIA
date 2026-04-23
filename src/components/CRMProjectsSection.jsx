@@ -5,9 +5,25 @@ import Button from './ui/Button';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { formatPhone, formatRelativeDate, calculateAge } from '../utils/formatters';
 import ChatWindow from './ChatWindow';
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragOverlay, useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+
+// Droppable step container — accepts candidates dropped into it
+const DroppableStepZone = ({ stepId, isOver, children }) => {
+    const { setNodeRef, isOver: isDragOver } = useDroppable({ id: stepId, data: { type: 'step', stepId } });
+    const highlight = isOver || isDragOver;
+    return (
+        <div ref={setNodeRef}
+            className={`flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar transition-all duration-300 rounded-b-2xl ${
+                highlight
+                    ? 'bg-blue-50/80 dark:bg-blue-900/20 ring-2 ring-blue-400/40 ring-inset'
+                    : ''
+            }`}>
+            {children}
+        </div>
+    );
+};
 
 const SortableCandCard = ({ candidate, onRemove, onChat }) => {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -99,6 +115,9 @@ const CRMProjectsSection = ({ showToast, user }) => {
     const [chatCandidate, setChatCandidate] = useState(null);
 
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+    const [activeId, setActiveId] = useState(null);
+    const [activeItem, setActiveItem] = useState(null);
+    const [overStepId, setOverStepId] = useState(null);
 
     useEffect(() => { fetchProjects(); }, []);
     useEffect(() => { if (activeProject) fetchCandidates(activeProject.id); }, [activeProject?.id]);
@@ -245,27 +264,97 @@ const CRMProjectsSection = ({ showToast, user }) => {
         } catch (e) { showToast('Error', 'error'); }
     };
 
+    const handleDragStart = (event) => {
+        const { active } = event;
+        setActiveId(active.id);
+        setActiveItem(active.data.current);
+    };
+
+    const handleDragOver = (event) => {
+        const { over } = event;
+        if (!over) { setOverStepId(null); return; }
+        // Determine which step we're hovering over
+        if (over.data.current?.type === 'step') {
+            setOverStepId(over.id);
+        } else if (over.data.current?.candidate) {
+            setOverStepId(over.data.current.candidate.crmMeta?.stepId || null);
+        } else {
+            setOverStepId(null);
+        }
+    };
+
     const handleDragEnd = async (event) => {
         const { active, over } = event;
+        setActiveId(null);
+        setActiveItem(null);
+        setOverStepId(null);
+
         if (!over || !active.data.current?.candidate) return;
         const candidate = active.data.current.candidate;
+        const currentStepId = candidate.crmMeta?.stepId;
+
+        // Determine target step
         let targetStepId = null;
-        if (over.id?.toString().startsWith('step_') || over.id === 'step_inicio') {
-            targetStepId = over.id;
+        if (over.data.current?.type === 'step') {
+            targetStepId = over.data.current.stepId;
         } else if (over.data.current?.candidate) {
             targetStepId = over.data.current.candidate.crmMeta?.stepId;
         }
-        if (!targetStepId || targetStepId === candidate.crmMeta?.stepId) return;
-        setCandidates(prev => prev.map(c => c.id === candidate.id ? { ...c, crmMeta: { ...c.crmMeta, stepId: targetStepId } } : c));
-        try {
-            await fetch('/api/manual_projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'moveCandidate', projectId: activeProject.id, candidateId: candidate.id, stepId: targetStepId }) });
-        } catch (e) { showToast('Error al mover', 'error'); }
+
+        if (!targetStepId) return;
+
+        // CASE 1: Reorder within the SAME step
+        if (currentStepId === targetStepId && over.data.current?.candidate) {
+            const stepCands = candidates.filter(c => c.crmMeta?.stepId === currentStepId);
+            const oldIndex = stepCands.findIndex(c => c.id === active.id);
+            const newIndex = stepCands.findIndex(c => c.id === over.id);
+            if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+                const reordered = arrayMove(stepCands, oldIndex, newIndex);
+                // Rebuild full candidates list: replace the step's candidates in order
+                const otherCands = candidates.filter(c => c.crmMeta?.stepId !== currentStepId);
+                setCandidates([...otherCands, ...reordered]);
+                // Persist order
+                try {
+                    await fetch('/api/manual_projects', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'reorderCandidates',
+                            projectId: activeProject.id,
+                            stepId: currentStepId,
+                            candidateIds: reordered.map(c => c.id)
+                        })
+                    });
+                } catch (e) { console.error('Reorder error:', e); }
+            }
+            return;
+        }
+
+        // CASE 2: Move to a DIFFERENT step
+        if (currentStepId !== targetStepId) {
+            setCandidates(prev => prev.map(c =>
+                c.id === candidate.id ? { ...c, crmMeta: { ...c.crmMeta, stepId: targetStepId } } : c
+            ));
+            try {
+                await fetch('/api/manual_projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'moveCandidate', projectId: activeProject.id, candidateId: candidate.id, stepId: targetStepId })
+                });
+            } catch (e) { showToast('Error al mover', 'error'); }
+        }
+    };
+
+    const handleDragCancel = () => {
+        setActiveId(null);
+        setActiveItem(null);
+        setOverStepId(null);
     };
 
     const steps = activeProject?.steps || [];
 
     return (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd} onDragCancel={handleDragCancel}>
             <div className="flex gap-6 h-full min-h-0">
                 {/* LEFT SIDEBAR — Project List */}
                 <div className="w-72 shrink-0 flex flex-col gap-3">
@@ -373,16 +462,19 @@ const CRMProjectsSection = ({ showToast, user }) => {
 
                                                 {/* Candidates */}
                                                 <SortableContext items={stepCands.map(c => c.id)} strategy={verticalListSortingStrategy}>
-                                                    <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar" data-step-id={step.id}
-                                                        onDragOver={(e) => e.preventDefault()}>
+                                                    <DroppableStepZone stepId={step.id} isOver={overStepId === step.id}>
                                                         {stepCands.length === 0 ? (
-                                                            <div className="text-center py-8 text-slate-300 dark:text-slate-600 text-xs">
+                                                            <div className={`text-center py-8 text-xs rounded-xl border-2 border-dashed transition-all duration-300 ${
+                                                                overStepId === step.id
+                                                                    ? 'border-blue-400 text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                                                                    : 'border-transparent text-slate-300 dark:text-slate-600'
+                                                            }`}>
                                                                 Arrastra candidatos aquí
                                                             </div>
                                                         ) : stepCands.map(c => (
                                                             <SortableCandCard key={c.id} candidate={c} onRemove={handleUnlink} onChat={setChatCandidate} />
                                                         ))}
-                                                    </div>
+                                                    </DroppableStepZone>
                                                 </SortableContext>
                                             </div>
                                         );
@@ -402,6 +494,30 @@ const CRMProjectsSection = ({ showToast, user }) => {
                     )}
                 </div>
             </div>
+
+            {/* Drag Overlay — floating preview of dragged card */}
+            <DragOverlay dropAnimation={{
+                duration: 250,
+                easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)'
+            }}>
+                {activeId && activeItem?.candidate ? (
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-800 border-2 border-blue-400 shadow-2xl shadow-blue-500/30 min-w-[220px] max-w-[280px] scale-105 rotate-[1deg] opacity-95">
+                        <div className="flex items-center gap-2">
+                            {activeItem.candidate.profilePic ? (
+                                <img src={activeItem.candidate.profilePic} className="w-8 h-8 rounded-full object-cover" alt="" />
+                            ) : (
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                                    {(activeItem.candidate.nombre || '?')[0]?.toUpperCase()}
+                                </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{activeItem.candidate.nombre || 'Sin nombre'}</p>
+                                <p className="text-[10px] text-slate-400 truncate">{formatPhone(activeItem.candidate.whatsapp)}</p>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+            </DragOverlay>
 
             {/* Create/Edit Modal */}
             {showCreate && (
