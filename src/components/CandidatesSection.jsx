@@ -64,6 +64,10 @@ function SortableHeaderCell({ id, label }) {
 
 const isProfileComplete = (c) => {
     if (!c) return false;
+    // Fast-path: Use pre-calculated backend audit flag if available
+    if (c.statusAudit) return c.statusAudit === 'complete';
+
+    // Fallback for legacy candidates not yet re-synced
     const valToStr = (v) => v ? String(v).trim().toLowerCase() : '-';
     const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
     

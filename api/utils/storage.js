@@ -428,58 +428,81 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     }
 
     // SEARCH PATH or EXCLUSION PATH
-    // Optimization: For simplicity when filtering, we load all and filter in memory
-    // TODO: Improve this with Redis-side sets intersection if performance drops
-    const allCandidates = await getDistributedItems(KEYS.CANDIDATES_LIST, KEYS.CANDIDATE_PREFIX);
+    // Optimization: Stream candidates from Redis in chunks to prevent Node.js OOM crashes on large databases.
     const lowerSearch = search.toLowerCase();
+    const cleanSearch = search.replace(/\D/g, '');
 
-    let filtered = allCandidates;
+    const customFieldsJson = excludeLinked ? await client.get('custom_fields') : null;
+    const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
 
-    // Filter by Search (Universal Deep Search)
-    if (search) {
-        const cleanSearch = search.replace(/\D/g, '');
-        filtered = filtered.filter(c => {
-            // 1. Check all text/number values in the object
-            const foundInFields = Object.values(c).some(val =>
-                val !== null &&
-                val !== undefined &&
-                val.toString().toLowerCase().includes(lowerSearch)
-            );
-            if (foundInFields) return true;
+    const totalDbCount = async () => (await client.scard(KEYS.LIST_COMPLETE)) + (await client.scard(KEYS.LIST_PENDING));
+    const dbSize = await totalDbCount();
 
-            // 2. Special check for phone numbers (ignoring symbols)
-            if (cleanSearch && c.whatsapp) {
-                const cleanWhatsApp = c.whatsapp.replace(/\D/g, '');
-                if (cleanWhatsApp.includes(cleanSearch)) return true;
+    let filtered = [];
+    const CHUNK_SIZE = 500;
+    let currentIndex = 0;
+
+    // We stop when we have found enough items to fill the current page (offset + limit)
+    // OR we have scanned the entire database.
+    while (currentIndex < dbSize && filtered.length < offset + limit) {
+        const ids = await client.zrevrange(KEYS.CANDIDATES_LIST, currentIndex, currentIndex + CHUNK_SIZE - 1);
+        if (!ids || ids.length === 0) break;
+        
+        const pipeline = client.pipeline();
+        ids.forEach(id => pipeline.get(`${KEYS.CANDIDATE_PREFIX}${id}`));
+        const results = await pipeline.exec();
+        
+        for (let i = 0; i < results.length; i++) {
+            const [err, res] = results[i];
+            if (err || !res) continue;
+            
+            try {
+                let c = JSON.parse(res);
+                c = hydrate(c);
+                
+                // 1. Tag Filter
+                if (tagFilter && (!Array.isArray(c.tags) || !c.tags.includes(tagFilter))) continue;
+                
+                // 2. Exclusion Filter (Linked profiles or incomplete profiles)
+                if (excludeLinked) {
+                    const isNotLinked = c.proyecto === 0;
+                    if (!isNotLinked || !isProfileComplete(c, customFields)) continue;
+                }
+                
+                // 3. Search Filter
+                if (search) {
+                    let match = false;
+                    const foundInFields = Object.values(c).some(val =>
+                        val !== null && val !== undefined && val.toString().toLowerCase().includes(lowerSearch)
+                    );
+                    if (foundInFields) match = true;
+                    else if (cleanSearch && c.whatsapp) {
+                        const cleanWhatsApp = c.whatsapp.replace(/\D/g, '');
+                        if (cleanWhatsApp.includes(cleanSearch)) match = true;
+                    }
+                    if (!match) continue;
+                }
+                
+                // Passed all active filters
+                filtered.push(c);
+                
+            } catch (e) {
+                // Ignore parse errors
             }
-
-            return false;
-        });
+        }
+        
+        currentIndex += CHUNK_SIZE;
+        // Yield event loop
+        await new Promise(r => setTimeout(r, 2));
     }
 
-    // Hydrate all with 'proyecto'
-    filtered = filtered.map(hydrate);
-
-    // Filter by Tag
-    if (tagFilter) {
-        filtered = filtered.filter(c => Array.isArray(c.tags) && c.tags.includes(tagFilter));
-    }
-
-    // Filter out Linked Candidates
-    if (excludeLinked) {
-        // [IRON-CLAD QUALITY SHIELD] Only show 100% complete profiles when adding to projects
-        const customFieldsJson = await client.get('custom_fields');
-        const customFields = customFieldsJson ? JSON.parse(customFieldsJson) : [];
-
-        filtered = filtered.filter(c => {
-            const isNotLinked = c.proyecto === 0;
-            return isNotLinked && isProfileComplete(c, customFields);
-        });
-    }
+    const isExhausted = currentIndex >= dbSize;
+    // Provide a fake total to allow pagination "Next" button if not exhausted
+    const estimatedTotal = isExhausted ? filtered.length : filtered.length + 1;
 
     return {
         candidates: filtered.slice(offset, offset + limit),
-        total: filtered.length
+        total: estimatedTotal
     };
 };
 

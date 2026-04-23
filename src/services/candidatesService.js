@@ -176,12 +176,10 @@ export class CandidatesSubscription {
     }
 
     start() {
-        this.pollFull();
+        this.pollFull(); // Initial load
         
-        // Loop 1: Lista completa de candidatos (Pesado, cada 15s)
-        this.intervalId = setInterval(() => {
-            this.pollFull();
-        }, this.interval);
+        // Loop 1 (REMOVED): No more 15s heavy polling of all candidates. 
+        // We now rely 100% on SSE (Push-only architecture) for list updates to save bandwidth and prevent DOM jank.
 
         // Loop 2: Estadísticas del dashboard (Ligero, cada 3s)
         this.statsIntervalId = setInterval(() => {
