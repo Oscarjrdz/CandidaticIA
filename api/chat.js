@@ -112,6 +112,18 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true, marked: 'handled' });
             }
 
+            if (action === 'mark_unread') {
+                // Set unreadMsgCount=1 and clear botTime so it triggers unread visual
+                try {
+                    await updateCandidate(candidateId, { 
+                        unreadMsgCount: 1,
+                        lastBotMessageAt: null,
+                        ultimoMensajeBot: null
+                    });
+                } catch (e) {}
+                return res.status(200).json({ success: true, marked: 'unread' });
+            }
+
             return res.status(400).json({ error: 'Invalid action' });
         }
 
