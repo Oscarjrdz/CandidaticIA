@@ -236,6 +236,12 @@ export default async function handler(req, res) {
 
                     candidateId = newCandidate?.id || await getCandidateIdByPhone(phone);
 
+                    // 🚀 SSE: Notify dashboard IMMEDIATELY
+                    try {
+                        const { notifyNewCandidate } = await import('../utils/sse-notify.js');
+                        if (newCandidate) notifyNewCandidate(newCandidate).catch(() => {});
+                    } catch (e) {}
+
                     // Save first message via atomic pipeline
                     if (candidateId) {
                         const freshCandidate = await getCandidateById(candidateId);
