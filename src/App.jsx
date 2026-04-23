@@ -260,7 +260,7 @@ function App() {
                       : activeSection === 'users' ? 'Gestión de equipo y permisos'
                       : activeSection === 'post-maker' ? 'Creación de posts para Facebook'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
-                      : activeSection === 'projects' ? 'Kanban de reclutamiento manual'
+                      : activeSection === 'projects' ? 'Kanban de reclutamiento'
                       : activeSection === 'projects-ia' ? 'Proyectos con automatización IA'
                       : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos'
                       : 'Credenciales y configuración del sistema'}

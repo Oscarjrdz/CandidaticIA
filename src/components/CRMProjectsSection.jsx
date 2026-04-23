@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight } from 'lucide-react';
+import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { useConfirmModal } from './ui/ConfirmModal';
-import { formatPhone, formatRelativeDate } from '../utils/formatters';
+import { formatPhone, formatRelativeDate, calculateAge } from '../utils/formatters';
 import ChatWindow from './ChatWindow';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
@@ -36,9 +36,41 @@ const SortableCandCard = ({ candidate, onRemove, onChat }) => {
                         className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-red-400"><X className="w-3.5 h-3.5" /></button>
                 </div>
             </div>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[9px] text-slate-500 font-medium mt-2">
+                {candidate.municipio && (
+                    <div className="flex items-center gap-0.5 whitespace-nowrap">
+                        <MapPin className="w-2.5 h-2.5 text-blue-500" />
+                        {candidate.municipio}
+                    </div>
+                )}
+                {candidate.escolaridad && (
+                    <div className="flex items-center gap-0.5 whitespace-nowrap">
+                        <GraduationCap className="w-2.5 h-2.5 text-blue-500" />
+                        {candidate.escolaridad}
+                    </div>
+                )}
+                {(candidate.edad || candidate.fechaNacimiento) && (
+                    <div className="flex items-center gap-0.5 whitespace-nowrap">
+                        <Calendar className="w-2.5 h-2.5 text-blue-500" />
+                        {calculateAge(candidate.fechaNacimiento, candidate.edad)}
+                    </div>
+                )}
+                {candidate.genero && candidate.genero !== 'Desconocido' && (
+                    <div className="flex items-center gap-0.5 whitespace-nowrap">
+                        <User className="w-2.5 h-2.5 text-blue-500" />
+                        {candidate.genero}
+                    </div>
+                )}
+                {candidate.categoria && (
+                    <div className="flex items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50">
+                        {candidate.categoria}
+                    </div>
+                )}
+            </div>
+
             {candidate.tags?.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
-                    {candidate.tags.slice(0, 3).map((t, i) => (
+                    {candidate.tags.map((t, i) => (
                         <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 font-medium">
                             {typeof t === 'string' ? t : t.name}
                         </span>
@@ -305,10 +337,28 @@ const CRMProjectsSection = ({ showToast, user }) => {
                                 <div className="flex gap-4 h-full pb-4" style={{ minWidth: `${Math.max(steps.length * 280, 560)}px` }}>
                                     {steps.map(step => {
                                         const stepCands = candidates.filter(c => c.crmMeta?.stepId === step.id);
+                                        const stepNameLower = (step.name || '').toLowerCase();
+                                        let containerBgClass = "bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-800";
+                                        let headerBgClass = "border-b border-slate-100 dark:border-slate-800";
+                                        
+                                        if (stepNameLower.includes('inicio')) {
+                                            containerBgClass = "bg-yellow-500/5 dark:bg-yellow-500/10 border-yellow-500/10 dark:border-yellow-500/20";
+                                            headerBgClass = "bg-yellow-500/10 dark:bg-yellow-500/20 border-b border-yellow-500/10 dark:border-yellow-500/20";
+                                        } else if (stepNameLower.includes('cita') && !stepNameLower.includes('citado')) {
+                                            containerBgClass = "bg-orange-500/5 dark:bg-orange-500/10 border-orange-500/10 dark:border-orange-500/20";
+                                            headerBgClass = "bg-orange-500/10 dark:bg-orange-500/20 border-b border-orange-500/10 dark:border-orange-500/20";
+                                        } else if (stepNameLower.includes('citados')) {
+                                            containerBgClass = "bg-green-500/5 dark:bg-green-500/10 border-green-500/10 dark:border-green-500/20";
+                                            headerBgClass = "bg-green-500/10 dark:bg-green-500/20 border-b border-green-500/10 dark:border-green-500/20";
+                                        } else if (stepNameLower.includes('no interesa')) {
+                                            containerBgClass = "bg-red-500/5 dark:bg-red-500/10 border-red-500/10 dark:border-red-500/20";
+                                            headerBgClass = "bg-red-500/10 dark:bg-red-500/20 border-b border-red-500/10 dark:border-red-500/20";
+                                        }
+
                                         return (
-                                            <div key={step.id} className="w-72 shrink-0 flex flex-col bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                                            <div key={step.id} className={`w-72 shrink-0 flex flex-col rounded-2xl border overflow-hidden ${containerBgClass}`}>
                                                 {/* Column Header */}
-                                                <div className="px-4 py-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
+                                                <div className={`px-4 py-3 flex items-center justify-between ${headerBgClass}`}>
                                                     <div className="flex items-center gap-2">
                                                         <h3 className="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">{step.name}</h3>
                                                         <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full font-bold">{stepCands.length}</span>
