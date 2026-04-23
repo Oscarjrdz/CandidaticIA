@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar } from 'lucide-react';
+import { FolderPlus, Trash2, Plus, Pencil, Users, User, Search, X, Loader2, MessageCircle, Copy, ChevronRight, GraduationCap, MapPin, Calendar, Palette } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import { useConfirmModal } from './ui/ConfirmModal';
@@ -114,6 +114,26 @@ const CRMProjectsSection = ({ showToast, user }) => {
     const [searching, setSearching] = useState(false);
     const [chatCandidate, setChatCandidate] = useState(null);
 
+    // Step Edit Modal state
+    const [editingStep, setEditingStep] = useState(null); // { id, name, color }
+    const [stepEditName, setStepEditName] = useState('');
+    const [stepEditColor, setStepEditColor] = useState('#3b82f6');
+
+    const STEP_COLOR_PALETTE = [
+        '#3b82f6', // blue
+        '#8b5cf6', // violet
+        '#ec4899', // pink
+        '#ef4444', // red
+        '#f97316', // orange
+        '#eab308', // yellow
+        '#22c55e', // green
+        '#14b8a6', // teal
+        '#06b6d4', // cyan
+        '#6366f1', // indigo
+        '#a855f7', // purple
+        '#64748b', // slate
+    ];
+
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
     const [activeId, setActiveId] = useState(null);
     const [activeItem, setActiveItem] = useState(null);
@@ -193,20 +213,34 @@ const CRMProjectsSection = ({ showToast, user }) => {
 
     const handleAddStep = async () => {
         if (!activeProject) return;
-        const name = prompt('Nombre del nuevo paso:', 'Nuevo Paso');
-        if (!name?.trim()) return;
-        const newStep = { id: `step_${Date.now()}`, name: name.trim() };
-        const steps = [...(activeProject.steps || []), newStep];
-        await saveSteps(steps, 'Paso agregado');
+        setEditingStep({ id: null, name: '', color: '#3b82f6' });
+        setStepEditName('');
+        setStepEditColor('#3b82f6');
     };
 
     const handleRenameStep = async (stepId) => {
         const step = activeProject.steps.find(s => s.id === stepId);
         if (!step) return;
-        const newName = prompt('Nuevo nombre:', step.name);
-        if (!newName?.trim() || newName === step.name) return;
-        const steps = activeProject.steps.map(s => s.id === stepId ? { ...s, name: newName } : s);
-        await saveSteps(steps, 'Paso renombrado');
+        setEditingStep({ id: stepId, name: step.name, color: step.color || '#3b82f6' });
+        setStepEditName(step.name);
+        setStepEditColor(step.color || '#3b82f6');
+    };
+
+    const handleSaveStepEdit = async () => {
+        if (!stepEditName.trim()) return;
+        if (editingStep.id) {
+            // Rename + color update
+            const steps = activeProject.steps.map(s =>
+                s.id === editingStep.id ? { ...s, name: stepEditName.trim(), color: stepEditColor } : s
+            );
+            await saveSteps(steps, 'Paso actualizado');
+        } else {
+            // New step
+            const newStep = { id: `step_${Date.now()}`, name: stepEditName.trim(), color: stepEditColor };
+            const steps = [...(activeProject.steps || []), newStep];
+            await saveSteps(steps, 'Paso agregado');
+        }
+        setEditingStep(null);
     };
 
     const handleDeleteStep = async (stepId) => {
@@ -426,36 +460,29 @@ const CRMProjectsSection = ({ showToast, user }) => {
                                 <div className="flex gap-4 h-full pb-4" style={{ minWidth: `${Math.max(steps.length * 280, 560)}px` }}>
                                     {steps.map(step => {
                                         const stepCands = candidates.filter(c => c.crmMeta?.stepId === step.id);
-                                        const stepNameLower = (step.name || '').toLowerCase();
-                                        let containerBgClass = "bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-800";
-                                        let headerBgClass = "border-b border-slate-100 dark:border-slate-800";
-                                        
-                                        if (stepNameLower.includes('inicio')) {
-                                            containerBgClass = "bg-yellow-500/5 dark:bg-yellow-500/10 border-yellow-500/10 dark:border-yellow-500/20";
-                                            headerBgClass = "bg-yellow-500/10 dark:bg-yellow-500/20 border-b border-yellow-500/10 dark:border-yellow-500/20";
-                                        } else if (stepNameLower.includes('cita') && !stepNameLower.includes('citado')) {
-                                            containerBgClass = "bg-orange-500/5 dark:bg-orange-500/10 border-orange-500/10 dark:border-orange-500/20";
-                                            headerBgClass = "bg-orange-500/10 dark:bg-orange-500/20 border-b border-orange-500/10 dark:border-orange-500/20";
-                                        } else if (stepNameLower.includes('citados')) {
-                                            containerBgClass = "bg-green-500/5 dark:bg-green-500/10 border-green-500/10 dark:border-green-500/20";
-                                            headerBgClass = "bg-green-500/10 dark:bg-green-500/20 border-b border-green-500/10 dark:border-green-500/20";
-                                        } else if (stepNameLower.includes('no interesa')) {
-                                            containerBgClass = "bg-red-500/5 dark:bg-red-500/10 border-red-500/10 dark:border-red-500/20";
-                                            headerBgClass = "bg-red-500/10 dark:bg-red-500/20 border-b border-red-500/10 dark:border-red-500/20";
-                                        }
+                                        const stepColor = step.color || '#64748b';
 
                                         return (
-                                            <div key={step.id} className={`w-72 shrink-0 flex flex-col rounded-2xl border overflow-hidden ${containerBgClass}`}>
+                                            <div key={step.id}
+                                                className="w-72 shrink-0 flex flex-col rounded-2xl border overflow-hidden"
+                                                style={{
+                                                    backgroundColor: `${stepColor}08`,
+                                                    borderColor: `${stepColor}25`
+                                                }}>
                                                 {/* Column Header */}
-                                                <div className={`px-4 py-3 flex items-center justify-between ${headerBgClass}`}>
+                                                <div className="px-4 py-3 flex items-center justify-between"
+                                                    style={{
+                                                        backgroundColor: stepColor,
+                                                        borderBottom: `1px solid ${stepColor}40`
+                                                    }}>
                                                     <div className="flex items-center gap-2">
-                                                        <h3 className="font-bold text-sm text-slate-700 dark:text-slate-200 truncate">{step.name}</h3>
-                                                        <span className="text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded-full font-bold">{stepCands.length}</span>
+                                                        <h3 className="font-bold text-sm text-white truncate">{step.name}</h3>
+                                                        <span className="text-[10px] bg-white/25 text-white px-1.5 py-0.5 rounded-full font-bold">{stepCands.length}</span>
                                                     </div>
                                                     <div className="flex gap-0.5">
-                                                        <button onClick={() => handleRenameStep(step.id)} className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400"><Pencil className="w-3 h-3" /></button>
+                                                        <button onClick={() => handleRenameStep(step.id)} className="p-1 rounded hover:bg-white/20 text-white/70 hover:text-white transition-colors"><Pencil className="w-3 h-3" /></button>
                                                         {steps.length > 1 && (
-                                                            <button onClick={() => handleDeleteStep(step.id)} className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-400"><Trash2 className="w-3 h-3" /></button>
+                                                            <button onClick={() => handleDeleteStep(step.id)} className="p-1 rounded hover:bg-white/20 text-white/70 hover:text-white transition-colors"><Trash2 className="w-3 h-3" /></button>
                                                         )}
                                                     </div>
                                                 </div>
@@ -580,6 +607,65 @@ const CRMProjectsSection = ({ showToast, user }) => {
             {/* Chat Window */}
             {chatCandidate && (
                 <ChatWindow isOpen={!!chatCandidate} onClose={() => setChatCandidate(null)} candidate={chatCandidate} />
+            )}
+
+            {/* Step Edit Modal */}
+            {editingStep && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setEditingStep(null)}>
+                    <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white">
+                            {editingStep.id ? 'Editar Paso' : 'Nuevo Paso'}
+                        </h3>
+                        <input
+                            value={stepEditName}
+                            onChange={e => setStepEditName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSaveStepEdit()}
+                            placeholder="Nombre del paso"
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm outline-none focus:border-blue-500 dark:text-white"
+                            autoFocus
+                        />
+
+                        {/* Color Picker */}
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                                <Palette className="w-3.5 h-3.5" />
+                                Color de encabezado
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {STEP_COLOR_PALETTE.map(color => (
+                                    <button
+                                        key={color}
+                                        onClick={() => setStepEditColor(color)}
+                                        className={`w-8 h-8 rounded-xl transition-all duration-200 border-2 hover:scale-110 ${
+                                            stepEditColor === color
+                                                ? 'border-slate-800 dark:border-white scale-110 shadow-lg'
+                                                : 'border-transparent hover:border-slate-300'
+                                        }`}
+                                        style={{ backgroundColor: color }}
+                                        title={color}
+                                    />
+                                ))}
+                            </div>
+                            {/* Preview */}
+                            <div className="mt-3 rounded-xl overflow-hidden border" style={{ borderColor: `${stepEditColor}30` }}>
+                                <div className="px-3 py-2 flex items-center gap-2" style={{ backgroundColor: stepEditColor }}>
+                                    <span className="text-white text-xs font-bold truncate">{stepEditName || 'Vista previa'}</span>
+                                    <span className="text-[9px] bg-white/25 text-white px-1.5 py-0.5 rounded-full font-bold">3</span>
+                                </div>
+                                <div className="px-3 py-3 text-[10px] text-slate-400" style={{ backgroundColor: `${stepEditColor}08` }}>
+                                    Candidatos irán aquí...
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button onClick={() => setEditingStep(null)} className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl py-3 font-bold">Cancelar</Button>
+                            <Button onClick={handleSaveStepEdit} disabled={!stepEditName.trim()} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl py-3 font-bold">
+                                {editingStep.id ? 'Guardar' : 'Crear'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {confirmModalJSX}
