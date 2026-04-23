@@ -1208,7 +1208,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
 
         // --- Messages for the actively viewed chat → reload INSTANTLY ---
-        if (sseUpdate.candidateId === selectedChat?.id || (selectedChat?.whatsapp && sseUpdate.phoneMatch === selectedChat.whatsapp)) {
+        if (String(sseUpdate.candidateId) === String(selectedChat?.id) || (selectedChat?.whatsapp && String(sseUpdate.phoneMatch) === String(selectedChat.whatsapp))) {
             if (sseUpdate.updates?.messageStatusUpdate) {
                 const { id, status, additionalData } = sseUpdate.updates.messageStatusUpdate;
                 setMessages(prev => {
@@ -1229,9 +1229,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         if (prev.some(m => m.id === newMsg.id || (m.ultraMsgId && m.ultraMsgId === newMsg.ultraMsgId))) {
                             return prev;
                         }
-                        // Remove optimistic temp message if we got the real one
-                        const cleaned = prev.filter(m => !String(m.id).startsWith('temp_'));
-                        return [...cleaned, newMsg];
+                        // Optimistic messages are handled by the fetch promise; just append new ones
+                        return [...prev, newMsg];
                     });
                 } else {
                     // Fallback for legacy hooks that don't send payload
