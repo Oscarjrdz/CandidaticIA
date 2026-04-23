@@ -197,7 +197,8 @@ export default async function handler(req, res) {
                     esNuevo: 'NO',
                     bot_ia_active: false,
                     primerContacto: new Date().toISOString(),
-                    ultimoMensaje: new Date().toISOString()
+                    ultimoMensaje: new Date().toISOString(),
+                    mensajesTotales: 0
                 });
 
                 // 🚀 SSE: Notify dashboard IMMEDIATELY

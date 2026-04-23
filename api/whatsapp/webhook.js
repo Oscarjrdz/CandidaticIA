@@ -444,7 +444,8 @@ export default async function handler(req, res) {
                     await updateCandidate(candidateId, {
                         ultimoMensaje: new Date().toISOString(),
                         lastUserMessageAt: new Date().toISOString(),
-                        unreadMsgCount: (Number(candidate.unreadMsgCount) || 0) + 1
+                        unreadMsgCount: (Number(candidate.unreadMsgCount) || 0) + 1,
+                        mensajesTotales: (Number(candidate.mensajesTotales) || 0) + 1
                     });
 
                     // SSE is already fired by saveMessage() above — with enriched messagePayload
@@ -551,7 +552,8 @@ export default async function handler(req, res) {
                     ...freshCandidate,
                     ultimoMensaje: new Date().toISOString(),
                     lastUserMessageAt: new Date().toISOString(),
-                    unreadMsgCount: (Number(freshCandidate?.unreadMsgCount) || 0) + 1
+                    unreadMsgCount: (Number(freshCandidate?.unreadMsgCount) || 0) + 1,
+                    mensajesTotales: (Number(freshCandidate?.mensajesTotales) || 0) + 1
                 };
 
                 await saveWebhookTransaction({

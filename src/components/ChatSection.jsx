@@ -464,7 +464,7 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
     const isUnread = checkIfUnreadStandalone(chat);
     const profileComplete = isProfileCompleteStandalone(chat);
     const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
-    const isEmptyChat = chat.mensajesTotales === 0 || !chat.ultimoMensaje || (chat.primerContacto && chat.ultimoMensaje && Math.abs(new Date(chat.ultimoMensaje) - new Date(chat.primerContacto)) < 1000);
+    const isEmptyChat = chat.mensajesTotales === 0 || !chat.ultimoMensaje;
 
     return (
         <div 
