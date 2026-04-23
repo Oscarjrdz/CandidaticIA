@@ -76,7 +76,7 @@ const formatWhatsAppText = (text) => {
                 <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="bg-gray-100 dark:bg-gray-800 p-2 text-blue-500 hover:text-blue-600 text-[11px] flex items-center gap-1 font-medium select-none whitespace-normal"><span class="text-xs shrink-0">📍</span> <span>Google Maps</span></a>
             </div>`;
         })
-        .replace(/\[Sticker:\s*(https?:\/\/[^\s\]]+)\]/gi, (match, url) => {
+        .replace(/\[Sticker:\s*([^\s\]]+)\]/gi, (match, url) => {
             return `<div class="mt-1 mb-1"><img src="${url}" alt="Sticker" class="max-w-[120px] max-h-[120px] object-contain rounded bg-transparent" /></div>`;
         });
 };
