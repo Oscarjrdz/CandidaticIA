@@ -14,7 +14,7 @@ import { getFields } from '../services/automationsService';
 import { deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
 import { generateChatHistoryText } from '../services/chatExportService';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
-import { useGatewaySocket } from '../hooks/useGatewaySocket';
+import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 
 /**
  * Sortable Header Sub-component
@@ -398,7 +398,7 @@ const CandidatesSection = ({ showToast, user }) => {
 
 
     // 📡 SSE: Real-time candidate updates
-    const { newCandidate, updatedCandidate, globalStats } = useGatewaySocket();
+    const { newCandidate, updatedCandidate, globalStats } = useCandidatesSSE();
 
     // Listen for new candidates via SSE
     useEffect(() => {

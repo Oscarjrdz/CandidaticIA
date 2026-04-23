@@ -1434,12 +1434,9 @@ export const saveWebhookTransaction = async ({
                     ssePayload.messagePayload = message;
                     ssePayload.messageFrom = message.from;
                 }
-                // Enrich with candidate fields so frontend can patch locally
+                // Enrich with ALL candidate fields so frontend can patch locally (e.g. AI extracted fields)
                 if (candidateUpdates) {
-                    if (candidateUpdates.ultimoMensaje) ssePayload.ultimoMensaje = candidateUpdates.ultimoMensaje;
-                    if (candidateUpdates.lastUserMessageAt) ssePayload.lastUserMessageAt = candidateUpdates.lastUserMessageAt;
-                    if (candidateUpdates.lastBotMessageAt) ssePayload.lastBotMessageAt = candidateUpdates.lastBotMessageAt;
-                    if (candidateUpdates.unreadMsgCount !== undefined) ssePayload.unreadMsgCount = candidateUpdates.unreadMsgCount;
+                    Object.assign(ssePayload, candidateUpdates);
                 }
                 import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
                     notifyCandidateUpdate(candidateId, ssePayload).catch(() => {});

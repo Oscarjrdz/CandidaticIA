@@ -151,23 +151,30 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             if (!data) return;
             if (data.candidateId !== candidate.id) return;
 
+            const updates = data.updates || {};
+
+            // Inyectar actualización del perfil del candidato (tarjeta top)
+            if (Object.keys(updates).length > 0) {
+                setCandidate(prev => ({ ...prev, ...updates }));
+            }
+
             // Inyectar nuevo mensaje
-            if (data.newMessage && data.messagePayload) {
+            if (updates.newMessage && updates.messagePayload) {
                 setMessages(prev => {
                     // Evita inyectar doble si el WebSocket fue más rápido
-                    if (prev.some(m => m.id === data.messagePayload.id)) {
+                    if (prev.some(m => m.id === updates.messagePayload.id)) {
                         // Si ya existe, podríamos actualizar su estado
-                        return prev.map(m => m.id === data.messagePayload.id ? { ...m, ...data.messagePayload } : m);
+                        return prev.map(m => m.id === updates.messagePayload.id ? { ...m, ...updates.messagePayload } : m);
                     }
-                    return [...prev, data.messagePayload];
+                    return [...prev, updates.messagePayload];
                 });
             } 
             
             // Inyectar actualización de estado (palomitas)
-            if (data.messageStatusUpdate) {
+            if (updates.messageStatusUpdate) {
                 setMessages(prev => prev.map(m => 
-                    m.id === data.messageStatusUpdate.id 
-                        ? { ...m, status: data.messageStatusUpdate.status } 
+                    m.id === updates.messageStatusUpdate.id 
+                        ? { ...m, status: updates.messageStatusUpdate.status } 
                         : m
                 ));
             }
