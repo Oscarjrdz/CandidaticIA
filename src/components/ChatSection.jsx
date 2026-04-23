@@ -1195,6 +1195,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     // 🚀 SSE-DRIVEN: Surgical state updates (zero re-fetch architecture)
     useEffect(() => {
         if (!sseUpdate) return;
+        
+        console.log('🔍 [SSE DEBUG] Received update for:', sseUpdate.candidateId, 'Selected:', selectedChat?.id);
 
         // --- Typing indicator (unchanged) ---
         if (sseUpdate.updates?.recruiterTyping !== undefined) {
