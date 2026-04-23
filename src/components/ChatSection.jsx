@@ -1244,6 +1244,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     });
                 }
             }
+        }
 
         // --- SURGICAL CANDIDATE PATCH (replaces loadCandidates) ---
         // Instead of re-fetching 2,042 candidates, patch ONLY the one that changed
