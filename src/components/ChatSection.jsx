@@ -1229,7 +1229,25 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         if (prev.some(m => m.id === newMsg.id || (m.ultraMsgId && m.ultraMsgId === newMsg.ultraMsgId))) {
                             return prev;
                         }
-                        // Optimistic messages are handled by the fetch promise; just append new ones
+                        // Smart deduplication: If we sent a message optimistically, SSE might arrive before fetch resolves.
+                        // We swap the temp message instead of appending to avoid visual duplicates.
+                        if (newMsg.from === 'me') {
+                            const pendingIndex = prev.findIndex(m => 
+                                m.status === 'pending' && 
+                                String(m.id).startsWith('temp') && 
+                                (
+                                    (newMsg.type === 'text' && m.content === newMsg.content) || 
+                                    (newMsg.mediaUrl && m.mediaUrl === newMsg.mediaUrl) ||
+                                    (newMsg.type === 'template' && m.tipo === 'template')
+                                )
+                            );
+                            if (pendingIndex !== -1) {
+                                const newArr = [...prev];
+                                newArr[pendingIndex] = newMsg;
+                                return newArr;
+                            }
+                        }
+
                         return [...prev, newMsg];
                     });
                 } else {
