@@ -282,12 +282,21 @@ const MessageInputBox = React.forwardRef(({ onSend, onTyping, fileInputRef, hand
 // 🧱 STANDALONE HELPERS (outside component to avoid re-creation on every render)
 const checkIfUnreadStandalone = (chat) => {
     if (!chat) return false;
-    const userTime = chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0;
+    if (chat.unreadMsgCount > 0) return true;
+
+    // Use ultimoMensaje to guarantee we capture the absolute latest message time if the user spoke last
+    const userTime = Math.max(
+        chat.lastUserMessageAt ? new Date(chat.lastUserMessageAt).getTime() : 0,
+        chat.ultimoMensaje ? new Date(chat.ultimoMensaje).getTime() : 0
+    );
+
     const botTime = Math.max(
         chat.lastBotMessageAt ? new Date(chat.lastBotMessageAt).getTime() : 0, 
         chat.ultimoMensajeBot ? new Date(chat.ultimoMensajeBot).getTime() : 0
     );
-    return userTime > botTime + 1000 || chat.unreadMsgCount > 0;
+
+    // 1000ms tolerance for DB race conditions when bot writes timestamps sequentially
+    return userTime > botTime + 1000;
 };
 
 const isProfileCompleteStandalone = (c) => {
