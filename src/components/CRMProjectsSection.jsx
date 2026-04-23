@@ -337,6 +337,15 @@ const CRMProjectsSection = ({ showToast, user }) => {
                                             </div>
                                         );
                                     })}
+
+                                    {/* Add Step Column */}
+                                    <div onClick={handleAddStep}
+                                        className="w-72 shrink-0 flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 cursor-pointer transition-all duration-300 group min-h-[200px]">
+                                        <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 flex items-center justify-center transition-colors mb-3">
+                                            <Plus className="w-6 h-6 text-slate-300 dark:text-slate-600 group-hover:text-blue-500 transition-colors" />
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-300 dark:text-slate-600 group-hover:text-blue-500 transition-colors">Nuevo Paso</p>
+                                    </div>
                                 </div>
                             </div>
                         </>
