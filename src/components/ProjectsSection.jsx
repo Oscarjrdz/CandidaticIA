@@ -5,7 +5,7 @@ import {
     FolderPlus, Search, UserPlus, Trash2, ChevronRight, Users,
     GraduationCap, MapPin, MessageSquare, ExternalLink, FolderKanban,
     Sparkles, History, User, Clock, Zap, MessageCircle, Pencil, Briefcase, Plus, Calendar,
-    Bot, Settings, Power, X, Loader2, Rocket, Copy, Bell
+    Bot, Settings, Power, X, Loader2, Rocket, Copy, Bell, Palette
 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -132,47 +132,37 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
         isDragging
     } = useSortable({ id: id, data: { type: 'column', step } });
 
+    const stepColor = step.color || '#64748b';
+
     const style = {
         transform: CSS.Translate.toString(transform),
         transition,
         opacity: isDragging ? 0.5 : 1
     };
 
-    const stepNameLower = (step.name || '').toLowerCase();
-
-    // Dynamic background styling based on column name
-    let containerBgClass = "bg-slate-50/50 dark:bg-slate-900/30 border-slate-200/50 dark:border-slate-800/50";
-    let headerBgClass = "bg-white/40 dark:bg-slate-800/20";
-
-    if (stepNameLower.includes('inicio')) {
-        containerBgClass = "bg-yellow-500/5 dark:bg-yellow-500/10 border-yellow-500/10 dark:border-yellow-500/20";
-        headerBgClass = "bg-yellow-500/10 dark:bg-yellow-500/20";
-    } else if (stepNameLower.includes('cita') && !stepNameLower.includes('citado')) {
-        containerBgClass = "bg-orange-500/5 dark:bg-orange-500/10 border-orange-500/10 dark:border-orange-500/20";
-        headerBgClass = "bg-orange-500/10 dark:bg-orange-500/20";
-    } else if (stepNameLower.includes('citados')) {
-        containerBgClass = "bg-green-500/5 dark:bg-green-500/10 border-green-500/10 dark:border-green-500/20";
-        headerBgClass = "bg-green-500/10 dark:bg-green-500/20";
-    } else if (stepNameLower.includes('no interesa')) {
-        containerBgClass = "bg-red-500/5 dark:bg-red-500/10 border-red-500/10 dark:border-red-500/20";
-        headerBgClass = "bg-red-500/10 dark:bg-red-500/20";
-    }
-
     return (
         <div
             ref={setNodeRef}
-            style={style}
-            className={`flex-shrink-0 w-80 flex flex-col h-full rounded-[40px] border overflow-hidden ${containerBgClass}`}
+            style={{
+                ...style,
+                backgroundColor: `${stepColor}08`,
+                borderColor: `${stepColor}25`
+            }}
+            className="flex-shrink-0 w-80 flex flex-col h-full rounded-[40px] border overflow-hidden"
         >
             <div
-                className={`p-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800/50 backdrop-blur-sm ${headerBgClass}`}
+                className="p-3 flex items-center justify-between backdrop-blur-sm"
+                style={{
+                    backgroundColor: stepColor,
+                    borderBottom: `1px solid ${stepColor}40`
+                }}
             >
                 <div className="flex items-center gap-3" {...attributes} {...listeners}>
-                    <div className={`w-2 h-2 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.5)] ${step.aiConfig?.enabled ? 'bg-green-500 animate-pulse' : 'bg-blue-500'}`}></div>
-                    <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tighter text-sm truncate max-w-[150px] cursor-grab active:cursor-grabbing">
+                    <div className={`w-2 h-2 rounded-full shadow-[0_0_10px_rgba(255,255,255,0.4)] ${step.aiConfig?.enabled ? 'bg-green-300 animate-pulse' : 'bg-white/60'}`}></div>
+                    <h3 className="font-black text-white uppercase tracking-tighter text-sm truncate max-w-[150px] cursor-grab active:cursor-grabbing">
                         {step.name}
                     </h3>
-                    <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                    <span className="px-2 py-0.5 rounded-full bg-white/25 text-[10px] font-bold text-white">
                         {count}
                     </span>
                 </div>
@@ -188,8 +178,8 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                                     onEdit(step.id, 'calendar');
                                 }}
                                 className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.calendarOptions?.length > 0
-                                    ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                                    : 'text-slate-300 hover:text-emerald-500 hover:bg-emerald-50'}`}
+                                    ? 'text-white bg-white/25'
+                                    : 'text-white/50 hover:text-white hover:bg-white/20'}`}
                                 title="Configurar Horarios Disponibles"
                             >
                                 <Calendar className="w-3.5 h-3.5" />
@@ -202,8 +192,8 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                                     onEdit(step.id, 'confirmation');
                                 }}
                                 className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.appointmentConfirmation?.length > 0
-                                    ? 'text-purple-500 bg-purple-50 dark:bg-purple-900/20'
-                                    : 'text-slate-300 hover:text-purple-500 hover:bg-purple-50'}`}
+                                    ? 'text-white bg-white/25'
+                                    : 'text-white/50 hover:text-white hover:bg-white/20'}`}
                                 title="Configurar Mensaje de Confirmación de Cita"
                             >
                                 <MapPin className="w-3.5 h-3.5" />
@@ -219,8 +209,8 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                                 onEdit(step.id, 'reminders');
                             }}
                             className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.scheduledReminders?.length > 0
-                                ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/20'
-                                : 'text-slate-300 hover:text-amber-500 hover:bg-amber-50'}`}
+                                ? 'text-white bg-white/25'
+                                : 'text-white/50 hover:text-white hover:bg-white/20'}`}
                             title="Mensajes Programados (recordatorios)"
                         >
                             <Bell className="w-3.5 h-3.5" />
@@ -233,7 +223,7 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                             e.preventDefault(); e.stopPropagation();
                             onEdit(step.id, 'vacancy');
                         }}
-                        className="p-1.5 rounded-lg transition-all text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 active:scale-90 relative z-10"
+                        className="p-1.5 rounded-lg transition-all text-white/70 hover:text-white hover:bg-white/20 active:scale-90 relative z-10"
                         title="Editar Vacante del Proyecto"
                     >
                         <Briefcase className="w-3.5 h-3.5" />
@@ -246,11 +236,23 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                             onEdit(step.id, 'ai');
                         }}
                         className={`p-1.5 rounded-lg transition-colors relative z-10 ${step.aiConfig?.prompt
-                            ? 'text-[#10a37f] bg-[#10a37f]/10'
-                            : 'text-slate-300 hover:text-[#10a37f] hover:bg-[#10a37f]/10'}`}
+                            ? 'text-white bg-white/25'
+                            : 'text-white/50 hover:text-white hover:bg-white/20'}`}
                         title="Configurar Prompt del Bot"
                     >
                         <Bot className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Color/Edit Step */}
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault(); e.stopPropagation();
+                            onEdit(step.id, 'name');
+                        }}
+                        className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/20 transition-colors relative z-10"
+                        title="Editar paso"
+                    >
+                        <Pencil className="w-3.5 h-3.5" />
                     </button>
 
                     {!step.locked && step.id !== 'step_default' && !isFirstFour && (
@@ -259,7 +261,7 @@ const KanbanColumn = ({ id, step, children, count, onEdit, onLaunch, isFirstFour
                                 e.preventDefault(); e.stopPropagation();
                                 onEdit(step.id, 'delete');
                             }}
-                            className="p-1.5 text-slate-300 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors relative z-10"
+                            className="p-1.5 text-white/40 hover:text-white hover:bg-white/20 transition-colors relative z-10"
                             title="Eliminar paso"
                         >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -455,6 +457,17 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
 
     const [selectedCandidate, setSelectedCandidate] = useState(null);
     const [isChatOpen, setIsChatOpen] = useState(false);
+
+    // Step Edit Modal (name + color)
+    const [editingStepIA, setEditingStepIA] = useState(null); // { id, name, color } or null
+    const [stepIAEditName, setStepIAEditName] = useState('');
+    const [stepIAEditColor, setStepIAEditColor] = useState('#3b82f6');
+
+    const STEP_IA_COLOR_PALETTE = [
+        '#3b82f6', '#8b5cf6', '#ec4899', '#ef4444',
+        '#f97316', '#eab308', '#22c55e', '#14b8a6',
+        '#06b6d4', '#6366f1', '#a855f7', '#64748b',
+    ];
 
     // DnD Sensors & State
     const sensors = useSensors(
@@ -819,14 +832,16 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
             return;
         }
 
-        // Mode Name
-        const newName = prompt('Nuevo nombre del paso:', step.name);
-        if (!newName || newName === step.name) return;
+        // Mode Name — open modal
+        if (mode === 'name') {
+            setEditingStepIA({ id: stepId, name: step.name, color: step.color || '#64748b' });
+            setStepIAEditName(step.name);
+            setStepIAEditColor(step.color || '#64748b');
+            return;
+        }
 
-        const updatedSteps = activeProject.steps.map(s =>
-            s.id === stepId ? { ...s, name: newName } : s
-        );
-        saveStepsUpdate(updatedSteps, 'Paso renombrado');
+        // Fallback (shouldn't reach here normally)
+        return;
     };
 
     const handleDeleteStep = async (stepId) => {
@@ -940,17 +955,31 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
 
     const handleAddStep = async () => {
         if (!activeProject) return;
-        const name = prompt('Nombre del nuevo paso:', 'Nuevo Paso');
-        if (!name || !name.trim()) return;
+        setEditingStepIA({ id: null, name: '', color: '#3b82f6' });
+        setStepIAEditName('');
+        setStepIAEditColor('#3b82f6');
+    };
 
-        const newStep = {
-            id: `step_${Date.now()}`,
-            name: name.trim(),
-            aiConfig: { enabled: false, prompt: '', waitMessage: '' }
-        };
-
-        const updatedSteps = [...(activeProject.steps || []), newStep];
-        saveStepsUpdate(updatedSteps, 'Paso creado');
+    const handleSaveStepIA = async () => {
+        if (!stepIAEditName.trim()) return;
+        if (editingStepIA.id) {
+            // Rename + color update
+            const updatedSteps = activeProject.steps.map(s =>
+                s.id === editingStepIA.id ? { ...s, name: stepIAEditName.trim(), color: stepIAEditColor } : s
+            );
+            saveStepsUpdate(updatedSteps, 'Paso actualizado');
+        } else {
+            // New step
+            const newStep = {
+                id: `step_${Date.now()}`,
+                name: stepIAEditName.trim(),
+                color: stepIAEditColor,
+                aiConfig: { enabled: false, prompt: '', waitMessage: '' }
+            };
+            const updatedSteps = [...(activeProject.steps || []), newStep];
+            saveStepsUpdate(updatedSteps, 'Paso creado');
+        }
+        setEditingStepIA(null);
     };
 
     const updateStepAI = async (stepId, aiConfig) => {
@@ -1977,6 +2006,65 @@ const ProjectsSection = ({ showToast, onActiveChange }) => {
                     </Card>
                 </div>
             )}
+            {/* Step Edit Modal (name + color) */}
+            {editingStepIA && (
+                <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4" onClick={() => setEditingStepIA(null)}>
+                    <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-black text-slate-800 dark:text-white">
+                            {editingStepIA.id ? 'Editar Paso' : 'Nuevo Paso'}
+                        </h3>
+                        <input
+                            value={stepIAEditName}
+                            onChange={e => setStepIAEditName(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleSaveStepIA()}
+                            placeholder="Nombre del paso"
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-sm outline-none focus:border-blue-500 dark:text-white"
+                            autoFocus
+                        />
+
+                        {/* Color Picker */}
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                                <Palette className="w-3.5 h-3.5" />
+                                Color de encabezado
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {STEP_IA_COLOR_PALETTE.map(color => (
+                                    <button
+                                        key={color}
+                                        onClick={() => setStepIAEditColor(color)}
+                                        className={`w-8 h-8 rounded-xl transition-all duration-200 border-2 hover:scale-110 ${
+                                            stepIAEditColor === color
+                                                ? 'border-slate-800 dark:border-white scale-110 shadow-lg'
+                                                : 'border-transparent hover:border-slate-300'
+                                        }`}
+                                        style={{ backgroundColor: color }}
+                                        title={color}
+                                    />
+                                ))}
+                            </div>
+                            {/* Preview */}
+                            <div className="mt-3 rounded-xl overflow-hidden border" style={{ borderColor: `${stepIAEditColor}30` }}>
+                                <div className="px-3 py-2 flex items-center gap-2" style={{ backgroundColor: stepIAEditColor }}>
+                                    <span className="text-white text-xs font-bold truncate">{stepIAEditName || 'Vista previa'}</span>
+                                    <span className="text-[9px] bg-white/25 text-white px-1.5 py-0.5 rounded-full font-bold">3</span>
+                                </div>
+                                <div className="px-3 py-3 text-[10px] text-slate-400" style={{ backgroundColor: `${stepIAEditColor}08` }}>
+                                    Candidatos irán aquí...
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button onClick={() => setEditingStepIA(null)} className="flex-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl py-3 font-bold text-sm">Cancelar</button>
+                            <button onClick={handleSaveStepIA} disabled={!stepIAEditName.trim()} className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl py-3 font-bold text-sm">
+                                {editingStepIA.id ? 'Guardar' : 'Crear'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         {confirmModalJSX}
         </DndContext>
     );
