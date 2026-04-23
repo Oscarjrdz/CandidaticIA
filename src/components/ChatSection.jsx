@@ -1222,11 +1222,13 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 });
             } else if (sseUpdate.updates?.newMessage || !sseUpdate.updates?.recruiterTyping) {
                 if (sseUpdate.updates?.messagePayload) {
+                    console.log('🚀 [SSE] Injecting INSTANT MESSAGE:', sseUpdate.updates.messagePayload);
                     // 🚀 O(1) Instant Message Injection (Meta Standard)
                     setMessages(prev => {
                         // Prevent duplicates
                         const newMsg = sseUpdate.updates.messagePayload;
                         if (prev.some(m => m.id === newMsg.id || (m.ultraMsgId && m.ultraMsgId === newMsg.ultraMsgId))) {
+                            console.log('⚠️ [SSE] Ignored duplicate message injection:', newMsg.id);
                             return prev;
                         }
                         // Smart deduplication: If we sent a message optimistically, SSE might arrive before fetch resolves.
@@ -1244,13 +1246,17 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                             if (pendingIndex !== -1) {
                                 const newArr = [...prev];
                                 newArr[pendingIndex] = newMsg;
+                                setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
                                 return newArr;
                             }
                         }
 
+                        // Force UI to scroll to the newly injected message
+                        setTimeout(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
                         return [...prev, newMsg];
                     });
                 } else {
+                    console.log('⚠️ [SSE] No messagePayload provided in SSE. Falling back to loadMessages()...');
                     // Fallback for legacy hooks that don't send payload
                     setMessages(prev => {
                         const hasOptimistic = prev.some(m => String(m.id).startsWith('temp_'));
