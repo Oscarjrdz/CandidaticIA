@@ -1193,11 +1193,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         prevMessagesLength.current = messages.length;
     }, [messages]);
 
-    const selectedChatRef = useRef(selectedChat);
-    useEffect(() => {
-        selectedChatRef.current = selectedChat;
-    }, [selectedChat]);
-
     // 🚀 SSE-DRIVEN: Surgical state updates (zero re-fetch architecture)
     useEffect(() => {
         if (!sseUpdate) return;
