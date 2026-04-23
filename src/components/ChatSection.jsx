@@ -452,7 +452,7 @@ const ProfileModal = ({ candidate, onClose, onSave }) => {
 };
 
 // 🏎️ MEMOIZED ChatRow — only re-renders when THIS chat's data changes (not the whole list)
-const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal }) => {
+const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onDelete, onTogglePin, onlineReaders, blockLoading, userId, onOpenProfileModal, onMarkAsRead }) => {
     const isUnread = checkIfUnreadStandalone(chat);
     const profileComplete = isProfileCompleteStandalone(chat);
     const avatarColor = AVATAR_COLORS[((chat.nombre||'C').charCodeAt(0)*7)%10];
@@ -509,9 +509,18 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                     </div>
                     <div className="flex items-center shrink-0 ml-1 gap-1">
                         {isUnread && (
-                            <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center mr-1 shadow-sm shrink-0 text-white text-[11px] font-bold">
-                                {chat.unreadMsgCount || 1}
-                            </div>
+                            <>
+                                <button 
+                                    onClick={(e) => onMarkAsRead(chat, e)}
+                                    className="px-1.5 py-0.5 mr-1 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-[10px] font-medium text-gray-600 dark:text-gray-300 rounded shadow-sm transition-colors shrink-0"
+                                    title="Quitar notificación"
+                                >
+                                    Marcar leído
+                                </button>
+                                <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center mr-1 shadow-sm shrink-0 text-white text-[11px] font-bold">
+                                    {chat.unreadMsgCount || 1}
+                                </div>
+                            </>
                         )}
                         {onlineReaders.length > 0 && (
                             <div className="flex -space-x-1.5 mr-1 group/presence" title="Viendo este chat">
@@ -1459,6 +1468,26 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
     };
 
+    const handleMarkAsRead = async (chatToMark, e) => {
+        if (e) e.stopPropagation();
+        if (!chatToMark) return;
+
+        // Optimistic update
+        setCandidates(prev => prev.map(c => 
+            c.id === chatToMark.id ? { ...c, unreadMsgCount: 0 } : c
+        ));
+
+        try {
+            await fetch('/api/chat', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'mark_read', candidateId: chatToMark.id })
+            });
+        } catch(err) {
+            console.error('Error marking as read', err);
+        }
+    };
+
     const handleFileUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file || !selectedChat) return;
@@ -2211,6 +2240,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                     blockLoading={blockLoading}
                                     userId={user?.id || user?.whatsapp}
                                     onOpenProfileModal={setProfileModalCandidate}
+                                    onMarkAsRead={handleMarkAsRead}
                                 />
                             )}
                         />
