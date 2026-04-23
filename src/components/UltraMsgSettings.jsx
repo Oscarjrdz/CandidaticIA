@@ -145,27 +145,27 @@ const WhatsAppSettings = ({ showToast }) => {
 
                         {/* Stats Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-0 divide-x divide-gray-100 dark:divide-gray-700">
-                            {/* Total Messages */}
+                            {/* Total Sent */}
                             <div className="p-4 text-center">
                                 <div className="flex items-center justify-center gap-1.5 mb-1">
-                                    <MessageCircle className="w-3.5 h-3.5 text-gray-400" />
-                                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total</span>
+                                    <MessageCircle className="w-3.5 h-3.5 text-blue-400" />
+                                    <span className="text-[10px] font-semibold text-blue-500 uppercase tracking-wider">Enviados</span>
                                 </div>
-                                {loading ? <div className="h-7 w-12 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-gray-900 dark:text-white">{analytics?.totalConversations?.toLocaleString() || '0'}</p>}
-                                <p className="text-[10px] text-gray-400 mt-0.5">conversaciones</p>
+                                {loading ? <div className="h-7 w-12 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{analytics?.totalSent?.toLocaleString() || '0'}</p>}
+                                <p className="text-[10px] text-blue-500/70 mt-0.5">mensajes</p>
                             </div>
 
-                            {/* Free */}
+                            {/* Delivered */}
                             <div className="p-4 text-center">
                                 <div className="flex items-center justify-center gap-1.5 mb-1">
                                     <Check className="w-3.5 h-3.5 text-emerald-500" />
-                                    <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Gratis</span>
+                                    <span className="text-[10px] font-semibold text-emerald-500 uppercase tracking-wider">Entregados</span>
                                 </div>
-                                {loading ? <div className="h-7 w-12 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{analytics?.freeMessages?.toLocaleString() || '0'}</p>}
-                                <p className="text-[10px] text-emerald-500/70 mt-0.5">servicio (24h)</p>
+                                {loading ? <div className="h-7 w-12 bg-gray-200 dark:bg-gray-700 rounded mx-auto mt-1 mb-1 animate-pulse"></div> : <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{analytics?.totalDelivered?.toLocaleString() || '0'}</p>}
+                                <p className="text-[10px] text-emerald-500/70 mt-0.5">confirmados</p>
                             </div>
 
-                            {/* Paid */}
+                            {/* Paid Templates */}
                             <div className="p-4 text-center">
                                 <div className="flex items-center justify-center gap-1.5 mb-1">
                                     <TrendingUp className="w-3.5 h-3.5 text-amber-500" />

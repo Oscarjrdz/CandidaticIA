@@ -70,6 +70,8 @@ export default async function handler(req, res) {
                 let estimatedCostMXN = 0;
 
                 // ── Strategy 1: analytics (messaging counts - PMP model) ──
+                let totalSent = 0;
+                let totalDelivered = 0;
                 try {
                     const msgRes = await axios.get(
                         `https://graph.facebook.com/v25.0/${wabaId}`,
@@ -77,19 +79,19 @@ export default async function handler(req, res) {
                             headers,
                             timeout: 15000,
                             params: {
-                                fields: `analytics.start(${since}).end(${until}).granularity(MONTHLY).phone_numbers([${phoneNumberId}]).country_codes([]).message_directions(["OUTBOUND"]).message_types(["TEMPLATE","NORMAL"])`
+                                fields: `analytics.start(${since}).end(${until}).granularity(DAY)`
                             }
                         }
                     );
                     const rawMsg = msgRes.data?.analytics;
-                    if (rawMsg?.data) {
-                        const dataPoints = rawMsg.data[0]?.data_points || [];
-                        for (const dp of dataPoints) {
-                            const sent = dp.sent || 0;
-                            const delivered = dp.delivered || 0;
-                            totalConversations += sent;
+                    // Structure: { phone_numbers, granularity, data_points: [{start,end,sent,delivered}] }
+                    if (rawMsg?.data_points) {
+                        for (const dp of rawMsg.data_points) {
+                            totalSent += (dp.sent || 0);
+                            totalDelivered += (dp.delivered || 0);
                         }
                     }
+                    totalConversations = totalSent;
                 } catch (e) {
                     console.warn('analytics field failed:', e.response?.data?.error?.message || e.message);
                 }
@@ -135,6 +137,8 @@ export default async function handler(req, res) {
                 analytics = {
                     period: startOfMonth.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }),
                     totalConversations,
+                    totalSent,
+                    totalDelivered,
                     freeMessages,
                     paidMessages,
                     byCategory,
