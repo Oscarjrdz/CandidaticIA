@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     try {
         // 1. Phone number status
         const phoneRes = await axios.get(
-            `https://graph.facebook.com/v21.0/${phoneNumberId}`,
+            `https://graph.facebook.com/v25.0/${phoneNumberId}`,
             { headers, timeout: 10000 }
         );
         const phone = phoneRes.data;
@@ -53,20 +53,6 @@ export default async function handler(req, res) {
 
                 const since = Math.floor(startOfMonth.getTime() / 1000);
                 const until = Math.floor(endOfDay.getTime() / 1000);
-
-                // Use pricing_analytics for per-message billing model
-                const analyticsRes = await axios.get(
-                    `https://graph.facebook.com/v21.0/${wabaId}`,
-                    {
-                        headers,
-                        timeout: 15000,
-                        params: {
-                            fields: `conversation_analytics.start(${since}).end(${until}).granularity(MONTHLY).phone_numbers([${phoneNumberId}]).dimensions(["CONVERSATION_CATEGORY","CONVERSATION_TYPE","COUNTRY","PHONE"])`
-                        }
-                    }
-                );
-
-                const rawAnalytics = analyticsRes.data?.conversation_analytics;
 
                 // Mexico per-message rates (MXN) - Tier 0 / list price
                 // Source: Meta official rate card (MXN) as of Q2 2026
@@ -83,24 +69,65 @@ export default async function handler(req, res) {
                 const byCategory = {};
                 let estimatedCostMXN = 0;
 
-                if (rawAnalytics?.data) {
-                    const dataPoints = rawAnalytics.data[0]?.data_points || [];
-
-                    for (const dp of dataPoints) {
-                        const category = dp.CONVERSATION_CATEGORY || 'UNKNOWN';
-                        const type = dp.CONVERSATION_TYPE || 'REGULAR';
-                        const count = dp.conversation || 0;
-
-                        totalConversations += count;
-                        byCategory[category] = (byCategory[category] || 0) + count;
-
-                        if (type === 'FREE_TIER' || type === 'FREE_ENTRY_POINT' || category === 'SERVICE') {
-                            freeMessages += count;
-                        } else {
-                            paidMessages += count;
-                            estimatedCostMXN += count * (MXN_RATES[category] || 0.15);
+                // ── Strategy 1: analytics (messaging counts - PMP model) ──
+                try {
+                    const msgRes = await axios.get(
+                        `https://graph.facebook.com/v25.0/${wabaId}`,
+                        {
+                            headers,
+                            timeout: 15000,
+                            params: {
+                                fields: `analytics.start(${since}).end(${until}).granularity(MONTHLY).phone_numbers([${phoneNumberId}]).country_codes([]).message_directions(["OUTBOUND"]).message_types(["TEMPLATE","NORMAL"])`
+                            }
+                        }
+                    );
+                    const rawMsg = msgRes.data?.analytics;
+                    if (rawMsg?.data) {
+                        const dataPoints = rawMsg.data[0]?.data_points || [];
+                        for (const dp of dataPoints) {
+                            const sent = dp.sent || 0;
+                            const delivered = dp.delivered || 0;
+                            totalConversations += sent;
                         }
                     }
+                } catch (e) {
+                    console.warn('analytics field failed:', e.response?.data?.error?.message || e.message);
+                }
+
+                // ── Strategy 2: conversation_analytics (conversation-level) ──
+                try {
+                    const convRes = await axios.get(
+                        `https://graph.facebook.com/v25.0/${wabaId}`,
+                        {
+                            headers,
+                            timeout: 15000,
+                            params: {
+                                fields: `conversation_analytics.start(${since}).end(${until}).granularity(MONTHLY).phone_numbers([${phoneNumberId}]).dimensions(["CONVERSATION_CATEGORY","CONVERSATION_TYPE"])`
+                            }
+                        }
+                    );
+                    const rawConv = convRes.data?.conversation_analytics;
+                    if (rawConv?.data) {
+                        const dataPoints = rawConv.data[0]?.data_points || [];
+                        for (const dp of dataPoints) {
+                            const category = dp.CONVERSATION_CATEGORY || 'UNKNOWN';
+                            const type = dp.CONVERSATION_TYPE || 'REGULAR';
+                            const count = dp.conversation || 0;
+
+                            // Only override total if analytics field returned 0
+                            if (totalConversations === 0) totalConversations += count;
+                            byCategory[category] = (byCategory[category] || 0) + count;
+
+                            if (type === 'FREE_TIER' || type === 'FREE_ENTRY_POINT' || category === 'SERVICE') {
+                                freeMessages += count;
+                            } else {
+                                paidMessages += count;
+                                estimatedCostMXN += count * (MXN_RATES[category] || 0.15);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('conversation_analytics field failed:', e.response?.data?.error?.message || e.message);
                 }
 
                 const USD_RATE = 17.5; // Approximate MXN/USD
