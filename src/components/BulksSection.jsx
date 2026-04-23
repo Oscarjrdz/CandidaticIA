@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useConfirmModal } from './ui/ConfirmModal';
 import { Search, Plus, Trash2, Copy, Sparkles, Send, PauseCircle, PlayCircle, XCircle, Tag, X, ChevronDown, CheckCircle2, ArrowUpDown } from 'lucide-react';
 import { getCandidates } from '../services/candidatesService';
 
@@ -103,6 +104,7 @@ const CampaignHistoryItem = ({ h, reuseCampaign, deleteCampaign }) => {
 };
 
 const BulksSection = ({ showToast }) => {
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
     // Col 1: Candidates
     const [candidates, setCandidates] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -303,7 +305,13 @@ const BulksSection = ({ showToast }) => {
     };
 
     const deleteCampaign = async (id) => {
-        if (!window.confirm("¿Seguro que quieres borrar este historial?")) return;
+        const ok = await showConfirm({
+            title: 'Eliminar Historial',
+            message: '¿Seguro que quieres borrar este historial de campaña? Esta acción no se puede deshacer.',
+            confirmText: 'Eliminar',
+            variant: 'danger'
+        });
+        if (!ok) return;
         try {
             await fetch('/api/bulks?action=history_delete', {
                 method: 'POST',
@@ -450,7 +458,13 @@ const BulksSection = ({ showToast }) => {
     };
 
     const abortBulk = async () => {
-        if (!window.confirm("¿SEGURO QUE QUIERES ABORTAR TODOS LOS ENVÍOS RESTANTES?")) return;
+        const ok = await showConfirm({
+            title: 'Abortar Campaña',
+            message: '¿SEGURO QUE QUIERES ABORTAR TODOS LOS ENVÍOS RESTANTES? Los mensajes ya enviados no se pueden revertir.',
+            confirmText: 'Abortar',
+            variant: 'warning'
+        });
+        if (!ok) return;
         try {
             await fetch('/api/bulks?action=abort', { method: 'POST' });
             showToast && showToast("Campaña abortada", "success");

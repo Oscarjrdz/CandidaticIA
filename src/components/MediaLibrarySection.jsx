@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useConfirmModal } from './ui/ConfirmModal';
 import { Folder, Upload, Image as ImageIcon, Video, Mic, Trash2, Search, Plus, Loader2 } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -8,6 +9,7 @@ import Button from './ui/Button';
  * Centralized repository for bot-accessible assets.
  */
 const MediaLibrarySection = ({ showToast }) => {
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [assets, setAssets] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -38,7 +40,13 @@ const MediaLibrarySection = ({ showToast }) => {
     );
 
     const handleDelete = async (id) => {
-        if (!window.confirm('¿Estás seguro de que quieres eliminar este archivo?')) return;
+        const ok = await showConfirm({
+            title: 'Eliminar Archivo',
+            message: '¿Estás seguro de que quieres eliminar este archivo? Esta acción no se puede deshacer.',
+            confirmText: 'Eliminar',
+            variant: 'danger'
+        });
+        if (!ok) return;
 
         try {
             const res = await fetch('/api/media/delete', {
@@ -160,6 +168,7 @@ const MediaLibrarySection = ({ showToast }) => {
                     </div>
                 )}
             </div>
+            {confirmModalJSX}
         </div>
     );
 };

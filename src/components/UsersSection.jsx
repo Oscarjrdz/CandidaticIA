@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useConfirmModal } from './ui/ConfirmModal';
 import { UserPlus, Trash2, Pencil, Shield, Loader2, RefreshCw, Search, User, ShieldCheck, Plus, Check, X, Tag } from 'lucide-react';
 import Card from './ui/Card';
 import Button from './ui/Button';
@@ -36,6 +37,7 @@ const AVAILABLE_EXTRA_PERMS = [
 
 const UsersSection = ({ showToast }) => {
     const [activeTab, setActiveTab] = useState('users');
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [users, setUsers] = useState([]);
     const [roles, setRoles] = useState([]);
     const [allProjects, setAllProjects] = useState([]);
@@ -156,7 +158,13 @@ const UsersSection = ({ showToast }) => {
 
     const handleDeleteTag = async (index) => {
         const tagName = typeof allTags[index] === 'string' ? allTags[index] : allTags[index].name;
-        if (!window.confirm(`¿Eliminar la etiqueta "${tagName}"?`)) return;
+        const ok = await showConfirm({
+            title: 'Eliminar Etiqueta',
+            message: `¿Eliminar la etiqueta "${tagName}"? Se eliminará de todos los candidatos que la tengan.`,
+            confirmText: 'Eliminar',
+            variant: 'danger'
+        });
+        if (!ok) return;
         const updated = allTags.filter((_, i) => i !== index);
         await saveTagsToApi(updated);
     };
@@ -240,7 +248,13 @@ const UsersSection = ({ showToast }) => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('¿Estás seguro de eliminar este usuario?')) return;
+        const ok = await showConfirm({
+            title: 'Eliminar Usuario',
+            message: '¿Estás seguro de que deseas eliminar este usuario? Esta acción no se puede deshacer.',
+            confirmText: 'Eliminar',
+            variant: 'danger'
+        });
+        if (!ok) return;
         try {
             const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' });
             const data = await res.json();
@@ -303,7 +317,13 @@ const UsersSection = ({ showToast }) => {
     };
 
     const handleRoleDelete = async (id) => {
-        if (!window.confirm('¿Estás seguro de eliminar este rol?')) return;
+        const ok = await showConfirm({
+            title: 'Eliminar Rol',
+            message: '¿Estás seguro de que deseas eliminar este rol? Los usuarios asignados perderán sus permisos.',
+            confirmText: 'Eliminar',
+            variant: 'danger'
+        });
+        if (!ok) return;
         try {
             const res = await fetch(`/api/roles?id=${id}`, { method: 'DELETE' });
             const data = await res.json();
@@ -877,6 +897,7 @@ const UsersSection = ({ showToast }) => {
                     </div>
                 </form>
             </Modal>
+            {confirmModalJSX}
         </div>
     );
 };
