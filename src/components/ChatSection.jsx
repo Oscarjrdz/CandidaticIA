@@ -1236,7 +1236,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     }
                     return prev;
                 });
-            } else if (sseUpdate.updates?.newMessage || !sseUpdate.updates?.recruiterTyping) {
+            } else if (sseUpdate.updates?.newMessage) {
                 if (sseUpdate.updates?.messagePayload) {
                     console.log('🚀 [SSE] Injecting INSTANT MESSAGE:', sseUpdate.updates.messagePayload);
                     // 🚀 O(1) Instant Message Injection (Meta Standard)
@@ -1274,13 +1274,18 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 } else {
                     console.log('⚠️ [SSE] No messagePayload provided in SSE. Falling back to loadMessages()...');
                     // Fallback for legacy hooks that don't send payload
-                    setMessages(prev => {
-                        const hasOptimistic = prev.some(m => String(m.id).startsWith('temp_'));
-                        if (!hasOptimistic) {
-                            loadMessages();
-                        }
-                        return prev;
-                    });
+                    // Use ref to avoid stale closure over selectedChat
+                    const chatId = selectedChatRef.current?.id;
+                    if (chatId) {
+                        fetch(`/api/chat?candidateId=${chatId}`)
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.success && selectedChatRef.current?.id === chatId) {
+                                    setMessages(data.messages || []);
+                                }
+                            })
+                            .catch(() => {});
+                    }
                 }
             }
         }

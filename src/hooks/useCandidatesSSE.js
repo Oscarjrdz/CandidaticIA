@@ -1,8 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 /**
  * React Hook for Server-Sent Events (SSE) real-time updates
  * Connects to SSE endpoint and listens for candidate events
+ * 
+ * IMPORTANT: Uses a monotonic counter to guarantee every SSE event
+ * produces a unique state change — preventing React 18 batching
+ * from swallowing intermediate updates.
  */
 export function useCandidatesSSE() {
     const [newCandidate, setNewCandidate] = useState(null);
@@ -12,6 +16,7 @@ export function useCandidatesSSE() {
     const [error, setError] = useState(null);
     const eventSourceRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
+    const seqRef = useRef(0); // Monotonic counter to force unique references
 
     useEffect(() => {
         let isMounted = true;
@@ -42,8 +47,13 @@ export function useCandidatesSSE() {
                             console.log('🆕 New candidate via SSE:', data.data);
                             setNewCandidate(data.data);
                         } else if (data.type === 'candidate:update') {
-                            console.log('🔄 Candidate update via SSE:', data.data);
-                            setUpdatedCandidate(data.data);
+                            // 🚀 CRITICAL FIX: Stamp each update with a unique seq ID
+                            // so React always sees a new object reference, even if
+                            // two updates arrive for the same candidate in the same tick.
+                            seqRef.current += 1;
+                            const stamped = { ...data.data, _seq: seqRef.current };
+                            console.log('🔄 Candidate update via SSE:', stamped.candidateId, 'seq:', stamped._seq);
+                            setUpdatedCandidate(stamped);
                         } else if (data.type === 'stats:global') {
                             setGlobalStats(data.data);
                         }

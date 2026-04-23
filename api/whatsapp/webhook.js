@@ -446,11 +446,7 @@ export default async function handler(req, res) {
                         unreadMsgCount: (Number(candidate.unreadMsgCount) || 0) + 1
                     });
 
-                    // SSE notify
-                    try {
-                        const { notifyCandidateUpdate } = await import('../utils/sse-notify.js');
-                        notifyCandidateUpdate(candidateId, { ultimoMensaje: new Date().toISOString(), newMessage: true }).catch(() => {});
-                    } catch (e) {}
+                    // SSE is already fired by saveMessage() above — with enriched messagePayload
 
                     // Force stat recalc
                     const redisStat = getRedisClient();
