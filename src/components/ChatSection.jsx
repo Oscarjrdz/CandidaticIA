@@ -2191,7 +2191,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                             } : {}}
                                         >
                                             <Kanban className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${manualPipelineFilter ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={manualPipelineFilter ? { color: '#f59e0b' } : {}} />
-                                            <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{manualPipelineFilter ? (manualProjects.find(p => p.id === manualPipelineFilter)?.name || 'Pipeline') : 'CRM Manual'}</span>
+                                            <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{manualPipelineFilter ? (manualProjects.find(p => p.id === manualPipelineFilter)?.name || 'Pipeline') : 'CRM de Proyectos'}</span>
                                             <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'manualPipeline' ? 'rotate-180' : ''}`}>
                                                 <ChevronIcon />
                                             </div>
