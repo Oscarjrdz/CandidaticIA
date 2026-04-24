@@ -77,8 +77,8 @@ const formatWhatsAppText = (text) => {
         return token;
     };
 
-    // 2. Validate URLs start with https:// to prevent injection
-    const safeUrl = (u) => /^https?:\/\//i.test(u) ? u : '';
+    // 2. Validate URLs start with https:// to prevent injection, or allow safe internal relative routes
+    const safeUrl = (u) => /^(https?:\/\/|\/api\/|\/uploads\/)/i.test(u) ? u : '';
 
     // 3. Extract specific media blocks and replace them with safe tokens
     processed = processed

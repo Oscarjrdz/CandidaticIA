@@ -108,8 +108,8 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                     payload.sticker = { id: extraParams.mediaId };
                 } else {
                     const finalUrl = body.startsWith('http') ? body : `${process.env.NEXT_PUBLIC_API_URL || 'https://candidatic.com'}${body}`;
-                    payload.type = 'image';
-                    payload.image = { link: finalUrl };
+                    payload.type = 'sticker';
+                    payload.sticker = { link: finalUrl };
                 }
                 break;
             }
