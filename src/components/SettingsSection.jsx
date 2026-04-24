@@ -2,6 +2,7 @@ import React from 'react';
 import { Settings } from 'lucide-react';
 import GPTSettings from './GPTSettings';
 import WhatsAppSettings from './WhatsAppSettings';
+import RedisMonitorSettings from './RedisMonitorSettings';
 
 /**
  * Sección de Settings (configuración)
@@ -24,6 +25,9 @@ const SettingsSection = ({ showToast }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Redis Telemetry Monitor (Full Width) */}
+            <RedisMonitorSettings />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <WhatsAppSettings showToast={showToast} />
