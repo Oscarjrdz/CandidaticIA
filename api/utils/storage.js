@@ -187,6 +187,11 @@ export const recordVacancyInteraction = async (candidateId, projectId, vacancyId
         };
         // Use a Sorted Set scored by timestamp to keep history ordered and fast to query
         await client.zadd(historyKey, Date.now(), JSON.stringify(event));
+        // 🛡️ OOM PREVENTION: Keep only last 100 interactions per candidate
+        const count = await client.zcard(historyKey);
+        if (count > 100) {
+            await client.zremrangebyrank(historyKey, 0, count - 101);
+        }
     } catch (e) {
         console.error(`[Storage] Error recording vacancy interaction for ${candidateId}:`, e);
     }
@@ -1257,6 +1262,9 @@ export const saveMessage = async (candidateId, message) => {
             message.status = 'read';
         }
         await client.rpush(key, JSON.stringify(message));
+        // 🛡️ OOM PREVENTION: Cap at 500 messages, expire after 30 days of inactivity
+        await client.ltrim(key, -500, -1);
+        await client.expire(key, 2592000);
 
         // Detection of follow-up messages to increment counter
         const isFollowUp =
@@ -1405,6 +1413,9 @@ export const saveWebhookTransaction = async ({
     // 2. Save Message (RPUSH)
     if (candidateId && message) {
         pipeline.rpush(`messages:${candidateId}`, JSON.stringify(message));
+        // 🛡️ OOM PREVENTION: Cap at 500 messages, expire after 30 days of inactivity
+        pipeline.ltrim(`messages:${candidateId}`, -500, -1);
+        pipeline.expire(`messages:${candidateId}`, 2592000);
     }
 
     // 3. Update Candidate (SET)
