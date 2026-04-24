@@ -406,6 +406,6 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Método no permitido' });
     } catch (error) {
         console.error('Chat API Error:', error.message, error.stack);
-        return res.status(500).json({ error: 'Error interno', details: error.message, stack: (error.stack || '').split('\n').slice(0, 5).join(' | ') });
+        return res.status(500).json({ error: 'Error interno', details: error.message });
     }
 }

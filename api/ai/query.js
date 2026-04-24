@@ -359,7 +359,7 @@ IMPORTANTE: Responde SÓLO con el JSON en bruto, sin backticks (\`\`\`) ni marca
         return res.status(500).json({
             success: false,
             error: `API ERROR: ${error.message} `,
-            details: error.stack
+            details: error.message
         });
     }
 }

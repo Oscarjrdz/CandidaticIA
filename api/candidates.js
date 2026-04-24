@@ -165,8 +165,7 @@ export default async function handler(req, res) {
 
         return res.status(500).json({
             error: 'Error interno del servidor',
-            message: process.env.NODE_ENV === 'development' ? error.message : 'Error procesando solicitud',
-            details: error.message
+            message: process.env.NODE_ENV === 'development' ? error.message : 'Error procesando solicitud'
         });
     }
 }

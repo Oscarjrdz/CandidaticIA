@@ -18,6 +18,7 @@ import ProjectsSection from './components/ProjectsSection';
 import CRMProjectsSection from './components/CRMProjectsSection';
 import ByPassSection from './components/ByPassSection';
 import LoadingOverlay from './components/ui/LoadingOverlay';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 import LoginPage from './components/LoginPage';
 import LandingPage from './components/LandingPage';
 import { getTheme, saveTheme } from './utils/storage';
@@ -305,6 +306,7 @@ function App() {
         </header>
 
         <main className={`flex-1 overflow-y-auto overflow-x-hidden flex flex-col min-h-0 ${activeSection === 'chat' || activeSection === 'bulks' ? 'p-0' : 'px-3 sm:px-8 py-4 sm:py-8'}`}>
+          <ErrorBoundary>
           {activeSection === 'candidates' ? (
             <CandidatesSection showToast={showToast} user={user} />
           ) : activeSection === 'chat' ? (
@@ -336,6 +338,7 @@ function App() {
               showToast={showToast}
             />
           )}
+          </ErrorBoundary>
         </main>
 
         {/* Footer */}

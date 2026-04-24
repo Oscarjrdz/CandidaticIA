@@ -154,6 +154,6 @@ export default async function handler(req, res) {
     } catch (error) {
         console.error('🔥 CRITICAL AUTH ERROR:', error);
         // FORCE JSON RESPONSE even on crash
-        return res.status(500).json({ error: 'Internal Server Error', details: error.message, stack: error.stack });
+        return res.status(500).json({ error: 'Internal Server Error', details: error.message });
     }
 }

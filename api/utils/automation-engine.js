@@ -67,7 +67,7 @@ export async function runAIAutomations(isManual = false, manualConfig = null) {
     } catch (error) {
         console.error('ENGINE_CRASH:', error);
         logs.push(`🛑 CRASH: ${error.message} `);
-        return { success: false, error: error.message, stack: error.stack, logs };
+        return { success: false, error: error.message, logs };
     }
 }
 
