@@ -319,7 +319,13 @@ const checkIfUnreadStandalone = (chat) => {
     );
 
     // 1000ms tolerance for DB race conditions when bot writes timestamps sequentially
-    return userTime > botTime + 1000;
+    if (userTime > botTime + 1000) return true;
+
+    // Rule 3: No human recruiter has ever participated in this conversation
+    // If candidate has had activity but no recruiter has ever sent a message or handled the chat
+    if (userTime > 0 && !chat.lastHumanMessageAt) return true;
+
+    return false;
 };
 
 const isProfileCompleteStandalone = (c) => {
@@ -797,7 +803,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             const now = new Date().toISOString();
             setCandidates(prev => prev.map(c => 
                 c.id === candidateId 
-                    ? { ...c, unreadMsgCount: 0, lastBotMessageAt: now, ultimoMensajeBot: now } 
+                    ? { ...c, unreadMsgCount: 0, lastBotMessageAt: now, ultimoMensajeBot: now, lastHumanMessageAt: now } 
                     : c
             ));
         };
@@ -1588,7 +1594,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         // Optimistic update: we must trick the logic userTime > botTime by setting botTime to now
         const now = new Date().toISOString();
         setCandidates(prev => prev.map(c => 
-            c.id === chatToMark.id ? { ...c, unreadMsgCount: 0, lastBotMessageAt: now, ultimoMensajeBot: now } : c
+            c.id === chatToMark.id ? { ...c, unreadMsgCount: 0, lastBotMessageAt: now, ultimoMensajeBot: now, lastHumanMessageAt: now } : c
         ));
 
         try {

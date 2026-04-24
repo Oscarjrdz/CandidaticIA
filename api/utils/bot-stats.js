@@ -117,6 +117,9 @@ export const calculateBotStats = async () => {
                             const bestBotT = Math.max(botT1, botT2);
                             if (userT > 0 && userT > (bestBotT + 1000)) {
                                 totalUnreadCount++;
+                            } else if (userT > 0 && !c.lastHumanMessageAt) {
+                                // Rule 3: No human recruiter has ever participated
+                                totalUnreadCount++;
                             }
                         }
                     }

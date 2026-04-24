@@ -106,7 +106,8 @@ export default async function handler(req, res) {
                     await updateCandidate(candidateId, { 
                         unreadMsgCount: 0,
                         lastBotMessageAt: nowStr,
-                        ultimoMensajeBot: nowStr
+                        ultimoMensajeBot: nowStr,
+                        lastHumanMessageAt: nowStr
                     });
                 } catch (e) {}
                 return res.status(200).json({ success: true, marked: 'handled' });
@@ -363,6 +364,7 @@ export default async function handler(req, res) {
                         await updateCandidate(candidateId, {
                             ultimoMensajeBot: timestamp,
                             lastBotMessageAt: timestamp,
+                            lastHumanMessageAt: timestamp,
                             unreadMsgCount: 0
                         });
 
