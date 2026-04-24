@@ -315,7 +315,7 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
                     />
                 ) : (
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-[10px] border border-blue-100/30">
-                        {candidate.nombreReal?.charAt(0) || candidate.nombre?.charAt(0) || 'C'}
+                        {candidate.nombreReal?.charAt(0) || candidate.from?.charAt(0) || candidate.nombre?.charAt(0) || 'C'}
                     </div>
                 )}
             </div>
@@ -323,7 +323,7 @@ const SortableCandidateCard = ({ id, candidate, onChat, onUnlink }) => {
             <div className="flex-1 min-w-0 pr-14" {...listeners}>
                 <div className="flex flex-col mb-0.5">
                     <h4 className="font-extrabold text-slate-900 dark:text-white text-[11px] truncate uppercase tracking-tight">
-                        {candidate.nombreReal || candidate.nombre || 'Sin nombre'}
+                        {candidate.nombreReal || candidate.from || candidate.nombre || 'Sin nombre'}
                     </h4>
                     {(() => {
                         const vacName = candidate.currentVacancyName || candidate.projectMetadata?.currentVacancyName;

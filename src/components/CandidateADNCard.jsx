@@ -79,7 +79,7 @@ const CandidateADNCard = ({ candidate }) => {
                         <ProfileItem
                             icon={User}
                             label="Nombre Real"
-                            value={candidate.nombreReal || candidate.nombre}
+                            value={candidate.nombreReal || candidate.from || candidate.nombre}
                             colorClass="text-blue-600"
                         />
                         <ProfileItem
