@@ -1,7 +1,7 @@
 import { getMessages, saveMessage, getCandidateById, updateCandidate, updateMessageStatus, getRedisClient } from './utils/storage.js';
 import { substituteVariables } from './utils/shortcuts.js';
 import axios from 'axios';
-import { sendUltraMsgMessage, getUltraMsgConfig } from './whatsapp/utils.js';
+import { sendUltraMsgMessage, getUltraMsgConfig, buildMetaTemplateComponents } from './whatsapp/utils.js';
 
 // Candidatic legacy URLs removed as per UltraMsg migration.
 
@@ -220,62 +220,12 @@ export default async function handler(req, res) {
                     extraParams.templateName = tData.name;
                     extraParams.languageCode = tData.language || 'es_MX';
                     
-                    // Construcción dinámica de componentes (soporta BODY, HEADER textual/media, BUTTONS)
-                    const componentsToSend = [];
-                    (tData.components || []).forEach(comp => {
-                        const cType = (comp.type || '').toLowerCase();
-                        
-                        if (cType === 'body' || cType === 'header') {
-                            if (cType === 'body' || (comp.format || '').toLowerCase() === 'text') {
-                                const textInfo = comp.text || '';
-                                const varMatches = textInfo.match(/\{\{\d+\}\}/g) || [];
-                                let expectedCount = [...new Set(varMatches)].length;
-                                
-                                // Source of truth from Meta's parsed examples
-                                if (cType === 'body' && comp.example?.body_text?.[0]) {
-                                    expectedCount = comp.example.body_text[0].length;
-                                } else if (cType === 'header' && comp.example?.header_text) {
-                                    expectedCount = comp.example.header_text.length;
-                                }
-
-                                if (expectedCount > 0) {
-                                    componentsToSend.push({
-                                        type: cType,
-                                        parameters: Array(expectedCount).fill(0).map(() => ({ type: "text", text: candidateNameFallback }))
-                                    });
-                                }
-                            } else if (cType === 'header') {
-                                const format = (comp.format || '').toLowerCase();
-                                if (['image', 'video', 'document'].includes(format)) {
-                                    const placeholders = {
-                                        image: 'https://raw.githubusercontent.com/davidcelis/logo/master/logo.png',
-                                        video: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
-                                        document: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-                                    };
-                                    const mUrl = req.body.mediaUrl || placeholders[format] || placeholders.image;
-                                    componentsToSend.push({
-                                        type: 'header',
-                                        parameters: [ { type: format, [format]: { link: mUrl } } ]
-                                    });
-                                }
-                            }
-                        } else if (cType === 'buttons') {
-                            (comp.buttons || []).forEach((btn, index) => {
-                                if ((btn.type || '').toLowerCase() === 'url' && (btn.url || '').includes('{{')) {
-                                    const varMatches = (btn.url || '').match(/\{\{\d+\}\}/g) || [];
-                                    const uniqueVars = [...new Set(varMatches)];
-                                    if (uniqueVars.length > 0) {
-                                        componentsToSend.push({
-                                            type: 'button',
-                                            sub_type: 'url',
-                                            index: String(index),
-                                            parameters: uniqueVars.map(() => ({ type: "text", text: "info" }))
-                                        });
-                                    }
-                                }
-                            });
-                        }
-                    });
+                    // Construcción dinámica de componentes (DRY helper)
+                    const componentsToSend = buildMetaTemplateComponents(
+                        tData.components,
+                        candidateNameFallback,
+                        { mediaUrl: req.body.mediaUrl }
+                    );
 
                     if (componentsToSend.length > 0) {
                         extraParams.components = componentsToSend;

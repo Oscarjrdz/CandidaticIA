@@ -107,7 +107,7 @@ export default async function handler(req, res) {
 
     // Execute immediately upon connection so the UI doesn't wait 2 seconds, then loop
     runPoll();
-    const pollInterval = setInterval(runPoll, 2000);
+    const pollInterval = setInterval(runPoll, 5000);
 
     req.on('close', () => {
         clearInterval(keepAliveInterval);

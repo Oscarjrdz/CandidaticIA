@@ -410,3 +410,90 @@ export const uploadMediaToMeta = async (buffer, mimeType, filename = 'file') => 
         return null;
     }
 };
+
+/**
+ * ═══════════════════════════════════════════════════════════════════
+ * 🧱 Build Meta Template Components (DRY Helper)
+ * ═══════════════════════════════════════════════════════════════════
+ * Constructs the `components` array for Meta Cloud API template sends.
+ * Used by both chat.js (single send) and bulks.js (mass send).
+ *
+ * @param {Array} templateComponents - The components array from templateData
+ * @param {string} candidateNameFallback - Fallback text for variables (usually candidate name)
+ * @param {Object} [options] - Optional config
+ * @param {Object} [options.templateParams] - Custom params map (key: var index/name → value)
+ * @param {string} [options.mediaUrl] - Override URL for media headers
+ * @returns {Array} componentsToSend ready for Meta API
+ */
+export const buildMetaTemplateComponents = (templateComponents, candidateNameFallback, options = {}) => {
+    const { templateParams, mediaUrl } = options;
+    const componentsToSend = [];
+
+    (templateComponents || []).forEach(comp => {
+        const cType = (comp.type || '').toLowerCase();
+
+        if (cType === 'body' || cType === 'header') {
+            if (cType === 'body' || (comp.format || '').toLowerCase() === 'text') {
+                const textInfo = comp.text || '';
+                const varMatches = textInfo.match(/\{\{[^}]+\}\}/g) || [];
+                let expectedCount = [...new Set(varMatches)].length;
+                const uniqueVars = [...new Set(varMatches)];
+
+                // Source of truth from Meta's parsed examples
+                if (cType === 'body' && comp.example?.body_text?.[0]) {
+                    expectedCount = comp.example.body_text[0].length;
+                } else if (cType === 'header' && comp.example?.header_text) {
+                    expectedCount = comp.example.header_text.length;
+                }
+
+                if (expectedCount > 0) {
+                    const params = Array(expectedCount).fill(0).map((_, pIdx) => {
+                        // Try custom param by numeric key
+                        const numKey = String(pIdx + 1);
+                        let customVal = templateParams?.[numKey];
+
+                        // Fallback to searching by named variable at this position
+                        if (!customVal && uniqueVars[pIdx]) {
+                            const stringKey = uniqueVars[pIdx].replace(/[{}]/g, '');
+                            customVal = templateParams?.[stringKey];
+                        }
+
+                        return { type: "text", text: customVal || candidateNameFallback };
+                    });
+                    componentsToSend.push({ type: cType, parameters: params });
+                }
+            } else if (cType === 'header') {
+                const format = (comp.format || '').toLowerCase();
+                if (['image', 'video', 'document'].includes(format)) {
+                    const placeholders = {
+                        image: 'https://raw.githubusercontent.com/davidcelis/logo/master/logo.png',
+                        video: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+                        document: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+                    };
+                    const mUrl = mediaUrl || placeholders[format] || placeholders.image;
+                    componentsToSend.push({
+                        type: 'header',
+                        parameters: [{ type: format, [format]: { link: mUrl } }]
+                    });
+                }
+            }
+        } else if (cType === 'buttons') {
+            (comp.buttons || []).forEach((btn, index) => {
+                if ((btn.type || '').toLowerCase() === 'url' && (btn.url || '').includes('{{')) {
+                    const btnVarMatches = (btn.url || '').match(/\{\{\d+\}\}/g) || [];
+                    const uniqueBtnVars = [...new Set(btnVarMatches)];
+                    if (uniqueBtnVars.length > 0) {
+                        componentsToSend.push({
+                            type: 'button',
+                            sub_type: 'url',
+                            index: String(index),
+                            parameters: uniqueBtnVars.map(() => ({ type: "text", text: "info" }))
+                        });
+                    }
+                }
+            });
+        }
+    });
+
+    return componentsToSend;
+};
