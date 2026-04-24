@@ -862,6 +862,18 @@ export const updateCandidate = async (id, data) => {
     if (!candidate) return null;
     const updated = { ...candidate, ...data };
 
+    // 📊 ATOMIC UNREAD: Handle manual read/unread state changes to keep global badge in sync
+    if (data.unreadMsgCount !== undefined && candidate.unreadMsgCount !== data.unreadMsgCount) {
+        const redisAtomic = getRedisClient();
+        if (redisAtomic) {
+            if (data.unreadMsgCount === 0 && (Number(candidate.unreadMsgCount) || 0) > 0) {
+                await redisAtomic.decr('stats:bot:unread_v2').catch(() => {});
+            } else if (data.unreadMsgCount > 0 && (Number(candidate.unreadMsgCount) || 0) === 0) {
+                await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
+            }
+        }
+    }
+
     // [SIN TANTO ROLLO] Atomic Status Sync
     await syncCandidateStats(id, updated);
 
@@ -1265,6 +1277,9 @@ export const saveMessage = async (candidateId, message) => {
         // 🛡️ OOM PREVENTION: Cap at 500 messages, expire after 30 days of inactivity
         await client.ltrim(key, -500, -1);
         await client.expire(key, 2592000);
+
+        // 📊 ACTIVITY TRACKER: Update sorted set for O(log N) inactivity queries
+        await client.zadd('activity:tracker', Date.now(), candidateId).catch(() => {});
 
         // Detection of follow-up messages to increment counter
         const isFollowUp =

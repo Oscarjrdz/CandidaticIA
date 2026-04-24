@@ -572,6 +572,12 @@ export default async function handler(req, res) {
                     mensajesTotales: (Number(freshCandidate?.mensajesTotales) || 0) + 1
                 };
 
+                // 📊 ATOMIC UNREAD: Increment global counter only when candidate goes from 0→1 unread
+                if ((Number(freshCandidate?.unreadMsgCount) || 0) === 0) {
+                    const redisAtomic = getRedisClient();
+                    if (redisAtomic) await redisAtomic.incr('stats:bot:unread_v2').catch(() => {});
+                }
+
                 await saveWebhookTransaction({
                     candidateId,
                     message: msgToSave,

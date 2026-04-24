@@ -82,7 +82,7 @@ export default async function handler(req, res) {
 
             // Trigger background flight plan update if stale (5 mins)
             const now = Date.now();
-            if (!lastCalc || (now - parseInt(lastCalc)) > 300000) {
+            if (!lastCalc || (now - parseInt(lastCalc)) > 900000) {
                 import('../utils/bot-stats.js').then(m => m.calculateBotStats()).catch(() => { });
                 await redis.set('stats:bot:last_calc', now.toString(), 'EX', 60);
             }
