@@ -1281,15 +1281,18 @@ export const saveMessage = async (candidateId, message) => {
         if (message.from !== 'me') {
             const now = new Date().toISOString();
             const isFromUser = message.from === 'user';
-            import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
-                notifyCandidateUpdate(candidateId, { 
+            try {
+                const { notifyCandidateUpdate } = await import('./sse-notify.js');
+                await notifyCandidateUpdate(candidateId, { 
                     newMessage: true,
                     messagePayload: message, // 🚀 ENRICHED PAYLOAD: Send full object to avoid HTTP polling
                     messageFrom: message.from,
                     ultimoMensaje: now,
                     ...(isFromUser ? { lastUserMessageAt: now } : { lastBotMessageAt: now, unreadMsgCount: 0 })
-                }).catch(() => {});
-            }).catch(() => {});
+                });
+            } catch (err) {
+                console.error('Error in SSE notify:', err);
+            }
         }
 
     } catch (e) {
@@ -1320,11 +1323,14 @@ export const updateMessageStatus = async (candidateId, ultraMsgId, status, addit
             }
             
             // 🚀 FIRE SSE! Update Chat UI checks in real time
-            import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
-                notifyCandidateUpdate(candidateId, { 
+            try {
+                const { notifyCandidateUpdate } = await import('./sse-notify.js');
+                await notifyCandidateUpdate(candidateId, { 
                     messageStatusUpdate: { id: ultraMsgId, status, additionalData } 
-                }).catch(() => {});
-            }).catch(err => console.error("Could not import sse-notify", err));
+                });
+            } catch (err) {
+                console.error("Could not import sse-notify", err);
+            }
 
             return true;
         } else {
@@ -1449,9 +1455,12 @@ export const saveWebhookTransaction = async ({
                 if (candidateUpdates) {
                     Object.assign(ssePayload, candidateUpdates);
                 }
-                import('./sse-notify.js').then(({ notifyCandidateUpdate }) => {
-                    notifyCandidateUpdate(candidateId, ssePayload).catch(() => {});
-                }).catch(() => {});
+                try {
+                    const { notifyCandidateUpdate } = await import('./sse-notify.js');
+                    await notifyCandidateUpdate(candidateId, ssePayload);
+                } catch (err) {
+                    console.error('Error in SSE webhook notify:', err);
+                }
             }
         }
         return results;

@@ -107,11 +107,9 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                     payload.type = 'sticker';
                     payload.sticker = { id: extraParams.mediaId };
                 } else {
-                    // Fallback to image. Meta Cloud API requires exact 512x512 WebP files for stickers.
-                    // If we just pass an arbitrary link, Meta API often rejects it (400 Bad Request).
-                    // Sending as an image ensures the candidate receives it.
+                    const finalUrl = body.startsWith('http') ? body : `${process.env.NEXT_PUBLIC_API_URL || 'https://candidatic.com'}${body}`;
                     payload.type = 'image';
-                    payload.image = { link: body };
+                    payload.image = { link: finalUrl };
                 }
                 break;
             }
