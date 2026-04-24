@@ -72,7 +72,7 @@ const formatWhatsAppText = (text) => {
 
     // Helper to store matches safely
     const storeToken = (html) => {
-        const token = `__MEDIA_TOKEN_${tokenCounter++}__`;
+        const token = `@@@MEDIA_TOKEN_${tokenCounter++}@@@`;
         tokens[token] = html;
         return token;
     };
