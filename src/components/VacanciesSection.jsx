@@ -5,6 +5,7 @@ import Button from './ui/Button';
 import Input from './ui/Input';
 import Modal from './ui/Modal';
 import VacancyEditorModal from './VacancyEditorModal';
+import { useConfirmModal } from './ui/ConfirmModal';
 
 // DND Kit imports
 import {
@@ -148,6 +149,7 @@ const VacanciesSection = ({ showToast }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const { confirmModalJSX, showConfirm } = useConfirmModal();
 
     // DND Sensors
     const sensors = useSensors(
@@ -223,7 +225,14 @@ const VacanciesSection = ({ showToast }) => {
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('¿Seguro que deseas eliminar esta vacante?')) return;
+        const confirmed = await showConfirm({
+            title: 'Eliminar Vacante',
+            message: '¿Seguro que deseas eliminar esta vacante? Esta acción no se puede deshacer.',
+            confirmText: 'Eliminar',
+            cancelText: 'Cancelar',
+            variant: 'danger'
+        });
+        if (!confirmed) return;
 
         try {
             const res = await fetch(`/api/vacancies?id=${id}`, {
@@ -324,7 +333,14 @@ const VacanciesSection = ({ showToast }) => {
     };
 
     const handleDeleteCategory = async (id) => {
-        if (!confirm('¿Seguro que deseas eliminar esta categoría?')) return;
+        const confirmed = await showConfirm({
+            title: 'Eliminar Categoría',
+            message: '¿Seguro que deseas eliminar esta categoría?',
+            confirmText: 'Eliminar',
+            cancelText: 'Cancelar',
+            variant: 'danger'
+        });
+        if (!confirmed) return;
         try {
             const res = await fetch(`/api/categories?id=${id}`, { method: 'DELETE' });
             if (res.ok) {
@@ -484,6 +500,8 @@ const VacanciesSection = ({ showToast }) => {
                     }}
                 />
             )}
+            
+            {confirmModalJSX}
         </div>
     );
 };
