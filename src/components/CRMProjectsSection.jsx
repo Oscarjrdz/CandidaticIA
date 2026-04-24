@@ -38,11 +38,11 @@ const SortableCandCard = ({ candidate, onRemove, onChat }) => {
                     <img src={candidate.profilePic} className="w-8 h-8 rounded-full object-cover" alt="" />
                 ) : (
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                        {(candidate.nombre || '?')[0]?.toUpperCase()}
+                        {(candidate.nombreReal || candidate.from || candidate.nombre || '?')[0]?.toUpperCase()}
                     </div>
                 )}
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{candidate.nombre || 'Sin nombre'}</p>
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{candidate.nombreReal || candidate.from || candidate.nombre || 'Sin nombre'}</p>
                     <p className="text-[10px] text-slate-400 truncate">{formatPhone(candidate.whatsapp)}</p>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -537,11 +537,11 @@ const CRMProjectsSection = ({ showToast, user }) => {
                                 <img src={activeItem.candidate.profilePic} className="w-8 h-8 rounded-full object-cover" alt="" />
                             ) : (
                                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                                    {(activeItem.candidate.nombre || '?')[0]?.toUpperCase()}
+                                    {(activeItem.candidate.nombreReal || activeItem.candidate.from || activeItem.candidate.nombre || '?')[0]?.toUpperCase()}
                                 </div>
                             )}
                             <div className="flex-1 min-w-0">
-                                <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{activeItem.candidate.nombre || 'Sin nombre'}</p>
+                                <p className="text-sm font-bold text-slate-700 dark:text-slate-200 truncate">{activeItem.candidate.nombreReal || activeItem.candidate.from || activeItem.candidate.nombre || 'Sin nombre'}</p>
                                 <p className="text-[10px] text-slate-400 truncate">{formatPhone(activeItem.candidate.whatsapp)}</p>
                             </div>
                         </div>
