@@ -4800,7 +4800,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
             deliveryPromise,
             reactionPromise,
             updateCandidate(candidateId, candidateUpdates),
-            await saveMessage(candidateId, {
+            saveMessage(candidateId, {
                 from: 'bot',
                 content: dbContentToSave,
                 timestamp: new Date().toISOString()

@@ -77,10 +77,15 @@ const formatWhatsAppText = (text) => {
         return token;
     };
 
-    // 2. Extract specific media blocks and replace them with safe tokens
+    // 2. Validate URLs start with https:// to prevent injection
+    const safeUrl = (u) => /^https?:\/\//i.test(u) ? u : '';
+
+    // 3. Extract specific media blocks and replace them with safe tokens
     processed = processed
         .replace(/\[Imagen Adjunta:\s*(https?:\/\/[^\s\]]+)\](?:\nCaption:\s*(.*))?/gi, (match, url, caption) => {
-            return storeToken(`<div class="mt-1 mb-1"><img src="${url}" alt="Adjunto" class="max-w-[200px] object-cover rounded shadow-sm bg-transparent" />${caption ? `<div class="text-[11px] text-gray-600 dark:text-gray-300 mt-1">${caption}</div>` : ''}</div>`);
+            const sUrl = safeUrl(url);
+            if (!sUrl) return match;
+            return storeToken(`<div class="mt-1 mb-1"><img src="${sUrl}" alt="Adjunto" class="max-w-[200px] object-cover rounded shadow-sm bg-transparent" />${caption ? `<div class="text-[11px] text-gray-600 dark:text-gray-300 mt-1">${caption}</div>` : ''}</div>`);
         })
         .replace(/\[Ubicación:\s*(.*?)\s*\(([-.\d]+),\s*([-.\d]+)\)\]/gi, (match, address, lat, lng) => {
             return storeToken(`<div class="mt-1 mb-1 border border-black/10 dark:border-white/10 rounded overflow-hidden max-w-[220px]">
@@ -88,10 +93,12 @@ const formatWhatsAppText = (text) => {
             </div>`);
         })
         .replace(/\[Sticker:\s*([^\s\]]+)\]/gi, (match, url) => {
-            return storeToken(`<div class="mt-1 mb-1"><img src="${url}" alt="Sticker" class="max-w-[120px] max-h-[120px] object-contain rounded bg-transparent" /></div>`);
+            const sUrl = safeUrl(url);
+            if (!sUrl) return match;
+            return storeToken(`<div class="mt-1 mb-1"><img src="${sUrl}" alt="Sticker" class="max-w-[120px] max-h-[120px] object-contain rounded bg-transparent" /></div>`);
         });
 
-    // 3. Apply standard markdown formatting safely on the remaining text
+    // 4. Apply standard markdown formatting safely on the remaining text
     processed = processed
         .replace(/\*(.*?)\*/g, '<strong class="font-bold">$1</strong>')
         .replace(/_(.*?)_/g, '<em class="italic">$1</em>')
@@ -347,6 +354,24 @@ const isProfileCompleteStandalone = (c) => {
 };
 
 const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'];
+
+// HIGH-1: Shared RBAC filter (eliminates duplication between filteredCandidates & baseCandidates)
+const passesRBACFilter = (c, roleAllowedCandidateIds, user) => {
+    if (roleAllowedCandidateIds === null) return true;
+    const allowedCrm = user?.allowed_crm_projects;
+    const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
+    const allowedLabels = user?.allowed_labels;
+    const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
+
+    const inAllowedProject = roleAllowedCandidateIds.has(c.id);
+    const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
+    const inAllowedLabel = hasLabelRestriction && Array.isArray(c?.tags) && c.tags.some(t => {
+        const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : t?.name?.trim().toLowerCase();
+        return allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
+    });
+
+    return inAllowedProject || inAllowedCrm || inAllowedLabel;
+};
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -747,7 +772,11 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     useEffect(() => {
         activeFilterRef.current = activeFilter;
         filterValueRef.current = filterValue;
-        loadCandidates();
+        // MED-3: Only re-fetch from server when label filter changes (server-side param)
+        // All other filters work client-side on the existing candidates state
+        if (activeFilter === 'label') {
+            loadCandidates();
+        }
     }, [activeFilter, filterValue]);
     
     // Marketing (Briefcase) Filters - Route A
@@ -825,23 +854,16 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         // 🚀 POLLING REMOVED: Trust the SSE `sseUpdate` for real-time candidate list updates.
 
         // 🔔 Poll chat stats (unread counts + locks) — now O(1) on backend
-        const statsInterval = setInterval(async () => {
+        // MED-2: Single function handles both initial + interval (no duplicate fetch)
+        const fetchStats = async () => {
             try {
                 const res = await fetch('/api/chat-stats');
                 const data = await res.json();
-                    setChatLocks(data.locks || {});
+                if (data.success) setChatLocks(data.locks || {});
             } catch (e) { /* silent */ }
-        }, 5000);
-        // Initial fetch
-        (async () => {
-            try {
-                const res = await fetch('/api/chat-stats');
-                const data = await res.json();
-                if (data.success) {
-                    setChatLocks(data.locks || {});
-                }
-            } catch (e) { /* silent */ }
-        })();
+        };
+        fetchStats(); // Initial fetch
+        const statsInterval = setInterval(fetchStats, 5000);
 
         return () => { clearInterval(statsInterval); };
     }, []);
@@ -974,6 +996,13 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     // Load quick replies on mount
     useEffect(() => { loadQuickReplies(); }, []);
 
+    // HIGH-3: Clean up typing indicator timers on unmount to prevent state updates on unmounted component
+    useEffect(() => {
+        return () => {
+            Object.values(typingTimersRef.current).forEach(t => clearTimeout(t));
+        };
+    }, []);
+
     // Keyboard shortcut listener for quick replies
     useEffect(() => {
         if (quickReplies.length === 0) return;
@@ -1104,21 +1133,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             if (!matchesSearch && searchVal !== "") return false;
 
             // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
-            if (roleAllowedCandidateIds !== null) {
-                const allowedCrm = user?.allowed_crm_projects;
-                const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
-                const allowedLabels = user?.allowed_labels;
-                const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
-
-                const inAllowedProject = roleAllowedCandidateIds.has(c.id);
-                const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
-                const inAllowedLabel = hasLabelRestriction && Array.isArray(c?.tags) && c.tags.some(t => {
-                    const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : t?.name?.trim().toLowerCase();
-                    return allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
-                });
-
-                if (!inAllowedProject && !inAllowedCrm && !inAllowedLabel) return false;
-            }
+            if (!passesRBACFilter(c, roleAllowedCandidateIds, user)) return false;
 
             // --- Strict Inbox para Reclutadores (Sin botón 'Todos') ---
             if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
@@ -1171,24 +1186,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     ]);
 
     // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
-    const baseCandidates = useMemo(() => (candidates || []).filter(c => {
-        if (roleAllowedCandidateIds !== null) {
-            const allowedCrm = user?.allowed_crm_projects;
-            const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
-            const allowedLabels = user?.allowed_labels;
-            const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
-
-            const inAllowedProject = roleAllowedCandidateIds.has(c.id);
-            const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
-            const inAllowedLabel = hasLabelRestriction && Array.isArray(c?.tags) && c.tags.some(t => {
-                const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : t?.name?.trim().toLowerCase();
-                return allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
-            });
-
-            if (!inAllowedProject && !inAllowedCrm && !inAllowedLabel) return false;
-        }
-        return true;
-    }), [candidates, roleAllowedCandidateIds, user]);
+    const baseCandidates = useMemo(() => (candidates || []).filter(c => passesRBACFilter(c, roleAllowedCandidateIds, user)
+    ), [candidates, roleAllowedCandidateIds, user]);
 
     const badgeCounts = useMemo(() => {
         let all = 0, complete = 0, incomplete = 0;
@@ -1482,13 +1481,16 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const isSendingMediaRef = useRef(false);
 
     const loadMessages = async () => {
-        if (!selectedChat?.id) return;
+        // BUG-4: Capture chat ID at call time to prevent stale closure injection
+        const chatId = selectedChatRef.current?.id;
+        if (!chatId) return;
         if (isSendingMediaRef.current) return; // Mute polling/SSE while an optimistic upload is in flight
 
         try {
-            const res = await fetch(`/api/chat?candidateId=${selectedChat.id}`);
+            const res = await fetch(`/api/chat?candidateId=${chatId}`);
             const data = await res.json();
-            if (data.success && !isSendingMediaRef.current) {
+            // Guard: only inject if we're still viewing the same chat
+            if (data.success && !isSendingMediaRef.current && selectedChatRef.current?.id === chatId) {
                 setMessages(data.messages || []);
             }
         } catch (e) {
@@ -1758,8 +1760,15 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
     };
 
+    // MED-6: Debounce ref to prevent double-send on rapid clicks
+    const lastSendTimeRef = useRef(0);
+
     const handleSend = (msg) => {
         if (!msg || !selectedChat) return;
+        // Prevent double-send within 1 second
+        const now = Date.now();
+        if (now - lastSendTimeRef.current < 1000) return;
+        lastSendTimeRef.current = now;
 
         // Auto-silence bot on manual intervention
         autoSilenceBot(selectedChat);
@@ -2832,7 +2841,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
                                             {/* Text Rendering */}
                                             {msg.content && (
-                                                <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '16px', paddingRight: '80px', paddingTop: msg.mediaUrl ? '2px' : '0' }} dangerouslySetInnerHTML={{ __html: msg._formattedHtml || formatWhatsAppText(msg.content) }}></div>
+                                                <div className="whitespace-pre-wrap leading-[1.35] inline-block break-words" style={{ paddingBottom: '16px', paddingRight: '80px', paddingTop: msg.mediaUrl ? '2px' : '0' }} dangerouslySetInnerHTML={{ __html: msg._formattedHtml }}></div>
                                             )}
                                             {!msg.content && <div style={{ paddingBottom: '16px', paddingRight: '80px' }}></div>}
                                             
