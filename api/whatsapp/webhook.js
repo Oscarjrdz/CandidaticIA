@@ -7,6 +7,7 @@
  * All business logic (admin commands, AI, Brenda, etc.) is preserved.
  * ═══════════════════════════════════════════════════════════════════
  */
+import crypto from 'crypto';
 import {
     saveMessage,
     getCandidateIdByPhone,
@@ -64,6 +65,35 @@ export default async function handler(req, res) {
 
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    // ═══ HMAC-SHA256 SIGNATURE VALIDATION (Meta Cloud API Security) ═══
+    // When META_APP_SECRET is configured, validates X-Hub-Signature-256 header
+    // to ensure payloads truly originate from Meta. Graceful degradation: if
+    // the secret is not set, logs a warning and allows the request through.
+    const appSecret = process.env.META_APP_SECRET;
+    if (appSecret) {
+        const signature = req.headers['x-hub-signature-256'];
+        if (!signature) {
+            console.error('[META WEBHOOK] ❌ Missing X-Hub-Signature-256 header — rejecting spoofed request');
+            return res.status(401).json({ error: 'Missing signature' });
+        }
+        // Vercel parses JSON automatically; reconstruct the raw body for HMAC
+        const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+        const expectedSignature = 'sha256=' + crypto
+            .createHmac('sha256', appSecret)
+            .update(rawBody, 'utf-8')
+            .digest('hex');
+        if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))) {
+            console.error('[META WEBHOOK] ❌ Invalid HMAC signature — rejecting tampered payload');
+            return res.status(401).json({ error: 'Invalid signature' });
+        }
+    } else {
+        // Log once per cold start to remind ops team to configure the secret
+        if (!global.__hmacWarned) {
+            console.warn('[META WEBHOOK] ⚠️ META_APP_SECRET not configured — webhook signature validation DISABLED. Add it in Vercel env vars for production security.');
+            global.__hmacWarned = true;
+        }
     }
 
     const payload = req.body;
