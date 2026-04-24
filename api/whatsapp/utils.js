@@ -162,6 +162,41 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                 break;
             }
 
+            case 'interactive': {
+                payload.type = 'interactive';
+                payload.interactive = {
+                    type: 'button',
+                    body: { text: body },
+                    action: {
+                        buttons: (extraParams.buttons || []).slice(0, 3).map((btnText, i) => ({
+                            type: 'reply',
+                            reply: {
+                                id: `btn_${Date.now()}_${i}`,
+                                title: btnText.substring(0, 20)
+                            }
+                        }))
+                    }
+                };
+                break;
+            }
+
+            case 'contacts': {
+                payload.type = 'contacts';
+                // Meta requires the phone number without the '+' if present, or just standard string
+                let contactPhone = String(extraParams.contactPhone || body).replace(/[^\d+]/g, '');
+                payload.contacts = [{
+                    name: {
+                        first_name: extraParams.contactName || 'Contacto',
+                        formatted_name: extraParams.contactName || 'Contacto'
+                    },
+                    phones: [{
+                        phone: contactPhone,
+                        type: "WORK"
+                    }]
+                }];
+                break;
+            }
+
             // Default: text message
             default: {
                 // Filter technical/empty messages

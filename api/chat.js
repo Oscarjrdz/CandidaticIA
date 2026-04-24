@@ -129,7 +129,7 @@ export default async function handler(req, res) {
         }
 
         if (req.method === 'POST') {
-            const { candidateId, message, type = 'text', mediaUrl, base64Data, replyToId } = req.body;
+            const { candidateId, message, type = 'text', mediaUrl, base64Data, replyToId, extraParams: incomingExtraParams = {} } = req.body;
 
             if (!candidateId || (!message && !mediaUrl && type !== 'template')) {
                 return res.status(400).json({ error: 'Faltan datos requeridos' });
@@ -180,6 +180,10 @@ export default async function handler(req, res) {
                 }
                 const displayName = tData.name.replace(/_/g, ' ');
                 contentToSave = `⚡ Plantilla oficial: *${displayName}*\n\n${realText}`.trim();
+            } else if (type === 'interactive' && incomingExtraParams.buttons) {
+                contentToSave = `${finalMessage}\n\n[Botones: ${incomingExtraParams.buttons.join(' | ')}]`;
+            } else if (type === 'contacts') {
+                contentToSave = `[Tarjeta de Contacto: ${incomingExtraParams.contactName || 'N/A'}]`;
             }
 
             // 1. Transactional Save
@@ -211,7 +215,7 @@ export default async function handler(req, res) {
 
                 let sendResult;
                 const cleanTo = candidate.whatsapp.replace(/\D/g, '');
-                const extraParams = {};
+                const extraParams = { ...incomingExtraParams };
                 if (replyToId) extraParams.referenceId = replyToId;
 
                 if (type === 'template') {
@@ -233,6 +237,8 @@ export default async function handler(req, res) {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, contentToSave, 'template', extraParams);
                 } else if (type === 'text') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat', extraParams);
+                } else if (type === 'interactive' || type === 'contacts') {
+                    sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, type, extraParams);
                 } else {
                     // ═══ MEDIA (image/document/video/audio) ═══
                     // If the mediaUrl is an internal Redis URL, upload to Meta first for reliability
