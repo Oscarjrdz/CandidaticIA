@@ -186,28 +186,7 @@ const WhatsAppSettings = ({ showToast }) => {
                             </div>
                         </div>
 
-                        {/* Category Breakdown - Always show */}
-                        {!loading && (
-                            <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30">
-                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">Desglose por Tipo</p>
-                                <div className="flex flex-wrap gap-2">
-                                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                                        💬 Gratis (Servicio 24h): {analytics?.freeMessages?.toLocaleString() || '0'} msgs • $0
-                                    </span>
-                                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                                        ⚡ Con Costo (Templates): {analytics?.paidMessages?.toLocaleString() || '0'} msgs • ${analytics?.totalCost?.toLocaleString() || '0'} MXN
-                                    </span>
-                                </div>
-                            </div>
-                        )}
 
-                        {/* Pricing Note */}
-                        <div className="px-4 py-2.5 border-t border-gray-100 dark:border-gray-700 bg-emerald-50/50 dark:bg-emerald-950/10">
-                            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 leading-relaxed">
-                                💡 <strong>Brenda IA responde gratis</strong> — Los mensajes de servicio (respuestas a candidatos dentro de 24h) tienen costo $0.
-                                Solo se cobra por templates de marketing/utilidad enviados fuera de la ventana de servicio.
-                            </p>
-                        </div>
                     </div>
                 )}
 
