@@ -429,44 +429,6 @@ export default async function handler(req, res) {
                     if (!candidate) candidateId = null;
                 }
 
-                // ═══ GATEWAY INTERCEPTION: If this candidate belongs to Gateway, don't process with Brenda ═══
-                if (candidate && candidate.origen === 'gateway_instance') {
-                    // Save the incoming message so it appears in chat history
-                    await saveMessage(candidateId, {
-                        id: msgId,
-                        from: 'user',
-                        content: body,
-                        type: messageType,
-                        mediaUrl: mediaUrl || undefined,
-                        timestamp: new Date().toISOString()
-                    });
-
-                    // Insert system alert for the recruiter
-                    await saveMessage(candidateId, {
-                        id: `sys_${Date.now()}`,
-                        from: 'system',
-                        content: '📲 Este candidato contactó al número oficial de Meta. Respóndele por aquí (Gateway).',
-                        type: 'system',
-                        timestamp: new Date().toISOString()
-                    });
-
-                    // Update timestamps + unread
-                    await updateCandidate(candidateId, {
-                        ultimoMensaje: new Date().toISOString(),
-                        lastUserMessageAt: new Date().toISOString(),
-                        unreadMsgCount: (Number(candidate.unreadMsgCount) || 0) + 1,
-                        mensajesTotales: (Number(candidate.mensajesTotales) || 0) + 1
-                    });
-
-                    // SSE is already fired by saveMessage() above — with enriched messagePayload
-
-                    // Force stat recalc
-                    const redisStat = getRedisClient();
-                    if (redisStat) await redisStat.del('stats:bot:last_calc');
-
-                    console.log(`[META WEBHOOK] 📡 Gateway candidate ${phone} contacted Meta. Alert injected.`);
-                    continue;
-                }
 
                 if (!candidateId) {
                     candidate = await saveCandidate({

@@ -205,7 +205,7 @@ export default async function handler(req, res) {
 
             await saveMessage(candidateId, msgToSave);
 
-            // 2. Send message (auto-routing: Gateway vs Meta handled by sendUltraMsgMessage)
+            // 2. Send message via Meta Cloud API
             try {
                 // Templates always go via Meta Cloud API (even for gateway candidates)
 

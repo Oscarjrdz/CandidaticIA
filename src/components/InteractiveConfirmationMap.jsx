@@ -120,7 +120,7 @@ const SortableItem = ({ item, isDragging, onUpdate, onToggle }) => {
     const getTitle = (type) => {
         switch (type) {
             case 'text': return 'Mensaje de Texto';
-            case 'location': return 'Ubicación (UltraMsg)';
+            case 'location': return 'Ubicación';
             case 'image': return 'Imagen Adjunta';
             default: return '';
         }

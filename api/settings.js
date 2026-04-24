@@ -1,5 +1,5 @@
 /**
- * Settings API - Manage UltraMsg credentials and export timer in Redis
+ * Settings API - Manage platform settings, timer, Brenda settings, and system prompt timer in Redis
  * GET /api/settings?type=credentials|timer
  * POST /api/settings { type, data }
  */
@@ -85,34 +85,7 @@ export default async function handler(req, res) {
                 });
             }
 
-            if (type === 'catcher_tag') {
-                value = await redis.get('catcher_tag');
-                return res.status(200).json({
-                    success: true,
-                    data: value || 'CATCHER'
-                });
-            }
 
-            if (type === 'gateway_tag') {
-                value = await redis.get('gateway_tag');
-                return res.status(200).json({
-                    success: true,
-                    data: value || 'GATEWAY'
-                });
-            }
-
-            // Gateway credentials (Catcher + Instance)
-            if (type === 'catcher_credentials') {
-                const id = await redis.get('catcher_instance_id') || '';
-                const token = await redis.get('catcher_instance_token') || '';
-                return res.status(200).json({ success: true, data: { instanceId: id, token } });
-            }
-
-            if (type === 'gateway_credentials') {
-                const id = await redis.get('gateway_instance_id') || '';
-                const token = await redis.get('gateway_instance_token') || '';
-                return res.status(200).json({ success: true, data: { instanceId: id, token } });
-            }
 
             return res.status(400).json({ error: 'Invalid type' });
         }
@@ -210,42 +183,7 @@ export default async function handler(req, res) {
                 });
             }
 
-            if (type === 'catcher_tag') {
-                if (typeof data !== 'string') {
-                    return res.status(400).json({ error: 'Invalid tag format' });
-                }
-                await redis.set('catcher_tag', data);
-                return res.status(200).json({
-                    success: true,
-                    message: 'Catcher tag saved'
-                });
-            }
 
-            if (type === 'gateway_tag') {
-                if (typeof data !== 'string') {
-                    return res.status(400).json({ error: 'Invalid tag format' });
-                }
-                await redis.set('gateway_tag', data);
-                return res.status(200).json({
-                    success: true,
-                    message: 'Gateway tag saved'
-                });
-            }
-
-            // Gateway credentials (Catcher + Instance)
-            if (type === 'catcher_credentials') {
-                if (!data || typeof data !== 'object') return res.status(400).json({ error: 'Invalid format' });
-                if (data.instanceId) await redis.set('catcher_instance_id', data.instanceId);
-                if (data.token) await redis.set('catcher_instance_token', data.token);
-                return res.status(200).json({ success: true, message: 'Catcher credentials saved' });
-            }
-
-            if (type === 'gateway_credentials') {
-                if (!data || typeof data !== 'object') return res.status(400).json({ error: 'Invalid format' });
-                if (data.instanceId) await redis.set('gateway_instance_id', data.instanceId);
-                if (data.token) await redis.set('gateway_instance_token', data.token);
-                return res.status(200).json({ success: true, message: 'Gateway credentials saved' });
-            }
 
             return res.status(400).json({ error: 'Invalid type' });
         }

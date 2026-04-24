@@ -24,7 +24,7 @@ import { sendUltraMsgMessage, getUltraMsgConfig, sendUltraMsgReaction, sendUltra
 import { getCachedConfig, getCachedConfigBatch } from '../utils/cache.js';
 import { getOpenAIResponse } from '../utils/openai.js';
 import { processRecruiterMessage } from './recruiter-agent.js';
-import { sendGatewayPresence } from '../utils/messenger.js';
+
 import { inferGender } from '../utils/gender-helper.js';
 import { classifyIntent } from './intent-classifier.js';
 import { FEATURES } from '../utils/feature-flags.js';
@@ -4019,7 +4019,7 @@ ${safeDnaLines}
                                                 msgClean = msgClean.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
                                                 // 💬 Show typing before every bubble after the first
                                                 if (i > 0) {
-                                                    sendGatewayPresence(candidateData.whatsapp, 'composing').catch(() => {});
+                                                    sendUltraMsgPresence(config.instanceId, config.token, candidateData.whatsapp, 'composing').catch(() => {});
                                                 }
                                                 await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, msgClean, 'chat', { priority: i + 1 }).catch(() => { });
                                             }
@@ -4713,7 +4713,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                         for (let i = 0; i < messagesToSend.length; i++) {
                             // 💬 Show typing before every bubble after the first
                             if (i > 0) {
-                                sendGatewayPresence(candidateData.whatsapp, 'composing').catch(() => {});
+                                sendUltraMsgPresence(candidateData.whatsapp, 'composing').catch(() => {});
                             }
                             await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, messagesToSend[i], 'chat', { priority: i + 1 }).catch(() => { });
                         }

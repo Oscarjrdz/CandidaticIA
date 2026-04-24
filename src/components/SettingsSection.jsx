@@ -1,9 +1,7 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
 import GPTSettings from './GPTSettings';
-import UltraMsgSettings from './UltraMsgSettings';
-import GatewayCatcherSettings from './GatewayCatcherSettings';
-import GatewayInstanceSettings from './GatewayInstanceSettings';
+import WhatsAppSettings from './WhatsAppSettings';
 
 /**
  * Sección de Settings (configuración)
@@ -28,12 +26,8 @@ const SettingsSection = ({ showToast }) => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <UltraMsgSettings showToast={showToast} />
-                <div className="space-y-4">
-                    <GPTSettings showToast={showToast} />
-                    <GatewayCatcherSettings showToast={showToast} />
-                    <GatewayInstanceSettings showToast={showToast} />
-                </div>
+                <WhatsAppSettings showToast={showToast} />
+                <GPTSettings showToast={showToast} />
             </div>
         </div>
     );

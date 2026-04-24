@@ -520,9 +520,6 @@ const ChatRow = React.memo(({ chat, isSelected, isPinned, onSelect, onBlock, onD
                         <h3 className={`text-[17px] truncate flex-1 min-w-0 transition-colors ${isUnread ? 'text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef]'}`}>
                             {toTitleCase(chat.nombreReal || chat.nombre) || chat.whatsapp}
                         </h3>
-                        {chat.origen === 'gateway_instance' && (
-                            <span className="shrink-0 px-1.5 py-0.5 text-[8px] font-black tracking-wider uppercase bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded border border-violet-200 dark:border-violet-700/50 leading-none">GW</span>
-                        )}
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-2">
                         {chat.lastMessageFrom === 'me' || chat.lastMessageFrom === 'bot' ? (

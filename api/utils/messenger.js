@@ -30,9 +30,3 @@ export const sendMessage = async (number, message, type = 'chat', extraParams = 
     }
 };
 
-// ─── Presence is not supported by Meta Cloud API ────────────────
-// This is a no-op stub to prevent errors in existing code.
-export const sendGatewayPresence = async (_phone, _status) => {
-    // Meta Cloud API does not expose typing/online indicators.
-    // This function intentionally does nothing.
-};

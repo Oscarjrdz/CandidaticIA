@@ -3,7 +3,7 @@ import { Trash2, AlertCircle, Maximize2, Minimize2, Paperclip, Mic, Image as Ima
 import Button from './ui/Button';
 import VacancyHistoryCard from './VacancyHistoryCard';
 import CandidateADNCard from './CandidateADNCard';
-import { useGatewaySocket } from '../hooks/useGatewaySocket';
+
 import { Virtuoso } from 'react-virtuoso';
 const formatWhatsAppText = (text) => {
     if (!text) return '';
@@ -62,7 +62,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
     const [sending, setSending] = useState(false);
     const [availableFields, setAvailableFields] = useState([]);
     const [replyToMsg, setReplyToMsg] = useState(null);
-    const { updatedCandidate } = useGatewaySocket();
+
 
     // Recording State
     const [isRecording, setIsRecording] = useState(false);
@@ -123,54 +123,11 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
         }
     }, [isOpen, candidate]);
 
-    // Real-Time Updates Listener (Replaces Short-Polling)
+    // Real-Time Updates Listener (SSE)
     useEffect(() => {
         if (!isOpen || !candidate) return;
 
-        // Escucha el evento directo del WebSocket (Baileys)
-        const handleWsUpsert = (e) => {
-             const payload = e.detail;
-             if (!payload) return;
-             
-             const rawPhone = candidate.whatsapp ? candidate.whatsapp.replace(/\D/g, '') : '';
-             const jid = payload.remoteJid || payload.from || payload.sender || payload.id || '';
-             const msgPhone = typeof jid === 'string' ? jid.split('@')[0] : '';
-             
-             // Si el origen del socket coincide con el teléfono de este candidato abierto
-             if (rawPhone && msgPhone && (msgPhone.includes(rawPhone) || rawPhone.includes(msgPhone))) {
-                 
-                 // Búsqueda profunda de texto para inyectar la viñeta inmediatamente
-                 let textContent = '';
-                 if (payload.body) textContent = payload.body; // <-- Formato real de Railway 
-                 else if (payload.text) textContent = payload.text;
-                 else if (payload.message?.conversation) textContent = payload.message.conversation;
-                 else if (payload.message?.extendedTextMessage?.text) textContent = payload.message.extendedTextMessage.text;
-                 else if (payload.content) textContent = payload.content;
-
-                 const isFromMe = payload.fromMe || false;
-                 
-                 const newMsg = {
-                     id: payload.messageId || payload.id || `ws_${Date.now()}`,
-                     from: isFromMe ? 'me' : 'candidate', // si lo envía el sistema, o si nos llega del candidato
-                     content: textContent || '',
-                     type: payload.type || 'text',
-                     mediaUrl: payload.mediaUrl || null,
-                     timestamp: new Date().toISOString(),
-                     status: 'received'
-                 };
-                 
-                 // Inyección Zero-Latency instantánea a la pantalla del usuario
-                 if (textContent || payload.mediaUrl || payload.type === 'image' || payload.type === 'audio') {
-                     setMessages(prev => {
-                         // Evita inyectar doble si la base de datos fue más rápida que el socket (raro)
-                         if (prev.some(m => m.id === newMsg.id)) return prev;
-                         return [...prev, newMsg];
-                     });
-                 }
-             }
-        };
-
-        // Escucha el evento unificado de SSE (Fallback/Webhook para múltiples instancias)
+        // Escucha el evento unificado de SSE
         const handleSseUpdate = (e) => {
             const data = e.detail;
             if (!data) return;
@@ -205,11 +162,9 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
             }
         };
 
-        window.addEventListener('gateway_msg_upsert', handleWsUpsert);
         window.addEventListener('sse:candidate:update', handleSseUpdate);
         
         return () => {
-            window.removeEventListener('gateway_msg_upsert', handleWsUpsert);
             window.removeEventListener('sse:candidate:update', handleSseUpdate);
         };
     }, [isOpen, candidate]);

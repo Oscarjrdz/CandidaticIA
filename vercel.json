@@ -28,14 +28,6 @@
             "destination": "/api/ai/tts?text=:text"
         },
         {
-            "source": "/api/gateway/send/:instanceId/messages/:type",
-            "destination": "/api/gateway/send"
-        },
-        {
-            "source": "/api/gateway/webhook/:instanceId",
-            "destination": "/api/gateway/webhook"
-        },
-        {
             "source": "/api/:path*",
             "destination": "/api/:path*"
         }
@@ -76,10 +68,6 @@
         {
             "path": "/api/cron/send-reminders",
             "schedule": "*/15 * * * *"
-        },
-        {
-            "path": "/api/gateway/keepalive",
-            "schedule": "0 * * * *"
         }
     ]
 }
