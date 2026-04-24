@@ -208,10 +208,10 @@ export class Orchestrator {
         // ✅ SEQUENTIAL SEND — guarantees WhatsApp delivery order: OMG → Seleccionado → Sticker
         // Parallel sends arrive in network-latency order which is non-deterministic on WhatsApp.
         await sendUltraMsgMessage(config.instanceId, config.token, phone, introMsg, 'chat');
-        saveMessage(candidateId, { from: 'bot', content: introMsg, timestamp: new Date().toISOString() }).catch(() => {});
+        await saveMessage(candidateId, { from: 'bot', content: introMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
         await sendUltraMsgMessage(config.instanceId, config.token, phone, inductionMsg, 'chat');
-        saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() }).catch(() => {});
+        await saveMessage(candidateId, { from: 'bot', content: inductionMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
         // Sticker goes LAST — after both text bubbles are confirmed sent
         await MediaEngine.sendCongratsPack(config, phone, 'bot_celebration_sticker', candidateId);
@@ -228,10 +228,10 @@ export class Orchestrator {
                 const ctaMsg = `¿Te gustaría agendar una entrevista? 😊💖🌼`;
 
                 await sendUltraMsgMessage(config.instanceId, config.token, phone, vacancyMsg, 'chat');
-                saveMessage(candidateId, { from: 'bot', content: vacancyMsg, timestamp: new Date().toISOString() }).catch(() => {});
+                await saveMessage(candidateId, { from: 'bot', content: vacancyMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
                 await sendUltraMsgMessage(config.instanceId, config.token, phone, ctaMsg, 'chat');
-                saveMessage(candidateId, { from: 'bot', content: ctaMsg, timestamp: new Date().toISOString() }).catch(() => {});
+                await saveMessage(candidateId, { from: 'bot', content: ctaMsg, timestamp: new Date().toISOString() }).catch(() => {});
 
                 vacancyAlreadySent = true;
                 console.log(`⚡ [INSTANT] Vacancy sent directly (no GPT, no worker) for ${candidateId}`);

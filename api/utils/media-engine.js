@@ -28,8 +28,8 @@ export class MediaEngine {
         if (stickerUrl) {
             console.log(`[MEDIA ENGINE] 🚀 Sending Congrats Sticker: ${customStickerKey}`);
             if (candidateId) {
-                import('./storage.js').then(({ saveMessage }) => {
-                    saveMessage(candidateId, { from: 'bot', content: `[Sticker: ${stickerUrl}]`, timestamp: new Date().toISOString() }).catch(() => {});
+                import('./storage.js').then(async ({ saveMessage }) => {
+                    await saveMessage(candidateId, { from: 'bot', content: `[Sticker: ${stickerUrl}]`, timestamp: new Date().toISOString() }).catch(() => {});
                 });
             }
             return await sendMetaMessage(phone, stickerUrl, 'sticker', { mediaId: metaMediaId });

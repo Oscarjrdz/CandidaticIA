@@ -103,8 +103,16 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
             }
 
             case 'sticker': {
-                payload.type = 'sticker';
-                payload.sticker = extraParams.mediaId ? { id: extraParams.mediaId } : { link: body };
+                if (extraParams.mediaId) {
+                    payload.type = 'sticker';
+                    payload.sticker = { id: extraParams.mediaId };
+                } else {
+                    // Fallback to image. Meta Cloud API requires exact 512x512 WebP files for stickers.
+                    // If we just pass an arbitrary link, Meta API often rejects it (400 Bad Request).
+                    // Sending as an image ensures the candidate receives it.
+                    payload.type = 'image';
+                    payload.image = { link: body };
+                }
                 break;
             }
 
