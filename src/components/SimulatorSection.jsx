@@ -699,7 +699,7 @@ const SimulatorSection = ({ showToast }) => {
                             {/* WA Chat Area */}
                             <div 
                                 className="flex-1 overflow-y-auto px-4 py-4 space-y-3 custom-scrollbar" 
-                                style={{ backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")', backgroundSize: 'contain' }}
+                                style={{ backgroundImage: 'url("/whatsapp-bg.png")', backgroundSize: 'contain' }}
                             >
                                 {messages.map((msg) => (
                                     <div key={msg.id} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>

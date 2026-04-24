@@ -720,7 +720,7 @@ const ChatWindow = ({ isOpen, onClose, candidate }) => {
                     <div 
                         className="absolute inset-0 z-0 opacity-[0.4] dark:opacity-[0.05] pointer-events-none"
                         style={{
-                            backgroundImage: 'url("https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png")',
+                            backgroundImage: 'url("/whatsapp-bg.png")',
                             backgroundRepeat: 'repeat',
                             backgroundSize: '350px'
                         }}
