@@ -815,17 +815,13 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
     }, [activeFilter, filterValue]);
     
-    // Marketing (Briefcase) Filters - Route A
-    const [aiProjectFilter, setAiProjectFilter] = useState(null);
-    const [aiStepFilter, setAiStepFilter] = useState(null);
-    const [aiProjectCandidates, setAiProjectCandidates] = useState(null);
+
 
     // Manual CRM (Kanban) Filters - Route B
     const [manualPipelineFilter, setManualPipelineFilter] = useState(null);
     const [manualStepFilter, setManualStepFilter] = useState(null);
 
     const [showDropdown, setShowDropdown] = useState(null);
-    const [projects, setProjects] = useState([]); // Colección maestra de marketing (maletín)
 
     // RBAC: base-level candidate restriction
     const [roleAllowedCandidateIds, setRoleAllowedCandidateIds] = useState(null); // null = no restriction, Set = restricted
@@ -879,7 +875,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         loadTags();
         loadVacanciesList();
         loadManualProjects();
-        loadProjects();
+
 
         // Fetch Meta Templates in background
         fetch('/api/whatsapp/templates')
@@ -951,26 +947,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         loadAllowedCandidates();
     }, [user, rolePermissions]);
 
-    // 🚀 NEW: Load Project Candidates specific to Riel A
-    useEffect(() => {
-        if (!aiProjectFilter) {
-            setAiProjectCandidates(null);
-            return;
-        }
-        
-        const loadProjectCands = async () => {
-            try {
-                const res = await fetch(`/api/projects?id=${aiProjectFilter}&view=candidates`);
-                const data = await res.json();
-                if (data.success) {
-                    setAiProjectCandidates(data.candidates);
-                }
-            } catch (e) {
-                console.error("Failed to load project candidates for filter:", e);
-            }
-        };
-        loadProjectCands();
-    }, [aiProjectFilter]);
 
     const loadVacanciesList = async () => {
         try {
@@ -985,17 +961,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }
     };
 
-    const loadProjects = async () => {
-        try {
-            const res = await fetch('/api/projects');
-            const data = await res.json();
-            if (data.success && data.projects) {
-                setProjects(data.projects);
-            }
-        } catch (e) {
-            console.error('Error fetching marketing projects', e);
-        }
-    };
+
 
     const loadManualProjects = async () => {
         try {
@@ -1185,13 +1151,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 if (filterValue === 'incomplete' && isComplete) return false;
             }
 
-            // --- Ruta A: Filtros Marketing ---
-            if (aiProjectFilter) {
-                if (!aiProjectCandidates) return false; // Todavía cargando los candidatos del proyecto
-                const matchingCand = aiProjectCandidates.find(pc => pc.id === c.id);
-                if (!matchingCand) return false; // No pertenece a este proyecto
-                if (aiStepFilter && matchingCand.projectMetadata?.stepId !== aiStepFilter) return false; // No está en este paso
-            }
 
             // --- Ruta B: Filtros CRM Manual ---
             if (manualPipelineFilter && c?.manualProjectId !== manualPipelineFilter) return false;
@@ -1216,8 +1175,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         });
     }, [
         candidates, debouncedSearch, roleAllowedCandidateIds, user, 
-        activeFilter, filterValue, aiProjectFilter, aiStepFilter, 
-        aiProjectCandidates, manualPipelineFilter, manualStepFilter,
+        activeFilter, filterValue, 
+        manualPipelineFilter, manualStepFilter,
         pinnedChats
     ]);
 
@@ -1239,7 +1198,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         return { all, complete, incomplete };
     }, [baseCandidates]);
     const unreadCounts = useMemo(() => {
-        const counts = { tags: {}, aiProjects: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0 };
+        const counts = { tags: {}, crmProjects: {}, complete: 0, incomplete: 0, all: 0 };
         for (const c of baseCandidates) {
             const isUnread = checkIfUnread(c);
 
@@ -1260,9 +1219,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                         }
                     });
                 }
-                if (c.projectId) {
-                    counts.aiProjects[c.projectId] = (counts.aiProjects[c.projectId] || 0) + 1;
-                }
+
                 if (c.manualProjectId) {
                     counts.crmProjects[c.manualProjectId] = (counts.crmProjects[c.manualProjectId] || 0) + 1;
                 }
@@ -2288,124 +2245,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
 
                         {/* Renglón 3: Proyectos y CRM Manual */}
                         <div className="flex flex-col gap-2 w-full">
-                            {/* Riel A: Proyectos (Maletín) */}
-                            {canSeeFilter('filter_projects') && (
-                                <div className="w-full flex flex-col gap-2">
-                                    <div className="relative w-full">
-                                        <div 
-                                            onClick={() => setShowDropdown(showDropdown === 'aiProject' ? null : 'aiProject')}
-                                            className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${aiProjectFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-9 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
-                                            style={aiProjectFilter ? {
-                                                boxShadow: `0 0 0 2px #3b82f6`,
-                                                borderColor: 'transparent'
-                                            } : {}}
-                                        >
-                                            <Briefcase className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${aiProjectFilter ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-400 dark:text-gray-500'}`} style={aiProjectFilter ? { color: '#3b82f6' } : {}} />
-                                            <span className="flex-1 truncate text-[#111b21] dark:text-[#e9edef]">{aiProjectFilter ? (projects.find(p => p.id === aiProjectFilter)?.name || 'Proyecto') : 'Proyectos'}</span>
-                                            <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'aiProject' ? 'rotate-180' : ''}`}>
-                                                <ChevronIcon />
-                                            </div>
-                                        </div>
-                                        {aiProjectFilter && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); setAiProjectFilter(null); setAiStepFilter(null); setShowDropdown(null); }}
-                                                className="absolute right-8 top-1/2 -translate-y-1/2 p-1 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors shrink-0 z-10"
-                                                title="Quitar filtro"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        )}
-                                        {showDropdown === 'aiProject' && (
-                                            <div className="absolute top-full left-0 mt-2 w-full bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-[100] py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                                {filteredProjects.length === 0 ? (
-                                                    <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay proyectos</div>
-                                                ) : (
-                                                    filteredProjects.map(project => {
-                                                        const unreadCount = unreadCounts.aiProjects[project.id] || 0;
-                                                        const isSelected = aiProjectFilter === project.id;
-                                                        return (
-                                                            <div
-                                                                key={project.id}
-                                                                onClick={() => { setAiProjectFilter(project.id); setAiStepFilter(null); setShowDropdown(null); }}
-                                                                className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
-                                                                title={project.name}
-                                                            >
-                                                                <span className="truncate flex-1 pr-2">{project.name}</span>
-                                                                {unreadCount > 0 && (
-                                                                    <div className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-[#25d366] dark:bg-[#00a884] flex items-center justify-center shrink-0 text-white text-[10px] font-bold shadow-sm">
-                                                                        {unreadCount}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    {/* Pasos Dropdown (Riel A) */}
-                                    {aiProjectFilter && (() => {
-                                        const activeProject = projects.find(p => p.id === aiProjectFilter);
-                                        if (!activeProject) return null;
-                                        return (
-                                            <div className="relative w-full">
-                                                <div 
-                                                    onClick={() => setShowDropdown(showDropdown === 'aiStep' ? null : 'aiStep')}
-                                                    className={`w-full bg-[#f0f2f5] dark:bg-[#202c33] border ${aiStepFilter ? 'border-transparent' : 'border-gray-200 dark:border-gray-700'} rounded-lg pl-3 pr-14 py-2 text-xs outline-none font-medium text-left cursor-pointer transition-all flex items-center shadow-sm relative`}
-                                                    style={aiStepFilter ? {
-                                                        boxShadow: `0 0 0 2px #8b5cf6`,
-                                                        borderColor: 'transparent'
-                                                    } : {}}
-                                                >
-                                                    <span className={`flex-1 truncate ${aiStepFilter ? 'text-[#111b21] dark:text-[#e9edef]' : 'text-gray-500 dark:text-gray-400'}`}>
-                                                        {aiStepFilter ? (activeProject.steps?.find(s => s.id === aiStepFilter)?.name || 'Paso') : 'Todos los pasos'}
-                                                    </span>
-                                                    <div className={`absolute right-2 top-1/2 -translate-y-1/2 transition-transform ${showDropdown === 'aiStep' ? 'rotate-180' : ''}`}>
-                                                        <ChevronIcon />
-                                                    </div>
-                                                </div>
-                                                {aiStepFilter && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); setAiStepFilter(null); setShowDropdown(null); }}
-                                                        className="absolute right-8 top-1/2 -translate-y-1/2 p-1 rounded-md bg-red-50 dark:bg-red-900/20 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors shrink-0 z-10"
-                                                        title="Quitar filtro"
-                                                    >
-                                                        <X className="w-3.5 h-3.5" />
-                                                    </button>
-                                                )}
-                                                {showDropdown === 'aiStep' && (
-                                                    <div className="absolute top-full left-0 mt-2 w-full bg-white dark:bg-[#202c33] border border-gray-100 dark:border-gray-700 shadow-xl rounded-lg z-[100] py-1 max-h-64 overflow-y-auto custom-scrollbar">
-                                                        <div
-                                                            onClick={() => { setAiStepFilter(null); setShowDropdown(null); }}
-                                                            className={`px-4 py-2.5 text-xs cursor-pointer flex items-center justify-between ${!aiStepFilter ? 'bg-purple-50 dark:bg-purple-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
-                                                        >
-                                                            Todos los Pasos
-                                                        </div>
-                                                        {activeProject.steps?.length === 0 ? (
-                                                            <div className="px-4 py-2.5 text-xs text-gray-500 italic">No hay pasos</div>
-                                                        ) : (
-                                                            activeProject.steps?.map(step => {
-                                                                const isSelected = aiStepFilter === step.id;
-                                                                return (
-                                                                    <div
-                                                                        key={step.id}
-                                                                        onClick={() => { setAiStepFilter(step.id); setShowDropdown(null); }}
-                                                                        className={`px-4 py-2.5 text-xs cursor-pointer flex items-center gap-2 ${isSelected ? 'bg-purple-50 dark:bg-purple-900/30 text-[#111b21] dark:text-[#e9edef] font-bold' : 'text-[#111b21] dark:text-[#e9edef] hover:bg-[#f0f2f5] dark:hover:bg-[#111b21]'}`}
-                                                                        title={step.name}
-                                                                    >
-                                                                        <span className="truncate flex-1">{step.name}</span>
-                                                                    </div>
-                                                                );
-                                                            })
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            )}
+
 
                             {/* Riel B: CRM Manual */}
                             {canSeeFilter('filter_crm') && (

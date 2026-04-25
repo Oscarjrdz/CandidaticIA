@@ -430,6 +430,18 @@ export default async function handler(req, res) {
 
                 // ── 🌪️ RESET COMMAND INTERCEPTOR ──
                 const upperBody = body?.toUpperCase().trim() || '';
+
+                // ── 🔐 APP LOGIN INTERCEPTOR (BOLSA DE EMPLEO) ──
+                if (upperBody.includes('SOLICITAR PIN DE ACCESO')) {
+                    const redis = getRedisClient();
+                    if (redis) {
+                        const pin = Math.floor(1000 + Math.random() * 9000).toString();
+                        await redis.set(`app_login_pin:${phone}`, pin, 'EX', 600);
+                        await sendMessage(phone, `👋 ¡Hola!\n\nTu PIN de acceso para la app de Candidatic es: *${pin}*\n\nEste código expirará en 10 minutos. 🔐`);
+                    }
+                    continue; // Detener propagación para no activar IA ni guardar mensaje
+                }
+
                 if (upperBody.startsWith('RESET')) {
                     let targetPhone = phone;
 

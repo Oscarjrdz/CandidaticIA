@@ -14,7 +14,6 @@ import UsersSection from './components/UsersSection';
 import PostMakerSection from './components/PostMakerSection';
 import BotIASection from './components/BotIASection';
 import MediaLibrarySection from './components/MediaLibrarySection';
-import ProjectsSection from './components/ProjectsSection';
 import CRMProjectsSection from './components/CRMProjectsSection';
 import ByPassSection from './components/ByPassSection';
 import LoadingOverlay from './components/ui/LoadingOverlay';
@@ -84,7 +83,7 @@ function App() {
                  setRolePermissions(currentUserRole.permissions);
                  if (currentUserRole.permissions['candidates'] !== true) {
                      // Fallback orderly based on typical Sidebar order
-                     const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'projects-ia', 'post-maker', 'users', 'settings'];
+                     const fallbackKeys = ['chat', 'bot-ia', 'automations', 'vacancies', 'bypass', 'projects', 'post-maker', 'users', 'settings'];
                      const fallback = fallbackKeys.find(k => currentUserRole.permissions[k] === true);
                      if (fallback) {
                          setActiveSection(fallback);
@@ -216,7 +215,6 @@ function App() {
                       : activeSection === 'post-maker' ? 'Post Maker'
                       : activeSection === 'media-library' ? 'Biblioteca'
                       : activeSection === 'projects' ? 'Proyectos'
-                      : activeSection === 'projects-ia' ? 'Proyectos IA'
                       : activeSection === 'bypass' ? 'ByPass'
                       : 'Configuración'}
                   </h1>
@@ -262,7 +260,6 @@ function App() {
                       : activeSection === 'post-maker' ? 'Creación de posts para Facebook'
                       : activeSection === 'media-library' ? 'Biblioteca de archivos y recursos del Bot'
                       : activeSection === 'projects' ? 'Kanban de reclutamiento'
-                      : activeSection === 'projects-ia' ? 'Proyectos con automatización IA'
                       : activeSection === 'bypass' ? 'Enrutamiento automático de candidatos'
                       : 'Credenciales y configuración del sistema'}
                   </p>
@@ -328,8 +325,6 @@ function App() {
             <MediaLibrarySection showToast={showToast} />
           ) : activeSection === 'projects' ? (
             <CRMProjectsSection showToast={showToast} user={user} />
-          ) : activeSection === 'projects-ia' ? (
-            <ProjectsSection showToast={showToast} />
           ) : activeSection === 'bypass' ? (
             <ByPassSection showToast={showToast} />
 

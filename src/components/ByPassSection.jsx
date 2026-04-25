@@ -212,10 +212,10 @@ const ByPassSection = ({ showToast }) => {
 
     const loadProjects = async () => {
         try {
-            const res = await fetch('/api/projects');
+            const res = await fetch('/api/manual_projects');
             const data = await res.json();
             if (data.success) {
-                setProjects(data.projects || []);
+                setProjects(data.data || []);
             }
         } catch (e) {
             console.error('Error loading projects:', e);

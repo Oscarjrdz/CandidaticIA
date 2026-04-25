@@ -20,7 +20,6 @@ const AVAILABLE_SECTIONS = [
     { id: 'post-maker', name: 'Post Maker' },
     { id: 'media-library', name: 'Biblioteca' },
     { id: 'projects', name: 'Proyectos' },
-    { id: 'projects-ia', name: 'Proyectos IA' },
     { id: 'bypass', name: 'ByPass' }
 ];
 
@@ -29,7 +28,6 @@ const AVAILABLE_CHAT_FILTERS = [
     { id: 'filter_complete', name: 'Perfil Completo' },
     { id: 'filter_incomplete', name: 'Incompletos' },
     { id: 'filter_labels', name: 'Etiquetas' },
-    { id: 'filter_projects', name: 'Proyectos' },
     { id: 'filter_crm', name: 'CRM de Proyectos' }
 ];
 
@@ -42,7 +40,6 @@ const UsersSection = ({ showToast }) => {
     const { confirmModalJSX, showConfirm } = useConfirmModal();
     const [users, setUsers] = useState([]);
     const [roles, setRoles] = useState([]);
-    const [allProjects, setAllProjects] = useState([]);
     const [allManualProjects, setAllManualProjects] = useState([]);
     const [allTags, setAllTags] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -58,7 +55,6 @@ const UsersSection = ({ showToast }) => {
         pin: '',
         role: 'Recruiter',
         status: 'Active',
-        allowed_projects: [],
         allowed_crm_projects: [],
         allowed_labels: []
     });
@@ -83,23 +79,20 @@ const UsersSection = ({ showToast }) => {
     const loadData = async () => {
         setLoading(true);
         try {
-            const [usersRes, rolesRes, projRes, manualRes, tagsRes] = await Promise.all([
+            const [usersRes, rolesRes, manualRes, tagsRes] = await Promise.all([
                 fetch('/api/users'),
                 fetch('/api/roles'),
-                fetch('/api/projects'),
                 fetch('/api/manual_projects'),
                 fetch('/api/tags')
             ]);
             
             const usersData = await usersRes.json();
             const rolesData = await rolesRes.json();
-            const projData = await projRes.json();
             const manualData = await manualRes.json();
             const tagsData = await tagsRes.json();
             
             if (usersData.success) setUsers(usersData.users);
             if (rolesData.success) setRoles(rolesData.roles);
-            if (projData.success && projData.projects) setAllProjects(projData.projects);
             if (manualData.success && manualData.data) setAllManualProjects(manualData.data);
             if (tagsData.success && tagsData.tags) setAllTags(tagsData.tags);
         } catch {
@@ -198,7 +191,6 @@ const UsersSection = ({ showToast }) => {
                 pin: user.pin || '',
                 role: user.role,
                 status: user.status,
-                allowed_projects: user.allowed_projects || [],
                 allowed_crm_projects: user.allowed_crm_projects || [],
                 allowed_labels: user.allowed_labels || [],
                 can_manage_tags: user.can_manage_tags || false
@@ -211,7 +203,6 @@ const UsersSection = ({ showToast }) => {
                 pin: '',
                 role: roles.length > 0 ? roles[0].name : 'Recruiter',
                 status: 'Active',
-                allowed_projects: [],
                 allowed_crm_projects: [],
                 allowed_labels: []
             });
@@ -351,16 +342,6 @@ const UsersSection = ({ showToast }) => {
     };
 
     // User-level assignment toggles
-    const toggleUserProject = (projectId) => {
-        setFormData(prev => {
-            const current = prev.allowed_projects || [];
-            const next = current.includes(projectId)
-                ? current.filter(id => id !== projectId)
-                : [...current, projectId];
-            return { ...prev, allowed_projects: next };
-        });
-    };
-
     const toggleUserCrmProject = (projectId) => {
         setFormData(prev => {
             const current = prev.allowed_crm_projects || [];
@@ -658,42 +639,6 @@ const UsersSection = ({ showToast }) => {
                         const perms = getRolePermissions(formData.role);
                         return (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-gray-100 dark:border-gray-700">
-                                {/* Proyectos AI asignados */}
-                                {!!perms['filter_projects'] && allProjects.length > 0 && (
-                                    <div>
-                                        <h4 className="text-sm font-bold text-gray-800 dark:text-white mb-1">📂 Proyectos Asignados</h4>
-                                        <p className="text-[10px] text-gray-400 mb-2">Sin selección = ver todos. Marca “Ninguno” para restringir a cero.</p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 border border-blue-100 dark:border-blue-900 rounded-lg bg-blue-50/50 dark:bg-blue-900/10">
-                                            {/* Opción Ninguno */}
-                                            <label className="col-span-full flex items-center space-x-3 cursor-pointer p-2 rounded-lg bg-blue-100/60 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors border border-blue-200 dark:border-blue-800">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={(formData.allowed_projects || []).includes('__none__')}
-                                                    onChange={() => {
-                                                        const hasNone = (formData.allowed_projects || []).includes('__none__');
-                                                        setFormData(f => ({ ...f, allowed_projects: hasNone ? [] : ['__none__'] }));
-                                                    }}
-                                                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
-                                                />
-                                                <span className="text-sm font-bold text-blue-700 dark:text-blue-300 select-none">🚫 Ninguno (sin acceso a proyectos)</span>
-                                            </label>
-                                            {/* Proyectos individuales (deshabilitados si está marcado Ninguno) */}
-                                            {allProjects.map(proj => (
-                                                <label key={proj.id} className={`flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors ${ (formData.allowed_projects || []).includes('__none__') ? 'opacity-40 pointer-events-none' : ''}`}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={(formData.allowed_projects || []).includes(proj.id)}
-                                                        onChange={() => toggleUserProject(proj.id)}
-                                                        disabled={(formData.allowed_projects || []).includes('__none__')}
-                                                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
-                                                    />
-                                                    <span className="text-sm font-medium text-gray-900 dark:text-gray-300 select-none truncate">{proj.name}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
                                 {/* Pipelines CRM Manual asignados */}
                                 {!!perms['filter_crm'] && allManualProjects.length > 0 && (
                                     <div>
