@@ -98,18 +98,26 @@ function animate() {
 /**
  * Fire confetti burst!
  * @param {number} count - Number of particles (default 80)
+ * @param {HTMLElement|null} originEl - Optional element to burst from
  */
-export function fireConfetti(count = 80) {
+export function fireConfetti(count = 80, originEl = null) {
   ensureCanvas();
 
-  // Burst from top-center with slight spread
-  const cx = _canvas.width / 2;
-  const cy = _canvas.height * 0.25;
+  let cx, cy;
+  if (originEl) {
+    // Burst from the element's center position
+    const rect = originEl.getBoundingClientRect();
+    cx = rect.left + rect.width / 2;
+    cy = rect.top + rect.height / 2;
+  } else {
+    cx = _canvas.width / 2;
+    cy = _canvas.height * 0.25;
+  }
 
   for (let i = 0; i < count; i++) {
     _particles.push(new Particle(
-      cx + (Math.random() - 0.5) * 200,
-      cy + (Math.random() - 0.5) * 40
+      cx + (Math.random() - 0.5) * 160,
+      cy + (Math.random() - 0.5) * 30
     ));
   }
 

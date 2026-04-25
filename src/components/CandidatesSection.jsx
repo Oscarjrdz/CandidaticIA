@@ -288,6 +288,7 @@ const CandidatesSection = ({ showToast, user }) => {
 
     // ✅ META AUDIT: Deletion guard — prevents SSE ghost re-insertion after delete
     const recentlyDeletedRef = useRef(new Set());
+    const statCardRef = useRef(null); // 🎊 Confetti origin anchor
 
     // === TAGS STATE & LOGIC ===
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
@@ -422,7 +423,7 @@ const CandidatesSection = ({ showToast, user }) => {
                 const exists = prev.some(c => c.id === newCandidate.id);
                 if (exists) return prev;
                 showToast && showToast('Nuevo candidato recibido 🎉', 'success');
-                fireConfetti(); // 🎊
+                fireConfetti(80, statCardRef.current); // 🎊
                 return [newCandidate, ...prev];
             });
         }
@@ -744,7 +745,7 @@ const CandidatesSection = ({ showToast, user }) => {
                     ) : (
                         <>
                             {/* Card 1: Candidates */}
-                            <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
+                            <div ref={statCardRef} className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm relative overflow-hidden group">
                                 <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                                     <Users className="w-16 h-16 text-blue-500 transform rotate-12" />
                                 </div>
