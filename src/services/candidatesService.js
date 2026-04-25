@@ -46,30 +46,8 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', includ
     }
 };
 
-/**
- * Obtiene estadísticas de candidatos de forma ultra ligera (sin array de candidatos)
- */
-export const getCandidatesStats = async () => {
-    try {
-        const response = await fetch(`${API_BASE}/api/candidates?stats=true&limit=0`);
-        const data = await response.json();
+// ✅ META AUDIT: getCandidatesStats REMOVED — stats now arrive via SSE globalStats (push-only)
 
-        if (!response.ok) {
-            throw new Error(data.error || 'Error obteniendo estadísticas');
-        }
-
-        return {
-            success: true,
-            stats: data.stats
-        };
-    } catch (error) {
-        return {
-            success: false,
-            error: error.message,
-            stats: null
-        };
-    }
-};
 
 /**
  * Obtiene un candidato por ID

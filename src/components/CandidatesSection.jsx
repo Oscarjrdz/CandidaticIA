@@ -1,20 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, FileText, Loader2, CheckCircle, Check, Sparkles, Send, Zap, Ban, GripVertical, Radio, Tag, ChevronDown, X, Pencil, Plus, AlertTriangle } from 'lucide-react';
+import { Users, Search, Trash2, RefreshCw, User, MessageCircle, Clock, Loader2, CheckCircle, Sparkles, Send, Zap, Ban, GripVertical, Tag, ChevronDown, X, Pencil, Plus, AlertTriangle } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import Card from './ui/Card';
+
 import ErrorBoundary from './ui/ErrorBoundary';
 import Button from './ui/Button';
 import ChatWindow from './ChatWindow';
 import MagicSearch from './MagicSearch';
-import Skeleton, { CardSkeleton, TableRowSkeleton } from './ui/Skeleton';
+import { CardSkeleton, TableRowSkeleton } from './ui/Skeleton';
 import Modal from './ui/Modal';
 import { useConfirmModal } from './ui/ConfirmModal';
 import { getCandidates, deleteCandidate, blockCandidate, CandidatesSubscription } from '../services/candidatesService';
 import { getFields } from '../services/automationsService';
-import { deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatFile } from '../utils/storage';
-import { generateChatHistoryText } from '../services/chatExportService';
+import { deleteChatFileId, deleteLocalChatFile } from '../utils/storage';
+
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import { fireConfetti } from '../utils/confetti';
@@ -58,11 +58,7 @@ function SortableHeaderCell({ id, label }) {
 }
 
 /**
- * Sección de Candidatos con Auto-Exportación y Columnas Arrastrables
- */
-
-/**
- * Sección de Candidatos con Auto-Exportación
+ * Sección de Candidatos — Meta-Audited Architecture
  */
 
 const isProfileComplete = (c) => {
