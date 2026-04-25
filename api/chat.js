@@ -180,10 +180,19 @@ export default async function handler(req, res) {
                 }
                 const displayName = tData.name.replace(/_/g, ' ');
                 contentToSave = `⚡ Plantilla oficial: *${displayName}*\n\n${realText}`.trim();
-            } else if (type === 'interactive' && incomingExtraParams.buttons) {
-                contentToSave = `${finalMessage}\n\n[Botones: ${incomingExtraParams.buttons.join(' | ')}]`;
+            } else if (type === 'interactive') {
+                const intType = incomingExtraParams.interactiveType || 'button';
+                if (intType === 'button' && incomingExtraParams.buttons) {
+                    contentToSave = `${finalMessage}\n\n[Botones: ${incomingExtraParams.buttons.join(' | ')}]`;
+                } else if (intType === 'list' && incomingExtraParams.listItems) {
+                    contentToSave = `${finalMessage}\n\n[Lista: ${incomingExtraParams.listItems.map(i => i.title).join(', ')}]`;
+                } else if (intType === 'product') {
+                    contentToSave = `[Producto del Catálogo: ${incomingExtraParams.productSku}]`;
+                }
             } else if (type === 'contacts') {
                 contentToSave = `[Tarjeta de Contacto: ${incomingExtraParams.contactName || 'N/A'}]`;
+            } else if (type === 'location') {
+                contentToSave = `[Ubicación: ${incomingExtraParams.name || 'Mapa'}]`;
             }
 
             // 1. Transactional Save
@@ -237,7 +246,7 @@ export default async function handler(req, res) {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, contentToSave, 'template', extraParams);
                 } else if (type === 'text') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, 'chat', extraParams);
-                } else if (type === 'interactive' || type === 'contacts') {
+                } else if (type === 'interactive' || type === 'contacts' || type === 'location') {
                     sendResult = await sendUltraMsgMessage(ultraConfig.instanceId, ultraConfig.token, cleanTo, finalMessage, type, extraParams);
                 } else {
                     // ═══ MEDIA (image/document/video/audio) ═══

@@ -164,27 +164,58 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
 
             case 'interactive': {
                 payload.type = 'interactive';
-                payload.interactive = {
-                    type: 'button',
-                    body: { text: body },
-                    action: {
-                        buttons: (extraParams.buttons || []).slice(0, 3).map((btnText, i) => ({
-                            type: 'reply',
-                            reply: {
-                                id: `btn_${Date.now()}_${i}`,
-                                title: btnText.substring(0, 20)
-                            }
-                        }))
-                    }
-                };
+                const intType = extraParams.interactiveType || 'button'; // default
+
+                if (intType === 'button') {
+                    payload.interactive = {
+                        type: 'button',
+                        body: { text: body },
+                        action: {
+                            buttons: (extraParams.buttons || []).slice(0, 3).map((btnText, i) => ({
+                                type: 'reply',
+                                reply: {
+                                    id: `btn_${Date.now()}_${i}`,
+                                    title: btnText.substring(0, 20)
+                                }
+                            }))
+                        }
+                    };
+                } else if (intType === 'list') {
+                    payload.interactive = {
+                        type: 'list',
+                        body: { text: body },
+                        action: {
+                            button: extraParams.listButtonText?.substring(0,20) || 'Ver opciones',
+                            sections: [
+                                {
+                                    title: extraParams.listSectionTitle?.substring(0,24) || 'Opciones',
+                                    rows: (extraParams.listItems || []).slice(0, 10).map((item, i) => ({
+                                        id: `list_${Date.now()}_${i}`,
+                                        title: item.title?.substring(0, 24) || 'Opción',
+                                        description: item.description?.substring(0, 72) || ''
+                                    }))
+                                }
+                            ]
+                        }
+                    };
+                } else if (intType === 'product') {
+                    payload.interactive = {
+                        type: 'product',
+                        body: { text: body || 'Mira nuestro producto' },
+                        action: {
+                            catalog_id: extraParams.catalogId,
+                            product_retailer_id: extraParams.productSku
+                        }
+                    };
+                }
                 break;
             }
 
             case 'contacts': {
                 payload.type = 'contacts';
-                // Meta requires the phone number without the '+' if present, or just standard string
                 let contactPhone = String(extraParams.contactPhone || body).replace(/[^\d+]/g, '');
-                payload.contacts = [{
+                
+                const contactData = {
                     name: {
                         first_name: extraParams.contactName || 'Contacto',
                         formatted_name: extraParams.contactName || 'Contacto'
@@ -193,7 +224,23 @@ export const sendMetaMessage = async (to, body, type = 'chat', extraParams = {})
                         phone: contactPhone,
                         type: "WORK"
                     }]
-                }];
+                };
+
+                if (extraParams.company || extraParams.title) {
+                    contactData.org = {};
+                    if (extraParams.company) contactData.org.company = extraParams.company;
+                    if (extraParams.title) contactData.org.title = extraParams.title;
+                }
+                
+                if (extraParams.email) {
+                    contactData.emails = [{ email: extraParams.email, type: "WORK" }];
+                }
+                
+                if (extraParams.url) {
+                    contactData.urls = [{ url: extraParams.url, type: "WORK" }];
+                }
+
+                payload.contacts = [contactData];
                 break;
             }
 
