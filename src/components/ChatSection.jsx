@@ -363,21 +363,24 @@ const isProfileCompleteStandalone = (c) => {
 const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'];
 
 // HIGH-1: Shared RBAC filter (eliminates duplication between filteredCandidates & baseCandidates)
-const passesRBACFilter = (c, roleAllowedCandidateIds, user) => {
-    if (roleAllowedCandidateIds === null) return true;
+const passesRBACFilter = (c, user) => {
+    if (!user || user.role === 'SuperAdmin') return true;
+
     const allowedCrm = user?.allowed_crm_projects;
     const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
+    
     const allowedLabels = user?.allowed_labels;
     const hasLabelRestriction = Array.isArray(allowedLabels) && allowedLabels.length > 0;
 
-    const inAllowedProject = roleAllowedCandidateIds.has(c.id);
+    if (!hasCrmRestriction && !hasLabelRestriction) return true;
+
     const inAllowedCrm = hasCrmRestriction && c?.manualProjectId && allowedCrm.includes(c.manualProjectId);
     const inAllowedLabel = hasLabelRestriction && Array.isArray(c?.tags) && c.tags.some(t => {
         const searchLabel = typeof t === 'string' ? t.trim().toLowerCase() : t?.name?.trim().toLowerCase();
         return allowedLabels.some(al => typeof al === 'string' && al.trim().toLowerCase() === searchLabel);
     });
 
-    return inAllowedProject || inAllowedCrm || inAllowedLabel;
+    return inAllowedCrm || inAllowedLabel;
 };
 
 
@@ -824,7 +827,6 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const [showDropdown, setShowDropdown] = useState(null);
 
     // RBAC: base-level candidate restriction
-    const [roleAllowedCandidateIds, setRoleAllowedCandidateIds] = useState(null); // null = no restriction, Set = restricted
 
     // Helper for RBAC
     const canSeeFilter = (filterKey) => {
@@ -833,13 +835,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         return rolePermissions[filterKey] === true;
     };
 
-    // Filter projects by user-level assignment
-    const filteredProjects = (() => {
-        if (!user || user.role === 'SuperAdmin') return projects;
-        const allowed = user?.allowed_projects;
-        if (!Array.isArray(allowed) || allowed.length === 0) return projects; // no restriction set yet
-        return projects.filter(p => allowed.includes(p.id));
-    })();
+    // No AI projects
 
     const filteredManualProjects = (() => {
         if (!user || user.role === 'SuperAdmin') return manualProjects;
@@ -900,52 +896,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         return () => { clearInterval(statsInterval); };
     }, []);
 
-    // RBAC: Load candidate IDs from all allowed projects to create base filter
-    useEffect(() => {
-        if (!user || user.role === 'SuperAdmin' || rolePermissions?.['filter_todos'] === true) {
-            setRoleAllowedCandidateIds(null);
-            return;
-        }
-        const allowedProjects = user?.allowed_projects;
-        const allowedCrm = user?.allowed_crm_projects;
-        const hasProjectRestriction = Array.isArray(allowedProjects) && allowedProjects.length > 0;
-        const hasCrmRestriction = Array.isArray(allowedCrm) && allowedCrm.length > 0;
-
-        if (!hasProjectRestriction && !hasCrmRestriction) {
-            setRoleAllowedCandidateIds(null);
-            return;
-        }
-
-        const loadAllowedCandidates = async () => {
-            try {
-                const candidateIdSet = new Set();
-
-                // Fetch candidates from all allowed AI projects
-                if (hasProjectRestriction) {
-                    const projPromises = allowedProjects.map(projId =>
-                        fetch(`/api/projects?id=${projId}&view=candidates`).then(r => r.json())
-                    );
-                    const projResults = await Promise.all(projPromises);
-                    projResults.forEach(data => {
-                        if (data.success && Array.isArray(data.candidates)) {
-                            data.candidates.forEach(c => candidateIdSet.add(c.id));
-                        }
-                    });
-                }
-
-                // For CRM manual projects, candidates have manualProjectId field
-                // We'll filter by that field in the filteredCandidates logic
-                // Just mark that CRM restriction exists
-
-                setRoleAllowedCandidateIds(candidateIdSet);
-            } catch (e) {
-                console.error('Error loading RBAC allowed candidates:', e);
-                setRoleAllowedCandidateIds(null);
-            }
-        };
-
-        loadAllowedCandidates();
-    }, [user, rolePermissions]);
+    // RBAC effect removed (handled inline)
 
 
     const loadVacanciesList = async () => {
@@ -1135,7 +1086,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             if (!matchesSearch && searchVal !== "") return false;
 
             // --- RBAC Base Filter: Only show candidates from allowed projects or tags ---
-            if (!passesRBACFilter(c, roleAllowedCandidateIds, user)) return false;
+            if (!passesRBACFilter(c, user)) return false;
 
             // --- Strict Inbox para Reclutadores (Sin botón 'Todos') ---
             if (!canSeeFilter('filter_todos') && activeFilter === 'all') {
@@ -1174,15 +1125,15 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             return (tsCache.get(b.id) || 0) - (tsCache.get(a.id) || 0);
         });
     }, [
-        candidates, debouncedSearch, roleAllowedCandidateIds, user, 
+        candidates, debouncedSearch, user, 
         activeFilter, filterValue, 
         manualPipelineFilter, manualStepFilter,
         pinnedChats
     ]);
 
     // ── Badge counts (MEMOIZED — only recalculated when candidates change) ──
-    const baseCandidates = useMemo(() => (candidates || []).filter(c => passesRBACFilter(c, roleAllowedCandidateIds, user)
-    ), [candidates, roleAllowedCandidateIds, user]);
+    const baseCandidates = useMemo(() => (candidates || []).filter(c => passesRBACFilter(c, user)
+    ), [candidates, user]);
 
     const badgeCounts = useMemo(() => {
         let all = 0, complete = 0, incomplete = 0;
