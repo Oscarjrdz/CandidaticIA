@@ -285,6 +285,9 @@ const CandidatesSection = ({ showToast, user }) => {
     const [magicLoading, setMagicLoading] = useState({});
     const [blockLoading, setBlockLoading] = useState({});
 
+    // ✅ META AUDIT: Deletion guard — prevents SSE ghost re-insertion after delete
+    const recentlyDeletedRef = useRef(new Set());
+
     // === TAGS STATE & LOGIC ===
     const TAG_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#a855f7", "#ec4899", "#8b5cf6", "#64748b"];
     const [availableTags, setAvailableTags] = useState([]);
@@ -411,38 +414,36 @@ const CandidatesSection = ({ showToast, user }) => {
     // Listen for new candidates via SSE
     useEffect(() => {
         if (newCandidate && newCandidate.id) {
-            // Check if candidate already exists (prevent duplicates)
+            // ✅ META AUDIT: Ghost guard — skip if recently deleted
+            if (recentlyDeletedRef.current.has(newCandidate.id)) return;
+
             setCandidates(prev => {
                 const exists = prev.some(c => c.id === newCandidate.id);
-                if (exists) {
-                    console.log('Candidate already exists, skipping:', newCandidate.id);
-                    return prev; // Don't add duplicate
-                }
-                // Prepend new candidate to list
+                if (exists) return prev;
                 showToast && showToast('Nuevo candidato recibido 🎉', 'success');
                 return [newCandidate, ...prev];
             });
         }
     }, [newCandidate, showToast]);
 
-    // Listen for updated candidates via WebSocket
+    // Listen for updated candidates via SSE
     useEffect(() => {
         if (updatedCandidate && (updatedCandidate.candidateId || updatedCandidate.phoneMatch) && updatedCandidate.updates) {
+            // ✅ META AUDIT: Ghost guard — skip updates for recently deleted candidates
+            if (updatedCandidate.candidateId && recentlyDeletedRef.current.has(updatedCandidate.candidateId)) return;
+
             setCandidates(prev => {
                 const index = prev.findIndex(c => 
                     (updatedCandidate.candidateId && c.id === updatedCandidate.candidateId) || 
                     (updatedCandidate.phoneMatch && c.whatsapp && c.whatsapp.includes(updatedCandidate.phoneMatch))
                 );
-                if (index === -1) return prev; // Not in list, ignore
+                if (index === -1) return prev;
 
                 const updatedList = [...prev];
                 updatedList[index] = { ...updatedList[index], ...updatedCandidate.updates };
-                
-                // Keep current sort order (by primerContacto/createdAt) — don't re-sort by ultimoMensaje
                 return updatedList;
             });
 
-            // Si el candidato actualizado es el que está seleccionado en el chat lateral, actualizarlo también
             if (selectedCandidate) {
                  const matchId = updatedCandidate.candidateId && selectedCandidate.id === updatedCandidate.candidateId;
                  const matchPhone = updatedCandidate.phoneMatch && selectedCandidate.whatsapp && selectedCandidate.whatsapp.includes(updatedCandidate.phoneMatch);
@@ -453,10 +454,14 @@ const CandidatesSection = ({ showToast, user }) => {
         }
     }, [updatedCandidate]);
 
-    // Live Stats Integration: Update dashboard when globalStats pulse arrives
+    // ✅ META AUDIT: Live Stats — sync BOTH stats object AND totalItems from SSE
     useEffect(() => {
         if (globalStats) {
             setStats(prev => ({ ...prev, ...globalStats }));
+            // Keep the big counter in sync with SSE (complete + pending = total)
+            if (globalStats.total !== undefined) {
+                setTotalItems(globalStats.total);
+            }
         }
     }, [globalStats]);
 
@@ -639,16 +644,31 @@ const CandidatesSection = ({ showToast, user }) => {
         if (!candidateToDelete) return;
         setIsDeleting(true);
         const { id, whatsapp } = candidateToDelete;
+
+        // ✅ META AUDIT: Optimistic delete — remove from UI INSTANTLY
+        // 1. Add to deletion guard (blocks SSE ghost re-insertion for 10s)
+        recentlyDeletedRef.current.add(id);
+        setTimeout(() => recentlyDeletedRef.current.delete(id), 10000);
+
+        // 2. Optimistic state removal (zero-latency UI)
+        setCandidates(prev => prev.filter(c => c.id !== id));
+        if (aiFilteredCandidates) {
+            setAiFilteredCandidates(prev => prev ? prev.filter(c => c.id !== id) : null);
+        }
+        setTotalItems(prev => Math.max(0, prev - 1));
+        setCandidateToDelete(null);
+
+        // 3. Fire API delete in background
         const result = await deleteCandidate(id);
 
         if (result.success) {
             deleteLocalChatFile(whatsapp);
             deleteChatFileId(whatsapp);
-            showToast('Candidato eliminado correctamente', 'success');
-            setCandidateToDelete(null);
-            loadCandidates();
+            showToast('Candidato eliminado ✓', 'success');
         } else {
+            // Rollback: re-fetch on failure
             showToast(`Error: ${result.error}`, 'error');
+            loadCandidates();
         }
         setIsDeleting(false);
     };
