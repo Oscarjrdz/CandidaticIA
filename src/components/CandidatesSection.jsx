@@ -17,6 +17,7 @@ import { deleteChatFileId, saveLocalChatFile, getLocalChatFile, deleteLocalChatF
 import { generateChatHistoryText } from '../services/chatExportService';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
+import { fireConfetti } from '../utils/confetti';
 
 /**
  * Sortable Header Sub-component
@@ -421,6 +422,7 @@ const CandidatesSection = ({ showToast, user }) => {
                 const exists = prev.some(c => c.id === newCandidate.id);
                 if (exists) return prev;
                 showToast && showToast('Nuevo candidato recibido 🎉', 'success');
+                fireConfetti(); // 🎊
                 return [newCandidate, ...prev];
             });
         }
