@@ -1,29 +1,30 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import ConfirmModal from './ui/ConfirmModal';
-import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MoreVertical, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin } from 'lucide-react';
+import { MapPin, List as ListIcon, ShoppingBag, UserSquare, MousePointerClick, Search, MessageSquare, Plus, Smile, Paperclip, Mic, ArrowLeft, Send, Tag, Pencil, Check, X, Trash2, Briefcase, Kanban, BookOpen, Keyboard, Loader2, Edit2, Reply, Zap, Pin } from 'lucide-react';
 import EmojiPicker from 'emoji-picker-react';
 import { getCandidates, blockCandidate, deleteCandidate } from '../services/candidatesService';
 import ManualProjectsSidepanel from './ManualProjectsSidepanel';
 import { formatRelativeDate } from '../utils/formatters';
 import { useCandidatesSSE, useSSECandidateUpdate } from '../hooks/useCandidatesSSE';
 import { Virtuoso } from 'react-virtuoso';
+import { isProfileComplete } from '../utils/profileUtils';
+
+// ✅ META AUDIT: Intl.DateTimeFormat singletons — created ONCE, reused forever
+const _fmtTime = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', hour: 'numeric', minute: '2-digit', hour12: true });
+const _fmtMidnight = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', year: 'numeric', month: '2-digit', day: '2-digit' });
+const _fmtWeekday = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', weekday: 'long' });
+const _fmtDate = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', day: '2-digit', month: '2-digit', year: 'numeric' });
 
 const safeFormatTime = (dateStr) => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return '';
 
-    const timeFormatter = new Intl.DateTimeFormat('es-MX', {
-        timeZone: 'America/Monterrey',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-    });
-    const timeStr = timeFormatter.format(d).replace(' p. m.', ' pm').replace(' a. m.', ' am').toLowerCase();
+    const timeStr = _fmtTime.format(d).replace(' p. m.', ' pm').replace(' a. m.', ' am').toLowerCase();
 
     // Calculate elapsed days accurately in Monterrey timezone
     const getMid = (dateObj) => {
-        const str = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Monterrey', year: 'numeric', month: '2-digit', day: '2-digit' }).format(dateObj);
+        const str = _fmtMidnight.format(dateObj);
         const [m, day, y] = str.split('/');
         return new Date(y, m - 1, day);
     };
@@ -33,19 +34,12 @@ const safeFormatTime = (dateStr) => {
     if (diffDays === 0) return `Hoy ${timeStr}`;
     if (diffDays === 1) return `Ayer ${timeStr}`;
     if (diffDays > 1 && diffDays < 7) {
-        const weekdayStr = new Intl.DateTimeFormat('es-MX', { timeZone: 'America/Monterrey', weekday: 'long' }).format(d);
+        const weekdayStr = _fmtWeekday.format(d);
         const capitalized = weekdayStr.charAt(0).toUpperCase() + weekdayStr.slice(1);
         return `${capitalized} ${timeStr}`;
     }
 
-    const dateStrFormatted = new Intl.DateTimeFormat('es-MX', {
-        timeZone: 'America/Monterrey',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    }).format(d);
-
-    return `${dateStrFormatted} ${timeStr}`;
+    return `${_fmtDate.format(d)} ${timeStr}`;
 };
 
 const toTitleCase = (str) => {
@@ -342,23 +336,8 @@ const checkIfUnreadStandalone = (chat) => {
     return false;
 };
 
-const isProfileCompleteStandalone = (c) => {
-    if (!c) return false;
-    const valToStr = (v) => v ? String(v).trim().toLowerCase() : '-';
-    const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
-    const hasCoreData = coreFields.every(f => {
-        const val = valToStr(c[f]);
-        if (val === '-' || val === 'null' || val === 'n/a' || val === 'na' || val === 'ninguno' || val === 'ninguna' || val === 'none' || val === 'desconocido' || val.includes('proporcionado') || val.length < 2) return false;
-        if (f === 'escolaridad') {
-            const junk = ['kinder', 'ninguna', 'sin estudios', 'no tengo', 'no curse', 'preescolar', 'maternal'];
-            if (junk.some(j => val.includes(j))) return false;
-        }
-        return true;
-    });
-    const ageVal = valToStr(c.edad || c.fechaNacimiento);
-    const hasAgeData = ageVal !== '-' && ageVal !== 'null' && ageVal !== 'n/a' && ageVal !== 'na';
-    return hasCoreData && hasAgeData;
-};
+// ✅ META AUDIT: isProfileComplete imported from shared utils/profileUtils.js
+const isProfileCompleteStandalone = isProfileComplete;
 
 const AVATAR_COLORS = ['#f9a8d4','#a5b4fc','#86efac','#fcd34d','#fdba74','#c4b5fd','#67e8f9','#f0abfc','#fca5a5','#bef264'];
 
@@ -743,6 +722,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     const messagesEndRef = useRef(null);
     const fileInputRef = useRef(null);
     const lastPresenceTimeRef = useRef(0);
+    // ✅ META AUDIT: Ghost guard — prevents SSE re-insertion after delete (same pattern as CandidatesSection)
+    const recentlyDeletedRef = useRef(new Set());
 
     const handleTyping = () => {
         if (!selectedChat) return;
@@ -811,11 +792,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     useEffect(() => {
         activeFilterRef.current = activeFilter;
         filterValueRef.current = filterValue;
-        // MED-3: Only re-fetch from server when label filter changes (server-side param)
-        // All other filters work client-side on the existing candidates state
-        if (activeFilter === 'label') {
-            loadCandidates();
-        }
+        // ✅ META AUDIT: Label filter is now 100% client-side — tags already exist in each candidate object.
+        // No server re-fetch needed. filteredCandidates useMemo handles the filtering.
     }, [activeFilter, filterValue]);
     
 
@@ -879,10 +857,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
             .then(data => { if(data.success && data.data) setMetaTemplates(data.data.filter(t => t.status==='APPROVED')); })
             .catch(() => {});
 
-        // 🚀 POLLING REMOVED: Trust the SSE `sseUpdate` for real-time candidate list updates.
-
-        // 🔔 Poll chat stats (unread counts + locks) — now O(1) on backend
-        // MED-2: Single function handles both initial + interval (no duplicate fetch)
+        // ✅ META AUDIT: chat-stats polling KILLED — locks fetched once at mount.
+        // Locks are visual-only indicators; they don't need 5s real-time precision.
+        // Saves 17,280 requests/day/user.
         const fetchStats = async () => {
             try {
                 const res = await fetch('/api/chat-stats');
@@ -890,10 +867,9 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                 if (data.success) setChatLocks(data.locks || {});
             } catch (e) { /* silent */ }
         };
-        fetchStats(); // Initial fetch
-        const statsInterval = setInterval(fetchStats, 5000);
+        fetchStats(); // Single hydration fetch at mount
 
-        return () => { clearInterval(statsInterval); };
+        return () => {};
     }, []);
 
     // RBAC effect removed (handled inline)
@@ -1324,6 +1300,8 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
     // 🆕 SSE: New candidate arrived → inject directly (zero re-fetch)
     useEffect(() => {
         if (!sseNewCandidate) return;
+        // ✅ META AUDIT: Ghost guard — don't re-insert recently deleted candidates
+        if (recentlyDeletedRef.current.has(sseNewCandidate.id)) return;
         setCandidates(prev => {
             if (prev.some(c => c.id === sseNewCandidate.id)) return prev; // already exists
             return [sseNewCandidate, ...prev];
@@ -1514,19 +1492,27 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
         }));
         if (!confirmed) return;
 
+        // ✅ META AUDIT: Optimistic delete + ghost guard (same pattern as CandidatesSection)
+        const { id } = chatToDelete;
+        recentlyDeletedRef.current.add(id);
+        setTimeout(() => recentlyDeletedRef.current.delete(id), 10000);
+
+        // Instant UI removal
+        setCandidates(prev => prev.filter(c => c.id !== id));
+        if (selectedChat?.id === id) setSelectedChat(null);
+
+        // Background API call
         try {
-            const result = await deleteCandidate(chatToDelete.id);
+            const result = await deleteCandidate(id);
             if (result.success) {
-                showToast && showToast('Chat eliminado correctamente', 'success');
-                setCandidates(prev => prev.filter(c => c.id !== chatToDelete.id));
-                if (selectedChat?.id === chatToDelete.id) {
-                    setSelectedChat(null);
-                }
+                showToast && showToast('Chat eliminado ✓', 'success');
             } else {
                 showToast && showToast(`Error al eliminar: ${result.error}`, 'error');
+                loadCandidates(); // Rollback
             }
         } catch (error) {
             showToast && showToast('Error de red al eliminar', 'error');
+            loadCandidates(); // Rollback
         }
     };
 

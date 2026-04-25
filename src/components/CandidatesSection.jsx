@@ -18,6 +18,7 @@ import { deleteChatFileId, deleteLocalChatFile } from '../utils/storage';
 import { formatPhone, formatRelativeDate, formatDateTime, calculateAge, formatValue } from '../utils/formatters';
 import { useCandidatesSSE } from '../hooks/useCandidatesSSE';
 import { fireConfetti } from '../utils/confetti';
+import { isProfileComplete, isChatEmpty } from '../utils/profileUtils';
 
 /**
  * Sortable Header Sub-component
@@ -61,33 +62,7 @@ function SortableHeaderCell({ id, label }) {
  * Sección de Candidatos — Meta-Audited Architecture
  */
 
-const isProfileComplete = (c) => {
-    if (!c) return false;
-    // Fast-path: Use pre-calculated backend audit flag if available
-    if (c.statusAudit) return c.statusAudit === 'complete';
-
-    // Fallback for legacy candidates not yet re-synced
-    const valToStr = (v) => v ? String(v).trim().toLowerCase() : '-';
-    const coreFields = ['nombreReal', 'municipio', 'escolaridad', 'categoria', 'genero'];
-    
-    const hasCoreData = coreFields.every(f => {
-        const val = valToStr(c[f]);
-        if (val === '-' || val === 'null' || val === 'n/a' || val === 'na' || val === 'ninguno' || val === 'ninguna' || val === 'none' || val === 'desconocido' || val.includes('proporcionado') || val.length < 2) return false;
-        if (f === 'escolaridad') {
-            const junk = ['kinder', 'ninguna', 'sin estudios', 'no tengo', 'no curse', 'preescolar', 'maternal'];
-            if (junk.some(j => val.includes(j))) return false;
-        }
-        return true;
-    });
-
-    const ageVal = valToStr(c.edad || c.fechaNacimiento);
-    const hasAgeData = ageVal !== '-' && ageVal !== 'null' && ageVal !== 'n/a' && ageVal !== 'na';
-    return hasCoreData && hasAgeData;
-};
-
-const isChatEmpty = (c) => {
-    return !c.lastUserMessageAt && !c.ultimoMensajeBot && !c.lastBotMessageAt && !(c.unreadMsgCount > 0);
-};
+// ✅ META AUDIT: isProfileComplete & isChatEmpty imported from shared utils/profileUtils.js
 
 const areCandidatePropsEqual = (prev, next) => {
     if (prev.candidate !== next.candidate) return false;
