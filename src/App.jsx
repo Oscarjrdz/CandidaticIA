@@ -10,6 +10,7 @@ import BulksSection from './components/BulksSection';
 import SettingsSection from './components/SettingsSection';
 import AutomationsSection from './components/AutomationsSection';
 import VacanciesSection from './components/VacanciesSection';
+import BolsaSection from './components/BolsaSection';
 import UsersSection from './components/UsersSection';
 import PostMakerSection from './components/PostMakerSection';
 import BotIASection from './components/BotIASection';
@@ -210,6 +211,7 @@ function App() {
                       : activeSection === 'bot-ia' ? 'Bot IA'
                       : activeSection === 'automations' ? 'Automatizaciones'
                       : activeSection === 'vacancies' ? 'Vacantes'
+                      : activeSection === 'bolsa' ? 'Bolsa de Empleo (App)'
                       : activeSection === 'history' ? 'Historial'
                       : activeSection === 'users' ? 'Usuarios'
                       : activeSection === 'post-maker' ? 'Post Maker'
@@ -317,6 +319,8 @@ function App() {
             <AutomationsSection showToast={showToast} />
           ) : activeSection === 'vacancies' ? (
             <VacanciesSection showToast={showToast} />
+          ) : activeSection === 'bolsa' ? (
+            <BolsaSection showToast={showToast} />
           ) : activeSection === 'users' ? (
             <UsersSection showToast={showToast} />
           ) : activeSection === 'post-maker' ? (

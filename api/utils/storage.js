@@ -401,15 +401,8 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
     const client = getClient();
     if (!client) return { candidates: [], total: 0 };
 
-    // Get linked candidates set for hydration and exclusion
-    const idsArray = await client.hkeys(KEYS.CANDIDATE_PROJECT_LINK);
-    const linkedIds = new Set(idsArray);
-
-    // Helper to hydrate candidates with the 'proyecto' virtual field
-    const hydrate = (c) => ({
-        ...c,
-        proyecto: linkedIds.has(c.id) ? 1 : 0
-    });
+    // ✅ META AUDIT: Removed O(N) HKEYS call for CANDIDATE_PROJECT_LINK hydration.
+    // The 'proyecto' virtual field is now derived from the candidate's own projectId field.
 
     // If searching or tagFiltering, we currently have to do a scan (unless we index names too)
     // For now, if search and tagFilter are empty, we use the ultra-fast F1 Steering.
@@ -425,7 +418,7 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
         const results = await pipeline.exec();
 
         const candidates = results
-            .map(([err, res]) => (err || !res) ? null : hydrate(JSON.parse(res)))
+            .map(([err, res]) => (err || !res) ? null : JSON.parse(res))
             .filter(Boolean);
 
         const total = await sumCount();
@@ -462,16 +455,16 @@ export const getCandidates = async (limit = 100, offset = 0, search = '', exclud
             if (err || !res) continue;
             
             try {
-                let c = JSON.parse(res);
-                c = hydrate(c);
+                const c = JSON.parse(res);
                 
                 // 1. Tag Filter
                 if (tagFilter && (!Array.isArray(c.tags) || !c.tags.includes(tagFilter))) continue;
                 
                 // 2. Exclusion Filter (Linked profiles or incomplete profiles)
+                // ✅ META AUDIT: Check projectId inline instead of external hash lookup
                 if (excludeLinked) {
-                    const isNotLinked = c.proyecto === 0;
-                    if (!isNotLinked || !isProfileComplete(c, customFields)) continue;
+                    const isLinked = !!c.projectId;
+                    if (isLinked || !isProfileComplete(c, customFields)) continue;
                 }
                 
                 // 3. Search Filter

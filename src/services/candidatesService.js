@@ -158,12 +158,8 @@ export const deleteCandidate = async (id) => {
  * Desacopla la consulta pesada de la lista de candidatos de la consulta ligera de estadísticas.
  */
 export class CandidatesSubscription {
-    constructor(callback, interval = 15000) { // 15 segundos para la lista pesada
+    constructor(callback) {
         this.callback = callback;
-        this.interval = interval;
-        this.intervalId = null;
-        this.statsIntervalId = null;
-        this.lastCount = 0;
         this.limit = 100;
         this.offset = 0;
         this.search = '';
@@ -176,15 +172,9 @@ export class CandidatesSubscription {
     }
 
     start() {
-        this.pollFull(); // Initial load
-        
-        // Loop 1 (REMOVED): No more 15s heavy polling of all candidates. 
-        // We now rely 100% on SSE (Push-only architecture) for list updates to save bandwidth and prevent DOM jank.
-
-        // Loop 2: Estadísticas del dashboard (Ligero, cada 3s)
-        this.statsIntervalId = setInterval(() => {
-            this.pollStats();
-        }, 3000);
+        this.pollFull(); // Initial load only — SSE handles all subsequent updates
+        // ✅ META AUDIT: Stats polling REMOVED. SSE delivers stats:global every 5s.
+        // ✅ META AUDIT: Candidate list polling REMOVED. SSE Pub/Sub handles real-time updates.
     }
 
     async pollFull() {
@@ -194,23 +184,8 @@ export class CandidatesSubscription {
         }
     }
 
-    async pollStats() {
-        const result = await getCandidatesStats();
-        if (result.success) {
-            // Pasamos null en candidates para indicar que es un update solo de stats
-            this.callback(null, result.stats);
-        }
-    }
-
     stop() {
-        if (this.intervalId) {
-            clearInterval(this.intervalId);
-            this.intervalId = null;
-        }
-        if (this.statsIntervalId) {
-            clearInterval(this.statsIntervalId);
-            this.statsIntervalId = null;
-        }
+        // No intervals to clean up — fully SSE-driven architecture
     }
 }
 

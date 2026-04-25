@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
     try {
         // DYNAMIC IMPORTS
-        const { getCandidates, getCandidateById, deleteCandidate, getCandidatesStats } = await import('./utils/storage.js');
+        const { getCandidates, getCandidateById, deleteCandidate } = await import('./utils/storage.js');
 
         // GET /api/candidates - Obtener lista o estadísticas
         if (req.method === 'GET') {
@@ -24,9 +24,7 @@ export default async function handler(req, res) {
             // Estadísticas (Optional mixed response)
             let statsData = null;
             if (stats === 'true') {
-                const { getEventStats, getCandidatesStats, getRedisClient } = await import('./utils/storage.js');
-                const candidatesStats = await getCandidatesStats();
-                const msgStats = await getEventStats();
+                const { getRedisClient } = await import('./utils/storage.js');
                 const redis = getRedisClient();
 
                 const pipeline = redis.pipeline();

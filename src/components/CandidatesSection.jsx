@@ -167,9 +167,8 @@ const CandidateRow = React.memo(({ candidate, columnOrder, fieldsMap, magicLoadi
             })}
             <td className="py-0.5 px-2.5">
                 {(() => {
-                    const vacName = candidate.currentVacancyName || candidate.projectMetadata?.currentVacancyName;
-                    const stepId = candidate.projectMetadata?.stepId || '';
-                    const isNoInteresa = !vacName && (/no.?interesa/i.test(stepId) || /no.?interesa/i.test(candidate.status || '') || /no.?interesa/i.test(candidate.projectMetadata?.stepName || ''));
+                    const vacName = candidate.currentVacancyName;
+                    const isNoInteresa = !vacName && (/no.?interesa/i.test(candidate.status || ''));
                     if (isNoInteresa) return <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase italic bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">NO INTERESA</span>;
                     return <div className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase italic whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">{vacName || '-'}</div>;
                 })()}
@@ -469,30 +468,18 @@ const CandidatesSection = ({ showToast, user }) => {
     }, [aiFilteredCandidates]);
 
     useEffect(() => {
-        const loadInitialData = async () => {
-            // Cargar candidatos
-            loadCandidates();
-
-            // Cargar campos dinámicos
-            loadFields();
-        };
-
+        // ✅ META AUDIT: loadFields is the ONLY init work here.
+        // Candidate loading is handled by subscription.start() → pollFull()
         const loadFields = async () => {
             const result = await getFields();
             if (result.success) {
-                // Remove 'foto' and default hidden fields if necessary
                 const dynamicFields = result.fields.filter(f => f.value !== 'foto');
                 setFields(dynamicFields);
 
-                // Initialize column order if not present in localStorage
                 setColumnOrder(prevOrder => {
                     const existingOrderIds = new Set(prevOrder);
                     const newIds = dynamicFields.map(f => f.value).filter(id => !existingOrderIds.has(id));
-
-                    // Keep existing order, append new ones at the end
                     const mergedOrder = [...prevOrder.filter(id => dynamicFields.some(f => f.value === id)), ...newIds];
-
-                    // Save merged order back if it changed
                     if (mergedOrder.length !== prevOrder.length || mergedOrder.some((v, i) => v !== prevOrder[i])) {
                         try { localStorage.setItem('candidateColumnOrder', JSON.stringify(mergedOrder)); } catch (e) { }
                     }
@@ -501,18 +488,20 @@ const CandidatesSection = ({ showToast, user }) => {
             }
         };
 
-        loadInitialData();
+        loadFields();
 
-        // Polling de candidatos
+        // ✅ META AUDIT: Single source of truth for initial data load
         const subscription = new CandidatesSubscription((newCandidates, newStats) => {
-            // Only update if not filtering by AI (polling refreshes full list based on current page/search)
             if (!aiFilteredCandidatesRef.current) {
                 if (newCandidates !== null) {
                     setCandidates(newCandidates);
+                    setTotalItems(prev => newStats?.total || newStats?.candidates || prev);
+                    setIsInitialLoading(false);
+                    setLoading(false);
                 }
-                if (newStats) setStats(prev => ({ ...prev, ...newStats })); // Merge live stats
+                if (newStats) setStats(prev => ({ ...prev, ...newStats }));
             }
-        }, 15000);
+        });
 
         subscriptionRef.current = subscription;
         subscription.updateParams(LIMIT, 0, '');
@@ -522,7 +511,7 @@ const CandidatesSection = ({ showToast, user }) => {
             subscription.stop();
             subscriptionRef.current = null;
         };
-    }, []); // Se ejecuta solo una vez al inicio
+    }, []);
 
     // Dynamic subscription params updater
     useEffect(() => {
@@ -695,24 +684,25 @@ const CandidatesSection = ({ showToast, user }) => {
         }
     }, [showToast]);
 
-    // Displayed candidates is just 'candidates' (current page) or AI filtered
-    let displayedCandidates = aiFilteredCandidates || candidates;
+    // ✅ META AUDIT: Memoized pipeline — filter + sort only recalculated when deps change
+    const displayedCandidates = React.useMemo(() => {
+        let result = aiFilteredCandidates || candidates;
 
-    if (hideIncomplete) {
-        displayedCandidates = displayedCandidates.filter(c => isProfileComplete(c));
-    }
-
-    if (showOnlyEmpty) {
-        displayedCandidates = displayedCandidates.filter(c => isChatEmpty(c));
-    }
-
-    if (sortWhatsAppByDate) {
-        displayedCandidates = [...displayedCandidates].sort((a, b) => {
-            const dateA = new Date(a.primerContacto || a.createdAt || 0).getTime();
-            const dateB = new Date(b.primerContacto || b.createdAt || 0).getTime();
-            return sortWhatsAppByDate === 'asc' ? dateA - dateB : dateB - dateA;
-        });
-    }
+        if (hideIncomplete) {
+            result = result.filter(c => isProfileComplete(c));
+        }
+        if (showOnlyEmpty) {
+            result = result.filter(c => isChatEmpty(c));
+        }
+        if (sortWhatsAppByDate) {
+            result = [...result].sort((a, b) => {
+                const dateA = new Date(a.primerContacto || a.createdAt || 0).getTime();
+                const dateB = new Date(b.primerContacto || b.createdAt || 0).getTime();
+                return sortWhatsAppByDate === 'asc' ? dateA - dateB : dateB - dateA;
+            });
+        }
+        return result;
+    }, [candidates, aiFilteredCandidates, hideIncomplete, showOnlyEmpty, sortWhatsAppByDate]);
 
     const totalPages = Math.ceil(totalItems / LIMIT);
 

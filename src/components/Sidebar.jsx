@@ -34,6 +34,7 @@ const DEFAULT_MENU_ITEMS = [
     { id: 'bot-ia', label: 'Bot IA (2.0)', icon: Smartphone, position: 'top' },
     { id: 'automations', label: 'Automatizaciones', icon: Zap, position: 'top' },
     { id: 'vacancies', label: 'Vacantes', icon: Briefcase, position: 'top' },
+    { id: 'bolsa', label: 'Bolsa (App)', icon: Smartphone, position: 'top' },
     { id: 'bypass', label: 'ByPass', icon: Zap, position: 'top' },
     // { id: 'media-library', label: 'Biblioteca Multimedia', icon: Folder, position: 'top' },
     { id: 'projects', label: 'Proyectos', icon: FolderKanban, position: 'top' },
