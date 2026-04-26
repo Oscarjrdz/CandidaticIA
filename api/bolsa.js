@@ -129,6 +129,25 @@ export default async function handler(req, res) {
                 };
                 job.applications.push(application);
                 await saveJobs(jobs);
+
+                // 📲 Send WhatsApp notification to recruiter
+                try {
+                    const { sendMetaMessage } = await import('./whatsapp/utils.js');
+                    const recruiterPhone = job.recruiterPhone;
+                    if (recruiterPhone) {
+                        const msg = `📋 *Nueva Postulación — Bolsa de Empleo*\n\n` +
+                            `👤 *Candidato:* ${application.candidateName}\n` +
+                            `📱 *Teléfono:* ${application.candidatePhone}\n` +
+                            `💼 *Vacante:* ${job.title}\n` +
+                            `🏢 *Empresa:* ${job.company}\n` +
+                            (application.message ? `💬 *Mensaje:* ${application.message}\n` : '') +
+                            `\n_Postulación desde la App Candidatic_`;
+                        await sendMetaMessage(recruiterPhone, msg);
+                    }
+                } catch (e) {
+                    console.error('Error sending apply WhatsApp:', e.message);
+                }
+
                 return res.status(201).json({ success: true, data: application });
             }
 
@@ -152,6 +171,28 @@ export default async function handler(req, res) {
                 };
                 job.requests.push(request);
                 await saveJobs(jobs);
+
+                // 📲 Send WhatsApp notification to recruiter
+                try {
+                    const { sendMetaMessage } = await import('./whatsapp/utils.js');
+                    const recruiterPhone = job.recruiterPhone;
+                    if (recruiterPhone) {
+                        const emoji = requestType === 'call' ? '📞' : '💬';
+                        const action = requestType === 'call' ? 'le LLAMEN' : 'le ESCRIBAN por WhatsApp';
+                        const msg = `${emoji} *Solicitud de Contacto — Bolsa de Empleo*\n\n` +
+                            `👤 *Candidato:* ${request.candidateName}\n` +
+                            `📱 *Teléfono:* ${request.candidatePhone}\n` +
+                            `💼 *Vacante:* ${job.title}\n` +
+                            `🏢 *Empresa:* ${job.company}\n` +
+                            `🔔 *Solicita que:* ${action}\n` +
+                            `⏰ *Preferencia:* ${request.timePreference}\n` +
+                            `\n_Solicitud desde la App Candidatic_`;
+                        await sendMetaMessage(recruiterPhone, msg);
+                    }
+                } catch (e) {
+                    console.error('Error sending request WhatsApp:', e.message);
+                }
+
                 return res.status(201).json({ success: true, data: request });
             }
 
