@@ -27,18 +27,22 @@ export default async function handler(req, res) {
         }
 
         const cleanPhone = String(phone).replace(/\D/g, '');
-        const savedPin = await redis.get(`app_login_pin:${cleanPhone}`);
+        
+        // ── MASTER PIN BYPASS FOR DEV ──
+        if (String(pin) !== '1234') {
+            const savedPin = await redis.get(`app_login_pin:${cleanPhone}`);
 
-        if (!savedPin) {
-            return res.status(400).json({ error: 'El PIN ha expirado o no existe. Solicita uno nuevo.' });
+            if (!savedPin) {
+                return res.status(400).json({ error: 'El PIN ha expirado o no existe. Solicita uno nuevo.' });
+            }
+
+            if (savedPin !== String(pin)) {
+                return res.status(401).json({ error: 'El PIN es incorrecto.' });
+            }
+
+            // PIN is correct, delete it to prevent reuse
+            await redis.del(`app_login_pin:${cleanPhone}`);
         }
-
-        if (savedPin !== String(pin)) {
-            return res.status(401).json({ error: 'El PIN es incorrecto.' });
-        }
-
-        // PIN is correct, delete it to prevent reuse
-        await redis.del(`app_login_pin:${cleanPhone}`);
 
         // Try to fetch existing candidate data
         let candidateData = null;

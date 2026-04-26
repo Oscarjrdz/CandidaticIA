@@ -1215,7 +1215,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                     setMessages(prev => {
                         const newMsg = sseUpdate.updates.messagePayload;
                         // Prevent duplicates
-                        if (prev.some(m => m.id === newMsg.id || (m.ultraMsgId && m.ultraMsgId === newMsg.ultraMsgId))) {
+                        if (prev.some(m => String(m.id) === String(newMsg.id) || (m.ultraMsgId && String(m.ultraMsgId) === String(newMsg.ultraMsgId)))) {
                             return prev;
                         }
                         // Smart deduplication: swap optimistic temp message
@@ -2775,7 +2775,7 @@ export default function ChatSection({ showToast, user, rolePermissions, onlineUs
                                             {msg.mediaUrl && (
                                                 <div className="mb-0.5 rounded overflow-hidden mt-1 cursor-pointer">
                                                     {(msg.type === 'image' || msg.type === 'sticker') && (
-                                                        <img src={msg.mediaUrl} alt="media" className="max-w-[260px] max-h-[260px] object-cover rounded shadow-sm bg-transparent" />
+                                                        <img src={msg.mediaUrl} alt="media" loading="lazy" width="260" height="260" className="max-w-[260px] max-h-[260px] w-auto h-auto object-cover rounded shadow-sm bg-transparent" />
                                                     )}
                                                     {msg.type === 'video' && (
                                                         <video src={msg.mediaUrl} controls className="max-w-[260px] max-h-[260px] rounded shadow-sm bg-black" />

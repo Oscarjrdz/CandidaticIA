@@ -40,7 +40,21 @@ function _notifyListeners() {
 }
 
 function _updateState(patch) {
-    _globalState = { ..._globalState, ...patch };
+    // Shallow equality check: skip update if nothing actually changed.
+    // This prevents stats:global polls (every 5s) from creating a new object
+    // reference and triggering unnecessary re-renders (which cause scroll jumps).
+    const next = { ..._globalState, ...patch };
+    const changed = Object.keys(next).some(k => {
+        const a = _globalState[k], b = next[k];
+        if (a === b) return false;
+        // Deep-compare objects (e.g. globalStats) by value, not reference
+        if (a && b && typeof a === 'object' && typeof b === 'object') {
+            return JSON.stringify(a) !== JSON.stringify(b);
+        }
+        return true;
+    });
+    if (!changed) return;
+    _globalState = next;
     _notifyListeners();
 }
 

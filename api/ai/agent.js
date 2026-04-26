@@ -562,12 +562,18 @@ function formatRecruiterMessage(text, candidateData = null, stepContext = {}) {
 
     // 🎂 FECHA DE NACIMIENTO: Inject example format if GPT forgot it
     // Only inject when ASKING for the date, not when confirming it was saved.
-    if (/fecha de nacimiento|cu[aá]ndo naciste|d[ií]a de nacimiento/i.test(text)
-        && !/(?:ej\.|ejemplo|DD\/|por ejemplo|\d{2}\/\d{2}\/\d{4})/i.test(text)
-        && !/ya tengo|tengo tu|registr|anot[eéaó]|captur|guard[aáe]/i.test(text)
-        && text.includes('?')) {
-        // Append example cleanly after the text rather than interrupting the sentence
-        text = text.trimEnd() + '\n(ej. 19/05/1983)';
+    {
+        const _DATE_Q_RE = /fecha de nacimiento|cu[aá]ndo naciste|d[ií]a de nacimiento/i;
+        const _HAS_EX_RE = /(?:ej\.|ejemplo|DD\/|por ejemplo|\d{2}\/\d{2}\/\d{4})/i;
+        const _IS_CONFIRM_RE = /ya tengo|tengo tu|registr|anot[eéaó]|captur|guard[aáe]/i;
+
+        let parts = text.includes('[MSG_SPLIT]') ? text.split('[MSG_SPLIT]') : [text];
+        for (let i = 0; i < parts.length; i++) {
+            if (_DATE_Q_RE.test(parts[i]) && !_HAS_EX_RE.test(parts[i]) && !_IS_CONFIRM_RE.test(parts[i]) && parts[i].includes('?')) {
+                parts[i] = parts[i].trimEnd() + '\n(ej. 19/05/1983)';
+            }
+        }
+        text = parts.join('[MSG_SPLIT]');
     }
 
 
@@ -3799,7 +3805,7 @@ ${safeDnaLines}
                                 const bridgeSticker = await redis?.get(bridgeKey);
                                 if (bridgeSticker) {
                                     await sendUltraMsgMessage(config.instanceId, config.token, candidateData.whatsapp, bridgeSticker, 'sticker');
-                                    await saveMessage(candidateId, { from: 'bot', content: `[Sticker: ${bridgeSticker}]`, timestamp: new Date().toISOString() }).catch(() => { });
+                                    await saveMessage(candidateId, { from: 'bot', content: `[Sticker]`, type: 'sticker', mediaUrl: bridgeSticker, timestamp: new Date().toISOString() }).catch(() => { });
                                     // 🚀 BRIDGE GAP: Re-trigger "escribiendo..." right after the sticker
                                     // ONLY for non-terminal steps — if the next step is Citados/No Interesa/exit,
                                     // there's no follow-up GPT response and composing would hang forever.
@@ -4615,6 +4621,7 @@ SEPARADOR DE BURBUJAS [MSG_SPLIT]: Cuando se te indique enviar DOS mensajes, esc
                 const SENTINEL = '[MSG_SPLIT]';
                 if (responseTextVal.includes(SENTINEL)) {
                     responseTextVal.split(SENTINEL).forEach(p => { if (p.trim()) messagesToSend.push(p.trim()); });
+                    responseTextVal = responseTextVal.replace(/\[MSG_SPLIT\]/g, '\n\n').trim();
                 } else {
                     // Strip any leaked sentinel residue before sending, then try regex split
                     responseTextVal = responseTextVal.replace(/\[MSG_SPLIT\]/g, ' ').trim();
