@@ -52,14 +52,23 @@ const AdsStatisticsSection = ({ showToast }) => {
                         Rendimiento de campañas "Click-to-WhatsApp" y atribución de candidatos.
                     </p>
                 </div>
-                <button
-                    onClick={loadStats}
-                    disabled={loading}
-                    className="flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50"
-                >
-                    <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                    Actualizar
-                </button>
+                <div className="flex space-x-2">
+                    <a
+                        href="/api/debug-webhook"
+                        target="_blank"
+                        className="flex items-center px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 rounded-xl hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors shadow-sm text-sm font-medium"
+                    >
+                        Ver Logs del Webhook
+                    </a>
+                    <button
+                        onClick={loadStats}
+                        disabled={loading}
+                        className="flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm disabled:opacity-50"
+                    >
+                        <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        Actualizar
+                    </button>
+                </div>
             </div>
 
             {/* KPI Cards */}
